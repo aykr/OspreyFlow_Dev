@@ -34,8 +34,10 @@ def _queries(principal: Principal) -> list[str]:
 def test_a_request_reader_matches_a_gazetteer_node_on_its_name_alone() -> None:
     for query in _queries(READER):
         assert f"__.and({GUARD},__.or(" in query
-        # The name is matched outside the guard, the identifiers inside it.
-        assert query.index("__.has('name'") < query.index(GUARD) < query.index("__.has('osm_id'")
+        # The name is matched outside the guard, a case's own identifier inside it; `osm_id`, only
+        # a gazetteer's, is matched on no node at all (Amendment 3).
+        assert query.index("__.has('name'") < query.index(GUARD) < query.index("__.has('uprn'")
+        assert "__.has('osm_id'" not in query
 
 
 def test_the_conduit_s_own_work_matches_every_field() -> None:
@@ -52,3 +54,48 @@ def test_a_type_with_no_name_field_matches_a_gazetteer_node_on_nothing() -> None
     )
     assert f"or(__.and({GUARD},__.or(" in query
     assert "__.has('family_name'" in query and query.index(GUARD) < query.index("__.has('nino'")
+
+
+#: ADR-147 Amendment 3: the identifiers only a gazetteer carries, never matched for a request
+#: reader on any node, since no reader is sent them; `uprn` is a case's own and is matched still.
+ONLY = ("osm_id", "os_place_id", "gss_code", "gnis_feature_id", "tiger_geoid", "nad_address_id")
+
+
+def _all_fields(principal: Principal, types: tuple[str, ...] = ("Location",)) -> list[str]:
+    access = AccessFilter(load_uk_le_scheme())
+    fields = ("name", "uprn", *ONLY)
+    return [
+        SearchNodesBuilder(fields, "node/1").render_gremlin(access, principal),
+        SuggestNodesBuilder(types, fields, "node/1").render_gremlin(access, principal),
+    ]
+
+
+def test_a_request_reader_matches_no_node_on_a_gazetteer_only_identifier() -> None:
+    case_reader = READER.model_copy(update={"datasets": ["case-a"]})
+    for query in _all_fields(case_reader):
+        for field in ONLY:
+            assert f"__.has('{field}'" not in query, (field, query)
+        assert "__.has('name'" in query and "__.has('uprn'" in query
+
+
+def test_the_conduit_s_own_work_still_matches_them() -> None:
+    for query in _all_fields(CONDUIT):
+        assert all(f"__.has('{field}'" in query for field in ONLY), query
+
+
+def test_a_search_by_a_gazetteer_only_identifier_alone_matches_nothing() -> None:
+    """A type whose only identifier is one of them: the search is asked, and matches nothing,
+    rather than falling back to every field."""
+    access = AccessFilter(load_uk_le_scheme())
+    case_reader = READER.model_copy(update={"datasets": ["case-a"]})
+    query = SearchNodesBuilder(("osm_id",), "node/1").render_gremlin(access, case_reader)
+    assert "__.has('osm_id'" not in query
+    # Exactly the step that keeps no node, before the access step, dedup and limit: never a
+    # bare or() or a fall-back that matches every node. ArcadeDB's answer to it is proven live
+    # (`test_gazetteer_only_ids_withheld_everywhere_live.py`).
+    assert query.startswith("g.V().or(__.not(__.identity())).")
+    for builder in (
+        SuggestNodesBuilder(("Location",), ("osm_id", "os_place_id"), "7"),
+        SearchNodesBuilder(("osm_id", "os_place_id"), "7"),
+    ):
+        assert ".or(__.not(__.identity()))." in builder.render_gremlin(access, case_reader)

@@ -1,0 +1,443 @@
+ADR-147 Am 3 live RED at 22f5b65: ontology/handling.py and graph_arcadedb/builders.py reverted to main's (Amendment 1's read and match), stack g (platform-b's lease)
+Running on ospreyflow-test (stack g, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T104025Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_case_s_own_place_is_sent_and_found_without_a_gazetteer_only_identifier _
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x70a3f54e2470>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x70a3f54e2670>)
+
+    def test_a_case_s_own_place_is_sent_and_found_without_a_gazetteer_only_identifier(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        private_key, _ = keypair
+        headers = {"Authorization": f"Bearer {sign_token(private_key, default_claims())}"}
+        PLANTED.clear()
+        cases: list[str] = []
+    
+        from services.api.app import app
+    
+        try:
+            place_id = _run(_plant())
+            with TestClient(app) as client:
+                made = client.post("/v1/investigations", headers=headers, json=new_case())
+                case_id = made.json()["id"]
+                cases.append(case_id)
+                _run(_give_case(case_id))
+                search = f"/v1/investigations/{case_id}/search"
+                suggest = f"/v1/investigations/{case_id}/suggest"
+    
+                # Found by no identifier only a gazetteer carries: neither the exact search nor the
+                # type-ahead on its prefix, which says no `more` though twelve places share it.
+                for query in (OSM_ID, OS_PLACE_ID):
+                    by_id = client.post(search, headers=headers, json={"query": query})
+>                   assert by_id.status_code == 200 and by_id.json()["nodes"] == [], by_id.text
+E                   AssertionError: {"nodes":[{"id":"01M72GQ4Y96FSA47Y22ANZTK1Y","type":"Location","properties":{"name":"Wrexbury 53814407","osm_id":"753814407","os_place_id":"osgb53814407","uprn":"953814407"},"provenance":{"state":"asserted","sources":[{"document_id":"studio-load","locator":"1","excerpt_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-10T10:40:32.713782Z","last_confirmed":null,"confirmed_by":null},"handling":{"classification":"OFFICIAL","handling_code":"P","action_code":null,"sanitisation_code":null,"originator":"unit-1","owning_unit":"unit-1","review_date":null,"legal_basis":null},"resolution":{"cluster_id":null,"cluster_score":null,"resolution_run":null,"manually_linked":[],"manually_split":[]},"audit":{"created_at":"2026-11-10T10:40:32.713846Z","created_by":"loader-1","revision":1,"superseded_by":null,"load_id":null,"recipe_id":null,"recipe_version":null,"reverted":false,"withdrawn_by_load":null},"datasets":["case-own-am3-live-53814407"]}]}
+E                   assert (200 == 200 and [{'id': '01M7...e, ...}, ...}] == []
+E                    +  where 200 = <Response [200 OK]>.status_code
+E                     
+E                     Left contains one more item: {'id': '01M72GQ4Y96FSA47Y22ANZTK1Y', 'type': 'Location', 'properties': {'name': 'Wrexbury 53814407', 'osm_id': '753814...fffffffffffffffffffffffffffffffffffffffffffffffffffffff'}], 'sources_withheld': False, 'extracted_by': None, ...}, ...}
+E                     Use -v to get more diff)
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:199: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:40:48] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 10:40:54] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_case_s_own_place_is_sent_and_found_without_a_gazetteer_only_identifier
+1 failed, 1 warning in 35.62s
+
+===== the match half alone reverted =====
+ADR-147 Am 3 live RED (match half) at ba7e215: graph_arcadedb/builders.py alone reverted to main's (Amendment 1's match); stack g, platform-b's lease
+Running on ospreyflow-test (stack g, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T105711Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rA ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py
+FFF...                                                                   [100%]
+=================================== FAILURES ===================================
+______ test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier ______
+
+world = {'app': <fastapi.applications.FastAPI object at 0x75630a1127e0>, 'headers': {'Authorization': 'Bearer eyJhbGciOiJSUzI1...UAXGYhBTddM01MEcHZQFH4Qq9c13MV9_bylH73w'}, 'case': '01M72HNWTR19ZH4FBSVMHS2TGW', 'place': '01M72HNR6T3VJ2JDXXGNGYZASG'}
+
+    def test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier(
+        world: dict[str, Any],
+    ) -> None:
+        with TestClient(world["app"]) as client:
+            for query in (OSM_ID, OS_PLACE_ID):
+                answer = client.post(
+                    f"/v1/investigations/{world['case']}/search",
+                    headers=world["headers"],
+                    json={"query": query},
+                )
+>               assert answer.status_code == 200 and answer.json()["nodes"] == [], answer.text
+E               AssertionError: {"nodes":[{"id":"01M72HNR6T3VJ2JDXXGNGYZASG","type":"Location","properties":{"name":"Wrexbury 16719987","uprn":"916719987"},"provenance":{"state":"asserted","sources":[{"document_id":"studio-load","locator":"1","excerpt_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-10T10:57:15.482115Z","last_confirmed":null,"confirmed_by":null},"handling":{"classification":"OFFICIAL","handling_code":"P","action_code":null,"sanitisation_code":null,"originator":"unit-1","owning_unit":"unit-1","review_date":null,"legal_basis":null},"resolution":{"cluster_id":null,"cluster_score":null,"resolution_run":null,"manually_linked":[],"manually_split":[]},"audit":{"created_at":"2026-11-10T10:57:15.482158Z","created_by":"loader-1","revision":1,"superseded_by":null,"load_id":null,"recipe_id":null,"recipe_version":null,"reverted":false,"withdrawn_by_load":null},"datasets":["case-own-am3-live-16719987"]}]}
+E               assert (200 == 200 and [{'id': '01M7...e, ...}, ...}] == []
+E                +  where 200 = <Response [200 OK]>.status_code
+E                 
+E                 Left contains one more item: {'id': '01M72HNR6T3VJ2JDXXGNGYZASG', 'type': 'Location', 'properties': {'name': 'Wrexbury 16719987', 'uprn': '91671998...fffffffffffffffffffffffffffffffffffffffffffffffffffffff'}], 'sources_withheld': False, 'extracted_by': None, ...}, ...}
+E                 Use -v to get more diff)
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:247: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:20] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:24] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:29] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_________ test_the_type_ahead_suggests_nothing_by_one_and_says_no_more _________
+
+world = {'app': <fastapi.applications.FastAPI object at 0x75630a1127e0>, 'headers': {'Authorization': 'Bearer eyJhbGciOiJSUzI1...99SopZugauMfdL3ssDB565QWzSiGq-x04cVsogA'}, 'case': '01M72HPC2SS2F88J308M74Y704', 'place': '01M72HP7JZYMTD69JJYRF67AM9'}
+
+    def test_the_type_ahead_suggests_nothing_by_one_and_says_no_more(world: dict[str, Any]) -> None:
+        """Twelve places share the prefix: under Amendment 1 they fill the page and say `more`."""
+        with TestClient(world["app"]) as client:
+            for body in (
+                {"query": OSM_ID},
+                {"query": OSM_ID, "mode": "contains", "ignore_case": True},
+            ):
+                hinted = client.post(
+                    f"/v1/investigations/{world['case']}/suggest", headers=world["headers"], json=body
+                )
+                assert hinted.status_code == 200, hinted.text
+>               assert hinted.json()["nodes"] == [] and hinted.json()["more"] is False, body
+E               AssertionError: {'query': '716719987'}
+E               assert ([{'id': '01M7....}, ...}, ...] == []
+E                 
+E                 Left contains 10 more items, first extra item: {'id': '01M72HP7JZYMTD69JJYRF67AM9', 'type': 'Location', 'properties': {'name': 'Wrexbury 16719987', 'uprn': '91671998...fffffffffffffffffffffffffffffffffffffffffffffffffffffff'}], 'sources_withheld': False, 'extracted_by': None, ...}, ...}
+E                 Use -v to get more diff)
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:261: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:35] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:40] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:45] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none __
+
+world = {'app': <fastapi.applications.FastAPI object at 0x75630a1127e0>, 'headers': {'Authorization': 'Bearer eyJhbGciOiJSUzI1...z46ThxwU9kUDlJai9xJPaDlBH5-JRKKGGxFt42g'}, 'case': '01M72HPVAST6M9N239617JJDV9', 'place': '01M72HPPYF6A8F19VNSBAFGK92'}
+
+    def test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none(
+        world: dict[str, Any],
+    ) -> None:
+        async def check() -> None:
+            client, graph = await _graph()
+            try:
+                reader = _reader()
+                assert await graph.search_nodes(OSM_ID, reader) == []
+                suggested = await graph.suggest_nodes(OSM_ID, reader)
+                assert suggested.nodes == [] and suggested.more is False
+                assert [n.id for n in await graph.search_nodes(UPRN, reader)] == [world["place"]]
+                # The step a search on those fields alone is sent, run by ArcadeDB itself.
+                access = AccessFilter(load_uk_le_scheme())
+                empty = SearchNodesBuilder(("osm_id",), OSM_ID).render_gremlin(access, reader)
+                assert "or(__.not(__.identity()))" in empty
+                assert await client.gremlin(empty) == []
+                unlimited = reader.model_copy(update={"datasets": None})
+                control = SearchNodesBuilder(("osm_id",), OSM_ID).render_gremlin(access, unlimited)
+                found = await client.gremlin(control)
+                assert [row["id"] for row in found] == [world["place"]], found
+            finally:
+                await client.aclose()
+    
+>       _run(check())
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:287: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:67: in _run
+    return asyncio.run(coro)
+           ^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:194: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/base_events.py:687: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def check() -> None:
+        client, graph = await _graph()
+        try:
+            reader = _reader()
+>           assert await graph.search_nodes(OSM_ID, reader) == []
+E           AssertionError: assert [Node(id='01M...e-16719987'])] == []
+E             
+E             Left contains one more item: Node(id='01M72HPPYF6A8F19VNSBAFGK92', type='Location', properties={'name': 'Wrexbury 16719987', 'uprn': '916719987'}, ... recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['case-own-am3-live-16719987'])
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:271: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:51] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:57:57] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone _______
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:03] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:08] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:13] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+__________________ test_the_working_set_s_seed_sends_neither ___________________
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:19] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:23] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:28] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+__________ test_a_load_s_match_reaches_no_node_the_reader_cannot_see ___________
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:34] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:58:40] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone
+PASSED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_working_set_s_seed_sends_neither
+PASSED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_type_ahead_suggests_nothing_by_one_and_says_no_more
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none
+3 failed, 3 passed, 1 warning in 92.03s (0:01:32)
+
+===== the read half alone reverted =====
+ADR-147 Am 3 live RED (read half) at ba7e215: ontology/handling.py alone reverted to main's (Amendment 1's read); stack g, platform-b's lease
+Running on ospreyflow-test (stack g, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T105914Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rA ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py
+...FFF                                                                   [100%]
+=================================== FAILURES ===================================
+______ test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone _______
+
+world = {'app': <fastapi.applications.FastAPI object at 0x782787106240>, 'headers': {'Authorization': 'Bearer eyJhbGciOiJSUzI1...MK6hhLDSaNIvC8FMoAEXLpNmoQ1lFzi8RA0DMbQ'}, 'case': '01M72HTZH6F8W0Z5X4GMACH91W', 'place': '01M72HTV2HR2ENRZRVXTC2YZ02'}
+
+    def test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone(
+        world: dict[str, Any],
+    ) -> None:
+        with TestClient(world["app"]) as client:
+            for query in (NAME, UPRN):
+                found = client.post(
+                    f"/v1/investigations/{world['case']}/search",
+                    headers=world["headers"],
+                    json={"query": query},
+                )
+                assert found.status_code == 200, found.text
+                assert [n["id"] for n in found.json()["nodes"]] == [world["place"]], (query, found.text)
+                sent = found.json()["nodes"][0]["properties"]
+                assert sent.get("uprn") == UPRN, sent
+>               assert "osm_id" not in sent and "os_place_id" not in sent, sent
+E               AssertionError: {'name': 'Wrexbury 48458984', 'osm_id': '748458984', 'os_place_id': 'osgb48458984', 'uprn': '948458984'}
+E               assert ('osm_id' not in {'name': 'Wrexbury 48458984', 'osm_id': '748458984', 'os_place_id': 'osgb48458984', 'uprn': '948458984'})
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:307: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:06] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:11] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:16] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+__________________ test_the_working_set_s_seed_sends_neither ___________________
+
+world = {'app': <fastapi.applications.FastAPI object at 0x782787106240>, 'headers': {'Authorization': 'Bearer eyJhbGciOiJSUzI1...J7muDU8gfl64frHXHMiSM9G_Gq5xXdR5gWQmvww'}, 'case': '01M72HVEMG3VX2BKJ13QJG365D', 'place': '01M72HVA4GP57Z8VDK1G6QAXY2'}
+
+    def test_the_working_set_s_seed_sends_neither(world: dict[str, Any]) -> None:
+        with TestClient(world["app"]) as client:
+            found = client.post(
+                f"/v1/investigations/{world['case']}/search",
+                headers=world["headers"],
+                json={"query": NAME},
+            )
+            seeded = client.post(
+                f"/v1/investigations/{world['case']}/seed",
+                headers=world["headers"],
+                json={"nodes": [found.json()["nodes"][0]], "edges": []},
+            )
+            assert seeded.status_code == 200, seeded.text
+>           assert OSM_ID not in seeded.text and OS_PLACE_ID not in seeded.text, seeded.text
+E           AssertionError: {"delta":{"seq":1,"op":"add","nodes":[{"id":"01M72HVA4GP57Z8VDK1G6QAXY2","type":"Location","properties":{"name":"Wrexbury 48458984","osm_id":"748458984","os_place_id":"osgb48458984","uprn":"948458984"},"provenance":{"state":"asserted","sources":[{"document_id":"studio-load","locator":"1","excerpt_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-10T11:00:17.680402Z","last_confirmed":null,"confirmed_by":null},"handling":{"classification":"OFFICIAL","handling_code":"P","action_code":null,"sanitisation_code":null,"originator":"unit-1","owning_unit":"unit-1","review_date":null,"legal_basis":null},"resolution":{"cluster_id":null,"cluster_score":null,"resolution_run":null,"manually_linked":[],"manually_split":[]},"audit":{"created_at":"2026-11-10T11:00:17.680430Z","created_by":"loader-1","revision":1,"superseded_by":null,"load_id":null,"recipe_id":null,"recipe_version":null,"reverted":false,"withdrawn_by_load":null},"datasets":["case-own-am3-live-48458984"]}],"edges":[]},"links_among":"not_asked"}
+E           assert ('748458984' not in '{"delta":{"..."not_asked"}'
+E             
+E             '748458984' is contained here:
+E               "osm_id":"748458984","os_place_id":"osgb48458984","uprn":"948458984"},"provenance":{"state":"asserted","sources":[{"document_id":"studio-load","locator":"1","excerpt_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-10T11:00:17.680402Z","last_confirmed":null,"confirmed_by":null},"handling":{"classification":"OFFICIAL","handling_code":"P","action_code":null,"sanitisation_code":null,"originator":"unit-1","owning_unit":"unit-1","review_dat...
+E             
+E             ...Full output truncated (2 lines hidden), use '-vv' to show)
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:324: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:22] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:27] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:31] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+__________ test_a_load_s_match_reaches_no_node_the_reader_cannot_see ___________
+
+world = {'app': <fastapi.applications.FastAPI object at 0x782787106240>, 'headers': {'Authorization': 'Bearer eyJhbGciOiJSUzI1...4uYEdGL2jAsiyTzdpnb93i0efylsB9HGNZ85OuA'}, 'case': '01M72HVXNVC66EK7D8QNN35GC3', 'place': '01M72HVS9J11ZM9Z12452KRTS3'}
+
+    def test_a_load_s_match_reaches_no_node_the_reader_cannot_see(world: dict[str, Any]) -> None:
+        """`find_node` on a recipe's `match_on` (`services/ingest/engine.py`, a load's and the Test's
+        lookup), run as the reader's scoped principal: a place in a dataset the case does not read is
+        not matched, so neither the load nor the Test's `referenced` count reaches it; the case's own
+        place is matched by its `os_place_id` (the load's own work) and comes back without the six."""
+    
+        async def check() -> None:
+            client, graph = await _graph()
+            try:
+                reader = _reader()
+                assert await graph.find_node("Location", "os_place_id", UNREAD_PLACE_ID, reader) is None
+                unlimited = reader.model_copy(update={"datasets": None})
+                hidden = await graph.find_node("Location", "os_place_id", UNREAD_PLACE_ID, unlimited)
+                assert hidden is not None  # the positive control: it is there
+                own = await graph.find_node("Location", "os_place_id", OS_PLACE_ID, reader)
+                assert own is not None and own.id == world["place"]
+                assert "osm_id" not in own.properties and "os_place_id" not in own.properties
+                assert own.properties["uprn"] == UPRN
+            finally:
+                await client.aclose()
+    
+>       _run(check())
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:352: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:67: in _run
+    return asyncio.run(coro)
+           ^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:194: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/base_events.py:687: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def check() -> None:
+        client, graph = await _graph()
+        try:
+            reader = _reader()
+            assert await graph.find_node("Location", "os_place_id", UNREAD_PLACE_ID, reader) is None
+            unlimited = reader.model_copy(update={"datasets": None})
+            hidden = await graph.find_node("Location", "os_place_id", UNREAD_PLACE_ID, unlimited)
+            assert hidden is not None  # the positive control: it is there
+            own = await graph.find_node("Location", "os_place_id", OS_PLACE_ID, reader)
+            assert own is not None and own.id == world["place"]
+>           assert "osm_id" not in own.properties and "os_place_id" not in own.properties
+E           AssertionError: assert ('osm_id' not in {'name': 'Wrexbury 48458984', 'osm_id': '748458984', 'os_place_id': 'osgb48458984', 'uprn': '948458984'})
+E            +  where {'name': 'Wrexbury 48458984', 'osm_id': '748458984', 'os_place_id': 'osgb48458984', 'uprn': '948458984'} = Node(id='01M72HVS9J11ZM9Z12452KRTS3', type='Location', properties={'name': 'Wrexbury 48458984', 'osm_id': '748458984',... recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['case-own-am3-live-48458984']).properties
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:347: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:37] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:43] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier ______
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:25] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:30] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:34] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_________ test_the_type_ahead_suggests_nothing_by_one_and_says_no_more _________
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:40] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:45] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:49] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none __
+---------------------------- Captured stderr setup -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:59:55] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+--------------------------- Captured stderr teardown ---------------------------
+127.0.0.1 - - [10/Nov/2026 11:00:00] "GET /jwks.json HTTP/1.1" 200 -
+---------------------------- Captured log teardown -----------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+PASSED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_type_ahead_suggests_nothing_by_one_and_says_no_more
+PASSED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_at_the_adapter_no_node_is_matched_on_one_and_the_empty_step_keeps_none
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_found_by_name_and_uprn_the_place_is_sent_with_its_uprn_alone
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_working_set_s_seed_sends_neither
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see
+3 failed, 3 passed, 1 warning in 88.09s (0:01:28)

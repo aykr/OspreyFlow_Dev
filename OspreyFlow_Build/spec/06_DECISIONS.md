@@ -32263,6 +32263,56 @@ dataset that takes a gazetteer holds a copy of every place, written a page at a 
 1,000 places, measured as above), and keeps them after a removal; a re-build rewrites every recorded
 dataset's copies but those the case made its own. A removal is one record's update.
 
+### ADR-147, Amendment 3 (10 November 2026) — a gazetteer's own identifiers withheld from every node, and matched on none
+
+**Why.** A gazetteer loaded through the Studio arrives in a case's own dataset as a plain file: nothing marks
+it a gazetteer, so Amendment 1 point 3a, which withholds a gazetteer's identifiers from a node in a
+`gazetteer-*` dataset or a case's copy of one, left `osm_id` and its kind in that case's node reads (CARRIES
+row 23, raised by studio). The owner chose the strict reading (MORNING item 11, option (a)).
+
+**Decisions.**
+1. **The six identifiers only a gazetteer carries** (`schemas.mapconfig.GAZETTEER_ONLY_IDENTIFIERS`: `osm_id`,
+   `os_place_id`, `gss_code`, `gnis_feature_id`, `tiger_geoid`, `nad_address_id`) **leave every node for every
+   request reader**, whatever dataset it is in and whatever its type, in `ontology.handling.withhold_sources`,
+   the projection every node read passes through. `uprn` is not among them: a case's own `Location` keeps it
+   (point 3a). A gazetteer's place still loses all seven (point 3a, unchanged).
+2. **No node is matched on one of the six** for a request reader (`builders.match_any_field`, inside the
+   traversal, so the rows, the extra row that says `more` and any count follow it): a reader is never sent one,
+   so no search may answer on one, or a prefix search would rebuild it. A search whose fields are all among the
+   six matches nothing; it does not fall back to every field. A gazetteer's place is still matched on its name
+   alone (point 3b), and every other node by its name and the identifiers it is sent, a case's own `uprn` among
+   them. This is how the reservation's "a Location matched on its name alone" is read here: a node is never
+   matched on an identifier its reads withhold.
+3. **The Conduit's own work keeps them** (`datasets is None`), and so does a read inside `sources_in_full` (a
+   read written back, a gazetteer load), as in point 3a.
+4. **A load's own match key is the load's work** (the orchestrator's ruling, 10 November 2026, on the lane
+   review's question): `find_node` on a recipe's `match_on` (a Studio load's, and its Test's) matches its one
+   named field unguarded, so a gazetteer re-loaded through the Studio by its `os_place_id` updates its places
+   rather than doubling them. It runs as the reader's scoped principal, so it never reaches a node in a dataset
+   the case does not read, and the Test's `referenced` count counts only nodes the reader may see; the node it
+   reaches comes back without the six, as every node read does. The Test's preview of a node the file would
+   create is the uploader's own file, not a node read, and keeps the file's values. Proved by
+   `tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see`.
+   A matched existing node in the Test's answer is the Test's to pass through `withhold_sources` as well (a
+   carry to the studio lane).
+5. **Amendment 1's "Left" line on a gazetteer loaded through the Studio** ("is the case's data and keeps its
+   identifiers on every read") **is closed by this amendment**, and the port's contract
+   (`ports/graph.py`'s `search_nodes` and `suggest_nodes`) states the wider rule.
+
+**Cost.** An analyst's own data loses those six identifiers in reads and searches (the owner's ruling, MORNING
+item 11).
+
+**Tests.** `tests/ontology/test_gazetteer_identifiers_withheld.py` (a case's own Location keeps its `uprn` and
+loses the six; any type of node; the Conduit keeps them); `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`
+(no node matched on one of the six; the Conduit matches them; a search by one alone matches nothing);
+`tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py` (over ArcadeDB, through the real routes and at
+the adapter: a case's own Location found by neither `osm_id` nor `os_place_id`, by search or type-ahead, with
+no `more`; the step a search on those alone is sent keeps no node, the Conduit's own read finding it; found by
+its name and its `uprn`, and sent with its `uprn` alone; decision 4's load match). The match and the read each
+shown red by its own plant at its call site, the unit cases too (`plants.md`).
+
+**Built by:** the platform-b lane, after P6.
+
 ### ADR-147, Amendment 4 (10 November 2026) — the case's gazetteer panel as built (P6)
 
 **Why.** Amendment 2's "Left, and why" says "The Glass has no control for a gazetteer yet". This is that control, built by platform-b as step P6, and that line of Amendment 2 is closed by it.
