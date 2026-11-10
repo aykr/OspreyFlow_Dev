@@ -377,13 +377,13 @@ HOME_READER = Principal(
 
 
 async def _retyped(adapter: GraphPort, *, commit: bool = True) -> dict[str, str]:
-    """A drawn incident and a drawn person in the drawing; the person promoted, the incident copied
-    as an Organisation with a MEMBER_OF from the person onto the uncommitted copy, and the copy's
+    """A drawn place (a Location of the core model, which every conformance store holds) and a drawn
+    person in the drawing; the person promoted, the place copied as an Organisation with a MEMBER_OF from the person onto the uncommitted copy, and the copy's
     SAME_AS back in no dataset: one transaction."""
     (incident, person), _ = await _write(
         adapter,
         [
-            _node("Incident", classification="OFFICIAL", datasets=[DRAWING], name="Night fight"),
+            _node("Location", classification="OFFICIAL", datasets=[DRAWING], name="Night fight"),
             _node("Person", classification="OFFICIAL", datasets=[DRAWING], family_name="Mercer"),
         ],
         [],
@@ -427,7 +427,7 @@ async def test_a_retyped_copy_and_a_link_onto_it_land_with_the_promotion_in_one_
         assert (member.source, member.target) == (ids["person"], ids["copy"])
         # The original stays the drawing's alone, of its own type.
         (original,) = await adapter.get_nodes([ids["incident"]], HOME_READER)
-        assert (original.type, original.datasets) == ("Incident", [DRAWING])
+        assert (original.type, original.datasets) == ("Location", [DRAWING])
 
 
 async def test_a_retyped_copy_rolled_back_writes_neither_it_nor_its_links(
@@ -485,7 +485,7 @@ async def test_the_no_dataset_check_fails_with_the_back_link_put_in_the_drawing(
 
     async with factory.context() as adapter:
         (incident,), _ = await _write(
-            adapter, [_node("Incident", classification="OFFICIAL", datasets=[DRAWING])], []
+            adapter, [_node("Location", classification="OFFICIAL", datasets=[DRAWING])], []
         )
         (copy,), _ = await _write(
             adapter, [_node("Organisation", classification="OFFICIAL", datasets=[SOURCE])], []

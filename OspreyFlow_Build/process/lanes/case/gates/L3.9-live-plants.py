@@ -11,7 +11,7 @@ PLANTS = [
      "        return held", T + "test_datasets_store.py", "merges_a_drawn_dataset"),
     ("the case not moved onto the target", "services/api/datasets.py",
      '            if moved != "UPDATE 1":\n                raise DrawnAlreadyMerged(merged.dataset_id)',
-     "            pass", T + "test_datasets_store.py", "merges_a_drawn_dataset"),
+     "            pass", T + "test_datasets_store.py", "does_not_read_the_drawing"),
     ("the trigger check never widened", "services/api/promotion_store.py",
      "        AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%drawn_merge%'",
      "        AND c.contype = 'c'", T + "test_promotion_store.py", "old_trigger_check"),

@@ -300,3 +300,34 @@ async def test_postgres_merges_a_drawn_dataset_once_and_its_revert_undoes_it(
         assert await s.unmerge_drawn(drawn.id) is None
     finally:
         await s.close()
+
+
+async def test_postgres_refuses_a_merge_whose_case_does_not_read_the_drawing(
+    fresh_dsn: str,
+) -> None:
+    """The claim moves the drawing's own case onto the target, in one transaction: a case that
+    does not read the drawing moves nothing, so the claim is refused and nothing of it is kept (a
+    merge recorded with its case left on the drawing would read the target from no case)."""
+    from datetime import UTC, datetime
+
+    from services.api.datasets import DrawnAlreadyMerged, DrawnMerged
+
+    s = await PostgresDatasetStore.connect(fresh_dsn)
+    try:
+        home, stranger = new_id(), new_id()
+        drawn = await s.create_drawn(
+            ALICE, f"Drawing {new_id()}", highest_marking="OFFICIAL", home_case=home
+        )
+        target = await s.create(ALICE, f"Target {new_id()}")
+        before = await s.ids_of_case(home)
+        with pytest.raises(DrawnAlreadyMerged):
+            await s.merge_drawn(
+                DrawnMerged(
+                    dataset_id=drawn.id, into=target.id, load_id=f"promotion-{new_id()}",
+                    case_id=stranger, merged_at=datetime(2026, 11, 10, 9, 0, tzinfo=UTC),
+                )
+            )  # fmt: skip
+        assert await s.drawn_merged_of(drawn.id) is None
+        assert await s.ids_of_case(home) == before
+    finally:
+        await s.close()
