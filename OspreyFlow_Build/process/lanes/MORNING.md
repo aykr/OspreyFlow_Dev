@@ -85,6 +85,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    stamp its places (a new field); (c) leave it. **Chosen: (a), the strict reading**, as ADR-147 Amendment 3 (reserved,
    platform-b, after P6; it touches shared and case files, so it goes as one reviewed step). Cost: an analyst's own
    data loses those six identifiers in reads. **To overrule:** say "(b)" or "(c)".
+    *As built (platform-b, decision 4):* a Studio load still matches on its own match key (OS Open Names'
+    `os_place_id`), as the reader's scoped principal, or a re-load would duplicate every place; the Test's preview of
+    a would-create node is the uploader's own file; an existing node the Test returns loses the six like any read
+    (a carry to studio).
 12. **BPMN and DMN: stored, or produced on demand? (rules-b's L2.11a.)** ADR-146 says each rule "is saved as" BPMN
    2.0 and DMN; the codec as built produces them on demand from the rule's sentence. Options: (a) the editor's save
    writes both files beside the rule at every version, and Export returns the stored files; (b) an amendment saying a
