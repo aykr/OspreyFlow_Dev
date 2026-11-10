@@ -1,0 +1,164 @@
+# targeted live set at 75a5430 (main bf9513b), lease studio, stack c (ospreyflow-test), 2026-11-10, 22 min 33 s, ended before 21:27Z, without the diffs
+# The selection and why: 75a5430.live-selection.txt (40 files). 3 failed, 370 passed.
+# The three failures are main's, fixed at a8e9992 (test isolation: another file's screening list names the same synthetic people): tests/ingest/test_kyc_rules.py (two alerts expected, four raised; the risk
+# factors gain shared_attribute). Run alone at 75a5430 under the same lease: the same three fail. Run alone from a worktree
+# of main bf9513b itself under the same lease (about 21:28Z): the same three fail, word for word. L1.7 changes neither the rules
+# nor the KYC fixtures; its recipe_run.py change splits the run into begin_run and continue_run with nothing run twice.
+# The 299-file change-based run started first was stopped at the orchestrator's word (the targeted set in its place).
+........................................................................ [ 19%]
+........................................................................ [ 38%]
+....................F......F.....F...................................... [ 57%]
+........................................................................ [ 77%]
+........................................................................ [ 96%]
+.............                                                            [100%]
+=================================== FAILURES ===================================
+_ test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x70011671b350>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x70011671b7d0>, 'audit': <services.api.audit.AuditWriter object at 0x700141710350>, ...}
+
+    async def test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate(
+        stores: dict[str, Any],
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            report = await _onboard(graph, _gate(stores, graph, [rule], case), [_application("Halcyon Marine Ltd")])
+            assert report.nodes_created >= 1 and report.rows_held == 0, "the applicant loads, with its alerts"
+            alerts = await _alerts(stores, case)
+            words = sorted(a.words for a in alerts)
+>           assert len(alerts) == 2, words
+E           AssertionError: ['Halcyon Marine Ltd is ultimately owned 32% by Priya Nair: Priya Nair matches “Priya NAIR” on a politically exposed p...a sanctions list (Synthetic consolidated list (OspreyFlow demo)), score 0.98 — a suggestion to confirm, not a finding']
+E           assert 4 == 2
+E            +  where 4 = len([Alert(id='01M73MEYM11FF11M5M5X9CDAV3', rule_id='typology:01M73MES44PFTB0JJYZA3QSDQ7', owner_id='kyc-officer', mode=<A..._at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None)])
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:154: AssertionError
+_______ test_the_status_and_risk_are_computed_from_what_the_reader_sees ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x7001582690d0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x70015823eab0>, 'audit': <services.api.audit.AuditWriter object at 0x70015acd30e0>, ...}
+
+    async def test_the_status_and_risk_are_computed_from_what_the_reader_sees(
+        stores: dict[str, Any],
+    ) -> None:
+        """Halcyon onboarded with an expired certificate, a phone three others use, registered in
+        Cyprus in ship management, owned through the trust by two listed people: unverified, and every
+        factor named. Nothing is stored: the same read tomorrow could differ, and that is the point."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            await _customers_sharing(graph, 3)
+            await _onboard(graph, _gate(stores, graph, [rule], case), [_application(
+                "Halcyon Marine Ltd", phone=SHARED_PHONE, document_title="Certificate of incorporation",
+                document_kind="certificate_of_incorporation", document_expires="2025-01-31")])  # fmt: skip
+            halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+            assert halcyon is not None
+            status = await assess(graph, ComputeRustworkxAdapter(), halcyon.id, OFFICER, today=date(2026, 10, 10))
+            assert status.status == "unverified"
+            assert [d.state for d in status.documents] == ["expired"]
+            factors = sorted(f.factor for f in status.factors)
+>           assert factors == ["country_medium", "industry_medium", "owner_listed", "owner_listed",
+                               "shared_attribute", "unverified"]  # fmt: skip
+E           AssertionError: assert ['country_med..._listed', ...] == ['country_med... 'unverified']
+E             
+E             At index 4 diff: 'owner_listed' != 'shared_attribute'
+E             Left contains 2 more items, first extra item: 'shared_attribute'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:284: AssertionError
+_____ test_a_confirmed_screening_match_repoints_the_other_alert_citing_it ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x700141725970>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x700158277290>, 'audit': <services.api.audit.AuditWriter object at 0x70015acf4800>, ...}
+
+    async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(stores: dict[str, Any]) -> None:
+        """ADR-109 Amendments 9 and 10 through the real screening path (L2.8b item 8, replacing the
+        hand-written SAME_AS): two applicants owned through the same trust by Elena Petrov, onboarded one
+        after the other, each raise a screening alert citing the one match the screening wrote between
+        Petrov and the listed PETROVA (a pair of one audience is one link). A true positive on the first
+        confirms the match into a new revision; the second alert cites that revision and stays in the
+        queue. Red without the repoint: the second alert cited the superseded match and was withheld."""
+        from services.api import alert_queue
+    
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            await _onboard(graph, gate, [_application("Halcyon Two Ltd")])
+            petrov = [a for a in await _alerts(stores, case) if "Petrov" in (a.words or "")]
+>           assert len(petrov) == 2, [a.words for a in petrov]
+E           AssertionError: ['Halcyon Two Ltd is ultimately owned 48% by Elena Petrov: Elena Petrov matches “Elena Petrova” on a sanctions list (S...a sanctions list (Synthetic consolidated list (OspreyFlow demo)), score 0.98 — a suggestion to confirm, not a finding']
+E           assert 4 == 2
+E            +  where 4 = len([Alert(id='01M73MGA23TQP9XAH593KKVKQV', rule_id='typology:01M73MG39Y5GQYW5ZRQ6RWMRH1', owner_id='kyc-officer', mode=<A..._at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None)])
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:525: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_rule_editor_routes.py::test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------------------- 328 unmarked test(s) reached a store ---------------------
+tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_a_case_reading_both_datasets_is_named_the_sources: ArcadeDB on port 2493
+tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_every_read_path_withholds_sources_of_an_element_in_a_dataset_the_case_lacks: ArcadeDB on port 2493
+tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_the_remaining_read_paths_withhold_and_name_by_the_readers_scope: ArcadeDB on port 2493
+tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_withholding_changes_what_is_sent_never_what_is_stored: ArcadeDB on port 2493
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_chain_of_writes_brings_the_alert_to_the_newest_revision: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_writes_back_a_list_another_close_has_repointed_since: ArcadeDB on port 2493, Postgres on port 55435
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record: ArcadeDB on port 2493, Postgres on port 55435
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout]: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue: ArcadeDB on port 2493, Postgres on port 55435
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert: ArcadeDB on port 2493, Postgres on port 55435
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_graph_failure_leaves_every_alert_on_the_live_link: ArcadeDB on port 2493, Postgres on port 55435
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+… and 308 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+847.81s setup    tests/services/api/test_pid_access_control.py::test_j1_the_principals_star_is_49_in_a_and_45_in_c_for_the_analyst_and_the_cleared
+11.53s setup    tests/services/api/test_pid_access_control.py::test_amendment_7_circle_is_red_under_each_planted_wrong_rule_at_all_three_points
+9.93s call     tests/scenarios/test_ledger_graph.py::test_ledger_graph_side
+9.28s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+9.07s call     tests/ingest/test_alert_evidence_withheld_live.py::test_the_file_finds_its_own_rule_whatever_else_is_active_in_the_store
+8.92s call     tests/ingest/test_gazetteer_ids_withheld_live.py::test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifiers
+8.74s call     tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+8.69s call     tests/ingest/test_typology_rules.py::test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and_total
+8.43s call     tests/ingest/test_typology_rules.py::test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opened
+8.32s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+7.91s call     tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+7.60s call     tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+7.37s call     tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds
+7.34s call     tests/ingest/test_alert_evidence_withheld_live.py::test_more_records_settled_at_once_than_the_store_holds_connections_all_finish
+7.30s call     tests/ingest/test_typology_rules.py::test_a_post_commit_rule_alerts_once_per_finding
+7.18s call     tests/scenarios/test_ledger_graph.py::test_a_reseed_names_the_sar_it_wrote_again
+7.11s call     tests/scenarios/test_ledger_graph.py::test_building_the_ledger_twice_makes_nothing_twice
+6.90s call     tests/ingest/test_typology_rules.py::test_a_false_positive_closes_the_alert_and_leaves_its_node_inferred
+6.63s call     tests/ingest/test_alert_evidence_withheld_live.py::test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking
+6.32s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words
+6.14s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record
+6.06s call     tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+5.94s call     tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+5.92s call     tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+5.73s call     tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+5.67s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one
+5.63s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read
+5.61s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue
+5.59s call     tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_node
+5.57s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+3 failed, 370 passed, 2 warnings in 1353.30s (0:22:33)
+Wall time: 1355 s, exit 1 (stack c, the lease studio took at 2026-11-10T21:01:41Z; set-up before it 22 s)
