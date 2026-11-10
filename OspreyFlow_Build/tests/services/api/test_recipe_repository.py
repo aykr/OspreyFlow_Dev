@@ -681,6 +681,7 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
     thread for a further wait. Measured with a 2 s wait: about 2 s here, about 4 s for one wait
     each, so a loaded host has about a second either side."""
     import fcntl
+    import threading
 
     wait = 2.0
     repo = tmp_path / "repo"
@@ -688,6 +689,10 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
     monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", wait)
     other = (repo / ".git" / studio_publish.PUBLISH_LOCK_NAME).open("a")
     fcntl.flock(other, fcntl.LOCK_EX)
+    # A safety release, cancelled once the publishes return: a wait without limit then ends (and
+    # fails the bound below) rather than hangs.
+    safety = threading.Timer(4 * wait, lambda: fcntl.flock(other, fcntl.LOCK_UN))
+    safety.start()
     try:
         started = time.monotonic()
         outcomes = await asyncio.gather(
@@ -697,6 +702,8 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
         )
         elapsed = time.monotonic() - started
     finally:
+        safety.cancel()
+        safety.join()
         fcntl.flock(other, fcntl.LOCK_UN)
         other.close()
     assert all(

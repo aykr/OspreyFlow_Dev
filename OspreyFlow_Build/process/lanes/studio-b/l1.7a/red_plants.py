@@ -233,10 +233,17 @@ PLANTS = [
 ]
 
 def run(files: list[str]) -> str:
+    try:
+        return _run(files)
+    except subprocess.TimeoutExpired:  # a plant that hangs a test is red, not a stalled record
+        return "FAILED (the run hung past 300 s and was stopped)\n0 passed, hung"
+
+
+def _run(files: list[str]) -> str:
     done = subprocess.run(
         [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-p", "no:cacheprovider",
          "-q", "-rA", *files],
-        cwd=CORE, capture_output=True, text=True, env={**os.environ, "COLUMNS": "400"},
+        cwd=CORE, capture_output=True, text=True, env={**os.environ, "COLUMNS": "400"}, timeout=300,
     )  # fmt: skip
     keep = ("PASSED", "FAILED", "ERROR")
     out = done.stdout
