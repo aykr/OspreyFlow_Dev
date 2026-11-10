@@ -1005,6 +1005,9 @@ def backups_folder_of(config: Mapping[str, object], *, home: Path) -> Path:
     own_server = config.get("profile") == "small" and not any(
         _section(config, "external").values()
     )
+    if value is None and own_server:
+        # Left out on a server of your own: the schema's default, where Amendment 33 wrote.
+        value = LEGACY_BACKUPS_PLACEHOLDER
     text = str(value or "").strip()
     placeholder = bool(text) and Path(text) == Path(LEGACY_BACKUPS_PLACEHOLDER)
     if text and (not placeholder or own_server):

@@ -31009,7 +31009,8 @@ Platform-b took a recommended option for each and built it, and the orchestrator
    `~/OspreyFlow/backups` and says so. A blank value is the same, and the placeholder is compared as
    a path (`/var/lib/osprey/backups/` is it too). On Small on a server of your own
    (no `external:`) Amendment 33 always wrote the folder, so the placeholder there is that server's
-   chosen folder. Setup refuses the placeholder off a server, naming the reason, so a choice of it is
+   chosen folder, and so is the setting left out, which is the schema's default (the guided page
+   writes the default out and a hand-written file may not: one folder either way). Setup refuses the placeholder off a server, naming the reason, so a choice of it is
    never set aside without a word; the guided page never offers it (blank where it knows no home
    folder), and its Review says a folder never chosen goes to `~/OspreyFlow/backups`. The schema's default is unchanged: changing it would move every
    rendered `OSPREY_BACKUP_ROOT`.
@@ -31066,7 +31067,7 @@ Platform-b took a recommended option for each and built it, and the orchestrator
 
 | Invariant | Test |
 | --- | --- |
-| the placeholder and a blank are no folder named; a server's placeholder is its folder | `tests/harness/test_backup.py::test_a_config_without_a_backups_folder_falls_back_and_says_so`, `::test_every_profile_backs_up_to_its_configured_folder` |
+| the placeholder and a blank are no folder named; a server's placeholder, written or left out, is its folder | `tests/harness/test_backup.py::test_a_config_without_a_backups_folder_falls_back_and_says_so`, `::test_every_profile_backs_up_to_its_configured_folder`; `tests/harness/test_webapp_screens.py::test_the_three_screens_round_trip_through_osprey_yaml_and_render_identically` |
 | setup refuses the placeholder off a server | `tests/cli/test_answers.py::test_the_schemas_placeholder_named_as_the_backups_folder_is_refused_off_a_server` |
 | a cloud install gets no default; the prompt asks on lite | `tests/cli/test_answers.py::test_folders_backups_is_read_for_every_profile`; `tests/cli/test_install.py::test_install_asks_for_the_backups_folder` |
 | restore lists, looks in the deployment's folder first, offers only its own sets, never an `.incomplete` | `tests/harness/test_restore_finds_sets.py` (all three) |

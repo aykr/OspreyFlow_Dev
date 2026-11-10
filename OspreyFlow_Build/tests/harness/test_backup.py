@@ -67,6 +67,11 @@ def test_every_profile_backs_up_to_its_configured_folder(tmp_path: Path) -> None
     # The placeholder a server named on purpose is still that server's folder (Amendment 33).
     named = _own_server(tmp_path, backups=backup.LEGACY_PLACEHOLDER)
     assert backup.default_out_root(named) == Path(backup.LEGACY_PLACEHOLDER) / "small"
+    # And so is the schema's default when the server's settings leave it out (Amendment 38
+    # decision 1): the guided page writes it out and a hand-written file may not, one folder either
+    # way.
+    unset = _own_server(tmp_path, backups=None)
+    assert backup.backups_folder(unset) == (Path(backup.LEGACY_PLACEHOLDER), None)
 
 
 def test_a_config_without_a_backups_folder_falls_back_and_says_so(

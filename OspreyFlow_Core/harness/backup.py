@@ -120,9 +120,12 @@ def fallback_backups_folder() -> Path:
 
 def named_backups_folder(config: OspreyConfig) -> str | None:
     """`components.storage.backups` as written, when it names a folder (ADR-114 Amendment 38
-    decision 1: the placeholder, or a blank, names none off a server of your own); else `None`."""
+    decision 1: the placeholder, or a blank, names none off a server of your own); else `None`.
+    On a server of your own the setting left out is the schema's default, the placeholder, where
+    Amendment 33 always wrote."""
     storage = config.components.storage
-    value = storage.backups.strip() if "backups" in storage.model_fields_set else ""
+    given = "backups" in storage.model_fields_set or self_contained_small(config)
+    value = storage.backups.strip() if given else ""
     placeholder = value and Path(value) == Path(LEGACY_PLACEHOLDER)
     return value if value and (not placeholder or self_contained_small(config)) else None
 
@@ -176,7 +179,7 @@ def is_inside(folder: Path, root: Path) -> bool:
 
 def refuse_inside_the_checkout(folder: Path) -> None:
     """Amendment 37 decision 2: no backup is ever written inside the checkout (the git checkout, so
-    `OspreyFlow_Build/` and the root too), which is synced, copied and shared with its working
+    the folder holding this product too), which is synced, copied and shared with its working
     tree; a set holds the deployment's data and any real-data exception (ADR-035 §C3)."""
     checkout = checkout_root().resolve()
     if is_inside(folder, checkout):

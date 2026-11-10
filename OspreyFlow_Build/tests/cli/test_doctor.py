@@ -657,6 +657,7 @@ def test_the_doctor_warns_of_the_answers_backups_folder_before_the_install(
         {"components": {"storage": {"backups": "/var/lib/osprey/backups/"}}},
         {"profile": "small", "components": {"storage": {"backups": "/var/lib/osprey/backups"}},
          "network": {"public_origin": "https://osprey.example.internal"}},
+        {"profile": "small", "network": {"public_origin": "https://osprey.example.internal"}},
         {"profile": "small", "network": {"public_origin": "https://osprey.example.org"},
          "external": {"postgres": {"host": "db.example.org"}},
          "components": {"storage": {"backups": "/var/lib/osprey/backups"}}},
