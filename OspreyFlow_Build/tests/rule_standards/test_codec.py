@@ -21,8 +21,10 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -317,3 +319,32 @@ def test_a_blank_the_sentence_refuses_is_refused_in_words() -> None:
     assert planted != bpmn
     with pytest.raises(MalformedRuleFile, match="hour"):
         from_files(planted.encode(), dmn.encode())
+
+
+#: The `.bpmn` the workspace's *Show as BPMN* tests and harness draw: the codec's own output, so the
+#: drawing is tested against what the export route really sends (rule 15), never a hand-written file.
+WORKSPACE_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "OspreyFlow_Core/apps/workspace/src/alerts/ruleStandards/fixtures/visits-to-listed-people.bpmn"
+)
+
+
+def workspace_fixture_rule() -> SentenceRuleInput:
+    sentence = RuleSentence.model_validate({
+        "subject": "Person",
+        "conditions": [{"op": "one_of", "property": "listing", "values": ["sanction", "pep"]}],
+        "frequency": {"kind": "count", "link_type": "VISITED", "at_least": 3, "within_days": 7},
+        "severity": "high",
+    })  # fmt: skip
+    return SentenceRuleInput(name="Visits to listed people", sentence=sentence)
+
+
+def test_the_workspace_fixture_is_the_codecs_own_output() -> None:
+    written = to_bpmn(workspace_fixture_rule(), dataset_id="ds-prison-visits")
+    if os.environ.get("OSPREY_WRITE_FIXTURES") == "1":
+        WORKSPACE_FIXTURE.parent.mkdir(parents=True, exist_ok=True)
+        WORKSPACE_FIXTURE.write_text(written)
+    assert WORKSPACE_FIXTURE.read_text() == written, (
+        "the workspace's BPMN fixture is not what the codec writes; rewrite it with "
+        "OSPREY_WRITE_FIXTURES=1"
+    )

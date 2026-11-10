@@ -34,3 +34,24 @@ reader's case does not read). The real store's refusal is the live file's (§3).
 
 A first attempt at a "parsed before the cap" plant was a no-op (`… if False else None`). It passed, as it
 should have, and proves nothing, so it is not counted. The "no cap" plant is the one that counts.
+
+## §3 The live file (`tests/ingest/test_rule_standards_routes_live.py`)
+
+Run under the lease. Its figures are in `gates/<sha>.live.txt`.
+
+## §4 *Show as BPMN* (`src/alerts/ruleStandards/`; `ShowAsBpmn.test.tsx`, 5 cases)
+
+The drawing is tested against `fixtures/visits-to-listed-people.bpmn`, which
+`test_the_workspace_fixture_is_the_codecs_own_output` keeps equal to `to_bpmn`'s output.
+
+| Plant | Red |
+| --- | --- |
+| focus not given back to the button | `gives focus back to the button when it closes, by Escape or by Close` |
+| Escape not handled | the same case |
+| the sequence flows not checked (the whole condition removed) | `does not draw a process OspreyFlow does not run` |
+| a second end event drawn as the first | that case, and `says so, and draws nothing, for a file that is not a rule's process` |
+
+A first flows plant removed only `flows.size !== 2`, so the other two checks still caught the crossed
+flow. It passed, and is not counted.
+
+The keyboard spec's reds (each id's handler removed) are recorded with the Playwright run.

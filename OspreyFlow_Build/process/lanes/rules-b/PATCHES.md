@@ -21,3 +21,9 @@ at `App.tsx`'s neighbouring hunks; restore those files from the branch instead. 
 Not yet built anywhere: the Studio's door to the help page (studio's review, accept-type and merge
 screens, which L3.4 and L1.x build) and the boards' Alerts panel mount (L3.3). Both take
 `help/RolesHelpPage` and `reports/AlertsPanel` as they stand.
+
+## L2.11a (10 November 2026)
+
+| Patch | Owner | What | Its test, red first |
+| --- | --- | --- | --- |
+| `registry-L2.11a.patch` | shared (`keyboard/actionRegistry.ts`) | `RULE_STANDARDS_ACTIONS` (3 ids): *Show as BPMN* opened, then closed by Escape and by *Close*, with focus back on the button each time. It goes in with the merge itself, since `keyboard/rule-standards.spec.ts` imports it | each id's case in `rule-standards.spec.ts`, red with its handler removed (l2.11a/RED_RECORD §4) |
