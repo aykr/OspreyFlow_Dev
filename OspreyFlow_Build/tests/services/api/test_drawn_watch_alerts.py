@@ -267,9 +267,13 @@ async def test_a_failing_drawn_watch_run_is_audited_never_the_loads_failure(
     _tall()
     alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
     await _after_run(_deps(run, _Alerts(fails=True)), alike)  # does not raise
-    (failed,) = [r for r in run.world.audit.records if r["action"] == "watch_evaluation_failed"]
-    assert failed["resolved_query"] == {"load_id": "load-9", "drawn_watches": True,
-                                        "error": "the alert store is down"}  # fmt: skip
+    failed = [r for r in run.world.audit.records if r["action"] == "watch_evaluation_failed"]
+    # L3.H2 (rule 7): fixed words under the loader; the error under the watch's owner, Alice.
+    by = {r["principal"].id: r for r in failed}
+    assert by[LOADER.id]["resolved_query"] == {"load_id": "load-9", "drawn_watches": True,
+                                               "error": "a drawn watch could not run"}  # fmt: skip
+    assert by["alice"]["resolved_query"]["error"] == "the alert store is down"
+    assert by["alice"]["investigation_id"] == K
 
 
 async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into(

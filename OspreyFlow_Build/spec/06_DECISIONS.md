@@ -33057,6 +33057,40 @@ that would put an element above the new ceiling is refused. Data held above it i
 - **Decision 4:** `test_deployment_ceiling_backstop.py`.
 - **Decision 5:** `tests/test_seed_internal_ceiling.py`.
 
+### ADR-148, Amendment 4 (10 November 2026) — the ceiling on promotions and drawn merges as built (L3.H2)
+
+Status: accepted. Written in the case lane at step L3.H2. It records the write side that Amendment 2
+decision 6 carried to the case lane (`promotions.py`, `drawn_merge.py`).
+
+**Context.** Before this step, a promotion of a drawn item marked above `deployment.highest_marking` committed,
+because the promotion's marking check knew only the dataset's own highest. A drawn merge was stopped only by the
+stamping graph's backstop (Amendment 2 decision 4), inside its load's transaction, after its promotion record
+had been stored.
+
+**Decision.** A promotion, a layer merge or a drawn merge that would write anything marked above the
+deployment's highest marking is refused before anything is written, in words that name the limit and never the
+item's content. The ceiling is the rendered setting (`OSPREY_HIGHEST_MARKING`), read as `run_recipe` reads it.
+It is judged in three places:
+1. **Each item's marking check** (`Promotions._problems`) names the deployment's limit too, where it is stricter
+   than the dataset's highest: on the sheet, at *Promote*, at a layer merge, for a drawn merge's items and at the
+   approval's re-check. A picture's document is judged the same way; a picture above the limit is left behind,
+   said why, and its node goes. A drawn merge's chosen match, marked as the stricter of its ends, is judged too
+   (`drawn_merge._plan`), and again at the merge's approval (`MergeCommit.recheck`). Each is a 422
+   `check_failed`, or at an approval a rejection, 409 `items_changed`.
+2. **The promotion's record**, which holds every marking it would write (its items, a picture's document, a drawn
+   merge's matches and each retyped item's copy as it will be written), is refused before it is stored: 422 `above_the_deployments_highest_marking`, as a load is.
+3. **The load itself** refuses its record's marking before its transaction begins, for a ceiling lowered while
+   the promotion waited. The promotion is rejected, never left waiting.
+
+`Promotions.highest()`, which reads an unmarked dataset at the scheme's highest, is unchanged: decision 6's
+reads are not capped.
+
+**Carried:** the promotion sheet's `highest_marking` and its marking check's line state the dataset's highest,
+not the deployment's where that is stricter (each item's own words do name it).
+
+**Tests:** `tests/services/api/test_promotion_ceiling.py`, each case red by its plant
+(`process/lanes/case/gates/L3.H2-plants.txt`).
+
 ### ADR-135, Amendment 4 (10 November 2026) — the model route on the `cloud-platform` profile: the client's own approved gateway, or Bedrock (P11)
 
 *The owner's decision of 10 November. Supersedes P11's "held until the client asks for AI": the client

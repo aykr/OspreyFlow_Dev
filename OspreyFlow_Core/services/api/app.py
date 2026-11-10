@@ -598,6 +598,7 @@ from .case_views import (
     ViewNotFound,
     open_view,
 )
+from .change_stream import touched_node_ids
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -629,6 +630,7 @@ from .dataset_scope import (
     DrawnOnItsBoard,
     NoAnalystLayerError,
     UnknownDatasetError,
+    holds_a_level_in,
     made_in,
     outside_any_case,
     read_in_view,
@@ -903,6 +905,7 @@ from .recipe_run import (
     _evaluate_watches_best_effort,
     _owner_resolver,
     _rule_gate,
+    run_drawn_watches_best_effort,
     run_recipe_as,
 )
 from .recipe_runs import External, RecipeRun, RecipeRunStore, RunTrigger
@@ -2121,24 +2124,6 @@ def _owner_with_custom_roles(app_: Any, resolve: Callable[[str], Awaitable[Princ
         return await with_custom_roles(app_, await resolve(owner_id))
 
     return resolved
-
-
-def holds_a_level_in(
-    investigations: InvestigationStore | Callable[[], InvestigationStore],
-) -> Callable[[Principal, str], Any]:
-    """Whether a principal holds any level on a case, by the case's own Viewer check: what a case
-    made from another and not yet converted asks before its reader reads its original's layer
-    (`scope_to_case`). Given as a getter, the store is looked up only when such a case asks."""
-
-    async def holds(principal: Principal, investigation_id: str) -> bool:
-        store = investigations() if callable(investigations) else investigations
-        try:
-            await store.get_authorized(investigation_id, principal, need=AccessLevel.VIEWER)
-        except (InvestigationNotFoundError, InsufficientAccessError):
-            return False
-        return True
-
-    return holds
 
 
 def get_watch_reach(request: Request) -> DatasetReach:
@@ -15986,13 +15971,18 @@ async def release_held_rows_route(
     kyc_expiries: KycExpiriesDep,
     patterns_store: PatternsStoreDep,
     recipe_runs: RecipeRunsDep,
+    board_items: BoardItemsDep,
+    datasets: DatasetsDep,
+    investigations: InvestigationsDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
     rule_reach: RuleReachDep = None,  # type: ignore[assignment]
 ) -> LoadReportView:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
-    failing rule no longer holds them (ruling 1: the release is the human judgement)."""
+    failing rule no longer holds them (ruling 1: the release is the human judgement). A load of its
+    own, it runs the drawn watches as every load does (spec 01; L3.H2), and its answer says how
+    many alerts they raised for the releaser alone."""
     held = [
         await held_rows.get_authorized(held_id, investigation.id, principal)
         for held_id in dict.fromkeys(body.ids)
@@ -16097,6 +16087,12 @@ async def release_held_rows_route(
         },
         result_cardinality=len(decided),
     )
+    report.drawn_watch_alerts = await run_drawn_watches_best_effort(
+        node_ids=touched_node_ids(report), dataset_id=recipe.dataset_id, principal=principal,
+        investigation_id=investigation.id, load_id=report.load_id, board_items=board_items,
+        datasets=datasets, investigations=investigations, graph=graph, ontology=ontology,
+        principal_resolver=principal_resolver, alerts_store=alerts_store, audit=audit,
+    )  # fmt: skip
     return report_view(report, principal, handling_scheme)
 
 

@@ -17,6 +17,10 @@ What a mistake would do, and the case that catches it:
 - a second home case at a later *Make live*, or owners asked again:
   `test_a_later_make_live_asks_nothing_and_makes_no_second_home_case`;
 - a home case removed while its dataset exists: `test_a_home_case_cannot_be_removed`;
+- a non-member holding `remove_case` told a home case is there (its 409, not the 404 of a case
+  that does not exist; rule 3): `test_a_non_member_holding_remove_case_finds_no_case_home_or_not`;
+- the administrator's safety net removing a home case, or reaching another unit's case:
+  `test_the_administrators_safety_net_removes_a_working_case_but_keeps_a_home_case`;
 - the System setting changed by anyone but an administrator, or unaudited:
   `test_the_owner_setting_is_an_administrators_and_audited`.
 """
@@ -53,6 +57,12 @@ PEOPLE = {
         ("analyst", "ana-1", ["analyst"]),
     )
 }
+# L3.H2: an analyst of the unit holding `remove_case` but no level on any case, and an
+# administrator of another unit.
+PEOPLE["outsider"] = Principal(id="out-1", clearance="SECRET", org_unit="unit-1", roles=["analyst"])
+PEOPLE["admin-2"] = Principal(
+    id="adm-2", clearance="SECRET", org_unit="unit-2", roles=["osprey-admin"]
+)
 PERSONS = {"eng-1", "ana-1", "per-2", "adm-1"}  # what the directory holds as people
 ROBOT = "service-account-loader"
 
@@ -118,6 +128,14 @@ class _Cases:
             for c, g in self.grants.items()
             if principal.id in g and c not in self.removed
         ]
+
+    async def get_for_access_admin(self, case_id: str, principal: Principal) -> Investigation:
+        """The administrator's safety net as the real store finds it: by the case's unit alone,
+        never a removed case, another unit's finding nothing."""
+        made = self.made.get(case_id)
+        if made is None or case_id in self.removed or made.owning_unit != principal.org_unit:
+            raise InvestigationNotFoundError(case_id)
+        return made
 
     async def hidden_tab_ids(self, principal: Principal) -> set[str]:
         return set()
@@ -283,6 +301,47 @@ def test_a_home_case_cannot_be_removed(world: SimpleNamespace) -> None:
     assert home not in world.cases.removed
     working = world.client.delete("/v1/investigations/case-a", headers=_as("analyst"))
     assert working.status_code == 204, working.text
+
+
+def test_a_non_member_holding_remove_case_finds_no_case_home_or_not(world: SimpleNamespace) -> None:
+    """L3.H2 (rule 3): an analyst of the unit, holding `remove_case` but no level on either case,
+    is told of no case: the home case and a working case answer the same 404 as a case that does
+    not exist, never the home case's 409, which would say a dataset's home case is there."""
+    _make_live(world, {"people": ["ana-1"]})
+    home = world.datasets.homes["ds-a"].investigation_id
+    answers = [
+        world.client.delete(f"/v1/investigations/{case}", headers=_as("outsider"))
+        for case in (home, "case-a", "no-such-case")
+    ]
+    assert [a.status_code for a in answers] == [404, 404, 404], [a.text for a in answers]
+    assert answers[0].json() == answers[1].json() == answers[2].json()
+    assert world.cases.removed == []
+
+
+def test_the_administrators_safety_net_removes_a_working_case_but_keeps_a_home_case(
+    world: SimpleNamespace,
+) -> None:
+    """L3.H2 (ADR-052 §4; ADR-145 Amendment 4 decision 2): the administrator of the case's own
+    unit, holding no level on it, removes a working case through the safety net, audited as the
+    override it is; a home case is kept from them as from its Authors; another unit's
+    administrator finds neither."""
+    _make_live(world, {"people": ["ana-1"]})
+    home = world.datasets.homes["ds-a"].investigation_id
+    missing = world.client.delete("/v1/investigations/no-such-case", headers=_as("admin-2"))
+    for case in (home, "case-a"):
+        other = world.client.delete(f"/v1/investigations/{case}", headers=_as("admin-2"))
+        assert other.status_code == 404, other.text
+        assert other.json() == missing.json()
+    kept = world.client.delete(f"/v1/investigations/{home}", headers=_as("admin"))
+    assert kept.status_code == 409, kept.text
+    assert kept.json()["detail"]["error"] == "home_case_kept"
+    removed = world.client.delete("/v1/investigations/case-a", headers=_as("admin"))
+    assert removed.status_code == 204, removed.text
+    assert world.cases.removed == ["case-a"]
+    overrides = [e for e in world.audit.entries if e["action"] == "access_admin_override"]
+    assert [e["investigation_id"] for e in overrides] == [home, "case-a"]
+    (entry,) = [e for e in world.audit.entries if e["action"] == "remove_investigation"]
+    assert entry["investigation_id"] == "case-a" and entry["principal"].id == "adm-1"
 
 
 def test_the_owner_setting_is_an_administrators_and_audited(world: SimpleNamespace) -> None:

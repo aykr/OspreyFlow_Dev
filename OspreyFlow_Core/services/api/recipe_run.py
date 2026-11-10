@@ -15,8 +15,9 @@ not the route must make its own (the scheduler's `check_case` does; the seed del
 
 from __future__ import annotations
 
+import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
 from datetime import UTC, datetime
@@ -49,6 +50,7 @@ from .drawn_watches import DrawnWatchesFailed, DrawnWatchRun, holds_a_level_in, 
 from .evaluation import DatasetReach, evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
+from .investigations import InvestigationStore
 from .jobs import JobQueue
 from .kyc_expiries import KycExpiryStore
 from .list_connector import ListStore
@@ -68,6 +70,8 @@ from .studio_publish import LoadSink, run_published_recipe
 from .target_models import TargetModelStore
 from .typology_rules import TypologyRuleStore
 from .watch_reach import owner_reaches_dataset_in
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -592,6 +596,11 @@ def always_judges(rule: TypologyRule) -> bool:
     return is_deployment_wide(rule) or is_just_me(rule)
 
 
+#: What a loader's own audit entry says when a drawn watch could not run: fixed words, since the
+#: failing watch may be another owner's (rule 7; L3.H2).
+DRAWN_WATCH_FAILED = "a drawn watch could not run"
+
+
 async def _run_drawn_watches_best_effort(
     deps: RecipeRunDeps,
     entry: ChangeStreamEntry,
@@ -601,43 +610,89 @@ async def _run_drawn_watches_best_effort(
     investigation_id: str,
     load_id: str,
 ) -> int:
+    """The run path's drawn watches (`run_drawn_watches_best_effort`), with the run's stores."""
+    if deps.board_items is None or deps.datasets is None or deps.investigations is None:
+        return 0
+    return await run_drawn_watches_best_effort(
+        node_ids=entry.node_ids, dataset_id=dataset_id, principal=principal,
+        investigation_id=investigation_id, load_id=load_id, board_items=deps.board_items,
+        datasets=deps.datasets, investigations=deps.investigations, graph=deps.graph,
+        ontology=deps.ontology, principal_resolver=deps.principal_resolver,
+        alerts_store=deps.alerts_store, audit=deps.audit,
+    )  # fmt: skip
+
+
+async def run_drawn_watches_best_effort(
+    *,
+    node_ids: Sequence[str],
+    dataset_id: str | None,
+    principal: Principal,
+    investigation_id: str,
+    load_id: str,
+    board_items: BoardItemStore,
+    datasets: DatasetStore,
+    investigations: InvestigationStore,
+    graph: GraphPort,
+    ontology: OntologySchema,
+    principal_resolver: PrincipalResolver,
+    alerts_store: AlertStore,
+    audit: AuditWriter,
+) -> int:
     """L3.6 (ADR-143 Amendment 2 decision 8; ADR-146 decision 4): every live drawn watch on the
     dataset the load wrote into, run against the nodes it wrote or matched (`DrawnWatchRun`), each
     match raised into the one queue as the watch owner's alert. Each owner is resolved afresh, as
     for every watch (`_owner_resolver`), and read in their watch's case through the adapter.
-    Best effort, as the other watches: a failure is audited, never the load's."""
-    if (
-        deps.board_items is None
-        or deps.datasets is None
-        or deps.investigations is None
-        or dataset_id is None
-    ):
+    Best effort, as the other watches: a failure is audited, never the load's. Every load runs it:
+    the run path (`run_recipe_as`) and a release of held rows (L3.H2), which is a load of its own.
+    Returns the alerts raised for `principal` alone (rule 7)."""
+    if dataset_id is None:
         return 0
     run = DrawnWatchRun(
-        items=deps.board_items,
-        graph=deps.graph,
-        ontology=deps.ontology,
-        owner_of=_owner_resolver(principal, deps.principal_resolver),
-        datasets=deps.datasets,
-        holds_a_level=holds_a_level_in(deps.investigations),
-        raise_alert=raise_into(deps.alerts_store),
+        items=board_items,
+        graph=graph,
+        ontology=ontology,
+        owner_of=_owner_resolver(principal, principal_resolver),
+        datasets=datasets,
+        holds_a_level=holds_a_level_in(investigations),
+        raise_alert=raise_into(alerts_store),
     )
-    counted = 0
     try:
         return await run.after_load(
-            dataset_id, entry.node_ids, load_id=load_id, counted_for=principal.id
+            dataset_id, list(node_ids), load_id=load_id, counted_for=principal.id
         )
     except Exception as exc:  # noqa: BLE001 - as `_evaluate_watches_best_effort`'s: audited
-        # Another owner's watch failing never changes what the loader is told (rule 7).
-        counted = exc.counted if isinstance(exc, DrawnWatchesFailed) else 0
-        await deps.audit.record(
+        # Another owner's watch failing never changes what the loader is told (rule 7), nor is its
+        # error, which may name that owner or their identity provider, written under the loader:
+        # fixed words under the loader, the detail under each failing watch's own owner.
+        await audit.record(
             principal=principal,
             action="watch_evaluation_failed",
             investigation_id=investigation_id,
-            resolved_query={"load_id": load_id, "drawn_watches": True, "error": str(exc)},
+            resolved_query={"load_id": load_id, "drawn_watches": True, "error": DRAWN_WATCH_FAILED},
             result_cardinality=0,
         )
-        return counted
+        if not isinstance(exc, DrawnWatchesFailed):
+            # Not one owner's (the board store, the dataset registry): the operator's log alone.
+            _log.warning("the drawn watches could not run for load %s", load_id, exc_info=exc)
+            return 0
+        for failure in exc.failures:
+            if failure.owner is None:
+                # Resolving the owner is what failed: there is no one to write it under but the
+                # operator's log.
+                _log.warning(
+                    "drawn watch %s could not run: its owner was not resolved",
+                    failure.watch.id, exc_info=failure.error,
+                )  # fmt: skip
+                continue
+            await audit.record(
+                principal=failure.owner,
+                action="watch_evaluation_failed",
+                investigation_id=failure.watch.case_id,
+                resolved_query={"load_id": load_id, "drawn_watch_id": failure.watch.id,
+                                "error": str(failure.error)},
+                result_cardinality=0,
+            )  # fmt: skip
+        return exc.counted
 
 
 async def _evaluate_watches_best_effort(

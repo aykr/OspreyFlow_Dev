@@ -87,7 +87,15 @@ from .case_views import CaseViewStore, StoredCaseView
 from .datasets import DRAWN, SOURCE, Dataset, DrawnAlreadyMerged, DrawnMerged
 from .evidence_brief import display_name
 from .promotion_store import CopyRow, MergeMatchRow, PromotionRecord
-from .promotions import PromotionRefused, Promotions, _detail, _kind, _Read, is_gazetteer
+from .promotions import (
+    PromotionRefused,
+    Promotions,
+    _detail,
+    _kind,
+    _Read,
+    deployment_ceiling,
+    is_gazetteer,
+)
 from .rule_evaluation import handling_readable
 
 logger = logging.getLogger(__name__)
@@ -616,6 +624,7 @@ class DrawnMerges:
         } if picks else {}  # fmt: skip
         rows: list[MergeMatchRow] = []
         scheme, highest = promotions.boards.scheme, promotions.highest(target)
+        ceiling = promotions.ceiling()
         for pick in picks:
             if (
                 pick not in offered
@@ -636,6 +645,14 @@ class DrawnMerges:
                     "check_failed",
                     f"A match would be marked {stricter.classification}, above {target.name}'s "
                     f"highest allowed marking, {highest}.",
+                    status=422,
+                )
+            over = promotions.above_the_ceiling(stricter.classification, ceiling)
+            if over is not None:
+                # ADR-148 decision 10: a match is written, so it is judged as a write is.
+                raise PromotionRefused(
+                    "check_failed",
+                    f"A match would be marked {stricter.classification}, {over}",
                     status=422,
                 )
             rows.append(
@@ -723,6 +740,9 @@ class DrawnMerges:
             )
         goes, left, rows, copies, _ = await self._plan(drawn, case_id, target, body, reader)
         markings = [Handling.model_validate_json(r.handling).classification for r in rows]
+        # Each copy as it will be written (re-read whole after the items were judged), so one
+        # raised between the two reads is judged against the ceiling too (L3.H2's review).
+        markings += [Handling.model_validate_json(c.handling).classification for c in copies]
         # The record, its matches and its copies in one store write (the second review, item 13).
         record = await promotions._record(
             trigger="drawn_merge", case_id=case_id, board_id=None, dataset=target,
@@ -923,6 +943,7 @@ class MergeCommit:
             return "changed"
         held = (await self.datasets.egress_of([record.dataset_id])).get(record.dataset_id)
         highest = (held.highest_marking if held else None) or self.scheme.classification[-1]
+        ceiling = deployment_ceiling(self.scheme)
         for r in rows:
             ends = (nodes[r.drawn].handling, nodes[r.loaded].handling)
             stricter = merge_handling(*ends, self.scheme)
@@ -931,6 +952,9 @@ class MergeCommit:
             # (A loaded end read here is in the target: the read is the target and the drawing,
             # and a loaded node is in no drawing.)
             if not self.scheme.clears(highest, stricter.classification):
+                return "changed"
+            # The deployment's ceiling lowered since it was sent (ADR-148 decision 10; L3.H2).
+            if not ceiling.is_the_scheme_s_highest and ceiling.above(stricter.classification):
                 return "changed"
         return None
 

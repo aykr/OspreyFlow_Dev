@@ -566,6 +566,8 @@ async def _release(
         valkey=1, handling_scheme=SCHEME, alerts_store=1, principal_resolver=1,  # type: ignore[arg-type]
         typology_rules=1, held_rows=held, screening_lists=1, compute=1,  # type: ignore[arg-type]
         kyc_expiries=1, patterns_store=1, recipe_runs=ledger,  # type: ignore[arg-type]
+        # L3.H2: the drawn watches' stores (the recipe names no dataset, so none runs here).
+        board_items=1, datasets=1, investigations=1,  # type: ignore[arg-type]
     )  # fmt: skip
 
 
