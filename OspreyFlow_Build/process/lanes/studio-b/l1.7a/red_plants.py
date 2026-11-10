@@ -230,6 +230,17 @@ PLANTS = [
                 "        with Repo(str(repo_root)) as early:\n"
                 "            early.open_index(config=ConfigFile())\n" + ACQUIRE)],
      [REPO_TESTS], [LOCK_PROBE], "outside the lock: ['index read']"),
+    ("refused-left-ahead", "a refused publish leaves its file and index as it wrote them, "
+     "ahead of HEAD (L1.7a's carry)",
+     [("                _put_back_as_head_holds(repo, repo_root, relative_path)\n",
+       "                pass  # PLANT\n")], [REPO_TESTS],
+     ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it",
+      "test_a_new_recipe_refused_is_not_left_on_the_volume",
+      "test_a_failure_after_staging_leaves_nothing_committed"]),
+    ("aside-contents-unchecked", "an aside of mkdtemp's shape swept whatever it holds",
+     [("                ours = sorted(os.listdir(left)) in ([], [\".git\"])\n",
+       "                ours = True  # PLANT\n")], [REPO_TESTS],
+     ["test_an_aside_holding_more_than_a_git_directory_is_kept"], "holding more than .git was swept"),
 ]
 
 def run(files: list[str]) -> str:
