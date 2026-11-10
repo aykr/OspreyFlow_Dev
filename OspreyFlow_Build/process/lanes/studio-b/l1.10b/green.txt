@@ -1,8 +1,10 @@
-# head a394f8c; no plant
+# head 3cd63d3; no plant
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_only_the_row_check_s_refusals_remove_the_step_tables
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_rendered_every_pack_is_seeded_as_before
@@ -13,7 +15,10 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_fixture_cor
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
-PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_public_datasets_declaration_holds_for_every_recipe
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_a_staged_public_dataset_is_seeded_as_before
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
@@ -22,4 +27,8 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py:
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
-23 passed, 1 warning in 9.08s
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
+32 passed, 1 warning in 10.87s

@@ -37,8 +37,12 @@ DRY_RUN_CHECK = (
     "        recipe, sample, ceiling if ceiling is not None else DeploymentCeiling.from_env()\n"
     "    )\n"
 )
-WHOLE_FILE_CHECK = "        refuse_rows_above_the_ceiling(recipe, all_rows, DeploymentCeiling.from_env())\n"
-REMOVAL = "        await asyncio.to_thread(remove_step_tables, prepared, storage)\n        raise\n"
+WHOLE_FILE_CHECK = (
+    "            await asyncio.to_thread(\n"
+    "                refuse_rows_above_the_ceiling, recipe, all_rows, DeploymentCeiling.from_env()\n"
+    "            )\n"
+)
+REMOVAL = "        await remove_step_tables_on(refused, prepared, storage)\n        raise\n"
 
 #: (slug, what, [(file, old, new)], test files, the tests that must go red, the reason or None)
 PLANTS = [
@@ -54,12 +58,15 @@ PLANTS = [
      "a refused staged load left its step tables"),
     ("removed-on-success", "a run the ceiling passes loses its step tables too",
      [(PIPELINE, "    finish_staged_report(branch, prepared)\n",
-       "    finish_staged_report(branch, prepared)\n    remove_step_tables(prepared, storage)  # PLANT\n")],
+       "    finish_staged_report(branch, prepared)\n"
+       "    await remove_step_tables_on(AboveTheDeploymentCeiling('OFFICIAL'), prepared, storage)  # PLANT\n")],
      [TABLES], ["test_a_staged_run_within_the_ceiling_keeps_its_step_tables"],
      "AssertionError: assert [] == ['titled.parq"),
     ("removal-too-wide", "the removal clears every load's tables, not the refused run's own",
-     [(STAGED, "    for path in prepared.paths.values():\n        fs.delete_file(path)\n",
-       "    fs._fs.delete_dir_contents(f\"{storage.bucket}/loads\")  # PLANT\n")],
+     # The test store's own subtree (`LocalStore._fs`): the plant clears every load's folder there, the
+     # widest a removal could reach; the real store has no such attribute, and needs none here.
+     [(STAGED, "    for path in prepared.paths.values():\n        try:\n",
+       "    fs._fs.delete_dir_contents(f\"{storage.bucket}/loads\")  # PLANT\n    for path in ():\n        try:\n")],
      [TABLES], ["test_the_removal_touches_no_other_run_s_tables"],
      "AssertionError: assert [] == ['titled.parq"),
     ("pack-undeclared", "a pack's declaration dropped (the Ledger's)",
@@ -103,10 +110,10 @@ PLANTS = [
      [(ENGINE, DRY_RUN_CHECK, "")],
      [VERIFYING], ["test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling"], 'AssertionError: {"rows_read":'),
     ("sample-only", "Verify judges only its sample, not the whole file",
-     [(VERIFY, WHOLE_FILE_CHECK, "")],
+     [(VERIFY, WHOLE_FILE_CHECK, "            pass  # PLANT\n")],
      [VERIFYING], ["test_test_judges_every_row_of_the_file_not_only_its_sample"], 'AssertionError: {"rows_read":'),
     ("test-unjudged", "Test judges nothing against the ceiling, in Verify or its dry run",
-     [(ENGINE, DRY_RUN_CHECK, ""), (VERIFY, WHOLE_FILE_CHECK, "")],
+     [(ENGINE, DRY_RUN_CHECK, ""), (VERIFY, WHOLE_FILE_CHECK, "            pass  # PLANT\n")],
      [VERIFYING], ["test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words",
                    "test_test_judges_every_row_of_the_file_not_only_its_sample",
                    "test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling"], 'AssertionError: {"rows_read":'),
