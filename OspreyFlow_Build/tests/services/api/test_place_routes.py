@@ -615,7 +615,10 @@ def test_an_analyst_is_refused_on_the_dataset_s_sources_routes(name: str) -> Non
     finally:
         app.dependency_overrides.pop(get_principal, None)
         app.dependency_overrides.pop(require_studio_dataset, None)
-    assert response.status_code == 403 and "studio role" in response.text, (name, response.text)
+    # The Studio role's refusal in words (CARRIES row 40, `studio_role_refusal`): the right, and the
+    # roles that hold it, never the role's id.
+    refused = response.status_code == 403 and "It is held by the" in response.text
+    assert refused and "Admin › Roles" in response.text, (name, response.text)
 
 
 def test_the_export_ledger_is_exempt_only_while_no_screen_calls_it() -> None:
