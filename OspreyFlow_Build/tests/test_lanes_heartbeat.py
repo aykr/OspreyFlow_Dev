@@ -443,3 +443,16 @@ def test_watch_shows_the_summary_unless_asked_for_the_full_view(hb, tmp_path) ->
     full = hb("watch", "--full", OSPREY_WATCH_PASSES="1", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
     assert "OSPREYFLOW ·" in short and "Test stack" not in short
     assert "Test stack" in full and "OSPREYFLOW ·" not in full
+
+
+def test_an_estimate_is_cut_by_characters_never_through_one(hb, tmp_path) -> None:
+    """10 November 2026: an estimate reading "parts 2–5 …" was cut at a fixed byte width, through the en dash's
+    three bytes, so `show` and `summary` printed invalid UTF-8 and every lane's lanes-check failed decoding them.
+    The cut is by characters: an estimate of en dashes and arrows past the width comes out whole up to it."""
+    table = tmp_path / "progress.tsv"
+    table.write_text("admin\tT1\tM\tbuilding\tFaster runs\n")
+    note = "–" * 30 + "→" * 30  # 60 characters, 180 bytes: any byte cut lands inside one
+    (tmp_path / "estimates.tsv").write_text(f"# as of 2026-11-10T12:00:00Z\nadmin\tT1\t{note}\t~13:30\tA\n")
+    for verb in ("show", "summary"):
+        out = hb(verb, OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout  # text=True: a bad byte raises
+        assert "–" * 30 + "→" * 10 in out, verb

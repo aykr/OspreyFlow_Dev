@@ -161,7 +161,9 @@ estimates() {
     [ -n "$t" ] && ago=", $(( ($(date -u +%s) - t) / 60 ))m ago"
   fi
   echo "ESTIMATED TIME TO MERGE (the orchestrator's${asof:+, as of ${asof:11:5} UTC}$ago):"
-  grep -v '^#' "$ESTIMATES" | awk -F'\t' 'NF >= 4 { printf "  %-9s %-6s %-46s %s\n", $1, $2, substr($3, 1, 46), $4 }'
+  # Cut and padded by characters, never bytes (BSD awk and cut count bytes: an en dash cut through printed invalid
+  # UTF-8, 10 November 2026): perl in UTF-8 mode, on macOS and Linux alike.
+  grep -v '^#' "$ESTIMATES" | perl -CSD -F'\t' -lane 'next if @F < 4; printf "  %-9s %-6s %-46s %s\n", $F[0], $F[1], substr($F[2], 0, 46), $F[3]'
   echo
 }
 
@@ -238,7 +240,7 @@ show() {
         printf '%s · %s · account %s%s\n' "$state" "$ago" "$account" "${merged:+ · $merged}"
       fi
       now="$(current_of "$lane")"
-      line2="${now:+now ${now%% *} $(echo "${now#* }" | cut -c1-48)}"
+      line2="${now:+now ${now%% *} $(printf '%s\n' "${now#* }" | perl -CSD -ne 'print substr($_, 0, 48)' | tr -d '\n')}"
       [ -n "$note" ] && line2="${line2:+$line2 — }$note"
       [ -n "$line2" ] && printf '  %s\n' "${line2:0:$((width - 2))}"
       continue
@@ -282,8 +284,9 @@ summary() {
     local asof; asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | head -1)"
     echo
     echo "REMAINING (the orchestrator's estimates${asof:+, as of ${asof:11:5} UTC}):"
-    grep -v '^#' "$ESTIMATES" | awk -F'\t' 'NF >= 4 { t = ($5 == "B") ? "B" : "A"; rows[t] = rows[t] sprintf("    %-10s %-7s %-40s %s\n", $1, $2, substr($3, 1, 40), $4) }
-      END { if (rows["A"] != "") printf "  Demo track:\n%s", rows["A"]; if (rows["B"] != "") printf "  Client track:\n%s", rows["B"] }'
+    grep -v '^#' "$ESTIMATES" | perl -CSD -F'\t' -lane 'next if @F < 4; $t = (($F[4] // "") eq "B") ? "B" : "A";
+        $r{$t} .= sprintf("    %-10s %-7s %-40s %s\n", $F[0], $F[1], substr($F[2], 0, 40), $F[3]);
+      END { print "  Demo track:\n$r{A}" =~ s/\n\z//r if $r{A}; print "  Client track:\n$r{B}" =~ s/\n\z//r if $r{B} }'
   fi
   echo
   local line="" lane st
