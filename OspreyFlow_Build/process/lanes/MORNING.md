@@ -20,7 +20,15 @@ Your word, 10 November: "going forward can you go ahead with the recommended opt
 decided this way, draw up a summary for me, when i come back online". Each entry: the question, what I chose and why,
 where it is recorded, and how to overrule it. Overrule any of them and I'll reverse it.
 
-*(None yet.)*
+1. **ADR-148 question 2: where the settings and key files live** (model settings, map settings, the write-only
+   keys) on the cloud-platform profile. **Chose (a):** in Postgres (RDS), the keys encrypted with a KMS key the
+   namespace holds, each replica told of a change through Redis. **Why:** it needs nothing the Cloud Platform team
+   may refuse; (b), Kubernetes Secrets the Conduit writes, needs a Role to write Secrets in its own namespace.
+   **Recorded:** ADR-148's open question 2, closed in the decision log; P8 builds it. **To overrule:** say (b).
+2. **ADR-148 question 3: Java in the Conduit on the cloud-platform profile.** **Chose (a):** this profile builds
+   the Conduit without Java, and the basemap is built off-platform with `ospreyflow map build` and uploaded.
+   **Why:** a smaller image with fewer scan findings, and the profile needs no in-product build. **Recorded:**
+   ADR-148's open question 3, closed; P7 builds it. **To overrule:** say "one image everywhere".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

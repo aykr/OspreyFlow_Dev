@@ -31442,6 +31442,9 @@ ourselves. What the platform requires, and where `main` stands:
 3. **One Conduit image or two.** Decision 12 builds the Conduit without Java on this profile. Confirm, or
    keep one image everywhere and accept the larger image and its scan findings.
 
+
+**Closed on the orchestrator's recommendation, 10 November 2026** (the owner's standing word: "go ahead with the recommended option … draw up a summary for me"; `process/lanes/MORNING.md`'s summary, items 1 and 2; the owner may overrule): question 2, **(a)**, the settings and key files in Postgres with the keys encrypted by the namespace's KMS key; question 3, **the Conduit without Java on this profile**. Question 1 stays open until P8's report.
+
 ### Consequences
 
 - The `cluster` profile is not touched; `local-lite` and `small` are not touched except for the numeric
