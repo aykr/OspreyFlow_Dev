@@ -55,7 +55,7 @@ platform	P10	M	todo	Sign-in claims from Entra ID mapped by settings; no Keycloak
 platform	P11	M	todo	(held until the client asks for AI) Bedrock as a model engine (ADR-135 Am 4)
 platform-b	P6	S	todo	The case's gazetteer panel beside place search, by keyboard
 docs	D1	M	done	The website: drawing boards and three places, marked coming
-docs	D2a	M	building	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
+docs	D2a	M	done 99d927d	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
 docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
 docs	D2c	M	todo	The Cloud Platform deployment guide (after P7–P10; ADR-148)
 platform-b	P5b	S	building	Backups in a folder the administrator names at setup (ADR-114 Am 37)

@@ -1,19 +1,19 @@
-# as of 2026-11-10T06:19Z
-docs	D2a	fixes in; re-review and its heavy runs, then merge	~09:00	A
+# as of 2026-11-10T06:54Z
 rules	L2.10	last plants, re-review, merge	~08:30	A
 studio-b	L1.7a	fixes reviewed; Am 17, gates at one head, the lock probe	~11:00	A
-platform-b	P5b	built; rebase, review, gates now (no longer after D2a)	~08:30	A
-case	L3.9	type-mapping rework, gates, review	~13:00–15:00	A
-admin	L2.5b	built (caa5739); live run on c, review, local runs queued	~10:30	A
+platform-b	P5b	local gates green; review, make test	~08:30	A
+case	L3.9	fixes in (09c21fc); review, live on e, local runs	~10:00	A
+admin	L2.5b	local gates green; make test and live re-run on c	~08:30	A
 studio-b	tips	Studio's tips patches, after L1.7a	~11:30–12:30	A
 studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
 studio	L1.7	operations, releases, carries	~17:00–19:00	A
 rules	L2.11	rule editor, after L2.10	~19:00–21:00	A
 case	L3.6	drawn-watch alerts, after L3.9	~17:00–18:00	A
-platform	P7	cloud-platform profile, after P5	~19:00–21:00	B
+platform	P7	UID commit merging now; profile, then the kind cluster	~17:00–19:00	B
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
 studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning	B
 platform-b	P6	gazetteer panel, after P5b (demo track)	~12:30	A
+docs	P5b's guide rows	the §13 carry, after P5b	~10:00	A
 docs	D2b	decks, after L2.11	~11 Nov, morning	A
 docs	D2c	Cloud Platform guide, after P10	~12 Nov	B
 platform	P11	held until the client asks for AI	—	B
