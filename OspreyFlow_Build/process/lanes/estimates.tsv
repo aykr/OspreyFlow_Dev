@@ -1,4 +1,4 @@
-# as of 2026-11-10T11:00Z
+# as of 2026-11-10T11:49Z
 admin	T1	part 1 merged; batched DDL in proof; parts 2–5 next	DDL ~13:30; 2–3 ~16:00; 4–5 ~11 Nov	A
 studio-b	tips	Studio's tips patches plus L1.7a's carries, starting now	~13:30	A
 studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
@@ -9,7 +9,6 @@ case	L3.6	drawn-watch alerts, starting now	~15:00–16:00	A
 platform	P7	kind proved stores, UIDs, egress; 18 review points, a fresh session from HANDOFF	~11 Nov, midday	B
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
 studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning	B
-platform-b	ADR-147 Am 3	gazetteer identifiers withheld everywhere, starting now	~14:30	A
 docs	D2b	decks, after L2.11	~11 Nov, morning	A
 docs	D2c	Cloud Platform guide, after P10	~12 Nov	B
 platform	P11	held until the client asks for AI	—	B
