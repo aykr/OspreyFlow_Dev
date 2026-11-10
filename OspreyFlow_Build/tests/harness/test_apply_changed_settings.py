@@ -449,6 +449,30 @@ def test_it_restarts_only_the_services_whose_rendered_files_changed(
     assert "--force-recreate" in up and "--no-deps" in up
 
 
+def test_a_service_the_new_render_adds_is_started_with_its_dependencies_first(
+    deployment: Deployment,
+) -> None:
+    """The v0.5.0 upgrade rehearsal (run 3): `ospreyflow apply` over a deployment rendered before
+    ADR-135 Amendment 2 restarted the gateway with `--no-deps`, so the new `litellm-db` step, which
+    makes the gateway's database role, never ran, and the gateway could not sign in to Postgres. A
+    service the deployment never had is brought up by the whole project first, as an install does,
+    so each starts after what it depends on; only then are the changed files' services recreated."""
+    compose_file = deployment.folder / "compose.yaml"
+    text = compose_file.read_text("utf-8")
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    document["services"].pop("litellm-db")
+    document["services"]["litellm"].get("depends_on", {}).pop("litellm-db", None)
+    compose_file.write_text(banner + yaml.safe_dump(document, sort_keys=False), "utf-8")
+    deployment.compose.as_installed(compose_file)
+    deployment.write_config(GEMINI)
+    assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
+    ups = deployment.compose.ups()
+    whole = [u for u in ups if not [a for a in u[u.index("up") + 1 :] if not a.startswith("-")]]
+    assert whole and ups.index(whole[0]) < ups.index(next(u for u in ups if "litellm" in u))
+    assert "--no-deps" not in whole[0] and "--wait" in whole[0]
+
+
 def test_a_run_once_job_is_neither_started_nor_waited_on(
     deployment: Deployment, capsys: pytest.CaptureFixture[str]
 ) -> None:

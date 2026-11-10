@@ -1134,6 +1134,7 @@ def reapply(
         )
         restart = services_to_restart(out_dir, stage)
         removed = set(_services(out_dir)) - set(_services(stage))
+        added = set(_services(stage)) - set(_services(out_dir))
         # Defect 9 (Amendment 33, "as found on the first server"): a newly chosen model fetched,
         # and waited on, before anything that uses it starts again. From the staged files, so a
         # refused download changes nothing and the next apply sees the same change.
@@ -1151,6 +1152,12 @@ def reapply(
     # ADR-114 Amendment 35: the stores' data moved into their named volumes once; the move stops
     # the whole deployment, so all of it is started again afterwards.
     moved = stores_moved(compose_file, files_held)
+    if added:
+        # A service the deployment never had (ADR-135 Amendment 2's `litellm-db`, which makes the
+        # gateway's database role): the whole project brought up first, as an install does, so each
+        # starts after what it depends on (the v0.5.0 upgrade rehearsal, run 3: restarted with
+        # `--no-deps`, the gateway came up before its role existed and could not sign in).
+        _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
     if restart or removed:
         _run(
             _compose(compose_file)
