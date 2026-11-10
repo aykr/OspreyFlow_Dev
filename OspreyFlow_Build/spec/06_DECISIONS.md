@@ -32037,8 +32037,10 @@ Superset.
    Secret's passwords as `random_password`, and a key a person holds (a model engine's) as a sensitive
    variable. `tofu fmt` leaves it unchanged and `tofu validate` accepts it, for both environments.
 3. **The managed stores' details** are read from those secrets by name, by the pods that read the stores
-   (the Conduit, the workers, the report sync, Superset) and no other: the workspace's nginx, which reads the
-   whole env, is not handed the database's password. A `$(VAR)` in a command or a value is defined before it.
+   (the Conduit, the workers, the report sync, Superset, which take the whole env), and otherwise only by a
+   container that read the same detail on the cluster (Keycloak's and the gateway's database, their init
+   containers' `psql`), and only those details: the workspace's nginx, which reads the whole env, is not
+   handed the database's password. A `$(VAR)` in a command or a value is defined before it.
    **What a cluster's install writes into our Secret, and this profile has no install to write**
    (`harness.cluster_install`: the OIDC addresses and client, the object store's endpoint, region and
    credentials mode, the database's TLS mode, the reporting secrets, the Conduit's client secret) is

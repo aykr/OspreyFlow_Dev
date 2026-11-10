@@ -56,7 +56,7 @@ GATEWAY = frozenset({"litellm", "litellm-db"})
 
 #: What reads the managed stores' details: only these are given them (a pod that reads the whole
 #: env, as the workspace's nginx does, is not handed the database's password for that).
-READERS = frozenset({"api", "worker", "report-sync", "superset", "ingest"})
+READERS = frozenset({"api", "worker", "report-sync", "superset"})
 
 #: Decision 5: one of each in development.
 DEVELOPMENT_REPLICAS = {
@@ -87,7 +87,6 @@ GRACE_SECONDS = {"arcadedb": 120, "clickhouse": 60, "clickhouse-keeper": 30}
 OURS: dict[str, tuple[str, str, dict[str, str]]] = {
     "workspace": ("apps/workspace/Dockerfile", ".", {}),
     "api": ("services/api/Dockerfile", ".", {"CONDUIT_JAVA": "omitted"}),
-    "ingest": ("services/ingest/Dockerfile", ".", {}),
     "ner": ("services/ner/Dockerfile", ".", {}),
     "worker": ("services/worker/Dockerfile", ".", {}),
     "report-sync": ("services/report_sync/Dockerfile", ".", {}),

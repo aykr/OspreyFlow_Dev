@@ -397,8 +397,8 @@ def render_terraform(
     )
     account = secrets.irsa.service_account
     files["irsa.tf"] = _file(
-        "Decision 4: the service account the Conduit, ingest and the workers run as, given the\n"
-        "buckets through its role (IRSA), so no S3 key exists anywhere.",
+        "Decision 4: the service account the Conduit, the workers and the report sync run as,\n"
+        "given the buckets through its role (IRSA), so no S3 key exists anywhere.",
         [
             (
                 'data "aws_iam_policy_document" "buckets"',

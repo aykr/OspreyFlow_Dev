@@ -257,14 +257,44 @@ def test_no_managed_detail_is_in_a_file_or_our_own_secret(values: dict[str, Any]
     assert "$(POSTGRES_HOST)" not in yaml.safe_dump(values["environment"])
 
 
-def test_only_the_readers_are_given_the_managed_stores_details(values: dict[str, Any]) -> None:
-    workloads = _by_name(values)
-    for name in ("workspace", "ner", "arcadedb", "clickhouse", "clickhouse-keeper"):
-        refs = [e["name"] for e in workloads[name].get("env", []) if "secretKeyRef" in e]
-        assert refs == [], (name, refs)
-    api = {e["name"] for e in workloads["api"]["env"] if "secretKeyRef" in e}
-    assert {"POSTGRES_HOST", "POSTGRES_PASSWORD", "VALKEY_HOST", "VALKEY_PASSWORD",
-            "MINIO_BUCKET_PREFIX"} <= api  # fmt: skip
+def _on_the_cluster(fixture: str) -> dict[tuple[str, str], dict[str, Any]]:
+    """The same deployment's containers as the cluster profile renders them, by (pod, container)."""
+    from harness.cloud_platform import _as_cluster, _cp
+
+    config = _config(fixture)
+    as_cluster = _as_cluster(config, load_platform(_cp(config).platform))
+    cluster = yaml.safe_load(render(as_cluster, resolver=_resolver).artefacts["values.yaml"])
+    return {
+        (pod["name"], c["name"]): c for pod in _pods(cluster)
+        for c in [pod, *pod.get("initContainers", [])]
+    }  # fmt: skip
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_only_the_readers_are_given_the_managed_stores_details(fixture: str) -> None:
+    """Every container, init containers among them, is given a managed store's detail only if it
+    read it on the cluster: a reader taking the whole env (the Conduit, the workers, the report
+    sync, Superset) every one; any other only those its env names or its command refers to
+    (Keycloak's and the gateway's database, their init containers' `psql`). So the workspace's
+    nginx, which takes the whole env, never holds the database's password."""
+    from harness.cloud_platform import READERS
+
+    values = _values(_config(fixture))
+    variables = set(managed_variables(_config(fixture)))
+    cluster = _on_the_cluster(fixture)
+    for pod in _pods(values):
+        for container in [pod, *pod.get("initContainers", [])]:
+            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e}
+            if pod["name"] in READERS and container.get("envFrom"):
+                assert given == variables, (container["name"], variables - given)
+                continue
+            before = cluster[(pod["name"], container["name"])]
+            text = yaml.safe_dump(before)
+            read = {e["name"] for e in before.get("env", [])} | {
+                v for v in variables if re.search(rf"\$(\({v}\)|\{{{v}\}}|{v}\b)", text)
+            }  # fmt: skip
+            assert given <= read, (pod["name"], container["name"], given - read)
+    assert "ingest" not in READERS  # never rendered on this profile
 
 
 def test_a_variable_a_command_names_is_defined_before_it(values: dict[str, Any]) -> None:
