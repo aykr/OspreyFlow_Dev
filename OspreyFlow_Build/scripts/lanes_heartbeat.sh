@@ -190,7 +190,10 @@ show() {
         waiting-for-owner)
           case "$note" in
             *"lease"*) echo "$lane is waiting for the lease: $note" >> "$mine" ;;   # the orchestrator passes it
-            *) echo "$lane is waiting for you: $note" >> "$needs" ;;
+            # Only a note that names the owner is the owner's: lanes beat this state while they wait on
+            # the orchestrator (a merge, a slot, a stack), and on 10 November 2026 those reached Needs you.
+            *[Oo]wner*) echo "$lane is waiting for you: $note" >> "$needs" ;;
+            *) echo "$lane is waiting for the orchestrator: $note" >> "$mine" ;;
           esac ;;
         blocked)
           case "$note" in

@@ -111,8 +111,19 @@ def test_a_working_beat_older_than_the_quiet_limit_is_the_orchestrators(hb) -> N
 
 def test_a_waiting_for_owner_beat_needs_you(hb) -> None:
     _all_beat(hb)
-    hb("beat", "case", "waiting-for-owner", "question on open question 1")
-    assert _needs(hb("show")) == ["case is waiting for you: question on open question 1"]
+    hb("beat", "case", "waiting-for-owner", "the owner's ruling on open question 1")
+    assert _needs(hb("show")) == ["case is waiting for you: the owner's ruling on open question 1"]
+
+
+def test_a_waiting_beat_that_names_no_owner_is_the_orchestrators(hb) -> None:
+    """Lanes beat waiting-for-owner while they wait on the orchestrator (a merge, a slot, a stack): on
+    10 November 2026 the owner was shown "case is waiting for you: L3.6 ... waiting for L2.10 to merge"
+    under Needs you. A waiting note that does not name the owner is the orchestrator's, never notified."""
+    _all_beat(hb)
+    hb("beat", "case", "waiting-for-owner", "L3.6 plan ratified; waiting for L2.10 to merge")
+    show = hb("show")
+    assert _needs(show) == []
+    assert _mine(show) == ["case is waiting for the orchestrator: L3.6 plan ratified; waiting for L2.10 to merge"]
 
 
 def test_a_lease_older_than_its_limit_is_the_orchestrators(hb) -> None:
@@ -156,7 +167,7 @@ def test_watch_notifies_once_per_new_line_not_on_every_pass(hb) -> None:
     _all_beat(hb)
     hb.age("glass", 46)  # quiet: the orchestrator's, never notified (the owner, 9 November 2026)
     hb.hold_lease("studio", 121)  # long-held: the orchestrator's too
-    hb("beat", "case", "waiting-for-owner", "a question")
+    hb("beat", "case", "waiting-for-owner", "a question for the owner")
     hb("watch", "1", OSPREY_WATCH_PASSES="3")
     notes = hb.notified.read_text().splitlines()
     assert len(notes) == 1, notes
@@ -234,14 +245,14 @@ def test_only_what_needs_the_owner_is_under_needs_you(hb) -> None:
     NEEDS YOU and is notified."""
     _all_beat(hb)
     hb("beat", "glass", "ready-to-merge", "done")
-    hb("beat", "case", "waiting-for-owner", "a question")
+    hb("beat", "case", "waiting-for-owner", "a question for the owner")
     out = hb("show").stdout
     needs = out.split("NEEDS YOU:")[1].split("FOR THE ORCHESTRATOR")[0]
     assert "case is waiting for you" in needs and "glass is ready to merge" not in needs
     assert "glass is ready to merge" in out.split("FOR THE ORCHESTRATOR")[1]
     hb("watch", "1", OSPREY_WATCH_PASSES="1")
     notes = hb.notified.read_text().splitlines()
-    assert len(notes) == 1 and "case is waiting for you: a question" in notes[0]
+    assert len(notes) == 1 and "case is waiting for you: a question for the owner" in notes[0]
 
 
 def test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled(hb, tmp_path) -> None:
