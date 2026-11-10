@@ -874,7 +874,8 @@ test("when promotions are overdue is set in Operations by keyboard", async ({ pa
   const sent = page.waitForRequest((r) => r.url().endsWith("/settings/promotion-alert-days") && r.method() === "PUT");
   await press(page, "Save when promotions are overdue");
   expect((await sent).postDataJSON()).toEqual({ alert_after_days: 4 });
-  expect(asked).toContain("PUT settings/promotion-alert-days");
+  // The request is seen as it leaves; the harness records it as it answers, so wait for that.
+  await expect.poll(() => asked).toContain("PUT settings/promotion-alert-days");
   registerCovered(REGISTRY, "set-when-promotions-are-overdue-by-keyboard");
 });
 

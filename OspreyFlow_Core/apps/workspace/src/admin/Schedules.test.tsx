@@ -49,6 +49,10 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       // ADR-145 decision 9: Operations opens with what ages (`sections/Operations.tsx`).
       if (path === "operations/ageing")
         return json(200, { alert_after_days: 3, rules: [], waiting: [], promotions_recorded: false });
+      // ADR-141 (L1.7): then the runs, the scheduler, external triggers and quotas (`OperationsFigures`).
+      if (path === "operations/runs")
+        return json(200, { days: 7, units: ["unit-1"], rows: [], external: [], quotas: [],
+          scheduler: { skipped: 0, missed: 0, running_now: 0, refused: [], paused: [] } });  // prettier-ignore
       if (path === "schedules") return json(200, [SCHEDULE, SECRET]);
       if (path === "schedules/feed/pause")
         return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1", next_run: null });

@@ -155,7 +155,7 @@ def test_the_gate_refuses_an_unfed_or_dangling_step() -> None:
             ),
             sources={"bookings": source_table("bookings", [{"a": "1"}], load_id="l")},
             lists={},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
 
 
@@ -236,14 +236,14 @@ def test_a_list_given_under_another_name_is_refused() -> None:
             STEPS.validate_python([_lookup("branches")]),
             sources={"bookings": bookings},
             lists={"branches": est},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
     with pytest.raises(StagingError, match="the source table given as 'owners'"):
         run_staging(
             STEPS.validate_python([_lookup("establishments")]),
             sources={"owners": bookings},
             lists={"establishments": est},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
 
 
@@ -323,7 +323,7 @@ def test_a_subscribed_screening_list_serves_a_lookup_after_its_round_trip() -> N
             STEPS.validate_python([step]),
             sources={"customers": customers},
             lists={"ofac_sdn": back},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
 
 
@@ -336,7 +336,7 @@ def test_a_step_s_table_round_trips_its_parquet() -> None:
         STEPS.validate_python([{**_lookup("establishments"), "on": "a"}]),
         sources={"bookings": bookings},
         lists={"establishments": est},
-        dataset_id="pid", marked=()
+        dataset_id="pid", marked=(), subscribed=()
     )
     back = read_staged_table(
         stage_table(result.output, storage=STORE, load_id="ld-1"), storage=STORE
@@ -355,7 +355,7 @@ def test_a_step_never_writes_over_a_column() -> None:
             STEPS.validate_python([_lookup("establishments")]),
             sources={"bookings": bookings},
             lists={"establishments": est},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
     derive = {
         "id": "d",
@@ -370,7 +370,7 @@ def test_a_step_never_writes_over_a_column() -> None:
             STEPS.validate_python([derive]),
             sources={"bookings": bookings},
             lists={},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
 
 
@@ -401,7 +401,7 @@ def test_a_filter_reads_its_declared_values_trimmed_as_it_reads_cells() -> None:
             STEPS.validate_python([step]),
             sources={"bookings": bookings},
             lists={},
-            dataset_id="pid", marked=()
+            dataset_id="pid", marked=(), subscribed=()
         )
         assert len(done.output.rows) == (1 if "equals" in keep[0] else 2), keep
 
@@ -425,7 +425,8 @@ def test_a_union_of_tables_whose_columns_differ_is_refused() -> None:
     step = {"id": "both", "kind": "union", "inputs": ["a", "b"]}
     with pytest.raises(StagingError, match="stacks 'b' and 'a', whose columns differ"):
         run_staging(
-            STEPS.validate_python([step]), sources={"a": a, "b": b}, lists={}, dataset_id="pid", marked=()
+            STEPS.validate_python([step]), sources={"a": a, "b": b}, lists={}, dataset_id="pid", marked=(),
+            subscribed=()
         )
 
 

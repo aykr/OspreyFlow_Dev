@@ -584,6 +584,16 @@ POST   /v1/ingest/schedule-preview      a schedule in words and its next five ru
 POST   /v1/investigations/{id}/ingest/recipes/{rid}/schedule/pause    pause the schedule — schedule_pipelines
 POST   /v1/investigations/{id}/ingest/recipes/{rid}/schedule/resume   resume it — schedule_pipelines
 GET    /v1/investigations/{id}/ingest/recipes/{rid}/runs   the recipe's run ledger; counts withheld above the reader
+GET    /v1/investigations/{id}/ingest/recipes/{rid}/quota   the Runs tab's quota bar: the recipe's dataset's quota of runs a day and today's runs into it (ADR-141 decision 6); run_pipelines, Viewer
+GET    /v1/investigations/{id}/ingest/recipes/{rid}/owned-externally   the client a deployed pipeline is owned externally by, or null, never who marked it (ADR-141 decision 11, Amendment 1); schedule_pipelines, Viewer
+PUT    /v1/investigations/{id}/ingest/recipes/{rid}/owned-externally   mark it owned externally by one client (`{"client_id"}`), each external run acting as the marker in this case; 409 in words for a pipeline not deployed or with a schedule of its own; schedule_pipelines, Editor; audited as mark_pipeline_owned_externally
+DELETE /v1/investigations/{id}/ingest/recipes/{rid}/owned-externally   take it back (204); schedule_pipelines, Editor; audited as clear_pipeline_owned_externally
+POST   /v1/runs                         the run API (ADR-141 decision 10): a service identity's client-credentials token only (a person's is 403), triggering a pipeline owned externally by that client as its owner (`dataset_id`, `pipeline_id`, `version` latest or a number, `external_run_id`); 202 with the run; 404 in words for a pipeline not owned externally by the client, 409 for a stale pin, 429 past a quota
+GET    /v1/runs/{run_id}                one external run's status, read back only by the client that triggered it; counts withheld unless the owner may view every marking, a failure in fixed words
+GET    /v1/admin/operations/runs        Operations' figures (`?days=`, ADR-141 decisions 7-8): runs, refusals and metering by day and unit, scheduler health, external triggers, quotas and budget alerts, each read in its store's WHERE by the reader's units; counts withheld above the reader; no account id; operate_schedules
+PUT    /v1/admin/operations/quotas/{scope}/{key}   set a dataset's or unit's quota of runs a day and its alert share (ADR-141 decision 6); administer_system; audited as set_run_quota
+GET    /v1/datasets/{dataset_id}/release   a dataset's release (`?name=&version=`, ADR-140 Amendment 9 decision 4): the `DatasetRelease` manifest and its files, never a credential, owner, membership, folder path or licensed row; edit_target_model and publish_pipelines; audited as export_dataset_release
+POST   /v1/datasets/{dataset_id}/release/import   a release's files judged as Connect, Map, dedupe and the canvas judge a draft (`?dry_run=true` writes nothing), landed as drafts only; refused whole in words; edit_target_model and edit_pipelines; audited as plan_dataset_release_import or import_dataset_release
 GET    /v1/investigations/{id}/data-feeds   the pipelines feeding the case (Viewer, read_data_feeds)
 GET    /v1/admin/schedules              every schedule (operate_schedules)
 GET    /v1/admin/schedules/{rid}/runs   one schedule's run ledger (operate_schedules)

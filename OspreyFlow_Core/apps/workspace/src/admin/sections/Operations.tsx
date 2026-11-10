@@ -8,6 +8,7 @@ import type { OperationsAgeing } from "../../../../../packages/schemas/generated
 import { Button, Input } from "../../design/primitives";
 import { operationsAgeing, setPromotionAlertDays, type AdminApi } from "../api";
 import { Schedules } from "../Schedules";
+import { OperationsFigures } from "../OperationsFigures";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" });
@@ -115,6 +116,8 @@ export function Operations({ api }: { api: AdminApi }) {
   return (
     <div style={{ display: "grid", gap: "var(--sp-16)" }}>
       <Ageing api={api} />
+      {/* ADR-141 (L1.7, the studio lane by agreement): the runs, the scheduler, external triggers, quotas. */}
+      <OperationsFigures api={api} />
       <Schedules api={api} />
     </div>
   );

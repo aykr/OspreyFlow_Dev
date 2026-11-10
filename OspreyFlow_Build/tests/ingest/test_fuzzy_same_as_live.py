@@ -36,7 +36,7 @@ async def _load(graph: Any, written: list[NodeWrite | EdgeWrite], load_id: str) 
         _recipe(0.6), sources=_sources(), lists={}, dataset_id=DATASET, graph=stamping,
         ontology=ONTOLOGY, tx=tx, principal=LOADER, load_id=load_id,
         investigation_scope="case-live-8", storage=ObjectStorageConfig(bucket="staging"),
-        scheme=SCHEME, written=written,
+        scheme=SCHEME, written=written, subscribed=(),
     )  # fmt: skip
     await stamping.commit_transaction(tx)
     return done

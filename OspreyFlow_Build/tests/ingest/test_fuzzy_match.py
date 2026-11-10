@@ -121,6 +121,7 @@ async def _load(recipe: Recipe, graph: ValidatingGraph | None = None, load_id: s
         recipe, sources=_sources(), lists={}, dataset_id="pid", graph=graph,  # type: ignore[arg-type]
         ontology=ONTOLOGY, tx=tx, principal=LOADER, load_id=load_id,  # type: ignore[arg-type]
         investigation_scope="case-1", storage=ObjectStorageConfig(bucket="staging"), scheme=SCHEME,
+        subscribed=(),
     )  # fmt: skip
     await graph.commit_transaction(tx)
     return done, graph
@@ -136,7 +137,9 @@ def _persons(graph: ValidatingGraph) -> dict[str, list[Any]]:
 
 def test_the_step_keeps_every_left_row_and_scores_its_best_match() -> None:
     out, report = run_fuzzy_step(
-        FuzzyMatchStep.model_validate(_step(0.6)), *(_sources()[n] for n in ("visits", "owners"))
+        FuzzyMatchStep.model_validate(_step(0.6)),
+        *(_sources()[n] for n in ("visits", "owners")),
+        marked=(),
     )
     got = [(r.cells["family"], r.cells["matched_owner"], r.cells["match_score"]) for r in out.rows]
     assert [g[0] for g in got] == ["WHITLOW", "ELLERY", "OKAFOR", "PRICE", "ODEH"]
@@ -226,7 +229,7 @@ async def test_test_and_the_load_write_the_same_same_as() -> None:
     tested = await dry_run_staged_recipe(
         _recipe(0.6), sources=_sources(), lists={}, dataset_id="pid",
         graph=ValidatingGraph(ONTOLOGY), ontology=ONTOLOGY, principal=LOADER,  # type: ignore[arg-type]
-        scheme=SCHEME,
+        scheme=SCHEME, subscribed=(),
     )  # fmt: skip
     same_as = [e for e in tested.result.edges if e.type == "SAME_AS"]
     assert len(same_as) == 3
@@ -273,11 +276,11 @@ def test_a_fuzzy_match_is_the_last_step() -> None:
 
     problems = staging_rule_violations(
         [step, DeriveStep.model_validate(after)],
-        sources=["visits", "owners"], lists=[], dataset_id="pid", marked=()
+        sources=["visits", "owners"], lists=[], dataset_id="pid", marked=(), subscribed=()
     )  # fmt: skip
     assert any("is the last step" in p for p in problems), problems
     assert staging_rule_violations([step], sources=["visits", "owners"], lists=[],
-                                   dataset_id="pid", marked=()) == []  # fmt: skip
+                                   dataset_id="pid", marked=(), subscribed=()) == []  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -319,7 +322,7 @@ def test_a_step_with_too_many_pairs_and_no_blocking_key_is_refused() -> None:
     many = source_table("visits", [{"family": f"N{i}"} for i in range(1100)], load_id="L")
     owners = source_table("owners", [{"owner": f"N{i}"} for i in range(1000)], load_id="O")
     with pytest.raises(StagingError) as refused:
-        run_fuzzy_step(FuzzyMatchStep.model_validate(_step(0.6)), many, owners)
+        run_fuzzy_step(FuzzyMatchStep.model_validate(_step(0.6)), many, owners, marked=())
     assert any("block_on" in p for p in refused.value.problems)
     assert fuzzy_match.FUZZY_PAIR_LIMIT == 1_000_000
     # With a thousand owners the prior that any one pair matches is one in a thousand, so an exact
@@ -328,13 +331,14 @@ def test_a_step_with_too_many_pairs_and_no_blocking_key_is_refused() -> None:
         _step(0.4, block_on=[{"left": "family", "right": "owner", "method": "exact"}])
     )
     small = source_table("visits", [{"family": f"N{i}"} for i in range(1100)], load_id="L")
-    out, report = run_fuzzy_step(blocked, small, owners)
+    out, report = run_fuzzy_step(blocked, small, owners, marked=())
     assert report.matched == 1000 and report.unmatched == 100 and len(out.rows) == 1100
 
 
 def test_run_staging_runs_a_fuzzy_match_at_the_real_call_site() -> None:
     result = run_staging(
-        [FuzzyMatchStep.model_validate(_step(0.6))], sources=_sources(), lists={}, dataset_id="pid", marked=()
+        [FuzzyMatchStep.model_validate(_step(0.6))], sources=_sources(), lists={}, dataset_id="pid", marked=(),
+        subscribed=()
     )
     assert result.reports[0].matched == 3
     assert "match_score" in result.output.columns

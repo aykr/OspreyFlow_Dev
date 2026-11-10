@@ -116,12 +116,15 @@ async def test_the_run_path_passes_the_read_to_the_load(
         "audit": SimpleNamespace(record=nothing),
         "media": InMemoryMediaStore(),
         "config": SimpleNamespace(post_ingest_resolution=False),
+        # ADR-141 decision 6: no quota here.
+        "run_quotas": None,
     }
     names = [f.name for f in dataclasses.fields(run_module.RecipeRunDeps)]
     deps = run_module.RecipeRunDeps(**{n: stand_ins.get(n, object()) for n in names})
     recipe = SimpleNamespace(
-        recipe_id="r", version=1, pipeline=object() if pipeline else None, row_template=None
-    )
+        recipe_id="r", version=1, pipeline=object() if pipeline else None, row_template=None,
+        dataset_id="ds-1", owning_unit="unit-1",
+    )  # fmt: skip
     await run_module.run_recipe_as(
         deps,
         principal=OWNER,

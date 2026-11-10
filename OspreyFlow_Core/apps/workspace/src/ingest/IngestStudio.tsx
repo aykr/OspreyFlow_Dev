@@ -14,6 +14,7 @@ import { HELP_TITLE } from "../help/roles";
 import { RolesHelpPage } from "../help/RolesHelpPage";
 import { type CaseListing, listCases } from "../investigation/cases";
 import { PipelineStudio } from "./dag/PipelineStudio";
+import { ReleasesTab } from "./releases/ReleasesTab";
 import { RunsTab } from "./runs/RunsTab";
 import { caseForDataset, currentDataset, studioDatasets } from "./studio/datasets";
 import { ModelProposals } from "../linktypes/ModelProposals";
@@ -40,13 +41,15 @@ export interface IngestStudioProps {
   username?: string | null;
 }
 
-export type StudioPlace = "model" | "sources" | "pipelines" | "runs";
+export type StudioPlace = "model" | "sources" | "pipelines" | "runs" | "releases";
 
 export const STUDIO_PLACES: { id: StudioPlace; label: string }[] = [
   { id: "model", label: "1 Model" },
   { id: "sources", label: "2 Sources" },
   { id: "pipelines", label: "3 Pipelines" },
   { id: "runs", label: "4 Runs" },
+  // ADR-140 Amendment 9 decision 4: a dataset's release between environments, as YAML.
+  { id: "releases", label: "5 Releases" },
 ];
 
 export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenCase, rights, username }: IngestStudioProps) {
@@ -242,8 +245,18 @@ function Studio({
             runs={data.runs}
             level={servingCase?.level ?? null}
             canRevert={rights?.has("revert_loads") ?? false}
+            canSchedule={rights?.has("schedule_pipelines") ?? false}
             username={username ?? null}
             onChanged={data.reload}
+          />
+        )}
+        {place === "releases" && (
+          <ReleasesTab
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            datasetId={datasetId}
+            datasetName={datasetName}
+            rights={rights ?? null}
           />
         )}
       </div>

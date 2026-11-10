@@ -68,6 +68,7 @@ from .pipeline_run import (
 from .recipe_run import RecipeRunDeps
 from .recipe_runs import RecipeRunStore
 from .review import ExtractionCandidateStore
+from .run_quotas import PostgresQuotaStore
 from .screening import ScreeningListStore
 from .strength_influencers import InfluencerStore
 from .studio_publish import _REPO_ROOT as RECIPES_REPO_ROOT
@@ -98,6 +99,8 @@ class RunResources:
     screening_lists: ScreeningListStore
     kyc_expiries: KycExpiryStore
     recipe_runs: RecipeRunStore
+    #: ADR-141 decision 6: the run quotas every run's start judges, a seed's load among them.
+    run_quotas: PostgresQuotaStore
     extraction_candidates: ExtractionCandidateStore
     datasets_store: PostgresDatasetStore
     #: The cases' levels, which a watch's owner's reach is asked of (ADR-146 Amendment 4 point 7).
@@ -178,6 +181,7 @@ class RunResources:
             compute=self.compute,
             kyc_expiries=self.kyc_expiries,
             recipe_runs=self.recipe_runs,
+            run_quotas=self.run_quotas,
             influencers=self.influencers,
             target_models=self.target_models,
             staging_storage=self.staging_storage,
@@ -205,6 +209,7 @@ class RunResources:
         await self.screening_lists.close()
         await self.kyc_expiries.close()
         await self.recipe_runs.close()
+        await self.run_quotas.close()
         await self.extraction_candidates.close()
         await self.datasets_store.close()
         await self.investigations.close()
@@ -244,6 +249,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     kyc_expiries = await KycExpiryStore.connect(config.postgres.dsn)
     # ADR-110 decision 6: the run ledger.
     recipe_runs = await RecipeRunStore.connect(config.postgres.dsn)
+    run_quotas = await PostgresQuotaStore.connect(config.postgres.dsn)
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     # ADR-099: the datasets of each unit and of each case.
     datasets_store = await PostgresDatasetStore.connect(config.postgres.dsn)
@@ -313,6 +319,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         screening_lists=screening_lists,
         kyc_expiries=kyc_expiries,
         recipe_runs=recipe_runs,
+        run_quotas=run_quotas,
         extraction_candidates=extraction_candidates,
         datasets_store=datasets_store,
         investigations=investigations,

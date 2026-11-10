@@ -319,11 +319,13 @@ async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
     stand_ins: dict[str, Any] = {
         "recipe_runs": runs, "audit": SimpleNamespace(record=nothing),
         "media": InMemoryMediaStore(), "config": SimpleNamespace(post_ingest_resolution=False),
+        # ADR-141 decision 6 (L1.7): no quota, so the run's start judges none.
+        "run_quotas": None,
     }  # fmt: skip
     names = [f.name for f in dataclasses.fields(run_module.RecipeRunDeps)]
     deps = run_module.RecipeRunDeps(**{n: stand_ins.get(n, object()) for n in names})
     recipe = SimpleNamespace(recipe_id="r", version=1, pipeline=None, row_template=None,
-                             dataset_id="src")  # fmt: skip
+                             dataset_id="src", owning_unit=None)  # fmt: skip
     report = await run_module.run_recipe_as(
         deps, principal=LOADER, recipe=recipe,  # type: ignore[arg-type]
         investigation_id=K, source_location="x.csv", trigger="manual",

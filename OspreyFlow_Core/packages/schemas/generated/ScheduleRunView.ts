@@ -1,7 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type RunId = string;
-export type Trigger = "manual" | "schedule" | "watch" | "release" | "source_refresh";
+export type Trigger = "manual" | "schedule" | "watch" | "release" | "source_refresh" | "external";
 export type Slot = string | null;
 export type StartedAt = string;
 export type FinishedAt = string | null;

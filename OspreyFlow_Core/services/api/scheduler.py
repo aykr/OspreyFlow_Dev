@@ -37,6 +37,7 @@ from schemas.rights import Right, rights_for
 from .dataset_scope import CompositeReadOnlyError
 from .investigations import InsufficientAccessError, InvestigationNotFoundError
 from .recipe_runs import NotRunOutcome, RecipeRunStore, RunTrigger
+from .run_quotas import QuotaRefused
 from .studio_map import resolve_source_handling
 
 if TYPE_CHECKING:
@@ -382,6 +383,8 @@ class ScheduleExecutor:
             return
         try:
             await self.run(owner, recipe, case, latest)
+        except QuotaRefused as refused:  # ADR-141 decision 6: recorded refused, in words
+            await self._tell_owner(recipe, f"{self._due(recipe, latest)} was refused: {refused}")
         except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
             log.exception("scheduled run of recipe %s failed", recipe.recipe_id)
             await self._tell_owner(recipe, f"{self._due(recipe, latest)} failed: {error}")
@@ -449,6 +452,8 @@ class ScheduleExecutor:
                     owner, recipe, case, None, file, trigger=trigger,
                     refresh=source.read if source is not None else None,
                 )  # fmt: skip
+            except QuotaRefused as refused:  # ADR-141 decision 6: recorded refused, in words
+                await self._tell_owner(recipe, f"{words} was refused: {refused}")
             except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
                 log.exception("watched run of recipe %s failed", recipe.recipe_id)
                 await self._tell_owner(recipe, f"{words} failed: {error}")
@@ -495,6 +500,22 @@ class ScheduleExecutor:
             return await self.run(owner, recipe, case, None)
         finally:
             await self._release(lock, token)
+
+    async def owner_for_external(self, recipe: StudioRecipeDraft) -> tuple[Principal, str]:
+        """ADR-141 decision 10: an external trigger's run acts as the pipeline's owner (the person
+        who marked it owned externally), resolved afresh through token exchange with every check a
+        scheduled slot gets, and the loader's studio role (`run_pipelines`) besides; refused in
+        words (`ScheduleRunRefused`) otherwise. Never as the service identity."""
+        try:
+            owner, case = await self._owner(recipe)
+        except _Refused as refused:
+            raise ScheduleRunRefused(str(refused)) from refused
+        if Right.RUN_PIPELINES not in rights_for(owner.roles):
+            raise ScheduleRunRefused(
+                f"the pipeline's owner, {recipe.schedule_owner}, no longer holds the loader's "
+                "studio role (run_pipelines)"
+            )
+        return owner, case
 
     @staticmethod
     def _due(recipe: StudioRecipeDraft, slot: datetime) -> str:

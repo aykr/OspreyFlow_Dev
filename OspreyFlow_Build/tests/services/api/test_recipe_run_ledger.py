@@ -39,7 +39,10 @@ async def runs() -> AsyncIterator[RecipeRunStore]:
 def _deps(runs: RecipeRunStore) -> app_module.RecipeRunDeps:
     names = [f.name for f in dataclasses.fields(app_module.RecipeRunDeps)]
     return app_module.RecipeRunDeps(
-        **{n: (runs if n == "recipe_runs" else object()) for n in names}  # type: ignore[arg-type]
+        **{  # type: ignore[arg-type]
+            n: runs if n == "recipe_runs" else None if n == "run_quotas" else object()
+            for n in names
+        }
     )
 
 
@@ -55,7 +58,7 @@ async def _run(
 
     monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
     monkeypatch.setattr(run_module, "resolve_source_handling", lambda recipe: SOURCE)
-    recipe = SimpleNamespace(recipe_id=recipe_id, version=2)
+    recipe = SimpleNamespace(recipe_id=recipe_id, version=2, dataset_id=None, owning_unit=None)
     result: Any
     try:
         result = await run_module.run_recipe_as(

@@ -181,6 +181,7 @@ async def _told(
         state.recipes_repo_root = repo
         state.media = InMemoryMediaStore()
         state.audit = _Nothing()
+        state.run_quotas = None  # no quota set (ADR-141 decision 6): the run is not judged
         app.state = state
         # No lifespan: the state above is the app's.
         transport = httpx.ASGITransport(app=app)

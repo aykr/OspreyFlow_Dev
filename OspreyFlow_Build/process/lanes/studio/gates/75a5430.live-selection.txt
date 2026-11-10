@@ -1,0 +1,50 @@
+# The targeted live selection at 75a5430 (main bf9513b), asked for by the orchestrator in place of the change-based one
+# (which came to all 299 files: the lane's change includes recipe_run.py and app.py, which nearly every live file imports).
+# Why: the whole live set passed at 58ca968 with every failure explained (58ca968.live.txt); this rebase changed only two
+# conflict hunks in app.py (the sentence_rules and service_identity imports; run_studio_recipe's rule_lists, rule_reach and
+# run_quotas), so the files proving the run path, its ledger, L2.11's rules and the access control over both are re-run;
+# main's nightly full live set (02:13Z) covers the rest after the merge.
+# A: the run API and every route's rights; B: the run ledger and stamping; C: L2.11's rule files that are live (its
+# list-refresh, schedule-reach and sentence-route files are offline ones, run by make test); D: every live access-control
+# file naming recipe runs or rules (rule 4). test_external_runs_live.py is added by hand: only the Makefile diff, applied at
+# merge, makes it a live file to tools.live_select.
+tests/services/api/test_external_runs_live.py	A: the run API, quotas and Owned externally, live
+tests/services/api/test_route_rights.py	A: every route's rights, the floor
+tests/ingest/test_snapshot_withdrawal.py	B: the run ledger and stamping
+tests/scenarios/test_ledger_graph.py	B: the run ledger and stamping
+tests/scenarios/test_ledger_monitoring_storyline.py	B: the run ledger and stamping
+tests/services/api/test_recipe_run_ledger.py	B: the run ledger and stamping
+tests/services/api/test_recipe_runs.py	B: the run ledger and stamping
+tests/services/api/test_row_key_withdrawal_ledger.py	B: the run ledger and stamping
+tests/services/api/test_run_metering_ledger.py	B: the run ledger and stamping
+tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py	B: the run ledger and stamping
+tests/services/api/test_source_watermark_ledger.py	B: the run ledger and stamping
+tests/services/api/test_studio_load_stamps_its_case_dataset_live.py	B: the run ledger and stamping
+tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py	B: the run ledger and stamping
+tests/test_seed_ledger_screening_rule.py	B: the run ledger and stamping
+tests/test_stamp_datasets.py	B: the run ledger and stamping
+tests/test_stamp_records.py	B: the run ledger and stamping
+tests/ingest/test_kyc_rules.py	C: L2.11's rule files
+tests/ingest/test_rule_writes_in_the_record.py	C: L2.11's rule files
+tests/ingest/test_typology_rule_routes.py	C: L2.11's rule files
+tests/ingest/test_typology_rules.py	C: L2.11's rule files
+tests/services/api/test_rule_drafts_store.py	C: L2.11's rule files
+tests/services/api/test_rule_editor_routes.py	C: L2.11's rule files
+tests/services/api/test_rule_maker_checker_routes.py	C: L2.11's rule files
+tests/services/api/test_rule_schedule.py	C: L2.11's rule files
+tests/services/api/test_schedule_notice.py	C: L2.11's rule files
+tests/test_migrate_rules_to_datasets_store.py	C: L2.11's rule files
+tests/adapters/graph_arcadedb/test_sources_withheld_live.py	D: live access control naming recipe runs or rules (rule 4)
+tests/ingest/test_alert_evidence_withheld_live.py	D: live access control naming recipe runs or rules (rule 4)
+tests/ingest/test_gazetteer_ids_withheld_live.py	D: live access control naming recipe runs or rules (rule 4)
+tests/ingest/test_node_preview_access.py	D: live access control naming recipe runs or rules (rule 4)
+tests/resolve/test_projection_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/test_dossier_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/test_investigation_access_store.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/test_pid_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/test_sources_withheld_routes.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/working_set/test_compute_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/working_set/test_connection_strength_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/working_set/test_explain_cluster_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/working_set/test_manual_resolution_access_control.py	D: live access control naming recipe runs or rules (rule 4)
+tests/services/api/working_set/test_resolution_threshold_access_control.py	D: live access control naming recipe runs or rules (rule 4)

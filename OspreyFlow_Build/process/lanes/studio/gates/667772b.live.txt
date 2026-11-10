@@ -1,0 +1,959 @@
+# live set at 667772b, lease studio, stack f (ospreyflow-test), 2026-11-10 07:41Z-11:25Z
+Running on ospreyflow-test (stack f, osprey-runs/studio/OspreyFlow_Build/), logged at osprey-runs/studio.meta/runs/20261110T074151Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:randomly ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py ../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_runs.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py ../OspreyFlow_Build/tests/services/api/test_row_key_withdrawal_ledger.py ../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py ../OspreyFlow_Build/tests/services/api/test_external_runs_live.py ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py ../OspreyFlow_Build/tests/services/api/test_list_connector_store.py ../OspreyFlow_Build/tests/services/api/test_target_models_store.py ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+...F.................................................................... [  3%]
+........................................................................ [  6%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+.....................................................F.................. [ 17%]
+.......................s................................................ [ 20%]
+........................ss.............................................. [ 24%]
+........................................................................ [ 27%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+........................................................................ [ 38%]
+..ssss........................sss....................................... [ 41%]
+........................................................................ [ 45%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+........................................................................ [ 55%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+..........................................F............................. [ 69%]
+........................................................................ [ 73%]
+........................................................................ [ 76%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+.................................FFFF.....F............................. [ 94%]
+...................FF.................................................FF [ 97%]
+F..............................F............F.                           [100%]
+=================================== FAILURES ===================================
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x7315c6457530>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x73156560e670>)
+
+    def test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        """ADR-114 Amendment 33 decision 4 and the owner's answer 6 (rules 3 and 4): a person signed in
+        through the organisation's identity provider arrives with exactly the claims the realm's
+        arrival mappers give (`harness.realm.ORGANISATION_ARRIVAL_ATTRIBUTES`; the real Keycloak's
+        token is shown to carry them in `tests/harness/test_organisation_sign_in.py`) — no role, no
+        handling code, a clearance and a unit no scheme knows. On every read route of the Conduit, with
+        a real case in the store, they are refused (403, or 404 for a case they cannot see), or answered
+        with nothing: an empty list, never a count."""
+        from harness.realm import ORGANISATION_ARRIVAL_ATTRIBUTES
+    
+        key, _ = keypair
+        case = asyncio.run(_case("rights-member"))
+        claims = default_claims(sub="from-the-organisation", roles=[], receivable_handling_codes=[],
+                                **ORGANISATION_ARRIVAL_ATTRIBUTES)  # fmt: skip
+        claims.pop("roles")
+        headers = {"Authorization": f"Bearer {sign_token(key, claims)}"}
+        answered: dict[str, object] = {}
+        reads = 0
+        with TestClient(__import__("services.api.app", fromlist=["app"]).app) as client:
+            for name, route in sorted(_routes().items()):
+                if "GET" not in route.methods:
+                    continue
+                reads += 1
+                path = route.path.replace("{investigation_id}", case)
+                for number in ("{z}", "{x}", "{y}"):
+                    path = path.replace(number, "0")
+                path = re.sub(r"\{[a-z_]+(:path)?\}", "x", path)
+                response = client.get(path, headers=headers)
+                if response.status_code in (403, 404):
+                    continue
+                # A route that answers must answer with nothing of the deployment's.
+>               assert response.status_code == 200, (name, path, response.status_code, response.text)
+E               AssertionError: ('read_external_run', '/v1/runs/x', 401, '{"detail":"the sign-in could not be verified"}')
+E               assert 401 == 200
+E                +  where 401 = <Response [401 Unauthorized]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:638: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:42:22] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 07:42:25] "GET /jwks.json HTTP/1.1" 200 -
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x73154c1816a0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x731566b08650>, 'audit': <services.api.audit.AuditWriter object at 0x7315664965a0>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...2026, 11, 10, 8, 21, 19, 988653, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None, gazetteer=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...2026, 11, 10, 8, 21, 19, 988653, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None, gazetteer=None) = Edge(id='01M728R7ZSZTTJNYKHZYZG0KFD', type='SAME_AS', source='01M728R64Z63H4MQT9B7YT7WD7', target='01M728R7ZMTWR4CKHVA...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x731565383d50>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x7315653830d0>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 2 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   2 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'... 'relationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'... 'relationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 09:16:47] "GET /jwks.json HTTP/1.1" 200 -
+_ test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x731483288b90>, cases=<services.api.investigations....igationStore object at 0x7315457fc140>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x73152f7d9880>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-291/test_a_studio_load_tells_and_s0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x731483289880>
+
+    async def test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       alone = await _loader_alone_or_beside(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:240: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:231: in _loader_alone_or_beside
+    owner, said = await world.run(loader, ours, [PAIR])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:169: in run
+    report = await executor.run(owner, self.draft, case, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:13033: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+services/api/recipe_run.py:194: in begin_run
+    limits = await judge_quota(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+quotas = <object object at 0x73154597c7c0>
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x731483288b90>
+dataset_id = None, owning_unit = 'unit-1'
+now = datetime.datetime(2026, 11, 10, 11, 21, 3, 673484, tzinfo=datetime.timezone.utc)
+
+    async def judge(
+        quotas: QuotaStore,
+        runs: RunCounts,
+        *,
+        dataset_id: str | None,
+        owning_unit: str | None,
+        now: datetime,
+    ) -> list[QuotaLimit]:
+        """Refuses (`QuotaRefused`) a run past its dataset's or its unit's quota of runs a day, and
+        records the budget alert once a day when this run reaches a quota's alert share. Returns the
+        limits the run's start is held to again, under their locks, as it is recorded."""
+        since = day_start(now)
+        limits: list[QuotaLimit] = []
+        day = since.date().isoformat()
+        for scope, key in (("dataset", dataset_id), ("unit", owning_unit)):
+            if not key:
+                continue
+>           quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+                          ^^^^^^^^^^
+E           AttributeError: 'object' object has no attribute 'get'
+
+services/api/run_quotas.py:278: AttributeError
+_ test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x731544873680>, cases=<services.api.investigations....igationStore object at 0x7314b3a56f30>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7315457fdca0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-291/test_two_cases_loading_into_on0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7314b3a54e90>
+
+    async def test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        world, opened = await _in_a_world(stores, tmp_path, monkeypatch, "shared")
+        first, second, third = _loader("first"), _loader("second"), _loader("third")
+        shared = await _dataset(stores, first)
+        one, two = await _case(stores, first, shared), await _case(stores, second, shared)
+        elsewhere = await _case(stores, third, await _dataset(stores, third))
+        async with opened as raw:
+            world.graph = await _conduits_graph(raw, stores)
+>           one_owner, _ = await world.run(first, one, [PAIR])
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:169: in run
+    report = await executor.run(owner, self.draft, case, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:13033: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+services/api/recipe_run.py:194: in begin_run
+    limits = await judge_quota(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+quotas = <object object at 0x731544107220>
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x731544873680>
+dataset_id = None, owning_unit = 'unit-1'
+now = datetime.datetime(2026, 11, 10, 11, 21, 22, 165904, tzinfo=datetime.timezone.utc)
+
+    async def judge(
+        quotas: QuotaStore,
+        runs: RunCounts,
+        *,
+        dataset_id: str | None,
+        owning_unit: str | None,
+        now: datetime,
+    ) -> list[QuotaLimit]:
+        """Refuses (`QuotaRefused`) a run past its dataset's or its unit's quota of runs a day, and
+        records the budget alert once a day when this run reaches a quota's alert share. Returns the
+        limits the run's start is held to again, under their locks, as it is recorded."""
+        since = day_start(now)
+        limits: list[QuotaLimit] = []
+        day = since.date().isoformat()
+        for scope, key in (("dataset", dataset_id), ("unit", owning_unit)):
+            if not key:
+                continue
+>           quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+                          ^^^^^^^^^^
+E           AttributeError: 'object' object has no attribute 'get'
+
+services/api/run_quotas.py:278: AttributeError
+______ test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset ______
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x731554e270e0>, cases=<services.api.investigations....igationStore object at 0x7315457d6660>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x731554e0bd10>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-291/test_one_tick_stamps_each_sche0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7315457d48f0>
+
+    async def test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The scheduler itself (`ScheduleExecutor.tick` and `run_now`) over the real `check_case` and
+        `run`: `run` scopes nothing of its own, so each run's stamp is whatever its own `_owner` set
+        just before it (`_consider_slot`, `run_now`). Two pipelines due in one tick, in two cases on two
+        datasets, and a third run now in a third, each read their own link alone. Red if owners are
+        resolved for every recipe before any runs (`L1.2a_RED_RECORD.md`). A source refresh through
+        `case_for_dataset` is not driven here: this fixture's pipeline names no dataset, which a watch
+        refuses."""
+        from services.api.config import ValkeyConfig
+        from services.api.scheduler import ScheduleExecutor
+        from valkey.asyncio import Valkey
+    
+        owners = [
+            Principal(id=f"owner-{new_id()}", clearance="SECRET", org_unit="unit-1",
+                      roles=["source_approver"])
+            for _ in range(3)
+        ]  # fmt: skip
+        cases = [await _case(stores, o, await _dataset(stores, o)) for o in owners]
+        set_at, slot = (
+            datetime(2026, 6, 1, 12, tzinfo=UTC),
+            datetime(2026, 6, 2, 5, tzinfo=UTC),
+        )
+        published = [fresh_published_draft(tmp_path / f"pipeline-{n}") for n in range(3)]
+        repos = {draft.recipe_id: repo for repo, draft in published}
+        drafts = [
+            draft.model_copy(update={
+                "schedule_cron": "0 6 * * *", "schedule_owner": o.id, "schedule_set_at": set_at,
+                "schedule_case": case,
+            })
+            for (_, draft), o, case in zip(published, owners, cases, strict=True)
+        ]  # fmt: skip
+        for draft in drafts:
+            _write(Path(draft.source_location), [PAIR])
+    
+        async def execute(deps: Any, **kwargs: Any) -> Any:
+            recipe = kwargs["recipe"]
+            return await run_published_recipe(
+                recipe, kwargs["principal"], graph=deps.graph, ontology=ONTOLOGY, load_id=new_id(),
+                investigation_scope=kwargs["investigation_id"], repo_root=repos[recipe.recipe_id],
+                analytics=None, media=kwargs["media"], scheme=SCHEME, sink=kwargs["sink"],
+            )  # fmt: skip
+    
+        monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
+        monkeypatch.setattr(run_module, "resolve_source_handling", lambda draft: SOURCE)
+        monkeypatch.setattr(
+            "services.api.scheduler.resolve_source_handling", lambda draft: SOURCE
+        )
+    
+        class Due:
+            async def scheduled(self) -> list[Any]:
+                return drafts[:2]
+    
+            async def set_paused(self, *_: Any, **__: Any) -> None:
+                return None
+    
+        async def resolve(owner_id: str) -> Principal:
+            return next(o for o in owners if o.id == owner_id)
+    
+        async def notify(*_: Any) -> None:
+            return None
+    
+        config = ValkeyConfig.from_env()
+        valkey = Valkey(host=config.host, port=config.port)
+        world = World(stores, None, published[0][0], drafts[0], monkeypatch)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as raw:
+                world.graph = await _conduits_graph(raw, stores)
+                closures = world.executor()
+                scheduler = ScheduleExecutor(
+                    recipes=Due(), runs=stores.runs, valkey=valkey, scheme=SCHEME,  # type: ignore[arg-type]
+                    resolve_owner=resolve, check_case=closures.check_case, run=closures.run,
+                    notify=notify, watch_files=None, source_watches=None, case_for_dataset=None,
+                )  # fmt: skip
+                await scheduler.tick(slot + timedelta(seconds=20))
+>               await scheduler.run_now(drafts[2])
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:361: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/scheduler.py:500: in run_now
+    return await self.run(owner, recipe, case, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:13033: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+services/api/recipe_run.py:194: in begin_run
+    limits = await judge_quota(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+quotas = <object object at 0x731565200eb0>
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x731554e270e0>
+dataset_id = None, owning_unit = 'unit-1'
+now = datetime.datetime(2026, 11, 10, 11, 21, 36, 494916, tzinfo=datetime.timezone.utc)
+
+    async def judge(
+        quotas: QuotaStore,
+        runs: RunCounts,
+        *,
+        dataset_id: str | None,
+        owning_unit: str | None,
+        now: datetime,
+    ) -> list[QuotaLimit]:
+        """Refuses (`QuotaRefused`) a run past its dataset's or its unit's quota of runs a day, and
+        records the budget alert once a day when this run reaches a quota's alert share. Returns the
+        limits the run's start is held to again, under their locks, as it is recorded."""
+        since = day_start(now)
+        limits: list[QuotaLimit] = []
+        day = since.date().isoformat()
+        for scope, key in (("dataset", dataset_id), ("unit", owning_unit)):
+            if not key:
+                continue
+>           quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+                          ^^^^^^^^^^
+E           AttributeError: 'object' object has no attribute 'get'
+
+services/api/run_quotas.py:278: AttributeError
+------------------------------ Captured log call -------------------------------
+ERROR    services.api.scheduler:scheduler.py:389 scheduled run of recipe private-cash-01m72k1y7vypz77tchk7msm060 failed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/scheduler.py", line 385, in _consider_slot
+    await self.run(owner, recipe, case, latest)
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py", line 13033, in run
+    return await run_recipe_as(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 151, in run_recipe_as
+    run_id, started_at = await begin_run(
+                         ^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 194, in begin_run
+    limits = await judge_quota(
+             ^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/run_quotas.py", line 278, in judge
+    quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+                  ^^^^^^^^^^
+AttributeError: 'object' object has no attribute 'get'
+ERROR    services.api.scheduler:scheduler.py:389 scheduled run of recipe private-cash-01m72k1y85tekmy94vy5q09xa6 failed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/scheduler.py", line 385, in _consider_slot
+    await self.run(owner, recipe, case, latest)
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py", line 13033, in run
+    return await run_recipe_as(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 151, in run_recipe_as
+    run_id, started_at = await begin_run(
+                         ^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 194, in begin_run
+    limits = await judge_quota(
+             ^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/run_quotas.py", line 278, in judge
+    quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+                  ^^^^^^^^^^
+AttributeError: 'object' object has no attribute 'get'
+_ test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x731545928fb0>, cases=<services.api.investigations....igationStore object at 0x73154592a600>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x73154592b830>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-291/test_run_now_tells_and_shows_i0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73148962e4b0>
+routed = None
+
+    async def test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace,  # noqa: F811
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        routed: None,
+    ) -> None:
+>       alone = await _told(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:193: in _told
+    said = await _run_now(world, client, accounts, loader, ours)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:132: in _run_now
+    response = await client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12967: in run_studio_recipe
+    report = await run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+services/api/recipe_run.py:194: in begin_run
+    limits = await judge_quota(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+quotas = <tests.services.api.test_studio_run_now_stamps_its_case_dataset_live._Nothing object at 0x7314b2be2840>
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x731545928fb0>
+dataset_id = None, owning_unit = 'unit-1'
+now = datetime.datetime(2026, 11, 10, 11, 21, 46, 736369, tzinfo=datetime.timezone.utc)
+
+    async def judge(
+        quotas: QuotaStore,
+        runs: RunCounts,
+        *,
+        dataset_id: str | None,
+        owning_unit: str | None,
+        now: datetime,
+    ) -> list[QuotaLimit]:
+        """Refuses (`QuotaRefused`) a run past its dataset's or its unit's quota of runs a day, and
+        records the budget alert once a day when this run reaches a quota's alert share. Returns the
+        limits the run's start is held to again, under their locks, as it is recorded."""
+        since = day_start(now)
+        limits: list[QuotaLimit] = []
+        day = since.date().isoformat()
+        for scope, key in (("dataset", dataset_id), ("unit", owning_unit)):
+            if not key:
+                continue
+            quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+>           if quota is None or quota.runs_per_day is None:
+                                ^^^^^^^^^^^^^^^^^^
+E           AttributeError: 'list' object has no attribute 'runs_per_day'
+
+services/api/run_quotas.py:279: AttributeError
+____ test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds _____
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x73152d3a16a0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-291/test_a_snapshot_tells_its_load0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x731544871b50>
+
+    async def test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds(
+        runs: RecipeRunStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       alone = await _told(runs, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:269: in _told
+    return await _three_runs(
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:281: in _three_runs
+    await world.run(loader, ours, [A, B])
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:160: in run
+    report = await run_module.run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+services/api/recipe_run.py:194: in begin_run
+    limits = await judge_quota(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+quotas = <object object at 0x731489d6c580>
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x73152d3a16a0>
+dataset_id = None, owning_unit = 'unit-1'
+now = datetime.datetime(2026, 11, 10, 11, 22, 37, 757504, tzinfo=datetime.timezone.utc)
+
+    async def judge(
+        quotas: QuotaStore,
+        runs: RunCounts,
+        *,
+        dataset_id: str | None,
+        owning_unit: str | None,
+        now: datetime,
+    ) -> list[QuotaLimit]:
+        """Refuses (`QuotaRefused`) a run past its dataset's or its unit's quota of runs a day, and
+        records the budget alert once a day when this run reaches a quota's alert share. Returns the
+        limits the run's start is held to again, under their locks, as it is recorded."""
+        since = day_start(now)
+        limits: list[QuotaLimit] = []
+        day = since.date().isoformat()
+        for scope, key in (("dataset", dataset_id), ("unit", owning_unit)):
+            if not key:
+                continue
+>           quota = await quotas.get(scope, key)  # type: ignore[arg-type]
+                          ^^^^^^^^^^
+E           AttributeError: 'object' object has no attribute 'get'
+
+services/api/run_quotas.py:278: AttributeError
+_________ test_a_run_that_loads_is_recorded_succeeded_with_its_counts __________
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x7314b3a56b70>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7315457d6990>
+
+    async def test_a_run_that_loads_is_recorded_succeeded_with_its_counts(
+        runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        report = LoadReport(
+            load_id="load-9", recipe_id="x", recipe_version=2, rows_read=3, nodes_created=2
+        )
+        recipe_id, result = await _run(runs, monkeypatch, report)
+>       assert isinstance(result, LoadReport)
+E       assert False
+E        +  where False = isinstance(AttributeError("'types.SimpleNamespace' object has no attribute 'dataset_id'"), LoadReport)
+
+../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py:81: AssertionError
+____ test_a_run_that_fails_is_recorded_failed_and_the_failure_still_raised _____
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x73148b7e7470>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7314b3a57170>
+
+    async def test_a_run_that_fails_is_recorded_failed_and_the_failure_still_raised(
+        runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        recipe_id, result = await _run(runs, monkeypatch, FileNotFoundError("no such file: a.csv"))
+>       assert isinstance(result, FileNotFoundError)
+E       assert False
+E        +  where False = isinstance(AttributeError("'types.SimpleNamespace' object has no attribute 'dataset_id'"), FileNotFoundError)
+
+../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py:102: AssertionError
+____________ test_a_run_is_metered_on_its_report_and_in_the_ledger _____________
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x7314b3c08830>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x731544eda600>
+
+    async def test_a_run_is_metered_on_its_report_and_in_the_ledger(
+        runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       report, row = await _run(runs, monkeypatch)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py:73: in _run
+    report = await run_module.run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+deps = RecipeRunDeps(graph=<object object at 0x731489d6e070>, ontology=<object object at 0x731489d6dec0>, analytics=<object o... object at 0x731489d6e3b0>, list_store=<object object at 0x731489d6e2e0>, run_quotas=<object object at 0x731489d6e1e0>)
+principal = Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=None)
+recipe = namespace(recipe_id='01M72K6VK9YB2Y0R4PKM00R3FD', version=2)
+investigation_id = 'case-1', trigger = 'source_refresh', slot = None
+source_file = None, external = None
+
+    async def begin_run(
+        deps: RecipeRunDeps,
+        *,
+        principal: Principal,
+        recipe: StudioRecipeDraft,
+        investigation_id: str,
+        trigger: RunTrigger,
+        slot: datetime | None = None,
+        source_file: str | None = None,
+        external: External | None = None,
+    ) -> tuple[str, datetime]:
+        """The run's start, before anything is read: its quotas judged (ADR-141 decision 6) — past
+        one, it is recorded *refused* (not counted toward a schedule's pause) and `QuotaRefused` is
+        raised in words — then its ledger row, which claims an external run id once
+        (`ExternalRunRecorded` when it is held already, decision 12)."""
+        started_at = datetime.now(UTC)
+>       counted = Counted(dataset_id=recipe.dataset_id, owning_unit=recipe.owning_unit)
+                                     ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'types.SimpleNamespace' object has no attribute 'dataset_id'
+
+services/api/recipe_run.py:190: AttributeError
+____________________ test_a_failed_run_records_no_metering _____________________
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x731544b109b0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x731544b104d0>
+
+    async def test_a_failed_run_records_no_metering(
+        runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       report, row = await _run(runs, monkeypatch, fail=True)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py:73: in _run
+    report = await run_module.run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+deps = RecipeRunDeps(graph=<object object at 0x731489d6ead0>, ontology=<object object at 0x731489d6e2d0>, analytics=<object o... object at 0x731489d6ec50>, list_store=<object object at 0x731489d6ec60>, run_quotas=<object object at 0x731489d6ec40>)
+principal = Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=None)
+recipe = namespace(recipe_id='01M72K6VMBT76RE0CE2GNCVWX7', version=2)
+investigation_id = 'case-1', trigger = 'source_refresh', slot = None
+source_file = None, external = None
+
+    async def begin_run(
+        deps: RecipeRunDeps,
+        *,
+        principal: Principal,
+        recipe: StudioRecipeDraft,
+        investigation_id: str,
+        trigger: RunTrigger,
+        slot: datetime | None = None,
+        source_file: str | None = None,
+        external: External | None = None,
+    ) -> tuple[str, datetime]:
+        """The run's start, before anything is read: its quotas judged (ADR-141 decision 6) — past
+        one, it is recorded *refused* (not counted toward a schedule's pause) and `QuotaRefused` is
+        raised in words — then its ledger row, which claims an external run id once
+        (`ExternalRunRecorded` when it is held already, decision 12)."""
+        started_at = datetime.now(UTC)
+>       counted = Counted(dataset_id=recipe.dataset_id, owning_unit=recipe.owning_unit)
+                                     ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'types.SimpleNamespace' object has no attribute 'dataset_id'
+
+services/api/recipe_run.py:190: AttributeError
+__________ test_the_admin_view_withholds_the_metering_with_the_counts __________
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x731473ae29f0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x731473ae2ff0>
+
+    async def test_the_admin_view_withholds_the_metering_with_the_counts(
+        runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       _, row = await _run(runs, monkeypatch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py:108: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py:73: in _run
+    report = await run_module.run_recipe_as(
+services/api/recipe_run.py:151: in run_recipe_as
+    run_id, started_at = await begin_run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+deps = RecipeRunDeps(graph=<object object at 0x731489d6e1c0>, ontology=<object object at 0x731489d6ea40>, analytics=<object o... object at 0x731489d6dec0>, list_store=<object object at 0x731489d6e070>, run_quotas=<object object at 0x731489d6e150>)
+principal = Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=None)
+recipe = namespace(recipe_id='01M72K6VNEZP2MJXRTG5G5SRN1', version=2)
+investigation_id = 'case-1', trigger = 'source_refresh', slot = None
+source_file = None, external = None
+
+    async def begin_run(
+        deps: RecipeRunDeps,
+        *,
+        principal: Principal,
+        recipe: StudioRecipeDraft,
+        investigation_id: str,
+        trigger: RunTrigger,
+        slot: datetime | None = None,
+        source_file: str | None = None,
+        external: External | None = None,
+    ) -> tuple[str, datetime]:
+        """The run's start, before anything is read: its quotas judged (ADR-141 decision 6) — past
+        one, it is recorded *refused* (not counted toward a schedule's pause) and `QuotaRefused` is
+        raised in words — then its ledger row, which claims an external run id once
+        (`ExternalRunRecorded` when it is held already, decision 12)."""
+        started_at = datetime.now(UTC)
+>       counted = Counted(dataset_id=recipe.dataset_id, owning_unit=recipe.owning_unit)
+                                     ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'types.SimpleNamespace' object has no attribute 'dataset_id'
+
+services/api/recipe_run.py:190: AttributeError
+_____ test_the_postgres_quota_store_keeps_quotas_and_raises_an_alert_once ______
+
+>   ???
+
+asyncpg/protocol/prepared_stmt.pyx:175: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+asyncpg/protocol/codecs/base.pyx:251: in asyncpg.protocol.protocol.Codec.encode
+    ???
+asyncpg/protocol/codecs/base.pyx:153: in asyncpg.protocol.protocol.Codec.encode_scalar
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   AttributeError: 'str' object has no attribute 'toordinal'
+
+asyncpg/pgproto/codecs/datetime.pyx:97: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+    async def test_the_postgres_quota_store_keeps_quotas_and_raises_an_alert_once() -> None:
+        from services.api.run_quotas import PostgresQuotaStore, QuotaAlert
+    
+        store = await PostgresQuotaStore.connect(PostgresConfig.from_env().dsn)
+        key = f"ds-q-{new_id()}"
+        try:
+            await store.set(RunQuota(scope="dataset", key=key, runs_per_day=3, alert_at_share=0.5))
+            assert (await store.get("dataset", key)) == RunQuota(
+                scope="dataset", key=key, runs_per_day=3, alert_at_share=0.5
+            )
+            assert [q.key for q in await store.reached_by(units=["unit-x"], datasets=[key])] == [key]
+            assert await store.reached_by(units=["unit-x"], datasets=["another"]) == []
+            alert = QuotaAlert("dataset", key, "2026-11-10", "reached")
+>           assert await store.raise_once(alert, at=datetime.now(UTC)) is True
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_external_runs_live.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/run_quotas.py:217: in raise_once
+    status = await conn.execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:380: in execute
+    _, status, _ = await self._execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:1904: in _execute
+    result, _ = await self.__execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2003: in __execute
+    result, stmt = await self._do_execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2066: in _do_execute
+    result = await executor(stmt, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncpg/protocol/protocol.pyx:176: in bind_execute
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.DataError: invalid input for query argument $3: '2026-11-10' ('str' object has no attribute 'toordinal')
+
+asyncpg/protocol/prepared_stmt.pyx:204: DataError
+____________________ test_phase8_exit_criterion_end_to_end _____________________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x7314b2dfe150>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x7314b2dfc670>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-291/test_phase8_exit_criterion_end0')
+git_repo = PosixPath('/tmp/pytest-of-root/pytest-291/test_phase8_exit_criterion_end0/repo')
+
+    def test_phase8_exit_criterion_end_to_end(
+        api_env: None,
+        keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+        tmp_path: Path,
+        git_repo: Path,
+    ) -> None:
+        import asyncio
+    
+        private_key, _ = keypair
+        import time as _time
+    
+        # A one-hour expiry, not the default 300s (`tests/conftest.py::default_claims`) — this
+        # walkthrough's own real ArcadeDB/Postgres round trips run measurably longer than that,
+        # confirmed directly (a real run's own token expired mid-test at the B14 jump call before
+        # this fix, `401 signature has expired`, not assumed).
+        # An analyst who loads too: since ADR-112 a `loader` alone holds no `create_case`, and B14's
+        # address asks for the queue's read and Rules and Monitoring (ADR-146 Amendment 2).
+        headers = _bearer(private_key, roles=["analyst", "loader"], exp=int(_time.time()) + 3600)
+    
+        from services.api.app import app
+    
+        # === Scenario B ===============================================================================
+    
+        # B1-B3
+        cdr_ids = asyncio.run(_ingest_cdr_fixture(tmp_path))
+    
+        async def _build_b_graph() -> dict[str, object]:
+            client, graph = await _graph_client()
+            try:
+                # B4-B7: two cohorts, one on the shared CDR endpoint, one on a shared handle.
+                cohort_1_person_ids = await _seed_cohort(
+                    graph, shared_endpoint_id=cdr_ids["b_party_endpoint_id"], prefix="c1"
+                )
+                cohort_2_person_ids, handle_id = await _seed_handle_cohort(graph, prefix="c2")
+    
+                # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
+                # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
+                # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
+                # (`spec/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+                # stand-in for something else.
+    
+                # B9/B10: the real Person pair — see this file's own helper docstring for why neither
+                # cohort above can serve this, and why this pair is provably the same generator's own
+                # output.
+                b9_a_id, b9_b_id, b9_cluster_id, b9_score = await _seed_and_resolve_b9_b10_person_pair(
+                    graph, scheme=load_uk_le_scheme()
+                )
+    
+                # B15: the seizure record's device/SIM legs.
+                seizure_ids = await _write_seizure_device_legs(graph)
+    
+                return {
+                    "cohort_1_person_ids": cohort_1_person_ids,
+                    "cohort_2_person_ids": cohort_2_person_ids,
+                    "handle_id": handle_id,
+                    "b9_a_id": b9_a_id,
+                    "b9_b_id": b9_b_id,
+                    "b9_cluster_id": b9_cluster_id,
+                    "b9_score": b9_score,
+                    **seizure_ids,
+                }
+            finally:
+                await client.aclose()
+    
+        b_graph = asyncio.run(_build_b_graph())
+    
+        with TestClient(app) as client:
+            investigation_b = client.post("/v1/investigations", headers=headers, json=new_case())
+            assert investigation_b.status_code == 201, investigation_b.text
+            inv_b_id = investigation_b.json()["id"]
+    
+            async def _fetch(node_id: str) -> dict:
+                _client, graph = await _graph_client()
+                try:
+                    node = await graph.get_node(node_id, PRINCIPAL)
+                    assert node is not None
+                    return node.model_dump(mode="json")
+                finally:
+                    await _client.aclose()
+    
+            # === B4: seed the four first-cohort Person entities, no edges between them.
+            cohort_1_nodes = [asyncio.run(_fetch(pid)) for pid in b_graph["cohort_1_person_ids"]]
+            seeded_b4 = client.post(
+                f"/v1/investigations/{inv_b_id}/seed",
+                headers=headers,
+                json={"nodes": cohort_1_nodes, "edges": []},
+            )
+            assert seeded_b4.status_code == 200, seeded_b4.text
+>           assert len(seeded_b4.json()["delta"]["nodes"]) == 4
+E           assert 0 == 4
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py:768: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:24:38] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/ingest/test_optional_bindings.py::test_a_run_refuses_a_list_valued_transform_as_a_deduplicate_key_or_a_match
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:520: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `DeduplicateConfig` - serialized value may not be as expected [field_name='deduplicate', input_value={'key': [{'field': 'alias... 'transform': 'split'}]}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py::test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py::test_a_run_that_loads_is_recorded_succeeded_with_its_counts
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py::test_a_run_that_fails_is_recorded_failed_and_the_failure_still_raised
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py::test_a_run_is_metered_on_its_report_and_in_the_ledger
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py::test_a_failed_run_records_no_metering
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py::test_the_admin_view_withholds_the_metering_with_the_counts
+FAILED ../OspreyFlow_Build/tests/services/api/test_external_runs_live.py::test_the_postgres_quota_store_keeps_quotas_and_raises_an_alert_once
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+15 failed, 2037 passed, 10 skipped, 2 warnings in 13373.22s (3:42:53)

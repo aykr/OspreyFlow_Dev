@@ -23,7 +23,7 @@ whose tables would make more than `FUZZY_PAIR_LIMIT` pairs is refused in words, 
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import date
 from typing import Any
 
@@ -45,6 +45,7 @@ from .staging_catalogue import (
     StagingError,
     StepReport,
     _added_names,
+    refuse_a_differing_marking,
 )
 
 #: Pairs a fuzzy match may compare with no blocking key (rule 2: refused above, never truncated).
@@ -153,7 +154,7 @@ def score_text(score: float) -> str:
 
 
 def run_fuzzy_step(
-    step: FuzzyMatchStep, left: StagedTable, right: StagedTable
+    step: FuzzyMatchStep, left: StagedTable, right: StagedTable, *, marked: Collection[str]
 ) -> tuple[StagedTable, StepReport]:
     compared_columns: list[FuzzyComparison | FuzzyBlocking] = [*step.compare, *step.block_on]
     problems = [
@@ -191,6 +192,8 @@ def run_fuzzy_step(
             continue
         score, at = match
         other = right.rows[at]
+        # CARRIES row 48 (rule 3): the matched row's values are written under this row's marking.
+        refuse_a_differing_marking(step.id, row, other, marked)
         cells = (
             dict(row.cells)
             | {name: other.cells.get(column) for column, name in pairs}

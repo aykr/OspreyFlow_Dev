@@ -31,13 +31,22 @@ import logging
 import os
 import time
 from collections import Counter
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from dataclasses import replace as dataclass_replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast, get_args
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import (
@@ -92,6 +101,7 @@ from services.ingest.recipe_rules import (
     handling_bindings,
     template_elements,
 )
+from services.ingest.release import ReleaseRefused as BundleRefused
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import DEPLOYMENT_WIDE
 from services.ingest.transforms import STRUCTURED_PARTS
@@ -384,6 +394,18 @@ from schemas.monitoring import (
     RuleVersion,
     WouldRaise,
 )
+from schemas.operations import (
+    ExternallyOwnedInput,
+    ExternalRunInput,
+    ExternalRunStatus,
+    OperationsRollup,
+    PausedPipeline,
+    QuotaAlertView,
+    QuotaScope,
+    RunQuota,
+    RunQuotaInput,
+    RunQuotaUse,
+)
 from schemas.packs import (
     AddPackItem,
     PackDraft,
@@ -420,6 +442,12 @@ from schemas.promotions import (
     TypeChoice,
 )
 from schemas.promotions import Promotions as PromotionsList
+from schemas.release import (
+    ReleaseBundleInput,
+    ReleaseExport,
+    ReleaseImportPlan,
+    ReleaseMetadata,
+)
 from schemas.rights import (
     CUSTOM_ROLE_PREFIX,
     ROLE_RIGHTS,
@@ -676,6 +704,7 @@ from .export import (
     OverrideRequiredError,
     submit_export,
 )
+from .external_runs import start_external_run, status_for
 from .folder_watch import WatchedFile, describe_watch, validate_watch, waiting_files
 from .held_rows import HeldRowNotFoundError, HeldRowStore
 from .history import (
@@ -806,6 +835,7 @@ from .model_routing import (
 from .monitor_schedule import MonitorScheduleExecutor, monitor_matcher
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
+from .operations_rollup import external_triggers, rollup_rows, scheduler_health
 from .packs import (
     PackExportRefused,
     PackHasWithheldItems,
@@ -875,7 +905,7 @@ from .recipe_run import (
     _rule_gate,
     run_recipe_as,
 )
-from .recipe_runs import RecipeRun, RecipeRunStore, RunTrigger
+from .recipe_runs import External, RecipeRun, RecipeRunStore, RunTrigger
 from .release_notice import read_update_notice
 from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
@@ -912,6 +942,7 @@ from .rules_place import PLACE as RULES_PLACE
 from .rules_place import opens_rules_place, reads_queue_rows, refusal_wait
 from .rules_place import refusal as rules_place_refusal
 from .rules_place import rows_refusal as queue_rows_refusal
+from .run_quotas import QuotaRefused, QuotaStore, day_start
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .run_source import (
     SourceChangedSinceVerifyError,
@@ -945,6 +976,12 @@ from .sentence_rules import (
     run_on_list_refresh,
     run_scheduled_rule,
     strength_context,
+)
+from .service_identity import (
+    DEPLOYMENT_CLIENT_WORDS,
+    ServiceIdentityRefused,
+    ServiceIdentityVerifier,
+    is_deployment_client,
 )
 from .site_images import (
     object_key_for,
@@ -1008,6 +1045,14 @@ from .studio_recipes import (
     StudioRecipeStore,
     recipe_reader,
     reconcile_recipe_pins,
+)
+from .studio_release import (
+    apply_import,
+    bundle_from_text,
+    deployment_secrets,
+    export_release,
+    plan_import,
+    with_default_classification,
 )
 from .studio_staging import (
     StagedTestInputs,
@@ -1152,6 +1197,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # L3.8: what a person owns that the case lane keeps, which Disable… lists (ADR-145 A4).
     person_ownership = await PostgresOwnershipStore.connect(config.postgres.dsn)
+    # ADR-141 decision 6: the run quotas every run's start judges (`run_quotas.judge`).
+    run_quotas = resources.run_quotas
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -1267,6 +1314,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.screening_lists = screening_lists
     app.state.kyc_expiries = kyc_expiries
     app.state.recipe_runs = recipe_runs
+    app.state.run_quotas = run_quotas
+    # ADR-141 decision 10: a service identity's sign-in, for the run API alone.
+    app.state.service_identities = ServiceIdentityVerifier(config)
+    # The external runs going on in the background, held so none is collected mid-run.
+    app.state.external_runs = set()
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
     # ADR-128 decision 3, rule 3: an attachment is shown to a reader only with the title its own
@@ -2148,6 +2200,29 @@ def get_recipe_runs(request: Request) -> RecipeRunStore:
     return request.app.state.recipe_runs  # type: ignore[no-any-return]
 
 
+def get_run_quotas(request: Request) -> QuotaStore | None:
+    return getattr(request.app.state, "run_quotas", None)
+
+
+RunQuotasDep = Annotated[QuotaStore | None, Depends(get_run_quotas)]
+
+
+def get_service_identity(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> str:
+    """The run API's caller (ADR-141 decision 10): the client a service identity's token names,
+    or 401 in words. Never a `Principal`: a service identity reads nothing as itself."""
+    verifier: ServiceIdentityVerifier = request.app.state.service_identities
+    try:
+        return verifier.client_of(credentials.credentials)
+    except ServiceIdentityRefused as refused:
+        raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
+
+
+ServiceIdentityDep = Annotated[str, Depends(get_service_identity)]
+
+
 RecipeRunsDep = Annotated[RecipeRunStore, Depends(get_recipe_runs)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
@@ -2374,6 +2449,35 @@ _STUDIO_ROLE_RIGHT: dict[StudioRole, Right] = {
 }
 
 
+#: The built-in roles as a person reads them (Admin › Roles' catalogue, and the Studio's refusals).
+BUILT_IN_ROLE_LABELS = {
+    "analyst": "Analyst",
+    "data_engineer": "Data Engineer",
+    "osprey-admin": "Admin",
+    "reports_viewer": "Reports Viewer",
+    "rule_author": "Rule author",
+}
+_STUDIO_ACTION_WORDS: dict[StudioRole, str] = {
+    StudioRole.SOURCE_AUTHOR: "edit pipelines",
+    StudioRole.SOURCE_APPROVER: "deploy pipelines",
+    StudioRole.LOADER: "run pipelines",
+}
+
+
+def studio_role_refusal(role: StudioRole) -> str:
+    """A missing studio role in words (CARRIES row 40; ADR-145 Amendment 4 decision 12, the owner's
+    ruling (c)): the action, and the roles that hold its right, never the role's id or a person."""
+    right = _STUDIO_ROLE_RIGHT[role]
+    holders = [BUILT_IN_ROLE_LABELS[r] for r, rights in ROLE_RIGHTS.items() if right in rights]
+    if right in rights_for(SUPER_USER_PRESET):
+        holders.append("Super user")
+    held = " or ".join(holders) if holders else "no built-in role"
+    return (
+        f"You may not {_STUDIO_ACTION_WORDS[role]} here. It is held by the {held} role, or by a "
+        "custom role an administrator gives it to; ask an administrator in Admin › Roles."
+    )
+
+
 def require_studio_role(role: StudioRole) -> Any:
     """Ingest Studio action authorisation (`09_INGEST_STUDIO.md` §8) — a
     dependency factory rather than a bare dependency, since which role a
@@ -2390,7 +2494,7 @@ def require_studio_role(role: StudioRole) -> Any:
         if _STUDIO_ROLE_RIGHT[role] not in rights_for(principal.roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"principal lacks required studio role: {role.value}",
+                detail=studio_role_refusal(role),
             )
         return principal
 
@@ -3449,6 +3553,12 @@ async def _engine_refused_handler(request: Request, exc: EngineRefused) -> JSONR
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"error": "engine_refused", "detail": str(exc)},
     )
+
+
+@app.exception_handler(QuotaRefused)
+async def _quota_refused_handler(request: Request, exc: QuotaRefused) -> JSONResponse:
+    """ADR-141 decision 6: a run past a quota, refused in words; the ledger has it *refused*."""
+    return JSONResponse(status_code=429, content={"error": "quota_used", "detail": str(exc)})
 
 
 @app.exception_handler(ScheduleRefused)
@@ -8424,9 +8534,7 @@ async def case_gazetteers_route(
     owner's ruling 6): names only, never a count of places (a count would take in places above the
     reader's clearance). Viewer and `investigate`, as the place search is. A case reading a
     composite or nothing is answered with none."""
-    return await _gazetteers_view(
-        await _own_dataset(investigation.id, datasets), datasets, store
-    )
+    return await _gazetteers_view(await _own_dataset(investigation.id, datasets), datasets, store)
 
 
 #: ADR-147 Amendment 2: the words a refused addition is said in.
@@ -9899,8 +10007,14 @@ def _subscribable(lists: Sequence[DeploymentList]) -> list[SubscribableList]:
     location, who added it, the real dataset it is, its mapping or its failure's words."""
     return [
         SubscribableList(
-            id=x.id, name=x.name, template=x.template, version=x.version, entries=x.entries,
-            updated_at=x.updated_at, failing=x.failure is not None, schedule_words=x.schedule_words,
+            id=x.id,
+            name=x.name,
+            template=x.template,
+            version=x.version,
+            entries=x.entries,
+            updated_at=x.updated_at,
+            failing=x.failure is not None,
+            schedule_words=x.schedule_words,
         )  # fmt: skip
         for x in lists
     ]
@@ -11241,6 +11355,147 @@ async def _audit_model(
     )
 
 
+# --- Studio › Releases (ADR-140 Amendment 9 decision 4) -----------------------------------------
+
+#: Export reads the live model and the published pipelines; behind the dataset's own gate.
+_EXPORTS_A_RELEASE = [
+    Depends(require_right(Right.EDIT_TARGET_MODEL)),
+    Depends(require_right(Right.PUBLISH_PIPELINES)),
+]
+#: Import writes the model's draft and pipeline drafts, as the model's and the canvas's own saves.
+_IMPORTS_A_RELEASE = [
+    Depends(require_right(Right.EDIT_TARGET_MODEL)),
+    Depends(require_right(Right.EDIT_PIPELINES)),
+    Depends(refuse_loading_a_composite),
+]
+
+
+@app.get("/v1/datasets/{dataset_id}/release", dependencies=_EXPORTS_A_RELEASE)
+async def export_dataset_release(
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    studio_recipes: StudioRecipesDep,
+    rows_kept: ListRowsDep,
+    staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
+    sources: SourcesDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+    name: Annotated[str, Query(min_length=1, max_length=253)],
+    version: Annotated[str, Query(min_length=1, max_length=64)],
+) -> ReleaseExport:
+    """*Export* (Studio › Releases) and `ospreyflow release export`: the dataset's release as its
+    bundle's files (`services/api/studio_release.py` has what is read, as the exporter). Refused
+    in words (422 `release_refused`) when there is no live model or a file would hold a secret."""
+    try:
+        result = await export_release(
+            dataset_id=dataset_id,
+            principal=principal,
+            metadata=ReleaseMetadata.model_construct(name=name, version=version),
+            models=models,
+            recipes=studio_recipes,
+            rows_kept=rows_kept,
+            staging_storage=staging_storage,
+            list_store=list_store,
+            sources=sources,
+            scheme=handling_scheme,
+            secrets=deployment_secrets(),
+        )
+    except BundleRefused as refused:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content={"error": "release_refused", "problems": refused.problems}
+        )
+    await audit.record(
+        principal=principal,
+        action="export_dataset_release",
+        resolved_query={"dataset_id": dataset_id, "name": name, "version": version},
+        result_cardinality=len(result.files),
+    )
+    return ReleaseExport(
+        files={path: data.decode("utf-8") for path, data in result.files.items()},
+        left_out=result.left_out,
+    )
+
+
+@app.post("/v1/datasets/{dataset_id}/release/import", dependencies=_IMPORTS_A_RELEASE)
+async def import_dataset_release(
+    dataset_id: StudioDatasetDep,
+    principal: SourceAuthorDep,
+    body: ReleaseBundleInput,
+    models: TargetModelsDep,
+    studio_recipes: StudioRecipesDep,
+    rows_kept: ListRowsDep,
+    staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
+    ontology: OntologyDep,
+    dry_run: bool = False,
+) -> ReleaseImportPlan:
+    """*Import* and `ospreyflow release import [--dry-run]`: the bundle read and checked, every
+    pipeline judged by the canvas's own gates, then (unless `dry_run`) everything written as a
+    draft. A bundle that cannot be read, or any refusal, writes nothing (422, the plan's words).
+    Nothing goes live: *Make live* stays a person's audited step."""
+    try:
+        bundle = bundle_from_text(body.files)
+    except BundleRefused as refused:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422,
+            content=ReleaseImportPlan(dry_run=dry_run, refused=refused.problems).model_dump(
+                mode="json"
+            ),
+        )
+    planned = await plan_import(
+        bundle,
+        dataset_id=dataset_id,
+        principal=principal,
+        dry_run=dry_run,
+        models=models,
+        rows_kept=rows_kept,
+        staging_storage=staging_storage,
+        list_store=list_store,
+        sources=sources,
+        scheme=handling_scheme,
+        ontology=ontology,
+    )
+    plan = planned.plan
+    if plan.refused:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content=plan.model_dump(mode="json")
+        )
+    if dry_run:
+        await audit.record(
+            principal=principal,
+            action="plan_dataset_release_import",
+            resolved_query={"dataset_id": dataset_id, "release": bundle.manifest.metadata.name},
+            result_cardinality=len(plan.items),
+        )
+        return plan
+    made = await apply_import(
+        bundle,
+        planned,
+        dataset_id=dataset_id,
+        principal=principal,
+        models=models,
+        recipes=studio_recipes,
+        rows_kept=rows_kept,
+    )
+    await audit.record(
+        principal=principal,
+        action="import_dataset_release",
+        resolved_query={
+            "dataset_id": dataset_id,
+            "release": bundle.manifest.metadata.name,
+            "version": bundle.manifest.metadata.version,
+            "pipelines": made,
+        },
+        result_cardinality=len(plan.items),
+    )
+    return plan
+
+
 @app.get(
     "/v1/datasets/{dataset_id}/sources",
     dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
@@ -11340,7 +11595,10 @@ def get_connector_readers(request: Request) -> Readers:
 
 
 async def _audit_refused_read(
-    audit: AuditWriter, principal: Principal, dataset_id: str, connection_id: str,
+    audit: AuditWriter,
+    principal: Principal,
+    dataset_id: str,
+    connection_id: str,
     refused: ConnectorRefused,
 ) -> None:
     """A refused connector read is audited, by ids and words alone: no server path."""
@@ -11824,11 +12082,7 @@ def _with_default_classification(
     lowest level, which for the UK scheme is `PUBLIC`. Done here, not in the Glass, so a draft never
     carries an empty marking whichever client wrote it; an analyst's own choice is never
     replaced."""
-    chosen = handling.get("classification")
-    if isinstance(chosen, str) and chosen.strip():
-        return handling
-    lowest = "PUBLIC" if "PUBLIC" in scheme.classification else scheme.classification[0]
-    return {**handling, "classification": lowest}
+    return with_default_classification(handling, scheme)
 
 
 @app.post(
@@ -12380,8 +12634,8 @@ async def preview_studio_recipe_staging(
         principal=principal,
         scheme=scheme,
         references=await dataset_reference_lists(
-                models, recipe.dataset_id, staging_storage, lists=list_store
-            ),
+            models, recipe.dataset_id, staging_storage, lists=list_store
+        ),
         storage=staging_storage,
     )
     await audit.record(
@@ -12833,6 +13087,14 @@ async def update_studio_recipe_schedule(
     and whoever sets it becomes its owner (decision 3). ADR-120 Amendment 2, decision 2: the
     re-commit carries the row's pins as stored, none included, and a mapped row with no core
     version is saved without one, as the administrator's route does."""
+    if (body.schedule_cron or body.schedule_watch) and await studio_recipes.external_owner(
+        recipe.recipe_id
+    ):
+        # ADR-141 decision 11: a pipeline owned externally has its schedule in the orchestrator.
+        raise HTTPException(
+            status_code=409,
+            detail="the pipeline is owned externally: its orchestrator runs it; nobody sets both",
+        )
     if body.schedule_cron is not None:
         validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
     if body.schedule_watch is not None:
@@ -13010,6 +13272,7 @@ async def run_studio_recipe(
     list_store: ListStoreDep = None,  # type: ignore[assignment]
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
     rule_reach: RuleReachDep = None,  # type: ignore[assignment]
+    run_quotas: RunQuotasDep = None,
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -13103,6 +13366,7 @@ async def run_studio_recipe(
             board_items=board_items,
             datasets=datasets,
             investigations=investigations,
+            run_quotas=run_quotas,
         ),
         principal=principal,
         recipe=recipe,
@@ -15957,13 +16221,7 @@ def _today() -> date:
 
 
 def _built_in_roles() -> list[BuiltInRole]:
-    labels = {
-        "analyst": "Analyst",
-        "data_engineer": "Data Engineer",
-        "osprey-admin": "Admin",
-        "reports_viewer": "Reports Viewer",
-        "rule_author": "Rule author",
-    }
+    labels = BUILT_IN_ROLE_LABELS
     roles = [
         BuiltInRole(id=i, label=labels[i], rights=sorted(r, key=lambda x: x.value))
         for i, r in ROLE_RIGHTS.items()
@@ -17109,6 +17367,332 @@ async def refresh_screening_list_route(
     return own
 
 
+def get_schedule_executor(request: Request) -> ScheduleExecutor:
+    return request.app.state.schedule_executor  # type: ignore[no-any-return]
+
+
+ScheduleExecutorDep = Annotated[ScheduleExecutor, Depends(get_schedule_executor)]
+
+
+# --- External orchestration and Operations (ADR-141; the redesign's phase 10) --------------------
+
+#: Who may hand a pipeline's schedule to an orchestrator: who may schedule it (ADR-110 decision 3).
+_HANDS_A_SCHEDULE = [Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase]
+_NO_SUCH_PIPELINE = (
+    "no pipeline this service identity may trigger has that id in that dataset: a pipeline is "
+    "triggered only by the client it is owned externally by"
+)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def read_pipeline_owned_externally(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    studio_recipes: StudioRecipesDep,
+) -> ExternallyOwnedInput | None:
+    """Whether the pipeline is owned externally, and by which client (ADR-141 decision 11); `null`
+    when it is not. The owner is not named here: the Runs tab shows the client alone."""
+    owner = await studio_recipes.external_owner(recipe.recipe_id)
+    return None if owner is None else ExternallyOwnedInput(client_id=owner.client_id)
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
+    dependencies=_HANDS_A_SCHEDULE,
+)
+async def mark_pipeline_owned_externally(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    body: ExternallyOwnedInput,
+) -> ExternallyOwnedInput:
+    """*Owned externally* (ADR-141 decision 11): the pipeline's schedule handed to an orchestrator,
+    triggered by `body.client_id` alone; the person marking it is the owner every external run
+    acts as, in this case (decision 10). Refused in words while it has a schedule of its own, so
+    nobody sets both."""
+    if recipe.status is not StudioRecipeStatus.PUBLISHED:
+        raise HTTPException(
+            status_code=409, detail="only a deployed pipeline can be owned externally"
+        )
+    if recipe.schedule_cron or recipe.schedule_watch:
+        raise HTTPException(
+            status_code=409,
+            detail="the pipeline has a schedule of its own: clear it first, so nobody sets both",
+        )
+    if is_deployment_client(body.client_id):
+        # Rule 3: the deployment's own clients have service accounts; none is an orchestrator.
+        raise HTTPException(status_code=422, detail=DEPLOYMENT_CLIENT_WORDS)
+    await studio_recipes.set_external_owner(
+        recipe.recipe_id,
+        client_id=body.client_id,
+        owner=principal.id,
+        case=investigation.id,
+        now=datetime.now(UTC),
+    )
+    await audit.record(
+        principal=principal,
+        action="mark_pipeline_owned_externally",
+        resolved_query={"recipe_id": recipe.recipe_id, "client_id": body.client_id},
+        result_cardinality=1,
+    )
+    return body
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_HANDS_A_SCHEDULE,
+)
+async def clear_pipeline_owned_externally(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> None:
+    await studio_recipes.clear_external_owner(recipe.recipe_id)
+    await audit.record(
+        principal=principal,
+        action="clear_pipeline_owned_externally",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+
+
+@app.post("/v1/runs", status_code=status.HTTP_202_ACCEPTED)
+async def start_external_run_route(
+    request: Request,
+    client_id: ServiceIdentityDep,
+    body: ExternalRunInput,
+    studio_recipes: StudioRecipesDep,
+    valkey: ValkeyDep,
+    executor: ScheduleExecutorDep,
+    principal_resolver: PrincipalResolverDep,
+) -> ExternalRunStatus:
+    """ADR-141 decision 9: an orchestrator starts a run of a deployed pipeline, keyed by its own
+    run id (decision 12). The service identity authorises the trigger and nothing more; the run
+    acts as the pipeline's owner (decision 10; `external_runs.py`). A pipeline that is not this
+    client's to trigger is 404, the same answer as one that does not exist."""
+    recipe = await studio_recipes.deployed(body.pipeline_id)
+    owner = await studio_recipes.external_owner(body.pipeline_id) if recipe else None
+    if (
+        recipe is None
+        or owner is None
+        or owner.client_id != client_id
+        or recipe.dataset_id != body.dataset_id
+    ):
+        raise HTTPException(status_code=404, detail=_NO_SUCH_PIPELINE)
+    if body.version != "latest" and body.version != recipe.version:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"the pipeline's deployed version is {recipe.version}, not {body.version}: "
+                "pin the deployed version, or ask for the latest"
+            ),
+        )
+    tasks: set[asyncio.Task[None]] = request.app.state.external_runs
+
+    def spawn(work: Coroutine[Any, Any, None]) -> object:
+        task = asyncio.create_task(work)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        return task
+
+    return await start_external_run(
+        deps=RecipeRunDeps.from_state(request.app.state),
+        executor=executor,
+        valkey=valkey,
+        recipe=owner.applied_to(recipe),
+        external=External(run_id=body.external_run_id, triggered_by=client_id),
+        spawn=spawn,
+        resolve_owner=_owner_or_none(principal_resolver),
+    )
+
+
+def _owner_or_none(resolver: PrincipalResolver) -> Callable[[str], Awaitable[Principal | None]]:
+    async def resolve(owner_id: str) -> Principal | None:
+        try:
+            return await resolver.resolve_for_owner_detailed(owner_id)
+        except Exception:  # noqa: BLE001 - an owner who cannot be resolved now sees nothing
+            return None
+
+    return resolve
+
+
+@app.get("/v1/runs/{run_id}")
+async def read_external_run(
+    run_id: str,
+    client_id: ServiceIdentityDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    principal_resolver: PrincipalResolverDep,
+) -> ExternalRunStatus:
+    """A run's status, report counts and held rows (ADR-141 decision 9), only for a run this very
+    client triggered, and its counts only as its owner may read them (rule 3)."""
+    run = await recipe_runs.get(run_id)
+    if run is None or run.trigger != "external" or run.triggered_by != client_id:
+        raise HTTPException(
+            status_code=404, detail="no run this service identity triggered has that id"
+        )
+    owner = await _owner_or_none(principal_resolver)(run.run_as)
+    return await status_for(run, owner=owner, scheme=handling_scheme)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/quota",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES))],
+)
+async def read_pipeline_quota(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    recipe_runs: RecipeRunsDep,
+    run_quotas: RunQuotasDep,
+) -> RunQuotaUse:
+    """The Runs tab's quota bar (ADR-141 decision 6): the dataset's quota of runs a day and
+    whether today's runs have used it. Only a case that reads the recipe's dataset is told, as
+    Test and Preview are refused (rule 4); and the day's count is every unit's runs into the
+    dataset, so only `administer_system` is given the number (rules 3 and 7, the strict reading;
+    ADR-141 Amendment 1)."""
+    if recipe.dataset_id and recipe.dataset_id not in (principal.datasets or []):
+        raise RecipeRuleError([QUOTA_WITHHELD])
+    quota = (
+        await run_quotas.get("dataset", recipe.dataset_id)
+        if run_quotas is not None and recipe.dataset_id
+        else None
+    )
+    today = (
+        await recipe_runs.runs_since(
+            since=day_start(datetime.now(UTC)), dataset_id=recipe.dataset_id
+        )
+        if recipe.dataset_id
+        else 0
+    )
+    limit = quota.runs_per_day if quota is not None else None
+    every_unit = Right.ADMINISTER_SYSTEM in rights_for(principal.roles)
+    return RunQuotaUse(
+        quota=quota,
+        runs_today=today if every_unit else None,
+        used=limit is not None and today >= limit,
+    )
+
+
+#: What the quota bar says to a case that does not read the recipe's dataset (rule 4).
+QUOTA_WITHHELD = (
+    "The quota is withheld: it counts this dataset's runs, which only a case that reads the "
+    "dataset may read."
+)
+
+
+def _units_read(principal: Principal) -> list[str] | None:
+    """Operations' reach (phase 10 step 7): the reader's own unit, unless they administer the
+    system, who reads every unit (`None`)."""
+    if Right.ADMINISTER_SYSTEM in rights_for(principal.roles):
+        return None
+    return [principal.org_unit]
+
+
+@app.get(
+    "/v1/admin/operations/runs", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))]
+)
+async def operations_runs(
+    principal: PrincipalDep,
+    recipe_runs: RecipeRunsDep,
+    studio_recipes: StudioRecipesDep,
+    handling_scheme: HandlingSchemeDep,
+    names: PrincipalNamesDep,
+    run_quotas: RunQuotasDep,
+    days: Annotated[int, Query(ge=1, le=90)] = 7,
+) -> OperationsRollup:
+    """Admin › Running › Operations (ADR-141 decisions 3, 4, 6, 7 and 14): the window's runs by
+    pipeline, dataset, unit and trigger per day; scheduler health; external triggers; the quotas.
+    The reader's unit's alone unless they administer the system, filtered in the ledger's own
+    `WHERE` (rule 3); counts withheld where a run wrote a marking the reader may not view."""
+    units = _units_read(principal)
+    since = day_start(datetime.now(UTC)) - timedelta(days=days - 1)
+    runs = await recipe_runs.window(since=since, units=units)
+    labels: dict[str, str] = {}
+    for recipe_id in {r.recipe_id for r in runs}:
+        try:
+            labels[recipe_id] = (await studio_recipes.get(recipe_id)).label
+        except StudioRecipeNotFoundError:
+            continue
+    paused = [
+        PausedPipeline(
+            pipeline_id=r.recipe_id, pipeline_label=r.label, reason=r.schedule_paused_reason
+        )
+        for r in await studio_recipes.paused_of(units)
+    ]
+    named = await names.full_names({r.run_as for r in runs if r.run_as})
+    datasets = sorted({r.dataset_id for r in runs if r.dataset_id})
+    quotas = (
+        [] if run_quotas is None else await run_quotas.reached_by(units=units, datasets=datasets)
+    )
+    since_day = since.astimezone(ZoneInfo("Europe/London")).date().isoformat()
+    alerts = (
+        []
+        if run_quotas is None
+        else await run_quotas.alerts(
+            since_day=since_day,
+            of=None if units is None else [(q.scope, q.key) for q in quotas],
+        )
+    )
+    return OperationsRollup(
+        days=days,
+        rows=rollup_rows(runs, reader=principal, scheme=handling_scheme, labels=labels),
+        scheduler=scheduler_health(runs, paused=paused, names=named),
+        external=external_triggers(
+            runs, reader=principal, scheme=handling_scheme, labels=labels, names=named
+        ),
+        quotas=quotas,
+        alerts=[
+            QuotaAlertView(scope=a.scope, key=a.key, day=date.fromisoformat(a.day), words=a.words)
+            for a in alerts
+        ],
+        units=units
+        if units is not None
+        else sorted({r.owning_unit for r in runs if r.owning_unit}),
+    )
+
+
+@app.put(
+    "/v1/admin/operations/quotas/{scope}/{key}",
+    # Setting a quota's own right first (decision (f) of L1.7: it limits every unit's runs;
+    # `test_route_rights.py` reads the first), then Operations', as each of the section's routes
+    # asks (`test_admin_sections.py`).
+    dependencies=[
+        Depends(require_right(Right.ADMINISTER_SYSTEM)),
+        Depends(require_right(Right.OPERATE_SCHEDULES)),
+    ],
+)
+async def set_run_quota(
+    scope: QuotaScope,
+    key: str,
+    body: RunQuotaInput,
+    principal: PrincipalDep,
+    run_quotas: RunQuotasDep,
+    audit: AuditDep,
+) -> RunQuota:
+    """A dataset's or a unit's quota of runs a day (ADR-141 decision 6), set by an administrator of
+    the system (the strict reach: a quota binds every unit's runs into a dataset)."""
+    if run_quotas is None:
+        raise HTTPException(status_code=503, detail="run quotas are not available")
+    quota = RunQuota(scope=scope, key=key, **body.model_dump())
+    await run_quotas.set(quota)
+    await audit.record(
+        principal=principal,
+        action="set_run_quota",
+        resolved_query={"scope": scope, "key": key, "runs_per_day": body.runs_per_day},
+        result_cardinality=1,
+    )
+    return quota
+
+
 @app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])
 async def list_schedules_route(
     principal: PrincipalDep,
@@ -17173,13 +17757,6 @@ async def pause_schedule_route(
                        result_cardinality=1)  # fmt: skip
     recipe = await _scheduled_recipe(studio_recipes, recipe_id)
     return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
-
-
-def get_schedule_executor(request: Request) -> ScheduleExecutor:
-    return request.app.state.schedule_executor  # type: ignore[no-any-return]
-
-
-ScheduleExecutorDep = Annotated[ScheduleExecutor, Depends(get_schedule_executor)]
 
 
 @app.exception_handler(ScheduleRunRefused)
@@ -18864,9 +19441,15 @@ async def read_audit_section_rules(
     names = await principal_names.full_names({e.principal_id for e in served})
     entries = [
         AuditSectionEntry(
-            recorded_at=e.recorded_at, who=names.get(e.principal_id, audit_section_module.NO_NAME),
-            action=e.action, kind="rules", held_in="rules", investigation_id=case_.id,
-            case_name=case_.name, detail=e.detail, result_cardinality=e.result_cardinality,
+            recorded_at=e.recorded_at,
+            who=names.get(e.principal_id, audit_section_module.NO_NAME),
+            action=e.action,
+            kind="rules",
+            held_in="rules",
+            investigation_id=case_.id,
+            case_name=case_.name,
+            detail=e.detail,
+            result_cardinality=e.result_cardinality,
         )  # fmt: skip
         for e in served
     ]

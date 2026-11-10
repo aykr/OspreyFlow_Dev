@@ -49,7 +49,9 @@ async def runs() -> AsyncIterator[RecipeRunStore]:
 
 def _deps(runs: RecipeRunStore) -> app_module.RecipeRunDeps:
     names = [f.name for f in dataclasses.fields(app_module.RecipeRunDeps)]
-    stand_ins: dict[str, Any] = {"recipe_runs": runs, "media": InMemoryMediaStore()}
+    stand_ins: dict[str, Any] = {
+        "recipe_runs": runs, "media": InMemoryMediaStore(), "run_quotas": None,
+    }  # fmt: skip
     return app_module.RecipeRunDeps(**{n: stand_ins.get(n, object()) for n in names})  # type: ignore[arg-type]
 
 
@@ -73,7 +75,9 @@ async def _run(runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch, fail: bool
         report = await run_module.run_recipe_as(
             _deps(runs),
             principal=LOADER,
-            recipe=SimpleNamespace(recipe_id=recipe_id, version=2),  # type: ignore[arg-type]
+            recipe=SimpleNamespace(
+                recipe_id=recipe_id, version=2, dataset_id=None, owning_unit=None
+            ),  # type: ignore[arg-type]
             investigation_id="case-1",
             source_location=None,
             trigger="source_refresh",

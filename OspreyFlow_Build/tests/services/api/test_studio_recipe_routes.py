@@ -76,6 +76,10 @@ class _FakeStudioRecipes:
         #: `verified_sources` column holds it — cleared by every edit, as the real store clears it.
         self.verified: dict[int, list[object]] = {}
 
+    async def external_owner(self, recipe_id: str) -> None:
+        """ADR-141 decision 11: none of these is owned externally."""
+        return None
+
     async def create_draft(self, principal: Principal, **kwargs: object) -> StudioRecipeDraft:
         self.create_calls.append(kwargs)
         self.draft = _draft(**{**kwargs, "owning_unit": principal.org_unit})  # type: ignore[arg-type]

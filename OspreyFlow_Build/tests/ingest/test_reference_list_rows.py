@@ -51,7 +51,9 @@ def test_imported_rows_are_the_rows_a_run_reads() -> None:
 def test_a_run_whose_list_has_no_file_is_refused_in_words() -> None:
     assert RECIPE.staging
     with pytest.raises(StagingError) as refused:
-        lists_for_run(RECIPE.staging, [ESTABLISHMENTS], dataset_id="pid", storage=STORAGE)
+        lists_for_run(
+            RECIPE.staging, [ESTABLISHMENTS], dataset_id="pid", storage=STORAGE, subscribed=()
+        )
     assert refused.value.problems == [
         "the list 'establishments' (version 3) has no rows kept for a run to read: import its "
         "rows first; nothing was loaded"
@@ -97,7 +99,7 @@ def test_a_run_reads_only_lists_the_dataset_may_read() -> None:
     theirs = ESTABLISHMENTS.model_copy(update={"dataset_id": "another"})
     import_list(theirs, CSV, storage=STORAGE)
     with pytest.raises(StagingError) as refused:
-        lists_for_run(RECIPE.staging, [theirs], dataset_id="pid", storage=STORAGE)
+        lists_for_run(RECIPE.staging, [theirs], dataset_id="pid", storage=STORAGE, subscribed=())
     assert refused.value.problems == [
         "step 'with_establishment' looks up 'establishments', which names no list this dataset "
         "holds or subscribes to"

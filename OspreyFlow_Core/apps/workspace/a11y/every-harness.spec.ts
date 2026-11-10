@@ -236,6 +236,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     "contacts=built&staged=sql&mode=expert&rights=expert", "contacts=built&staged=fuzzy&mode=expert&rights=expert",
     "contacts=built&staged=yaml&mode=expert&rights=expert", "contacts=built&staged=expert-test&mode=expert&rights=expert",
     "pipeline=expert-step&expert=1&mode=expert",
+    // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases.
+    "tab=releases&rights=releases",
   ],
   // ADR-140 Amendment 4: the Connections section, served by the page itself. ADR-145 decision 5:
   // every section in the side list, a coming placeholder open.

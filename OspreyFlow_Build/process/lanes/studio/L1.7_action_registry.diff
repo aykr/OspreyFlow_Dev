@@ -1,0 +1,24 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 5dc16a3..53812f2 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -1075,6 +1075,19 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
+   "read-an-expert-step-without-the-right-by-keyboard",
+   "show-and-save-the-pipeline-yaml-by-keyboard",
+   "read-the-expert-steps-a-test-disclosed-by-keyboard",
++  // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases.
++  "export-a-release-by-keyboard",
++  "check-and-import-a-release-by-keyboard",
++  // ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's external orchestration.
++  "hand-a-pipeline-to-an-orchestrator-by-keyboard",
++  "read-a-pipelines-airflow-dag-by-keyboard",
++  "take-a-pipeline-back-from-its-orchestrator-by-keyboard",
++] as const);
++
++// ADR-141 decision 6 (L1.7): Admin › Running › Operations' run quotas (`operations-figures.spec.ts`).
++export const OPERATIONS_FIGURES_ACTIONS = defineActionRegistry("OPERATIONS_FIGURES_ACTIONS", [
++  "save-a-run-quota-by-keyboard",
++  "read-a-refused-quota-save-by-keyboard",
+ ] as const);
+ 
+ // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.

@@ -19,7 +19,7 @@ from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 import asyncpg
 from pydantic import BaseModel, Field, model_validator
@@ -36,11 +36,38 @@ from schemas.ingest import (
     SourceWatermark,
 )
 
+from .run_quotas import QuotaLimit, QuotaRefused, quota_words
+
 #: `source_refresh` (ADR-110 Amendment 6 point 5): a run started by its source's refresh policy.
-RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh"]
+RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh", "external"]
 RunOutcome = Literal["running", "succeeded", "failed", "refused", "blocked", "skipped", "missed"]
 NotRunOutcome = Literal["refused", "blocked", "skipped", "missed"]
 _NOT_RUN = frozenset(get_args(NotRunOutcome))
+
+
+@dataclass(frozen=True)
+class Counted:
+    """What a run is counted under (ADR-141 decisions 3 and 6): its pipeline's dataset and unit."""
+
+    dataset_id: str | None
+    owning_unit: str | None
+
+
+@dataclass(frozen=True)
+class External:
+    """An orchestrator's trigger (ADR-141 decisions 10 and 12)."""
+
+    run_id: str
+    triggered_by: str
+
+
+class ExternalRunRecorded(Exception):
+    """The external run id is held by a run already (decision 12): nothing more is loaded."""
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(f"the external run id is already recorded, as run {run_id}")
+        self.run_id = run_id
+
 
 #: ADR-127 decision 6: the `LoadRecord` of each load the run made (a list: a pipeline run made one
 #: per branch), beside the run. A ledger made before it has the table without the column, which
@@ -193,13 +220,27 @@ ALTER TABLE recipe_runs ADD CONSTRAINT recipe_runs_trigger_check
 {_ADD_ROW_MARKINGS}
 -- ADR-110 Amendment 6 point 9: what a succeeded run cost (`RunMetering`); NULL before it.
 ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS metering JSONB;
+-- ADR-141 decisions 3, 6, 10 and 12: the dataset and unit a run is counted under (quotas and
+-- Operations' roll-up), the orchestrator's own run id, and the service identity that triggered
+-- it. NULL for a run recorded before them.
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS owning_unit TEXT;
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS external_run_id TEXT;
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS triggered_by TEXT;
+-- Decision 12: an external run id loads once. A refused trigger loaded nothing, so a retry of it
+-- may run; a run that started (running, succeeded or failed) holds the key.
+CREATE UNIQUE INDEX IF NOT EXISTS recipe_runs_external_once_idx
+    ON recipe_runs (recipe_id, external_run_id)
+    WHERE external_run_id IS NOT NULL AND outcome <> 'refused';
+CREATE INDEX IF NOT EXISTS recipe_runs_started_idx ON recipe_runs (started_at DESC);
 {_LOADED_ROW_KEYS}
 """
 
 _COLUMNS = (
     "run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source_handling, "
     "started_at, finished_at, outcome, rows_read, nodes_created, nodes_referenced, edges_created, "
-    "rows_rejected, rows_held, load_id, failure, source_file, row_markings, metering"
+    "rows_rejected, rows_held, load_id, failure, source_file, row_markings, metering, "
+    "dataset_id, owning_unit, external_run_id, triggered_by"
 )
 
 
@@ -233,6 +274,13 @@ class RecipeRun(BaseModel):
     #: ADR-110 Amendment 6 point 9: a succeeded run's metering; `None` for any other, and for one
     #: from before. Counts of the run's own: withheld with the others by every route.
     metering: RunMetering | None = None
+    #: ADR-141: the dataset and unit the run is counted under; `None` for one recorded before.
+    dataset_id: str | None = None
+    owning_unit: str | None = None
+    #: ADR-141 decisions 10 and 12: for trigger `external`, the orchestrator's run id and the
+    #: service identity (an OIDC client's name) that triggered it; `run_as` is the owner.
+    external_run_id: str | None = None
+    triggered_by: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -285,13 +333,36 @@ class RecipeRunStore:
         source: Handling,
         now: datetime,
         source_file: str | None = None,
+        counted: Counted | None = None,
+        external: External | None = None,
+        within: Sequence[QuotaLimit] = (),
     ) -> str:
+        """Records the run as started. `external`: an orchestrator's trigger, whose run id is
+        claimed here, once (decision 12): a second start with it raises `ExternalRunRecorded`
+        naming the run that holds it, and inserts nothing. `within` (ADR-141 decision 6): the
+        quotas the start is held to, each counted again under a transaction lock of its own, so
+        the count and the row are one step and two starts cannot both take a quota's last run
+        (`QuotaRefused`, nothing inserted; the lane review of L1.7, item 11)."""
         run_id = new_id()
-        await self._insert(
-            run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
-            started_at=now, finished_at=None, outcome="running", failure=None,
-            source_file=source_file,
-        )  # fmt: skip
+        async with self._pool.acquire() as conn, conn.transaction():
+            for limit in sorted(within, key=lambda q: (q.scope, q.key)):
+                await conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext($1))", f"quota:{limit.scope}:{limit.key}"
+                )
+                column = "dataset_id" if limit.scope == "dataset" else "owning_unit"
+                today = await conn.fetchval(
+                    f"SELECT count(*) FROM recipe_runs WHERE started_at >= $1 AND {column} = $2 "
+                    "AND outcome IN ('running', 'succeeded', 'failed')",
+                    limit.since,
+                    limit.key,
+                )
+                if int(today or 0) >= limit.runs_per_day:
+                    raise QuotaRefused(quota_words(limit.scope, limit.runs_per_day))
+            await self._insert(
+                run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
+                started_at=now, finished_at=None, outcome="running", failure=None,
+                source_file=source_file, counted=counted, external=external, conn=conn,
+            )  # fmt: skip
         return run_id
 
     async def finish(
@@ -887,6 +958,8 @@ class RecipeRunStore:
         now: datetime,
         counts_toward_pause: bool = True,
         source_file: str | None = None,
+        counted: Counted | None = None,
+        external: External | None = None,
     ) -> str:
         """A slot that did not run, and why (decisions 2–4)."""
         if outcome not in _NOT_RUN:
@@ -895,7 +968,7 @@ class RecipeRunStore:
         await self._insert(
             run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
             started_at=now, finished_at=now, outcome=outcome, failure=failure,
-            source_file=source_file,
+            source_file=source_file, counted=counted, external=external,
         )  # fmt: skip
         if not counts_toward_pause:
             async with self._pool.acquire() as conn:
@@ -920,27 +993,129 @@ class RecipeRunStore:
         outcome: RunOutcome,
         failure: str | None,
         source_file: str | None = None,
+        counted: Counted | None = None,
+        external: External | None = None,
+        conn: Any = None,
     ) -> None:
+        try:
+            if conn is not None:
+                await self._insert_row(
+                    conn, run_id, recipe_id, recipe_version, investigation_id, trigger, slot,
+                    run_as, source, started_at, finished_at, outcome, failure, source_file,
+                    counted, external,
+                )  # fmt: skip
+                return
+            async with self._pool.acquire() as held:
+                await self._insert_row(
+                    held, run_id, recipe_id, recipe_version, investigation_id, trigger, slot,
+                    run_as, source, started_at, finished_at, outcome, failure, source_file,
+                    counted, external,
+                )  # fmt: skip
+        except asyncpg.UniqueViolationError as error:
+            if external is None:
+                raise
+            held_run = await self.by_external(recipe_id, external.run_id)
+            raise ExternalRunRecorded(held_run.run_id if held_run else "") from error
+
+    @staticmethod
+    async def _insert_row(
+        conn: Any,
+        run_id: str,
+        recipe_id: str,
+        recipe_version: int,
+        investigation_id: str,
+        trigger: RunTrigger,
+        slot: datetime | None,
+        run_as: str,
+        source: Handling,
+        started_at: datetime,
+        finished_at: datetime | None,
+        outcome: RunOutcome,
+        failure: str | None,
+        source_file: str | None,
+        counted: Counted | None,
+        external: External | None,
+    ) -> None:
+        await conn.execute(
+            "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, "
+            "investigation_id, trigger, slot, run_as, source_handling, started_at, "
+            "finished_at, outcome, failure, source_file, dataset_id, owning_unit, "
+            "external_run_id, triggered_by) VALUES ($1, $2, $3, $4, $5, $6, $7, "
+            "$8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+            run_id,
+            recipe_id,
+            recipe_version,
+            investigation_id,
+            trigger,
+            slot,
+            run_as,
+            source.model_dump_json(),
+            started_at,
+            finished_at,
+            outcome,
+            failure,
+            source_file,
+            counted.dataset_id if counted else None,
+            counted.owning_unit if counted else None,
+            external.run_id if external else None,
+            external.triggered_by if external else None,
+        )
+
+    async def get(self, run_id: str) -> RecipeRun | None:
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, investigation_id, "
-                "trigger, slot, run_as, source_handling, started_at, finished_at, outcome, "
-                "failure, source_file) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13)",
-                run_id,
-                recipe_id,
-                recipe_version,
-                investigation_id,
-                trigger,
-                slot,
-                run_as,
-                source.model_dump_json(),
-                started_at,
-                finished_at,
-                outcome,
-                failure,
-                source_file,
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM recipe_runs WHERE run_id = $1", run_id
             )
+        return None if row is None else _row(row)
+
+    async def by_external(self, recipe_id: str, external_run_id: str) -> RecipeRun | None:
+        """The run holding an external run id (decision 12): the one that started, else the latest
+        refusal of it; `None` when the id was never sent."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM recipe_runs WHERE recipe_id = $1 "
+                "AND external_run_id = $2 ORDER BY (outcome = 'refused'), started_at DESC LIMIT 1",
+                recipe_id,
+                external_run_id,
+            )
+        return None if row is None else _row(row)
+
+    async def runs_since(
+        self, *, since: datetime, dataset_id: str | None = None, owning_unit: str | None = None
+    ) -> int:
+        """Runs that started (running, succeeded or failed) since `since`, of a dataset or a unit:
+        a quota's count (ADR-141 decision 6). A refused or skipped slot ran nothing."""
+        clause, args = (
+            ("dataset_id = $2", dataset_id) if dataset_id else ("owning_unit = $2", owning_unit)
+        )
+        async with self._pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT count(*) FROM recipe_runs WHERE started_at >= $1 AND "
+                f"{clause} AND outcome IN ('running', 'succeeded', 'failed')",
+                since,
+                args,
+            )
+        return int(value or 0)
+
+    async def window(self, *, since: datetime, units: Sequence[str] | None) -> list[RecipeRun]:
+        """Every run since `since` of `units` (`None`: every unit), for Operations (decision 3).
+        Bounded by the window (at most 90 days), never by a row limit: a roll-up of part of the
+        window would be a wrong total (rule 2)."""
+        async with self._pool.acquire() as conn:
+            if units is None:
+                rows = await conn.fetch(
+                    f"SELECT {_COLUMNS} FROM recipe_runs WHERE started_at >= $1 "
+                    "ORDER BY started_at DESC",
+                    since,
+                )
+            else:
+                rows = await conn.fetch(
+                    f"SELECT {_COLUMNS} FROM recipe_runs WHERE started_at >= $1 "
+                    "AND owning_unit = ANY($2::text[]) ORDER BY started_at DESC",
+                    since,
+                    list(units),
+                )
+        return [_row(r) for r in rows]
 
     async def for_recipe(self, recipe_id: str, *, limit: int = 50) -> list[RecipeRun]:
         """The recipe's runs, newest first."""

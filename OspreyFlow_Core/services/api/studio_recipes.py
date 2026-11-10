@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -98,6 +99,16 @@ ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS pack_versions JSONB;
 -- Build order step 30: each file the last Verify read, with the SHA-256 of its bytes; NULL when no
 -- Verify recorded one (before this column, or a seed's say-so). Cleared with `verified_at`.
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS verified_sources JSONB;
+-- ADR-141 decision 11: a pipeline whose schedule is handed to an orchestrator, kept by pipeline
+-- (not by version, so a new deployed version stays owned externally): the one client that may
+-- trigger it, and the person who marked it, whom every external run acts as, in their case.
+CREATE TABLE IF NOT EXISTS studio_external_owners (
+    recipe_id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    set_at TIMESTAMPTZ NOT NULL
+);
 """
 
 #: ADR-120 Amendment 1, decision 4: the versions the packs stood at when pinning began, which is
@@ -439,6 +450,27 @@ def carry_source_declarations(
     return merged
 
 
+@dataclass(frozen=True)
+class ExternalOwner:
+    """ADR-141 decision 11: who an owned-externally pipeline's runs act as, and its one client."""
+
+    recipe_id: str
+    client_id: str
+    owner: str
+    case_id: str
+
+    def applied_to(self, recipe: StudioRecipeDraft) -> StudioRecipeDraft:
+        """The recipe as an external run reads it: its owner and case the marker's, so the
+        scheduler's own owner checks judge the right person (decision 10)."""
+        return recipe.model_copy(
+            update={
+                "schedule_owner": self.owner,
+                "schedule_case": self.case_id,
+                "owned_externally_by": self.client_id,
+            }
+        )
+
+
 class StudioRecipeStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -678,9 +710,7 @@ class StudioRecipeStore:
         `sources` (build order step 30): each file that Verify read, with its hash, which a *Run
         now* is held to (`verified_sources`). None given (the seed's say-so, where no Verify ran)
         records none, and such a run is not held to one."""
-        recorded = (
-            json.dumps([source.model_dump() for source in sources]) if sources else None
-        )
+        recorded = json.dumps([source.model_dump() for source in sources]) if sources else None
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE studio_recipes SET verified_at = $1, verified_sources = $4::jsonb "
@@ -798,6 +828,63 @@ class StudioRecipeStore:
                 schedule_case if (schedule_cron or schedule_watch) else None,
             )
         return await self.get(recipe_id)
+
+    # --- ADR-141 decision 11: owned externally ---------------------------------------------------
+
+    async def set_external_owner(
+        self, recipe_id: str, *, client_id: str, owner: str, case: str, now: datetime
+    ) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO studio_external_owners (recipe_id, client_id, owner, case_id, set_at) "
+                "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (recipe_id) DO UPDATE SET "
+                "client_id = EXCLUDED.client_id, owner = EXCLUDED.owner, "
+                "case_id = EXCLUDED.case_id, set_at = EXCLUDED.set_at",
+                recipe_id,
+                client_id,
+                owner,
+                case,
+                now,
+            )
+
+    async def clear_external_owner(self, recipe_id: str) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute("DELETE FROM studio_external_owners WHERE recipe_id = $1", recipe_id)
+
+    async def external_owner(self, recipe_id: str) -> ExternalOwner | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT recipe_id, client_id, owner, case_id FROM studio_external_owners "
+                "WHERE recipe_id = $1",
+                recipe_id,
+            )
+        return None if row is None else ExternalOwner(**dict(row))
+
+    async def deployed(self, recipe_id: str) -> StudioRecipeDraft | None:
+        """The pipeline's deployed version (`published`), or `None`: the version an external run
+        runs, whose own number a pinned run must name (ADR-141 decision 11)."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM studio_recipes WHERE recipe_id = $1 AND status = $2 "
+                "ORDER BY version DESC LIMIT 1",
+                recipe_id,
+                StudioRecipeStatus.PUBLISHED.value,
+            )
+        return None if row is None else _row_to_draft(row)
+
+    async def paused_of(self, units: Sequence[str] | None) -> list[StudioRecipeDraft]:
+        """The paused schedules of `units` (`None`: every unit), for Operations' health, filtered
+        in the `WHERE` (rule 3; the lane review of L1.7, item 5): another unit's pipeline is never
+        read to be dropped."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM studio_recipes WHERE status = ANY($1::text[]) "
+                "AND schedule_paused AND (schedule_cron IS NOT NULL OR schedule_watch IS NOT NULL) "
+                "AND ($2::text[] IS NULL OR owning_unit = ANY($2::text[])) ORDER BY label",
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+                None if units is None else list(units),
+            )
+        return [_row_to_draft(r) for r in rows]
 
     async def scheduled(self) -> list[StudioRecipeDraft]:
         """Every recipe with a schedule, at its current version (published or flagged), paused or

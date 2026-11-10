@@ -131,7 +131,7 @@ def lists_for_run(
     *,
     dataset_id: str,
     storage: ObjectStorageConfig,
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
 ) -> dict[str, StagedTable]:
     """The lists a run's Lookups read, by name: each one the dataset may read (`readable_lists`),
     read from its version's file. A Lookup of a list it may not read is refused in the save gate's

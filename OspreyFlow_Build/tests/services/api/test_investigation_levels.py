@@ -88,6 +88,12 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/ingest/recipes/{recipe_id}/runs"): V,  # ADR-110 decision 7
     ("POST", P + "/ingest/recipes/{recipe_id}/schedule/pause"): E,
     ("POST", P + "/ingest/recipes/{recipe_id}/schedule/resume"): E,
+    # L1.7 (ADR-141 decisions 6 and 11): Owned externally, read by a viewer and set or taken back
+    # by an editor, and the Runs tab's quota bar.
+    ("GET", P + "/ingest/recipes/{recipe_id}/owned-externally"): V,
+    ("PUT", P + "/ingest/recipes/{recipe_id}/owned-externally"): E,
+    ("DELETE", P + "/ingest/recipes/{recipe_id}/owned-externally"): E,
+    ("GET", P + "/ingest/recipes/{recipe_id}/quota"): V,
     ("POST", P + "/history/{step_id}"): E,
     ("POST", P + "/judgements"): E,
     ("GET", P + "/judgements"): V,

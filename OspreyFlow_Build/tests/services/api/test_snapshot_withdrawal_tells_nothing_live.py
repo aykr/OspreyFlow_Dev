@@ -133,6 +133,7 @@ class World:
         stand_ins: dict[str, Any] = {
             "recipe_runs": self.runs,
             "media": InMemoryMediaStore(),
+            "run_quotas": None,  # no quota set (ADR-141 decision 6)
         }
         return app_module.RecipeRunDeps(
             **{n: stand_ins.get(n, object()) for n in names}

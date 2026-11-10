@@ -1,0 +1,20 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index e639827..4362f4d 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -717,6 +717,7 @@ jobs:
+           ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py
+           ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+           ../OspreyFlow_Build/tests/services/api/test_promotion_store.py
++          ../OspreyFlow_Build/tests/services/api/test_external_runs_live.py
+           ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
+           ../OspreyFlow_Build/tests/services/api/test_grading_registry.py
+           ../OspreyFlow_Build/tests/services/api/test_grading_change_live.py
+@@ -1096,6 +1097,7 @@ jobs:
+           --ignore=../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_store.py
++          --ignore=../OspreyFlow_Build/tests/services/api/test_external_runs_live.py
+           --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py

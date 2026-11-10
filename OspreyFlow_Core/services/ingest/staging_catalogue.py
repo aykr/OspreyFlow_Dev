@@ -344,7 +344,7 @@ def readable_lists(
     lists: Collection[ReferenceList],
     *,
     dataset_id: str,
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
 ) -> tuple[dict[str, ReferenceList], list[str]]:
     """The lists a dataset's Lookup may read, by name, and any name two of them share (ADR-140
     Amendment 9 decision 3): the dataset's own lists, and a **deployment-wide** screening list (its
@@ -374,7 +374,7 @@ def staging_rule_violations(
     lists: Collection[ReferenceList],
     dataset_id: str,
     marked: Collection[str],
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
 ) -> list[str]:
     """What the save gate refuses in a `staging:` list, in words (the redesign's phase 7: "a join
     must name a key; a step must be fed"). `sources`: the pipeline's source tables. `lists`: the
@@ -433,6 +433,7 @@ def staging_rule_violations(
                 f"step {step.id!r} is a fuzzy match, which is the last step: Map reads its "
                 "matched columns, and writes what it binds from them as inferred"
             )
+        problems.extend(marked_column_problems(step, marked))
         if isinstance(step, DeriveStep) and isinstance(step.settings, NormaliseSettings):
             if step.settings.adapter not in text_adapters():
                 problems.append(
@@ -447,6 +448,75 @@ def staging_rule_violations(
                 "(the last is what Map reads)"
             )
     return problems
+
+
+def marked_column_problems(step: StagingStep, marked: Collection[str]) -> list[str]:
+    """A typed step computing a value from a column a marking is bound to, refused (CARRIES row
+    48; rule 3; the strict option): a Derive reading one, a Lookup or a Join keyed on one, and a
+    Lookup, a Join or a fuzzy match adding a column of that name. Map binds an element's marking
+    from those columns, so a value made from one, or a value brought across into one, could be
+    bound as a marking lower than the row's own. The SQL step has its own rule (`sql_transform`)."""
+    if not marked:
+        return []
+    bound = "a column a marking is bound to"
+    problems: list[str] = []
+    if isinstance(step, DeriveStep):
+        problems.extend(
+            f"step {step.id!r} derives from {c!r}, {bound}: a value made from a marking could be "
+            "bound as another element's marking, so a Derive never reads one"
+            for c in step.columns
+            if c in marked
+        )
+    if isinstance(step, DeriveStep) and step.column in marked:
+        problems.append(
+            f"step {step.id!r} makes {step.column!r}, {bound}: a row's marking is its own, never "
+            "one a step computes"
+        )
+    if isinstance(step, FuzzyMatchStep):
+        compared = [*(c.left for c in step.compare), *(c.right for c in step.compare)]
+        compared += [*(b.left for b in step.block_on), *(b.right for b in step.block_on)]
+        problems.extend(
+            f"step {step.id!r} compares {c!r}, {bound}"
+            for c in dict.fromkeys(compared)
+            if c in marked
+        )
+    if isinstance(step, LookupStep) and step.on in marked:
+        problems.append(f"step {step.id!r} looks up on {step.on!r}, {bound}")
+    if isinstance(step, JoinStep):
+        problems.extend(
+            f"step {step.id!r} joins on {key!r}, {bound}"
+            for key in dict.fromkeys((step.left_key, step.right_key))
+            if key in marked
+        )
+    if isinstance(step, (LookupStep, JoinStep, FuzzyMatchStep)):
+        problems.extend(
+            f"step {step.id!r} adds {added.as_ or added.column!r}, {bound}: a row's marking is "
+            "its own, never one brought across from another table"
+            for added in step.add
+            if (added.as_ or added.column) in marked
+        )
+    return problems
+
+
+def marking_of(cells: Mapping[str, Cell], marked: Collection[str]) -> tuple[Cell, ...]:
+    """A row's marking cells, in a fixed order: what two rows must share to become one row."""
+    return tuple((cells.get(c) or "").strip() or None for c in sorted(marked))
+
+
+def refuse_a_differing_marking(
+    step_id: str, row: StagedTableRow, other: StagedTableRow, marked: Collection[str]
+) -> None:
+    """Rule 3 at the run (CARRIES row 48): an output row drawing on two rows is written under the
+    first's marking cells, so the second's must be the same; otherwise the step is refused whole,
+    in words naming neither row's values nor their markings."""
+    if marked and marking_of(row.cells, marked) != marking_of(other.cells, marked):
+        raise StagingError(
+            [
+                f"step {step_id!r} joins a row to one whose marking differs: a joined row is "
+                "written under one marking, so rows of different markings are never joined. Split "
+                "them by their marking first, or join only rows marked alike"
+            ]
+        )
 
 
 # --- The steps ----------------------------------------------------------------
@@ -531,7 +601,7 @@ def _lookup(
 
 
 def _join(
-    step: JoinStep, left: StagedTable, right: StagedTable
+    step: JoinStep, left: StagedTable, right: StagedTable, *, marked: Collection[str]
 ) -> tuple[StagedTable, StepReport, list[StagingRejection]]:
     problems = [
         f"step {step.id!r} joins on {key!r}, which {table.name!r} has not"
@@ -575,6 +645,7 @@ def _join(
                 out.append(StagedTableRow(cells, row.refs))
             continue
         for match in matches:
+            refuse_a_differing_marking(step.id, row, match, marked)
             met.add(id(match))
             cells = dict(row.cells) | {name: match.cells.get(column) for column, name in pairs}
             out.append(StagedTableRow(cells, row.refs + match.refs))
@@ -663,14 +734,15 @@ def _union(
 
 
 def _dedupe(
-    step: DedupeStep, table: StagedTable
+    step: DedupeStep, table: StagedTable, *, marked: Collection[str]
 ) -> tuple[StagedTable, StepReport, list[StagingRejection]]:
     missing = [c for c in step.on if c not in table.columns]
     if missing:
         raise StagingError(
             [f"step {step.id!r} dedupes on {m!r}, which {table.name!r} has not" for m in missing]
         )
-    groups: dict[tuple[Cell, ...], int] = {}
+    # CARRIES row 48: rows of different markings are never folded into one; each keeps its own.
+    groups: dict[tuple[tuple[Cell, ...], tuple[Cell, ...]], int] = {}
     out: list[StagedTableRow] = []
     for row in table.rows:
         key = tuple((row.cells.get(c) or "").strip() or None for c in step.on)
@@ -679,9 +751,10 @@ def _dedupe(
             # row stands alone, never folded into another keyless row.
             out.append(row)
             continue
-        at = groups.get(key)
+        folded = (key, marking_of(row.cells, marked))
+        at = groups.get(folded)
         if at is None:
-            groups[key] = len(out)
+            groups[folded] = len(out)
             out.append(row)
         else:
             survivor = out[at]
@@ -699,7 +772,7 @@ def run_staging(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     marked: Collection[str],
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
     may_read: Callable[[StagedRef], bool] | None = None,
 ) -> StagingResult:
     """Run the steps in order over the source tables and the reference lists (each a
@@ -744,7 +817,7 @@ def run_staging(
             lists_read[step.list_] = by_id[readable[step.list_].id]
             done = _lookup(step, tables[step.input], lists_read[step.list_])
         elif isinstance(step, JoinStep):
-            done = _join(step, tables[step.left], tables[step.right])
+            done = _join(step, tables[step.left], tables[step.right], marked=marked)
         elif isinstance(step, FilterStep):
             done = _filter(step, tables[step.input])
         elif isinstance(step, DeriveStep):
@@ -760,9 +833,12 @@ def run_staging(
         elif isinstance(step, FuzzyMatchStep):
             from .fuzzy_match import run_fuzzy_step
 
-            done = (*run_fuzzy_step(step, tables[step.left], tables[step.right]), [])
+            done = (
+                *run_fuzzy_step(step, tables[step.left], tables[step.right], marked=marked),
+                [],
+            )
         else:
-            done = _dedupe(step, tables[step.input])
+            done = _dedupe(step, tables[step.input], marked=marked)
         table, report, rejected = done
         tables[step.id] = table
         reports.append(report)

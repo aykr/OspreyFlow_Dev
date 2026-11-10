@@ -2,7 +2,9 @@
 // 2; `CLAUDE.md` rule 13): the tabs, the dataset switcher, the Runs tab's grid, held rows and Run now,
 // Sources' Add files, and Deploy as vN with Deploy and run now — no `page.mouse`, no `.click()`. The
 // harness serves itself and records every request, so each case proves its action reached its route.
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -1033,6 +1035,86 @@ test("Test discloses the pipeline's expert steps, read by keyboard", async ({ pa
   await expect(disclosed).toContainText("Counts each booking's PIN calls.");
   await expect(disclosed).toContainText(CALLS_SQL);
   registerCovered(REGISTRY, "read-the-expert-steps-a-test-disclosed-by-keyboard");
+});
+
+// ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases, by keyboard alone.
+test("a release is exported by keyboard, and its files listed", async ({ page }) => {
+  await page.goto(`${HARNESS}?rights=releases`);
+  await tab(page, "5 Releases");
+  const version = page.getByLabel("Release version");
+  await version.focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("2");
+  await press(page, "Export");
+  await expect(page.getByText("The release has 2 files.")).toBeVisible();
+  const sent = (await asked(page)).find((a) => a.path === "/v1/datasets/harbour-extract/release");
+  expect(sent).toBeTruthy();
+  const download = page.waitForEvent("download");
+  await press(page, "Download model.yaml");
+  expect((await download).suggestedFilename()).toBe("model.yaml");
+  registerCovered(REGISTRY, "export-a-release-by-keyboard");
+});
+
+test("a release is checked, then imported as drafts, by keyboard", async ({ page }) => {
+  await page.goto(`${HARNESS}?rights=releases`);
+  await tab(page, "5 Releases");
+  // A folder is chosen in the system's own picker, which the page cannot drive; the files are set on
+  // the input as the picker sets them, and every step after is the keyboard's.
+  // A folder input takes a directory, as the picker hands one over (Playwright refuses loose files).
+  const folder = mkdtempSync(join(tmpdir(), "ospreyflow-release-"));
+  writeFileSync(join(folder, "release.yaml"), "apiVersion: ospreyflow.io/v1\n");
+  await page.getByLabel("Choose the release's folder").setInputFiles(folder);
+  await expect(page.getByRole("button", { name: "Check the release" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Import as drafts" })).toBeDisabled();
+  await press(page, "Check the release");
+  await expect(page.getByText("Would write Wing phone calls as a new draft.")).toBeVisible();
+  await press(page, "Import as drafts");
+  await expect(page.getByText("Everything imported is a draft. Make the model live in 1 Model when it is ready.")).toBeVisible();
+  const imports = (await asked(page)).filter((a) => a.path === "/v1/datasets/harbour-extract/release/import");
+  expect(imports).toHaveLength(2);
+  registerCovered(REGISTRY, "check-and-import-a-release-by-keyboard");
+});
+
+// ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's quota bar, Owned externally, and the DAG.
+test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG read", async ({ page }) => {
+  // The default deployed pipeline watches a folder, so it is refused in words; one with no schedule
+  // of its own is handed over.
+  await page.goto(HARNESS);
+  await tab(page, "4 Runs");
+  const watched = page.getByRole("region", { name: "External orchestration" });
+  await expect(watched.getByRole("button", { name: "Mark owned externally" })).toBeDisabled();
+  await expect(watched).toContainText("This pipeline has a schedule of its own: clear it first");
+  await page.goto(`${HARNESS}?unscheduled=1`);
+  await tab(page, "4 Runs");
+  const region = page.getByRole("region", { name: "External orchestration" });
+  await expect(region.getByText("1 of 4 runs a day")).toBeVisible();
+  const pipeline = region.getByRole("combobox", { name: "Pipeline to orchestrate" });
+  await pipeline.focus();
+  const first = await pipeline.inputValue();
+  await region.getByLabel("The orchestrator's client").focus();
+  await page.keyboard.type("syn-airflow");
+  await region.getByRole("button", { name: "Mark owned externally" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(region.getByRole("status")).toContainText("only syn-airflow may trigger it");
+  const put = (await asked(page)).find((a) => a.method === "PUT" && a.path.endsWith(`/${first}/owned-externally`));
+  expect(JSON.parse(put?.body ?? "{}")).toEqual({ client_id: "syn-airflow" });
+  registerCovered(REGISTRY, "hand-a-pipeline-to-an-orchestrator-by-keyboard");
+  const pin = region.getByLabel("The DAG runs");
+  await pin.focus();
+  await page.keyboard.type("v"); // typed letters, as `chooseOption` (macOS opens the menu on an arrow)
+  await expect(pin).toHaveValue("this");
+  await expect(region.getByLabel("The Airflow DAG")).toContainText(`ospreyflow run harbour-extract ${first} --version `);
+  await expect(region.getByLabel("The Airflow DAG")).not.toContainText("--version latest");
+  const dag = page.waitForEvent("download");
+  await region.getByRole("button", { name: "Download the Airflow DAG" }).focus();
+  await page.keyboard.press("Enter");
+  expect((await dag).suggestedFilename()).toBe(`ospreyflow_${first}.py`);
+  registerCovered(REGISTRY, "read-a-pipelines-airflow-dag-by-keyboard");
+  await region.getByRole("button", { name: "Take it back" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(region.getByRole("status")).toContainText("is no longer owned externally");
+  expect((await asked(page)).some((a) => a.method === "DELETE" && a.path.endsWith(`/${first}/owned-externally`))).toBe(true);
+  registerCovered(REGISTRY, "take-a-pipeline-back-from-its-orchestrator-by-keyboard");
 });
 
 test("every registered Ingest Studio action has its own proving test case above", () => {

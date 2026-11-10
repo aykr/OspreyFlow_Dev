@@ -2,7 +2,7 @@
 // the page itself: for `ingest-studio.spec.ts` (rule 13) and the every-harness axe scan
 // (`a11y/every-harness.spec.ts`), in both themes and under GOV.UK (`?brand=govuk`). Nothing here
 // reaches a server; every request is recorded on `window.__asked` for the spec to prove an action
-// reached its route. `?tab=model|sources|runs` opens a place; `&cell=1` opens a day's run report on
+// reached its route. `?tab=model|sources|runs|releases` opens a place; `&cell=1` opens a day's run report on
 // Runs, `&held=1` its held rows. The data is synthetic (rule 9): invented names, `SYN-` ids.
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
@@ -57,6 +57,12 @@ let deployed: Record<string, unknown> = {
   schedule_owner: "engineer-1", schedule_paused: true,
   schedule_paused_reason: "waiting for its chapter 9 step: resume it on the Studio's Runs tab",
 };  // prettier-ignore
+// ADR-141 decision 11 (L1.7): `?unscheduled=1` deploys it with no schedule of its own, so it may be
+// marked owned externally (a pipeline with a schedule is refused, as the harness's default one is).
+if (startParams.get("unscheduled")) {
+  deployed = { ...deployed };
+  for (const key of ["schedule_watch", "schedule_owner", "schedule_paused", "schedule_paused_reason"]) delete deployed[key];
+}
 // Phase 6 (ADR-140 decision 3): `?expert=1` gives the draft an expert step, which guided mode reads
 // read-only. The step's kind is phase 8's; the harness only needs guided mode to meet one.
 const WITH_EXPERT_STEP = {
@@ -202,6 +208,9 @@ const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extrac
 // steps' save, YAML save and Check SQL need; without it the save refuses an expert step changed (403,
 // in words) and Check SQL refuses outright, as the Conduit does.
 if (startParams.get("rights") === "expert") RIGHTS.add("write_sql_transforms");
+// `?rights=releases` (L1.7): Studio › Releases asks Edit target model too, as an export or import
+// writes the model; given only here, so the other cases meet the Studio as they did.
+if (startParams.get("rights") === "releases") RIGHTS.add("edit_target_model");
 const EXPERT_WORDS =
   "This change adds, edits or removes an expert step (a SQL transform or a fuzzy match), which needs the right to write SQL transforms (write_sql_transforms), granted by an administrator. The pipeline's other steps can be edited without it.";
 const expertParts = (graph: { nodes: { id: string; kind: string; label: string; config?: unknown }[]; edges: { source: string; target: string }[] }) => {
@@ -252,6 +261,21 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return reply({ promotions_overdue: [], proposals: startParams.get("proposed") === "1"
       ? [{ dataset_id: "harbour-extract", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2 }] : [] }); // prettier-ignore
   if (path === "/v1/handling-scheme") return reply(SCHEME);
+  // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases. The export's files; an import's plan,
+  // a dry run when asked, the drafts it wrote otherwise.
+  // ADR-141 (L1.7): a deployed pipeline's quota and whether it is owned externally.
+  if (path.endsWith("/quota") && method === "GET")
+    return reply({ quota: { scope: "dataset", key: "harbour-extract", runs_per_day: 4, alert_at_share: 0.8 }, runs_today: 1, used: false });
+  if (path.endsWith("/owned-externally") && method === "GET") return reply(null);
+  if (path.endsWith("/owned-externally") && method === "PUT") return reply(JSON.parse(String(init?.body)));
+  if (path.endsWith("/owned-externally") && method === "DELETE") return new Response(null, { status: 204 });
+  if (path === "/v1/datasets/harbour-extract/release" && method === "GET")
+    return reply({ files: { "release.yaml": "apiVersion: ospreyflow.io/v1\n", "model.yaml": "packs: {}\n" }, left_out: 0 });
+  if (path === "/v1/datasets/harbour-extract/release/import" && method === "POST") {
+    const dryRun = new URL(String(input)).searchParams.get("dry_run") === "true";
+    return reply({ dry_run: dryRun, items: [{ role: "pipeline", name: "Wing phone calls", action: "new_draft" }],
+      refused: [], missing_connections: [], notes: [] }); // prettier-ignore
+  }
   if (path === "/v1/ingest/connectors") return reply([{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }]);
   if (path === "/v1/ingest/connections") return reply([{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: day(30) }]);
   if (path === "/v1/datasets/harbour-extract/source-files")
@@ -502,7 +526,7 @@ const press = (match: (b: HTMLButtonElement) => boolean) => {
 };
 const params = new URLSearchParams(window.location.search);
 const tab = params.get("tab");
-const labels: Record<string, string> = { model: "1 Model", sources: "2 Sources", runs: "4 Runs" };
+const labels: Record<string, string> = { model: "1 Model", sources: "2 Sources", runs: "4 Runs", releases: "5 Releases" };
 if (tab && labels[tab]) for (let i = 0; i < 40 && !press((b) => b.textContent === labels[tab]); i++) await settle();
 if (tab === "runs" && params.get("cell"))
   for (let i = 0; i < 40; i++) {

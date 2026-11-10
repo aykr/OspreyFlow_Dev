@@ -459,6 +459,10 @@ class StudioRecipeDraft(BaseModel):
     #: ADR-110 decisions 3 and 8: paused by a person, or by three refused runs in a row, and why.
     schedule_paused: bool = False
     schedule_paused_reason: str | None = None
+    #: ADR-141 decision 11: the one service identity (an OIDC client's name) an orchestrator
+    #: triggers this pipeline as, once its schedule is handed to it; `None` when it is not owned
+    #: externally. Set with `schedule_owner`, the person every external run acts as (decision 10).
+    owned_externally_by: str | None = None
     #: ADR-140 Amendment 4: why a `flagged` recipe needs attention, in words; `None` when it does
     #: not, or for one flagged before the reason was kept.
     flagged_reason: str | None = None

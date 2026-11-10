@@ -1,0 +1,138 @@
+{
+  "$defs": {
+    "ReleaseFile": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}(/[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}){0,3}$",
+          "title": "Path",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "domain_model",
+            "pipeline",
+            "reference_list",
+            "list_rows"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "role",
+        "sha256"
+      ],
+      "title": "ReleaseFile",
+      "type": "object"
+    },
+    "ReleaseMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ReleaseMetadata",
+      "type": "object"
+    },
+    "ReleaseSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "connections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Connections",
+          "type": "array"
+        },
+        "domain_model": {
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}(/[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}){0,3}$",
+          "title": "Domain Model",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/ReleaseFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "packs": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Packs",
+          "type": "object"
+        },
+        "pipelines": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pipelines",
+          "type": "array"
+        },
+        "reference_lists": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reference Lists",
+          "type": "array"
+        }
+      },
+      "required": [
+        "domain_model"
+      ],
+      "title": "ReleaseSpec",
+      "type": "object"
+    }
+  },
+  "$id": "https://ospreyflow.io/schemas/v1/release.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The manifest (`release.yaml`). Its JSON schema is `packages/schemas/release.schema.json`.",
+  "properties": {
+    "apiVersion": {
+      "const": "ospreyflow.io/v1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "DatasetRelease",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/ReleaseMetadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/ReleaseSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "title": "DatasetRelease",
+  "type": "object"
+}
