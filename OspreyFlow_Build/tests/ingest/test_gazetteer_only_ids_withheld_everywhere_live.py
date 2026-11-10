@@ -4,7 +4,7 @@ identifiers only a gazetteer carries (`GAZETTEER_ONLY_IDENTIFIERS`) are withheld
 for every request reader, and no node is matched on one, whatever dataset it is in. A `uprn`, a
 case's own identifier (Amendment 1 point 3a), is kept and still matched.
 
-One module's plant, read by each case on its own, so each half is shown red by its own plant
+Each case plants its own and removes it, so each half is shown red by its own plant
 (`plants.md`): a `Location` carrying an `osm_id`, an `os_place_id` and a `uprn` in a case's own
 source dataset (no `gazetteer-*` dataset, no gazetteer provenance), twelve more whose `osm_id`s
 share its prefix (more than a type-ahead page), and a place in a dataset the case does not read. -
@@ -180,7 +180,7 @@ async def _remove_rows(case_ids: list[str]) -> None:
         await connection.close()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def world(
     jwks_url: str, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> Iterator[dict[str, Any]]:
