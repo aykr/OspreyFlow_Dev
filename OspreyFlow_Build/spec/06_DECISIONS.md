@@ -32010,6 +32010,83 @@ ourselves. What the platform requires, and where `main` stands:
 - Solirius runs ArcadeDB and ClickHouse in production: backups, patching, upgrades and monitoring are in
   the support service, and their runbooks are part of the documentation step (D2c).
 
+### ADR-148, Amendment 1 (10 November 2026) — the `cloud-platform` profile as built (P7)
+
+Status: built by the platform lane in P7, the choices the brief left open taken as recommended and
+logged in `process/lanes/platform/REPORT.md` ("Decisions taken") for the owner to overrule. Decisions 1–5,
+7, 8, 12 and 14 are this step; 6, 9–11 and 13 are not, except where it says so. The context table's
+"six Dockerfiles" is **eight**: api, ingest, worker, report-sync, ner, the harness, the workspace and
+Superset.
+
+**As built.**
+
+1. **The profile** (`Profile.CLOUD_PLATFORM`, `osprey.yaml`'s `cloud_platform:`: the platform's
+   settings file by name, the namespace, the environment, the registry, the networks the ingress admits
+   and each enabled host's networks). `python -m harness.render` writes `deploy/generated/cloud-platform/`:
+   `values.yaml`, `versions.lock`, `images.yaml` (the push plan) and `terraform/*.tf`. **The values are
+   translated from the cluster's** (`harness/cloud_platform/`, over `harness.cluster.render_cluster`, which
+   gains a replica override), so a service is one thing on both. **A platform is a settings file**,
+   `harness/cloud_platform/platforms/<name>.yaml` (the client's, and `kind` for the local proof): ingress
+   class, annotations and controller namespace, storage class, egress kind and managed networks, and the
+   names of the secrets the managed stores' details arrive in. The set-up console does not offer the
+   profile: it is rendered for a pull request, not installed.
+2. **The Terraform is plain AWS and Kubernetes resources** in the environments repository's folder shape,
+   not the platform's modules, whose sources name the client's organisation; each file says what it makes,
+   so swapping a block for a module is a reviewer's edit. It writes every secret the values read, under the
+   settings' names (a test holds every `secretKeyRef` in the values to a key the Terraform writes), our own
+   Secret's passwords as `random_password`, and a key a person holds (a model engine's) as a sensitive
+   variable. `tofu fmt` leaves it unchanged and `tofu validate` accepts it, for both environments.
+3. **The managed stores' details** are read from those secrets by name, by the pods that read the stores
+   (the Conduit, the workers, the report sync, Superset) and no other: the workspace's nginx, which reads the
+   whole env, is not handed the database's password. A `$(VAR)` in a command or a value is defined before it.
+4. **Every pod runs as 10001:10001** (`podSecurity`: `runAsNonRoot`, the user and group, `fsGroup`,
+   seccomp `RuntimeDefault`; every container `allowPrivilegeEscalation: false`, not privileged, every
+   capability dropped). ArcadeDB, ClickHouse and Keeper start that way on volumes given to group 10001
+   (`process/lanes/platform/gates/p7_stores_uid_proof.sh`), each given a folder of its own for what the
+   image's own user owned (ArcadeDB's `log`, `backups`, `replication`; ClickHouse's and Keeper's logs;
+   Keeper's `/var/lib/clickhouse`, which it checks): no thin image is needed.
+5. **The chart** gains `templates/ingress.yaml` (the class, the hosts from `network.public_origin`'s sites,
+   TLS, the platform's annotations, the allow-list annotation from `cloud_platform.allow_from`, and a policy
+   admitting the controller's namespace alone), and, gated on values the cluster's do not carry: the pod
+   and container security contexts, a service account (the S3 role's, IRSA), a grace period (ArcadeDB
+   120 s), a PodDisruptionBudget for each StatefulSet (one copy down), Services never `LoadBalancer`
+   behind an ingress, the shared claim's access mode, and Calico's two policies. The cluster's manifests
+   are unchanged.
+6. **Egress** (decision 7): Calico's `ospreyflow-allow-egress` (order 100: the cluster's DNS, the
+   namespace's own pods, the platform's managed networks, each enabled host's networks) before
+   `ospreyflow-deny-egress` (order 200: every pod, egress, deny), and the chart's open-egress
+   `NetworkPolicy` not rendered. **Calico's open-source policy matches networks, not names**, so a host an
+   enabled feature reaches (a model engine's address, a proxied map provider's source or endpoint) names its
+   networks in `cloud_platform.egress_nets`; one without is refused at render, in words naming it.
+7. **Images** (decision 8): `ospreyflow images push --registry` follows the render's `images.yaml`: ours
+   built from the checkout and pushed, the third-party ones copied by digest
+   (`docker buildx imagetools create`), so the digest the values pin is the source's. Ours are pinned by the
+   digest the registry gives for its copy; until they are pushed the render is refused unless unpinned is
+   asked for. **No Java** (decision 12, building to the recommended answer of question 3): the Conduit's
+   Dockerfile takes `--build-arg CONDUIT_JAVA=omitted` (the default stays `included`; the Java stage is
+   then never pulled), and *Admin › Maps*' Build says, on this profile, that the map is built off the
+   platform with `ospreyflow map build`.
+8. **The shared folders until P8** (the orchestrator's acceptance, 10 November 2026): one ReadWriteOnce
+   claim on the platform's class, and every pod that mounts it placed on its node (a required pod
+   affinity). P8 removes it (`process/lanes/CARRIES.md`).
+9. **`make cp-policy-check`** (`tools/cp_policy_check.py`) renders both fixture environments, templates
+   the chart with Helm and refuses: a container without `runAsNonRoot: true` or a numeric non-zero
+   `runAsUser`, privilege or a kept capability, a port below 1024 (a container's or a Service's), a
+   `ReadWriteMany` claim, a `hostPath`, an image not from the profile's registry, no Calico policy denying
+   every pod's egress, and a Dockerfile of ours not `USER 10001:10001`. Each rule is red on its own planted
+   fault, in the values Helm reads or Helm's own output (`tests/cp_policy_check/`). Its Makefile target and
+   CI job are the owner's (`process/lanes/platform/P7_ci_makefile.diff`).
+10. **A defect fixed on the way**: `harness.cluster._Pins` pinned an image already given by its digest a
+    second time (`ref@sha256:…@sha256:…`: the gateway, Ollama, speaches), which no registry pulls; the
+    cluster's values change in those image lines alone.
+
+**Left, and why:** the acceptance scenarios on the kind cluster (see the report: what ran there, and what
+a full run still needs); Entra ID (decision 9, P10); the marking ceiling (10, studio-b's L1.10); backups
+(13); the shared folders, the settings files and the recipes repository off the shared disk (6, P8);
+`ospreyflow map upload` (decision 12's upload; with the tiles bucket, P8); reading Admin's runtime model
+and map settings for the egress list (the render reads `osprey.yaml`'s; L1.9's); the platform's own
+Gatekeeper constraints, not published to us.
+
 ### ADR-143, Amendment 5 (9 November 2026) — promotion and a removed case's layer as built (L3.4)
 
 Status: built by the case lane at L3.4 under Prompt L. The decisions the brief left open were taken

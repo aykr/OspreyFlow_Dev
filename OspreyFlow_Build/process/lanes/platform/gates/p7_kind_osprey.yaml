@@ -1,0 +1,12 @@
+# The kind cluster's deployment (process/lanes/platform/gates/p7_kind.sh deploy): the cloud-platform
+# profile on the `kind` platform settings, its images in the cluster's own registry. Synthetic.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+network:
+  public_origin: https://ospreyflow.p7.test
+cloud_platform:
+  platform: kind
+  namespace: ospreyflow-dev
+  environment: development
+  registry: localhost:5001
