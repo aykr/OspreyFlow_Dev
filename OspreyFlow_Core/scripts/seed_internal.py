@@ -114,14 +114,24 @@ DEFAULT_GRAPH_SAMPLE = 500
 REAL_DATA_USE = "owner_run_demonstration"
 
 DATASETS: dict[str, Dataset] = {
-    "hmp": Dataset(script="scripts.seed_hmp_fixture", case_name="HMP fixture (synthetic demo)"),
+    # ADR-148 Amendment 2 decision 5: each pack's highest marking, proved against what it writes
+    # (`tests/test_seed_internal_ceiling.py`). HMP's network holds one SECRET conflict, by design.
+    "hmp": Dataset(
+        script="scripts.seed_hmp_fixture",
+        case_name="HMP fixture (synthetic demo)",
+        highest_marking="SECRET",
+    ),
     "ledger": Dataset(
         script="scripts.seed_ledger_fixture",
         case_name="Operation Ledger (synthetic demo)",
+        highest_marking="OFFICIAL",
         mid_demo_steps=("--release-week-2", "--release-list-update", "--reset-week-2"),
     ),
+    # Its path spokes' SECRET shortcut, by design (the access-control suite's).
     "fixture-corp": Dataset(
-        script="scripts.seed_fixture_corp", case_name="Fixture Corp (synthetic demo)"
+        script="scripts.seed_fixture_corp",
+        case_name="Fixture Corp (synthetic demo)",
+        highest_marking="SECRET",
     ),
     "paysim": Dataset(
         script="scripts.seed_paysim",
@@ -136,6 +146,7 @@ DATASETS: dict[str, Dataset] = {
     "prison-intelligence": Dataset(
         script="scripts.seed_pid",
         case_name="Prison Intelligence Dataset (synthetic demo)",
+        highest_marking="OFFICIAL",
         rehearsal=True,
     ),
     # ADR-127 Amendment 40: the scale cohort, written straight from the plan (no Studio recipes, no
@@ -143,6 +154,7 @@ DATASETS: dict[str, Dataset] = {
     "prison-intelligence-scale": Dataset(
         script="scripts.seed_pid_scale",
         case_name="Prison Intelligence Dataset: scale cohort (synthetic demo)",
+        highest_marking="OFFICIAL",
         bulk=True,
     ),
     # ADR-138: the cyber starter's demo, a synthetic STIX 2.1 intrusion generated deterministically.
@@ -153,11 +165,17 @@ DATASETS: dict[str, Dataset] = {
     ),
     # ADR-138 decision 3: a public dataset the administrator downloaded, placed by
     # `scripts.public_dataset stage` under `public/<id>/`; its case is named from its manifest.
-    "public": Dataset(script="scripts.seed_public", case_name="", data_folder=PUBLIC_DATA),
+    "public": Dataset(
+        script="scripts.seed_public",
+        case_name="",
+        data_folder=PUBLIC_DATA,
+        highest_marking="OFFICIAL",
+    ),
     # ADR-114 Amendment 23: real data, an optional download each user makes and accepts.
     "enron": Dataset(
         script="scripts.seed_enron",
         case_name="Enron corpus (real data, this machine only)",
+        highest_marking="OFFICIAL",
         data_folder="Enron_Mails",
         real_dataset="enron",
         bulk=True,
