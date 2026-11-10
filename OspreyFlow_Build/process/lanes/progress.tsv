@@ -68,4 +68,4 @@ platform-b	ADR-147 Am 3	S	done	The six gazetteer-only identifiers withheld from 
 docs	P5b rows	S	done	P5b's guide rows, and L2.5b's and L2.5c's lines (merged c4c294c)
 studio-b	tips	S	done	The Studio's tips (L1.8's patches over L2.7) and L1.7a's carries (merged 5d5c0f8)
 case	L3.H1	S	building	A hygiene step: one read-set rule, a home case kept, the run report's drawn-watch count
-platform-b	P5b proof	S	building	ADR-114 Am 38 decision 9's owed live proof of the update path
+platform-b	P5b proof	S	done	ADR-114 Am 38 decision 9's owed live proof of the update path (merged 7b303bd)

@@ -6,7 +6,6 @@ orchestrator	release	your deployment rebuilt; product repo published	~21:00	A
 case	L3.H1	read-set rule, home case kept; live check, merge	~16:30	A
 admin	T1	parts 1, 3, 2a, batch merged; marks, parallel, sleeps	11 Nov	A
 studio-b	L1.10	marking ceiling: entry points built; packs, gates	~18:00	B
-platform-b	P5b proof	the owed live update proof, run 2	~15:30	B
 platform	P7	fresh session from HANDOFF; ConfigMap, review points	~11 Nov, midday	B
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
 studio-b	L1.9	S3 and Athena, after P7	~11 Nov, afternoon	B
