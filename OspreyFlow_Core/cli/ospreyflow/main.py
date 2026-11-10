@@ -30,6 +30,7 @@ import yaml
 from . import conduit_client, demo, starters
 from . import deployments as named
 from . import grading as grading_verb
+from . import images as image_verbs
 from . import maps as map_verbs
 from . import models as engine_keys
 from .answers import (
@@ -79,7 +80,7 @@ from .run import (
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
     "update", "uninstall", "repair-sign-in", "switch", "models", "apply", "deployments",
-    "starters", "map", "grading", "release", "run",
+    "starters", "map", "grading", "release", "run", "images",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -373,6 +374,9 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument(
         "--planetiler-jar", type=Path, help="planetiler's release jar, copied into the tiles folder"
     )
+
+    # ADR-148 decision 8: a cloud-platform render's images into the namespace's registry.
+    image_verbs.add_parser(verbs)
 
     # ADR-143 decision 11 and Amendment 6: the grading scheme, the drawn items and the setting.
     grading = verbs.add_parser("grading", help="change the grading scheme of every drawn item")
@@ -1554,6 +1558,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _grading(args, ctx)
     if verb in ("release", "run"):
         return _conduit_verb(args, ctx)
+    if verb == "images":
+        return image_verbs.main_action(args, ctx.product, ctx.run)
     if verb == "apply":
         return _apply_settings(ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb
