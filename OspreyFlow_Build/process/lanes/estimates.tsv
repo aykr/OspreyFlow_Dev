@@ -1,7 +1,7 @@
-# as of 2026-11-10T05:53Z
-studio	L1.5	clear; batch merge with P5 and D2a after L2.7	~07:15	A
-platform	P5	clear; batch merge with L1.5 and D2a	~07:15	A
-docs	D2a	in review; batch merge with L1.5 and P5	~07:15 (if the review is clear)	A
+# as of 2026-11-10T05:54Z
+studio	L1.5	merged in batch with P5, gating (server test, local ci)	~07:15	A
+platform	P5	merged in batch with L1.5, gating	~07:15	A
+docs	D2a	fixes in; re-review and its heavy runs, then merge	~09:00	A
 rules	L2.10	last plants, re-review, merge	~08:30	A
 studio-b	L1.7a	sent back: path escape, config plants, real CAS race	~10:30	A
 platform-b	P5b	after D2a: rows, PDF, gates, review	~09:30	A
