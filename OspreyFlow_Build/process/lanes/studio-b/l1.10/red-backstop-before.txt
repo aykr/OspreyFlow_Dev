@@ -1,0 +1,5 @@
+# head 2e6c1d2, the stamping graph without the ceiling's backstop: red first
+PASSED tests/services/api/test_deployment_ceiling_backstop.py::test_writes_at_the_ceiling_are_written
+FAILED tests/services/api/test_deployment_ceiling_backstop.py::test_a_node_above_the_ceiling_never_reaches_the_store - Failed: DID NOT RAISE AboveTheDeploymentCeiling
+FAILED tests/services/api/test_deployment_ceiling_backstop.py::test_a_link_above_the_ceiling_never_reaches_the_store - Failed: DID NOT RAISE AboveTheDeploymentCeiling
+FAILED tests/services/api/test_deployment_ceiling_backstop.py::test_a_bulk_load_above_the_ceiling_never_reaches_the_store - Failed: DID NOT RAISE AboveTheDeploymentCeiling

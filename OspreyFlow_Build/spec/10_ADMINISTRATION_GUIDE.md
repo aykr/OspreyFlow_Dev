@@ -1834,6 +1834,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `deployment` | section | — | Which deployment this is, on a machine that runs more than one. |
 | `deployment.name` | str or none | none | Names this deployment's Compose project, its volumes and its rendered folder, so a second deployment on the same machine shares none of them. |
 | `deployment.graph_port` | int or none | none | The port on this machine (127.0.0.1 only) the graph store's own tools reach it at. A deployment installed beside another with ospreyflow install --name is given one of its own, so the two share no port. |
+| `deployment.highest_marking` | str or none | none | The highest marking this deployment may hold: a load or an import marked above it is refused before anything is written, in words that say this limit and never the item's content. A demo pack that declares no highest marking is judged as the scheme's highest, so under a lower setting it is refused. One of the handling scheme's classifications. |
 | `appearance` | section | — | How every page looks: the deployment's brand, and what its page title names. |
 | `appearance.brand` | `ospreyflow` \| `govuk` | `ospreyflow` | The GOV.UK look, for a service on a gov.uk domain only. |
 | `appearance.service_name` | str or none | none | The service's name, in the page title. |

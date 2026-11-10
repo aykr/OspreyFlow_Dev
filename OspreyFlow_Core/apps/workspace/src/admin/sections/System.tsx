@@ -72,6 +72,15 @@ export function System({ api }: { api: AdminApi }) {
       )}
       {status?.engines && status.engines.length > 0 && <EnginesTable engines={status.engines} />}
       {status && <VersionSection version={status.version} update={status.update} />}
+      {status?.highest_marking && (
+        // ADR-148 decision 10: the deployment's marking ceiling, said in words.
+        <section aria-label="Highest marking" style={{ display: "grid", gap: "var(--sp-6)" }}>
+          <p className="value" style={{ margin: 0 }}>{status.highest_marking}</p>
+          <p className="label" style={{ margin: 0 }}>
+            {`The highest marking this deployment may hold. A load or an import marked above ${status.highest_marking} is refused before anything is written.`}
+          </p>
+        </section>
+      )}
       {status?.converted_views && <ConvertedSection converted={status.converted_views} />}
       <Button onClick={ask}>Ask again</Button>
       <OwnersMayBe api={api} />

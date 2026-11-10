@@ -30,6 +30,7 @@ export type Problem = string | null;
 export type Views = number;
 export type Cases = number;
 export type Problem1 = string | null;
+export type HighestMarking = string | null;
 
 /**
  * The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
@@ -43,6 +44,7 @@ export interface SystemStatus {
   model_notice?: ModelNotice;
   update?: UpdateNotice | null;
   converted_views?: ConvertedViews | null;
+  highest_marking?: HighestMarking;
   [k: string]: unknown;
 }
 /**

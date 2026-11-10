@@ -68,6 +68,7 @@ from harness.realm import CONDUIT_CLIENT_ID
 from harness.reporting import reporting_env, reporting_services
 from harness.site import (
     PROXY_IMAGE,
+    highest_marking,
     proxy_service,
     render_caddyfile,
     render_glass_settings,
@@ -1545,6 +1546,8 @@ def _render_env(config: OspreyConfig) -> str:
         ),
         f"OSPREY_IDENTITY_PROVIDER={config.governance.identity_provider}",
         f"OSPREY_HANDLING_SCHEME={config.governance.handling_scheme}",
+        # ADR-148 decision 10: the deployment's marking ceiling, the scheme's highest when unset.
+        f"OSPREY_HIGHEST_MARKING={highest_marking(config)}",
         f"OSPREY_ONTOLOGY={config.governance.ontology}",
         f"OSPREY_REAL_DATA_EXCEPTIONS={config.governance.real_data_exceptions}",
         f"OSPREY_MODELS_LOCAL_ONLY={'true' if config.models.local_only else 'false'}",
