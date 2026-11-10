@@ -16,5 +16,22 @@ runs name their lease and stack.
 
 ## §2 The store's draft, Test and Make live (`services/api/typology_rules.py`), live
 
-`tests/services/api/test_rule_drafts_store.py` needs Postgres, so it runs at the leased live run. Its plants
-are listed there.
+Live: the rules lease, stack c, by `stack_lease.sh remote`, at 5fa7b83 (`gates/5fa7b83.live.txt`).
+- **First:** the new store and route files, with the rule tests they touch (route rights, maker-checker's
+  store and routes, the schedule, the sentence store): 50 passed.
+- **A test that passed on another file's state.** Run alone, `test_rule_editor_routes.py`'s *Test* cases
+  failed unplanted. The route returned 500, because the test gave no screening-list store. The combined run
+  had passed only because an earlier file had left one on `app.state`. The test now gives one (5 passed
+  alone), and the first round of plants is recorded as void for that file.
+- **Each plant again** (a whole planted file swapped in at its real call site, then restored). Red only
+  where it should be:
+  1. A new rule saved live: the draft and never-runs cases, store and route, and those built on a draft.
+  2. The dataset check removed: only the two dataset-fixed cases.
+  3. Made live untested: only the two untested cases.
+  4. A test kept on a draft saved again: only `test_a_test_of_a_draft_saved_again_meanwhile_is_refused`.
+  5. The author approving their own: the two second-person cases, and maker-checker's own-approval cases.
+  6. A sent-back make-live retired: only `test_a_make_live_sent_back_returns_to_its_draft`.
+  7. Test's count told to everyone (rule 7): only the tester-alone route case.
+  8. The second-person policy ignored: only the second-person route case.
+  9. An editor's approval asks for the administrator: only the second-person route case.
+- Released and down.

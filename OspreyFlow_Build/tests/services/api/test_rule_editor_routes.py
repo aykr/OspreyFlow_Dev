@@ -44,6 +44,7 @@ from services.api.app import (
     get_ontology,
     get_patterns_store,
     get_principal,
+    get_screening_lists,
     get_typology_rules,
 )
 from services.api.config import PostgresConfig
@@ -66,6 +67,13 @@ def _files(body: SentenceRuleInput) -> RuleFiles:
 @asynccontextmanager
 async def _no_lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
+
+
+class _NoScreeningLists:
+    """The rule tested reads no screening list; the store is still asked for, so it is given."""
+
+    async def entries(self, entity_type: str) -> list[Any]:
+        return []
 
 
 class _Audit:
@@ -131,6 +139,7 @@ def _world(policy: str) -> Iterator[tuple[_World, TestClient]]:
         get_typology_rules: w.rules_store, get_audit: lambda: w.audit,
         get_datasets: lambda: w.datasets, get_graph: lambda: w.graph,
         get_analytics: lambda: AnalyticsDuckDBAdapter(con, SCHEME), get_hotlists_store: _Hotlists,
+        get_screening_lists: _NoScreeningLists,
     })  # fmt: skip
     try:
         with TestClient(app, raise_server_exceptions=False) as client:

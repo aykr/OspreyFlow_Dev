@@ -1,0 +1,134 @@
+## L2.11 first live check: the new store and route tests with the rule tests they touch: the rules lease, stack c, by stack_lease.sh remote, at 5fa7b83, start 2026-11-10T11:32:09Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261110T113226Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py
+..................................................                       [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+8.44s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+7.42s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.49s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.34s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.23s call     tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+0.13s call     tests/services/api/test_rule_editor_routes.py::test_each_editor_route_needs_its_right_the_case_and_its_level
+0.12s call     tests/services/api/test_rule_maker_checker_routes.py::test_a_change_and_a_retirement_of_a_deployment_rule_wait_and_are_kept_as_versions
+0.11s call     tests/services/api/test_rule_maker_checker_routes.py::test_a_deployment_scope_rule_deployed_by_one_person_is_pending_until_a_second_approves
+0.11s call     tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+0.09s call     tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+0.09s setup    tests/services/api/test_rule_editor_routes.py::test_each_editor_route_needs_its_right_the_case_and_its_level
+0.09s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.08s setup    tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+0.07s call     tests/services/api/test_rule_maker_checker_routes.py::test_the_new_rule_routes_need_the_right_the_case_and_their_level
+0.07s call     tests/services/api/test_rule_maker_checker_routes.py::test_a_waiting_change_names_its_proposer_and_asks_only_for_proposers_served
+0.05s call     tests/services/api/test_rule_drafts_store.py::test_a_draft_of_a_live_rule_leaves_it_running_as_it_stood
+0.05s call     tests/services/api/test_sentence_rule_store.py::test_a_deployment_wide_sentence_watches_every_case_and_a_case_sentence_its_own
+0.05s call     tests/services/api/test_rule_maker_checker_store.py::test_a_deployment_rule_live_before_approvals_existed_is_made_pending
+0.05s call     tests/services/api/test_rule_maker_checker_store.py::test_a_change_to_a_deployment_rule_waits_and_the_rule_runs_as_it_stood_meanwhile
+0.05s call     tests/services/api/test_rule_maker_checker_routes.py::test_the_author_cannot_approve_their_own_rule
+0.04s call     tests/services/api/test_rule_drafts_store.py::test_a_saved_draft_never_runs_and_keeps_its_files
+0.04s call     tests/services/api/test_rule_maker_checker_routes.py::test_approving_needs_the_administrators_right
+0.04s call     tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+0.04s call     tests/services/api/test_rule_schedule.py::test_after_downtime_the_latest_slot_runs_and_the_rest_are_missed
+0.04s call     tests/services/api/test_rule_drafts_store.py::test_a_make_live_sent_back_returns_to_its_draft
+0.04s call     tests/services/api/test_rule_schedule.py::test_three_refusals_in_a_row_stop_the_schedule_in_words
+0.04s call     tests/services/api/test_rule_maker_checker_routes.py::test_an_engineer_cannot_author_an_analyst_rule
+50 passed, 1 warning in 24.11s
+Wall time: 25 s, exit 0 (stack c, the lease rules took at 2026-11-10T11:32:00Z; set-up before it 17 s)
+# exit 0 end 2026-11-10T11:32:53Z
+
+# L2.11's plants at 5fa7b83, the rules lease, stack c, by stack_lease.sh remote; start 2026-11-10T11:34:17Z
+== plant: p1_saved_live.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_saved_draft_never_runs_and_keeps_its_files
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_draft_cannot_go_live_untested_nor_on_an_older_drafts_test
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_with_a_second_person_policy_a_rule_goes_live_only_on_another_persons_approval
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_make_live_sent_back_returns_to_its_draft
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+7 failed, 8 passed, 1 warning in 4.68s
+== plant: p2_dataset_moved.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_rules_dataset_is_fixed_once_saved
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+4 failed, 11 passed, 1 warning in 4.35s
+== plant: p3_live_untested.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_draft_cannot_go_live_untested_nor_on_an_older_drafts_test
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+3 failed, 12 passed, 1 warning in 4.65s
+== plant: p4_test_on_resaved.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_test_of_a_draft_saved_again_meanwhile_is_refused
+1 failed, 9 passed in 1.42s
+== plant: p5_own_approval.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_with_a_second_person_policy_a_rule_goes_live_only_on_another_persons_approval
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py::test_the_author_cannot_approve_their_own_rule
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py::test_a_change_to_a_deployment_rule_waits_and_the_rule_runs_as_it_stood_meanwhile
+5 failed, 20 passed, 1 warning in 5.17s
+== plant: p6_sent_back_retired.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_make_live_sent_back_returns_to_its_draft
+1 failed, 9 passed in 1.34s
+== plant: p7_count_to_all.py (services/api/app.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+2 failed, 3 passed, 1 warning in 3.86s
+== plant: p8_policy_ignored.py (services/api/app.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+2 failed, 3 passed, 1 warning in 4.39s
+== plant: p9_editor_approval_needs_admin.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+2 failed, 3 passed, 1 warning in 6.37s
+# end 2026-11-10T11:36:53Z
+
+# The plants above are void for test_rule_editor_routes.py: its Test cases failed unplanted once run alone (500, no screening-list store given; the first run had passed only on another file's app.state). The test now gives one (5 passed alone, 2026-11-10T11:39:02Z). Every plant again:
+
+# L2.11's plants at 5fa7b83, the rules lease, stack c, by stack_lease.sh remote; start 2026-11-10T11:39:02Z
+== plant: p1_saved_live.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_saved_draft_never_runs_and_keeps_its_files
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_draft_cannot_go_live_untested_nor_on_an_older_drafts_test
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_with_a_second_person_policy_a_rule_goes_live_only_on_another_persons_approval
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_make_live_sent_back_returns_to_its_draft
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+6 failed, 9 passed, 1 warning in 4.40s
+== plant: p2_dataset_moved.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_rules_dataset_is_fixed_once_saved
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+2 failed, 13 passed, 1 warning in 4.87s
+== plant: p3_live_untested.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_draft_cannot_go_live_untested_nor_on_an_older_drafts_test
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+2 failed, 13 passed, 1 warning in 4.42s
+== plant: p4_test_on_resaved.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_test_of_a_draft_saved_again_meanwhile_is_refused
+1 failed, 9 passed in 1.43s
+== plant: p5_own_approval.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_with_a_second_person_policy_a_rule_goes_live_only_on_another_persons_approval
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py::test_the_author_cannot_approve_their_own_rule
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py::test_a_change_to_a_deployment_rule_waits_and_the_rule_runs_as_it_stood_meanwhile
+4 failed, 21 passed, 1 warning in 5.15s
+== plant: p6_sent_back_retired.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py::test_a_make_live_sent_back_returns_to_its_draft
+1 failed, 9 passed in 1.41s
+== plant: p7_count_to_all.py (services/api/app.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+1 failed, 4 passed, 1 warning in 4.05s
+== plant: p8_policy_ignored.py (services/api/app.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+1 failed, 4 passed, 1 warning in 3.99s
+== plant: p9_editor_approval_needs_admin.py (services/api/typology_rules.py)
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+1 failed, 4 passed, 1 warning in 4.03s
+# end 2026-11-10T11:41:49Z
+# the rules lease on c: down and released 2026-11-10T11:42:14Z
