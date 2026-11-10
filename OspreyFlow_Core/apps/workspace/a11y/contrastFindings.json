@@ -1061,67 +1061,6 @@
    "reason": "over or under div.menu-panel",
    "own": 19.59,
    "owner": "shell"
-  },
-  ".menu-button > span[aria-hidden=\"true\"]": {
-   "text": "▾",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 18.34,
-   "owner": "shell"
-  }
- },
- "needs-you-harness.html open=1 (dark)": {
-  "span[aria-hidden=\"true\"]": {
-   "text": "▾",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 13.17,
-   "owner": "shell"
-  }
- },
- "needs-you-harness.html open=1 (light)": {
-  "span[aria-hidden=\"true\"]": {
-   "text": "▾",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 14.53,
-   "owner": "shell"
-  }
- },
- "needs-you-harness.html open=1 (govuk)": {
-  "span[aria-hidden=\"true\"]": {
-   "text": "▾",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 18.34,
-   "owner": "shell"
-  }
- },
- "places-harness.html open=more (dark)": {
-  "button[title=\"More\"] > .left-rail__glyph": {
-   "text": "⋯",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 10.08,
-   "owner": "shell"
-  }
- },
- "places-harness.html open=views (dark)": {
-  ".menu-button > span:nth-child(2)": {
-   "text": "▾",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 13.17,
-   "owner": "shell"
-  }
- },
- "places-harness.html open=views (light)": {
-  ".menu-button > span:nth-child(2)": {
-   "text": "▾",
-   "ratio": "unmeasurable",
-   "reason": "over or under the shadow of div.menu-panel",
-   "own": 14.53,
-   "owner": "shell"
   }
  }
 }

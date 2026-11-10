@@ -289,8 +289,7 @@ const EXTRA_STATES: Record<string, string[]> = {
 // too). Fixed ones come off; a new one is never added to make a run green. The owners, by page:
 // the map's attribution chip over the map's canvas (platform); the case screen's variant b ⋯ and
 // places' open More views under GOV.UK (shell); the boards' handles and labels where a link line or
-// another item lies at them (case); text an open menu's shadow reaches (shell); Home's key cap at
-// `opacity: 0.8` (home). Show as BPMN's words, once listed, measure on their task box since T3b.
+// another item lies at them (case); Home's key cap at `opacity: 0.8` (home). Show as BPMN's words, once listed, measure on their task box since T3b.
 const CONTRAST_FINDINGS: Record<string, ListedFindings> = readFindings(
   JSON.parse(readFileSync(new URL("./contrastFindings.json", import.meta.url), "utf8")),
 );
