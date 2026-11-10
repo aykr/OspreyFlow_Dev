@@ -300,12 +300,22 @@ def _open_repository(repo_root: Path) -> Repo:
 
 @contextmanager
 def _publish_lock(repo: Repo) -> Iterator[None]:
-    with open(os.path.join(repo.controldir(), PUBLISH_LOCK_NAME), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    """The exclusive `flock` on `PUBLISH_LOCK_NAME`, its file opened without following a link."""
+    path = os.path.join(repo.controldir(), PUBLISH_LOCK_NAME)
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o666)
+    except OSError as exc:
+        raise GitCommitError(
+            f"the recipe repository's {PUBLISH_LOCK_NAME} is a symbolic link or cannot be opened"
+        ) from exc
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 
 def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.stat_result:
