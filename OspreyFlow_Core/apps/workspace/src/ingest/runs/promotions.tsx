@@ -74,7 +74,7 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
       setPromotions(null);
       setRefused(
         answer.code === "right_required" || answer.code === "forbidden"
-          ? "You need Review promotions to see the analyst promotions into this dataset; a data engineer of the dataset has it."
+          ? "You need Review promotions to see the analyst promotions into this dataset: they are reviewed by the dataset's Authors who hold it."
           : answer.message,
       );
     }

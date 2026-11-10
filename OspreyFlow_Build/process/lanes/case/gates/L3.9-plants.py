@@ -261,10 +261,16 @@ PLANTS = [
    "            and i.dataset_id not in sealed\n",
    "",
    "failed_view_step_left_promote_nothing"),
+  # CARRIES (docs, D2a), taken in L3.9: Promote… offered only to one the promotion routes admit.
+  ("Promote… offered to every drawer (the Author level and rights not asked)",
+   "services/api/app.py",
+   "            \"may_promote\": may_draw\n            and await _may_promote(investigation.id, principal, investigations),",
+   "            \"may_promote\": may_draw,",
+   "offers_promote", "../OspreyFlow_Build/tests/services/api/test_promotions.py"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 out = []
-for words, f, old, new, k in PLANTS:
+for words, f, old, new, k, *where in PLANTS:
     p = CORE / f
     src = p.read_text()
     planted = src
@@ -273,7 +279,7 @@ for words, f, old, new, k in PLANTS:
         planted = planted.replace(o, n)
     p.write_text(planted)
     try:
-        r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", T, "-q", "-p", "no:cacheprovider", "-k", k], cwd=CORE, env=env, capture_output=True, text=True)
+        r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", where[0] if where else T, "-q", "-p", "no:cacheprovider", "-k", k], cwd=CORE, env=env, capture_output=True, text=True)
     finally:
         p.write_text(src)
     lines = r.stdout.splitlines()

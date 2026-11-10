@@ -124,7 +124,10 @@ describe("Analyst promotions", () => {
   it("says who has Review promotions when the reader does not", async () => {
     serve({ "GET /v1/datasets/src/promotions": () => ({ status: 403, body: { detail: { error: "right_required" } } }) });
     show();
-    expect(await screen.findByText(/You need Review promotions/)).toBeTruthy();
+    // The rule, in words (CARRIES, docs D2a): the dataset's Authors holding the right, not a role.
+    expect(
+      await screen.findByText("You need Review promotions to see the analyst promotions into this dataset: they are reviewed by the dataset's Authors who hold it."),
+    ).toBeTruthy();
   });
 
   it("draws the removed cases' layers for an Author, and cancels a merge's grant when it is closed", async () => {

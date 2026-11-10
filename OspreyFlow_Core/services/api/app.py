@@ -4233,14 +4233,20 @@ async def open_board(
     principal: PrincipalDep,
     boards: BoardsDep,
     grading: GradingSettingsDep,
+    investigations: InvestigationsDep,
 ) -> BoardOpened:
     """The board now, as this reader may see it; `missing` counts what it could not show. It
-    offers the deployment's grading scheme (`grading.scheme`, ADR-143 decision 11)."""
+    offers the deployment's grading scheme (`grading.scheme`, ADR-143 decision 11), and says
+    whether this reader may promote from it, asked as the promotion routes ask (CARRIES, docs
+    D2a: *Promote…* offered only to those the route admits; the route still refuses the rest)."""
     board = await boards.board(investigation.id, board_id, principal.id)
     opened = await boards.open(board, principal)
+    may_draw = opened.may_draw and _may_draw(principal)
     return opened.model_copy(
         update={
-            "may_draw": opened.may_draw and _may_draw(principal),
+            "may_draw": may_draw,
+            "may_promote": may_draw
+            and await _may_promote(investigation.id, principal, investigations),
             "grading_scheme": grading.scheme,
             "grading_grades": grading.grades,
         }
@@ -4262,6 +4268,21 @@ def _graded_in_the_deployments_scheme(given: Grading | None, grading: GradingSet
 
 def _may_draw(principal: Principal) -> bool:
     return Right.DRAW_ON_BOARDS in rights_for(principal.roles)
+
+
+async def _may_promote(
+    investigation_id: str, principal: Principal, investigations: InvestigationStore
+) -> bool:
+    """`_PROMOTES`' rights and the case's Author level (`InvestigationAuthorDep`), as asked of a
+    promotion route."""
+    held = rights_for(principal.roles)
+    if Right.PROMOTE_TO_DATASET not in held or Right.INVESTIGATE not in held:
+        return False
+    try:
+        await investigations.get_authorized(investigation_id, principal, need=AccessLevel.AUTHOR)
+    except (InvestigationNotFoundError, InsufficientAccessError):
+        return False
+    return True
 
 
 @app.post("/v1/investigations/{investigation_id}/boards/{board_id}/share", dependencies=_DRAWS)
