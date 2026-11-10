@@ -36,13 +36,14 @@ ID_CASES = [f"test_a_recipe_id_that_is_not_one_file_name_is_refused[{case}]"
 RACE = "test_a_real_writer_moving_head_mid_commit_is_refused"
 FAKE_REFUSAL = "test_a_failed_commit_is_an_error_not_a_quiet_success"
 LOCK_PROBE = "test_the_index_is_read_and_written_under_a_lock_another_process_honours"
+PUT_BACK = "                _put_back_as_head_holds(repo, repo_root, relative_path)\n"
+AFTER_WRITE_PUT_BACK = "            except _FailedAfterTheWrite as failed:\n" + PUT_BACK
+AFTER_COMMIT_PUT_BACK = "            except Exception:\n" + PUT_BACK
 LOCKED = (
     "        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):\n"
     "            _sweep_asides(repo_root)\n"
-    "            written = _write_recipe_file(repo_root, relative_path, data)\n"
-    "            try:\n"
-    "                _stage_and_commit(repo, path, written, data, message)\n"
 )
+STAGE = "                _stage_and_commit(repo, path, written, data, message)\n"
 ACQUIRE = (
     "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n"
     "    if not _REPOSITORY_LOCK.acquire(timeout=PUBLISH_LOCK_WAIT_SECONDS):\n"
@@ -157,9 +158,8 @@ PLANTS = [
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-after-the-write", "the publish flock taken after the recipe file is written: over the "
      "index and the commit only",
-     [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT").replace(
-         "                _stage_and_commit(",
-         "                with _publish_lock(repo, deadline):\n                    _stage_and_commit("))],
+     [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT")),
+      (STAGE, "                with _publish_lock(repo, deadline):  # PLANT\n    " + STAGE)],
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-file-link-followed", "the lock file opened following a link: `O_NOFOLLOW` dropped",
      [("os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC", "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC")],
@@ -235,12 +235,26 @@ PLANTS = [
                 "            early.open_index(config=ConfigFile())\n" + ACQUIRE)],
      [REPO_TESTS], [LOCK_PROBE], "outside the lock: ['index read']"),
     ("refused-left-ahead", "a refused publish leaves its file and index as it wrote them, "
-     "ahead of HEAD (L1.7a's carry)",
-     [("                _put_back_as_head_holds(repo, repo_root, relative_path)\n",
-       "                pass  # PLANT\n")], [REPO_TESTS],
+     "ahead of HEAD (L1.7a's carry): neither put-back called",
+     [(AFTER_WRITE_PUT_BACK, AFTER_WRITE_PUT_BACK.replace(PUT_BACK, "                pass  # PLANT\n")),
+      (AFTER_COMMIT_PUT_BACK, AFTER_COMMIT_PUT_BACK.replace(PUT_BACK, "                pass  # PLANT\n"))],
+     [REPO_TESTS],
      ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it",
       "test_a_new_recipe_refused_is_not_left_on_the_volume",
-      "test_a_failure_after_staging_leaves_nothing_committed"]),
+      "test_a_failure_after_staging_leaves_nothing_committed",
+      "test_a_failure_after_the_rename_is_put_back_too"]),
+    ("after-rename-not-put-back", "a failure after the rename left ahead: that put-back alone removed",
+     [(AFTER_WRITE_PUT_BACK, AFTER_WRITE_PUT_BACK.replace(PUT_BACK, "                pass  # PLANT\n"))],
+     [REPO_TESTS], ["test_a_failure_after_the_rename_is_put_back_too"], "the file is ahead"),
+    ("put-back-file-only", "the file put back, its index entry not: the index half alone removed",
+     [("            index[path] = index_entry_from_stat(written, Blob.from_string(committed).id)\n",
+       "            pass  # PLANT\n")], [REPO_TESTS],
+     ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it",
+      "test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to"]),
+    ("aside-empty-not-ours", "an empty aside not taken as ours: only a .git-only aside swept",
+     [('                ours = sorted(os.listdir(left)) in ([], [".git"])\n',
+       '                ours = sorted(os.listdir(left)) in ([".git"],)  # PLANT\n')], [REPO_TESTS],
+     ["test_an_empty_stale_aside_is_swept"], "an empty stale aside is still there"),
     ("aside-contents-unchecked", "an aside of mkdtemp's shape swept whatever it holds",
      [("                ours = sorted(os.listdir(left)) in ([], [\".git\"])\n",
        "                ours = True  # PLANT\n")], [REPO_TESTS],
