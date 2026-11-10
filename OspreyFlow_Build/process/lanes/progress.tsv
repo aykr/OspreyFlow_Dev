@@ -59,7 +59,7 @@ docs	D2a	M	done 99d927d	README, four guides (architecture new), welcome pages, w
 docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
 docs	D2c	M	todo	The Cloud Platform deployment guide (after P7–P10; ADR-148)
 platform-b	P5b	S	done f8df603	Backups in a folder the administrator names at setup (ADR-114 Am 37)
-studio-b	L1.7a	S	building	The dulwich swap, then the Studio's tips patches after L2.7
+studio-b	L1.7a	S	done 6fae515	The dulwich swap, then the Studio's tips patches after L2.7
 admin	L2.5c	S	done f4eb985	Admin's Delete for a removed case's layer; refusals that name roles
 rules-b	L2.11a	S	building	The rule editor's standards: BPMN 2.0 and DMN, export, import refusal, Show as BPMN (split from L2.11)
 admin	T1	M	building	Faster live test runs: measure, store-only live sets, selection by change, parallel workers, the slow few
