@@ -14,7 +14,7 @@ studio-b	L1.6	L	done	Phase 9: connectors; the screening-list connector and templ
 studio	L1.7	L	building	Phase 10: Operations, external orchestration; Releases as YAML
 studio-b	L1.8	S	done	The Studio's tips and who-can refusals; Domain model wording
 studio-b	L1.9	L	todo	S3 and Athena connectors, by the namespace's IAM role (after P7; ADR-148)
-studio-b	L1.10	S	todo	The deployment's marking ceiling (ADR-148 decision 10)
+studio-b	L1.10	S	building	The deployment's marking ceiling (ADR-148 decision 10)
 glass	L2.1	M	done	The alerts gap map
 glass	L2.2	L	done	Three places: switcher, banner, Home, rail, GOV.UK header
 glass	L2.3	M	done	The case screen's first lightening
@@ -70,3 +70,5 @@ studio-b	tips	S	done	The Studio's tips (L1.8's patches over L2.7) and L1.7a's ca
 admin	T1 p1	S	done	Every server run measured (merged afe3354)
 admin	T1 DDL	S	done	The graph schema applied as one script (merged 2456d2c)
 admin	T1 p3	S	done	The live check by selection (merged 94a74c5)
+case	L3.H1	S	building	A hygiene step: one read-set rule, a home case kept, the run report's drawn-watch count
+platform-b	P5b proof	S	building	ADR-114 Am 38 decision 9's owed live proof of the update path

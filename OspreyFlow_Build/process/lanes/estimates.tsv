@@ -1,12 +1,14 @@
-# as of 2026-11-10T13:29Z
-admin	T1	part 1 merged; batched DDL in proof; parts 2–5 next	DDL ~13:30; 2–3 ~16:00; 4–5 ~11 Nov	A
-studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
-studio	L1.7	operations, releases, carries	~17:00–19:00	A
-rules	L2.11	rule editor (form, draft/test/live, migration), after L2.10	~17:00–18:30	A
-platform	P7	kind proved stores, UIDs, egress; 18 review points, a fresh session from HANDOFF	~11 Nov, midday	B
+# as of 2026-11-10T14:36Z
+studio	L1.7	releases, run API, quotas; make test, then ci and merge	~17:30	A
+rules	L2.11	rule editor built; live, keyboard/axe/ci, make test, merge	~17:30	A
+docs	D2b	the decks, after L2.11	~19:30	A
+orchestrator	release	your deployment rebuilt; product repo published	~21:00	A
+case	L3.H1	read-set rule, home case kept; live check, merge	~16:30	A
+admin	T1	parts 1, 3, 2a, batch merged; marks, parallel, sleeps	11 Nov	A
+studio-b	L1.10	marking ceiling: entry points built; packs, gates	~18:00	B
+platform-b	P5b proof	the owed live update proof, run 2	~15:30	B
+platform	P7	fresh session from HANDOFF; ConfigMap, review points	~11 Nov, midday	B
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
-studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning	B
-docs	D2b	decks, after L2.11	~11 Nov, morning	A
+studio-b	L1.9	S3 and Athena, after P7	~11 Nov, afternoon	B
 docs	D2c	Cloud Platform guide, after P10	~12 Nov	B
 platform	P11	held until the client asks for AI	—	B
-orchestrator	release	refresh your deployment, publish the product repo	after Track A, ~21:30	A
