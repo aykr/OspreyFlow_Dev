@@ -873,27 +873,37 @@ async def test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to
 
     def with_a_rival(*args: object, **kwargs: object) -> object:
         made = real(*args, **kwargs)  # type: ignore[arg-type]
-        # The rival's own bytes, staged and committed by real git over ours in the window.
-        (repo / "recipes" / "alpha.yaml").write_text("version: theirs\n")
-        _git(repo, "add", "recipes/alpha.yaml")
+        # The rival commits its own bytes through git's plumbing, never touching the working
+        # tree, so the file still holds this publish's bytes when it is refused: only a put-back
+        # that reads the current `HEAD` (not the parent read at the start) gives the rival's.
+        theirs = subprocess.run(
+            [GIT, "hash-object", "-w", "--stdin"], cwd=repo, input="version: theirs\n",
+            capture_output=True, text=True, check=True,
+            env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
+        ).stdout.strip()  # fmt: skip
+        _git(repo, "update-index", "--cacheinfo", f"100644,{theirs},recipes/alpha.yaml")
         _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost",
              "commit", "-q", "-m", "theirs")  # fmt: skip
+        assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 2\n"
         return made
 
     monkeypatch.setattr(studio_publish, "commit_tree_changes", with_a_rival)
     with pytest.raises(GitCommitError):
         await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
 
-    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: theirs\n"
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: theirs\n", (
+        "the file went back to the parent read at the start, not to the current HEAD"
+    )
     assert _git(repo, "status", "--porcelain") == ""
 
 
 @needs_git
-async def test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it(
+async def test_a_head_that_is_not_a_commit_is_refused_before_the_write(
     tmp_path: Path,
 ) -> None:
-    """When `HEAD` cannot be read as a commit (an annotated tag, say), what it holds is unknown:
-    the put-back leaves the file rather than removing a recipe that may be published."""
+    """When `HEAD` cannot be read as a commit (an annotated tag, say), the publish is refused
+    before anything is written (the lane review's minor): what `HEAD` holds is unknown, so a
+    write there could be neither committed nor put back."""
     repo = tmp_path / "repo"
     await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
     _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost",
@@ -901,10 +911,35 @@ async def test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_
     tag = _git(repo, "rev-parse", "v1").strip()
     (repo / ".git" / "HEAD").write_text(tag + "\n")
 
-    with pytest.raises(GitCommitError):
+    with pytest.raises(GitCommitError) as raised:
         await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
 
-    assert (repo / "recipes" / "alpha.yaml").exists(), "a recipe was removed for want of a commit"
+    assert "not a commit" in str(raised.value)
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 1\n", "written before"
+
+
+@needs_git
+async def test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """When `HEAD` holds a directory where the recipe's file goes, it holds no file to put back,
+    and a tree must never be written as the recipe: the put-back leaves the file as written and
+    says why."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "--initial-branch=main")
+    (repo / "recipes" / "alpha.yaml").mkdir(parents=True)
+    (repo / "recipes" / "alpha.yaml" / "inside").write_text("a file in a directory\n")
+    _git(repo, "add", "recipes")
+    _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost", "commit", "-q", "-m", "d")
+    shutil.rmtree(repo / "recipes" / "alpha.yaml")
+    _fail_commit(monkeypatch)
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
+
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"id: alpha\n", "a tree was written"
+    assert "HEAD holds no file there" in caplog.text
 
 
 @needs_git
@@ -967,3 +1002,28 @@ async def test_an_empty_stale_aside_is_swept(tmp_path: Path) -> None:
     await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
 
     assert not empty.exists(), "an empty stale aside is still there"
+
+
+async def test_the_first_use_sweep_runs_under_the_in_process_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-140 Amendment 18 decision 3: at first use the stale aside is swept under the
+    in-process lock, before the `flock`'s file exists (it lives in the `.git` not yet made); by
+    every later publish, under both."""
+    seen: list[tuple[bool, bool]] = []
+    real = studio_publish._sweep_asides
+    root = tmp_path / "fresh"
+
+    def probed(repo_root: Path) -> None:
+        lock_file = repo_root / ".git" / studio_publish.PUBLISH_LOCK_NAME
+        seen.append((studio_publish._REPOSITORY_LOCK.locked(), lock_file.exists()))
+        real(repo_root)
+
+    monkeypatch.setattr(studio_publish, "_sweep_asides", probed)
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=root)
+
+    first_use, after = seen[0], seen[-1]
+    assert first_use == (True, False), (
+        f"the first-use sweep ran with (lock, flock file) {first_use}"
+    )
+    assert after == (True, True), f"the later sweep ran with (lock, flock file) {after}"
