@@ -55,8 +55,10 @@ EOF
     docker exec "$node" mkdir -p /etc/containerd/certs.d/localhost:5001
     printf '[host."http://%s:5000"]\n' "$NAME-registry" | docker exec -i "$node" cp /dev/stdin /etc/containerd/certs.d/localhost:5001/hosts.toml
   done
-  # 8 GB together: 4 GB a node.
+  # 8 GB together: 4 GB a node, and pods on both (the worker alone could not hold Keycloak's own
+  # build beside the rest: it was killed, exit 137, mid-build).
   for node in $(kind get nodes --name "$NAME"); do docker update --memory 4g --memory-swap 4g "$node" >/dev/null; done
+  kubectl taint nodes "$NAME-control-plane" node-role.kubernetes.io/control-plane:NoSchedule- 2>/dev/null || true
   # Calico, by its operator, with its API server (projectcalico.org/v3 policies).
   kubectl create -f "https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/tigera-operator.yaml" 2>/dev/null || true
   kubectl wait --for=condition=Established crd/installations.operator.tigera.io --timeout=120s
@@ -128,10 +130,13 @@ from harness.render import load_config, render
 config, out, mode = load_config(Path(sys.argv[1])), Path(sys.argv[2]), sys.argv[3]
 # kind alone: every image is pinned by the digest the cluster's registry holds for its copy (seeded
 # from this server's Docker, whose push writes its own manifest), never Docker Hub's.
-def in_kind_registry(ref):
-    first, _, rest = ref.split("@")[0].partition("/")
-    path = rest if rest and ("." in first or ":" in first or first == "localhost") else ref.split("@")[0]
-    return "localhost:5001/" + path
+from harness.cloud_platform import _in_registry
+def in_kind_registry(ref):  # the copy's name as `seed_theirs` pushed it: an untagged one by its digest's tag
+    reference, _, digest = ref.partition("@")
+    target = _in_registry(reference, "localhost:5001")
+    if ":" not in reference.rsplit("/", 1)[-1] and digest:
+        target += ":sha256-" + digest.removeprefix("sha256:")[:12]
+    return target
 resolver = (lambda ref: registry_digest_resolver(in_kind_registry(ref))) if mode == "registry" else (lambda ref: None)
 # An image of ours skipped (SKIP_OURS) is left unpinned on kind, and its pod cannot pull: said so.
 import os
@@ -158,6 +163,15 @@ standins() {
       -extfile "$c/san" -out "$c/tls.crt" 2>/dev/null
     kubectl -n platform-managed create secret generic standin-tls --from-file="$c/tls.crt" --from-file="$c/tls.key" --from-file="$c/ca.crt"
     kubectl -n "$NS" create secret generic standin-ca --from-file="$c/ca.crt"
+  fi
+  # The Ingress's certificate for the deployment's three names, by the same CA (the acceptance run trusts it).
+  if ! kubectl -n "$NS" get secret osprey-p7-tls >/dev/null 2>&1; then
+    c="$HOME/osprey-runs/platform.tools/standin-ca"
+    openssl req -newkey rsa:2048 -nodes -subj "/CN=ospreyflow.p7.test" -keyout "$c/door.key" -out "$c/door.csr" 2>/dev/null
+    printf 'subjectAltName=DNS:ospreyflow.p7.test,DNS:id.ospreyflow.p7.test,DNS:bi.ospreyflow.p7.test' > "$c/door.san"
+    openssl x509 -req -in "$c/door.csr" -CA "$c/ca.crt" -CAkey "$c/ca.key" -CAcreateserial -days 7 \
+      -extfile "$c/door.san" -out "$c/door.crt" 2>/dev/null
+    kubectl -n "$NS" create secret tls osprey-p7-tls --cert="$c/door.crt" --key="$c/door.key"
   fi
   # Their images, and the egress probe's, from the cluster's registry (Docker Hub's limit refuses the nodes).
   for i in postgres:16.4 valkey/valkey:8.0 chrislusf/seaweedfs:4.48 busybox:1.36; do
@@ -257,9 +271,10 @@ identity() {  # what a cluster's install does once Keycloak answers, and this pr
     kubectl -n "$NS" rollout status deployment/keycloak --timeout=600s
   PYTHONPATH=.:packages .venv/bin/python - "$CONFIG" "$NS" <<'PY'
 import base64, json, subprocess, sys
+from pathlib import Path
 from harness.cluster_install import SystemKube, _configure_identity
 from harness.render import load_config
-config, namespace = load_config(sys.argv[1]), sys.argv[2]
+config, namespace = load_config(Path(sys.argv[1])), sys.argv[2]
 data = json.loads(subprocess.run(["kubectl", "-n", namespace, "get", "secret", "ospreyflow-secrets",
                                   "-o", "jsonpath={.data}"], check=True, capture_output=True, text=True).stdout)
 values = {k: base64.b64decode(v).decode() for k, v in data.items()}
@@ -291,7 +306,21 @@ check() {
      nc -z -w 5 arcadedb.'"$NS"'.svc.cluster.local 2480 && echo "PASS own arcadedb reached" || echo "FAIL own arcadedb refused"'
 }
 
+accept() {  # the acceptance scenarios through the Ingress (the exit's third line), after deploy and identity
+  local env="$HOME/osprey-runs/platform.tools/acceptance.env" ip
+  for d in api worker workspace; do kubectl -n "$NS" rollout status "deployment/$d" --timeout=600s; done
+  PYTHONPATH=.:packages .venv/bin/python "$HERE/p7_kind_acceptance.py" "$CONFIG" "$NS" "$env"
+  ip=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$NAME-control-plane")
+  set -a; . "$env"; set +a
+  OSPREY_TEST_OVER_THE_WIRE=1 OSPREY_WORKSPACE_ORIGIN=https://ospreyflow.p7.test \
+    OSPREY_KEYCLOAK_ORIGIN=https://id.ospreyflow.p7.test P7_INGRESS_IP="$ip" \
+    P7_CA_FILE="$HOME/osprey-runs/platform.tools/standin-ca/ca.crt" PYTHONPATH=".:packages:$HERE" \
+    .venv/bin/python -m pytest -p p7_kind_door -p no:randomly -rA -q \
+    ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py
+}
+
 case "${1:-}" in
   up) up ;; down) down ;; status) status ;; tools) tools ;; deploy) deploy ;; identity) identity ;; check) check ;;
-  *) echo "usage: p7_kind.sh up|down|status|tools|deploy|identity|check" >&2; exit 2 ;;
+  accept) accept ;;
+  *) echo "usage: p7_kind.sh up|down|status|tools|deploy|identity|check|accept" >&2; exit 2 ;;
 esac

@@ -10,3 +10,18 @@ cloud_platform:
   namespace: ospreyflow-dev
   environment: development
   registry: localhost:5001
+  # The Ingress's certificate, signed by the stand-in CA for the three names (p7_kind.sh standins).
+  tls_secret: osprey-p7-tls
+# The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+map:
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "\xA9 OpenStreetMap contributors"
