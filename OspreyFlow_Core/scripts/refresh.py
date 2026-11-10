@@ -44,10 +44,14 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterator, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 from harness import ingest_uploads, model_downloads, register_sign_in, store_volumes
@@ -105,6 +109,63 @@ def _register(argv: list[str]) -> int:
 #: ADR-138: the folder of a deployment kept under `~/.ospreyflow/deployments/<name>/`, which the
 #: `ospreyflow` command names when it runs this (or a seed) for a deployment chosen with `--name`.
 DEPLOYMENT_DIR_VARIABLE = "OSPREYFLOW_DEPLOYMENT_DIR"
+
+
+#: How recent a rollback point marks a deployment as the one an update is moving.
+_UPDATE_IN_PROGRESS_SECONDS = 3600
+#: The rollback point `harness.update` keeps in the deployment's own folder just before its files
+#: step, as v0.4.12 wrote it (964a2a9, `harness/update.py` lines 278-287, called at line 430):
+#: `rollback/<version>-<UTC %Y%m%dT%H%M%SZ>/`, holding `.commit`.
+_ROLLBACK_POINT = re.compile(r"^.+-(\d{8}T\d{6}Z)$")
+
+
+def _newest_rollback_point(folder: Path) -> datetime | None:
+    points = folder / "rollback"
+    stamps = []
+    for point in points.iterdir() if points.is_dir() else []:
+        made = _ROLLBACK_POINT.match(point.name)
+        if made and (point / ".commit").is_file():
+            try:
+                stamp = datetime.strptime(made.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+            except ValueError:  # a stamp no clock writes (month 13): not v0.4.12's point
+                continue
+            stamps.append(stamp)
+    return max(stamps, default=None)
+
+
+def _being_updated(repo_root: Path) -> list[Path]:
+    """The rendered deployments, the checkout's own and those kept by name (ADR-138), whose newest
+    rollback point was made in the last hour: the one an update from an earlier release is moving,
+    whose `update` (v0.4.12's among them) names no deployment to `--files-only` (the rehearsal, 10
+    November 2026)."""
+    roots = [repo_root / "deploy" / "generated", Path.home() / ".ospreyflow" / "deployments"]
+    now = datetime.now(UTC)
+    found = []
+    for root in roots:
+        for compose in sorted(root.glob("[!.]*/compose.yaml")) if root.is_dir() else []:
+            newest = _newest_rollback_point(compose.parent)
+            age = (now - newest).total_seconds() if newest is not None else -1.0
+            if 0 <= age < _UPDATE_IN_PROGRESS_SECONDS:  # a future stamp is no update under way
+                found.append(compose.parent)
+    return found
+
+
+def _for_an_update(repo_root: Path) -> None:
+    """`--files-only` given no deployment (`OSPREYFLOW_DEPLOYMENT_DIR`): the one being updated, if
+    one is; refused, naming them, if several are; otherwise as before."""
+    if os.environ.get(DEPLOYMENT_DIR_VARIABLE):
+        return
+    moving = _being_updated(repo_root)
+    if len(moving) == 1:
+        os.environ[DEPLOYMENT_DIR_VARIABLE] = str(moving[0])
+    elif len(moving) > 1:
+        raise RefreshFailed(
+            "More than one deployment has an update under way ("
+            + ", ".join(str(p) for p in moving)
+            + "), so this refresh cannot tell which to bring up to date; nothing was changed. "
+            "Check out the version you are moving to, then update one at a time with "
+            "`ospreyflow update --name <deployment>`, which names it to this step."
+        )
 
 
 def _deployment_dir(repo_root: Path) -> Path:
@@ -260,6 +321,91 @@ def _like_the_deployment(config: OspreyConfig, services: dict, directory: Path) 
     return config
 
 
+#: ADR-135 Amendment 2's gateway secrets, which only `harness.apply` mints.
+_GATEWAY_SECRETS = (
+    "OSPREY_LITELLM_MASTER_SECRET",
+    "OSPREY_LITELLM_SALT_SECRET",
+    "OSPREY_LITELLM_DB_PASSWORD",
+)
+
+
+def _named(directory: Path) -> str:
+    """` --name <deployment>`: one kept by name (ADR-138), or `default`, the checkout's own, so the
+    words never fall to "the only one, or the one last used" on a machine with several."""
+    return f" --name {directory.name if directory.parent.name == 'deployments' else 'default'}"
+
+
+def before_the_gateway_database(directory: Path) -> str:
+    """ADR-114 Amendment 39's words, on one line (`update` reports the last line its files step
+    prints): the route the v0.5.0 upgrade rehearsal proved, nothing done by refresh itself."""
+    n = _named(directory)
+    return (
+        "This deployment was rendered before the model gateway kept its own database (ADR-135 "
+        "Amendment 2), which a refresh cannot bring it to, so nothing was changed. With the "
+        "checkout at the version you are moving to (git checkout <its tag>), run "
+        f"`ospreyflow backup{n}`, then `ospreyflow apply{n}` (it keeps every secret and an install "
+        f"from a release on its own images), then `ospreyflow update{n}` and `ospreyflow apply{n}` "
+        "once more for an install from a release (the second apply moves the providers' keys into "
+        f"the gateway), or `ospreyflow start --build{n}` for one built from a checkout."
+    )
+
+
+def _unset_required(directory: Path) -> list[str]:
+    """Each name the compose file requires (`${NAME:?...}`) that `deployment.env` holds no value
+    for: Compose refuses every command on such a file. Names only, never a value."""
+    compose = (directory / "compose.yaml").read_text(encoding="utf-8")
+    required = set(re.findall(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*):?\?", compose))
+    held: dict[str, str] = {}
+    env_path = directory / "deployment.env"
+    for line in env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []:
+        name, sep, value = line.partition("=")
+        if sep and not name.startswith("#"):
+            held[name.strip()] = value.strip()
+    return sorted(name for name in required if held.get(name, "") in ("", '""', "''"))
+
+
+def _predates_the_gateway_database(directory: Path) -> bool:
+    """Whether the deployment's gateway is as rendered before ADR-135 Amendment 2: a `litellm`
+    service with no `LITELLM_SALT_KEY` (v0.4.12's held a fixed master key and no database)."""
+    compose_path = directory / "compose.yaml"
+    if not compose_path.is_file():
+        return False
+    document = yaml.safe_load(compose_path.read_text(encoding="utf-8")) or {}
+    gateway = (document.get("services") or {}).get("litellm")
+    if not isinstance(gateway, dict):
+        return False
+    environment = gateway.get("environment") or {}
+    if isinstance(environment, list):
+        names = {str(item).partition("=")[0] for item in environment}
+    else:
+        names = set(environment)
+    return "LITELLM_SALT_KEY" not in names
+
+
+def _named_volumes_declared(document: dict[str, Any], rendered: dict[str, Any]) -> bool:
+    """Every named volume a service mounts declared at the top level, as the render declares it: a
+    mount `_new_services_added` gives the Conduit (`map-settings`, `model-settings`) names one a
+    deployment rendered before it lacks, and Compose refuses the whole project (the v0.5.0 upgrade
+    rehearsal). Says whether anything was added."""
+    declared = dict(document.get("volumes") or {})
+    wanted = rendered.get("volumes") or {}
+    added = False
+    for service in (document.get("services") or {}).values():
+        mounts = (service.get("volumes") or []) if isinstance(service, dict) else []
+        for volume in mounts:
+            if isinstance(volume, dict):  # the long syntax: only a named volume's source
+                source = str(volume.get("source") or "") if volume.get("type") == "volume" else ""
+            else:
+                source = str(volume).split(":", 1)[0] if ":" in str(volume) else ""
+            if not source or source.startswith((".", "/", "~", "$")) or source in declared:
+                continue
+            declared[source] = wanted.get(source) or {"driver": "local"}
+            added = True
+    if added:
+        document["volumes"] = declared
+    return added
+
+
 def _new_services_added(directory: Path) -> None:
     """Brings in what a render of this checkout has and the deployment does not (ADR-098: the
     recogniser): each new service, and each new setting of the Conduit's. Nothing the deployment
@@ -275,9 +421,10 @@ def _new_services_added(directory: Path) -> None:
     document = yaml.safe_load(text)
     services = document.setdefault("services", {})
     config = _like_the_deployment(config, services, directory)
-    rendered = yaml.safe_load(
+    rendered_document = yaml.safe_load(
         _render_compose(config, service_images(config, build_context=_build_context(services)))
-    )["services"]
+    )
+    rendered = rendered_document["services"]
     changed = False
     layout = _on_the_internal_network(document)
     left_out = []
@@ -314,6 +461,8 @@ def _new_services_added(directory: Path) -> None:
             if key not in environment:
                 environment[key] = value
                 changed = True
+    if _named_volumes_declared(document, rendered_document):
+        changed = True
     if changed:
         body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
@@ -554,7 +703,81 @@ def _release_registry(directory: Path) -> Iterator[None]:
             os.environ["OSPREY_IMAGE_REGISTRY"] = before
 
 
+#: What the files pass writes: these top-level files, the sign-in theme and `state/`. Staged
+#: copies of these alone (a folder from before ADR-114 Amendment 35 may hold store data).
+_STAGED_FOLDERS = (THEME_DIRECTORY,)
+
+
 def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
+    """ADR-114 Amendment 39: the files pass runs on a staged copy beside the deployment, and only a
+    result Compose can interpolate is moved into place; a refusal changes nothing in the folder."""
+    if _predates_the_gateway_database(directory):
+        raise RefreshFailed(before_the_gateway_database(directory))
+    stage = directory.parent / f".{directory.name}.refresh-staging"
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(mode=0o700)  # private before anything is copied in: it holds deployment.env
+    stage.chmod(0o700)  # whatever the umask took off
+    try:
+        for path in directory.iterdir():
+            if path.is_file() and not path.is_symlink():
+                shutil.copy2(path, stage / path.name)
+            elif path.name in _STAGED_FOLDERS and path.is_dir():
+                shutil.copytree(path, stage / path.name, symlinks=True)
+        changed = _files_up_to_date_in(stage, repo_root)
+        missing = _unset_required(stage)
+        if missing:
+            gateway = any(name in _GATEWAY_SECRETS for name in missing)
+            raise RefreshFailed(
+                before_the_gateway_database(directory)
+                if gateway
+                else "This checkout's compose file requires "
+                + ", ".join(missing)
+                + ", which deployment.env does not hold, so nothing was changed. Run `ospreyflow "
+                + f"apply{_named(directory)}` with the checkout at the version you are moving to."
+            )
+        # Into place: each changed file renamed over its old one (the stage is beside the
+        # deployment, so on its file system, and a rename is all or nothing), `deployment.env` last,
+        # so an interruption leaves whole files, old or new, and the secrets as they were.
+        # A file a service mounts on its own (`./glass.json:…`) is written in place instead: a
+        # rename gives it a new inode, and the running container would keep the old one (the
+        # workspace serves `glass.json` per visit, and nothing restarts it). None holds a secret.
+        mounted = _mounted_files(stage)
+        files = sorted(
+            (p for p in stage.iterdir() if p.is_file()), key=lambda p: p.name == "deployment.env"
+        )
+        for path in files:
+            target = directory / path.name
+            if target.is_file() and target.read_bytes() == path.read_bytes():
+                continue
+            if path.name in mounted and target.is_file():
+                with target.open("r+b") as handle:
+                    handle.write(path.read_bytes())
+                    handle.truncate()
+            else:
+                os.replace(path, target)
+        for path in stage.iterdir():
+            if path.is_dir() and path.name in _STAGED_FOLDERS:
+                shutil.copytree(path, directory / path.name, symlinks=True, dirs_exist_ok=True)
+            elif path.is_dir():
+                (directory / path.name).mkdir(exist_ok=True)
+        return changed
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
+def _mounted_files(directory: Path) -> set[str]:
+    """The top-level files of `directory` a service of its compose file mounts on their own."""
+    document = yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {}
+    names = set()
+    for service in (document.get("services") or {}).values():
+        for volume in (service.get("volumes") or []) if isinstance(service, dict) else []:
+            source = volume.get("source") if isinstance(volume, dict) else str(volume).split(":")[0]
+            if isinstance(source, str) and source.startswith("./") and "/" not in source[2:]:
+                names.add(source[2:])
+    return names
+
+
+def _files_up_to_date_in(directory: Path, repo_root: Path) -> dict[str, bool]:
     theme_changed = _theme_changed(directory, repo_root)
     proxy_changed = _models_up_to_date(directory)
     _new_services_added(directory)
@@ -653,8 +876,9 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["--files-only"]:
         try:
+            _for_an_update(repo_root)
             changed = files_up_to_date(repo_root)
-        except NothingToRefresh as error:
+        except (NothingToRefresh, RefreshFailed) as error:
             print(f"refresh: {error}", file=sys.stderr)
             return 1
         print(json.dumps(changed, sort_keys=True))

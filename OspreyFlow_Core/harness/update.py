@@ -23,11 +23,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -616,10 +617,16 @@ def _roll_back(
     return 1
 
 
-def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]:
+#: How `scripts.refresh` is told the deployment to act on (its `DEPLOYMENT_DIR_VARIABLE`).
+DEPLOYMENT_DIR = "OSPREYFLOW_DEPLOYMENT_DIR"
+
+
+def _subprocess(
+    argv: Sequence[str], cwd: Path | None = None, env: Mapping[str, str] | None = None
+) -> tuple[int, str]:
     try:
         done = subprocess.run(
-            list(argv), capture_output=True, text=True, check=False, cwd=cwd, timeout=7200
+            list(argv), capture_output=True, text=True, check=False, cwd=cwd, timeout=7200, env=env
         )
     except (OSError, subprocess.SubprocessError) as failed:
         return 1, str(failed)
@@ -677,8 +684,15 @@ def real_host(
                        *pointed, "--yes"], "restore the backup")  # fmt: skip
 
     def files() -> dict[str, bool]:
+        # The deployment named to refresh, never left for it to find (ADR-114 Amendment 39): a
+        # deployment kept by name is not the checkout's own (ADR-138).
+        def run_here(argv: Sequence[str]) -> tuple[int, str]:
+            return _subprocess(argv, cwd=repo, env={**os.environ, DEPLOYMENT_DIR: str(directory)})
+
         said = _ok_real(
-            run, [*python, "-m", "scripts.refresh", "--files-only"], "bring the files up to date"
+            run_here,
+            [*python, "-m", "scripts.refresh", "--files-only"],
+            "bring the files up to date",
         )
         changed = json.loads(said.splitlines()[-1])
         return {str(k): bool(v) for k, v in changed.items()}
