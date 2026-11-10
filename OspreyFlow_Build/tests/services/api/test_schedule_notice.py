@@ -7,18 +7,28 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from services.api.alert_queue import monitoring_queue
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
 from services.api.scheduler import schedule_notice
-from services.api.alert_queue import monitoring_queue
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
-
 from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 NOW = datetime(2026, 6, 2, 5, tzinfo=UTC)
+
+
+class _NothingReadable:
+    """A graph in which the reader may read nothing: a queued alert citing any node or link is left
+    out whole, so only an alert citing none, as the notice, can be listed."""
+
+    async def get_nodes(self, ids: object, reader: object) -> list[object]:
+        return []
+
+    async def get_edges(self, ids: object, reader: object) -> list[object]:
+        return []
 
 
 def _recipe(case: str) -> StudioRecipeDraft:
@@ -42,12 +52,14 @@ async def test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queu
         assert await store.list_case_queue(case, reader) == []
         # L2.10 (ADR-146 decision 1): the inbox went into the one queue, which shows the notice to
         # its owner, with its words and no referent, and to no one else in the case.
-        (queued,) = await monitoring_queue(store, None, NO_TRANSACTIONS, case, reader)  # type: ignore[arg-type]
+        (queued,) = await monitoring_queue(store, _NothingReadable(), NO_TRANSACTIONS, case, reader)  # type: ignore[arg-type]
         assert queued.alert.id == notice.id
         assert queued.alert.words == "The scheduled run of Daily export was refused: x"
-        assert queued.alert.rule_id == f"schedule:{recipe.recipe_id}" and queued.alert.referent_node_ids == []
+        assert queued.alert.rule_id == f"schedule:{recipe.recipe_id}"
+        assert queued.alert.referent_node_ids == []
         someone_else = reader.model_copy(update={"id": f"other-{new_id()}"})
         assert await store.list_authorized(someone_else) == []
-        assert await monitoring_queue(store, None, NO_TRANSACTIONS, case, someone_else) == []  # type: ignore[arg-type]
+        nothing = _NothingReadable()
+        assert await monitoring_queue(store, nothing, NO_TRANSACTIONS, case, someone_else) == []  # type: ignore[arg-type]
     finally:
         await store.close()

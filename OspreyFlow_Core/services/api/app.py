@@ -14799,7 +14799,16 @@ async def reject_rule_change(
     people who may approve it."""
     if not await typology_rules.waits_to_go_live(rule_id, investigation.id, principal):
         _require_administrator(principal)
-    rule = await typology_rules.reject(rule_id, investigation.id, principal, body.reason)
+    try:
+        rule = await typology_rules.reject(rule_id, investigation.id, principal, body.reason)
+    except OwnChangeRefused as refused:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "own_change",
+                "message": f"{str(refused)[0].upper()}{str(refused)[1:]}.",
+            },
+        ) from refused
     await audit.record(
         principal=principal,
         action="rule_change_rejected",
