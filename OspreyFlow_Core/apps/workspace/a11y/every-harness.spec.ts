@@ -108,12 +108,14 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
   // ADR-143 Amendment 2 decision 6 (L3.9): the Studio's Merge into a dataset… with its sheet open (the
   // mapping with a type the target lacks, a match, the checks), after the dry run, after the merge, for
-  // a second-person target.
+  // a second-person target, and with a type mapped onto another (Amendment 7).
   "drawn-merge-harness.html": [
     "choose=src&press=Map%20and%20match",
     "choose=src&press=Map%20and%20match%7CDry%20run",
     "choose=src&press=Map%20and%20match%7CDry%20run%7C4.%20Merge",
     "choose=src&policy=second_person_reviews&press=Map%20and%20match",
+    // Amendment 7: a drawn type mapped onto another of the target's types, its property places drawn.
+    "choose=src&press=Map%20and%20match&map=Organisation",
   ],
   // ADR-143 decision 9 (L3.5): the Model tab's proposals block with its decision form, the form's
   // error summary, and as the proposer.

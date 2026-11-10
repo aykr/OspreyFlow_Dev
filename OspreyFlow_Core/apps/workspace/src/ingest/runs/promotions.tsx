@@ -197,7 +197,8 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
               <div key={i.element_id} className={govuk ? "govuk-summary-list__row" : "board__summary-row"}>
                 <dt className={govuk ? "govuk-summary-list__key" : "label"}>{i.label}</dt>
                 <dd className={govuk ? "govuk-summary-list__value" : undefined}>
-                  {i.type}, {i.marking}
+                  {i.type}
+                  {i.goes_in_as ? ` (goes in as a new ${i.goes_in_as})` : ""}, {i.marking}
                   {i.grading ? `, graded ${i.grading}` : ""}
                   {i.source_note ? ` — ${i.source_note}` : ""}
                 </dd>

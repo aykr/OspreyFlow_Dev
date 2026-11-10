@@ -4,7 +4,9 @@
 // answering as the merge routes do for an Author of the target holding `merge_datasets`
 // (`?policy=second_person_reviews` for a target that asks a second person; once merged it answers
 // 404 for the drawing, as the Studio's gate does). `?choose=src` chooses the target once drawn, and `?press=<button text>`
-// presses buttons in turn ("|" between), for the axe scan of each step. What was sent is on
+// presses buttons in turn ("|" between), for the axe scan of each step; `?map=Organisation` maps the
+// drawn Vessel onto the target's Organisation once the merge is open (Amendment 7), so its property
+// places are drawn. What was sent is on
 // `window.__DRAWN_MERGE__`.
 import { createRoot } from "react-dom/client";
 
@@ -36,20 +38,27 @@ const item = (id: string, type: string, label: string, problems: string[] = []):
   source: null, target: null, problems,
 });  // prettier-ignore
 const LACKS = "Vessel is not a type of Prison intel's model.";
+const CHOICES = ["Organisation", "Person"];
 const sheet = {
   drawn_dataset_id: "d-night", drawn_name: "Night visits", target_dataset_id: "src", target_name: "Prison intel",
   highest_marking: "OFFICIAL-SENSITIVE", policy,
   mapping: [
-    { kind: "node", drawn_type: "Person", target_type: "Person", items: 2, why_not: null },
-    { kind: "node", drawn_type: "Vessel", target_type: null, items: 1,
-      why_not: `${LACKS} Its items are left out and stay on the drawing; propose the type on Prison intel's Model tab to merge them later.` },
+    { kind: "node", drawn_type: "Person", target_type: "Person", items: 2, why_not: null, choices: CHOICES,
+      drawn_properties: ["family_name"] },
+    { kind: "node", drawn_type: "Vessel", target_type: null, items: 1, choices: CHOICES, drawn_properties: ["flag", "name"],
+      why_not: `${LACKS} Map it onto one of its types, or its items are left out and stay on the drawing; propose the type on Prison intel's Model tab to merge them later.` },
+  ],
+  target_types: [
+    { kind: "node", name: "Organisation", properties: ["org_ref", "name", "country"], required: [] },
+    { kind: "node", name: "Person", properties: ["family_name", "given_names"], required: ["family_name"] },
   ],
   matches: [{ drawn: "e-i-1", drawn_label: "Mercer", loaded: "p-loaded", loaded_label: "Mercer", loaded_type: "Person", score: 1, why: "a name alike" }],
   more_matches: false,
-  items: [item("i-1", "Person", "Mercer"), item("i-2", "Person", "Unknown male “Tall”"), item("i-3", "Vessel", "Night boat", [LACKS])],
+  // A type mapped onto none is said at Map and left out by the merge, never a problem of its items.
+  items: [item("i-1", "Person", "Mercer"), item("i-2", "Person", "Unknown male “Tall”"), item("i-3", "Vessel", "Night boat")],
   checks: [
     { name: "marking", passed: true, words: "Every marking within Prison intel's highest allowed, OFFICIAL-SENSITIVE" },
-    { name: "types", passed: false, words: "Every type in Prison intel's model: 1 not" },
+    { name: "types", passed: true, words: "Every type in Prison intel's model" },
   ],
   recorded_as: "One load into Prison intel (trigger drawn_merge), committed at once (the Author promotes).",
 };  // prettier-ignore
@@ -74,10 +83,15 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     });  // prettier-ignore
   }
   if (rest === "merge-sheet" && url.searchParams.get("target") === "src") return json(200, sheet);
-  const ticked = ((body?.item_ids as string[]) ?? []).filter((i) => i !== "i-3");
+  // As the Conduit: the Vessel goes as the type it is mapped onto, a new item; mapped onto none, it is
+  // left out with Map's reason.
+  const vessel = ((body?.mapping as Json[]) ?? []).find((m) => m.drawn_type === "Vessel")?.target_type ?? null;
+  const ticked = ((body?.item_ids as string[]) ?? []).filter((i) => i !== "i-3" || vessel !== null);
+  const retyped = vessel !== null && ticked.includes("i-3") ? 1 : 0;
+  const leftOut = vessel === null ? [{ item_id: "i-3", label: "Night boat", why: "Its type, Vessel, goes into no type of Prison intel (Map): it stays on the drawing, read-only." }] : [];
   const matches = ((body?.matches as unknown[]) ?? []).length;
   if (rest === "merges/dry-run" && method === "POST") {
-    return json(200, { target_dataset_id: "src", nodes: ticked.length, links: 0, matches, left_out: [{ item_id: "i-3", label: "Night boat", why: LACKS }], recorded_as: "" });
+    return json(200, { target_dataset_id: "src", nodes: ticked.length, links: 0, matches, retyped, left_out: leftOut, recorded_as: "" });
   }
   if (rest === "merges" && method === "POST") {
     merged = policy === "author_promotes";
@@ -85,7 +99,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
       id: "m-1", load_id: "promotion-night-1", trigger: "drawn_merge", dataset_id: "src", dataset_name: "Prison intel", case_id: "h-night",
       case_name: "Night visits", board_id: null, proposed_by: "dana", proposed_by_name: "D. Engineer", proposed_at: "2026-11-09T09:00:00Z",
       status: policy === "author_promotes" ? "committed" : "awaiting_review", nodes: ticked.length, links: 0,
-      left_out: [{ item_id: "i-3", label: "Night boat", why: LACKS }], may_review: false, why_not: null, revert_command: null,
+      left_out: leftOut, may_review: false, why_not: null, revert_command: null,
     });  // prettier-ignore
   }
   return json(404, {});
@@ -97,6 +111,7 @@ const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
 const choose = params.get("choose");
+let map = params.get("map");
 const presses = (params.get("press") ?? "").split("|").filter(Boolean);
 const step = () => {
   const select = document.querySelector<HTMLSelectElement>("#drawn-merge-target");
@@ -104,6 +119,14 @@ const step = () => {
     const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
     set.call(select, choose);
     select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  const rows = Array.from(document.querySelectorAll<HTMLSelectElement>("select[id^=drawn-merge-type-]"));
+  const vesselRow = rows.find((r) => r.labels?.[0]?.textContent?.startsWith("Vessel"));
+  if (map && vesselRow) {
+    const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+    set.call(vesselRow, map);
+    vesselRow.dispatchEvent(new Event("change", { bubbles: true }));
+    map = null;
   }
   const name = presses[0];
   if (name && (!choose || select?.value === choose)) {
@@ -113,7 +136,7 @@ const step = () => {
       button.click();
     }
   }
-  if (presses.length > 0 || (choose && select?.value !== choose)) requestAnimationFrame(step);
+  if (presses.length > 0 || map || (choose && select?.value !== choose)) requestAnimationFrame(step);
 };
 requestAnimationFrame(step);
 

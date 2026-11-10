@@ -93,6 +93,10 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
         { element_id: "n-a", kind: "node", type: "Person", label: "Unknown male “Tall”", marking: "OFFICIAL", grading: "B21", source_note: "Wing officer report, 4 Nov" },
         { element_id: "n-b", kind: "node", type: "Vehicle", label: "Blue van", marking: "OFFICIAL", grading: "C32", source_note: "Gate log" },
         { element_id: "e-c", kind: "link", type: "ASSOCIATE_OF", label: "seen together", marking: "OFFICIAL", grading: "B21", source_note: "Visits log" },
+        // A drawn merge's item mapped onto another of the target's types (ADR-143 Amendment 7).
+        ...(p.trigger === "drawn_merge"
+          ? [{ element_id: "n-d", kind: "node", type: "Incident", label: "Night fight", marking: "OFFICIAL", grading: "B21", source_note: "Wing log", goes_in_as: "Organisation" }]
+          : []),
       ],
     });  // prettier-ignore
   }

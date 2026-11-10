@@ -171,4 +171,18 @@ describe("Analyst promotions", () => {
     const list = await screen.findByRole("list", { name: "Proposed matches" });
     expect(list.textContent).toBe("Mercer and Mercer (Person), 100%");
   });
+
+  it("says which of a drawn merge's items go in as another type (Amendment 7)", async () => {
+    const p = P({ trigger: "drawn_merge", case_name: "Night visits" });
+    const fight = { element_id: "n2", kind: "node", type: "Incident", label: "Night fight", marking: "OFFICIAL", goes_in_as: "Organisation" };
+    serve({
+      "GET /v1/datasets/src/promotions": () => ({ status: 200, body: { promotions: [p] } }),
+      "GET /v1/datasets/src/promotions/p1": () => ({ status: 200, body: { ...DETAILS(p).body, items: [...DETAILS(p).body.items, fight] } }),
+    });
+    show();
+    await screen.findByText("promotion-1");
+    fireEvent.click(screen.getByRole("button", { name: /Review/ }));
+    expect(await screen.findByText(/Incident \(goes in as a new Organisation\), OFFICIAL/)).toBeTruthy();
+    expect(screen.getByText(/^Person, OFFICIAL/)).toBeTruthy();
+  });
 });

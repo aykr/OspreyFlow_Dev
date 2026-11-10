@@ -1,6 +1,7 @@
 // The Ingest Studio's *Merge into a dataset…* by keyboard alone (ADR-143 Amendment 2 decision 6;
 // Amendment 3; rule 13): choose the dataset and map and match; tick a match and run the dry run; merge
-// what the dry run showed; close the merge by Escape. No `page.mouse`, no `.click()` in these.
+// what the dry run showed; map a drawn type onto another of the target's types and place its properties
+// (Amendment 7); close the merge by Escape. No `page.mouse`, no `.click()` in these.
 import { expect, test, type Page } from "@playwright/test";
 
 import { DRAWN_MERGE_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -32,7 +33,7 @@ async function mapAndMatch(page: Page): Promise<void> {
 test("a dataset is chosen and the drawing mapped and matched by keyboard", async ({ page }) => {
   await open(page);
   await mapAndMatch(page);
-  await expect(page.getByRole("dialog").getByText(/Vessel is not a type of Prison intel's model\. Its items are left out/)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(/Vessel is not a type of Prison intel's model\. Map it onto one of its types/)).toBeVisible();
   expect((await sent(page)).some((s) => s.path === "/v1/datasets/d-night/merge-sheet?target=src")).toBe(true);
   registerCovered("DRAWN_MERGE_ACTIONS", "choose-a-dataset-and-map-and-match-a-drawing-by-keyboard");
 });
@@ -62,8 +63,52 @@ test("the drawing is merged as its dry run showed, by keyboard", async ({ page }
   await press(page, "4. Merge");
   await expect(page.getByRole("heading", { name: "Merge sent" })).toBeFocused();
   const merge = (await sent(page)).find((s) => s.method === "POST" && s.path === "/v1/datasets/d-night/merges");
-  expect(merge?.body).toEqual({ target_dataset_id: "src", item_ids: ["i-1", "i-2"], matches: [{ drawn: "e-i-1", loaded: "p-loaded" }] });
+  expect(merge?.body).toEqual({
+    target_dataset_id: "src",
+    item_ids: ["i-1", "i-2", "i-3"],
+    matches: [{ drawn: "e-i-1", loaded: "p-loaded" }],
+    mapping: [
+      { kind: "node", drawn_type: "Person", target_type: "Person", properties: [] },
+      { kind: "node", drawn_type: "Vessel", target_type: null, properties: [] },
+    ],
+  });
   registerCovered("DRAWN_MERGE_ACTIONS", "merge-a-drawn-dataset-after-its-dry-run-by-keyboard");
+});
+
+test("a drawn type is mapped onto another of the target's types, its properties placed, by keyboard", async ({ page }) => {
+  await open(page);
+  await mapAndMatch(page);
+  const vessel = page.getByLabel("Vessel goes in as");
+  await vessel.focus();
+  await expect(vessel).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(vessel).toHaveValue("Organisation");
+  await expect(page.getByText(/Each goes in as a new Organisation, linked to its drawn item by a proposed match/)).toBeVisible();
+  // `name` goes into the Organisation's name; `flag`, not carried until placed, into its country.
+  await expect(page.getByLabel("name goes into")).toHaveValue("name");
+  const flag = page.getByLabel("flag goes into");
+  await flag.focus();
+  await expect(flag).toBeFocused();
+  for (let n = 0; n < 3; n += 1) await page.keyboard.press("ArrowDown");
+  await expect(flag).toHaveValue("country");
+  await press(page, "Dry run");
+  await expect(page.getByRole("status")).toContainText("It would add 3 items and 0 links to Prison intel, 1 of them as new items of another type");
+  await press(page, "4. Merge");
+  await expect(page.getByRole("heading", { name: "Merge sent" })).toBeFocused();
+  const merge = (await sent(page)).find((s) => s.method === "POST" && s.path === "/v1/datasets/d-night/merges");
+  expect((merge?.body as { mapping: unknown }).mapping).toEqual([
+    { kind: "node", drawn_type: "Person", target_type: "Person", properties: [] },
+    {
+      kind: "node",
+      drawn_type: "Vessel",
+      target_type: "Organisation",
+      properties: [
+        { drawn_property: "flag", target_property: "country" },
+        { drawn_property: "name", target_property: "name" },
+      ],
+    },
+  ]);
+  registerCovered("DRAWN_MERGE_ACTIONS", "map-a-drawn-type-onto-another-of-the-targets-types-by-keyboard");
 });
 
 test("the merge closes on Escape, nothing sent", async ({ page }) => {

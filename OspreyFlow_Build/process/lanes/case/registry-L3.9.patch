@@ -11,7 +11,7 @@ index 8dca9e5..1713a15 100644
  ] as const);
  
  /** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made
-@@ -520,6 +522,16 @@ export const PROMOTION_ACTIONS = defineActionRegistry("PROMOTION_ACTIONS", [
+@@ -520,6 +522,17 @@ export const PROMOTION_ACTIONS = defineActionRegistry("PROMOTION_ACTIONS", [
    "delete-a-removed-cases-layer-after-asking-once-by-keyboard",
  ] as const);
  
@@ -23,6 +23,7 @@ index 8dca9e5..1713a15 100644
 +  "tick-a-match-and-run-the-merges-dry-run-by-keyboard",
 +  "merge-a-drawn-dataset-after-its-dry-run-by-keyboard",
 +  "close-a-drawn-merge-by-escape",
++  "map-a-drawn-type-onto-another-of-the-targets-types-by-keyboard",
 +] as const);
 +
  /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's

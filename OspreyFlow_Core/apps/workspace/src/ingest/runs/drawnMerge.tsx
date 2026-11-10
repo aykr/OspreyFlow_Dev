@@ -1,6 +1,10 @@
 // Ingest Studio › 4 Runs › *Merge into a dataset…* (ADR-143 Amendment 2 decisions 6 and 7; Amendment
-// 3 decision 2): a drawn dataset merged into a dataset the reader is an Author of, in four steps.
-//   1 Map the models: each drawn type and the target type its items go in as, or why not.
+// 3 decision 2; Amendment 7): a drawn dataset merged into a dataset the reader is an Author of, in four
+// steps.
+//   1 Map the models: each drawn type onto any type of the target's model, or left out, and for one
+//     mapped onto another type, each drawn property's place in it (the owner's ruling: as a Studio
+//     load's Map step maps). An item of another type goes in as a new item, linked back to its drawn
+//     one by a proposed match.
 //   2 Match: the *Looks like a loaded item* pairs; each chosen one goes in as a proposed match
 //     (inferred, scored) that a person confirms later; nothing is collapsed.
 //   3 Dry run: what would be added and matched; nothing written.
@@ -21,6 +25,7 @@ import {
   type DrawnMergeSheet,
   type MergeBody,
   type MergeTargets,
+  type TypeChoice,
 } from "./drawnMergeApi";
 
 export interface DrawnMergeProps {
@@ -33,6 +38,33 @@ export interface DrawnMergeProps {
 
 const pairKey = (drawn: string, loaded: string) => JSON.stringify([drawn, loaded]);
 
+/** A drawn type's row, keyed as the Conduit keys it. */
+const typeKey = (kind: string, drawnType: string) => JSON.stringify([kind, drawnType]);
+
+/** One drawn type's choice: the target's type (`null`: left out) and each drawn property's place. */
+interface Choice {
+  to: string | null;
+  places: Record<string, string | null>;
+}
+
+type Mapping = DrawnMergeSheet["mapping"][number];
+
+/** The dry run's outcome, in words. */
+export function dryRunWords(dry: DrawnMergeDryRun, target: string): string {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  const retyped = (dry.retyped ?? 0) > 0 ? `, ${dry.retyped} of them as new items of another type` : "";
+  return (
+    `It would add ${n(dry.nodes, "item", "items")} and ${n(dry.links, "link", "links")} to ${target}${retyped}, ` +
+    `and propose ${n(dry.matches, "match", "matches")}. Nothing has been written.`
+  );
+}
+
+/** A drawn property's place in `to` until one is chosen: the same name if `to` has it, else none. */
+function startingPlaces(row: Mapping, to: string | null, sheet: DrawnMergeSheet): Record<string, string | null> {
+  const held = (sheet.target_types ?? []).find((t) => t.kind === row.kind && t.name === to);
+  return Object.fromEntries((row.drawn_properties ?? []).map((p) => [p, held?.properties.includes(p) ? p : null]));
+}
+
 export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: DrawnMergeProps) {
   const govuk = currentBrand() === "govuk";
   const [targets, setTargets] = useState<MergeTargets | null>(null);
@@ -40,6 +72,7 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
   const [sheet, setSheet] = useState<DrawnMergeSheet | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [pairs, setPairs] = useState<Set<string>>(new Set());
+  const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [dry, setDry] = useState<DrawnMergeDryRun | null>(null);
   const [sent, setSent] = useState<Promotion | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -73,6 +106,14 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
     setSheet(answer.value);
     setTicked(startingTicks(answer.value.items ?? []));
     setPairs(new Set());
+    setChoices(
+      Object.fromEntries(
+        (answer.value.mapping ?? []).map((m) => [
+          typeKey(m.kind, m.drawn_type),
+          { to: m.target_type ?? null, places: startingPlaces(m, m.target_type ?? null, answer.value) },
+        ]),
+      ),
+    );
   }
 
   const body = (): MergeBody => ({
@@ -81,6 +122,19 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
     matches: [...pairs].map((p) => {
       const [drawn, loaded] = JSON.parse(p) as [string, string];
       return { drawn, loaded };
+    }),
+    mapping: (sheet?.mapping ?? []).map((m): TypeChoice => {
+      const chosen = choices[typeKey(m.kind, m.drawn_type)];
+      const to = chosen ? chosen.to : (m.target_type ?? null);
+      return {
+        kind: m.kind,
+        drawn_type: m.drawn_type,
+        target_type: to,
+        properties:
+          to !== null && to !== m.drawn_type
+            ? Object.entries(chosen?.places ?? {}).map(([drawn_property, target_property]) => ({ drawn_property, target_property }))
+            : [],
+      };
     }),
   });
 
@@ -122,6 +176,19 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
       if (next.has(itemId)) next.delete(itemId);
       else next.add(itemId);
       return next;
+    });
+  };
+  const choose = (row: Mapping, to: string | null) => {
+    changed();
+    if (!sheet) return;
+    setChoices((held) => ({ ...held, [typeKey(row.kind, row.drawn_type)]: { to, places: startingPlaces(row, to, sheet) } }));
+  };
+  const place = (row: Mapping, prop: string, into: string | null) => {
+    changed();
+    setChoices((held) => {
+      const key = typeKey(row.kind, row.drawn_type);
+      const was = held[key] ?? { to: row.target_type ?? null, places: {} };
+      return { ...held, [key]: { ...was, places: { ...was.places, [prop]: into } } };
     });
   };
   const togglePair = (key: string) => {
@@ -213,15 +280,71 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
                   </tr>
                 </thead>
                 <tbody className={govuk ? "govuk-table__body" : undefined}>
-                  {(sheet.mapping ?? []).map((m) => (
-                    <tr key={`${m.kind} ${m.drawn_type}`} className={govuk ? "govuk-table__row" : undefined}>
-                      <th scope="row" className={header} style={{ fontWeight: "normal", textAlign: "left" }}>
-                        {m.drawn_type} ({m.kind === "node" ? "item" : "link"})
-                      </th>
-                      <td className={cell}>{m.target_type ?? m.why_not}</td>
-                      <td className={cell}>{m.items}</td>
-                    </tr>
-                  ))}
+                  {(sheet.mapping ?? []).map((m, row) => {
+                    const chosen = choices[typeKey(m.kind, m.drawn_type)] ?? { to: m.target_type ?? null, places: {} };
+                    const word = m.kind === "node" ? "item" : "link";
+                    const id = `drawn-merge-type-${row}`;
+                    const into = (sheet.target_types ?? []).find((t) => t.kind === m.kind && t.name === chosen.to);
+                    const retyped = chosen.to !== null && chosen.to !== m.drawn_type;
+                    return (
+                      <tr key={typeKey(m.kind, m.drawn_type)} className={govuk ? "govuk-table__row" : undefined}>
+                        <th scope="row" className={header} style={{ fontWeight: "normal", textAlign: "left" }}>
+                          {m.drawn_type} ({word})
+                        </th>
+                        <td className={cell}>
+                          <label htmlFor={id} className="visually-hidden">
+                            {m.drawn_type} goes in as
+                          </label>
+                          <select
+                            id={id}
+                            className={govuk ? "govuk-select" : "select"}
+                            value={chosen.to ?? ""}
+                            onChange={(e) => choose(m, e.target.value === "" ? null : e.target.value)}
+                          >
+                            <option value="">Leave out</option>
+                            {(m.choices ?? []).map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                          {chosen.to === null && <p className="caption">{m.why_not ?? `Left out: its ${word}s stay on the drawing, read-only.`}</p>}
+                          {retyped && (
+                            <>
+                              <p className="caption">
+                                Each goes in as a new {chosen.to}, linked to its drawn {word} by a proposed match for a person to confirm.
+                              </p>
+                              {(m.drawn_properties ?? []).map((prop) => {
+                                const pid = `${id}-${prop}`;
+                                return (
+                                  <div key={prop} className={govuk ? "govuk-form-group" : "board__row"}>
+                                    <label htmlFor={pid} className={govuk ? "govuk-label" : "label"}>
+                                      {prop} goes into
+                                    </label>{" "}
+                                    <select
+                                      id={pid}
+                                      className={govuk ? "govuk-select" : "select"}
+                                      value={chosen.places[prop] ?? ""}
+                                      onChange={(e) => place(m, prop, e.target.value === "" ? null : e.target.value)}
+                                    >
+                                      <option value="">Not carried (it stays on the drawing)</option>
+                                      {(into?.properties ?? []).map((p) => (
+                                        <option key={p} value={p}>
+                                          {p}
+                                          {(into?.required ?? []).includes(p) ? " (required)" : ""}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          )}
+                        </td>
+                        <td className={cell}>{m.items}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <h5 className={govuk ? "govuk-heading-s" : "label"}>2. Match</h5>
@@ -256,8 +379,7 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
               {dry ? (
                 <div role="status">
                   <p className={govuk ? "govuk-body" : undefined}>
-                    It would add {dry.nodes} item{dry.nodes === 1 ? "" : "s"} and {dry.links} link{dry.links === 1 ? "" : "s"} to {sheet.target_name}, and propose{" "}
-                    {dry.matches} match{dry.matches === 1 ? "" : "es"}. Nothing has been written.
+                    {dryRunWords(dry, sheet.target_name)}
                   </p>
                   {(dry.left_out ?? []).length > 0 && (
                     <ul className={govuk ? "govuk-list" : undefined}>

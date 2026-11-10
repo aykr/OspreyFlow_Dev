@@ -8,18 +8,15 @@ import type {
   DrawnMergeSheet,
   MergeTargets,
   Promotion,
+  TypeChoice,
 } from "../../../../../packages/schemas/generated";
 import { answered, send } from "../../boards/promotionsApi";
 
-export type { DrawnMergeDryRun, DrawnMergeInput, DrawnMergeSheet, MergeTargets };
+export type { DrawnMergeDryRun, DrawnMergeInput, DrawnMergeSheet, MergeTargets, TypeChoice };
 
-/** What is sent: `DrawnMergeInput`, its items checked non-empty by the Conduit (the screen sends
- * none until one is ticked). */
-export interface MergeBody {
-  target_dataset_id: string;
-  item_ids: string[];
-  matches: { drawn: string; loaded: string }[];
-}
+/** What is sent: `DrawnMergeInput`, with its items as a plain list (the generated type's is a
+ * non-empty tuple; the Conduit checks it, and the screen sends none until one is ticked). */
+export type MergeBody = Omit<DrawnMergeInput, "item_ids"> & { item_ids: string[] };
 
 const drawn = (api: string, datasetId: string, tail: string) => `${api}/v1/datasets/${encodeURIComponent(datasetId)}/${tail}`;
 
