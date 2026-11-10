@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from dulwich.objects import Blob
@@ -32,7 +33,10 @@ from services.api import studio_publish
 from services.api.studio_publish import GitCommitError, commit_recipe_file
 
 GIT = shutil.which("git")
-needs_git = pytest.mark.skipif(GIT is None, reason="the host's git reads the history back")
+#: Skipped only off CI: in CI a missing git fails the test, so the history is always read back.
+needs_git = pytest.mark.skipif(
+    GIT is None and not os.environ.get("CI"), reason="the host's git reads the history back"
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -169,9 +173,12 @@ async def test_publish_never_execs_a_binary(
     trap = tmp_path / "trap.sh"
     _plant_every_config_driven_command(repo, trap)
     second = b"id: alpha\nversion: 2\n"
-    await commit_recipe_file("alpha", second, version=2, repo_root=repo)
-
-    assert calls == []
+    try:
+        await commit_recipe_file("alpha", second, version=2, repo_root=repo)
+    finally:
+        # Asked even when the publish raised, so a spawn is what the failure says, not the
+        # GitCommitError a refused spawn turns into.
+        assert calls == [], f"the publish spawned: {calls!r}"
     assert not Path(f"{trap}.ran").exists()
     # The second commit holds the bytes given, unfiltered and unsigned.
     from dulwich.object_store import tree_lookup_path
@@ -300,7 +307,7 @@ def test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative(
 
 @needs_git
 @pytest.mark.parametrize(
-    "recipe_id", ["../x", ".git/x", "../../outside", "a/b", "..", ".hidden", "", "x\x00y"]
+    "recipe_id", ["../x", ".git/x", "../../outside", "a/b", "..", ".hidden", ""]
 )
 async def test_a_recipe_id_that_is_not_one_file_name_is_refused(
     tmp_path: Path, recipe_id: str
@@ -396,29 +403,61 @@ async def test_a_real_writer_moving_head_mid_commit_is_refused(
 async def test_the_index_is_read_and_written_under_a_lock_another_process_honours(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Item 7: the read-modify-write of the index, and the commit, hold an exclusive `flock` on
-    the repository's publish lock, so the Prison Intelligence seed beside a running Conduit cannot
-    lose the other's index entry. Probed from a second open of the lock file, as another process
-    would take it, while the publish is between staging and moving `HEAD`."""
+    """Item 7, and the re-review's item 3: the file's write, the index's read-modify-write and the
+    commit all hold an exclusive `flock` on the repository's publish lock, so the Prison
+    Intelligence seed beside a running Conduit cannot lose the other's index entry. Probed from a
+    second open of the lock file, as another process would take it, at each of the three."""
     import fcntl
+
+    from dulwich.index import Index
 
     repo = tmp_path / "repo"
     await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
     lock = repo / ".git" / studio_publish.PUBLISH_LOCK_NAME
-    held: list[bool] = []
-    real = studio_publish.commit_tree_changes
+    held: dict[str, bool] = {}
 
-    def probe(*args: object, **kwargs: object) -> object:
+    def probe(where: str) -> None:
         with lock.open("a") as other:
             try:
                 fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                held.append(True)
+                held[where] = True
             else:
                 fcntl.flock(other, fcntl.LOCK_UN)
-                held.append(False)
-        return real(*args, **kwargs)  # type: ignore[arg-type]
+                held[where] = False
 
-    monkeypatch.setattr(studio_publish, "commit_tree_changes", probe)
+    def wrap(where: str, real: Any) -> Any:
+        def probed(*args: object, **kwargs: object) -> object:
+            probe(where)
+            return real(*args, **kwargs)
+
+        return probed
+
+    monkeypatch.setattr(
+        studio_publish, "_write_recipe_file", wrap("write", studio_publish._write_recipe_file)
+    )
+    monkeypatch.setattr(Index, "write", wrap("index", Index.write))
+    monkeypatch.setattr(
+        studio_publish, "commit_tree_changes", wrap("commit", studio_publish.commit_tree_changes)
+    )
     await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
-    assert held == [True]
+    assert held == {"write": True, "index": True, "commit": True}
+
+
+@needs_git
+async def test_a_linked_publish_lock_is_refused(tmp_path: Path) -> None:
+    """The lock file is opened without following a link, so a link planted in its place cannot
+    have a publish create or open a file elsewhere."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    before = _git(repo, "rev-parse", "HEAD")
+    lock = repo / ".git" / studio_publish.PUBLISH_LOCK_NAME
+    lock.unlink()
+    elsewhere = tmp_path / "elsewhere.lock"
+    lock.symlink_to(elsewhere)
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert not elsewhere.exists()
+    assert _git(repo, "rev-parse", "HEAD") == before

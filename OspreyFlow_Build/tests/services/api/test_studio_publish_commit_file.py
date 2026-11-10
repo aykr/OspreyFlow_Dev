@@ -38,7 +38,10 @@ from schemas.ingest import Recipe
 DATA = b"# a comment a re-serialisation would drop\nid: r-one\nversion: 1\n"
 
 GIT = shutil.which("git")
-needs_git = pytest.mark.skipif(GIT is None, reason="the host's git reads the history back")
+#: Skipped only off CI: in CI a missing git fails the test.
+needs_git = pytest.mark.skipif(
+    GIT is None and not os.environ.get("CI"), reason="the host's git reads the history back"
+)
 
 
 def _git(repo: Path, *args: str) -> str:
