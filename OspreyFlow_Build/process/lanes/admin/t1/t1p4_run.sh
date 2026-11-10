@@ -2,7 +2,8 @@
 # T1 part 4's leased run, from OspreyFlow_Build, as
 #   scripts/stack_lease.sh acquire admin "<purpose>" && scripts/stack_lease.sh up admin &&
 #   scripts/stack_lease.sh remote admin -- process/lanes/admin/t1/t1p4_run.sh [step …]
-# on one commit and one lease, in order (or only the steps named):
+# on one commit and one lease, in order (or only the steps named; `clean` first removes what the live proof's first red
+# run left on the shared names, `t1p4_clean.py`):
 # 1. isolation: the live proof and its red (tests/test_worker_isolation_live.py);
 # 2. graph: the graph_port suite serial, then at 4 and 8 workers, its wall time each way (its databases are per test,
 #    so this measures the workers, not the redirect);
@@ -59,6 +60,7 @@ steps=("$@")
 [ "${#steps[@]}" -gt 0 ] || steps=(isolation graph access)
 for s in "${steps[@]}"; do
   case "$s" in
+    clean) PYTHONPATH="$B:.:packages" .venv/bin/python "$B/process/lanes/admin/t1/t1p4_clean.py" || failed=1 ;;
     isolation) step isolation "${P[@]}" "$B/tests/test_worker_isolation_live.py" ;;
     graph)
       step graph-serial "${P[@]}" "$B/tests/conformance/graph_port"

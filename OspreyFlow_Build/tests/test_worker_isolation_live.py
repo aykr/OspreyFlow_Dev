@@ -57,17 +57,24 @@ async def _arcadedb(step):
             try:
                 await client.sql(f"CREATE DOCUMENT TYPE {kind} IF NOT EXISTS")
             except Exception:
-                pass  # the other worker made it a moment ago (the red run's shared database)
+                pass  # the other worker is making it (the red run's shared database): wait until it is there
+            deadline = time.monotonic() + 30
+            while not await client.sql("SELECT FROM schema:types WHERE name = :n", params={"n": kind}):
+                assert time.monotonic() < deadline, f"{kind} never appeared"
+                await asyncio.sleep(0.1)
             await client.sql(f"INSERT INTO {kind} SET k = 'same', worker = :w", params={"w": WORKER})
             return None
         if step == "read":
             return sorted({r["worker"] for r in await client.sql(f"SELECT worker FROM {kind} WHERE k = 'same'")})
-        await client.sql(f"DELETE FROM {kind} WHERE worker = :w", params={"w": WORKER})
+        if await client.sql("SELECT FROM schema:types WHERE name = :n", params={"n": kind}):
+            await client.sql(f"DELETE FROM {kind} WHERE worker = :w", params={"w": WORKER})
+        # Both workers' rows gone before the type (and a database the red run made) is dropped: in the red run they
+        # share one, and a type dropped under the other worker's DELETE fails it (seen on stack b, 10 November).
+        _barrier("arcadedb-removed")
         try:
             await client.sql(f"DROP TYPE {kind} IF EXISTS UNSAFE")
         except Exception:
-            pass  # the other worker's removal got there first
-        _barrier("arcadedb-removed")  # both workers' rows gone before a database the red run made is dropped
+            pass  # the other worker's drop got there first
         if (SHARED / f"made-arcadedb-{WORKER}").exists():
             await client.drop_database()
     finally:
