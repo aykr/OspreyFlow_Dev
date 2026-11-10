@@ -94,6 +94,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    writes both files beside the rule at every version, and Export returns the stored files; (b) an amendment saying a
    lossless serialisation meets the decision. **Chosen: (a)**, the decision as accepted (no ADR is amended away);
    rules builds the save in L2.11, rules-b records the shapes as ADR-146 Amendment 5. **To overrule:** say "(b)".
+13. **The rule editor's rules (rules' L2.11, six decisions; ADR-146 Amendment 6).** (1) *Make live*'s second person
+   follows the dataset's existing promotion policy: where it asks for review, another holder of `deploy_rules` at
+   Author level approves, never the author; a composite asks if any member does (the alternative, a separate setting,
+   would be a new Admin control). (2) *Test* runs over 30 days on the stored draft, its result kept on that version,
+   and *Make live* is refused unless the version going live is the one tested. (3) At most one draft and one live
+   version; *Save* needs `author_rules`, *Make live* `deploy_rules`. (4) A rule's dataset is one the case reads; a
+   change naming another is refused. (5) *When* gains "a screening list refreshes"; a new rule cannot take the
+   whole-deployment scope. (6) The migration puts each rule in its dataset's home case, reports any dataset without
+   one, dry run first. **To overrule:** name the number.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
