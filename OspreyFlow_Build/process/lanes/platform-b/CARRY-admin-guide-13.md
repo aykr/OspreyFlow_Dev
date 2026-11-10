@@ -89,7 +89,7 @@ P5b merges without it, at the orchestrator's word (10 November 2026: docs' D2a r
 
 ## 7. What the guide (version 1.59) states as fact that P5b changes
 
-Line numbers are 1.59's.
+Line numbers are 1.59's. D2a has since moved them, so find each by the words quoted.
 - About :292, "backups are kept in the deployment's own folder". A named deployment's sets now go to
   `<backups folder>/<name>/`.
 - :795 (§5a.3), "`ospreyflow backup` writes each set to `server.backups`". Each set now goes to `<server.backups>/<deployment>/`.
