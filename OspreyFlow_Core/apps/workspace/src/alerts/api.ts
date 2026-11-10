@@ -34,7 +34,7 @@ import type {
 import type { WorkingSetDelta } from "../workingset/models";
 
 export type QueueFilter = "active" | "closed" | "all";
-export type KindFilter = "all" | "typology" | "hotlist" | "monitor" | "analyst";
+export type KindFilter = "all" | "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";
 /** ADR-146 decision 2: the queue's filters; *All* holds the suppressed alerts too (Amendment 1). */
 export type QueueShow = "mine" | "team" | "unassigned" | "all";
 export type SeverityFilter = "all" | "high" | "medium" | "low";

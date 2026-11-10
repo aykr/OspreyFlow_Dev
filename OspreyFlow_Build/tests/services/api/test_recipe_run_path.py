@@ -112,6 +112,9 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "models": given["target_models"], "staging_storage": given["staging_storage"],
         # ADR-140 Amendment 13: the deployment-wide lists a staged run's Lookups may subscribe to.
         "list_store": given["list_store"],
+        # L3.6: the drawn watches a load is run against, and the case read sets of their owners.
+        "board_items": given["board_items"], "datasets": given["datasets"],
+        "investigations": given["investigations"],
         # Build order step 30: the run is held to the files Verify recorded; none here.
         "studio_recipes": _NothingVerified(),
     }

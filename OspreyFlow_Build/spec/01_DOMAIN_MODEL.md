@@ -867,9 +867,34 @@ The invariants, each with the test that fails if it is broken (rule 12):
     the record).
 - **Watched** (Amendment 2 decision 8): drawing an item sets one watch (`DrawnWatch`, kind
   `drawn_watch`) on the case's dataset, owned by its author; withdrawing it ends the watch; a watch on
-  an item the reader may not see is withheld whole. Its alerts' queue is L3.6's with L2.10.
+  an item the reader may not see is withheld whole.
   - `test_drawing_sets_a_watch_and_withdrawing_ends_it`;
     `test_a_watch_on_an_item_the_reader_may_not_see_is_withheld_whole`, red with every watch listed.
+- **A load meeting a drawn item** (Amendment 2 decision 8; ADR-146 decisions 1 and 4; L3.6). Every
+  load (the Studio's *Run now*, a scheduled or watched run, a command-line load) runs the live drawn
+  watches on the dataset it wrote into, and on each composite of it. A watch is run only for an owner
+  who resolves now and holds a level on the watch's case, reading what that case reads for them
+  (`drawn_watches.case_read_set`, as `scope_to_case`), through the adapter. A loaded node matches by
+  the board's own rule (`boards.resembles`: of the drawn item's type, the same identifier, or a name
+  alike at `MATCH_AT`), never a drawn node, never a pair decided *Same* or *Not the same*. Each match
+  is claimed once per (case, drawn element, loaded node), the claim given back if its alert cannot be
+  saved, and raises one `drawn_watch` alert (`rule_id` `drawn_watch:<watch>`): **its owner's, in the
+  watch's case alone, never shared** (`alerts.queue_scope`; the owner/team watch clause excludes the
+  kind), citing the drawn item and the loaded node, so the queue withholds it whole from a reader who
+  may not see either. It is kept out of alert trends, which count an owner's alerts in every case
+  they open (fewer than the queue, never more). Its *what fired it* names the loaded node's file and
+  row; *Open the board* opens the board the drawn item's own provenance names (`DrawnAssertion.
+  board_id`), read as the reader with the rest of the evidence. A drawn link's watch never matches
+  (only nodes are loaded as matches). The run is inside the load's request, best effort and audited
+  (`watch_evaluation_failed`), as the other watches.
+  - `test_drawn_watch_alerts.py` (one per match per case, the owner's reach, composites, the claim
+    given back), `test_drawn_watch_queue.py` (withheld whole, red with the drawn item left out),
+    `test_drawn_watch_queue_live.py` (the owner's in its case alone; never in a trend), each red by
+    its plant (the lane's gate record).
+- **Link types a drawing cannot satisfy** (L3.6; CARRIES): a link type whose model requires a
+  property (ROLE_IN's `role`) is neither offered on a board nor drawn, since a drawn link carries no
+  property; a merge may still map onto it.
+  - `test_a_link_type_whose_model_requires_a_property_is_not_offered_nor_drawn`.
 - **Matching never merges** (decision 6; rule 6): *Same* writes one `SAME_AS` (1.0) in the layer,
   *Not the same* one `NOT_SAME_AS`, marked as the stricter of the two ends; no node is written.
   - `test_same_writes_one_link_and_merges_nothing`, red with the writer merging.

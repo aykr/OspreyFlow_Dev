@@ -1,0 +1,196 @@
+Running on ospreyflow-test (stack e, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261110T132519Z/log: sh -c cd OspreyFlow_Core || exit 9; T=../OspreyFlow_Build/tests; rm -f /tmp/case-live-plants-L3.6.txt; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rA -p no:cacheprovider $T/services/api/test_drawn_watch_queue_live.py $T/services/api/test_monitoring_queue.py $T/services/api/test_board_store.py $T/services/api/test_alert_facts.py; echo "PYTEST_EXIT=$?"; cd .. && OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/process/lanes/case/gates/L3.6-live-plants.py /tmp/case-live-plants-L3.6.txt; echo "PLANTS_EXIT=$?"; echo "=== LIVE PLANTS ==="; cat /tmp/case-live-plants-L3.6.txt
+............................................                             [100%]
+==================================== PASSES ====================================
+____________ test_a_failing_analytics_store_does_not_lose_the_alert ____________
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.alerts:alerts.py:683 alert facts not kept for 1 alert(s)
+Traceback (most recent call last):
+  File "/root/osprey-runs/case/OspreyFlow_Build/../OspreyFlow_Core/services/api/alerts.py", line 681, in publish_facts
+    await self.fact_sink([_row_to_fact(r) for r in rows])
+  File "/root/osprey-runs/case/OspreyFlow_Build/tests/services/api/test_alert_facts.py", line 199, in refuse
+    raise RuntimeError("analytics store away")
+RuntimeError: analytics store away
+============================= slowest 30 durations =============================
+1.92s call     tests/services/api/test_monitoring_queue.py::test_what_raises_alerts_lists_only_the_readers_watches_and_counts_only_what_they_may_see
+0.30s setup    tests/services/api/test_board_store.py::test_a_datasets_live_watches_are_listed_across_cases_and_an_ended_one_is_not
+0.25s call     tests/services/api/test_monitoring_queue.py::test_the_queue_reads_on_a_fresh_database_with_the_alert_store_alone
+0.17s setup    tests/services/api/test_board_store.py::test_a_links_ends_are_kept
+0.16s setup    tests/services/api/test_board_store.py::test_a_match_and_a_promotion_are_kept
+0.16s setup    tests/services/api/test_board_store.py::test_a_match_is_claimed_once_per_case_whatever_loads_it_again
+0.15s setup    tests/services/api/test_board_store.py::test_the_postgres_case_check_fails_with_the_case_planted_out
+0.15s setup    tests/services/api/test_board_store.py::test_withdrawing_ends_the_watch_and_only_in_its_case
+0.15s setup    tests/services/api/test_board_store.py::test_an_item_and_its_watch_round_trip_by_case
+0.10s setup    tests/services/api/test_monitoring_queue.py::test_the_queue_shows_a_typology_a_hotlist_and_a_monitor_alert_to_a_team_member
+0.09s call     tests/services/api/test_monitoring_queue.py::test_a_team_member_claims_and_closes_a_hotlist_alert_and_a_stranger_cannot
+0.09s call     tests/services/api/test_monitoring_queue.py::test_a_hidden_alert_reveals_nothing_through_count_order_or_reads
+0.08s call     tests/services/api/test_alert_facts.py::test_a_raised_alert_is_kept_and_its_triage_replaces_it
+0.08s setup    tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_reaches_its_owner_in_its_case
+0.07s setup    tests/services/api/test_board_store.py::test_a_board_is_kept_apart_from_views_and_changed_only_by_its_creator
+0.07s setup    tests/services/api/test_alert_facts.py::test_a_raised_alert_is_kept_and_its_triage_replaces_it
+0.07s setup    tests/services/api/test_alert_facts.py::test_an_alert_on_a_secret_handling_is_not_counted_below_it
+0.06s setup    tests/services/api/test_alert_facts.py::test_an_alert_saved_without_its_handlings_is_counted_for_no_one
+0.06s call     tests/services/api/test_monitoring_queue.py::test_severity_defaults_by_kind_and_the_filters_are_applied_in_the_query
+0.06s setup    tests/services/api/test_alert_facts.py::test_an_audience_change_reaches_the_trend_at_once
+0.06s setup    tests/services/api/test_alert_facts.py::test_a_hotlist_match_rests_on_the_node_it_matched
+0.06s call     tests/services/api/test_monitoring_queue.py::test_the_queue_shows_a_typology_a_hotlist_and_a_monitor_alert_to_a_team_member
+0.06s setup    tests/services/api/test_alert_facts.py::test_an_alert_closed_by_a_revert_is_kept_closed
+0.06s call     tests/services/api/test_alert_facts.py::test_an_audience_change_reaches_the_trend_at_once
+0.05s setup    tests/services/api/test_monitoring_queue.py::test_a_case_alert_is_given_to_a_member_and_a_shared_one_only_to_be_claimed
+0.05s call     tests/services/api/test_monitoring_queue.py::test_a_case_alert_is_given_to_a_member_and_a_shared_one_only_to_be_claimed
+0.05s setup    tests/services/api/test_alert_facts.py::test_every_alert_is_kept_again_at_start
+0.05s setup    tests/services/api/test_alert_facts.py::test_a_failing_analytics_store_does_not_lose_the_alert
+0.05s call     tests/services/api/test_board_store.py::test_a_datasets_live_watches_are_listed_across_cases_and_an_ended_one_is_not
+0.05s setup    tests/services/api/test_monitoring_queue.py::test_an_alert_raised_before_teams_existed_reaches_its_owner_alone
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_reaches_its_owner_in_its_case
+PASSED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_no_one_but_its_owner_reads_a_drawn_watch_alert
+PASSED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_its_owner_does_not_read_it_through_another_case
+PASSED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_its_owner_reads_nothing_once_the_drawn_item_is_hidden_from_them
+PASSED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_is_never_counted_in_a_trend
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_the_queue_shows_a_typology_a_hotlist_and_a_monitor_alert_to_a_team_member
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_an_only_me_hotlist_alert_reaches_its_owner_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_shared_alert_reaches_the_owners_unit_and_no_other
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_an_alert_raised_before_teams_existed_reaches_its_owner_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_notify_stub_reaches_its_owner_alone_on_a_team_hotlist
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_hotlist_turned_back_to_only_me_withdraws_its_alerts_from_the_team
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_another_cases_typology_alert_is_not_in_this_queue
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_an_alert_of_a_dataset_the_case_does_not_read_is_not_queued
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_scheduled_runs_notice_is_never_queued
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_team_routed_alert_reaches_only_its_members_and_the_home_cases_authors
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_member_leaving_the_team_no_longer_reads_its_routed_alert
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_routed_alert_is_shown_to_a_member_only_where_they_may_read_its_evidence
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_without_an_answer_for_its_datasets_a_routed_alert_reaches_its_team_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_the_filters_mine_team_unassigned_and_older_are_in_the_query
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_dataset_alert_is_in_every_case_reading_its_dataset_and_no_other
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_each_kind_has_a_default_severity
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_severity_defaults_by_kind_and_the_filters_are_applied_in_the_query
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_hidden_alert_reveals_nothing_through_count_order_or_reads
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_team_member_claims_and_closes_a_hotlist_alert_and_a_stranger_cannot
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_case_alert_is_given_to_a_member_and_a_shared_one_only_to_be_claimed
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_closing_without_a_reason_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_the_queue_reads_on_a_fresh_database_with_the_alert_store_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_what_raises_alerts_lists_only_the_readers_watches_and_counts_only_what_they_may_see
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_an_item_and_its_watch_round_trip_by_case
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_withdrawing_ends_the_watch_and_only_in_its_case
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_match_and_a_promotion_are_kept
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_links_ends_are_kept
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_the_postgres_case_check_fails_with_the_case_planted_out
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_board_is_kept_apart_from_views_and_changed_only_by_its_creator
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_datasets_live_watches_are_listed_across_cases_and_an_ended_one_is_not
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_match_is_claimed_once_per_case_whatever_loads_it_again
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_a_raised_alert_is_kept_and_its_triage_replaces_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_an_alert_closed_by_a_revert_is_kept_closed
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_an_audience_change_reaches_the_trend_at_once
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_an_alert_saved_without_its_handlings_is_counted_for_no_one
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_an_alert_on_a_secret_handling_is_not_counted_below_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_a_hotlist_match_rests_on_the_node_it_matched
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_a_failing_analytics_store_does_not_lose_the_alert
+PASSED ../OspreyFlow_Build/tests/services/api/test_alert_facts.py::test_every_alert_is_kept_again_at_start
+44 passed in 9.73s
+PYTEST_EXIT=0
+## a drawn watch's alert reaching its owner through every case (no exclusion from the watch clause)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k through_another_case; exit 1 (RED)
+E       AssertionError: assert ['01M72T57XRV...6W34QTZSV424'] == ['01M72T57XVP59Y6W34QTZSV424']
+E         
+E         At index 0 diff: '01M72T57XRVJ71G2SZMK8YQ9SS' != '01M72T57XVP59Y6W34QTZSV424'
+E         Left contains one more item: '01M72T57XVP59Y6W34QTZSV424'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_its_owner_does_not_read_it_through_another_case
+
+## a drawn watch's alert read by every member of its case (no owner in its clause)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k no_one_but_its_owner; exit 1 (RED)
+E           AssertionError: assert '01M72T596FH50PY9SN6JMSPBQV' not in ['01M72T596FH50PY9SN6JMSPBQV']
+E            +  where '01M72T596FH50PY9SN6JMSPBQV' = Alert(id='01M72T596FH50PY9SN6JMSPBQV', rule_id='drawn_watch:01M72T596FH50PY9SN6JMSPBQT', owner_id='analyst-01M72T596FH...d_at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None).id
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_no_one_but_its_owner_reads_a_drawn_watch_alert
+1 failed, 4 deselected in 0.86s
+
+## a drawn watch's alert never queued (no clause of its own)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k reaches_its_owner_in_its_case; exit 1 (RED)
+E       AssertionError: its owner is not given it in its case
+E       assert [] == ['01M72T5AF76TNXFFC3TSHYC5AC']
+E         
+E         Right contains one more item: '01M72T5AF76TNXFFC3TSHYC5AC'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_reaches_its_owner_in_its_case
+
+## a drawn watch's alert of no kind (never queued)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k reaches_its_owner_in_its_case; exit 1 (RED)
+E       AssertionError: its owner is not given it in its case
+E       assert [] == ['01M72T5BQQF8FK20NF05C3R87B']
+E         
+E         Right contains one more item: '01M72T5BQQF8FK20NF05C3R87B'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_reaches_its_owner_in_its_case
+
+## a drawn watch's alert reaching its owner in every case (no case in its clause)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k through_another_case; exit 1 (RED)
+E       AssertionError: assert ['01M72T5CZHS...KZA2XCFDCZWP'] == ['01M72T5CZMVVVHKZA2XCFDCZWP']
+E         
+E         At index 0 diff: '01M72T5CZHSVS5YNTZ6NZ5TXN0' != '01M72T5CZMVVVHKZA2XCFDCZWP'
+E         Left contains one more item: '01M72T5CZMVVVHKZA2XCFDCZWP'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_its_owner_does_not_read_it_through_another_case
+
+## a drawn watch's alert counted in its owner's trends in every case
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k never_counted_in_a_trend; exit 1 (RED)
+E       AssertionError: assert {'01M72T5E82A...CG237KXMS32Z'} == {'01M72T5E85W0KACG237KXMS32Z'}
+E         
+E         Extra items in the left set:
+E         '01M72T5E82A1TFJ9X5MY6GJW5R'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_is_never_counted_in_a_trend
+
+PLANTS_EXIT=0
+=== LIVE PLANTS ===
+## a drawn watch's alert reaching its owner through every case (no exclusion from the watch clause)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k through_another_case; exit 1 (RED)
+E       AssertionError: assert ['01M72T57XRV...6W34QTZSV424'] == ['01M72T57XVP59Y6W34QTZSV424']
+E         
+E         At index 0 diff: '01M72T57XRVJ71G2SZMK8YQ9SS' != '01M72T57XVP59Y6W34QTZSV424'
+E         Left contains one more item: '01M72T57XVP59Y6W34QTZSV424'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_its_owner_does_not_read_it_through_another_case
+
+## a drawn watch's alert read by every member of its case (no owner in its clause)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k no_one_but_its_owner; exit 1 (RED)
+E           AssertionError: assert '01M72T596FH50PY9SN6JMSPBQV' not in ['01M72T596FH50PY9SN6JMSPBQV']
+E            +  where '01M72T596FH50PY9SN6JMSPBQV' = Alert(id='01M72T596FH50PY9SN6JMSPBQV', rule_id='drawn_watch:01M72T596FH50PY9SN6JMSPBQT', owner_id='analyst-01M72T596FH...d_at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None).id
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_no_one_but_its_owner_reads_a_drawn_watch_alert
+1 failed, 4 deselected in 0.86s
+
+## a drawn watch's alert never queued (no clause of its own)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k reaches_its_owner_in_its_case; exit 1 (RED)
+E       AssertionError: its owner is not given it in its case
+E       assert [] == ['01M72T5AF76TNXFFC3TSHYC5AC']
+E         
+E         Right contains one more item: '01M72T5AF76TNXFFC3TSHYC5AC'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_reaches_its_owner_in_its_case
+
+## a drawn watch's alert of no kind (never queued)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k reaches_its_owner_in_its_case; exit 1 (RED)
+E       AssertionError: its owner is not given it in its case
+E       assert [] == ['01M72T5BQQF8FK20NF05C3R87B']
+E         
+E         Right contains one more item: '01M72T5BQQF8FK20NF05C3R87B'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_reaches_its_owner_in_its_case
+
+## a drawn watch's alert reaching its owner in every case (no case in its clause)
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k through_another_case; exit 1 (RED)
+E       AssertionError: assert ['01M72T5CZHS...KZA2XCFDCZWP'] == ['01M72T5CZMVVVHKZA2XCFDCZWP']
+E         
+E         At index 0 diff: '01M72T5CZHSVS5YNTZ6NZ5TXN0' != '01M72T5CZMVVVHKZA2XCFDCZWP'
+E         Left contains one more item: '01M72T5CZMVVVHKZA2XCFDCZWP'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_its_owner_does_not_read_it_through_another_case
+
+## a drawn watch's alert counted in its owner's trends in every case
+plant in services/api/alerts.py; ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py -k never_counted_in_a_trend; exit 1 (RED)
+E       AssertionError: assert {'01M72T5E82A...CG237KXMS32Z'} == {'01M72T5E85W0KACG237KXMS32Z'}
+E         
+E         Extra items in the left set:
+E         '01M72T5E82A1TFJ9X5MY6GJW5R'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py::test_a_drawn_watch_alert_is_never_counted_in_a_trend
+Wall time: 18 s, exit 0 (stack e, the lease case took at 2026-11-10T13:25:06Z; set-up before it 10 s)

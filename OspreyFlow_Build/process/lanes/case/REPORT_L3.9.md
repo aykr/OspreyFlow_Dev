@@ -1,0 +1,16 @@
+# Case lane · L3.9 (merging a drawn dataset) · report, 10 November 2026
+
+Gated head **`e0d313d`** on `lane/case`, on main `5e9fa5f` (not rebased again once gated); after it, records only (gates, this report, the patches). Gates (`gates/e0d313d.notes.md`, every failure explained): live, lease `case` on stack e, **77 passed**, 11 live plants red, stack down and released; `make test` offline **10205 passed**, 2 failed and vitest 2910 passed, 1 failed (the server's GPU, main's `test_valkey_config`, the shared server's Matrix budget: none this branch's); `make -k ci` here, every target green but three environmental (a trivy cache lock, port 5193 held, the tofu registry timing out; harness axe run again alone: 34 passed); keyboard **61 passed**; axe **860 passed** in dark, light and GOV.UK; **77 offline plants**, each red on its own assertion.
+
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| Merge into a dataset…: map, match, dry run, merge; one load under the target's policy and highest marking | **Met** | `test_drawn_merge.py` (89), `drawnMerge.test.tsx`, `keyboard/drawn-merge.spec.ts` |
+| Map onto any type of the target's model (the owner's ruling): retyped items as new elements, an inferred `SAME_AS` back in no dataset (ADR-099), never lower, only what the merger reads | **Met** (ADR-143 Amendment 7, written) | the retype cases; conformance `test_promotion.py` on ArcadeDB; the read-path case |
+| Matches scored, inferred, never collapsed (rules 5, 6); none across what the merger may not read, by count, order or timing | **Met** | the match and existence cases, their plants |
+| Refused into a dataset the merger may not write, or above its highest marking, nothing written; the dry run counts only what is seen | **Met** | the access cases; `test_route_rights.py` (live) |
+| The drawing a case view with annotations (decision 7); revert as L3.4's (copies, links and working sets too) | **Met** | the view and revert cases; `test_case_views_store.py`, `test_datasets_store.py` (live) |
+| Carried: `test_valkey_store.py`'s branch case; CARRIES row 55 (Promote… only to those the routes admit; the refusal's words) | **Done** | `947346a`; `test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit` |
+
+**Decisions taken** (Amendment 7 records each): same-name types promoted as the same element, others copied; a retyped link between items going as themselves refused; one waiting merge asked before the record, the commit's claim deciding a race.
+**Requests to the orchestrator:** apply `audit-census-L3.9.patch` (admin's), `registry-L3.9.patch`, `runs-tab-L3.9.patch` (studio's), `places-by-role-L3.9.patch` (rules'). Ratify the shared files edited: `packages/schemas` (one head commit), `packages/ports/graph.py` (a docstring), `services/api/datasets.py`, `grading.py` and `scripts/grading_change.py` (case-b's L3.7), `App.tsx`, `ingest/runs/{drawnMerge*,promotions*}` (by agreement), `a11y/every-harness.spec.ts`, `test_composite_schedules.py`, `ADR_RESERVATIONS.md`.
+**Left:** a copy carries no picture or board decision; a proposed link type touching a retyped node is refused, untested (no fixture draws one); found, not L3.9's: a board offers link types requiring a property a drawn link cannot carry (`ROLE_IN`'s `role`). **Questions for the owner:** none. **Running:** nothing; no stack held.

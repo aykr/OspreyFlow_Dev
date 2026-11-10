@@ -15,8 +15,6 @@ from datetime import UTC, datetime
 
 import asyncpg
 import pytest
-from conduit_common.identity import new_id
-from schemas.case_views import NodePosition
 from services.api.board_store import (
     BoardItem,
     ItemKind,
@@ -30,6 +28,9 @@ from services.api.case_views import (
     ViewNotFound,
 )
 from services.api.config import PostgresConfig
+
+from conduit_common.identity import new_id
+from schemas.case_views import NodePosition
 
 K, B = "case-k", "case-b"
 
@@ -189,3 +190,38 @@ async def test_a_board_is_kept_apart_from_views_and_changed_only_by_its_creator(
         await views.update_board(K, board.id, "bob", layout={})
     with pytest.raises(ViewNotFound):
         await views.update_board(B, board.id, "alice", layout={})
+
+
+# --- L3.6: the drawn watches a load into a dataset runs, and each match claimed once per case ----
+
+
+async def test_a_datasets_live_watches_are_listed_across_cases_and_an_ended_one_is_not(
+    items: PostgresBoardItemStore,
+) -> None:
+    in_k, in_b, elsewhere, ended = _drawn(), _drawn(case=B), _drawn(), _drawn()
+    watches = {}
+    for item, dataset in ((in_k, "src"), (in_b, "src"), (elsewhere, "other"), (ended, "src")):
+        watches[item.item_id] = new_watch(item, dataset_id=dataset)
+        await items.add(item, watches[item.item_id])
+    assert await items.withdraw(K, [ended.item_id], "alice", datetime.now(UTC)) == 1
+    on_src = {w.id for w in await items.active_watches_on("src")}
+    assert on_src == {watches[in_k.item_id].id, watches[in_b.item_id].id}
+    assert [w.id for w in await items.active_watches_on("other")] == [
+        watches[elsewhere.item_id].id
+    ]
+
+
+async def test_a_match_is_claimed_once_per_case_whatever_loads_it_again(
+    items: PostgresBoardItemStore,
+) -> None:
+    """One alert per match per case: the first claim of (case, drawn element, loaded node) alone
+    is true; the same loaded node meeting another case's watch is that case's own first."""
+    item = _drawn()
+    watch = new_watch(item, dataset_id="src")
+    await items.add(item, watch)
+    at = datetime.now(UTC)
+    assert await items.claim_match(watch, "p-loaded", at) is True
+    assert await items.claim_match(watch, "p-loaded", at) is False
+    assert await items.claim_match(watch, "p-other", at) is True
+    elsewhere = watch.model_copy(update={"case_id": B, "id": "w-b"})
+    assert await items.claim_match(elsewhere, "p-loaded", at) is True

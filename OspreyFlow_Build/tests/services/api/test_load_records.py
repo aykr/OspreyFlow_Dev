@@ -494,6 +494,8 @@ async def test_the_run_route_answers_a_view_with_no_id_from_the_loads_lists(
             "extraction_candidates": 1, "recogniser_for": 1, "online_geocode": 1,
             "typology_rules": 1, "held_rows": 1, "screening_lists": 1, "compute": 1,
             "kyc_expiries": 1, "recipe_runs": 1, "studio_recipes": _NothingVerified(), "watch_reach": 1,
+            # L3.6: the drawn watches' stores.
+            "board_items": 1, "datasets": 1, "investigations": 1,
         }  # fmt: skip
         assert names  # the dependency list is what `RecipeRunDeps` declares
         result = await app_module.run_studio_recipe(

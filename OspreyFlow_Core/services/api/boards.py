@@ -301,6 +301,11 @@ class Boards:
         for name in await self.model_link_types(case_id):
             held = self.ontology.edge_type(name)
             assert held is not None
+            # A drawn link carries no properties (`DrawnLinkInput`), so a type requiring one
+            # (`ROLE_IN`'s `role`) cannot be drawn: the adapter refuses it (L3.9's finding, L3.6).
+            # Neither offered nor drawn; a merge may still map onto it, placing the property.
+            if any(p.required for p in held.properties):
+                continue
             out[name] = (held, name)
         if self.case_types is not None:
             for name, offered in (await self.case_types.case_types(case_id, principal)).items():
@@ -1246,6 +1251,21 @@ def _accepts(types: Sequence[str], node_type: str) -> bool:
 
 def _normal(text: str) -> str:
     return " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+
+
+def resembles(drawn: Node, loaded: Node, ontology: Any) -> tuple[float, str] | None:
+    """*Looks like a loaded item*, for one pair, as `Boards.alike` scores what it finds: of the same
+    type, the same value of one of its identifiers (1.0), else a name alike (at least `MATCH_AT`);
+    `None` otherwise. A drawn watch's run asks it of each node a load wrote (L3.6)."""
+    if loaded.type != drawn.type or drawn.provenance.drawn is None:
+        return None
+    entity = ontology.entity_type(drawn.type)
+    for key in entity.identifiers if entity is not None else []:
+        value = drawn.properties.get(key)
+        if isinstance(value, str) and value.strip() and loaded.properties.get(key) == value:
+            return 1.0, f"the same {key}"
+    score = _alike(drawn.provenance.drawn.label, display_name(loaded))
+    return (round(score, 2), "a name alike") if score >= MATCH_AT else None
 
 
 def _alike(a: str, b: str) -> float:
