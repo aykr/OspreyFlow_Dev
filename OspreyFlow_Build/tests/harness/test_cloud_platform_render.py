@@ -574,3 +574,18 @@ def test_two_sources_copied_to_one_target_are_refused() -> None:
     copies("quay.io/team/tool:1.0@sha256:" + "a" * 64)
     with pytest.raises(CloudPlatformNotRenderable, match="two sources"):
         copies("docker.io/team/tool:1.0@sha256:" + "b" * 64)
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_the_lock_names_only_the_images_a_rendered_pod_runs(fixture: str) -> None:
+    """Found on the kind cluster (10 November 2026): with no engine enabled the gateway is not
+    rendered, yet the lock still named LiteLLM's image, which `images push` never copies, so the
+    render refused for want of a digest the namespace has no use for."""
+    artefacts = _artefacts(_config(fixture))
+    values = yaml.safe_load(artefacts["values.yaml"])
+    run = {c["image"].split("@")[0].rsplit("/", 1)[-1].split(":")[0] for c in _containers(values)}
+    locked = {
+        e["repository"].rsplit("/", 1)[-1]
+        for e in yaml.safe_load(artefacts["versions.lock"])["images"]
+    }
+    assert locked <= run, f"locked but never run: {sorted(locked - run)}"

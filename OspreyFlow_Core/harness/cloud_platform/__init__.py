@@ -465,8 +465,13 @@ def render_cloud_platform(
     platform = load_platform(_cp(config).platform)
     production = _cp(config).environment == "production"
     as_cluster = _as_cluster(config, platform)
-    # The images the cluster's configuration runs: none of the stores the platform manages.
-    images = [i for i in service_images(as_cluster) if i.service not in NOT_RENDERED]
+    engines = bool(config.models.enabled_providers)
+    # The images the cluster's configuration runs: none of the stores the platform manages, and
+    # the gateway's only with an engine enabled, so the lock names nothing a pod does not run.
+    images = [
+        i for i in service_images(as_cluster)
+        if i.service not in NOT_RENDERED and (engines or i.service not in GATEWAY)
+    ]  # fmt: skip
     rendered = render_cluster(
         as_cluster,
         images,
@@ -479,7 +484,6 @@ def render_cloud_platform(
     registry = _cp(config).registry
     assert registry is not None
     variables = managed_variables(config)
-    engines = bool(config.models.enabled_providers)
     api_image = next(i.image for i in images if i.service == "api")
     copies = _Copies(registry, api_image.rsplit("/", 1)[0], resolver)
 
