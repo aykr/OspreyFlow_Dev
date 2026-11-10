@@ -67,3 +67,22 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::tes
       Tests  17 passed (17)
 
 # == Live, under the rules lease (to come at the gates): the store's SQL (owner filter dropped from the list, from the total; typology, status and window dropped; a dataset reach put back), and the executor's ArcadeDB-shaped plant (the error's text put back into the words).
+
+# == Round 3 (the merger's review of round 2): an old notice's error text, at read
+# --- plant (needs_you.schedule_notices_for: the stored words served as they are, the check removed)
+        own text (`"<run> failed: <error>"`), here an `ArcadeDBError`'s whole reply naming a host, a type
+                  words='The scheduled run of Daily export due 9 November 2026 at 06:00 failed: ArcadeDB '
+E         + The scheduled run of Daily export due 9 November 2026 at 06:00 failed: ArcadeDB error 500: {"detail":"Duplicated key [ROW-7731] on Person[source_key] at arcadedb.internal:2480"}
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_notice_from_before_the_amendment_is_served_fixed_words_not_its_error
+1 failed, 13 passed, 1 warning in 1.61s
+# --- plant (schedule_notices.served_words: any stored words served)
+        for old in (f"{LEAD} failed: ArcadeDB error 500: Duplicated key [ROW-7731]",
+E             + The scheduled run of Daily export due 2 June 2026 at 06:00 failed: ArcadeDB error 500: Duplicated key [ROW-7731]
+        own text (`"<run> failed: <error>"`), here an `ArcadeDBError`'s whole reply naming a host, a type
+                  words='The scheduled run of Daily export due 9 November 2026 at 06:00 failed: ArcadeDB '
+E         + The scheduled run of Daily export due 9 November 2026 at 06:00 failed: ArcadeDB error 500: {"detail":"Duplicated key [ROW-7731] on Person[source_key] at arcadedb.internal:2480"}
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_only_a_fixed_sentence_is_served_and_anything_else_is_the_fallback
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_notice_from_before_the_amendment_is_served_fixed_words_not_its_error
+2 failed, 25 passed, 1 warning in 1.63s
+# --- green after both reverted
+27 passed, 1 warning in 1.57s

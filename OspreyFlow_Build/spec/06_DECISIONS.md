@@ -28399,6 +28399,11 @@ own place (ADR-145 decision 11).
    schedule; the slot is not run again, so nothing is promised), and two the scheduler already said in
    fixed words: *an earlier run into its case was still going* and *a refresh with no deduplication key*.
    The kinds are the orchestrator's four and its fifth for the sign-in service, plus those two.
+   **And at read:** *Needs you* serves a notice's stored words only when they end in one of these
+   sentences (`schedule_notices.served_words`); a notice written before this amendment, as
+   `"<run> failed: <the error's text>"`, is served the fixed fallback ("A scheduled load of yours
+   did not run as planned. …") instead, so no error's text reaches the Glass in the seven days after
+   an upgrade either (the merger's review). Every `_Refused` names its kind; none is defaulted.
 
 **Tests.** Live, against Postgres, each reader made as the route makes it: `test_schedule_notices_needs_you.py`
 (another person, an administrator, a team lead and an unknown principal read and count none of the
