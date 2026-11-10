@@ -35,3 +35,17 @@ Live: the rules lease, stack c, by `stack_lease.sh remote`, at 5fa7b83 (`gates/5
   8. The second-person policy ignored: only the second-person route case.
   9. An editor's approval asks for the administrator: only the second-person route case.
 - Released and down.
+
+## §3 The migration (`scripts/migrate_rules_to_datasets.py`), offline
+
+`tests/test_migrate_rules_to_datasets.py`: 5 passed, then one plant at a time.
+1. **The dry run handed the real writer:** red, only `test_a_dry_run_writes_nothing`.
+2. **A rule converted with a dataset that has no home case left out:** red, only
+   `test_a_dataset_with_no_home_case_leaves_the_rule_whole_and_running`.
+3. **The copies left whole-deployment:** red, only
+   `test_one_rule_per_dataset_in_its_home_case_with_the_same_conditions_and_the_original_retired`.
+4. **A rule never approved copied live:** red, only `test_a_rule_never_approved_is_copied_as_a_draft`.
+
+The store case (`test_migrate_rules_to_datasets_store.py`, its own schema, seeded as a store before
+L2.11) runs at the next leased run. It proves the dry run at `_main` changes no table, column, index or row,
+the real run leaves no whole-deployment rule, and a second run changes nothing.
