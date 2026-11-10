@@ -1,0 +1,81 @@
+# Playwright keyboard admin.spec.ts on this Mac at 3bd210d (on main 7bdd33b) with registry-L2.5c.diff applied, the orchestrator's local slot: 43 passed. Before it, the new case planted red (Admin's Delete not drawn): 1 failed, below the run.
+
+Running 43 tests using 1 worker
+
+  ✓   1 keyboard/admin.spec.ts:203:1 › a person's roles are saved by keyboard (334ms)
+  ✓   2 keyboard/admin.spec.ts:214:1 › a dashboard is registered and removed by keyboard (278ms)
+  ✓   3 keyboard/admin.spec.ts:229:1 › a dataset's egress is set by keyboard (186ms)
+  ✓   4 keyboard/admin.spec.ts:266:1 › a dataset's owners are changed by keyboard (192ms)
+  ✓   5 keyboard/admin.spec.ts:285:1 › a dataset's promotion policy is set by keyboard (184ms)
+  ✓   6 keyboard/admin.spec.ts:304:1 › a removed case's layer is merged, as a dry run, by keyboard (255ms)
+  ✓   7 keyboard/admin.spec.ts:318:1 › a removed case's layer is deleted, as a dry run, by keyboard (217ms)
+  ✓   8 keyboard/admin.spec.ts:331:1 › a removed case's layer is deleted by keyboard after its dry run (209ms)
+  ✓   9 keyboard/admin.spec.ts:347:1 › who may own a dataset is set in System by keyboard (195ms)
+  ✓  10 keyboard/admin.spec.ts:363:1 › the system is asked again by keyboard (149ms)
+  ✓  11 keyboard/admin.spec.ts:374:1 › a person is invited by keyboard and their one-time code is shown (204ms)
+  ✓  12 keyboard/admin.spec.ts:389:1 › a person's access is edited by keyboard (259ms)
+  ✓  13 keyboard/admin.spec.ts:399:1 › a person is disabled and enabled again by keyboard (286ms)
+  ✓  14 keyboard/admin.spec.ts:411:1 › a person's sign-in is reset by keyboard and the new code shown (180ms)
+  ✓  15 keyboard/admin.spec.ts:421:1 › a person is removed by keyboard once the removal is confirmed (203ms)
+  ✓  16 keyboard/admin.spec.ts:434:1 › a refused organisation arrival is joined to an account by keyboard (180ms)
+  ✓  17 keyboard/admin.spec.ts:450:1 › a demo pack's command is copied by keyboard (184ms)
+  ✓  18 keyboard/admin.spec.ts:462:1 › a schedule is paused and resumed by keyboard (192ms)
+  ✓  19 keyboard/admin.spec.ts:474:1 › a schedule's runs are shown by keyboard (178ms)
+  ✓  20 keyboard/admin.spec.ts:486:1 › a schedule is run now by keyboard, as its owner (171ms)
+  ✓  21 keyboard/admin.spec.ts:495:1 › a schedule is changed by keyboard, keeping its owner (477ms)
+  ✓  22 keyboard/admin.spec.ts:512:1 › a connection is named by keyboard (209ms)
+[WebServer] 07:47:54 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+  ✓  23 keyboard/admin.spec.ts:527:1 › a SQL and a JSON connection are named with their fields by keyboard (369ms)
+  ✓  24 keyboard/admin.spec.ts:565:1 › the grading scheme is read and its change command copied by keyboard (204ms)
+  ✓  25 keyboard/admin.spec.ts:580:1 › an API connection is named with its fields, and a connection tested, by keyboard (273ms)
+  ✓  26 keyboard/admin.spec.ts:612:1 › Admin's sections are moved between by keyboard (150ms)
+  ✓  27 keyboard/admin.spec.ts:632:1 › a coming section is opened by keyboard, and calls nothing (137ms)
+  ✓  28 keyboard/admin.spec.ts:648:1 › a person is given the Super user preset by keyboard (256ms)
+  ✓  29 keyboard/admin.spec.ts:660:1 › a person is given a custom role by keyboard (258ms)
+  ✓  30 keyboard/admin.spec.ts:673:1 › an Author is named for a case with none by keyboard (254ms)
+  ✓  31 keyboard/admin.spec.ts:686:1 › a person's case is transferred and they are disabled by keyboard (203ms)
+  ✓  32 keyboard/admin.spec.ts:709:1 › a built-in role is copied into a new role by keyboard (155ms)
+  ✓  33 keyboard/admin.spec.ts:725:1 › a custom role is made by keyboard (208ms)
+  ✓  34 keyboard/admin.spec.ts:741:1 › a right's tip is read with its box, and Roles, teams and Authors is opened and left, by keyboard (194ms)
+  ✓  35 keyboard/admin.spec.ts:758:1 › a custom role's versions are shown by keyboard (281ms)
+  ✓  36 keyboard/admin.spec.ts:768:1 › a custom role is edited by keyboard into its next version (182ms)
+  ✓  37 keyboard/admin.spec.ts:781:1 › a role's team is saved, its lead handed over and a cover named by keyboard (441ms)
+  ✓  38 keyboard/admin.spec.ts:818:1 › the audit is read by kind and person by keyboard (265ms)
+  ✓  39 keyboard/admin.spec.ts:838:1 › a case's rule audit is read in Audit by keyboard (164ms)
+  ✓  40 keyboard/admin.spec.ts:854:1 › the audit is paged by keyboard (199ms)
+  ✓  41 keyboard/admin.spec.ts:866:1 › when promotions are overdue is set in Operations by keyboard (162ms)
+  ✓  42 keyboard/admin.spec.ts:883:1 › a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard (261ms)
+  ✓  43 keyboard/admin.spec.ts:906:1 › every registered Admin action has its own proving test case above (0ms)
+
+  43 passed (10.6s)
+
+## the plant
+
+Running 1 test using 1 worker
+
+  ✘  1 keyboard/admin.spec.ts:331:1 › a removed case's layer is deleted by keyboard after its dry run (1.0m)
+
+
+  1) keyboard/admin.spec.ts:331:1 › a removed case's layer is deleted by keyboard after its dry run 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Delete Op Heron\'s layer now', exact: true })
+
+
+      187 |
+      188 | async function press(page: Page, name: string) {
+    > 189 |   await page.getByRole("button", { name, exact: true }).focus();
+          |                                                         ^
+      190 |   await page.keyboard.press("Enter");
+      191 | }
+      192 |
+        at press (/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts:189:57)
+        at /Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts:338:9
+
+    Error Context: test-results/admin-a-removed-case-s-lay-644dd--keyboard-after-its-dry-run/error-context.md
+
+  1 failed
+    keyboard/admin.spec.ts:331:1 › a removed case's layer is deleted by keyboard after its dry run ─

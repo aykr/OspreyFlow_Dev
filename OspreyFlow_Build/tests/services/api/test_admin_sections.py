@@ -63,12 +63,6 @@ NOT_WALKED = ("design/", "brand/")
 NOT_A_SECTION_S = {
     # Monitoring › Lists in the Glass calls these (`test_place_routes.py`'s first rule).
     r"^/v1/admin/screening-lists": "the Glass's Monitoring › Lists",
-    # L3.4 (ADR-143 Amendment 2 decision 1): an administrator's *Delete* of a removed case's layer,
-    # after Admin's own dry run. Its button in Admin › Datasets is the admin lane's screen, asked for
-    # through the orchestrator; until it lands no section calls it (the Studio's Authors delete
-    # through their own route meanwhile).
-    r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
-        "Admin › Datasets' Delete, the admin lane's screen to come",
     # ADR-090 Amendment 4 (L2.7): Admin's Proposed types is removed, proposals being decided on
     # the Studio's Model tab. These routes stay for the proposals that name no dataset (ADR-143
     # decision 5: the administrator's promotion "remains only" for those), with no screen of their
