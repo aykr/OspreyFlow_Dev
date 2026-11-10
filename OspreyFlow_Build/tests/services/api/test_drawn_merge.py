@@ -1027,9 +1027,15 @@ def test_a_retyped_item_goes_in_as_a_new_element_of_its_mapped_type_with_an_infe
     assert (copy.type, copy.properties, copy.datasets) == ("Organisation", {"name": "Night fight"},
                                                            ["src"])  # fmt: skip
     assert copy.provenance.drawn is not None and copy.provenance.drawn.label == "Night fight"
+    # Written back whole (ADR-130 Amendment 2), not as Dana is shown it: Alice's board kept.
+    assert copy.provenance.drawn.board_id == mw.board
+    assert copy.provenance == original.provenance
     assert copy.audit.load_id == body["load_id"]
     # Rule 5: inferred, a person confirms it; rule 6: two nodes, never one.
-    assert back.provenance.state == ProvenanceState.INFERRED and back.datasets == [mw.drawn]
+    # ADR-099 Amendment 2 decision 3: the copy and its original share no dataset, so neither does
+    # the link between them: no case reads it, nothing is joined at query time.
+    assert back.provenance.state == ProvenanceState.INFERRED
+    assert back.datasets == []
     assert back.audit.load_id == body["load_id"]
     (member,) = [e for e in mw.graph.edges() if e.type == "MEMBER_OF"]
     assert (member.source, member.target, member.datasets) == (
@@ -1069,13 +1075,15 @@ def test_only_an_original_the_merger_reads_is_copied(mw: SimpleNamespace) -> Non
     _incident_model(mw)
     hidden = _draw(mw, type="Incident", label="Courier run", marking="SECRET",
                    properties={"name": "Courier run"})  # fmt: skip
+    # Ticked by its id, alone: nothing is copied from it (the condition itself, asked first).
+    named = _step(mw, "merge", "erin", item_ids=[hidden["item_id"]], mapping=RETYPE)
+    assert not [n for n in mw.graph._graph_nodes.values() if n.type == "Organisation"]
+    unknown = _step(mw, "merge", "erin", item_ids=["no-such-item"], mapping=RETYPE)
+    assert (named.status_code, named.json()) == (unknown.status_code, unknown.json())
     dry = _step(mw, "dry_run", "erin", item_ids=_ids(drawn), mapping=RETYPE)
     assert dry.status_code == 200, dry.text
     assert (dry.json()["nodes"], dry.json()["retyped"]) == (2, 0)
     assert "Courier" not in json.dumps(dry.json())
-    named = _step(mw, "merge", "erin", item_ids=[hidden["item_id"]], mapping=RETYPE)
-    unknown = _step(mw, "merge", "erin", item_ids=["no-such-item"], mapping=RETYPE)
-    assert (named.status_code, named.json()) == (unknown.status_code, unknown.json())
     answer = _step(mw, "merge", "erin", item_ids=_ids(drawn), mapping=RETYPE)
     assert answer.status_code == 201, answer.text
     assert not [n for n in mw.graph._graph_nodes.values() if n.type == "Organisation"]
@@ -1150,6 +1158,13 @@ def test_a_match_on_a_retyped_node_is_looked_for_as_its_new_type_and_written_fro
     drawn = _incident(mw)
     as_drawn = _sheet_for(mw, "dana")["matches"]
     assert "o-loaded" not in {m["loaded"] for m in as_drawn}  # an Incident is no Organisation
+    # The sheet under the mapping offers it (the review, item 7): what Match shows, the merge takes.
+    mapped = _as("dana").get(f"/v1/datasets/{mw.drawn}/merge-sheet",
+                             params={"target": "src", "mapping": json.dumps(RETYPE)})  # fmt: skip
+    assert mapped.status_code == 200, mapped.text
+    assert "o-loaded" in {m["loaded"] for m in mapped.json()["matches"]}
+    (row,) = [m for m in mapped.json()["mapping"] if m["drawn_type"] == "Incident"]
+    assert row["target_type"] == "Organisation"
     pick = [{"drawn": drawn.fight["element_id"], "loaded": "o-loaded"}]
     answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE, matches=pick)
     assert answer.status_code == 201, answer.text
@@ -1278,6 +1293,191 @@ async def test_reverting_a_retyped_merge_withdraws_its_copies_their_links_and_sa
     await revert_promotion(record, boards.graph, mw.store, boards.items, merge)
     (member,) = [e for e in mw.graph.edges() if e.type == "MEMBER_OF"]
     assert mw.graph.node(copy.id).audit.reverted and member.audit.reverted
+    # Reverted as the load's own writes, never stamped withdrawn by a load (a refresh's record,
+    # which `restore_withdrawn` would bring back: the review, minor 21).
+    assert mw.graph.node(copy.id).audit.withdrawn_by_load is None
     assert next(e for e in mw.graph.edges() if e.id == back.id).audit.reverted
     assert mw.graph.node(drawn.fight["element_id"]).datasets == [mw.drawn]
     assert not mw.graph.node(drawn.fight["element_id"]).audit.reverted
+
+
+def test_a_sheet_given_a_mapping_it_cannot_read_is_refused(mw: SimpleNamespace) -> None:
+    _incident(mw)
+    for given in ("not json", json.dumps([{"kind": "node"}])):
+        answer = _as("dana").get(f"/v1/datasets/{mw.drawn}/merge-sheet",
+                                 params={"target": "src", "mapping": given})  # fmt: skip
+        assert _said(answer) == (422, "not_a_mapping"), answer.text
+
+
+def test_a_type_or_property_mapped_twice_is_refused(mw: SimpleNamespace) -> None:
+    """The review, minor 19: nothing taken silently, so a repeated choice is refused."""
+    drawn = _incident(mw)
+    twice = [RETYPE[0], {**RETYPE[0], "target_type": "Person"}]
+    once_each = [{**RETYPE[0], "properties": [
+        {"drawn_property": "name", "target_property": "name"},
+        {"drawn_property": "name", "target_property": None}]}]  # fmt: skip
+    for mapping in (twice, once_each):
+        answer = _step(mw, "dry_run", "dana", item_ids=drawn.ids, mapping=mapping)
+        assert _said(answer) == (422, "mapping_repeated"), answer.text
+
+
+def test_the_dry_run_says_what_a_retyped_item_does_not_carry(mw: SimpleNamespace) -> None:
+    """The review, minor 16 (rule 2): an unplaced property is said, never dropped silently."""
+    drawn = _incident(mw)
+    answer = _step(mw, "dry_run", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["not_carried"] == [
+        "Incident's category is not carried into Organisation: it stays on the drawing."
+    ]
+    # Only the incident is of another type: the link touching it is MEMBER_OF, also retyped.
+    assert answer.json()["retyped"] == 2
+
+
+def test_a_link_only_touching_a_retyped_node_is_not_counted_as_retyped(mw: SimpleNamespace) -> None:
+    """The review, minor 15: written new for its end, it keeps its own type. Mercer goes in as an
+    Organisation; his ROLE_IN, which may run from one, is kept as itself."""
+    drawn = _incident(mw)
+    as_org = [
+        {"kind": "node", "drawn_type": "Person", "target_type": "Organisation",
+         "properties": [{"drawn_property": "family_name", "target_property": "name"}]},
+    ]  # fmt: skip
+    answer = _step(mw, "dry_run", "dana", item_ids=drawn.ids, mapping=as_org)
+    assert answer.status_code == 200, answer.text
+    assert (answer.json()["nodes"], answer.json()["links"], answer.json()["retyped"]) == (2, 1, 1)
+
+
+def test_a_waiting_merge_whose_original_was_raised_is_rejected(mw: SimpleNamespace) -> None:
+    """The orchestrator's condition on the waiting path (the review, item 2): an original raised
+    since it was sent is not copied at the marking sent."""
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert sent.status_code == 201, sent.text
+    raised = _as("alice").patch(
+        f"/v1/investigations/{mw.home}/board-items/{drawn.fight['item_id']}",
+        json={"marking": "OFFICIAL-SENSITIVE"},
+    )
+    assert raised.status_code == 200, raised.text
+    decided = _as("sam").post(
+        f"/v1/datasets/src/promotions/{sent.json()['id']}/decision", json={"approve": True}
+    )
+    assert _said(decided) == (409, "items_changed"), decided.text
+    assert not [n for n in mw.graph._graph_nodes.values() if n.type == "Organisation"]
+
+
+@pytest.mark.parametrize(
+    ("which", "edit"),
+    [("fight", {"source_note": "Wing log, corrected"}), ("role", {"label": "led it"})],
+)
+def test_a_waiting_merge_whose_originals_drawn_assertion_changed_is_rejected(
+    mw: SimpleNamespace, which: str, edit: dict[str, Any]
+) -> None:
+    """The review, item 4: a source note, a label (a link's only edit) changed since it was sent
+    would be copied as it no longer is."""
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    item = getattr(drawn, which)["item_id"]
+    edited = _as("alice").patch(f"/v1/investigations/{mw.home}/board-items/{item}", json=edit)
+    assert edited.status_code == 200, edited.text
+    decided = _as("erin").post(
+        f"/v1/datasets/src/promotions/{sent.json()['id']}/decision", json={"approve": True}
+    )
+    assert _said(decided) == (409, "items_changed"), decided.text
+    assert mw.store.records[sent.json()["id"]].status == "rejected"
+
+
+async def test_a_copy_the_model_refuses_at_the_commit_rejects_the_merge_in_words(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review, item 4: the adapter's refusal (the model changed since) is the merge's
+    `items_changed`, rejected, nothing written; never a bare error."""
+    from ontology.errors import OntologyError
+
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+
+    async def refused(*_: Any, **__: Any) -> list[str]:
+        raise OntologyError("'Organisation' does not declare property 'name'")
+
+    monkeypatch.setattr(type(mw.graph), "upsert_nodes", refused)
+    decided = _as("erin").post(
+        f"/v1/datasets/src/promotions/{sent.json()['id']}/decision", json={"approve": True}
+    )
+    assert _said(decided) == (409, "items_changed"), decided.text
+    assert mw.store.records[sent.json()["id"]].status == "rejected"
+
+
+async def test_two_copies_written_as_one_link_are_shown_once_and_withheld_from_no_one(
+    mw: SimpleNamespace,
+) -> None:
+    """The review, item 8: the adapter merges two links of one pair and audience written in one
+    transaction (ADR-102), so two copies may share one written id."""
+    from dataclasses import replace
+
+    drawn = _incident(mw)
+    body = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE).json()
+    rows = mw.store.copies[body["id"]]
+    (link,) = [c for c in rows if c.kind == "link"]
+    mw.store.copies[body["id"]] = [*rows, replace(link, original="another-drawn-link")]
+    _, merge = _merge_commit(mw)
+    shown, withheld = await merge.copies_shown(mw.store.records[body["id"]], PEOPLE["erin"])
+    assert [i.element_id for i in shown if i.kind == "link"] == [link.written_id]
+    assert withheld is False
+
+
+async def test_the_board_fake_merges_a_link_written_twice_in_one_transaction() -> None:
+    """Rule 15: the fake refuses, and merges, what the adapter does (`_find_existing_edge(...,
+    session_id=tx)`)."""
+    from .board_fakes import BoardGraph
+    from .test_boards import ONTOLOGY, node
+
+    graph = BoardGraph(ONTOLOGY)
+    for n in ("a", "b"):
+        graph._graph_nodes[n] = node(n, "OFFICIAL").model_copy(update={"datasets": ["src"]})
+    tx = await graph.begin_transaction()
+    from schemas.domain import EdgeWrite, Provenance, SourceRef
+
+    def write(edge_id: str) -> EdgeWrite:
+        return EdgeWrite(
+            id=edge_id, type="ASSOCIATE_OF", source="a", target="b", properties={},
+            provenance=Provenance(state=ProvenanceState.ASSERTED, first_seen=datetime.now(UTC),
+                                  sources=[SourceRef(document_id="d", locator="", excerpt_hash="")]),
+            handling=graph.node("a").handling, created_by="eng", created_at=datetime.now(UTC),
+            datasets=["src"],
+        )  # fmt: skip
+
+    first, second = await graph.upsert_edges([write("e-1"), write("e-2")], tx)
+    await graph.commit_transaction(tx)
+    assert first == second == "e-1"
+    assert [e.id for e in graph.edges()] == ["e-1"]
+
+
+def test_a_rejected_drawn_merge_is_counted_alike_in_the_list_and_its_details(
+    mw: SimpleNamespace,
+) -> None:
+    """The review, item 12: Amendment 5 decision 6a, the same counts in both."""
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE).json()
+    rejected = _as("erin").post(f"/v1/datasets/src/promotions/{sent['id']}/decision",
+                                json={"approve": False, "reason": "Not this one"})  # fmt: skip
+    assert rejected.status_code == 200, rejected.text
+    listed = _as("erin").get("/v1/datasets/src/promotions").json()["promotions"]
+    (row,) = [(p["nodes"], p["links"]) for p in listed if p["id"] == sent["id"]]
+    details = _as("erin").get(f"/v1/datasets/src/promotions/{sent['id']}").json()["promotion"]
+    assert row == (details["nodes"], details["links"]) == (2, 1)
+
+
+def test_the_merge_audits_its_mapping_and_its_copies(mw: SimpleNamespace) -> None:
+    """The review, item 11: the trail says what was chosen and what was written for it."""
+    drawn = _incident(mw)
+    body = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE).json()
+    (entry,) = [e for e in mw.audit.records if e["action"] == "merge_drawn_dataset"]
+    query = entry["resolved_query"]
+    assert [m["target_type"] for m in query.get("mapping", [])] == ["Organisation", "MEMBER_OF"]
+    copies = {c["original"]: c for c in query.get("copies", [])}
+    assert set(copies) == {drawn.fight["element_id"], drawn.role["element_id"]}
+    assert all(c["written"] for c in copies.values())
+    assert entry["result_cardinality"] == body["nodes"] + body["links"]

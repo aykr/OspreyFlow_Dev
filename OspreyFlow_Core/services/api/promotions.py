@@ -120,6 +120,7 @@ class _MergeCommit(Protocol):
         self, record: PromotionRecord, reviewer: Principal
     ) -> tuple[list[Any], bool]: ...
     async def as_types(self, record: PromotionRecord) -> dict[str, str | None]: ...
+    def discard(self, record: PromotionRecord) -> None: ...
     async def copies_shown(
         self, record: PromotionRecord, reviewer: Principal
     ) -> tuple[list[DetailItem], bool]: ...
@@ -678,6 +679,13 @@ class Promotions:
         states = await self.investigations.admin_states([case_id])
         return case_id in states and states[case_id][1]
 
+    async def _roll_back(self, tx: Any, record: PromotionRecord) -> None:
+        """The load's transaction rolled back, and what a drawn merge kept of its writes for the
+        commit forgotten with it (the review, minor 20)."""
+        await self.boards.graph.rollback_transaction(tx)
+        if record.trigger == "drawn_merge" and self.merges is not None:
+            self.merges.discard(record)
+
     async def _commit(self, record: PromotionRecord, *, by: str | None) -> PromotionRecord:
         """The load itself: one graph transaction, all or nothing; then the registry's
         `promoted_at` (the withdrawal reads it, never the element). A load that fails leaves the
@@ -696,7 +704,7 @@ class Promotions:
                 # The chosen matches, in the same transaction: one load, all or nothing.
                 await self.merges.writes(record, tx)
         except NotPromotable as gone:
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             await self.reject(
                 record, was="awaiting_review", by=by,
                 reason=_CHANGED,
@@ -708,7 +716,7 @@ class Promotions:
             ) from gone
         except AmbiguousElementId as unclear:
             # An id two stored elements hold (`_holders`): refused whole, said in words.
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             await self.reject(
                 record, was="awaiting_review", by=by,
                 reason="The load was refused, and nothing was written.",
@@ -721,7 +729,7 @@ class Promotions:
         except Exception:
             # Whatever else refused the load (a composite, an unconverted case), the promotion is
             # not left waiting as if it could still be approved.
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             await self.reject(
                 record, was="awaiting_review", by=by,
                 reason="The load was refused, and nothing was written.",
@@ -731,7 +739,7 @@ class Promotions:
         if not await self.store.decide(
             record.id, was="awaiting_review", now="committed", by=by, at=now
         ):
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             raise PromotionRefused("already_decided", "This promotion has already been decided.")
         if drawn_merge:
             assert self.merges is not None
@@ -742,7 +750,7 @@ class Promotions:
             try:
                 await self.merges.before_commit(record)
             except Exception as refused:
-                await graph.rollback_transaction(tx)
+                await self._roll_back(tx, record)
                 await self.reject(
                     record, was="committed", by=by,
                     reason="The load was refused, and nothing was written.",
@@ -825,14 +833,16 @@ class Promotions:
     ) -> dict[str, tuple[int, int]]:
         """Each promotion's counts as `reader` would be shown its items in *Details*, never as
         recorded (Amendment 5 decision 6a: the counts of what is shown, never the difference).
-        One read per layer, not per promotion. A promotion whose elements are read for no one
-        (rejected, reverted) keeps its recorded counts: none of its items is shown to anyone."""
+        One read per layer, not per promotion, and one more per drawn merge for its retyped copies
+        (Amendment 7). A promotion whose elements are read for no one (rejected, reverted) keeps
+        its recorded counts, its copies among them, as `view` gives them: none of its items is
+        shown to anyone."""
         out: dict[str, tuple[int, int]] = {}
         groups: dict[tuple[str, ...], list[PromotionRecord]] = {}
         for record in records:
             read = self._reviewer_read(record, reader)
             if read is None:
-                out[record.id] = (len(record.node_ids), len(record.edge_ids))
+                out[record.id] = await self.recorded_counts(record)
                 continue
             groups.setdefault(tuple(read.datasets or ()), []).append(record)
         for datasets, held in groups.items():
@@ -855,6 +865,14 @@ class Promotions:
                         e + sum(1 for c in copies if c.kind != "node"),
                     )
         return out
+
+    async def recorded_counts(self, record: PromotionRecord) -> tuple[int, int]:
+        """As recorded: a drawn merge's retyped copies counted with what it promotes."""
+        copies = await self.store.copies_of(record.id) if record.trigger == "drawn_merge" else []
+        return (
+            len(record.node_ids) + sum(1 for c in copies if c.kind == "node"),
+            len(record.edge_ids) + sum(1 for c in copies if c.kind != "node"),
+        )
 
     async def details(self, record: PromotionRecord, reviewer: Principal) -> PromotionDetails:
         nodes, edges = await self._elements(record, reviewer)
@@ -1023,14 +1041,7 @@ class Promotions:
             await self._case_name(record.case_id) if show_case else "a case reading this dataset"
         )
         if counts is None:
-            # As recorded: a drawn merge's retyped copies counted with what it promotes.
-            copies = (
-                await self.store.copies_of(record.id) if record.trigger == "drawn_merge" else []
-            )
-            counts = (
-                len(record.node_ids) + sum(1 for c in copies if c.kind == "node"),
-                len(record.edge_ids) + sum(1 for c in copies if c.kind != "node"),
-            )
+            counts = await self.recorded_counts(record)
         return Promotion(
             id=record.id, load_id=record.load_id, trigger=record.trigger,
             dataset_id=record.dataset_id,

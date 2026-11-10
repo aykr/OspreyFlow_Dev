@@ -218,9 +218,15 @@ async def run(
     if record is None:
         print(f"No promotion has the load id {load_id}. Nothing was changed.")
         return 1
+    # A drawn merge's retyped copies (ADR-143 Amendment 7) are its own writes, withdrawn with it:
+    # said, and audited by what the load wrote.
+    copies = await store.copies_of(record.id) if record.trigger == "drawn_merge" else []
+    written = [{"original": c.original, "written": c.written_id, "same_as": c.same_as_id}
+               for c in copies]  # fmt: skip
     says = (
         f"promotion {load_id} into {record.dataset_id} from case {record.case_id}: "
         f"{len(record.node_ids)} items and {len(record.edge_ids)} links"
+        + (f", and {len(copies)} new item(s) of another type written for it" if copies else "")
     )
     if record.status != "committed":
         print(f"Refused: {says} is {record.status}, not committed. Nothing was changed.")
@@ -238,8 +244,9 @@ async def run(
         action="revert_promotion",
         investigation_id=record.case_id,
         resolved_query={"load_id": load_id, "dataset_id": record.dataset_id,
-                        "node_ids": list(record.node_ids), "edge_ids": list(record.edge_ids)},
-        result_cardinality=len(record.node_ids) + len(record.edge_ids),
+                        "node_ids": list(record.node_ids), "edge_ids": list(record.edge_ids),
+                        **({"copies": written} if written else {})},
+        result_cardinality=len(record.node_ids) + len(record.edge_ids) + len(copies),
     )  # fmt: skip
     try:
         await revert_promotion(record, graph, store, items, merge)

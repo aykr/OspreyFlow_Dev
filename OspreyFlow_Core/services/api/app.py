@@ -57,7 +57,14 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from scripts.build_local_basemap import GEOFABRIK_REGIONS, load_gazetteer
 from scripts.verify_map import verify_map
 from services.extract.writer import (
@@ -402,6 +409,7 @@ from schemas.promotions import (
     PromotionSheet,
     RemovedCaseLayer,
     RemovedCaseLayers,
+    TypeChoice,
 )
 from schemas.promotions import Promotions as PromotionsList
 from schemas.rights import (
@@ -4668,6 +4676,18 @@ async def _promotion_not_found_handler(request: Request, exc: PromotionNotFound)
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "promotion_not_found"}
     )
+
+
+async def _copies_audited(promotions: Any, record: PromotionRecord) -> list[dict[str, Any]]:
+    """A drawn merge's retyped items for its audit entry (ADR-143 Amendment 7): each original, the
+    type it goes in as, and what the load wrote for it (none while it waits or once refused)."""
+    if record.trigger != "drawn_merge":
+        return []
+    return [
+        {"original": c.original, "kind": c.kind, "type": c.type, "written": c.written_id,
+         "same_as": c.same_as_id}
+        for c in await promotions.store.copies_of(record.id)
+    ]  # fmt: skip
 
 
 async def _audit_promotion(
@@ -10239,10 +10259,12 @@ async def decide_promotion(
     """*Approve and commit* or *Reject with a reason* (C9, C11; ADR-133 Amendment 8)."""
     record = await _reviewable(promotions, dataset_id, promotion_id, principal)
     decided = await promotions.decide(record, principal, approve=body.approve, reason=body.reason)
+    copies = await _copies_audited(promotions, decided)
     await _audit_promotion(
         audit, principal, "approve_promotion" if body.approve else "reject_promotion",
-        record.case_id, len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
-        load_id=record.load_id, dataset_id=dataset_id, reason=body.reason,
+        record.case_id, len(record.node_ids) + len(record.edge_ids) + len(copies),
+        promotion_id=record.id, load_id=record.load_id, dataset_id=dataset_id,
+        reason=body.reason, **({"copies": copies} if copies else {}),
     )  # fmt: skip
     return await promotions.view(decided, principal, show_case=True)  # one of its Authors
 
@@ -10273,6 +10295,20 @@ async def drawn_merge_targets(
     return await merges.target_list(drawn, principal)
 
 
+_MERGE_MAPPING = TypeAdapter(Annotated[list[TypeChoice], Field(max_length=500)])
+
+
+def _merge_mapping(given: str | None) -> list[TypeChoice]:
+    if not given:
+        return []
+    try:
+        return _MERGE_MAPPING.validate_json(given)
+    except ValidationError:
+        raise PromotionRefused(
+            "not_a_mapping", "The mapping could not be read: choose from Map again.", status=422
+        ) from None
+
+
 @app.get("/v1/datasets/{dataset_id}/merge-sheet", dependencies=_MERGES)
 async def drawn_merge_sheet(
     dataset_id: StudioDatasetDep,
@@ -10280,12 +10316,16 @@ async def drawn_merge_sheet(
     principal: PrincipalDep,
     merges: DrawnMergesDep,
     audit: AuditDep,
+    mapping: str | None = None,
 ) -> DrawnMergeSheet:
     """Map and match: the drawing's items as the merger may see them, against the target's model
-    and the target's loaded nodes alone; audited (it reads the drawing for a merge)."""
+    and the target's loaded nodes alone; audited (it reads the drawing for a merge). `mapping`, a
+    JSON list of `TypeChoice`, is the mapping chosen so far (ADR-143 Amendment 7): the matches are
+    offered as each node goes in under it, as the merge will check them."""
+    chosen = _merge_mapping(mapping)
     drawn, case_id = await merges.drawn(dataset_id)
     into = await merges.target(drawn, target, principal)
-    sheet = await merges.sheet(drawn, case_id, into, principal)
+    sheet = await merges.sheet(drawn, case_id, into, principal, chosen)
     await _audit_promotion(
         audit, principal, "read_drawn_merge_sheet", case_id, len(sheet.items),
         dataset_id=dataset_id, target_dataset_id=into.id,
@@ -10331,11 +10371,14 @@ async def merge_drawn_dataset(
     drawn, case_id = await merges.drawn(dataset_id)
     into = await merges.target(drawn, body.target_dataset_id, principal)
     record = await merges.merge(drawn, case_id, into, body, principal)
+    copies = await _copies_audited(promotions, record)
     await _audit_promotion(
         audit, principal, "merge_drawn_dataset", case_id,
-        len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
+        len(record.node_ids) + len(record.edge_ids) + len(copies), promotion_id=record.id,
         load_id=record.load_id, dataset_id=dataset_id, target_dataset_id=into.id,
         status=record.status, matches=len(body.matches),
+        # Amendment 7: the mapping chosen, and each retyped item with the element written for it.
+        mapping=[c.model_dump() for c in body.mapping], copies=copies,
     )  # fmt: skip
     return await promotions.view(record, principal, show_case=True)  # one of the target's Authors
 

@@ -228,8 +228,13 @@ class BoardGraph(FakeGraphPort):
                 raise OntologyError("an edge end does not exist")
             validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
             held = self._merge_target(write)
+            # As the adapter (`_find_existing_edge(..., session_id=tx)`): a link of this pair and
+            # audience written earlier in the same transaction is merged into too (rule 15).
+            earlier = self._pending_merge_target(write, tx)
             if held is not None:
                 edge_id = held.id
+            elif earlier is not None:
+                edge_id = earlier
             elif any(e.id == write.id for e in self._graph_edges):
                 # As the adapter: edge `id` is unique, so a write of a taken id at another
                 # audience is a link of its own under a new id (ADR-102 Amendment 3).
@@ -239,6 +244,18 @@ class BoardGraph(FakeGraphPort):
             ids.append(edge_id)
             self._pending[tx][1].append((write, edge_id))
         return ids
+
+    def _pending_merge_target(self, write: EdgeWrite, tx: str) -> str | None:
+        key = audience_of(write.handling, write.datasets, SCHEME)
+        for pending, edge_id in self._pending[tx][1]:
+            if (
+                pending.type == write.type
+                and pending.source == write.source
+                and pending.target == write.target
+                and audience_of(pending.handling, pending.datasets, SCHEME) == key
+            ):
+                return edge_id
+        return None
 
     def _ends_type(self, node_id: str, tx: str) -> str | None:
         held = self._graph_nodes.get(node_id)
@@ -253,6 +270,12 @@ class BoardGraph(FakeGraphPort):
         new_id = new_edge_id()
         self._pending[tx][3].append((edge_id, replacement, new_id))
         return new_id
+
+    async def revert_elements(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], tx: str
+    ) -> None:
+        """As the adapter: each set reverted at commit, with no withdrawing load stamped."""
+        self._pending[tx][2].append((list(node_ids), list(edge_ids), None))
 
     async def withdraw_elements(
         self, node_ids: Sequence[str], edge_ids: Sequence[str], load_id: str, tx: str
@@ -450,10 +473,14 @@ class BoardGraph(FakeGraphPort):
         )
         self._graph_edges = [merged if e.id == held.id else e for e in self._graph_edges]
 
-    def _land_withdrawal(self, node_ids: list[str], edge_ids: list[str], load_id: str) -> None:
+    def _land_withdrawal(
+        self, node_ids: list[str], edge_ids: list[str], load_id: str | None
+    ) -> None:
         def withdrawn(audit: AuditStub) -> AuditStub:
             if audit.reverted:
                 return audit
+            if load_id is None:  # `revert_elements`
+                return audit.model_copy(update={"reverted": True})
             return audit.model_copy(update={"reverted": True, "withdrawn_by_load": load_id})
 
         for node_id in node_ids:
