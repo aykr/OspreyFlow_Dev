@@ -148,38 +148,55 @@ def _plant_every_config_driven_command(repo: Path, trap: Path) -> None:
 async def test_publish_never_execs_a_binary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No config-driven command runs (the independent review of L1.7a, item 2): with every one a
-    real `git commit` would honour planted, the second publish spawns nothing. Shown red with the
-    commit made by dulwich's own worktree commit, which reads the config (`l1.7a/`)."""
-    calls: list[object] = []
+    """No config-driven program runs (the independent review of L1.7a, item 2): with every one a
+    real `git commit` honours planted, neither publish spawns anything.
+
+    Three of the plants are shown to fire this trap when dulwich's own config-reading code is put
+    in the commit's place (`l1.7a/red_plants.py`): the hooks in `.git/hooks` (its worktree
+    commit), the signer `gpg.program` (the same commit with hooks skipped) and the clean filter
+    (its worktree stage). The rest, `core.hooksPath`, the `reference-transaction` and
+    `post-index-change` hooks, `core.fsmonitor` and the credential helper, are inert in dulwich
+    1.2.21: it has no code that runs them. They stay planted because a real `git commit` honours
+    them, so a later dulwich that does is caught here too."""
+    spawned: list[str] = []
 
     def refuse(*args: object, **kwargs: object) -> None:
-        calls.append(args)
-        raise AssertionError(f"the publish path spawned a process: {args!r}")
+        spawned.append(repr(args[0]) if args else "?")
+        raise AssertionError(f"the publish path spawned a process: {spawned[-1]}")
+
+    def refuse_popen(self: object, args: object, *rest: object, **kwargs: object) -> None:
+        refuse(args)
 
     async def refuse_async(*args: object, **kwargs: object) -> None:
         refuse(*args)
 
-    monkeypatch.setenv("PATH", str(tmp_path / "no-binaries-here"))
+    # PATH holds one program, a trap named `gpg`: dulwich's signer is offered only where it finds
+    # a `gpg`, so this makes the planted `gpg.program` reachable rather than inert by omission.
+    path_dir = tmp_path / "path-with-only-a-gpg"
+    path_dir.mkdir()
+    (path_dir / "gpg").write_text(f"#!/bin/sh\necho ran >> {path_dir}/gpg.ran\nexit 1\n")
+    (path_dir / "gpg").chmod(0o755)
+    monkeypatch.setenv("PATH", str(path_dir))
     monkeypatch.setattr(asyncio, "create_subprocess_exec", refuse_async)
     monkeypatch.setattr(asyncio, "create_subprocess_shell", refuse_async)
-    monkeypatch.setattr(subprocess.Popen, "__init__", refuse)
+    monkeypatch.setattr(subprocess.Popen, "__init__", refuse_popen)
     for name in ("system", "posix_spawn", "posix_spawnp", "execv", "execve", "execvp", "fork"):
         if hasattr(os, name):
             monkeypatch.setattr(os, name, refuse)
 
     repo = tmp_path / "repo"
-    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
     trap = tmp_path / "trap.sh"
-    _plant_every_config_driven_command(repo, trap)
     second = b"id: alpha\nversion: 2\n"
     try:
+        await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
+        _plant_every_config_driven_command(repo, trap)
         await commit_recipe_file("alpha", second, version=2, repo_root=repo)
     finally:
-        # Asked even when the publish raised, so a spawn is what the failure says, not the
+        # Asked even when a publish raised, so a spawn is what the failure says, not the
         # GitCommitError a refused spawn turns into.
-        assert calls == [], f"the publish spawned: {calls!r}"
+        assert spawned == [], f"the publish spawned: {spawned}"
     assert not Path(f"{trap}.ran").exists()
+    assert not (path_dir / "gpg.ran").exists()
     # The second commit holds the bytes given, unfiltered and unsigned.
     from dulwich.object_store import tree_lookup_path
     from dulwich.objects import Commit
@@ -461,3 +478,138 @@ async def test_a_linked_publish_lock_is_refused(tmp_path: Path) -> None:
 
     assert not elsewhere.exists()
     assert _git(repo, "rev-parse", "HEAD") == before
+
+
+@needs_git
+async def test_a_rival_making_the_repository_first_is_joined_not_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """First use on a fresh volume, with another process making the repository at the same moment
+    (the lane review's item 3): the publish's own git directory is made aside, so the rival's
+    lands first and the publish commits on top of it. Nothing is refused, no ref is left behind
+    and the aside directory is gone."""
+    from dulwich.repo import Repo
+
+    root = tmp_path / "fresh"
+    real = Repo.init
+    made_aside: list[bool] = []
+
+    def rival_first(path: str, **kwargs: Any) -> Repo:
+        made = real(path, **kwargs)
+        made_aside.append(not (root / ".git").exists())
+        _git(root, "init", "-q", "--initial-branch=main")
+        (root / "theirs").write_text("theirs\n")
+        _git(root, "add", "theirs")
+        _git(root, "-c", "user.name=Op", "-c", "user.email=op@localhost",
+             "commit", "-q", "-m", "theirs")  # fmt: skip
+        return made
+
+    monkeypatch.setattr(Repo, "init", staticmethod(rival_first))
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=root)
+
+    assert made_aside == [True]
+    assert _git(root, "log", "--format=%s").splitlines() == ["ingest: publish alpha v1", "theirs"]
+    assert _git(root, "for-each-ref", "--format=%(refname)").split() == ["refs/heads/main"]
+    assert sorted(p.name for p in root.iterdir()) == [".git", "recipes", "theirs"]
+    _git(root, "fsck", "--strict")
+
+
+@needs_git
+async def test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Neither the user's nor the system's git config is read, at first use (`init.defaultBranch`
+    and the like) or when the index is opened: dulwich's only way to them is refused here."""
+    from dulwich.config import StackedConfig
+
+    def never(*args: object, **kwargs: object) -> object:
+        raise AssertionError("the publish read the user's or the system's git config")
+
+    monkeypatch.setattr(StackedConfig, "default", classmethod(never))
+    monkeypatch.setattr(StackedConfig, "default_backends", classmethod(never))
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert _git(repo, "symbolic-ref", "HEAD").strip() == "refs/heads/main"
+    assert _git(repo, "log", "--format=%s").splitlines() == [
+        "ingest: publish alpha v2", "ingest: publish alpha v1",
+    ]  # fmt: skip
+
+
+@needs_git
+async def test_a_repository_whose_config_names_another_tree_is_refused(tmp_path: Path) -> None:
+    """The repository's own config is read for `core.worktree`: one naming another tree is refused
+    before anything is written, so the index can describe no tree but the one the recipe is
+    written to. (`core.bare` in a `.git` directory's config is ignored by dulwich, and a bare
+    repository has no index for git to read, so it is not asked here.)"""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    before = _git(repo, "rev-parse", "HEAD")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    with (repo / ".git" / "config").open("a") as config:
+        config.write(f"[core]\n\tworktree = {elsewhere}\n")
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert list(elsewhere.iterdir()) == []
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 1\n"
+    assert _git(repo, "--git-dir", str(repo / ".git"), "rev-parse", "HEAD") == before
+
+
+@needs_git
+@pytest.mark.parametrize("recipe_id", ["01JC5Q8K3ZP6V2T9XR4W7HMNBD", "a_b.c-1", "9"])
+async def test_an_id_of_the_shapes_the_studio_mints_is_accepted(
+    tmp_path: Path, recipe_id: str
+) -> None:
+    """The id check refuses nothing real: a ULID (`new_id`), and dots, underscores and a leading
+    digit (the lane review's minor)."""
+    repo = tmp_path / "repo"
+    path = await commit_recipe_file(recipe_id, b"id: x\n", version=1, repo_root=repo)
+    assert path == f"recipes/{recipe_id}.yaml"
+    assert _git(repo, "ls-files").split() == [path]
+
+
+async def test_a_publish_held_off_too_long_is_refused_not_hung(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A process stopped while holding the publish lock does not hang every publish (the lane
+    review's minor): after the wait, the publish is refused and nothing is written."""
+    import fcntl
+    import threading
+
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", 0.2)
+    other = (repo / ".git" / studio_publish.PUBLISH_LOCK_NAME).open("a")
+    fcntl.flock(other, fcntl.LOCK_EX)
+    # Let go after 3 s, so a wait without limit ends (and fails this test) rather than hangs.
+    release = threading.Timer(3.0, lambda: (fcntl.flock(other, fcntl.LOCK_UN), other.close()))
+    release.start()
+    try:
+        with pytest.raises(GitCommitError) as raised:
+            await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+    finally:
+        release.join()
+    assert "another publish" in str(raised.value)
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 1\n"
+
+
+@needs_git
+async def test_a_temporary_file_a_crash_left_is_swept(tmp_path: Path) -> None:
+    """A publish killed between writing its temporary file and renaming it leaves that file; the
+    next publish sweeps it under the lock, so `git status` is clean and `git add -A` cannot
+    commit it (the lane review's minor)."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    left = repo / "recipes" / ".beta.yaml.0123456789abcdef.tmp"
+    left.write_bytes(b"half a recipe")
+    kept = repo / "recipes" / ".not-ours.tmp"
+    kept.write_bytes(b"someone else's")
+
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert not left.exists()
+    assert kept.exists()  # only the shape the publish itself makes is swept

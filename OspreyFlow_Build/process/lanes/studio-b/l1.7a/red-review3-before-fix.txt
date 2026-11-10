@@ -1,0 +1,10 @@
+# the code at c93b8eb (before the lane review's round-2 fixes), the new tests: red first
+# the bounded-wait test is red here for want of PUBLISH_LOCK_WAIT_SECONDS; its real red is the lock-waits-forever plant
+PASSED tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[01JC5Q8K3ZP6V2T9XR4W7HMNBD]
+PASSED tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1]
+PASSED tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
+FAILED tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused - assert [False] == [True]
+FAILED tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says - services.api.studio_publish.GitCommitError: committing 'recipes/alpha.yaml' failed (AssertionError)
+FAILED tests/services/api/test_recipe_repository.py::test_a_repository_whose_config_names_another_tree_is_refused - Failed: DID NOT RAISE GitCommitError
+FAILED tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - AttributeError: <module 'services.api.studio_publish' from '/Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py'> has no attribute 'PUBLISH_LOCK_WAIT_SECONDS'
+FAILED tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept - AssertionError: assert not True
