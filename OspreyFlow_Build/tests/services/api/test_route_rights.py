@@ -364,6 +364,10 @@ ROUTE_RIGHTS = {
     "change_rule_sentence": "deploy_rules",
     "read_rule_versions": "read_alert_queue",
     "read_rule_schedule": "read_alert_queue",
+    # ADR-146 decision 3 (L2.11a): a rule's files exported as the rules are read; imported as a
+    # draft is written, by a rule author (ADR-112 Amendment 5).
+    "export_rule_standard_file": "read_alert_queue",
+    "import_rule_standard_files": "author_rules",
     "compile_rule_sentence": "investigate",
     "read_rule_sentence": "investigate",
     "preview_rule_sentence": "investigate",
