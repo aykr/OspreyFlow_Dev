@@ -53,6 +53,8 @@ export interface RulesPlaceProps {
   onOpenAlert?: (alertId: string | null) => void;
   /** *Open the evidence* (ADR-146 decision 6): resolves to words when it could not be opened. */
   onOpenEvidence?: (evidence: AlertEvidence) => Promise<string | null>;
+  /** L3.6, *Open the board* from a drawn watch's alert (`AlertQueue`'s `onOpenBoard`). */
+  onOpenBoard?: (boardId: string) => void;
 }
 
 export function RulesPlace(props: RulesPlaceProps) {
@@ -123,6 +125,7 @@ export function RulesPlace(props: RulesPlaceProps) {
           openAlertId={addressedId}
           onOpenAlert={props.onOpenAlert}
           onOpenEvidence={props.onOpenEvidence}
+          onOpenBoard={props.onOpenBoard}
         />
       )}
       {tab === "raises" && (

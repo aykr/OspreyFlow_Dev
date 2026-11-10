@@ -1828,6 +1828,11 @@ export function App() {
             }}
             address={addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null}
             onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
+            // L3.6: *Open the board* from a drawn watch's alert, in this case's Boards.
+            onOpenBoard={(boardId) => {
+              setBoardToOpen(boardId);
+              setView("boards");
+            }}
             // ADR-146 decision 6 (R5): the alert's evidence as a private view of its case (ADR-144
             // decision 4), opened as the Glass's read-only lens, with the way back to the alert.
             onOpenEvidence={async ({ alertId, title, nodeIds, caseId }) => {
