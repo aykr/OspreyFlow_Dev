@@ -8,11 +8,11 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   OperationsRollup,
   RunQuota,
-} from "../../../../../packages/schemas/generated";
+} from "../../../../packages/schemas/generated";
 
 type QuotaScope = RunQuota["scope"];
-import { Button, Input, Select } from "../../design/primitives";
-import type { AdminApi } from "../api";
+import { Button, Input, Select } from "../design/primitives";
+import type { AdminApi } from "./api";
 
 export const OPERATIONS_WORDS = {
   withheld: "withheld",

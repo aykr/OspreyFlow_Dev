@@ -21,7 +21,7 @@ index 7a2d6ba..022d2af 100644
  import { Button, Input } from "../../design/primitives";
  import { operationsAgeing, setPromotionAlertDays, type AdminApi } from "../api";
  import { Schedules } from "../Schedules";
-+import { OperationsFigures } from "./OperationsFigures";
++import { OperationsFigures } from "../OperationsFigures";
  
  const when = (iso: string) =>
    new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" });

@@ -12,7 +12,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { OperationsRollup } from "../../../../../packages/schemas/generated";
+import type { OperationsRollup } from "../../../../packages/schemas/generated";
 import { OPERATIONS_WORDS, OperationsFigures } from "./OperationsFigures";
 
 afterEach(() => {

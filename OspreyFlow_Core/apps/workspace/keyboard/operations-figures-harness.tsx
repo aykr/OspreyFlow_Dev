@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import { OperationsFigures } from "../src/admin/sections/OperationsFigures";
+import { OperationsFigures } from "../src/admin/OperationsFigures";
 import { applyHarnessBrand } from "./brandHarness";
 
 await applyHarnessBrand();
