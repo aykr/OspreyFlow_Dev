@@ -95,3 +95,22 @@ body itself an error.
 | Plant | Red |
 | --- | --- |
 | Export ignores the stored files (renders every time) | `test_export_serves_the_stored_files_not_a_fresh_render` |
+
+## §7 The second live set, and a fake corrected (7be4916; lease rules-b on stack d, 09:19–09:22Z)
+
+- **The set:** 316 passed, 1 failed (`gates/7be4916.live.txt`). The failure is
+  `test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses`: it counts
+  other runs' whole-deployment rules on the shared stack. That is main's known failure, fixed on
+  `lane/rules` at 8e8b9ff. My rules are not whole-deployment, and teardown removes them.
+- **The kind-check plant stayed green against the real store.** That is a finding about my fake, which put
+  layers among the case's chosen datasets. The real `chosen_of_case` is the case's `investigation_datasets`
+  rows, which never hold a layer. So the case's own layer is refused by `chosen_of_case` itself, which the
+  live case shows with and without the kind check. The kind check matters only for a drawn dataset, which
+  `create_drawn` makes its home case's chosen row.
+- **The fake now models the real store.** Layers are in the reader's read set but never chosen; a drawn
+  dataset is chosen.
+  - Red with the kind check removed: `test_a_drawn_dataset_its_home_case_chose_is_not_a_dataset_a_rule_declares`.
+  - Not counted: a "judged by the read set" plant, which crashed on a name that does not exist.
+  - The layer cases are proved by the live run, through the real store.
+  - The drawn case is offline only. A live drawn dataset needs `create_drawn` plus a teardown of its rows;
+    it is left, and the report says so.

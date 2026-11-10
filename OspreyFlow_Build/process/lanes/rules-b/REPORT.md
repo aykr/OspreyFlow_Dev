@@ -1,42 +1,31 @@
-# rules-b lane · report · L2.12, reporting folded into the places (9 November 2026; after the orchestrator's independent review of 211a6dc and its fix round)
+# rules-b lane · report · L2.11a, the rule's standards: BPMN 2.0 and DMN (10 November 2026)
 
-1. **Figures replace the Reports view: met.** The Figures tab has the Alerts panel and the Drawing panel (the drawing figures are null until L3.4). The second dashboards door is removed. Proved by `test_alert_panel_figures.py` and the `AlertsPanel`, `ReportsView`, `ReportsPlace` and `EmbeddedDashboards` tests. Every panel and board case is shown red by a plant (RED_RECORD §12).
-2. **Every figure counted as the reader, by audience (rules 3, 7): met.** `test_monitoring_dashboard.py`'s audience case covers a colleague, another unit, an only-me alert claimed by its owner, and another case's reader on the same dataset. The other unit's figures are now pinned exactly, not as a subset. Red by plants in `alerts.py`'s queue scope; the exact pin is red by a plant that takes the other unit's rows away (live, RED_RECORD §14).
-3. **The Reports Viewer reaches only decision 10's list: met.** In `test_reports_viewer_journey.py`:
-   - Each destination returns a 200 through the real case gate (red with the case refusing).
-   - Every route naming a right beyond the list refuses (over 200 routes; red with a right given, and with `share_case` taken off `rename_investigation`).
-   - The **24** routes that name no right are pinned and weighed. main's `get_grading_scheme_route` (L3.7) is weighed as reference settings, like the yardstick; that case was red at the rebased head before the change.
-4. **Feed: met.** Neither format carries the team view's *mine* to a board (red first on the JSON feed). Spec 03 says so.
-5. **Alert monitoring board, help page, roles' words: met.**
-   - The board's Superset guard is now one guard, red alone, on the mount and on the guest token.
-   - The board's Rule and Period selects are operated by typed keys; each is red with its handler removed.
-   - `AGE_BANDS` is typed against the generated age band in both directions, each direction shown red by `tsc`.
-   - `whyNot`, which named people, is removed (the owner's ruling (c)); red first.
-6. **Canvas badge, Admin's tips, See the trend: patches.** Each passes `git apply --check` at the head (`PATCHES.md`). Admin's tips are **narrowed**: `admin-tips.patch` gives each right's tip in Admin › Roles' role form, plus the help door. The rest is carried to admin after L2.6 (`CARRIES.md`): Roles' tables and team editor, People, Datasets, levels, and a refusal naming roles through studio-b's `whyNotByRole`.
-7. **Keyboard and axe: met.** `alert-figures.spec.ts`: 8 ids in `registry-L2.12.patch`, unchanged. Axe: 742 passed in dark, light and GOV.UK.
-8. **Gates at 6221632** (on main 99d92a8; offline, closed ports 59991–59994, OSPREY_LANE unset; `gates/6221632.*`):
-   - `make -k ci`: green except this machine's checks: `trivy` and the eight `trivy-image-*` (no Docker daemon; the vulnerability DB download failed), `opentofu-check` and `chart-check`.
-   - `make -k test`: 9,453 passed, 24 failed and 30 errors. All are harness cases that need Docker, plus main's known four (`osprey.yaml`, the Valkey port, `graphify-out` at the root, the phone fixture).
-   - The vitest half stopped with pytest's failure, so it was run on its own: 2,802 passed plus the harness's 45 (`6221632.vitest.txt`).
-   - Keyboard, with `registry-L2.12.patch` applied: 688 passed. 2 failed: `boards.spec.ts:225` and `:423`, main's own failure since L3.7, fixed on `lane/case` (CARRIES row).
-   - At a1a8c04 (`whyNot` removed, nothing else changed), vitest: 2,801 passed and 1 failed, `MatrixView.budget` at 2,855 ms against 2,500 on a shared machine. It passed when re-run alone and at 6221632 (`a1a8c04.vitest.txt`).
-9. **Live run:** rules-b lease on stack g (on the server), at 6221632, 16:22–16:32Z. 232 passed across 24 files, `test_route_rights.py` included (`gates/6221632.live.txt`). Then a plant run on the server's copy only, red then restored (`6221632.live-plant.txt`). Stack down, lease released.
-10. **Found on the way:**
-    - The earlier review's items 2 and 4 have no record; RED_RECORD §12 says so, and this review stands in for them.
-    - The effect's `drawsItself` check could never run; it is gone.
-    - studio-b's `L1.8_roles_words.patch` now applies here only with reduced context (`git apply -C1`), because `whyNot` was its neighbour.
-11. **Left:**
-    - The boards' Alerts panel mount (L3.3/L3.4) and the Studio's help door.
-    - Admin's tips beyond the role form (carried to admin).
-    - The Alerts panel reads the whole active queue to show five. Carried to rules: a typed `limit` on `read_alert_queue`, never a bare slice (rule 2).
-12. **For ratification at merge** (files outside the lane's map):
-    - The schemas commit (`packages/schemas/domain.py`, `generated/MonitoringFigures.ts`, `generated/ReportFigures.ts`), taken separately and first.
-    - `services/api/app.py` (the feed route leaving out *mine*, 3341887).
-    - `tests/services/api/test_reports.py` and `test_monitoring_dashboard.py`.
-    - `apps/workspace/src/App.tsx` and `App.test.tsx`; `home/HomePage.tsx`, `HomePage.test.tsx`, `homeData.ts` and `homeData.test.ts`; `shell/startScreen.tsx`.
-    - The shared test kit where the view switch says *Figures*: `a11y/every-harness.spec.ts`, `keyboard/{reports,shell}.spec.ts`, `keyboard/{reports,top-bar,places,case-screen-options}-harness.tsx`, `live/capture-kit.ts`.
-    - `process/lanes/CARRIES.md` (two rows).
-13. **Requests:**
-    - Apply `registry-L2.12.patch` in the merge, and pass the other three patches on after it.
-    - studio-b's roles-words patch takes `-C1`, or a rebuild at its `whyNotByRole` hunk.
-14. **Questions for the owner:** none. **Still running:** nothing.
+(L2.12's report is in git history, at 6221632 and before.)
+
+1. **Export to `.bpmn` and `.dmn`, and import back to the same rule: met.** `tests/rule_standards/test_codec.py` has a round trip for every shape of every blank. The route's round trip, dataset included, is in `test_rule_standards_routes.py`.
+2. **An unsupported file is refused in words, naming what it holds: met.** It covers a BPMN, DMN, `osprey:` or vendor element or attribute, an element out of its place, and an attribute the model would drop. Each is planted in a file the codec wrote (rule 15).
+3. **Access (rules 3 and 4): met.**
+   - **Export:** a rule the reader may not see is the same 404 as a missing one, offline and live (red with the store's reach dropped).
+   - **Import:** `author_rules` at Author. The dataset must be the case's chosen source or composite; any other is the app's `dataset_not_found`.
+   - **Caps:** both are red by plant.
+   - **Tables:** the rights and levels rows. `author_rules` came off the not-yet list.
+4. **Stored beside each version (ADR-146 Amendment 5, option (a)): the codec's half is met.** `rule_files` is the save's function, and Export serves stored bytes (red with it rendering). Rules wires the store in L2.11, with its two tests.
+5. **Show as BPMN by keyboard: unit cases met; Playwright and axe pending.** `ShowAsBpmn.test.tsx` passes (6). `keyboard/rule-standards.spec.ts` covers Tab, open, Escape, Close, focus back, and Escape back to the editor. It and the axe scans in three themes wait for the orchestrator's local slot.
+6. **Red record:** `l2.11a/RED_RECORD.md` §1–§6. **Friction row:** `process/friction/2026-11-10-rules-b-rule-standards.md`.
+7. **Live:** lease rules-b on stack d (server). Two runs at e81e8a2, then a second set at 7be4916 (`gates/`).
+8. **Gates:** `make -k ci` and `make test` wait for the rebase onto main after L2.10.
+9. **Lane-reviewer:** run once. It found eight must-fix and eight minor items; all are fixed except two left minors (decisions 8 and 9 below).
+10. **Patches:** `registry-L2.11a.patch`, `audit-L2.11a.patch` (needed at merge: `test_audit_kinds` is red without it) and `every-harness-L2.11a.patch`.
+11. **For ratification:** the three routes in `app.py` (one block); the schemas commit 101d98c; the rows in `test_investigation_levels.py` and `test_route_rights.py`; `src/alerts/ruleStandards/**`; and `spec/06_DECISIONS.md` (Amendment 5, at the orchestrator's request).
+
+## Decisions taken (each the recommended option; the owner may overrule)
+
+1. **Codec input.** Q: build on which rule model? Options: wait for L2.11's, or use today's `SentenceRuleInput`. **Chose:** `SentenceRuleInput`, one function per side, so the switch is one import. Agreed with rules.
+2. **File shapes.** Q: how should DMN carry what FEEL cannot say? Options: FEEL expressions, or `osprey:` extensions. **Chose:** extensions, plus one fixed FEEL form per operator. Nothing is read as an expression (rule 8).
+3. **Library.** Q: a BPMN/DMN library or hand-written XML? **Chose:** hand-written, read with `defusedxml`, which is already a dependency, so the licence register is unchanged.
+4. **Import's right.** Q: `deploy_rules` or `author_rules`? **Chose:** `author_rules` at Author (the editor's draft right). Agreed with rules.
+5. **Wiring.** Q: an `include_router` line or routes in `app.py`? **Chose:** three thin routes in `app.py`, the work in `rule_standards_routes.py`, as `watch_routes.py` does. Ratified by rules and the orchestrator.
+6. **Import body.** Q: multipart or JSON? **Chose:** JSON (`RuleFilesUpload`), so the body is capped as it streams before anything is spooled.
+7. **Declared dataset.** Q: membership of the read set, or the case's chosen dataset by kind? **Chose:** chosen and by kind (the strict option), refused as the app's missing dataset.
+8. **Left as minor:** the fake store does not model another case's whole-deployment rule (a missing grant, not a refusal); `_attr`/`_text` are not `saxutils`.
+9. **Left as minor:** XML-illegal control characters in a name would export a malformed file. The model allows them; the fix is a refusal at save, which belongs to rules' L2.11.

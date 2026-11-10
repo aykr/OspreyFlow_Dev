@@ -15,8 +15,8 @@ What a mistake would do, and the case that catches it:
   `test_a_dataset_outside_the_case_is_refused_as_a_missing_one`;
 - a file read past the cap: `test_a_file_over_the_cap_is_refused_before_it_is_read`, and a body:
   `test_a_body_over_the_cap_is_refused_as_it_streams`;
-- the case's layer, a borrowed layer or a drawn dataset declared:
-  `test_a_layer_or_a_drawn_dataset_in_the_case_is_not_a_dataset_a_rule_declares`;
+- the case's layer or a borrowed layer declared: `test_a_layer_the_case_reads_is_not_a_dataset_a_rule_declares`;
+- a drawn dataset declared: `test_a_drawn_dataset_its_home_case_chose_is_not_a_dataset_a_rule_declares`;
 - an import that writes, or names an element it refused vaguely: `test_an_unsupported_file_is_refused_by_name_and_nothing_is_written`.
 """
 
@@ -138,9 +138,10 @@ class _Rules:
 
 
 class _Datasets:
-    """The real store's `chosen_of_case`: the case's own chosen dataset (with its kind), and none
-    of another case's. Its layer, a layer it borrows and a drawn dataset are in the case's read set
-    but are not a dataset a rule declares; each is listed here as the real store would hold it."""
+    """The real store's `chosen_of_case`: the case's `investigation_datasets` rows, with their kinds,
+    and none of another case's. A layer, the case's own or one it borrows, is in the case's read set
+    (`ids_of_case`, the principal's datasets) but never a chosen row; a drawn dataset is its home
+    case's chosen row (`create_drawn`), so only the kind tells it apart."""
 
     def __init__(self) -> None:
         def made(did: str, kind: str, **more: Any) -> Dataset:
@@ -148,18 +149,16 @@ class _Datasets:
                            created_at=datetime(2026, 1, 1, tzinfo=UTC), kind=kind, **more)  # fmt: skip
 
         self.chosen = {CASE.id: [made(DATASET, "source")], OTHER_CASE: [made(HIDDEN_DATASET, "source")]}
-        self.kinds = {"layer-of-case-s": "analyst_layer", "borrowed-layer": "analyst_layer", "drawn-1": "drawn"}
+        self.kinds = {"drawn-1": "drawn"}
 
     async def chosen_of_case(self, investigation_id: str) -> list[Dataset]:
         return list(self.chosen.get(investigation_id, []))
 
     def choose(self, did: str) -> None:
-        """Give the case a dataset of one of the other kinds, as a store holding it would."""
-        kind = self.kinds[did]
-        extra = {"layer_of": CASE.id} if kind == "analyst_layer" else {}
+        """Make the case a drawn dataset's home case, as `create_drawn` does."""
         self.chosen[CASE.id].append(
             Dataset(id=did, name=did, owning_unit="unit-1", created_by="a",
-                    created_at=datetime(2026, 1, 1, tzinfo=UTC), kind=kind, **extra)  # type: ignore[arg-type]
+                    created_at=datetime(2026, 1, 1, tzinfo=UTC), kind=self.kinds[did])  # type: ignore[arg-type]
         )  # fmt: skip
 
 
@@ -278,15 +277,24 @@ def test_a_dataset_outside_the_case_is_refused_as_a_missing_one(world: dict[str,
     assert hidden.json() == {"error": "dataset_not_found", "detail": "There is no such dataset."}
 
 
-@pytest.mark.parametrize("dataset", ["layer-of-case-s", "borrowed-layer", "drawn-1"])
-def test_a_layer_or_a_drawn_dataset_in_the_case_is_not_a_dataset_a_rule_declares(
-    world: dict[str, Any], dataset: str
-) -> None:
-    world["datasets"].choose(dataset)
-    refused = _import(RULE_AUTHOR, *_files(dataset))
-    nowhere = _import(RULE_AUTHOR, *_files("ds-that-does-not-exist"))
+@pytest.mark.parametrize("layer", ["layer-of-case-s", "borrowed-layer"])
+def test_a_layer_the_case_reads_is_not_a_dataset_a_rule_declares(world: dict[str, Any], layer: str) -> None:
+    """The case's own layer, or one it borrows, is in what the reader reads in the case, never in
+    what the case chose: judged by the chosen datasets, not the read set."""
+    reader = _who("au", "analyst", "rule_author", datasets=[DATASET, layer])
+    refused = _import(reader, *_files(layer))
+    nowhere = _import(reader, *_files("ds-that-does-not-exist"))
     assert (refused.status_code, refused.json()) == (nowhere.status_code, nowhere.json())
-    assert _import(RULE_AUTHOR, *_files()).status_code == 200
+    assert _import(reader, *_files()).status_code == 200
+
+
+def test_a_drawn_dataset_its_home_case_chose_is_not_a_dataset_a_rule_declares(world: dict[str, Any]) -> None:
+    """ADR-143 Amendment 2 decision 5: no rule runs on a drawn dataset until it is merged."""
+    world["datasets"].choose("drawn-1")
+    reader = _who("au", "analyst", "rule_author", datasets=[DATASET, "drawn-1"])
+    refused = _import(reader, *_files("drawn-1"))
+    nowhere = _import(reader, *_files("ds-that-does-not-exist"))
+    assert (refused.status_code, refused.json()) == (nowhere.status_code, nowhere.json())
 
 
 def test_a_file_over_the_cap_is_refused_before_it_is_read(
