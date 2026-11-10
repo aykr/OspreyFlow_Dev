@@ -278,6 +278,7 @@ PUBLISH_LOCK_WAIT_SECONDS = 30.0
 #: The directory a first use makes its git directory in before renaming it into place; one a
 #: crashed first use left is swept once it is older than any live first use could be.
 _ASIDE_PREFIX = ".git-init-"
+_ASIDE = re.compile(re.escape(_ASIDE_PREFIX) + r"[a-z0-9_]{8}")
 _ASIDE_STALE_SECONDS = 600.0
 
 #: A temporary file `_write_recipe_file` makes beside a recipe; one a crash left is swept.
@@ -314,21 +315,23 @@ def _open_repository(repo_root: Path) -> Repo:
     `core.worktree`); one that is bare or names a worktree other than `repo_root` is refused, so
     the index can describe no tree but the one the file is written to.
     """
-    own = repo_root / ".git"
-    with suppress(FileNotFoundError):
-        if not stat.S_ISDIR(os.lstat(own).st_mode):
-            # A `.git` file naming another repository's directory, or a link: what would be
-            # written (index, objects, lock, `HEAD`) is another repository's.
-            raise GitCommitError("the recipe repository's .git is not a directory of its own")
     try:
         repo = Repo(str(repo_root))
     except NotGitRepository:
         repo = _initialise(repo_root)
-    if (
-        repo.bare
-        or Path(repo.path).resolve() != repo_root.resolve()
-        or Path(repo.controldir()).resolve() != own.resolve()
-    ):
+    own = repo_root / ".git"
+    try:
+        own_is_a_directory = stat.S_ISDIR(os.lstat(own).st_mode)
+    except FileNotFoundError:
+        own_is_a_directory = False
+    if not own_is_a_directory or Path(repo.commondir()).resolve() != own.resolve():
+        # A `.git` file naming another repository's directory, a link at `.git`, or a linked
+        # worktree's `commondir`: the objects, refs and config written or read would be another
+        # repository's. Checked after the open, so a link put there by a first use's rival is
+        # seen too.
+        repo.close()
+        raise GitCommitError("the recipe repository's .git is not a directory of its own")
+    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():
         repo.close()
         raise GitCommitError(
             "the recipe repository is bare or its config names another working tree"
@@ -336,21 +339,27 @@ def _open_repository(repo_root: Path) -> Repo:
     return repo
 
 
+def _sweep_asides(repo_root: Path) -> None:
+    """Remove an aside directory a crashed first use left, once older than any live first use
+    could be; only `tempfile.mkdtemp`'s own shape, so an operator's directory is never touched."""
+    for left in repo_root.iterdir():
+        if _ASIDE.fullmatch(left.name):
+            with suppress(OSError):
+                if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:
+                    shutil.rmtree(left)
+
+
 def _initialise(repo_root: Path) -> Repo:
     repo_root.mkdir(parents=True, exist_ok=True)
-    # An aside directory a crashed first use left (older than any live first use can be).
-    for left in repo_root.glob(f"{_ASIDE_PREFIX}*"):
-        with suppress(OSError):
-            if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:
-                shutil.rmtree(left)
+    _sweep_asides(repo_root)
     making = Path(tempfile.mkdtemp(prefix=_ASIDE_PREFIX, dir=repo_root))
     try:
         with Repo.init(str(making), config=StackedConfig([ConfigFile()])) as made:
             made.refs.set_symbolic_ref(HEADREF, Ref(b"refs/heads/main"))
         os.rename(making / ".git", repo_root / ".git")
     except OSError:
-        if not (repo_root / ".git").is_dir():
-            raise  # not another process's repository: a real failure
+        if not (repo_root / ".git" / "objects").is_dir():
+            raise  # no other process's repository is there: the real failure, kept
     finally:
         shutil.rmtree(making, ignore_errors=True)
     return Repo(str(repo_root))
@@ -477,6 +486,7 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
         raise _held_off()
     try:
         with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):
+            _sweep_asides(repo_root)
             written = _write_recipe_file(repo_root, relative_path, data)
             _stage_and_commit(repo, path, written, data, message)
     finally:
