@@ -1950,11 +1950,28 @@ SECRETS_FILE = "deployment.env"
 def write_private(path: Path, text: str) -> None:
     """`text` into `path`, readable and writable by its owner alone (`600`), whether the file is new
     or was looser before (ADR-137 decision 2: `deployment.env` had been written `644`, readable by
-    every account on the machine). The mode is set on the open file, before anything is written."""
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        os.fchmod(handle.fileno(), 0o600)
-        handle.write(text)
+    every account on the machine). The mode is set on the open file, before anything is written.
+
+    Whole or not at all (CARRIES, 10 November 2026): written to a `600` file beside `path`, flushed
+    to disk, given the old file's owner (so a run under sudo leaves it the operator's), and renamed
+    over it; a failure part way leaves the old file as it was and nothing beside it. Only for a file
+    a container reads when it is made (`deployment.env`, an `env_file`), never one it mounts: a
+    rename gives the file a new inode."""
+    staged = path.with_name(f".{path.name}.{os.getpid()}.writing")
+    descriptor = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.exists() and os.geteuid() == 0:
+            held = path.stat()
+            os.chown(staged, held.st_uid, held.st_gid)
+        os.replace(staged, path)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
 
 
 #: What a rendered file that holds no secret is written as, and a folder of them, whatever the
