@@ -341,11 +341,15 @@ def _open_repository(repo_root: Path) -> Repo:
 
 def _sweep_asides(repo_root: Path) -> None:
     """Remove an aside directory a crashed first use left, once older than any live first use
-    could be; only `tempfile.mkdtemp`'s own shape, so an operator's directory is never touched."""
+    could be: only `tempfile.mkdtemp`'s own shape, empty or holding one `.git`, so an operator's
+    directory is never touched."""
     for left in repo_root.iterdir():
         if _ASIDE.fullmatch(left.name):
             with suppress(OSError):
-                if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:
+                # Only what a first use makes: the aside empty, or holding one `.git` and nothing
+                # else (L1.7a's carry). Anything more is not ours, however old.
+                ours = sorted(os.listdir(left)) in ([], [".git"])
+                if ours and time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:
                     shutil.rmtree(left)
 
 
