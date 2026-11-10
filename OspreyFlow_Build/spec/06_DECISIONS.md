@@ -25360,12 +25360,23 @@ what of decisions 1–14 is built and what is left.
    schedule, watch, source refresh, external), and counted again under a transaction lock per
    dataset and unit as the run's ledger row is written, so two runs cannot both take a quota's last
    run. The budget alert is recorded once per quota and day at `alert_at_share` (80%) and shown on
-   Operations; its delivery to each administrator's *Needs you* is admin's, left.
+   Operations; its delivery to each administrator's *Needs you* is admin's, left. **The day's count
+   is every unit's runs into the dataset, so only a holder of `administer_system` is told the
+   number** (rules 3 and 7, the strict reading; the orchestrator's independent review of L1.7): the
+   Runs tab's quota bar (`GET …/recipes/{id}/quota`) gives `runs_today` to them alone and tells
+   anyone else only whether the quota is `used`; a quota refusal's words (to the owner, the service
+   identity and Operations) say the quota of N runs a day is used, and the budget alert's that the
+   day's runs reached its share, neither with a count. The bar is told only to a case that reads the
+   recipe's dataset, refused in words as Test and Preview are (rule 4).
 3. **The run API (decision 9).** `POST /v1/runs` (dataset, pipeline, a deployed version or
    `latest`, the external run id) and `GET /v1/runs/{run_id}`, for a service identity only: a token
    verified against the realm's JWKS, audience and issuer, whose `azp` names the client and whose
    `preferred_username` is Keycloak's `service-account-<client>`; a person's token is 403 on both,
-   and a service identity's is 401 on every other route (it carries no clearance or unit). A
+   and a service identity's is 401 on every other route (it carries no clearance or unit; held by
+   `test_a_service_identitys_token_is_401_on_a_persons_route`). The deployment's own clients
+   (`osprey-*`: the Conduit, the Glass, the Admin console, a report dashboard) are never a service
+   identity here, nor named as an *Owned externally* client (422 in words): several have service
+   accounts, and none is an orchestrator. A
    pipeline not owned externally by that client, in another dataset, or absent is one 404; a pin that
    is not the deployed version is 409 in words. The run acts as the owner through the scheduler's own
    checks (token exchange; `schedule_pipelines`, Editor of the case, cleared for the source) and the
