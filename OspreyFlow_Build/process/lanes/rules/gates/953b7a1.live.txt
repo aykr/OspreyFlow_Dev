@@ -1,0 +1,48 @@
+## L2.11 rebased onto main at 2456d2c: the migration's live case, the store and route cases and the rule tests they touch: the rules lease, stack c, by stack_lease.sh remote, at 953b7a1, start 2026-11-10T12:11:02Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261110T121113Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py ../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py
+....................................................                     [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+5.25s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+3.89s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.44s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.34s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.22s call     tests/test_migrate_rules_to_datasets_store.py::test_the_real_run_leaves_no_whole_deployment_rule_and_one_per_dataset
+0.18s call     tests/test_migrate_rules_to_datasets_store.py::test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row
+0.08s call     tests/services/api/test_rule_maker_checker_routes.py::test_a_deployment_scope_rule_deployed_by_one_person_is_pending_until_a_second_approves
+0.08s call     tests/services/api/test_rule_editor_routes.py::test_each_editor_route_needs_its_right_the_case_and_its_level
+0.08s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.08s call     tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+0.08s call     tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+0.07s call     tests/services/api/test_rule_maker_checker_routes.py::test_a_change_and_a_retirement_of_a_deployment_rule_wait_and_are_kept_as_versions
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_each_editor_route_needs_its_right_the_case_and_its_level
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+0.06s call     tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+0.05s call     tests/services/api/test_rule_maker_checker_routes.py::test_the_new_rule_routes_need_the_right_the_case_and_their_level
+0.04s call     tests/services/api/test_rule_maker_checker_routes.py::test_a_waiting_change_names_its_proposer_and_asks_only_for_proposers_served
+0.04s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.04s call     tests/services/api/test_rule_maker_checker_routes.py::test_the_author_cannot_approve_their_own_rule
+0.03s call     tests/services/api/test_rule_maker_checker_routes.py::test_approving_needs_the_administrators_right
+0.03s call     tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+0.03s call     tests/services/api/test_rule_maker_checker_store.py::test_a_deployment_rule_live_before_approvals_existed_is_made_pending
+0.03s call     tests/services/api/test_rule_maker_checker_routes.py::test_an_engineer_cannot_author_an_analyst_rule
+0.03s call     tests/services/api/test_rule_schedule.py::test_a_scheduled_rule_runs_as_its_principal_and_its_run_is_recorded
+0.03s call     tests/services/api/test_rule_drafts_store.py::test_a_draft_of_a_live_rule_leaves_it_running_as_it_stood
+0.03s call     tests/services/api/test_rule_schedule.py::test_after_downtime_the_latest_slot_runs_and_the_rest_are_missed
+0.03s call     tests/services/api/test_rule_schedule.py::test_a_slot_is_run_once
+52 passed, 1 warning in 18.47s
+Wall time: 20 s, exit 0 (stack c, the lease rules took at 2026-11-10T12:11:00Z; set-up before it 11 s)
+# exit 0 end 2026-11-10T12:11:33Z
+
+== plant: the dry run opens the bootstrapping store (scripts/migrate_rules_to_datasets.py), 2026-11-10T12:12:04Z
+FAILED ../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py::test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row
+1 failed, 1 passed in 1.20s
+# the rules lease on c: down and released 2026-11-10T12:12:29Z

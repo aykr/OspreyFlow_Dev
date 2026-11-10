@@ -46,9 +46,15 @@ Live: the rules lease, stack c, by `stack_lease.sh remote`, at 5fa7b83 (`gates/5
    `test_one_rule_per_dataset_in_its_home_case_with_the_same_conditions_and_the_original_retired`.
 4. **A rule never approved copied live:** red, only `test_a_rule_never_approved_is_copied_as_a_draft`.
 
-The store case (`test_migrate_rules_to_datasets_store.py`, its own schema, seeded as a store before
-L2.11) runs at the next leased run. It proves the dry run at `_main` changes no table, column, index or row,
-the real run leaves no whole-deployment rule, and a second run changes nothing.
+The store case (`test_migrate_rules_to_datasets_store.py`, its own schema, seeded as a store before L2.11)
+ran live on stack c (the rules lease) at 953b7a1 (`gates/953b7a1.live.txt`). With the store and route files and
+the rule tests they touch, 52 passed. It proves:
+- the dry run at `_main` changes no table, column, index or row;
+- the real run leaves no whole-deployment rule, and one rule per dataset with the same conditions;
+- a second run changes nothing.
+
+Red with the bootstrapping store opened on a dry run: only
+`test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row`. Released and down.
 
 ## §4 The team's member count for "where its alerts go" (`read_alert_teams`), offline
 
