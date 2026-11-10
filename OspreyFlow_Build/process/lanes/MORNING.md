@@ -29,6 +29,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    the Conduit without Java, and the basemap is built off-platform with `ospreyflow map build` and uploaded.
    **Why:** a smaller image with fewer scan findings, and the profile needs no in-product build. **Recorded:**
    ADR-148's open question 3, closed; P7 builds it. **To overrule:** say "one image everywhere".
+3. **How L3.9 applies your type-mapping ruling** (case's proposal, my agreement). The Studio's Map step maps each
+   drawn type to any type of the target's domain model, defaulting to the same name. Items whose type is unchanged
+   move into the target as the same element, as L3.4's promotions do. Items mapped to another type are written by the
+   load as new elements of that type, keeping their marking, grading and drawn provenance, each with an inferred,
+   scored SAME_AS back to its original. Nothing is collapsed (rules 5 and 6). One load and one revert, which also
+   withdraws the copies, their links and their SAME_AS. A picture, or a Same/Not-the-same decision, on a retyped item
+   is left out with its reason. **Why:** an element cannot change its class, and keeping unchanged items as the same
+   element keeps L3.4's revert. **Recorded:** ADR-143 Amendment 7 (case writes it). **To overrule:** say which part.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
