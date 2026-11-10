@@ -154,3 +154,40 @@ def test_a_recipe_whose_fixed_marking_is_above_the_ceiling_is_refused_before_any
     with pytest.raises(AboveTheDeploymentCeiling):
         ceiling_module.refuse_fixed_markings_above_the_ceiling(secret, ceiling)
     ceiling_module.refuse_fixed_markings_above_the_ceiling(recipe, ceiling)  # OFFICIAL passes
+
+
+async def test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The start itself, not only the reader: `lifespan` reads the ceiling before any store is
+    opened, and an unknown one ends it there."""
+    from services.api import app as app_module
+    from services.api.app import app
+
+    def opened(*_: object, **__: object) -> None:
+        raise AssertionError("the start went on to open the stores")
+
+    monkeypatch.setattr(app_module, "build_run_resources", opened)
+    monkeypatch.setattr(app_module.ApiConfig, "from_env", classmethod(lambda cls: object()))
+    monkeypatch.delenv("OSPREY_GRADING_SCHEME", raising=False)
+    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "SEKRIT")
+    with pytest.raises(CeilingUnknown):
+        async with app_module.lifespan(app):
+            pass
+
+
+def test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables() -> None:
+    """Structural, since a staged branch needs its stores to run end to end: in
+    `pipeline_run._run_staged_branch`, the ceiling's check of fixed markings comes before the
+    source tables are read and the step tables written (`source_tables`, `prepare_staged_load`).
+    Red with the check removed or moved after them."""
+    import inspect
+
+    from services.api import pipeline_run
+
+    source = inspect.getsource(pipeline_run._run_staged_branch)
+    check = source.find("refuse_fixed_markings_above_the_ceiling(")
+    assert check != -1, "the staged branch does not judge its fixed markings"
+    for write in ("source_tables,", "prepare_staged_load("):
+        assert source.find(write) != -1, write
+        assert check < source.find(write), f"the check comes after {write}"
