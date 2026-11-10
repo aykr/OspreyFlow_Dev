@@ -1,4 +1,4 @@
-# head 39141cb; plant: an unknown deployment.highest_marking rendered as written
+# head 68c4032; plant: an unknown deployment.highest_marking rendered as written
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_a_ceiling_the_scheme_does_not_know_is_refused_at_render; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -12,5 +12,9 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_w
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_recipe_whose_fixed_marking_is_above_the_ceiling_is_refused_before_any_staging
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_units_conflict_is_still_judged
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_reads_is_judged_by_it_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_ceiling_the_scheme_does_not_know_is_refused_at_render - Failed: DID NOT RAISE ValueError
-1 failed, 11 passed in 25.50s
+1 failed, 15 passed in 25.05s

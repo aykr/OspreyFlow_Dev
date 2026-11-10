@@ -1,0 +1,8 @@
+# head 68c4032; plant: the 422 without the detail the Glass shows a person
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py
+# must fail: test_a_document_above_the_ceiling_is_refused_before_anything_is_stored, test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored; for the reason 'KeyError'; all failed: yes
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_above_the_ceiling_is_refused_before_anything_is_stored - KeyError: 'detail'
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored - KeyError: 'detail'
+2 failed, 2 passed, 1 warning in 1.63s

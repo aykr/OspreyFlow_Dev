@@ -1,8 +1,8 @@
-# head 39141cb; plant: an entity's picture's marking not judged against the ceiling
+# head 68c4032; plant: an entity's picture's marking not judged against the ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py
 # must fail: test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_above_the_ceiling_is_refused_before_anything_is_stored
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored - AssertionError: {"document_id":"content:1","deltas":[{"seq":1,"op":"add","nodes":[],"edges":[]}]}
-1 failed, 3 passed, 1 warning in 1.61s
+1 failed, 3 passed, 1 warning in 1.58s

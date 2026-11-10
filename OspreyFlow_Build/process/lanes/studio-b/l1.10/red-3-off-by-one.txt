@@ -1,4 +1,4 @@
-# head 39141cb; plant: a marking at the ceiling counted as above it: `>` -> `>=`
+# head 68c4032; plant: a marking at the ceiling counted as above it: `>` -> `>=`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py
 # must fail: test_a_load_at_the_ceiling_passes, test_a_document_at_the_ceiling_is_stored, test_a_picture_at_the_ceiling_is_stored, test_the_conduit_reads_the_ceiling; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -10,11 +10,15 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_w
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_recipe_whose_fixed_marking_is_above_the_ceiling_is_refused_before_any_staging
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_units_conflict_is_still_judged
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_reads_is_judged_by_it_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_above_the_ceiling_is_refused_before_anything_is_stored
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduit_reads_the_ceiling - AssertionError: assert (True and not True)
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_nothing_set_is_the_scheme_s_highest - assert not True
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes - services.ingest.ceiling.AboveTheDeploymentCeiling: This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployment cleared to hold it.
-FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored - AssertionError: {"error":"above_the_deployments_highest_marking","problems":["This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deploym...
-FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored - AssertionError: {"error":"above_the_deployments_highest_marking","problems":["This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployme...
-5 failed, 11 passed, 1 warning in 25.12s
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored - AssertionError: {"error":"above_the_deployments_highest_marking","detail":"This file is marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so it was not added. Mark it no higher than OFFICIAL-SENSITIVE.","problems":["This file is marked above this deploym...
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored - AssertionError: {"error":"above_the_deployments_highest_marking","detail":"This file is marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so it was not added. Mark it no higher than OFFICIAL-SENSITIVE.","problems":["This file is marked above this deployme...
+5 failed, 15 passed, 1 warning in 25.14s
