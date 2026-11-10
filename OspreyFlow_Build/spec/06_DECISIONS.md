@@ -32066,6 +32066,14 @@ Superset.
    `NetworkPolicy` not rendered. **Calico's open-source policy matches networks, not names**, so a host an
    enabled feature reaches (a model engine's address, a proxied map provider's source or endpoint) names its
    networks in `cloud_platform.egress_nets`; one without is refused at render, in words naming it.
+   **The hosts are**: S3 and STS on every render (the bucket; IRSA's role), their networks the
+   platform settings file's `egress.service_nets` where the platform's team give them, else the
+   deployment's (a gateway endpoint routes S3 by a prefix list, never by the VPC's network, so
+   `managed_nets` does not cover it); each enabled model engine; each proxied map provider; the mail
+   server, which Keycloak reaches; and each host of `cloud_platform.connector_hosts`, the one list
+   that renders both the egress and the Conduit's own connector allow-list (`OSPREY_CONNECTOR_EGRESS`,
+   in the ConfigMap), so the two never disagree. The organisation's own sign-in is Small's alone and
+   refused at this profile; P10's Entra ID adds its host.
 7. **Images** (decision 8): `ospreyflow images push --registry` follows the render's `images.yaml`: ours
    built from the checkout and pushed, the third-party ones copied by digest
    (`docker buildx imagetools create`), so the digest the values pin is the source's. Ours are pinned by the

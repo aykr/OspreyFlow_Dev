@@ -37,6 +37,10 @@ class EgressSettings(_Strict):
     #: The networks the platform's managed stores answer in.
     managed_nets: list[str] = Field(min_length=1)
     dns_namespace: str = Field(min_length=1)
+    #: An AWS service's host and the networks the platform reaches it at (its VPC endpoint, or a
+    #: gateway endpoint's prefix list as networks), where the platform's guide names them; a host
+    #: not here takes the deployment's `cloud_platform.egress_nets`.
+    service_nets: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class SecretSettings(_Strict):

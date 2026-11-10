@@ -19,5 +19,8 @@ cloud_platform:
   environment: production
   registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
   allow_from: ["192.0.2.0/24", "198.51.100.0/24"]
+  # S3 and STS by their networks (synthetic): the bucket and IRSA's role, on every render.
   egress_nets:
+    s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+    sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
     api.openai.com: ["203.0.113.0/24"]

@@ -23,8 +23,12 @@ egress:
   # source policy matches networks, not names, so every host an enabled feature reaches names its
   # networks (cloud_platform.egress_nets in osprey.yaml).
   kind: calico
-  # The VPC the managed stores (RDS, ElastiCache, OpenSearch) answer in, and S3's gateway endpoint.
+  # The VPC the managed stores (RDS, ElastiCache, OpenSearch) answer in.
   managed_nets: ["172.20.0.0/16"]
+  # S3 (behind a gateway endpoint, routed by a prefix list, not this VPC) and STS (IRSA's role) are
+  # not named here until the platform's team give their networks: until then each deployment names
+  # them under cloud_platform.egress_nets, and a render without them is refused.
+  service_nets: {}
   # The cluster's DNS, which every pod needs.
   dns_namespace: kube-system
 # Decision 4: where each managed store's connection details arrive. The namespace's Terraform

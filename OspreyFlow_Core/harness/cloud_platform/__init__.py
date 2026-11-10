@@ -340,16 +340,24 @@ def _read_from_the_platform(
             ]
 
 
-def _egress_hosts(config: OspreyConfig) -> list[str]:
-    """Each host an enabled feature reaches (the settings ADR-135 Amendment 2 and ADR-147 gate):
-    a model engine's address and a proxied map provider's source."""
+def _host(address: str) -> str | None:
     from urllib.parse import urlsplit
 
+    return urlsplit(re.sub(r"\{[^}]*\}", "x", address)).hostname
+
+
+def _egress_hosts(config: OspreyConfig, platform: PlatformSettings) -> list[str]:
+    """Each host the namespace reaches: S3 (the bucket) and STS (IRSA's role) always; a model
+    engine's address and a proxied map provider's source (the settings ADR-135 Amendment 2 and
+    ADR-147 gate); the mail server, which Keycloak reaches; and each connector host. (The
+    organisation's own sign-in is Small's alone, refused at this profile; P10's Entra ID adds its
+    host here.)"""
     defaults = {"openai": "api.openai.com", "anthropic": "api.anthropic.com",
                 "gemini": "generativelanguage.googleapis.com"}  # fmt: skip
-    hosts: list[str] = []
+    region = platform.aws_region
+    hosts = [f"s3.{region}.amazonaws.com", f"sts.{region}.amazonaws.com"]
     for provider in config.models.enabled_providers:
-        host = urlsplit(provider.api_base).hostname if provider.api_base else None
+        host = _host(provider.api_base) if provider.api_base else None
         host = host or defaults.get(provider.name)
         if host is None:
             raise CloudPlatformNotRenderable(
@@ -361,17 +369,19 @@ def _egress_hosts(config: OspreyConfig) -> list[str]:
         if map_provider.proxy == "none":
             continue  # fetched by the browser, never from the namespace
         for address in (map_provider.source or "", map_provider.endpoint or ""):
-            if address.startswith(("http://", "https://")):
-                host = urlsplit(re.sub(r"\{[^}]*\}", "x", address)).hostname
-                if host:
-                    hosts.append(host)
+            if address.startswith(("http://", "https://")) and (host := _host(address)):
+                hosts.append(host)
+    if config.mail is not None:
+        hosts.append(config.mail.host)
+    hosts += _cp(config).connector_hosts
     return sorted(set(hosts))
 
 
 def egress_policy(config: OspreyConfig, platform: PlatformSettings) -> dict[str, Any]:
-    """Decision 7's two policies' settings: the networks allowed out, each host's by name."""
-    hosts = _egress_hosts(config)
-    given = _cp(config).egress_nets
+    """Decision 7's two policies' settings: the networks allowed out, each host's by name, from the
+    deployment's `egress_nets` or, for an AWS service, the platform's settings."""
+    given = {**platform.egress.service_nets, **_cp(config).egress_nets}
+    hosts = _egress_hosts(config, platform)
     missing = [host for host in hosts if not given.get(host)]
     if missing:
         raise CloudPlatformNotRenderable(
@@ -485,6 +495,9 @@ def render_cloud_platform(
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
     environment.update(install.settings)
+    if _cp(config).connector_hosts:
+        # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
+        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(_cp(config).connector_hosts))
     secrets = values["secrets"]
     secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
     secrets["defaults"] = {

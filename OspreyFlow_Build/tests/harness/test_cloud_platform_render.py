@@ -327,17 +327,77 @@ def test_the_conduit_is_planned_without_java() -> None:
 # ---- egress and the front door -----------------------------------------------------------------
 
 
+#: The fixtures' networks for S3 and STS (synthetic; the platform's own are its settings file's
+#: or the deployment's `egress_nets`).
+AWS = {
+    "s3.eu-west-2.amazonaws.com": ["198.18.0.0/24"],
+    "sts.eu-west-2.amazonaws.com": ["198.18.1.0/24"],
+}
+
+
+def _hosts(values: dict[str, Any]) -> dict[str, list[str]]:
+    return {h["host"]: h["nets"] for h in values["egress"]["hosts"]}
+
+
 def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks() -> None:
     dev = _values(_config("development"))["egress"]
-    assert dev["managedNets"] == load_platform("client").egress.managed_nets and dev["hosts"] == []
-    prod = _values(_config("production"))["egress"]
-    assert prod["hosts"] == [{"host": "api.openai.com", "nets": ["203.0.113.0/24"]}]
+    assert dev["managedNets"] == load_platform("client").egress.managed_nets
+    assert _hosts({"egress": dev}) == AWS
+    prod = _hosts(_values(_config("production")))
+    assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
+
+
+def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s() -> None:
+    """The bucket is reached at S3's addresses (a gateway endpoint routes them by a prefix list, not
+    the VPC's network) and IRSA's role by STS: each is an egress host on every render, its networks
+    the platform's settings file's (`egress.service_nets`) or the deployment's, or refused."""
+    with pytest.raises(CloudPlatformNotRenderable, match="s3.eu-west-2.amazonaws.com"):
+        _artefacts(_config("development", cloud_platform={"egress_nets": {}}))
+    kind = load_platform("kind")
+    assert set(kind.egress.service_nets) == set(AWS)
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"] |= {"platform": "kind", "egress_nets": {}}
+    assert _hosts(_values(OspreyConfig.model_validate(raw))) == {
+        h: list(n) for h, n in kind.egress.service_nets.items()
+    }
 
 
 def test_an_enabled_host_without_networks_is_refused_in_words() -> None:
-    config = _config("production", cloud_platform={"egress_nets": {}})
+    config = _config("production", cloud_platform={"egress_nets": AWS})
     with pytest.raises(CloudPlatformNotRenderable, match="api.openai.com"):
         _artefacts(config)
+
+
+def test_the_mail_server_is_an_egress_host() -> None:
+    """Keycloak sends invitations through the mail server, from the namespace: its host is allowed
+    by its networks or the render is refused. (The organisation's own sign-in is Small's alone,
+    refused at this profile by the schema.)"""
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw["mail"] = {"host": "smtp.example.org", "from_address": "ospreyflow@example.org"}
+    with pytest.raises(CloudPlatformNotRenderable, match="smtp.example.org"):
+        render(OspreyConfig.model_validate(raw), resolver=_resolver)
+    raw["cloud_platform"]["egress_nets"] |= {"smtp.example.org": ["198.51.100.25/32"]}
+    assert _hosts(_values(OspreyConfig.model_validate(raw)))["smtp.example.org"] == [
+        "198.51.100.25/32"
+    ]
+
+
+def test_a_connector_host_is_allowed_by_the_network_and_by_the_conduit_alike() -> None:
+    """A connection's host is reached only if both the namespace's egress and the Conduit's own
+    allow-list (`OSPREY_CONNECTOR_EGRESS`) admit it: one list, `cloud_platform.connector_hosts`,
+    renders both, so they never disagree."""
+    config = _config("development", cloud_platform={"connector_hosts": ["api.example.org"]})
+    with pytest.raises(CloudPlatformNotRenderable, match="api.example.org"):
+        _artefacts(config)
+    config = _config("development", cloud_platform={
+        "connector_hosts": ["api.example.org", "db.example.org"],
+        "egress_nets": {**AWS, "api.example.org": ["198.51.100.80/32"],
+                        "db.example.org": ["198.51.100.81/32"]}})  # fmt: skip
+    values = _values(config)
+    assert values["environment"]["OSPREY_CONNECTOR_EGRESS"] == "api.example.org,db.example.org"
+    assert "OSPREY_CONNECTOR_EGRESS" not in values["secrets"]["keys"]
+    assert {"api.example.org", "db.example.org"} <= set(_hosts(values))
+    assert "OSPREY_CONNECTOR_EGRESS" not in _values(_config("development"))["environment"]
 
 
 def test_a_proxied_map_provider_s_host_is_an_egress_host() -> None:
@@ -350,9 +410,9 @@ def test_a_proxied_map_provider_s_host_is_an_egress_host() -> None:
     }]}  # fmt: skip
     with pytest.raises(CloudPlatformNotRenderable, match="tiles.example.org"):
         render(OspreyConfig.model_validate(raw), resolver=_resolver)
-    raw["cloud_platform"]["egress_nets"] = {"tiles.example.org": ["198.51.100.0/24"]}
-    hosts = _values(OspreyConfig.model_validate(raw))["egress"]["hosts"]
-    assert hosts == [{"host": "tiles.example.org", "nets": ["198.51.100.0/24"]}]
+    raw["cloud_platform"]["egress_nets"] |= {"tiles.example.org": ["198.51.100.0/24"]}
+    hosts = _hosts(_values(OspreyConfig.model_validate(raw)))
+    assert hosts["tiles.example.org"] == ["198.51.100.0/24"]
 
 
 def test_the_front_door_is_the_platform_s_ingress() -> None:

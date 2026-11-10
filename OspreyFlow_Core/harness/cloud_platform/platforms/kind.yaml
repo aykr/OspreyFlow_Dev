@@ -14,6 +14,11 @@ egress:
   kind: calico
   # The stand-ins for the managed stores run as pods (namespace platform-managed), on the pod network.
   managed_nets: ["192.168.0.0/16"]
+  # S3's stand-in is a pod on the same network; kind has no STS (no IRSA), so its host is the pod
+  # network too, which nothing answers on.
+  service_nets:
+    s3.eu-west-2.amazonaws.com: ["192.168.0.0/16"]
+    sts.eu-west-2.amazonaws.com: ["192.168.0.0/16"]
   dns_namespace: kube-system
 secrets:
   postgres:
