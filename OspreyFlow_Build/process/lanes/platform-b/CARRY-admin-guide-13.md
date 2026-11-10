@@ -75,9 +75,15 @@ disagree.
 
 ## 6. The answers-file settings table: a `folders.backups` row, after the `folders.tiles` row (both guides)
 
-`tests/test_admin_guide.py::test_every_answers_file_setting_is_in_the_guide[folders-*]` stays red until it is in
-(P5b merges without it, at the orchestrator's word, 10 November 2026: docs' D2a rebuilds the same PDFs). It needs a
-version row and `make docs-pdf`.
+P5b merges without it, at the orchestrator's word (10 November 2026: docs' D2a rebuilds the same PDFs). So
+`tests/test_admin_guide.py` holds `NOT_YET_IN_THE_GUIDE = {"folders.backups"}`, which skips the setting in
+`test_every_answers_file_setting_is_in_the_guide`. In docs' own change:
+1. Delete the `NOT_YET_IN_THE_GUIDE` set and its two lines in the test:
+   `if setting in NOT_YET_IN_THE_GUIDE:` and `continue`.
+2. Run the test. `[folders-10_ADMINISTRATION_GUIDE.md]` and `[folders-administration-guide.md]` should go red with
+   "folders.backups is not in …".
+3. Add the row below to both guides. The cases should now be green.
+4. Add a version row and run `make docs-pdf`.
 
 > | `folders.backups` | Where `ospreyflow backup` writes, each deployment's sets in `<this>/<deployment name>/`; never inside the checkout (absolute, or from `~`); default `~/OspreyFlow/backups` (section 13) |
 
