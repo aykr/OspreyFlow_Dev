@@ -25,6 +25,13 @@ tell the orchestrator when it is up and down.
    `process/lanes/rules/gates/upg-rehearsal.txt`; tell the orchestrator and docs the exact steps, so the CHANGELOG's
    upgrade section says only what was proven.
 
+**From the previous rules session (L2.11):** there are **seven** one-off scripts, not six: `scripts.migrate_rules_to_datasets`
+(L2.11) also runs (its dry run only SELECTs; a dataset with no home case leaves its rule whole and reported; one
+transaction per rule; a second run changes nothing; L2.11's RED_RECORD §3 and §10). Settle its place in the order.
+And rules made before L2.11 keep running only while their owner holds `author_rules` or `deploy_rules` (ADR-146
+Amendment 6 decision 13): check the pack's seeded rule owners after the upgrade, and that their rules still raise
+alerts; if an upgrade would silently stop some, the notes must say what to do.
+
 **Not in this step:** making `ospreyflow update` run the migrations itself (code; a carry for tomorrow, recorded).
 
 **Exit.** The upgrade rehearsed end to end with every step recorded; the CHANGELOG's steps confirmed or corrected.
