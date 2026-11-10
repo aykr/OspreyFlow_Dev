@@ -78,6 +78,13 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    update` now really backs up and, on failure, rolls back with `down -v` and a restore; only a fake had seen it.
    **Chosen:** one throwaway deployment, `p5b-test`, synthetic data, on ospreyflow-test, torn down after, never near
    `osprey-small`. **To overrule:** say "fake only", and it is recorded as an open risk instead.
+11. **Gazetteer identifiers in a case's own data (CARRIES row 23, raised by studio).** A gazetteer loaded through the
+   Studio arrives as a plain file, so nothing marks it as a gazetteer and its osm_id and similar identifiers show in
+   node reads. Options: (a) withhold the gazetteer-only identifiers from every node for every reader, and match a
+   Location on its name alone, uprn kept on a case's own Location; (b) let the Studio mark a source as a gazetteer and
+   stamp its places (a new field); (c) leave it. **Chosen: (a), the strict reading**, as ADR-147 Amendment 3 (reserved,
+   platform-b, after P6; it touches shared and case files, so it goes as one reviewed step). Cost: an analyst's own
+   data loses those six identifiers in reads. **To overrule:** say "(b)" or "(c)".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
