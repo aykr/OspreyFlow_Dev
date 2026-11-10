@@ -172,6 +172,20 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    **This also matters for your own laptop deployment** when you rebuild it later: it will take the fixed update. The
    publish moves after the fix (around 01:00).
 
+25. **The publish waits for a green upgrade rehearsal, until 04:00 at the latest.** The seven migrations all passed
+   on a real v0.4.12 deployment, and every re-run wrote nothing. The first upgrade fix (0b45910) failed its
+   rehearsal on three counts, which platform-b is fixing:
+   - the secrets came over two passes, not one;
+   - two of the Conduit's volumes were undeclared;
+   - the old gateway kept its old key.
+
+   If the update from v0.4.12 is not green by 04:00, I publish v0.5.0 for **new installs only**. Its notes would
+   tell existing users to stay on v0.4.12 until v0.5.1 carries the fix, so nobody can break a working deployment
+   by updating. Overrule here if you would rather hold the whole release.
+
+   After an upgrade, **nobody holds Rule author** (decision 13), so the converted rule drafts wait until an admin
+   assigns it. The CHANGELOG says so.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
