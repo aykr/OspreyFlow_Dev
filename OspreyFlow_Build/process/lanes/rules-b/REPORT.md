@@ -2,34 +2,19 @@
 
 (L2.11a's report is in git history, at 35ed3df and before.)
 
-1. **The gate fails on axe's undecided colour contrast: met.**
-   - `a11y/undecidedContrast.ts` reads each node axe leaves incomplete. `src/color/textContrast.ts` judges it in Node, failing closed on anything it cannot read or model.
-   - It is called after every axe scan: every-harness, the workspace's `a11y.spec.ts` and `canvas-focus.spec.ts`, and the install harness's two specs.
-2. **Red on both plants: met.**
-   - P1, the L2.11a dialog text on its own surface: 6 of 6 looks.
-   - P2, platform-b's 1:1 panel words: 3 of 3.
-   - Then the stale check, the oklab grid, a foreign `pointer-events: none` overlay, a `none` colour, and each sibling; all of them are in `t3/RED_RECORD.md`.
-   - Unit cases are in `textContrast.test.ts`, with each rule's planted fault red (U1 to U19).
-3. **Green with each finding listed: met.** Main's findings are listed in `CONTRAST_FINDINGS` (every-harness) and `SHOWCASE_CONTRAST_FINDINGS` (`a11y.spec.ts`).
-   - Each is excused only by its selector, its text and its ratio. An unmeasurable one is excused by its exact reason, pinned to its own surfaces' ratio.
-   - A listed finding no longer found fails, and so does a listed title that is not a look.
-4. **Findings by owner** (`a11y/contrastFindings.json`; RED_RECORD round 3):
-   - platform: the map chip;
-   - shell: variant b's ⋯ and places' open menu;
-   - case: the boards' handles and labels;
-   - rules-b: Show as BPMN's words on its task box, carried;
-   - home: the key cap, fixed on rules-hyg;
-   - design system: the toast glyph.
-   - Out of reach, for T3b: a pressed button's `:active` state, and a cover lying between probed points.
-5. **Reviews:**
-   - Mine and the orchestrator's of 9dab1ef: 10 must-fixes, all fixed in 7ce19d0.
-   - merger-c2's of bd9b4ef: 2 must-fixes, fixed in 46e53d3.
-   - merger-c2's of e94b18c: 3 more silent passes, fixed in 9e8d51a. Its always-closed suggestion was tried and departed from, as decision 3 records.
-6. **Gates at c66b1e0** (rebased onto main ba14a00; tree f6cc21b):
-   - `gates/c66b1e0.ci.txt`: `make -k ci` green, exit 0.
-   - `gates/c66b1e0.test.txt`: pytest 10680 passed, 3 failed, 13 skipped; vitest 3030 passed, 1 failed. Each failure is an environment one, explained there.
-   - `gates/c66b1e0.browser.txt`: workspace 967 passed and harness 34 passed, no failures.
-7. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-gate.md`. **Still running:** nothing.
+1. **The gate fails on axe's undecided colour contrast: met.** `a11y/undecidedContrast.ts` reads what axe leaves incomplete, and `src/color/textContrast.ts` judges it in Node, failing closed. It runs after every axe scan: every-harness, `a11y.spec.ts`, `canvas-focus.spec.ts`, and the harness's two specs.
+2. **Red on both plants: met.** The L2.11a dialog plant, 6 of 6; platform-b's 1:1 panel words, 3 of 3. Then the stale check, the oklab grid, a foreign overlay, a `none` colour, merger-c2's spill and sized gradient, a mistyped title and each sibling. Unit faults U1 to U19 are red too (`t3/RED_RECORD.md`).
+3. **Green with each finding listed: met.** `a11y/contrastFindings.json` holds 84 looks and 132 findings. Each is pinned to its text, and to its ratio or exact reason plus its own surfaces' ratio. A stale listing fails, and so does a title that is not a look.
+4. **Findings by owner:**
+   - platform: the map chip; shell: variant b's ⋯ and places' menu; case: the boards' handles;
+   - rules-b: Show as BPMN's task box; home: the key cap (fixed on rules-hyg); design system: the toast glyph.
+   - For T3b: a pressed button's `:active`, a cover between probed points, and merger-c2's carries.
+5. **Reviews:** mine and the orchestrator's (9dab1ef), then merger-c2's three. Every must-fix is fixed; decision 3 departs from one suggestion, and merger-c2 accepted it.
+6. **Gates at c66b1e0** (on main ba14a00):
+   - `ci`: green.
+   - `test`: 10680 + 3030 passed; 4 environment failures, explained.
+   - `browser`: 967 + 34 passed.
+7. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-gate.md`. **Commits:** `main..` on lane/rules-b. **Still running:** nothing.
 
 ## Decisions taken (each the recommended option; the owner may overrule)
 
