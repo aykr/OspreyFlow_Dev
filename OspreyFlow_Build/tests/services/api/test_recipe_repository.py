@@ -680,12 +680,13 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
     """The wait has one limit for both locks (the lane review's round 3, item 3): with the
     `flock` held elsewhere, two publishes queued in this process both wait the one limit and are
     both refused within it, not one after the other, so queued publishes cannot each hold a worker
-    thread for a further wait. Measured with a 2 s wait: about 2 s here, about 4 s for one wait
-    each, so a loaded host has about a second either side."""
+    thread for a further wait. Measured with a 3 s wait: about 3 s here, about 6 s for one wait
+    each. The window, 0.75 to 1.6 waits, leaves a loaded host about 1.8 s above and 0.75 s below
+    (L1.7a's carry: the server's full run is loaded)."""
     import fcntl
     import threading
 
-    wait = 2.0
+    wait = 3.0
     repo = tmp_path / "repo"
     await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
     monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", wait)
@@ -712,8 +713,8 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
         isinstance(outcome, GitCommitError) and "another publish" in str(outcome)
         for outcome in outcomes
     ), outcomes
-    assert elapsed >= 0.9 * wait, f"refused after {elapsed:.2f} s, without waiting"
-    assert elapsed < 1.5 * wait, f"the second publish waited {elapsed:.2f} s, a second wait"
+    assert elapsed >= 0.75 * wait, f"refused after {elapsed:.2f} s, without waiting"
+    assert elapsed < 1.6 * wait, f"the second publish waited {elapsed:.2f} s, a second wait"
 
 
 async def test_a_publish_waits_for_a_lock_held_briefly_then_commits(
