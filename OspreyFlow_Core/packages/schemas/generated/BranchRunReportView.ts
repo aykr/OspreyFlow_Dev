@@ -30,6 +30,7 @@ export type SampleUnreadable = boolean;
 export type Rejections = RejectionRecord[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
+export type DrawnWatchAlerts = number;
 export type RowsWithdrawn = number;
 export type LinksKeptAnOccurrence = number;
 export type RowsLeftInPlace = number;
@@ -98,6 +99,7 @@ export interface LoadReportView {
   rejections?: Rejections;
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
+  drawn_watch_alerts?: DrawnWatchAlerts;
   rows_withdrawn?: RowsWithdrawn;
   links_kept_an_occurrence?: LinksKeptAnOccurrence;
   rows_left_in_place?: RowsLeftInPlace;
