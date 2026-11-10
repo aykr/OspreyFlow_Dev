@@ -51,6 +51,9 @@ export interface AlertQueueProps extends AlertsApi {
   /** ADR-146 decision 6, *Open the evidence*: the alert's evidence, as the reader was shown it,
    * opened in the Glass as a private view of the alert's case, with the way back to the alert. */
   onOpenEvidence?: (evidence: AlertEvidence) => Promise<string | null>;
+  /** L3.6 (ADR-143 Amendment 2 decision 8), *Open the board*: a drawn watch's alert opens the board
+   * its drawn item was drawn on, named by the item's own provenance as the reader read it. */
+  onOpenBoard?: (boardId: string) => void;
 }
 
 /** What *Open the evidence* opens: the nodes the reader was shown, under the alert's name, from the
@@ -71,7 +74,7 @@ export function closeNeedsSecondPerson(severity: string, audience: string): bool
 }
 const SEVERITY_WORDS: Record<string, string> = { high: "High", medium: "Medium", low: "Low" };
 
-type Kind = "typology" | "hotlist" | "monitor" | "analyst";
+type Kind = "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";
 type Audience = "case" | "team" | "owner";
 
 /** A row's kind, severity and audience; a row from before ADR-133 is a medium case alert. */
@@ -89,6 +92,7 @@ export function alertTitle(alert: Alert, kind: Kind): string {
   if (kind === "hotlist") return "Hotlist";
   if (kind === "monitor") return "Watched pattern";
   if (kind === "analyst") return alert.rule_id.startsWith("analyst:dataset:") ? "Dataset alert" : "Raised by an analyst";
+  if (kind === "drawn_watch") return "A load met a drawn item";
   return typologyLabel(alert.typology);
 }
 
@@ -211,6 +215,7 @@ export function AlertQueue(props: AlertQueueProps) {
               <option value="hotlist">Hotlists</option>
               <option value="monitor">Watched patterns</option>
               <option value="analyst">Raised by an analyst</option>
+              <option value="drawn_watch">Drawn items</option>
             </Select>
           </label>
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
@@ -283,6 +288,11 @@ export function AlertQueue(props: AlertQueueProps) {
       )}
     </div>
   );
+}
+
+/** L3.6: the board a drawn watch's alert opens — the one its drawn item names; `null` if none. */
+export function drawnBoard(nodes: readonly { provenance?: { drawn?: { board_id: string } | null } }[]): string | null {
+  return nodes.find((n) => n.provenance?.drawn)?.provenance?.drawn?.board_id ?? null;
 }
 
 interface AlertDetailProps extends AlertQueueProps {
@@ -430,6 +440,15 @@ function AlertDetail(props: AlertDetailProps) {
             }
           >
             Open the evidence
+          </Button>
+        </div>
+      )}
+      {f.kind === "drawn_watch" && props.onOpenBoard && drawnBoard(nodes) && (
+        // L3.6: the board the drawn item is on, as its provenance names it to this reader (who read
+        // the item, or the alert would not be shown); the board's own route decides who opens it.
+        <div>
+          <Button variant="primary" onClick={() => props.onOpenBoard!(drawnBoard(nodes)!)}>
+            Open the board
           </Button>
         </div>
       )}

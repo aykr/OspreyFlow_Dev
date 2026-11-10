@@ -35,10 +35,10 @@ export interface RuleGroup {
 
 export const groupKey = (g: RuleGroup): string => `${g.label}:${g.typology}`;
 
-const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors", analyst: "analyst" };
+const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors", analyst: "analyst", drawn_watch: "drawn_items" };
 /** The non-typology groups' names; a kind added later (one the Conduit counts under its own name) is
  * said by that name, never folded into a typology or another kind. */
-const GROUP_NAMES: Record<string, string> = { hotlists: "Hotlists", monitors: "Monitors", analyst: "Raised by an analyst" };
+const GROUP_NAMES: Record<string, string> = { hotlists: "Hotlists", monitors: "Monitors", analyst: "Raised by an analyst", drawn_items: "Drawn items" };
 
 /** The rule group a queued alert is counted under, as the Conduit's `_RULE_GROUP` names it: the Glass's one
  * copy, read by the Alerts panel and by Home's *Open the dashboard*, so the two cannot drift apart. */

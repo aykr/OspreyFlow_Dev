@@ -135,7 +135,13 @@ def _weeks(counts: Counter[tuple[date, str, str]]) -> list[LabelledWeekCount]:
 #: The rule group an alert of each kind is counted under: each typology by its typology (a closed
 #: name, where a rule's own name is analyst-written text the feed never carries), hotlists together,
 #: monitors together (ADR-134 decision 2).
-_RULE_GROUP = {"typology": "typology", "hotlist": "hotlists", "monitor": "monitors"}
+_RULE_GROUP = {
+    "typology": "typology",
+    "hotlist": "hotlists",
+    "monitor": "monitors",
+    # L3.6: as the Glass groups it (`figureParts.tsx`).
+    "drawn_watch": "drawn_items",
+}
 #: Still in the queue: open, claimed, or proposed for closing (ADR-146 decision 6, G9: a proposed
 #: close counts as open everywhere).
 _IN_QUEUE = ("open", "claimed", "closing")

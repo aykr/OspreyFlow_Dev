@@ -1,0 +1,5 @@
+  ✘  1 keyboard/drawn-watch-alert.spec.ts:15:1 › Open the board, from a drawn watch's alert, by keyboard (5.1s)
+  ✘  2 keyboard/drawn-watch-alert.spec.ts:25:1 › every registered drawn watch alert action has its own proving test case above (3ms)
+    - Expected  - 3
+    + Received  + 1
+  2 failed

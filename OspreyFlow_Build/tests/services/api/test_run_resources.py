@@ -118,6 +118,7 @@ STORES = (
     "PostgresTargetModelStore",
     "PostgresListStore",
     "InvestigationStore",
+    "PostgresBoardItemStore",
 )
 
 
@@ -215,6 +216,7 @@ async def test_closing_closes_everything_the_builder_opened(fakes: _Graph) -> No
         resources.extraction_candidates,
         resources.datasets_store,
         resources.investigations,
+        resources.board_items,
         resources.valkey,
         resources.arcadedb_client,
         resources.principal_resolver,

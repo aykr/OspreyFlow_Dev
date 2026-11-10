@@ -548,7 +548,7 @@ ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, CountedHandling, TrendResul
 
 # --- Alert trends (`06_DECISIONS.md` ADR-134 decision 3) ------------------------------------------
 
-AlertFactKind = Literal["typology", "hotlist", "monitor", "analyst"]
+AlertFactKind = Literal["typology", "hotlist", "monitor", "analyst", "drawn_watch"]
 #: Who may count an alert, as the one queue decides it (`services/api/alerts.py` `queue_scope`): a
 #: typology alert is its case's; a hotlist or monitor alert is its owner's, and its owner's team's
 #: when it is shared with them.

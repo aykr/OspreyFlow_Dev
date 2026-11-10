@@ -1,0 +1,78 @@
+Running on ospreyflow-test (stack e, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261110T112521Z/log: sh -c T=../OspreyFlow_Build/tests; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rA -p no:cacheprovider $T/services/api/test_drawn_watch_queue_live.py $T/services/api/test_monitoring_queue.py $T/services/api/test_board_store.py; echo "PYTEST_EXIT=$?"; cd .. && OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/process/lanes/case/gates/L3.6-live-plants.py /tmp/case-live-plants.txt; echo "=== LIVE PLANTS ==="; cat /tmp/case-live-plants.txt
+sh: 1: .venv/bin/pytest: not found
+PYTEST_EXIT=127
+sh: 1: OspreyFlow_Core/.venv/bin/python: not found
+=== LIVE PLANTS ===
+## the merged drawing left out of its case's read set
+plant in services/api/datasets.py; ../OspreyFlow_Build/tests/services/api/test_datasets_store.py -k merges_a_drawn_dataset; exit 1 (RED)
+E           AssertionError: assert ['01M72986AHD...279QH7VP4MCX'] == ['01M72986AHD...S5V4GA88KPNS']
+E             
+E             Right contains one more item: '01M729869QPHY4S5V4GA88KPNS'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_merges_a_drawn_dataset_once_and_its_revert_undoes_it
+1 failed, 12 deselected in 2.72s
+
+## the case not moved onto the target
+plant in services/api/datasets.py; ../OspreyFlow_Build/tests/services/api/test_datasets_store.py -k does_not_read_the_drawing; exit 1 (RED)
+E           Failed: DID NOT RAISE DrawnAlreadyMerged
+FAILED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_refuses_a_merge_whose_case_does_not_read_the_drawing
+1 failed, 12 deselected in 1.05s
+
+## the trigger check never widened
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k old_trigger_check; exit 1 (RED)
+E   asyncpg.exceptions.CheckViolationError: new row for relation "promotions" violates check constraint "promotions_trigger_check"
+E   DETAIL:  Failing row contains (01M7298AP3CXR946X7J5YC2CMA, promotion-01M7298AP3CXR946X7J5YC2CMB, drawn_merge, case-k, board-1, src, layer-k, alice, 2026-11-09 09:00:00+00, awaiting_review, OFFICIAL, unit-1, {n1,n2}, {e1}, {i1,i2,i3}, [["i4", "Spare", "Not ticked."]], null, null, null, null).
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_an_old_trigger_check_is_widened_once_to_take_drawn_merge
+1 failed, 15 deselected in 0.97s
+
+## the matches' edges never written back
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k drawn_merge_and_its_matches; exit 1 (RED)
+E       AssertionError: assert [None, None] == ['e1', 'e2']
+E         
+E         At index 0 diff: None != 'e1'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merge_and_its_matches_read_back_whole
+1 failed, 15 deselected in 0.93s
+
+## a drawn merge's copies not written with its record (Amendment 7)
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_written_with_it; exit 1 (RED)
+E       AssertionError: assert [] == [('node', 'd1..., 'd1', None)]
+E         
+E         Right contains 2 more items, first extra item: ('node', 'd1', 'Organisation', None, None, None)
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+1 failed, 15 deselected in 0.91s
+
+## the record and its copies written outside one transaction
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_refused_is_not_written; exit 1 (RED)
+E       AssertionError: assert PromotionRecord(id='01M7298EFB4J3KMVPYSEF6Q4W8', load_id='promotion-01M7298EFB4J3KMVPYSEF6Q4W9', trigger='drawn_merge'...i2', 'i3'), left_out=(('i4', 'Spare', 'Not ticked.'),), reviewed_by=None, reviewed_at=None, reason=None, grant_id=None) is None
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_record_whose_copies_are_refused_is_not_written_either
+1 failed, 15 deselected in 0.90s
+
+## the copies' ids never written back
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_written_with_it; exit 1 (RED)
+E       AssertionError: assert [(None, None), (None, None)] == [('w1', 's1'), ('w2', None)]
+E         
+E         At index 0 diff: (None, None) != ('w1', 's1')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+1 failed, 15 deselected in 0.89s
+
+## a waiting merge's copies read for the grading change
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k committed_merges_written_copies; exit 1 (RED)
+E       AssertionError: assert [('node', 'w1...'node', 'w3')] == []
+E         
+E         Left contains 2 more items, first extra item: ('node', 'w1')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_only_a_committed_merges_written_copies_are_read_for_the_grading_change
+1 failed, 15 deselected in 0.96s
+
+## a board's lens not rewritten
+plant in services/api/case_views.py; ../OspreyFlow_Build/tests/services/api/test_case_views_store.py -k boards_into_views; exit 1 (RED)
+E       AssertionError: assert (True, None, ['p1'], []) == (False, 'prom... ['d1', 'd2'])
+E         
+E         At index 0 diff: True != False
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_postgres_turns_a_drawings_boards_into_views_and_back
+1 failed, 6 deselected in 0.79s
+Wall time: 0 s, exit 0 (stack e, the lease case took at 2026-11-10T11:24:36Z; set-up before it 24 s)

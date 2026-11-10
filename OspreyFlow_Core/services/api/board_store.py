@@ -65,6 +65,15 @@ class BoardItemStore(Protocol):
         self, case_id: str, item_ids: Sequence[str], by: str, at: datetime
     ) -> int: ...
     async def active_watches(self, case_id: str) -> list[DrawnWatch]: ...
+    #: L3.6: every case's live watches on one dataset, for a load into it (ADR-146 decision 4: a
+    #: watch is run by every load into its dataset, whatever pipeline loads it).
+    async def active_watches_on(self, dataset_id: str) -> list[DrawnWatch]: ...
+    #: L3.6: a match claimed once per case (the drawn element and the loaded node, in the watch's
+    #: case): true for the first claim alone, so one alert is raised per match per case, whatever
+    #: loads it again. The claim is the dedupe; it is kept when the watch ends.
+    async def claim_match(self, watch: DrawnWatch, loaded_id: str, at: datetime) -> bool: ...
+    #: L3.6: a claim given back when its alert could not be saved, so the next load raises it.
+    async def release_match(self, watch: DrawnWatch, loaded_id: str) -> None: ...
     #: L3.4: a promotion's items marked when it commits, cleared when it is reverted.
     async def mark_promoted(
         self, case_id: str, item_ids: Sequence[str], at: datetime | None
@@ -114,6 +123,7 @@ class InMemoryBoardItemStore:
     def __init__(self) -> None:
         self.items: dict[str, BoardItem] = {}
         self.watches: dict[str, DrawnWatch] = {}
+        self.matches: dict[tuple[str, str, str], datetime] = {}
 
     async def add(self, item: BoardItem, watch: DrawnWatch | None) -> None:
         self.items[item.item_id] = item
@@ -160,6 +170,22 @@ class InMemoryBoardItemStore:
             key=lambda w: (w.created_at, w.id),
         )
 
+    async def active_watches_on(self, dataset_id: str) -> list[DrawnWatch]:
+        return sorted(
+            (w for w in self.watches.values() if w.dataset_id == dataset_id and w.ended_at is None),
+            key=lambda w: (w.created_at, w.id),
+        )
+
+    async def claim_match(self, watch: DrawnWatch, loaded_id: str, at: datetime) -> bool:
+        key = (watch.case_id, watch.element_id, loaded_id)
+        if key in self.matches:
+            return False
+        self.matches[key] = at
+        return True
+
+    async def release_match(self, watch: DrawnWatch, loaded_id: str) -> None:
+        self.matches.pop((watch.case_id, watch.element_id, loaded_id), None)
+
     async def mark_promoted(
         self, case_id: str, item_ids: Sequence[str], at: datetime | None
     ) -> None:
@@ -198,17 +224,30 @@ CREATE TABLE IF NOT EXISTS drawn_watches (
     ended_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS drawn_watches_by_case ON drawn_watches (case_id) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS drawn_watches_by_dataset ON drawn_watches (dataset_id)
+    WHERE ended_at IS NULL;
+-- L3.6: each drawn watch's match, once per case (the drawn element and the loaded node).
+CREATE TABLE IF NOT EXISTS drawn_watch_matches (
+    case_id TEXT NOT NULL,
+    element_id TEXT NOT NULL,
+    loaded_id TEXT NOT NULL,
+    watch_id TEXT NOT NULL,
+    matched_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (case_id, element_id, loaded_id)
+);
 """
 
-_ITEM_COLUMNS = (
+#: The registry's columns, in `BoardItem`'s order, and its row reader: exported for a reader of
+#: the registry outside this store (the grading change, `scripts.grading_change`; CARRIES, L3.6).
+ITEM_COLUMNS = (
     "item_id, board_id, case_id, kind, element_id, author, dataset_id, created_at, withdrawn_at, "
     "withdrawn_by, source, target, promoted_at"
 )
 _WATCH_COLUMNS = "id, item_id, element_id, case_id, dataset_id, owner, created_at, ended_at"
 
 
-def _item(row: Any) -> BoardItem:
-    return BoardItem(**{k: row[k] for k in _ITEM_COLUMNS.split(", ")})
+def item_from_row(row: Any) -> BoardItem:
+    return BoardItem(**{k: row[k] for k in ITEM_COLUMNS.split(", ")})
 
 
 def _watch(row: Any) -> DrawnWatch:
@@ -232,7 +271,7 @@ class PostgresBoardItemStore:
     async def add(self, item: BoardItem, watch: DrawnWatch | None) -> None:
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
-                f"INSERT INTO board_items ({_ITEM_COLUMNS}) "
+                f"INSERT INTO board_items ({ITEM_COLUMNS}) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
                 item.item_id, item.board_id, item.case_id, item.kind, item.element_id,
                 item.author, item.dataset_id, item.created_at, item.withdrawn_at,
@@ -249,40 +288,40 @@ class PostgresBoardItemStore:
     async def on_board(self, case_id: str, board_id: str) -> list[BoardItem]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT {_ITEM_COLUMNS} FROM board_items WHERE case_id = $1 AND board_id = $2 "
+                f"SELECT {ITEM_COLUMNS} FROM board_items WHERE case_id = $1 AND board_id = $2 "
                 "ORDER BY created_at, item_id",
                 case_id,
                 board_id,
             )
-        return [_item(r) for r in rows]
+        return [item_from_row(r) for r in rows]
 
     async def in_case(self, case_id: str) -> list[BoardItem]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT {_ITEM_COLUMNS} FROM board_items WHERE case_id = $1 "
+                f"SELECT {ITEM_COLUMNS} FROM board_items WHERE case_id = $1 "
                 "ORDER BY created_at, item_id",
                 case_id,
             )
-        return [_item(r) for r in rows]
+        return [item_from_row(r) for r in rows]
 
     async def get(self, case_id: str, item_id: str) -> BoardItem | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"SELECT {_ITEM_COLUMNS} FROM board_items WHERE case_id = $1 AND item_id = $2",
+                f"SELECT {ITEM_COLUMNS} FROM board_items WHERE case_id = $1 AND item_id = $2",
                 case_id,
                 item_id,
             )
-        return _item(row) if row is not None else None
+        return item_from_row(row) if row is not None else None
 
     async def by_element(self, case_id: str, element_id: str) -> BoardItem | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"SELECT {_ITEM_COLUMNS} FROM board_items WHERE case_id = $1 AND element_id = $2 "
+                f"SELECT {ITEM_COLUMNS} FROM board_items WHERE case_id = $1 AND element_id = $2 "
                 "ORDER BY created_at LIMIT 1",
                 case_id,
                 element_id,
             )
-        return _item(row) if row is not None else None
+        return item_from_row(row) if row is not None else None
 
     async def withdraw(self, case_id: str, item_ids: Sequence[str], by: str, at: datetime) -> int:
         async with self._pool.acquire() as conn, conn.transaction():
@@ -311,6 +350,32 @@ class PostgresBoardItemStore:
                 case_id,
             )
         return [_watch(r) for r in rows]
+
+    async def active_watches_on(self, dataset_id: str) -> list[DrawnWatch]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_WATCH_COLUMNS} FROM drawn_watches WHERE dataset_id = $1 "
+                "AND ended_at IS NULL ORDER BY created_at, id",
+                dataset_id,
+            )
+        return [_watch(r) for r in rows]
+
+    async def claim_match(self, watch: DrawnWatch, loaded_id: str, at: datetime) -> bool:
+        async with self._pool.acquire() as conn:
+            done = await conn.execute(
+                "INSERT INTO drawn_watch_matches (case_id, element_id, loaded_id, watch_id, "
+                "matched_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+                watch.case_id, watch.element_id, loaded_id, watch.id, at,
+            )  # fmt: skip
+        return bool(done == "INSERT 0 1")
+
+    async def release_match(self, watch: DrawnWatch, loaded_id: str) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM drawn_watch_matches WHERE case_id = $1 AND element_id = $2 "
+                "AND loaded_id = $3 AND watch_id = $4",
+                watch.case_id, watch.element_id, loaded_id, watch.id,
+            )  # fmt: skip
 
     async def mark_promoted(
         self, case_id: str, item_ids: Sequence[str], at: datetime | None

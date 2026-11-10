@@ -62,7 +62,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import yaml
 from pydantic import ValidationError
-from services.api.board_store import _ITEM_COLUMNS, _item
+from services.api.board_store import ITEM_COLUMNS, item_from_row
 from services.api.config import GradingSchemeUnknown, GradingSettings, PostgresConfig
 from services.api.grading import (
     BoardGradedItems,
@@ -205,7 +205,7 @@ NO_STORE_SETTINGS = (
 #: The board registry's live drawn nodes and links (`board_store`): a withdrawn item keeps the grade
 #: it was drawn with, and pictures and match links carry none.
 REGISTERED_SQL = (
-    f"SELECT {_ITEM_COLUMNS} FROM board_items "
+    f"SELECT {ITEM_COLUMNS} FROM board_items "
     "WHERE withdrawn_at IS NULL AND kind IN ('node', 'link') ORDER BY created_at, item_id"
 )
 
@@ -221,7 +221,7 @@ def registry_reader(pool: Any) -> Registered:
                 rows = await conn.fetch(REGISTERED_SQL)
             except asyncpg.UndefinedTableError:
                 return []
-        return [_item(row) for row in rows]
+        return [item_from_row(row) for row in rows]
 
     return registered
 

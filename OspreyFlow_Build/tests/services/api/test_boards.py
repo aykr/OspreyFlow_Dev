@@ -1626,3 +1626,23 @@ def test_the_hidden_label_check_fails_with_hidden_types_listed(
     monkeypatch.setattr(Boards, "link_types", every_type)
     b_board = _board("carol", B)
     assert STORED in _board_link_types("carol", B, b_board)
+
+
+# --- CARRIES (L3.9's finding, taken in L3.6): a link type a drawn link cannot satisfy ----------
+
+
+def test_a_link_type_whose_model_requires_a_property_is_not_offered_nor_drawn(
+    world: SimpleNamespace,
+) -> None:
+    """A drawn link carries no properties (`DrawnLinkInput`), so a type requiring one (`ROLE_IN`'s
+    `role`) is refused by the adapter's `upsert_edges` whenever it is drawn. The board offers only
+    what can be drawn, and the link route refuses the rest in words, before any write."""
+    board = _board()
+    offered = _board_link_types("alice", K, board)
+    assert "ROLE_IN" not in offered
+    assert "ASSOCIATE_OF" in offered  # the control: a type with no required property is offered
+    person = _item(board)["element_id"]
+    incident = _item(board, type="Incident", label="Night fight", properties={})["element_id"]
+    drawn = _link(board, person, incident, type="ROLE_IN")
+    assert drawn.status_code == 422, drawn.text
+    assert drawn.json()["error"] == "not_in_the_model"

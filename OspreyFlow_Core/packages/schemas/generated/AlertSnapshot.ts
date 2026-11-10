@@ -1,7 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type AlertId = string;
-export type Kind = "typology" | "hotlist" | "monitor" | "analyst";
+export type Kind = "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";
 export type Severity = "low" | "medium" | "high";
 export type Explanation = string;
 export type Typology = string | null;
