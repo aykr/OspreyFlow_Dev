@@ -17,12 +17,12 @@ import type {
   VerifyReport,
 } from "../../../../../packages/schemas/generated";
 import { GlassCanvas } from "../../canvas/GlassCanvas";
-import { Button } from "../../design/primitives/Button";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { OntologyRegistry } from "../../ontology/schema";
 import type { WorkingSet } from "../../workingset/store";
 import { workingSetOfDryRun } from "../verify/VerifyScreen";
 import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "../api";
+import { RightButton } from "../studio/rightsGate";
 
 /** The most rows a table Preview reads. The one place this number is written:
  * `tests/ingest/test_node_preview_access.py` reads it from this line. */
@@ -128,9 +128,10 @@ export function NodePreview({ apiBaseUrl, bearerToken, investigationId, recipeId
           : "A dry run up to this step: the graph it would make, at your own clearance. Nothing is written."}
       </p>
       <div>
-        <Button disabled={busy} onClick={() => void run()}>
+        {/* A graph Preview is Test's dry run, so it needs the right to test (L1.8: said before, not after). */}
+        <RightButton right={shape === "graph" ? "verify_pipelines" : "edit_pipelines"} disabled={busy} onClick={() => void run()}>
           {busy ? "Previewing…" : rows || report ? "Preview again" : "Run preview"}
-        </Button>
+        </RightButton>
       </div>
       {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
       {rows && (

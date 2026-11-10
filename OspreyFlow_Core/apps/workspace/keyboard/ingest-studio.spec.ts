@@ -664,8 +664,15 @@ test("a graph Preview is refused in words to a person without the right to test"
   await openVisits(page, "?rights=no-test");
   await press(page, "Map: Map");
   await press(page, "Preview");
-  await press(page, "Run preview");
-  await expect(drawer(page).getByRole("alert")).toContainText("needs the right to test pipelines");
+  // Said before the press, not after (ADR-145 Amendment 4 decision 12, L1.8): the button is still
+  // reached by keyboard, described by why and who can, and pressing it asks the server nothing.
+  const run = drawer(page).getByRole("button", { name: "Run preview" });
+  await run.focus();
+  await expect(run).toBeFocused();
+  await expect(run).toHaveAttribute("aria-disabled", "true");
+  await expect(run).toHaveAccessibleDescription(/^You need Verify pipelines; the Data Engineer role has it\./);
+  await page.keyboard.press("Enter");
+  expect((await asked(page)).some((a) => a.path.endsWith("/preview-graph"))).toBe(false);
 });
 
 // The harness refuses as the routes do (rule 15): the save gate's words, and Deploy without the

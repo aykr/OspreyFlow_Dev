@@ -10,6 +10,7 @@ import type { LoadCheck, LoadChecksView } from "../../../../../packages/schemas/
 import { Button } from "../../design/primitives/Button";
 import { Select } from "../../design/primitives/Select";
 import { fetchChecks, saveChecks } from "../api";
+import { RightButton } from "../studio/rightsGate";
 
 export interface ChecksScreenProps {
   apiBaseUrl: string;
@@ -168,9 +169,9 @@ export function ChecksScreen({ apiBaseUrl, investigationId, bearerToken, recipeI
         </table>
       )}
       <div>
-        <Button variant="primary" disabled={busy || !view} onClick={save}>
+        <RightButton right="edit_pipelines" variant="primary" disabled={busy || !view} onClick={save}>
           Save the load rules
-        </Button>
+        </RightButton>
       </div>
     </div>
   );

@@ -7,9 +7,11 @@ import { useEffect, useState } from "react";
 
 import { NEEDS_YOU_WORDS, proposedIn, readNeedsYou, type NeedsYou } from "../admin/needsYou/needsYouApi";
 import { onOpening, peekOpening, takeOpening } from "../admin/needsYou/openings";
-
+import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
 import { Tabs } from "../design/primitives/Tabs";
+import { HELP_TITLE } from "../help/roles";
+import { RolesHelpPage } from "../help/RolesHelpPage";
 import { type CaseListing, listCases } from "../investigation/cases";
 import { PipelineStudio } from "./dag/PipelineStudio";
 import { RunsTab } from "./runs/RunsTab";
@@ -17,6 +19,7 @@ import { caseForDataset, currentDataset, studioDatasets } from "./studio/dataset
 import { ModelProposals } from "../linktypes/ModelProposals";
 import { ModelTab } from "./studio/ModelTab";
 import { ReadinessStrip } from "./studio/ReadinessStrip";
+import { StudioRights, WhyNotLine } from "./studio/rightsGate";
 import { SourcesTab } from "./studio/SourcesTab";
 import { useRegisteredSources } from "./studio/useRegisteredSources";
 import { useStudioData } from "./studio/useStudioData";
@@ -29,7 +32,9 @@ export interface IngestStudioProps {
   investigationId: string | null;
   /** Opening the case that serves another dataset, chosen in the switcher. */
   onOpenCase: (id: string) => void;
-  /** The person's rights (`GET /v1/me/rights`): `revert_loads` shows a load's revert command. */
+  /** The person's rights (`GET /v1/me/rights`): each action that needs a right says why and who can
+   * when the person lacks it (ADR-145 Amendment 4 decision 12; L1.8), and `revert_loads` shows a load's
+   * revert command. */
   rights?: ReadonlySet<string> | null;
   /** The person's user name, for the revert command's `--reverted-by`. */
   username?: string | null;
@@ -53,6 +58,7 @@ export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenC
     );
   }
   return (
+    <StudioRights.Provider value={rights ?? null}>
     <Studio
       apiBaseUrl={apiBaseUrl}
       bearerToken={bearerToken}
@@ -61,6 +67,7 @@ export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenC
       rights={rights ?? null}
       username={username ?? null}
     />
+    </StudioRights.Provider>
   );
 }
 
@@ -76,6 +83,8 @@ function Studio({
   const [place, setPlace] = useState<StudioPlace>("pipelines");
   const [cases, setCases] = useState<CaseListing[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // *Roles, teams and Authors*, the one help page, opened from the Studio as from Admin (decision 12).
+  const [helpOpen, setHelpOpen] = useState(false);
   const data = useStudioData(apiBaseUrl, bearerToken, investigationId);
   // Read again when the Sources tab registers or edits one, so the strip counts what the tab lists.
   const [sourcesGeneration, setSourcesGeneration] = useState(0);
@@ -143,8 +152,12 @@ function Studio({
     }
   }
 
+  // The help page is drawn over the Studio, never instead of it: an open pipeline, map or form keeps
+  // what was typed while the page is read (the lane review of L1.8).
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <>
+    {helpOpen && <RolesHelpPage backTo="the Ingest Studio" onBack={() => setHelpOpen(false)} />}
+    <div hidden={helpOpen} style={{ display: helpOpen ? "none" : "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div
         style={{
           display: "flex",
@@ -170,6 +183,8 @@ function Studio({
           <span className="label">{`Working through the case “${servingCase.name}”: what loads here goes into ${datasetName}.`}</span>
         )}
         {problem && <span role="alert">{problem}</span>}
+        <span style={{ flex: 1 }} />
+        <Button onClick={() => setHelpOpen(true)}>{HELP_TITLE}</Button>
       </div>
       <ReadinessStrip packs={servingCase?.domains} pipelines={data.pipelines} sources={sources} runs={data.runs} />
       {proposed > 0 && place !== "model" && (
@@ -189,7 +204,20 @@ function Studio({
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
         {place === "model" && <ModelTab datasetName={datasetName} packs={servingCase?.domains} />}
-        {place === "model" && datasetId && <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}><ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} onDecided={() => setDecisions((n) => n + 1)} /></div>}
+        {place === "model" && datasetId && (
+          <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}>
+            {/* The proposals' own panel hides itself from whoever cannot accept types; the Studio says
+                why and who can instead (L1.8). */}
+            {rights && !rights.has("accept_types") ? (
+              <section aria-label="Proposed link types" style={{ display: "grid", gap: "var(--sp-8)" }}>
+                <h3 style={{ margin: 0, fontSize: "var(--fs-14)" }}>Proposed link types</h3>
+                <WhyNotLine right="accept_types" />
+              </section>
+            ) : (
+              <ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} onDecided={() => setDecisions((n) => n + 1)} />
+            )}
+          </div>
+        )}
         {place === "sources" && (
           <SourcesTab
             apiBaseUrl={apiBaseUrl}
@@ -220,5 +248,6 @@ function Studio({
         )}
       </div>
     </div>
+    </>
   );
 }

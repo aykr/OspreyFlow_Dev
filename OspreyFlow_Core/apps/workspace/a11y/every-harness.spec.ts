@@ -194,6 +194,9 @@ const EXTRA_STATES: Record<string, string[]> = {
     // The lane review of L1.6: the wizard's read step for each kind of connection.
     "view=wizard&serve=1&connection=c-sql&step=1", "view=wizard&serve=1&connection=c-api&step=1",
     "view=wizard&serve=1&connection=c-json&step=1",
+    // ADR-145 Amendment 4 decision 12 (L1.8): the lists and a source's page to someone holding no Studio
+    // right, each action described by why and who can.
+    "serve=1&rights=none", "view=source&serve=1&rights=none",
   ],
   // ADR-140 decision 1 (redesign phase 2): the Studio's Model, Sources and Runs places, a day's run
   // report with its revert command, and the held rows opened from it (Pipelines is the default).
@@ -201,6 +204,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     "tab=model", "tab=sources", "tab=runs", "tab=runs&cell=1", "tab=runs&cell=1&held=1",
     // L2.7: the Model tab's count and the reminder above the other tabs.
     "proposed=1",
+    // L1.8: each place, and a day's run report, to someone holding no Studio right: why and who can, in words.
+    "rights=none", "rights=none&tab=model", "rights=none&tab=sources", "rights=none&tab=runs&cell=1",
     // ADR-140 Amendment 4: the register wizard's governance step, a source's page, and a source
     // chosen in a pipeline.
     "tab=sources&register=1", "tab=sources&source=1", "tab=sources&source=1&edit=1", "pipeline=source",

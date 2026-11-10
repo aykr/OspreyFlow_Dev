@@ -31,6 +31,7 @@ import { alreadyLoadedWords } from "../alreadyLoaded";
 import { ExpertDisclosure } from "../dag/ExpertStepDrawer";
 import { WouldRaisePanel } from "./WouldRaisePanel";
 import { ProfileError, fetchDraft, fetchOntologySchema, runVerify } from "../api";
+import { RightButton } from "../studio/rightsGate";
 
 export interface VerifyScreenProps {
   apiBaseUrl: string;
@@ -152,9 +153,9 @@ export function VerifyScreen({ apiBaseUrl,
         {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Test{draft ? ` — ${draft.label}` : ""}</h1>
         <div style={{ flex: 1 }} />
-        <Button onClick={() => void handleRunVerify()} variant="primary" disabled={running}>
+        <RightButton right="verify_pipelines" onClick={() => void handleRunVerify()} variant="primary" disabled={running}>
           {running ? "Testing…" : "Run the test"}
-        </Button>
+        </RightButton>
       </div>
 
       {error && (

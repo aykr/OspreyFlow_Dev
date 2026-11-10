@@ -22,6 +22,7 @@ import { PipelineCanvas } from "./PipelineCanvas";
 import { addEnrichAfter, addExtractAfter, addSourceChain, removeNode } from "./pipelineGraphEdit";
 import { EXPERT_KINDS, STAGING_KIND_NAMES, STAGING_KINDS, addStagingStep, isStagingStep, removeStagingStep, type StagingKind } from "./stagingSteps";
 import { readStudioMode, writeStudioMode, type StudioMode } from "./studioMode";
+import { RightButton } from "../studio/rightsGate";
 
 export interface PipelineStudioProps {
   apiBaseUrl: string;
@@ -166,9 +167,9 @@ function PipelinesHome({
           maxLength={200}
           onChange={(e) => setLabel(e.target.value)}
         />
-        <Button variant="primary" disabled={!label.trim() || busy} onClick={() => void create()}>
+        <RightButton right="edit_pipelines" variant="primary" disabled={!label.trim() || busy} onClick={() => void create()}>
           New pipeline
-        </Button>
+        </RightButton>
       </section>
       {problem && <p role="alert">{problem}</p>}
       <section aria-label="Pipelines" style={{ display: "grid", gap: "var(--sp-4)" }}>
