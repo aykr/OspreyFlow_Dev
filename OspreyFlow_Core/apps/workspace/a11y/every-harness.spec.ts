@@ -20,6 +20,7 @@ import { expect, test } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { checkUndecidedContrast, type ListedFindings } from "./undecidedContrast";
+import { readFindings } from "../src/color/textContrast";
 
 const KEYBOARD = new URL("../keyboard/", import.meta.url);
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -288,11 +289,11 @@ const EXTRA_STATES: Record<string, string[]> = {
 // too). Fixed ones come off; a new one is never added to make a run green. The owners, by page:
 // the map's attribution chip over the map's canvas (platform); the case screen's variant b ⋯ and
 // places' open More views under GOV.UK (shell); the boards' handles and labels where a link line or
-// another item lies at them (case); Show as BPMN's words on the drawing's task box, in its dialog and
-// in the rule editor (rules-b, L2.11a's own); Home's key cap at `opacity: 0.8` (home).
-const CONTRAST_FINDINGS = JSON.parse(
-  readFileSync(new URL("./contrastFindings.json", import.meta.url), "utf8"),
-) as Record<string, ListedFindings>;
+// another item lies at them (case); text an open menu's shadow reaches (shell); Home's key cap at
+// `opacity: 0.8` (home). Show as BPMN's words, once listed, measure on their task box since T3b.
+const CONTRAST_FINDINGS: Record<string, ListedFindings> = readFindings(
+  JSON.parse(readFileSync(new URL("./contrastFindings.json", import.meta.url), "utf8")),
+);
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();
 

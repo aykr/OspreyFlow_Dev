@@ -10,6 +10,7 @@ import {
   needFor,
   parseColour,
   ratioOf,
+  readFindings,
   type Layer,
   type Rgba,
   type Sample,
@@ -99,7 +100,9 @@ describe("the colours Chrome writes", () => {
   });
 
   it("reads a channel out of its range as unread, not as a colour", () => {
-    for (const css of ["rgb(-1000 0 0)", "rgb(0 0 900)", "rgba(0, 0, 0, 2)", "color(srgb 4 0 0)", "oklab(3 0 0)"]) {
+    // Chrome clamps an rgb() it computes, so its out-of-range shape is `color(srgb …)` (a color-mix or
+    // relative colour past the gamut); rgb() and oklab() out of range stay refused as a second line.
+    for (const css of ["color(srgb 4 0 0)", "color(srgb 0 -2 0 / 0.5)", "rgb(0 0 900)", "rgba(0, 0, 0, 2)", "oklab(3 0 0)"]) {
       expect(parseColour(css), css).toBeNull();
     }
     expect(parseColour("color(srgb 1.0001 -0.0001 0.5)")).toEqual([255, 0, 127.5, 1]);
@@ -167,19 +170,41 @@ describe("gradients", () => {
   it("skips a `none` layer among gradients, and fails a spread too large to measure", () => {
     expect(gradientSurfaces("none, linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))", [255, 255, 255, 1])).not.toBeNull();
     const many = Array.from({ length: 4 }, () => "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255), rgb(0, 0, 0))").join(", ");
-    expect(gradientSurfaces(many, [255, 255, 255, 1])).toBeNull();
+    expect(gradientSurfaces(many, [255, 255, 255, 1])).toBe("more than 20000 possible backgrounds");
+    const spread = judge(sample({ chain: [layer({ backgroundColor: WHITE, backgroundImage: many })] }));
+    expect(spread.why).toMatch(/not measurable: more than 20000 possible backgrounds on <div>/);
   });
 
   it("fails a stop it cannot read, and a picture, rather than dropping them", () => {
-    expect(gradientSurfaces("linear-gradient(lab(50 0 0), transparent)", [255, 255, 255, 1])).toBeNull();
-    expect(gradientSurfaces('url("tile.png")', [255, 255, 255, 1])).toBeNull();
+    expect(gradientSurfaces("linear-gradient(lab(50 0 0), transparent)", [255, 255, 255, 1])).toBe("an unread gradient");
+    expect(gradientSurfaces('url("tile.png")', [255, 255, 255, 1])).toBe("a background picture");
     const pictured = judge(sample({ chain: [layer({ backgroundColor: WHITE, backgroundImage: "url(a.png)" })] }));
     expect(pictured.ratio).toBeNull();
-    expect(pictured.why).toMatch(/picture or unread gradient/);
+    expect(pictured.why).toBe("not measurable: a background picture on <div>");
   });
 });
 
 describe("what lies under the text", () => {
+  it("measures an SVG label's words on the shape under them, point by point", () => {
+    // Show as BPMN's task: words in fill rgb(232, 236, 237) on a task box filled rgb(40, 44, 46), the
+    // drawing's own element a white dialog; the second point is past the box, on the dialog.
+    const label = (under: string[][]) =>
+      judge(sample({ color: "rgb(232, 236, 237)", chain: [layer({ backgroundColor: WHITE })], under }));
+    expect(label([["rgb(40, 44, 46)"]]).why).toBe("");
+    expect(label([["rgb(40, 44, 46)"], []]).why).toMatch(/< 4\.5:1/);
+    expect(label([["rgb(225, 229, 230)"]]).why).toMatch(/^1\.\d\d:1/);
+    expect(label([["url(#hatch)"]]).why).toMatch(/unread shape fill/);
+  });
+
+  it("lays everything on the browser's own canvas, not on white", () => {
+    const dark = "rgb(18, 18, 18)";
+    // Light grey text on nothing but the canvas: fine on a dark canvas, 1.4:1 on white.
+    const onCanvas = (page?: string) => judge(sample({ color: "rgb(220, 220, 220)", chain: [layer()], page }));
+    expect(onCanvas(dark).why).toBe("");
+    expect(onCanvas().why).toMatch(/< 4\.5:1/);
+    expect(onCanvas("rgba(0, 0, 0, 0)").why).toMatch(/unread page colour/);
+  });
+
   it("composites an alpha stack: 50% black over white under 50% white text", () => {
     const stacked = judge(
       sample({
@@ -292,5 +317,34 @@ describe("a listed finding", () => {
     expect(excuses(listed, judge(sample({ overlappedBy: "canvas.other" })))).toBe(false);
     expect(excuses(listed, judge(sample({ chain: [layer({ filter: "blur(1px)" })] })))).toBe(false);
     expect(excuses(listed, found)).toBe(false);
+  });
+});
+
+describe("the findings file", () => {
+  const good = {
+    "a.html (dark)": {
+      ".x": { text: "Words", ratio: 3.2, owner: "case" },
+      ".y": { text: "More", ratio: "unmeasurable", reason: "over or under div", own: 7.1, owner: "shell" },
+    },
+  };
+
+  it("reads a well-formed file as it is", () => {
+    expect(readFindings(good)).toEqual(good);
+  });
+
+  it("refuses a malformed entry, naming it", () => {
+    const broken = (entry: unknown) => ({ "a.html (dark)": { ".x": entry } });
+    const cases: [unknown, RegExp][] = [
+      [[], /the file: not an object of looks/],
+      [{ "a.html (dark)": [] }, /a\.html \(dark\): not an object of selectors/],
+      [broken({ text: "W", ratio: "unmeasurable", own: 2, owner: "o" }), /› \.x: unexpected fields/],
+      [broken({ text: "W", ratio: "unmeasurable", reason: "", own: 2, owner: "o" }), /no reason/],
+      [broken({ text: "W", ratio: 3, owner: "o", own: 2 }), /unexpected fields/],
+      [broken({ text: "W", ratio: 40, owner: "o" }), /ratio out of range/],
+      [broken({ text: "W", ratio: "bad", owner: "o" }), /neither a number/],
+      [broken({ ratio: 3, owner: "o" }), /no text or owner/],
+      [broken({ text: "W", ratio: "unmeasurable", reason: "r", own: "7", owner: "o" }), /own ratio out of range/],
+    ];
+    for (const [json, why] of cases) expect(() => readFindings(json), String(why)).toThrow(why);
   });
 });

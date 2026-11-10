@@ -36,6 +36,12 @@ export interface Sample {
   chain: Layer[];
   /** A painted element under or over the text that is not the node nor an ancestor, or null. */
   overlappedBy: string | null;
+  /** For each probed point, colours (computed `fill`, opacity applied) of SVG shapes lying under the
+   * text there and above its own element's surface, nearest first: an SVG label's box. Absent or
+   * shorter than the points means none. */
+  under?: string[][];
+  /** The browser's canvas under everything, as computed (`Canvas`); white when absent. */
+  page?: string;
   /** axe's own reason for leaving it undecided (`messageKey`), kept for the message. */
   axeReason: string | null;
 }
@@ -167,17 +173,18 @@ function layersOf(image: string): string[] {
 /**
  * Every colour a gradient may lay over its element's own `base`: each layer's stops and the colours
  * between them, every layer composited over the ones beneath it (the canvas grid's lines cross), or
- * null when any part cannot be read (a picture, a stop in an unknown form, a `none` component).
+ * why it cannot be measured: a picture, a stop in an unknown form or with a `none` component, or more
+ * possible backgrounds than `MAX_SURFACES`.
  */
-export function gradientSurfaces(image: string, base: Rgba): Rgba[] | null {
+export function gradientSurfaces(image: string, base: Rgba): Rgba[] | string {
   if (image === "none") return [base];
   let surfaces: Rgba[] = [base];
   // Painted bottom first: the last layer lies lowest.
   for (const layer of layersOf(image).reverse()) {
     if (layer === "none") continue;
-    if (!/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return null;
+    if (!/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return "a background picture";
     const stops = (layer.match(COLOUR) ?? []).map(parseColour);
-    if (!stops.length || stops.some((c) => c === null)) return null;
+    if (!stops.length || stops.some((c) => c === null)) return "an unread gradient";
     const read = stops as Rgba[];
     // A layer may leave part of the box unpainted (its size, position or repeat), so the colour
     // beneath it is a sample too.
@@ -185,8 +192,9 @@ export function gradientSurfaces(image: string, base: Rgba): Rgba[] | null {
     for (let i = 0; i + 1 < read.length; i += 1) {
       for (let k = 1; k < STEPS; k += 1) samples.push(lerp(read[i] as Rgba, read[i + 1] as Rgba, k / STEPS));
     }
+    // Counted before the product is built, so a spread past the cap is refused, never built.
+    if (surfaces.length * samples.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
     surfaces = surfaces.flatMap((under) => samples.map((top) => over(top, under)));
-    if (surfaces.length > MAX_SURFACES) return null;
   }
   return surfaces;
 }
@@ -228,10 +236,25 @@ export function needFor(fontSize: string, fontWeight: string): number {
  * ancestor's opacity on its whole group. A string when that walk cannot be read (why).
  */
 function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
-  const points = Math.max(1, ...sample.chain.map((l) => l.covers.length));
+  const points = Math.max(1, ...sample.chain.map((l) => l.covers.length), sample.under?.length ?? 0);
+  const page = parseColour(sample.page ?? "rgb(255, 255, 255)");
+  if (!page || page[3] < 1) return `an unread page colour ${sample.page}`;
   let worst = Infinity;
   for (let p = 0; p < points; p += 1) {
     let pairs: [Rgba, Rgba][] = [[fg, [0, 0, 0, 0]]];
+    const lay = (surfaces: Rgba[]): string | null => {
+      // Counted before the product is built.
+      if (pairs.length * surfaces.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
+      pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
+      return null;
+    };
+    // An SVG label's shapes lie between its words and its own element's surface.
+    for (const fill of sample.under?.[p] ?? []) {
+      const colour = parseColour(fill);
+      if (!colour) return `an unread shape fill ${fill}`;
+      const refused = lay([colour]);
+      if (refused) return refused;
+    }
     for (const layer of sample.chain) {
       if (layer.filter !== "none" || layer.backdropFilter !== "none" || layer.mixBlendMode !== "normal") {
         return `a filter or blend on <${layer.name}>`;
@@ -240,13 +263,12 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
       const colour = parseColour(layer.backgroundColor);
       if (!colour) return `an unread background colour ${layer.backgroundColor} on <${layer.name}>`;
       const painted = gradientSurfaces(layer.backgroundImage, colour);
-      if (!painted) return `a background picture or unread gradient on <${layer.name}>`;
+      if (typeof painted === "string") return `${painted} on <${layer.name}>`;
       const opacity = parseFloat(layer.opacity);
       if (!(opacity >= 0 && opacity <= 1)) return `an unread opacity ${layer.opacity} on <${layer.name}>`;
       // An element whose box is not under this point lays nothing under the text there.
-      const surfaces: Rgba[] = (layer.covers[p] ?? true) ? painted : [[0, 0, 0, 0]];
-      pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
-      if (pairs.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
+      const refused = lay((layer.covers[p] ?? true) ? painted : [[0, 0, 0, 0]]);
+      if (refused) return refused;
       if (opacity < 1) {
         pairs = pairs.map(([ink, bg]) => [
           [ink[0], ink[1], ink[2], ink[3] * opacity],
@@ -254,9 +276,9 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
         ]);
       }
     }
-    const page: Rgba = [255, 255, 255, 1];
     for (const [ink, bg] of pairs) worst = Math.min(worst, ratioOf(over(ink, page), over(bg, page)));
   }
+  // Unreachable while `parseColour` refuses non-finite parts; kept as a second line.
   return Number.isFinite(worst) ? worst : `a measure that came out ${worst}`;
 }
 
@@ -307,4 +329,39 @@ export function excuses(listed: ListedFinding | undefined, finding: Judgement): 
     return finding.ownRatio !== null && finding.ownRatio >= listed.own - FLOOR;
   }
   return finding.ratio !== null && finding.ratio >= listed.ratio - FLOOR;
+}
+
+/**
+ * The listed findings, read from their JSON file and checked for shape, so a mistyped field or a
+ * missing reason fails the run naming the entry, never excuses by accident.
+ */
+export function readFindings(json: unknown): Record<string, Record<string, ListedFinding>> {
+  const bad = (where: string, what: string): never => {
+    throw new Error(`contrast findings: ${where}: ${what}`);
+  };
+  if (typeof json !== "object" || json === null || Array.isArray(json)) bad("the file", "not an object of looks");
+  const out: Record<string, Record<string, ListedFinding>> = {};
+  for (const [title, nodes] of Object.entries(json as Record<string, unknown>)) {
+    if (typeof nodes !== "object" || nodes === null || Array.isArray(nodes)) bad(title, "not an object of selectors");
+    out[title] = {};
+    for (const [selector, entry] of Object.entries(nodes as Record<string, unknown>)) {
+      const where = `${title} › ${selector}`;
+      const e = entry as Record<string, unknown>;
+      if (typeof e !== "object" || e === null) bad(where, "not an object");
+      const keys = Object.keys(e).sort().join(",");
+      if (typeof e.text !== "string" || typeof e.owner !== "string" || !e.owner) bad(where, "no text or owner");
+      if (typeof e.ratio === "number") {
+        if (keys !== "owner,ratio,text") bad(where, `unexpected fields ${keys}`);
+        if (!(e.ratio > 0 && e.ratio <= 21)) bad(where, `a ratio out of range ${e.ratio}`);
+      } else if (e.ratio === "unmeasurable") {
+        if (keys !== "own,owner,ratio,reason,text") bad(where, `unexpected fields ${keys}`);
+        if (typeof e.reason !== "string" || !e.reason) bad(where, "no reason");
+        if (e.own !== null && !(typeof e.own === "number" && e.own > 0 && e.own <= 21)) bad(where, `an own ratio out of range ${String(e.own)}`);
+      } else {
+        bad(where, `a ratio that is neither a number nor "unmeasurable": ${String(e.ratio)}`);
+      }
+      (out[title] as Record<string, ListedFinding>)[selector] = e as unknown as ListedFinding;
+    }
+  }
+  return out;
 }
