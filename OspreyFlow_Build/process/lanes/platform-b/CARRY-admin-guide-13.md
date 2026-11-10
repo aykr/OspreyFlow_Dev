@@ -72,3 +72,25 @@ disagree.
 ## 5. The guide's settings table (`components.storage.backups`, §… at line ~1348 of `spec/10`)
 
 > | `components.storage.backups` | str | `/var/lib/osprey/backups` | Where backups are written: `<this>/<deployment>/`. Asked at setup (`folders.backups`). The default is a placeholder: an `osprey.yaml` that keeps it (off a server of your own) backs up to `~/OspreyFlow/backups` and says so. |
+
+## 6. The answers-file settings table: a `folders.backups` row, after the `folders.tiles` row (both guides)
+
+`tests/test_admin_guide.py::test_every_answers_file_setting_is_in_the_guide[folders-*]` stays red until it is in
+(P5b merges without it, at the orchestrator's word, 10 November 2026: docs' D2a rebuilds the same PDFs). It needs a
+version row and `make docs-pdf`.
+
+> | `folders.backups` | Where `ospreyflow backup` writes, each deployment's sets in `<this>/<deployment name>/`; never inside the checkout (absolute, or from `~`); default `~/OspreyFlow/backups` (section 13) |
+
+## 7. What the guide (version 1.59) states as fact that P5b changes
+
+Line numbers are 1.59's.
+- About :292, "backups are kept in the deployment's own folder". A named deployment's sets now go to
+  `<backups folder>/<name>/`.
+- :795 (§5a.3), "`ospreyflow backup` writes each set to `server.backups`". Each set now goes to `<server.backups>/<deployment>/`.
+- :1028, the table row for `~/.ospreyflow/deployments/<name>/`, which says "… and its `backups/`". New sets aren't
+  written there; the old ones stay until moved (see 3).
+- :1030, "`backups/` | Backup sets". The checkout's `backups/` is no longer written; `ospreyflow doctor` names any sets left there.
+- :1467 (§13 Lite), "writes a set to `backups/<time>-<profile>-<commit>/`". See 1.
+- :1485 (§13 Small on your own server), "written to `server.backups`". See 2.
+- :1538, the `update` table, "its backup is written to `server.backups` first". It now goes to `<server.backups>/<deployment>/`.
+- :1697, the settings row for `components.storage.backups`. See 5.
