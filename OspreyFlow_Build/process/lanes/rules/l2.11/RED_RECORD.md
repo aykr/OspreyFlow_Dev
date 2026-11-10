@@ -212,3 +212,10 @@ On the server, offline: 10,522 passed, with 16 failed and 13 errors.
   `test_a_scheduled_run_reads_a_rules_list_and_a_composites_members_through_the_states_stores` is red,
   alone, with `from_state`'s building removed. `test_run_resources`' every-field check now holds them, and the
   route's run-path test passes both. The tests were fixed in the same change.
+
+**§13 proven live** (the orchestrator's ask), at 291787c: the rules lease, stack b, by `stack_lease.sh remote`
+(`gates/291787c.runpath.live.txt`). 278 passed and none failed. The run covered:
+- the eleven live files that reach the scheduler and the run paths (from_state, run_recipe_as, the schedule
+  executor, the ledgers, Run now, a Studio load and the list refresh's schedule);
+- the rule store and route live files, and the migration's store file;
+- the run-path offline files.

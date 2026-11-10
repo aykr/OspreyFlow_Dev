@@ -38,7 +38,7 @@
    - the three new live files (22 cases) run because their Makefile ignores are in the unapplied `L2.11_ci_yml.diff`, and `test_test_file_coverage_check` fails for the same reason;
    - the server's usual pair: valkey_config (main's own) and the webapp's GPU preflight.
 
-   The first take, at eae4092, found a real defect, fixed at 05ec309 (RED_RECORD §13). The scheduled, folder-watched and command-line runs never had the rule's list reader or reach: `from_state` read them as state attributes no Conduit holds, and `RunResources` never built them. So on those paths a composite's rule read only the composite's own id, and a rule naming a list could not run. Both paths now build them from their own stores. The test is red with that building removed.
+   The first take, at eae4092, found a real defect, fixed at 05ec309 (RED_RECORD §13). The scheduled, folder-watched and command-line runs never had the rule's list reader or reach: `from_state` read them as state attributes no Conduit holds, and `RunResources` never built them. So on those paths a composite's rule read only the composite's own id, and a rule naming a list could not run. Both paths now build them from their own stores. The test is red with that building removed. Proven live at 291787c on stack b, at the orchestrator's ask: 278 passed, none failed (`gates/291787c.runpath.live.txt`).
 5. **Reviews:**
    - My lane-reviewer's 29 findings were all built, with plants (RED_RECORD §10).
    - The orchestrator's conditions were met: list_refresh runs, the ci wiring is a diff, registries are passed by their literal names, test_schedule_notice is repointed, and Make live is gated on deploy_rules.
