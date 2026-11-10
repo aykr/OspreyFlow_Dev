@@ -160,6 +160,9 @@ securityContext:
   runAsUser: {{ .user }}
   runAsGroup: {{ .group }}
   fsGroup: {{ .group }}
+  {{- with $.w.supplementalGroups }}
+  supplementalGroups: {{ toJson . }}
+  {{- end }}
   seccompProfile:
     type: RuntimeDefault
 {{- else }}

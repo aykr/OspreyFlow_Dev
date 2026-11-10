@@ -73,6 +73,11 @@ SCRATCH: dict[str, list[str]] = {
     "clickhouse-keeper": ["/var/log/clickhouse-keeper", "/var/lib/clickhouse"],
 }
 
+#: An image built for any user in group 0 (OpenShift's convention) that writes into its own folders
+#: at start: Keycloak (`/opt/keycloak` is `1000:0`, group-writable; it builds itself there). Its pod
+#: adds group 0 as a supplementary group; the user stays 10001, non-root. Gone with Keycloak (P10).
+GROUP_ZERO = frozenset({"keycloak"})
+
 #: Decision 5: long enough for ArcadeDB to close its databases.
 GRACE_SECONDS = {"arcadedb": 120, "clickhouse": 60, "clickhouse-keeper": 30}
 
@@ -398,6 +403,8 @@ def render_cloud_platform(
             pod["scratch"] = [
                 *pod.get("scratch", []), *({"mountPath": p} for p in SCRATCH[pod["name"]])
             ]  # fmt: skip
+        if pod["name"] in GROUP_ZERO:
+            pod["supplementalGroups"] = [0]
         if pod["name"] in GRACE_SECONDS:
             pod["terminationGracePeriodSeconds"] = GRACE_SECONDS[pod["name"]]
         if pod.get("shared") or any(c.get("shared") for c in pod.get("initContainers", [])):

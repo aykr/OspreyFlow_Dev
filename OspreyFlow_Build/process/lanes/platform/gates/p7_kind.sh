@@ -180,12 +180,15 @@ standins() {
     --from-literal=bucket_prefix=ospreyflow-dev- | kubectl apply -f -
 }
 ourselves() {  # our own Secret as the namespace's Terraform makes it: a password for each key
-  local args=() key
+  # Each key the render names and the Secret lacks is added; one it holds is kept, since the stores
+  # already hold its password.
+  local key
+  kubectl -n "$NS" get secret ospreyflow-secrets >/dev/null 2>&1 || kubectl -n "$NS" create secret generic ospreyflow-secrets
   for key in $(PYTHONPATH=. .venv/bin/python -c "import yaml; v=yaml.safe_load(open('$OUT/values.yaml')); print(' '.join(v['secrets']['keys']))"); do
-    args+=(--from-literal="$key=$(openssl rand -hex 16)")
+    kubectl -n "$NS" get secret ospreyflow-secrets -o "jsonpath={.data.$key}" | grep -q . || \
+      kubectl -n "$NS" patch secret ospreyflow-secrets --type=merge \
+        -p "{\"data\":{\"$key\":\"$(openssl rand -hex 16 | tr -d '\n' | base64 -w0)\"}}" >/dev/null
   done
-  kubectl -n "$NS" get secret ospreyflow-secrets >/dev/null 2>&1 || \
-    kubectl -n "$NS" create secret generic ospreyflow-secrets "${args[@]}"
   kubectl -n "$NS" create serviceaccount ospreyflow --dry-run=client -o yaml | kubectl apply -f -
 }
 seed_theirs() {

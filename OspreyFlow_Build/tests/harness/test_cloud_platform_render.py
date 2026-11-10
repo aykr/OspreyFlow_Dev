@@ -118,6 +118,18 @@ def test_every_pod_runs_as_10001_and_none_keeps_a_user_of_its_own(values: dict[s
     assert not [p["name"] for p in _pods(values) if "runAs" in p]
 
 
+def test_keycloak_alone_takes_its_image_s_group_as_a_supplementary_one(
+    values: dict[str, Any],
+) -> None:
+    """Keycloak's image is built for any user in group 0 (`/opt/keycloak` is `1000:0`, group-writable)
+    and writes its own build there at start; as 10001:10001 alone it cannot (measured on the kind
+    cluster, 10 November 2026). Its pod alone adds group 0 as a supplementary group: the user stays
+    10001 and non-root. Entra ID replaces it in P10 (ADR-148 decision 9)."""
+    groups = {p["name"]: p.get("supplementalGroups") for p in _pods(values)}
+    assert groups.pop("keycloak") == [0]
+    assert set(groups.values()) == {None}
+
+
 def test_the_shared_folders_are_one_read_write_once_claim_its_mounters_on_one_node(
     values: dict[str, Any],
 ) -> None:
