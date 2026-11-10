@@ -224,7 +224,9 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
   const editor = props.editor;
   const [ontology, setOntology] = useState<OntologySchema | null>(editor ? editor.dataset.ontology : null);
   const [draft, setDraft] = useState<SentenceDraft>(() =>
-    editor?.initial ? fromSentence(editor.initial.sentence) : { ...emptyDraft(), ...(editor ? { scope: "this_case" as const } : {}) },
+    // ADR-146 Amendment 6: the older form keeps rules just for their author; the editor's are the
+    // case's.
+    editor?.initial ? fromSentence(editor.initial.sentence) : { ...emptyDraft(), scope: editor ? ("this_case" as const) : ("just_me" as const) },
   );
   const [name, setName] = useState(editor?.initial?.name ?? "");
   const [compiled, setCompiled] = useState<CompiledSentence | null>(null);
@@ -315,7 +317,9 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
         Write a rule as a sentence
       </h3>
       <p className="label" style={{ margin: 0 }}>
-        Fill each blank from the lists. Preview it on the last 90 days before you deploy it.
+        {editor
+          ? "Fill each blank from the lists, offered from this dataset's own model."
+          : "A rule just for you: fill each blank from the lists. Preview it on the last 90 days before you deploy it. A rule for the case is written above, on its dataset."}
       </p>
 
       <fieldset style={GROUP}>
@@ -649,8 +653,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               {/* ADR-146 decision 3: a rule on a declared dataset goes to a named team or its case;
                   a rule for the whole deployment is converted per dataset. */}
               {!editor && <option value="just_me">just me</option>}
-              <option value="this_case">this case</option>
-              {!editor && props.isAdministrator && <option value="deployment">the whole deployment</option>}
+              {editor && <option value="this_case">this case</option>}
             </Select>
           </label>
           {!justMe && (

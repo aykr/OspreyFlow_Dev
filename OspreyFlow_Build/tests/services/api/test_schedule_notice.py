@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
 from services.api.scheduler import schedule_notice
-from services.api.watch_routes import alert_to_view
+from services.api.alert_queue import monitoring_queue
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
@@ -40,10 +40,14 @@ async def test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queu
         (mine,) = await store.list_authorized(reader)
         assert mine.id == notice.id and mine.typology is None
         assert await store.list_case_queue(case, reader) == []
-        view = await alert_to_view(mine, reader, graph=None, analytics=NO_TRANSACTIONS, case="inbox-case")  # type: ignore[arg-type]
-        assert view.words == "The scheduled run of Daily export was refused: x"
-        assert view.rule_id == f"schedule:{recipe.recipe_id}" and view.referent_node_ids == []
+        # L2.10 (ADR-146 decision 1): the inbox went into the one queue, which shows the notice to
+        # its owner, with its words and no referent, and to no one else in the case.
+        (queued,) = await monitoring_queue(store, None, NO_TRANSACTIONS, case, reader)  # type: ignore[arg-type]
+        assert queued.alert.id == notice.id
+        assert queued.alert.words == "The scheduled run of Daily export was refused: x"
+        assert queued.alert.rule_id == f"schedule:{recipe.recipe_id}" and queued.alert.referent_node_ids == []
         someone_else = reader.model_copy(update={"id": f"other-{new_id()}"})
         assert await store.list_authorized(someone_else) == []
+        assert await monitoring_queue(store, None, NO_TRANSACTIONS, case, someone_else) == []  # type: ignore[arg-type]
     finally:
         await store.close()

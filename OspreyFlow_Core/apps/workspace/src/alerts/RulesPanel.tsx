@@ -276,6 +276,8 @@ export function runsWords(rule: TypologyRule): string {
       .sentence?.schedule;
     return `Runs on a schedule, ${scheduleWords(schedule)} (Europe/London), as its author`;
   }
+  // ADR-146 decision 3: run each time the screening list it names keeps a new version.
+  if (rule.trigger === "list_refresh") return "Runs when its screening list refreshes, as its author";
   return rule.trigger === "pre_commit"
     ? `Judges each load before it commits (budget ${(rule.budget_ms ?? 5000).toLocaleString("en-GB")} ms; held if it cannot judge)`
     : "Runs after each load commits";
@@ -298,6 +300,8 @@ export function RulesPanel(props: RulesPanelProps) {
   const [said, setSaid] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<SavedPattern[]>([]);
   const [preset, setPreset] = useState<{ template: RuleTemplate; nonce: number } | null>(null);
+  // ADR-146 decision 5: the rule whose row opened the editor.
+  const [opening, setOpening] = useState<TypologyRule | null>(null);
   const author = level === "author";
 
   // ADR-109 phase D: the account's own saved patterns — what a drawn rule may be deployed from,
@@ -369,15 +373,26 @@ export function RulesPanel(props: RulesPanelProps) {
                 rule={rule}
                 // ADR-146 decision 3: a draft asked to go live under its dataset's second-person
                 // policy is another Author's to approve; a whole-deployment change, the administrator's.
-                canApprove={author && ((props.isAdministrator ?? false) || (rule.pending_make_live ?? false)) && rule.pending_by !== props.accountId}
+                canApprove={
+                  author &&
+                  ((props.isAdministrator ?? false) || (rule.pending_make_live ?? false)) &&
+                  rule.pending_by !== props.accountId &&
+                  rule.pending_asked_by !== props.accountId
+                }
                 onDone={(words) => {
                   setSaid(words);
                   reload();
                 }}
               />
               <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
+                {author && rule.dataset_id && rule.params.typology === "sentence" && rule.status !== "retired" &&
+                  (rule.params as unknown as { sentence: { scope?: string } }).sentence.scope !== "just_me" && (
+                    <Button aria-label={`Open ${rule.name} in the rule editor`} onClick={() => setOpening(rule)}>
+                      Open in the rule editor
+                    </Button>
+                  )}
                 <RuleHistory {...props} rule={rule} />
-                {rule.trigger === "schedule" && <RuleSchedule {...props} rule={rule} />}
+                {(rule.trigger === "schedule" || rule.trigger === "list_refresh") && <RuleSchedule {...props} rule={rule} />}
               </span>
             </span>
             {author && rule.status === "active" && !rule.pending_action && (
@@ -403,7 +418,9 @@ export function RulesPanel(props: RulesPanelProps) {
         ))}
       </ul>
       <RuleEditor
+        key={opening?.id ?? "new"}
         {...props}
+        opening={opening}
         patterns={patterns}
         canMakeLive
         onChanged={(words) => {

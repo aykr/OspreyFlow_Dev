@@ -142,6 +142,22 @@ describe("the rule editor (ADR-146 decision 3)", () => {
     expect(calls.some((c) => c.path === "rules/r1/export.bpmn")).toBe(true);
   });
 
+  it("opens an existing rule at its draft, on its own dataset, ready to make live once tested (ADR-146 decision 5)", async () => {
+    world({
+      "rules/r1/draft": () => json(200, { rule_id: "r1", version: 2, action: "change", name: "Okafor, changed", status: "draft",
+        params: { typology: "sentence", pattern_id: "p", sentence: { subject: "Prisoner", conditions: [], severity: "low", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case" } },
+        trigger: "post_commit", budget_ms: 5000, proposed_by: "me", proposed_at: "2026-11-10T09:00:00Z",
+        tested_at: "2026-11-10T10:00:00Z", tested_by: "me", tested_days: 30, would_raise: null }),
+    }); // prettier-ignore
+    const live = { ...DRAFT, status: "active", name: "Okafor" };
+    render(<RuleEditor apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="author" patterns={[]} canMakeLive onChanged={vi.fn()} opening={live as never} />);
+    expect(((await screen.findByLabelText("Name of the rule")) as HTMLInputElement).value).toBe("Okafor, changed");
+    expect((screen.getByLabelText("Subject") as HTMLSelectElement).value).toBe("Prisoner");
+    expect(screen.queryByLabelText("The dataset this rule watches")).toBeNull(); // its dataset is fixed
+    expect(screen.getByText(/This draft was tested on/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Make live" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("says a dataset asks for a second person before it is made live", async () => {
     world({ "POST rules/drafts": () => json(201, { ...DRAFT, dataset_id: "ds-finance", params: { ...DRAFT.params, sentence: { subject: "Account" } } }) });
     editor();

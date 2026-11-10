@@ -84,9 +84,25 @@ class _Audit:
         self.entries.append(entry)
 
 
+class _Cases(_Case):
+    """Two cases, each with its own levels, applied as the real store applies them: a rule is
+    reached only through its own case (rule 4, the lane-reviewer's item 12)."""
+
+    def __init__(self, case_id: str, levels: dict[str, AccessLevel], other: str,
+                 other_levels: dict[str, AccessLevel]) -> None:  # fmt: skip
+        super().__init__(case_id, levels)
+        self.other = _Case(other, other_levels)
+
+    async def get_authorized(self, investigation_id: str, principal: Principal, *, need: AccessLevel) -> Any:
+        if investigation_id == self.other.case_id:
+            return await self.other.get_authorized(investigation_id, principal, need=need)
+        return await super().get_authorized(investigation_id, principal, need=need)
+
+
 class _World:
     def __init__(self, policy: str = "author_promotes") -> None:
         self.case = f"case-{new_id()}"
+        self.other_case = f"case-{new_id()}"
 
         def who(name: str, *roles: str) -> Principal:
             return Principal(id=f"{name}-{new_id()}", clearance="OFFICIAL", org_unit="unit-1",
@@ -98,10 +114,12 @@ class _World:
         self.no_right = who("no-right", "analyst")
         self.outsider = who("outsider", "analyst", "rule_author")
         self.as_ = self.author
-        self.investigations = _Case(self.case, {
+        # An Author of another case reading the same dataset: never this case's rules.
+        self.elsewhere = who("elsewhere", "analyst", "rule_author")
+        self.investigations = _Cases(self.case, {
             self.author.id: AccessLevel.AUTHOR, self.checker.id: AccessLevel.AUTHOR,
             self.viewer.id: AccessLevel.VIEWER, self.no_right.id: AccessLevel.AUTHOR,
-        })  # fmt: skip
+        }, self.other_case, {self.elsewhere.id: AccessLevel.AUTHOR})  # fmt: skip
         self.datasets = InMemoryDatasetStore()
         for dataset in (
             Dataset(id="ds-1", name="Prison records", owning_unit="unit-1", created_at=T0,
@@ -113,6 +131,7 @@ class _World:
         ):  # fmt: skip
             self.datasets.add(dataset)
         self.datasets.cases[self.case] = ["ds-1", "ds-drawn"]
+        self.datasets.cases[self.other_case] = ["ds-1"]
         self.audit = _Audit()
         self.patterns = _Patterns()
         self.graph = _Graph([_node("v1", "Person", family_name="Okafor"),
@@ -257,6 +276,8 @@ def test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone(
     assert client.get(f"{_base(w)}/{rule_id}/draft").json()["would_raise"] == 1
     w.as_ = w.checker
     assert client.get(f"{_base(w)}/{rule_id}/draft").json()["would_raise"] is None
+    # The versions route, too (the lane-reviewer's item 1): no reader but the tester is told.
+    assert {v["would_raise"] for v in client.get(f"{_base(w)}/{rule_id}/versions").json()} == {None}
     (entry,) = [e for e in w.audit.entries if e["action"] == "rule_tested"]
     assert entry["result_cardinality"] == 0 and "would_raise" not in str(entry["resolved_query"])
     w.as_ = w.author
@@ -303,3 +324,60 @@ def test_the_stored_files_are_the_codecs_at_every_saved_version(world: tuple[_Wo
         expected = rule_files(SentenceRuleInput.model_validate(
             {**body, "sentence": draft["params"]["sentence"]}), dataset_id="ds-1")  # fmt: skip
         assert kept is not None and (kept.bpmn, kept.dmn) == (expected.bpmn, expected.dmn)
+
+
+
+def test_neither_the_author_nor_the_asker_sends_a_make_live_back(strict: tuple[_World, TestClient]) -> None:
+    """ADR-146 Amendment 6 point 4: another Author decides a waiting make-live, either way (the
+    lane-reviewer's item 11). Red with send-back's own check removed."""
+    w, client = strict
+    rule_id = _made(w, client)
+    assert client.post(f"{_base(w)}/{rule_id}/test").status_code == 200
+    w.as_ = w.checker  # the checker asks; the author wrote it
+    assert client.post(f"{_base(w)}/{rule_id}/make-live").status_code == 200
+    for who in (w.author, w.checker):
+        w.as_ = who
+        refused = client.post(f"{_base(w)}/{rule_id}/reject", json={"reason": "mine"})
+        assert (refused.status_code, refused.json()["detail"]["error"]) == (403, "own_change"), who.id
+    assert client.get(f"{_base(w)}/{rule_id}/draft").json() is None  # still waiting, not sent back
+
+
+def test_another_cases_author_reaches_none_of_this_cases_rule(world: tuple[_World, TestClient]) -> None:
+    """Rule 4 at the store's own filter (the lane-reviewer's item 12): an Author of another case,
+    reading the same dataset, asking through their own case for this case's rule, finds nothing,
+    as a missing rule; and changes nothing."""
+    w, client = world
+    rule_id = _made(w, client)
+    w.as_ = w.elsewhere
+    there = f"/v1/investigations/{w.other_case}/rules/{rule_id}"
+    for method, path, body in (("GET", "draft", None), ("GET", "versions", None), ("POST", "test", None),
+                               ("POST", "make-live", None), ("POST", "approve", None),
+                               ("POST", "reject", {"reason": "no"}),
+                               ("PUT", "draft", {"name": "n", "dataset_id": "ds-1", "sentence": LISTED})):  # fmt: skip
+        answer = client.request(method, f"{there}/{path}", json=body)
+        assert (answer.status_code, answer.json().get("error")) == (404, "rule_not_found"), path
+    w.as_ = w.author
+    assert client.get(f"{_base(w)}/{rule_id}/draft").json()["name"] == "Okafor"
+
+
+def test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused(world: tuple[_World, TestClient]) -> None:
+    """ADR-146 decision 3 at the save (rule 12; the lane-reviewer's item 18): the dataset's live
+    model narrows what the sentence may name. Red with the save checked against the deployment's
+    whole ontology."""
+    from types import SimpleNamespace
+
+    from services.api.app import get_target_models
+
+    w, client = world
+
+    class _Models:
+        async def live(self, dataset_id: str) -> Any:
+            return SimpleNamespace(packs=["finance"], reference_lists=[])
+
+    app.dependency_overrides[get_ontology] = lambda: ONTOLOGY.model_copy(
+        update={"type_packs": {**ONTOLOGY.type_packs, "Person": "prison"}})
+    app.dependency_overrides[get_target_models] = lambda: _Models()
+    refused = _draft(w, client)
+    assert refused.status_code == 422, refused.text
+    assert "Person" in refused.text
+    assert w.patterns.saved == []
