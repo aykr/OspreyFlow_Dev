@@ -85,6 +85,15 @@ def marked_inputs(planted: str) -> tuple[dict[str, Any], dict[str, Any]]:
     return sources, lists
 
 
+def joined_owners(graph: Any) -> set[str]:
+    """The owners the Join met and the load committed: each a marked owner joined to a booking
+    marked alike, so a control that commits them shows the guard was met and passed, not skipped
+    by a left join that matched nothing."""
+    return {
+        n.properties["family_name"] for n in graph.committed_nodes if n.type == "Person"
+    }
+
+
 def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, list(rows[0]))
@@ -165,7 +174,8 @@ async def test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table(
             target_models=_Models([ESTABLISHMENTS.id]),  # type: ignore[arg-type]
             staging_storage=STORAGE,
         )  # fmt: skip
-    # The row's refusal, after the step tables were written, not the fixed check before them.
+    # The row check's kind ("load"; the fixed check before it has the same kind, so the step
+    # tables' absence below, which plant 1 turns red, is what shows this is the row check's).
     assert refused.value.kind == "load"
     assert "SECRET" not in " ".join(refused.value.problems)
     assert _step_tables(store, "run-r") == [], "a refused run left its step tables behind"
@@ -181,8 +191,10 @@ async def test_the_removal_touches_no_other_run_s_tables(
     before = _step_tables(store, "run-k")
     assert before, "the run the ceiling passed staged nothing"
     refused, refused_repo = await _published(tmp_path, planted="SECRET", name="refused")
-    with pytest.raises(AboveTheDeploymentCeiling):
+    with pytest.raises(AboveTheDeploymentCeiling) as refusal:
         await _run(refused, refused_repo, "run-r")
+    assert refusal.value.kind == "load"
+    assert _step_tables(store, "run-r") == [], "the refused run left its own step tables"
     assert _step_tables(store, "run-k") == before
 
 
@@ -192,7 +204,7 @@ async def test_a_staged_run_within_the_ceiling_keeps_its_step_tables(
     monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
     draft, repo = await _published(tmp_path, planted="OFFICIAL")
     _, graph = await _run(draft, repo, "run-w")
-    assert graph.committed_nodes
+    assert joined_owners(graph) == {"ELLERY", "WHITLOW"}, "the join met no marked owner"
     assert _step_tables(store, "run-w") == [
         "titled.parquet",
         "with_establishment.parquet",
@@ -219,13 +231,14 @@ async def test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal(
     )
     graph = ValidatingGraph(ONTOLOGY)
     tx = await graph.begin_transaction()
-    with pytest.raises(AboveTheDeploymentCeiling):
+    with pytest.raises(AboveTheDeploymentCeiling) as refused:
         await run_staged_recipe(
             recipe, sources=sources, lists=lists, dataset_id="pid",
             graph=graph, ontology=ONTOLOGY, tx=tx, principal=LOADER,  # type: ignore[arg-type]
             load_id="ld-run-r", investigation_scope="case-1", storage=STORAGE, scheme=SCHEME,
             subscribed=(),
         )  # fmt: skip
+    assert refused.value.kind == "load"
     assert _step_tables(store, "ld-run-r") == [], "a refused staged load left its step tables"
 
 

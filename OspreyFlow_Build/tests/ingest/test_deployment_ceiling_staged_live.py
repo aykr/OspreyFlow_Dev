@@ -28,7 +28,6 @@ import os
 import socket
 import uuid
 from collections.abc import Iterator
-from typing import Any
 
 import pyarrow.fs as pa_fs
 import pytest
@@ -40,7 +39,7 @@ from services.ingest.staging import ObjectStorageConfig
 from schemas.domain import Principal
 from tests.ingest.recipe_test_support import ValidatingGraph
 from tests.ingest.test_staged_run import ONTOLOGY, RECIPE, SCHEME
-from tests.services.api.test_deployment_ceiling_staged import marked_inputs
+from tests.services.api.test_deployment_ceiling_staged import joined_owners, marked_inputs
 
 LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
 STEPS = ("with_establishment", "with_owner", "titled")
@@ -87,7 +86,7 @@ def _held(storage: ObjectStorageConfig, load_id: str) -> list[str]:
     ]
 
 
-async def _load(storage: ObjectStorageConfig, load_id: str, planted: str) -> Any:
+async def _load(storage: ObjectStorageConfig, load_id: str, planted: str) -> ValidatingGraph:
     sources, lists = marked_inputs(planted)  # owners marked as the bookings they join (L1.7)
     entities = [
         e.model_copy(update={"handling": {"classification": {"field": "marking"}}})
@@ -99,12 +98,13 @@ async def _load(storage: ObjectStorageConfig, load_id: str, planted: str) -> Any
     )
     graph = ValidatingGraph(ONTOLOGY)
     tx = await graph.begin_transaction()
-    return await run_staged_recipe(
+    await run_staged_recipe(
         recipe, sources=sources, lists=lists, dataset_id="pid",
         graph=graph, ontology=ONTOLOGY, tx=tx, principal=LOADER,  # type: ignore[arg-type]
         load_id=load_id, investigation_scope="case-1", storage=storage, scheme=SCHEME,
         subscribed=(),
     )  # fmt: skip
+    return graph
 
 
 async def test_a_refused_staged_load_leaves_no_step_table_in_the_object_store(
@@ -123,5 +123,6 @@ async def test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_obj
 ) -> None:
     monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
     load_id = f"ceiling-passed-{uuid.uuid4().hex[:12]}"
-    await _load(storage, load_id, "OFFICIAL")
+    graph = await _load(storage, load_id, "OFFICIAL")
+    assert joined_owners(graph) == {"ELLERY", "WHITLOW"}, "the join met no marked owner"
     assert _held(storage, load_id) == list(STEPS)
