@@ -3,7 +3,7 @@
 // promotion policy; its Authors and *Change owner…*; every linked case with its layer as counts, and a
 // removed case's *Merge into the dataset* and *Delete*, each run dry. Never a layer's contents: the
 // Conduit sends counts only. Behind `administer_system`.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   AdminDataset,
@@ -456,14 +456,16 @@ function LinkedCases({
             setDeleted(words);
             onChanged();
           }}
-          onProblem={setProblem}
+          onProblem={(words) => {
+            // Refused (another unit's dataset reads as none, or the layer has gone): the dry run's
+            // counts no longer stand, so they and the Delete go, and the cases are read again.
+            setResult(null);
+            setProblem(words);
+            onChanged();
+          }}
         />
       )}
-      {deleted && (
-        <p role="status" style={{ margin: 0 }}>
-          {deleted}
-        </p>
-      )}
+      {deleted && <DeletedWords words={deleted} />}
     </div>
   );
 }
@@ -486,18 +488,31 @@ function DeleteLayer({
   const [busy, setBusy] = useState(false);
   if (!row) return null;
   return (
-    <div style={{ display: "flex", gap: "var(--sp-6)" }}>
+    <div style={{ display: "flex", gap: "var(--sp-6)", alignItems: "baseline", flexWrap: "wrap" }}>
       <Button
-        disabled={busy}
+        aria-disabled={busy}
         onClick={() => {
+          if (busy) return;
           setBusy(true);
           void deleteRemovedLayer(api, dataset.id, row.investigation_id)
-            .then((done) => onDeleted(done.words))
+            .then((done) => onDeleted(`${row.name}: ${done.words}`))
             .catch((e: Error) => onProblem(e.message))
             .finally(() => setBusy(false));
         }}
       >{`Delete ${row.name}'s layer now`}</Button>
+      <span className="label">It cannot be undone.</span>
     </div>
+  );
+}
+
+/** What the Delete said; focus moves to it, since the button it was pressed from has gone. */
+function DeletedWords({ words }: { words: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => ref.current?.focus(), [words]);
+  return (
+    <p ref={ref} role="status" tabIndex={-1} style={{ margin: 0 }}>
+      {words}
+    </p>
   );
 }
 
@@ -507,5 +522,5 @@ function DeleteLayer({
 export function doneWhere(action: LayerDryRun["action"]): string {
   return action === "merge"
     ? "One of the dataset's Authors merges it in the Ingest Studio, under 4 Runs, after their own dry run."
-    : "Delete it below if these are the right counts; one of the dataset's Authors may also delete it in the Ingest Studio, under 4 Runs.";
+    : "You may delete it below; one of the dataset's Authors may also delete it in the Ingest Studio, under 4 Runs.";
 }

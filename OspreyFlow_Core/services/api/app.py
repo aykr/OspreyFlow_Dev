@@ -18142,7 +18142,7 @@ async def layer_action_dry_run_route(
             raise LayerActionRefused(
                 403, "not_an_author",
                 "Only one of the dataset's Authors may merge a removed case's layer into it, in "
-                "the Ingest Studio's 4 Runs: an Author of its home case who holds Investigate."
+                "the Ingest Studio's 4 Runs: an Author of its home case."
                 + ("" if authors else
                    " It has no Authors yet: they are named at its first Make live."),
                 right=Right.INVESTIGATE,
@@ -18155,8 +18155,11 @@ async def layer_action_dry_run_route(
         f"Would merge {counts} from {row.name}'s layer into {dataset.name}, as one load under its "
         f"promotion policy ({policy}). Nothing has been written."
         if action == "merge"
-        else f"Would delete {counts} from {row.name}'s layer. Promoted items are never touched. "
-        "Nothing has been written."
+        # ADR-143 Amendment 5 decision 11: the layer's counts and what deleting withdraws, never
+        # "would delete N" (the counts include promoted items, which the delete never touches);
+        # the Studio's dry run's words (L2.5c).
+        else f"{row.name}'s layer holds {counts}. Deleting it withdraws those not promoted; "
+        "promoted items are never touched. Nothing has been written."
     )
     await audit.record(
         principal=principal,

@@ -1548,15 +1548,17 @@ item, label or property:
 `test_admin_dataset_cases.py` holds every Datasets route to it, red with one label planted. A
 removed case read directly (not through a composite) offers *Merge … into the dataset (dry run)* and
 *Delete …'s layer (dry run)*: each says what it would touch and writes nothing but its audit entry;
-after a delete's dry run, *Delete …'s layer now* deletes it for an administrator of the dataset's own
-unit, in the Conduit's words, and the cases are read again (L2.5c); the merge is refused to anyone not
+after a delete's dry run (the layer's counts and that deleting withdraws those not promoted, never
+"would delete N", ADR-143 Amendment 5 decision 11), *Delete …'s layer now*, said to be impossible to
+undo, deletes it for an administrator of the dataset's own unit, in the Conduit's words, with focus
+moved to them; a refusal drops the dry run; the cases are read again either way (L2.5c); the merge is refused to anyone not
 one of the dataset's Authors, in words naming the roles that may act, never a person (ADR-145
 Amendment 4 decision 12), and into a composite, which is offered no *Merge* and no promotion policy. **A composite case's layer is never
 merged** (Q5 (a), the orchestrator's settlement of 8 November 2026, on the owner's review list): it
 is deleted or left, from the composite's row, and a member's row says it is read through the
 composite, deleted there and never merged; an open point for L3.4, "composite layers: delete only,
 unless the owner chooses a member merge"; *Change owner…*'s grants and its
-audit entry are one transaction; the actions themselves are the promotion's, L3.4), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
+audit entry are one transaction; the merge is the promotion's, L3.4, done by the dataset's Authors in the Studio's *4 Runs*, and the delete is the same route there or Admin's own after its dry run, L2.5c), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
 the administrator can open, and its `ospreyflow demo add` command with *Copy* — the page runs nothing).
 Every action has its case in `keyboard/admin.spec.ts` (`ADMIN_ACTIONS`).
 

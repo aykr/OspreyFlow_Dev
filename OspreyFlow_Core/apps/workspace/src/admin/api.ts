@@ -1,7 +1,7 @@
 // The Admin area's calls (`06_DECISIONS.md` ADR-110 Amendment 1, ADR-112): people's roles,
 // dashboard identities and the system's health, all through the Conduit — never the identity
 // provider directly. Shapes are the generated ones.
-import { whyNotByRole, type Right } from "../help/roles";
+import { rightName, rolesHolding, whyNotByRole, type Right } from "../help/roles";
 import type {
   AccessInput,
   AdminPeopleRows,
@@ -73,12 +73,14 @@ async function failure(response: Response): Promise<Error> {
   // the Conduit's words, which say why and who can.
   if (
     typeof detail === "string" &&
-    ["not_an_author", "case_open", "case_not_linked", "composite_read_only", "owner_needed"].includes(body.error ?? "")
+    ["not_an_author", "case_open", "case_not_linked", "composite_read_only", "owner_needed", "no_layer"].includes(
+      body.error ?? "",
+    )
   ) {
     // ADR-145 Amendment 4 decision 12 (L2.5c): a refusal carrying a right says the roles that
-    // hold it, never the people.
+    // hold it, never the people; the block is the Author level, so it is not told to ask for it.
     const right = (body as { right?: unknown }).right;
-    return new Error(typeof right === "string" ? `${detail} ${whyNotByRole(right as Right)}` : detail);
+    return new Error(typeof right === "string" ? `${detail} ${authorAlsoNeeds(right as Right)}` : detail);
   }
   if (response.status === 409 && typeof body.error === "string" && typeof detail === "string") return new Error(detail);
   // ADR-145 Amendment 5: roles, teams, case levels and Disable…, refused in the Conduit's words.
@@ -91,6 +93,14 @@ async function failure(response: Response): Promise<Error> {
   }
   if (response.status === 403) return new Error("Your account does not hold the right for this.");
   return new Error(`The Admin area could not complete that (${response.status}).`);
+}
+
+/** What an Author also needs, by the roles that hold it, never the people (decision 12). */
+export function authorAlsoNeeds(right: Right): string {
+  const roles = rolesHolding(right);
+  if (roles.length === 0) return `An Author also needs ${rightName(right)}, which no built-in role has.`;
+  const named = roles.length === 1 ? `the ${roles[0]!} role has` : `the ${roles.slice(0, -1).join(", ")} and ${roles.at(-1)!} roles have`;
+  return `An Author also needs ${rightName(right)}, which ${named}.`;
 }
 
 async function call<T>(api: AdminApi, path: string, init: RequestInit = {}): Promise<T> {

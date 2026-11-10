@@ -426,6 +426,9 @@ def test_a_dry_run_counts_and_writes_nothing(world: SimpleNamespace) -> None:
     assert "into Prison records" in body["would"] and "Nothing has been written" in body["would"]
     deleted = _dry(world, "admin", "gone-1", "delete")
     assert deleted.status_code == 200 and "never touched" in deleted.json()["would"]
+    # ADR-143 Amendment 5 decision 11 (L2.5c's review): the counts, never "would delete N".
+    assert "withdraws those not promoted" in deleted.json()["would"]
+    assert "Would delete" not in deleted.json()["would"]
     assert _state(world) == before
     # Each dry run counts the one layer it is about, not every case's.
     assert [asked for asked, _ in world.graph.asked] == [[world.layers["gone-1"]]] * 2

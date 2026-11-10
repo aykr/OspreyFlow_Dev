@@ -146,12 +146,12 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
                          would: "Would merge 5 items and 4 links (48.8 kB) from Op Heron's layer into Enron corpus. Nothing has been written." });  // prettier-ignore
     if (path === "datasets/enron/cases/gone-1/delete/dry-run" && request.method() === "POST")
       return json(200, { investigation_id: "gone-1", action: "delete", items: 5, links: 4, size_bytes: 50000,
-                         would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." });  // prettier-ignore
+                         would: "Op Heron's layer holds 5 items and 4 links (48.8 kB). Deleting it withdraws those not promoted; promoted items are never touched. Nothing has been written." });  // prettier-ignore
     if (path === "datasets/enron/cases/gone-2/merge/dry-run" && request.method() === "POST")
       return json(403, { error: "not_an_author", right: "investigate",
                          detail: "Only one of the dataset's Authors may merge a removed case's layer into it, in the Ingest Studio's 4 Runs: an Author of its home case who holds Investigate." });  // prettier-ignore
     if (path === "datasets/enron/cases/gone-1/delete" && request.method() === "POST")
-      return json(200, { investigation_id: "gone-1", words: "Op Heron's layer is deleted; promoted items were not touched." });
+      return json(200, { investigation_id: "gone-1", words: "The layer was deleted: its items are withdrawn and kept in the audit. Promoted items were not touched." });
     if (path === "settings/dataset-owners" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "settings/dataset-owners") return json(200, { owners_may_be: "people_and_teams" });
     // L2.7: Policies' Grading scheme, read-only.
@@ -311,7 +311,7 @@ test("a removed case's layer is merged, as a dry run, by keyboard", async ({ pag
   expect(asked).toContain("POST datasets/enron/cases/gone-1/merge/dry-run");
   await press(page, "Merge Op Wren into the dataset (dry run)");
   await expect(page.getByRole("alert")).toContainText("Only one of the dataset's Authors may merge");
-  await expect(page.getByRole("alert")).toContainText("roles have it");
+  await expect(page.getByRole("alert")).toContainText("An Author also needs Investigate");
   registerCovered(REGISTRY, "dry-run-a-removed-cases-merge-by-keyboard");
 });
 
@@ -334,10 +334,12 @@ test("a removed case's layer is deleted by keyboard after its dry run", async ({
   await details(page);
   await expect(page.getByRole("button", { name: "Delete Op Heron's layer now" })).toHaveCount(0);
   await press(page, "Delete Op Heron's layer (dry run)");
-  await expect(page.getByRole("status")).toContainText("Delete it below if these are the right counts");
+  await expect(page.getByRole("status")).toContainText("You may delete it below");
   await press(page, "Delete Op Heron's layer now");
-  await expect(page.getByText("Op Heron's layer is deleted; promoted items were not touched.")).toBeVisible();
+  await expect(page.getByText("Op Heron: The layer was deleted: its items are withdrawn and kept in the audit. Promoted items were not touched.")).toBeVisible();
   expect(asked).toContain("POST datasets/enron/cases/gone-1/delete");
+  await expect.poll(() => asked.filter((a) => a === "GET datasets/enron/cases").length).toBe(2);
+  await expect(page.getByRole("status")).toBeFocused();
   registerCovered("ADMIN_ACTIONS", "delete-a-removed-cases-layer-by-keyboard");
 });
 

@@ -53,7 +53,7 @@ if (serving === "datasets") {
     // L2.5c: `show=delete`, the delete's dry run shown with Admin's own Delete after it.
     "/v1/admin/datasets/ds-a/cases/gone-1/delete/dry-run": { investigation_id: "gone-1", action: "delete", items: 5,
       links: 4, size_bytes: 50000,
-      would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." },
+      would: "Op Heron's layer holds 5 items and 4 links (48.8 kB). Deleting it withdraws those not promoted; promoted items are never touched. Nothing has been written." },
     "/v1/admin/datasets/ds-a/cases/gone-1/merge/dry-run": { investigation_id: "gone-1", action: "merge", items: 5, links: 4,
       size_bytes: 50000, would: "Would merge 5 items and 4 links (48.8 kB) from Op Heron's layer into Prison records. Nothing has been written." },
     "/v1/admin/settings/dataset-owners": { owners_may_be: "people_and_teams" },

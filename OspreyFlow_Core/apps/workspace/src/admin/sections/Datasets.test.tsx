@@ -31,23 +31,25 @@ const CASES = {
   ],
 };  // prettier-ignore
 
-function serve(posts: string[], dataset: object = DATASET) {
+function serve(posts: string[], dataset: object = DATASET, gets: string[] = []) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(String(url)).pathname.replace("/v1/admin/", "");
       const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
       if (init?.method === "POST") posts.push(path);
+      else gets.push(path);
       if (path === "datasets") return ok([dataset]);
       if (path === "datasets/ds-a/authors") return ok(AUTHORS);
       if (path === "datasets/ds-a/cases") return ok(CASES);
       if (path === "datasets/ds-a/cases/gone-1/delete/dry-run")
         return ok({ investigation_id: "gone-1", action: "delete", items: 5, links: 4, size_bytes: 50_000,
-                    would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." });  // prettier-ignore
-      if (path === "datasets/ds-a/cases/gone-1/delete")
-        return ok({ investigation_id: "gone-1", words: "Op Heron's layer is deleted; promoted items were not touched." });
-      if (path === "datasets/ds-a/cases/gone-2/delete")
-        return { ok: false, status: 404, json: async () => ({ detail: { error: "dataset_not_found" } }) } as Response;
+                    would: "Op Heron's layer holds 5 items and 4 links (48.8 kB). Deleting it withdraws those not promoted; promoted items are never touched. Nothing has been written." });  // prettier-ignore
+      if (path === "datasets/ds-a/cases/gone-1/delete" && !posts.includes("refuse-delete"))
+        return ok({ investigation_id: "gone-1", words: "The layer was deleted: its items are withdrawn and kept in the audit. Promoted items were not touched." });
+      // The real refusal's body for another unit's dataset (app.py's UnknownDatasetEgressError).
+      if (path === "datasets/ds-a/cases/gone-1/delete" && posts.includes("refuse-delete"))
+        return { ok: false, status: 404, json: async () => ({ error: "dataset_not_found", detail: "There is no such dataset." }) } as Response;
       if (path === "datasets/ds-a/cases/gone-1/merge/dry-run" && posts.includes("refuse"))
         return { ok: false, status: 403, json: async () => ({ error: "not_an_author", right: "investigate",
           detail: "Only one of the dataset's Authors may merge a removed case's layer into it, in the Ingest Studio's 4 Runs: an Author of its home case who holds Investigate." }) } as Response;  // prettier-ignore
@@ -62,7 +64,7 @@ function serve(posts: string[], dataset: object = DATASET) {
 describe("where a removed case's merge or delete is done", () => {
   it("names the Studio's 4 Runs for each action", () => {
     expect(doneWhere("delete")).toBe(
-      "Delete it below if these are the right counts; one of the dataset's Authors may also delete it in the Ingest Studio, under 4 Runs.",
+      "You may delete it below; one of the dataset's Authors may also delete it in the Ingest Studio, under 4 Runs.",
     );
   });
 });
@@ -96,22 +98,47 @@ describe("Datasets", () => {
 
   it("deletes a removed case's layer after its dry run, in the Conduit's words, and reads the cases again", async () => {
     const posts: string[] = [];
-    serve(posts);
+    const gets: string[] = [];
+    serve(posts, DATASET, gets);
     render(<Datasets api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Details for Prison records" }));
     await screen.findByRole("table", { name: "Cases linked to Prison records" });
+    expect(gets.filter((g) => g === "datasets/ds-a/cases")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Merge Op Heron into the dataset (dry run)" }));
     await screen.findByRole("status");
     expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Delete Op Heron's layer (dry run)" }));
-    expect((await screen.findByRole("status")).textContent).toContain("Delete it below if these are the right counts");
+    expect((await screen.findByRole("status")).textContent).toContain("You may delete it below");
+    expect(screen.getByText("It cannot be undone.")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Delete Op Heron's layer now" }));
-    expect(await screen.findByText("Op Heron's layer is deleted; promoted items were not touched.")).toBeTruthy();
+    expect(await screen.findByText("Op Heron: The layer was deleted: its items are withdrawn and kept in the audit. Promoted items were not touched.")).toBeTruthy();
     expect(posts).toEqual([
       "datasets/ds-a/cases/gone-1/merge/dry-run", "datasets/ds-a/cases/gone-1/delete/dry-run", "datasets/ds-a/cases/gone-1/delete",
     ]);  // prettier-ignore
     expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
+    // The cases are read again, so the row shows what is left (the review's finding 3).
+    await waitFor(() => expect(gets.filter((g) => g === "datasets/ds-a/cases")).toHaveLength(2));
+    // Focus moves to the words, since the button it was pressed from has gone (not left on the body).
+    expect(document.activeElement?.getAttribute("role")).toBe("status");
+    expect(document.activeElement?.textContent).toBe(
+      "Op Heron: The layer was deleted: its items are withdrawn and kept in the audit. Promoted items were not touched.",
+    );
+  });
+
+  it("says a refused Delete in the Conduit's words, drops the dry run's counts and reads the cases again", async () => {
+    const posts: string[] = ["refuse-delete"];
+    const gets: string[] = [];
+    serve(posts, DATASET, gets);
+    render(<Datasets api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details for Prison records" }));
+    await screen.findByRole("table", { name: "Cases linked to Prison records" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete Op Heron's layer (dry run)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Op Heron's layer now" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("That dataset is no longer there.");
+    expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
+    expect(screen.queryByText(/layer holds 5 items/)).toBeNull();
+    await waitFor(() => expect(gets.filter((g) => g === "datasets/ds-a/cases")).toHaveLength(2));
   });
 
   it("says a refused merge by the roles that may act, never by a person", async () => {
@@ -123,7 +150,8 @@ describe("Datasets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Merge Op Heron into the dataset (dry run)" }));
     const said = (await screen.findByRole("alert")).textContent ?? "";
     expect(said).toContain("Only one of the dataset's Authors may merge");
-    expect(said).toMatch(/You need Investigate; the .* roles have it/);
+    expect(said).toMatch(/An Author also needs Investigate, which the .* roles have\./);
+    expect(said).not.toContain("Ask an administrator");
     for (const person of ["D. Engineer", "S. Lead", "eng-1", "adm-2"]) expect(said).not.toContain(person);
   });
 
