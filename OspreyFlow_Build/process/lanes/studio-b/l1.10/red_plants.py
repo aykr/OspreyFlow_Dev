@@ -70,9 +70,11 @@ PLANTS = [
      [(CEILING, "        if raw not in scheme.classification:\n",
        "        if raw not in scheme.classification:\n            raw = ''  # PLANT\n"
        "        if raw and raw not in scheme.classification:\n")],
+     # Each fails in its own words (the reader: no CeilingUnknown; the start: the stores opened),
+     # so no one reason is named; the record keeps both lines.
      [LOADS], ["test_an_unknown_ceiling_stops_the_conduit_rather_than_guessing",
                "test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything"],
-     "DID NOT RAISE"),
+     None),
     ("start-read-removed", "the Conduit's start reads no ceiling",
      [(APP, "    deployment_ceiling = DeploymentCeiling.from_env()\n",
        "    deployment_ceiling = None  # PLANT\n")],
