@@ -44,3 +44,7 @@ Amendments 37 and 38 give.
 - P5b owed proof, the driver's conditions: no ID check in restore -> the another-lane case red; an old tag not put back -> the put-back case red; the after-check blind to a changed tag -> the after-check case red; another's volume allowed by the guard -> the guard case red; a teardown refusal raising -> the teardown case red; each restored
 - P5b owed proof, after the first run: nothing held before the build -> the put-back case red (the old image pruned, no tag to put back); a hold left not failed -> the after-check case red; restored
 - `p5b_deployment_guard.diff` (tests/harness/deployment_guard.py, the orchestrator's to apply): the GUARD_ARGV_ONLY exemption ignored → `test_every_teardown_in_the_tests_asks_first` and `test_a_guard_argv_only_file_passes_only_while_it_starts_no_process` red; its process check ignored → the latter red. Restored: green.
+
+## T2
+
+- Item 3, `apps/workspace/keyboard/registryCoverage.test.ts`: the constant-shape case written before the scan read constants → red (`reads a name passed through a string constant`). Fixed scan, with `packs.spec.ts` rewritten to `const REGISTRY = "PACKS_ACTIONS"; assertAllCovered(REGISTRY, …)` (the real call site's shape) → 63 green. Same spec, the constant branch planted out → 3 red: the constant case, `every assertAllCovered call … names its registry in a way this scan reads` (its words: "packs.spec.ts: REGISTRY", and the fix), and `PACKS_ACTIONS is asserted`. Spec restored.
