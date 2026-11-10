@@ -1,4 +1,4 @@
-# head 2abd24b; plant: the compare-and-swap called and its answer discarded (the independent review, item 3): `if not repo.refs.set_if_equals(...)` -> `if repo.refs.set_if_equals(...) and False`
+# head d257fb6; plant: the compare-and-swap called and its answer discarded (the independent review, item 3): `if not repo.refs.set_if_equals(...)` -> `if repo.refs.set_if_equals(...) and False`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_a_failed_commit_is_an_error_not_a_quiet_success, test_a_real_writer_moving_head_mid_commit_is_refused; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -46,4 +46,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_write_and_commit_recipe_goes_through_the_same_commit
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success - Failed: DID NOT RAISE GitCommitError
-2 failed, 43 passed in 8.46s
+2 failed, 43 passed in 8.54s

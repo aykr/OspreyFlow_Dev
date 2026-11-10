@@ -1,4 +1,4 @@
-# head 2abd24b; plant: the publish flock waited for without limit: `LOCK_NB` dropped
+# head d257fb6; plant: the publish flock waited for without limit: `LOCK_NB` dropped
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_publish_held_off_too_long_is_refused_not_hung; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: ['recipes/alpha.yaml', GitCommitError('another publish has held the recipe repository for over 2 s; publish again')]
-2 failed, 37 passed in 14.51s
+2 failed, 37 passed in 14.69s
