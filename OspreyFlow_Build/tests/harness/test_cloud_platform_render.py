@@ -541,3 +541,36 @@ def test_duckdb_is_refused_in_words() -> None:
 
 def test_the_fixture_loads_as_a_deployment_would() -> None:
     assert load_config(FIXTURES / "development.yaml").profile.value == "cloud-platform"
+
+
+# ---- the renderer's edges (reviewer point 16) --------------------------------------------------
+
+
+def test_bucket_names_are_unique_beyond_the_namespace_s_name() -> None:
+    """S3's bucket names are global across every AWS account: `<namespace>-media` is taken by the
+    first namespace of that name anywhere, so the Terraform adds a suffix of its own making, and the
+    prefix the services read is the same one the buckets are made under."""
+    s3 = _artefacts(_config())["terraform/s3.tf"]
+    assert 'resource "random_id" "buckets"' in s3
+    assert re.search(r'bucket\s*=\s*"\$\{local\.prefix\}\$\{each\.key\}"', s3), s3
+    assert re.search(r'prefix\s*=\s*"\$\{var\.namespace\}-\$\{random_id\.buckets\.hex\}-"', s3), s3
+    assert re.search(r"=\s*local\.prefix\b", s3), "the services' prefix is not the buckets' own"
+
+
+def test_an_image_with_neither_a_tag_nor_a_digest_is_refused() -> None:
+    from harness.cloud_platform import _Copies
+
+    copies = _Copies("registry.example/ns", "ghcr.io/ospreyflow", lambda ref: None)
+    with pytest.raises(CloudPlatformNotRenderable, match="neither a tag nor a digest"):
+        copies("docker.io/library/busybox")
+
+
+def test_two_sources_copied_to_one_target_are_refused() -> None:
+    """A second source for a target the plan already holds would be dropped silently, and the
+    values would pin a digest `images push` never copied."""
+    from harness.cloud_platform import _Copies
+
+    copies = _Copies("registry.example/ns", "ghcr.io/ospreyflow", lambda ref: None)
+    copies("quay.io/team/tool:1.0@sha256:" + "a" * 64)
+    with pytest.raises(CloudPlatformNotRenderable, match="two sources"):
+        copies("docker.io/team/tool:1.0@sha256:" + "b" * 64)

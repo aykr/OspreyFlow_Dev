@@ -324,12 +324,21 @@ def render_terraform(
         )
     bucket_list = "[" + ", ".join(_q(b) for b in BUCKETS) + "]"
     files["s3.tf"] = _file(
-        "Decisions 4 and 6: the buckets the services name as <prefix><name>, private, encrypted.",
+        "Decisions 4 and 6: the buckets the services name as <prefix><name>, private, encrypted.\n"
+        "A bucket's name is global across every AWS account, so the prefix carries a suffix\n"
+        "made here.",
         [
-            ("locals", [("buckets", f"toset({bucket_list})")]),
+            ('resource "random_id" "buckets"', [("byte_length", "4")]),
+            (
+                "locals",
+                [
+                    ("buckets", f"toset({bucket_list})"),
+                    ("prefix", '"${var.namespace}-${random_id.buckets.hex}-"'),
+                ],
+            ),
             (
                 'resource "aws_s3_bucket" "store"',
-                [("for_each", "local.buckets"), ("bucket", '"${var.namespace}-${each.key}"')],
+                [("for_each", "local.buckets"), ("bucket", '"${local.prefix}${each.key}"')],
             ),
             (
                 'resource "aws_s3_bucket_public_access_block" "store"',
@@ -365,7 +374,7 @@ def render_terraform(
                     ("versioning_configuration", [("status", _q("Enabled"))]),
                 ],
             ),
-            _secret(secrets.s3.name, {secrets.s3.keys["prefix"]: '"${var.namespace}-"'}),
+            _secret(secrets.s3.name, {secrets.s3.keys["prefix"]: "local.prefix"}),
         ],  # fmt: skip
     )
     registry = cp.registry or ""

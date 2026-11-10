@@ -279,6 +279,11 @@ class _Copies:
         source = f"{reference}@{digest}" if digest else reference
         target = _in_registry(reference, self.registry)
         if not reference.rsplit("/", 1)[-1].count(":"):
+            if not digest:
+                raise CloudPlatformNotRenderable(
+                    f"the image {image!r} has neither a tag nor a digest, so no copy of it can "
+                    "be named"
+                )
             target += ":sha256-" + digest.removeprefix("sha256:")[:12]  # a tag to push it under
         entry: dict[str, Any] = {"source": source, "target": target}
         if reference.startswith(self.ours_prefix + "/"):
@@ -289,7 +294,12 @@ class _Copies:
             digest = self.resolver(target) or ""
             if not digest:
                 self.unresolved.append(target)
-        self.plan.setdefault(target, entry)
+        held = self.plan.setdefault(target, entry)
+        if held.get("source") != entry.get("source"):
+            raise CloudPlatformNotRenderable(
+                f"two sources would be copied to {target}: {held.get('source')} and "
+                f"{entry.get('source')}; the values would pin a copy `images push` never made"
+            )
         return f"{target.split(':sha256-')[0]}@{digest}" if digest else target
 
 
