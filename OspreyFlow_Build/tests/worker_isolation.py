@@ -29,8 +29,11 @@ never dropped.
 ones whose Valkey client ignores `VALKEY_DB` (`db=0`, or no `db` at all). During a serial test the in-process
 redirect is off too, so the test and its children open the one shared graph; the serial tests run one at a time on
 that worker and no other test opens the shared name. The other stores stay the worker's own for a serial test, in
-the test and in its children alike, since a child inherits the worker's environment. Valkey's pub/sub channels are not per database, so they
-stay shared (investigation ids keep them apart). Its proof is `tests/test_worker_isolation.py` (offline) and
+the test and in its children alike, since a child inherits the worker's environment. Valkey's pub/sub channels are
+not per database, so they stay shared (investigation ids keep them apart).
+
+**A file that starts real containers runs on one worker too** (`CONTAINERS`, as `xdist_group("containers")`, a group
+of its own beside the serial one): one at a time, as in a serial run, so its module's fixtures start once. Its proof is `tests/test_worker_isolation.py` (offline) and
 `tests/test_worker_isolation_live.py` (two workers, the same names, on a leased stack).
 """
 
@@ -76,6 +79,25 @@ SERIAL = {
     "tests/harness/test_six_screen_live_exit.py": "a fixed compose project (COMPOSE_PROJECT), down -v",
     "tests/harness/test_sustained_load.py": "the fixed compose project osprey-local-lite, down -v",
 }
+
+#: A file that starts real containers (`docker run -d`, `compose up -d`/`--wait`, a wait for health, or the TLS
+#: fixtures' Docker helper). Such files go to one worker of their own, one at a time (`xdist_group("containers")`):
+#: under load distribution each worker taking a test from `test_organisation_sign_in.py` started its own module-scoped
+#: Keycloak, and on the 16-core server at 8 workers every one "never became ready" (10 November 2026, offline).
+CONTAINERS = re.compile(
+    r'"run",\s*"-d"|"up",\s*"-d"|"up",\s*"--wait"|\bwait_until_healthy\b|from tests\.harness\.tls_fixtures import'
+)
+_SOURCES: dict[Path, bool] = {}
+
+
+def starts_containers(path: Path) -> bool:
+    if path not in _SOURCES:
+        try:
+            _SOURCES[path] = bool(CONTAINERS.search(path.read_text(encoding="utf-8")))
+        except OSError:
+            _SOURCES[path] = False
+    return _SOURCES[path]
+
 
 _LEFT = re.compile(r"^ospreyflow[_-]x[0-9a-f]{8}[_-]t(\d{10})[_-]gw\d+")
 
@@ -330,6 +352,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if _serial(item):
             item.add_marker(pytest.mark.xdist_group("serial"))
+        elif starts_containers(Path(str(item.path))):
+            item.add_marker(pytest.mark.xdist_group("containers"))
 
 
 @pytest.hookimpl(hookwrapper=True)

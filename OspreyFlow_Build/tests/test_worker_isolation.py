@@ -401,3 +401,67 @@ def test_a_start_that_fails_part_way_is_still_cleared(monkeypatch: pytest.Monkey
         worker_isolation.pytest_configure(_config)  # type: ignore[arg-type]
     worker_isolation.pytest_unconfigure(_config)  # type: ignore[arg-type]
     assert calls == ["valkey", "postgres-made", "arcadedb-made", "arcadedb", "postgres", "valkey"], calls
+
+
+def test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not(tmp_path: Path) -> None:
+    """The shapes the real files take (10 November 2026: at 8 workers each worker's own module-scoped Keycloak in
+    `test_organisation_sign_in.py` "never became ready"); a file that only fakes `docker`, or names it in a string, is
+    not grouped. A serial file stays serial."""
+    from tests.worker_isolation import pytest_collection_modifyitems, starts_containers
+
+    shapes = {
+        "test_a.py": 'argv = ["run", "-d", "--name", name, "--network", network]\n',
+        "test_b.py": 'subprocess.run(["docker", "compose", "-f", str(f), "up", "-d"])\n',
+        "test_c.py": 'subprocess.run([*compose, "up", "--wait"])\n',
+        "test_d.py": "assert wait_until_healthy(running)\n",
+        "test_e.py": "from tests.harness.tls_fixtures import docker, render\n",
+        "test_f.py": 'def _docker(containers: str = "", volumes: str = ""):\n    return f"docker ps {containers}"\n',
+        "test_g.py": 'assert calls[0] == "docker run"\n',
+    }
+    for name, text in shapes.items():
+        (tmp_path / name).write_text(text)
+    assert [n for n in shapes if starts_containers(tmp_path / n)] == [
+        "test_a.py", "test_b.py", "test_c.py", "test_d.py", "test_e.py"
+    ]  # fmt: skip
+
+    class _Item:
+        def __init__(self, path: Path) -> None:
+            self.path = path
+            self.marks: list[pytest.MarkDecorator] = []
+
+        def add_marker(self, mark: pytest.MarkDecorator) -> None:
+            self.marks.append(mark)
+
+    real = ["organisation_sign_in", "proxy_tls_caddy", "render_memory", "apply_env", "deployment_guard"]
+    items = [_Item(BUILD / f"tests/harness/test_{n}.py") for n in real]
+    pytest_collection_modifyitems(None, items)  # type: ignore[arg-type]
+    assert {i.path.stem: [m.mark.args for m in i.marks] for i in items} == {
+        "test_organisation_sign_in": [("containers",)], "test_proxy_tls_caddy": [("containers",)],
+        "test_render_memory": [("containers",)], "test_apply_env": [("serial",)], "test_deployment_guard": [],
+    }  # fmt: skip
+
+
+_CONTAINER_PLANTED = """
+import json, os, time
+from pathlib import Path
+
+import pytest
+
+# argv = ["run", "-d", ...]: the shape that groups this file with the other container files
+
+@pytest.mark.parametrize("i", range(4))
+def test_one(i):
+    time.sleep(0.2)
+    out = Path(os.environ["T1_OUT"]) / f"{os.path.basename(__file__)}-{i}.json"
+    out.write_text(json.dumps(os.environ["PYTEST_XDIST_WORKER"]))
+"""
+
+
+def test_the_container_files_run_on_one_worker_through_xdist(tmp_path: Path) -> None:
+    for name in ("test_box_a.py", "test_box_b.py"):
+        (tmp_path / name).write_text(_CONTAINER_PLANTED)
+    ran, _ = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "3", "--dist", "loadgroup",
+                  files=("test_box_a.py", "test_box_b.py"))  # fmt: skip
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    seen = [json.loads(p.read_text()) for p in (tmp_path / "out").glob("test_box_*.json")]
+    assert len(seen) == 8 and len(set(seen)) == 1, seen
