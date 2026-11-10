@@ -45,3 +45,16 @@ same 585 statements in the same order with the same 8 copy-ups; that was checked
   then on the denylist. A run-time refusal is refused as `com.arcadedb.exception.SchemaException`. Each script was
   sent once (`client.scripts == 1`). 8697fc0 added the parse class to the denylist after this run; the next live run
   asserts both classes and prints their status codes.
+- At e789147, the whole of `graph_port` and `test_route_rights.py` gave 1 failed and 377 passed, under "stack d, the lease
+  orchestrator took at 2026-11-10T11:32:37Z; wall 519 s, set-up 12 s". The timings:
+  - a fresh database: 16.3 s one at a time, 0.2 s batched;
+  - applied again: 0.7 s one at a time, 0.1 s batched;
+  - the adapter's open: 0.3 s.
+
+  A parse error is refused as `CommandSQLParsingException`, **status 400**. The failure was the new populated-type case.
+- The probe at a62f7f4 (stack c, the orchestrator's lease) ran that case both ways, one statement at a time and batched.
+  Both created the index (`mx_Person[t1_probe]` and its bucket index) and both failed identically. **A test fault**:
+  ArcadeDB gives an index's `properties` nested, `[['t1_probe']]`, not `['t1_probe']`. The check is now
+  `_indexes_on`. It has its own red, `test_the_index_check_finds_nothing_when_the_index_is_left_out`, which leaves the
+  `t1_probe` CREATE INDEX out of the batch and also checks it still finds the `id` index. The populated case's time over
+  500 nodes was 1.2 s one at a time and 0.1 s batched.

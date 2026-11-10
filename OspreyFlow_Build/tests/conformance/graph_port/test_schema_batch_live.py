@@ -247,6 +247,49 @@ async def test_a_refusal_while_running_is_sent_once_and_a_re_apply_completes(
     _same(await _dump(client), await _dump(whole))
 
 
+def _indexes_on(indexes: list[dict[str, Any]], type_name: str, prop: str) -> list[str]:
+    """The indexes on one type's one property. ArcadeDB gives an index's `properties` nested, one
+    list per key (`[['t1_probe']]`: the orchestrator's probe at a62f7f4, stack c)."""
+    return [
+        str(i.get("name"))
+        for i in indexes
+        if i.get("typeName") == type_name and i.get("properties") in ([[prop]], [prop])
+    ]
+
+
+async def test_the_index_check_finds_nothing_when_the_index_is_left_out(
+    databases: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_indexes_on`'s own red (rule 15): the same new property, its CREATE INDEX left out."""
+    client = await databases()
+    ontology = load_default_ontology()
+    entity = ontology.entity_types[0]
+    name = groovy_identifier(physical_type_name(entity.name))
+    probe = PropertyDef(name="t1_probe", type=PropertyType.STRING, indexed=True)
+    changed = ontology.model_copy(
+        update={
+            "entity_types": [
+                entity.model_copy(update={"properties": [*entity.properties, probe]}),
+                *ontology.entity_types[1:],
+            ]
+        }
+    )
+    real = schema_statements
+
+    def without_its_index(schema: Any) -> Any:
+        plan = real(schema)
+        plan.ddl[:] = [
+            st for st in plan.ddl if not (st.startswith("CREATE INDEX") and "t1_probe" in st)
+        ]
+        return plan
+
+    monkeypatch.setattr(schema_module, "schema_statements", without_its_index)
+    await apply_schema(client, changed)
+    indexes = await client.sql("SELECT FROM schema:indexes")
+    assert not _indexes_on(indexes, name, "t1_probe")
+    assert _indexes_on(indexes, name, "id"), "the check found no index at all: it tested nothing"
+
+
 @pytest.mark.parametrize("how", ["one_at_a_time", "batched"])
 async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
     databases: Any, how: str
@@ -296,6 +339,6 @@ async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
         f"\n{how}: the statements naming t1_probe {mine}; {took:.1f} s over {rows} nodes\n"
         f"indexes on {name}: {seen}\nits properties: {names}"
     )
-    assert any(i.get("typeName") == name and i.get("properties") == ["t1_probe"] for i in indexes)
+    assert _indexes_on(indexes, name, "t1_probe"), seen
     found = await client.sql(f"SELECT count(*) AS n FROM {name} WHERE t1_probe = 'v1'")
     assert found[0]["n"] == rows // 5, found
