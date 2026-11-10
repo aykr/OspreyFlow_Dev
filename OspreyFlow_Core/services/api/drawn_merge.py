@@ -340,6 +340,8 @@ class DrawnMerges:
             element = r.element
             if element is None or r.item.kind not in ("node", "link"):
                 continue
+            if element.id in as_types and as_types[element.id] is None:
+                continue  # left out at Map: it goes nowhere, so breaks nothing
             retyped = element.id in copied
             if (
                 r.item.kind == "link"
@@ -382,6 +384,17 @@ class DrawnMerges:
                         f"{', '.join(held.to_types)}, not from {ends[0]} to {ends[1]}: map it "
                         "onto a link type that joins them.",
                     ))  # fmt: skip
+            if r.item.kind == "link" and retyped and not ({r.item.source, r.item.target} & copied):
+                # Both its ends go as themselves: a link of that type between them may be loaded in
+                # the target already, which the adapter would merge this one into (ADR-102), and
+                # the revert would then revert that loaded link. Which is so is not the merger's to
+                # know (rule 3), so it is refused whenever it could be (the fourth review, item 1).
+                problems.append((
+                    "types",
+                    f"It would go in as a new {to} link between two items that go in as "
+                    "themselves, and could join a link loaded between them: map it as itself, or "
+                    "leave it out.",
+                ))  # fmt: skip
             if problems:
                 out[r.item.item_id] = problems
         return out
@@ -476,6 +489,11 @@ class DrawnMerges:
         problems = await promotions._problems(
             reads, target, case_id, read, into_its_own_dataset=False, as_types=as_types
         )
+        # What the copies would break, as the merge checks it (the fourth review, minor 5).
+        for item_id, more_problems in (
+            await self._retyped_problems(reads, names, chosen, as_types, read)
+        ).items():
+            problems[item_id] = [*problems[item_id], *more_problems]
         matches, more = await self._matches(reads, drawn, target, reader, chosen, as_types)
         return DrawnMergeSheet(
             drawn_dataset_id=drawn.id, drawn_name=drawn.name, target_dataset_id=target.id,
@@ -501,7 +519,11 @@ class DrawnMerges:
     # --- what goes ------------------------------------------------------------------------
 
     async def _plan(
-        self, drawn: Dataset, case_id: str, target: Dataset, body: DrawnMergeInput,
+        self,
+        drawn: Dataset,
+        case_id: str,
+        target: Dataset,
+        body: DrawnMergeInput,
         reader: Principal,
     ) -> _Planned:
         """Every check again, here (the sheet may have been bypassed): the mapping, the items as a
@@ -723,6 +745,9 @@ class MergeCommit:
     views: CaseViewStore
     items: BoardItemStore
     scheme: Any
+    #: The working-set stores as a revert reaches them (`working_set_revert.WorkingSetReverter`),
+    #: for the revert alone: what it reverts leaves every case's canvas, as a load's do.
+    working_sets: Any = None
     _written: dict[str, list[str]] = field(default_factory=dict)
     _copies: dict[str, list[tuple[str, str | None]]] = field(default_factory=dict)
 
@@ -844,7 +869,20 @@ class MergeCommit:
         classification, a restricted code, the unit), so they may not approve and another reviewer
         may (403, it waits); `changed` when they may and it has moved since: an end gone from their
         read (withdrawn, raised, or out of the target), its marking moved, or the target's highest
-        lowered below it (rejected, never left waiting); `None` otherwise."""
+        lowered below it (rejected, never left waiting); `item_changed` for a retyped item's
+        original changed since it was chosen, and `target_changed` for a target no longer one this
+        drawing may go into (its kind, a gazetteer's prefix, the drawing's unit: the orchestrator's
+        review, item 6), each rejected; `None` otherwise."""
+        held = await self.datasets.egress_of([record.dataset_id, record.layer_id])
+        target, drawing = held.get(record.dataset_id), held.get(record.layer_id)
+        if (
+            target is None
+            or drawing is None
+            or target.kind != SOURCE
+            or is_gazetteer(target)
+            or target.owning_unit != drawing.owning_unit
+        ):
+            return "target_changed"
         rows = await self.promotions_store.matches_of(record.id)
         read = reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
         # Each retyped item's original as it was chosen (Amendment 7), read whole as the copy was
@@ -860,18 +898,18 @@ class MergeCommit:
             for c in copies:
                 held = now.get(c.original)
                 if held is None:  # withdrawn or raised since (an unseen item is 403 before this)
-                    return "changed"
+                    return "item_changed"
                 # Its marking: a copy is never written below its original (the orchestrator's
                 # condition), so one raised since is not copied as sent.
                 if held.handling != Handling.model_validate_json(c.handling):
-                    return "changed"
+                    return "item_changed"
                 if json.loads(json.dumps(held.properties, sort_keys=True, default=str)) != (
                     json.loads(c.original_properties)
                 ):
-                    return "changed"
+                    return "item_changed"
                 # Its drawn assertion: label, grading, source note and document, icon.
                 if held.provenance != Provenance.model_validate_json(c.provenance):
-                    return "changed"
+                    return "item_changed"
         if not rows:
             return None
         if not all(
@@ -1016,19 +1054,29 @@ class MergeCommit:
     async def undo_writes(self, record: PromotionRecord, tx: Any) -> None:
         """The revert's: the merge's matches, its copies and their `SAME_AS` reverted with it (never
         deleted), as a load's own writes are."""
-        edges = [r.edge_id for r in await self.promotions_store.matches_of(record.id) if r.edge_id]
-        copies = await self.promotions_store.copies_of(record.id)
-        nodes = sorted({c.written_id for c in copies if c.kind == "node" and c.written_id})
-        edges += [c.written_id for c in copies if c.kind == "link" and c.written_id]
-        edges += [c.same_as_id for c in copies if c.same_as_id]
-        edges = sorted(set(edges))
+        nodes, edges = await self._own_writes(record)
         if nodes or edges:
             # Reverted as a load's own writes are (`revert_elements`), never stamped withdrawn by
             # a load (a refresh's record, which `restore_withdrawn` would bring back).
             await self.graph.revert_elements(nodes, edges, tx)
 
+    async def _own_writes(self, record: PromotionRecord) -> tuple[list[str], list[str]]:
+        """What the merge's load wrote of its own: its matches, its copies, their `SAME_AS`."""
+        edges = [r.edge_id for r in await self.promotions_store.matches_of(record.id) if r.edge_id]
+        copies = await self.promotions_store.copies_of(record.id)
+        nodes = sorted({c.written_id for c in copies if c.kind == "node" and c.written_id})
+        edges += [c.written_id for c in copies if c.kind == "link" and c.written_id]
+        edges += [c.same_as_id for c in copies if c.same_as_id]
+        return nodes, sorted(set(edges))
+
     async def undo(self, record: PromotionRecord) -> None:
-        """The revert's, after its graph commit: the case back on its drawing, its views boards."""
+        """The revert's, after its graph commit: what it reverted out of every case's working set
+        (stored bodies are projected as stored, so a reverted copy on a canvas stays there
+        otherwise: the fourth review, item 3; `load_revert`'s step for a load), then the case back
+        on its drawing and its views boards."""
+        nodes, edges = await self._own_writes(record)
+        if self.working_sets is not None and (nodes or edges):
+            await self.working_sets.remove(nodes, edges)
         await self.datasets.unmerge_drawn(record.layer_id)
         await self.views.unmerge_boards(record.case_id, record.load_id)
 

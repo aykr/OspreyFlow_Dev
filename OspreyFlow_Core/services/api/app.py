@@ -4253,7 +4253,9 @@ async def open_board(
     return opened.model_copy(
         update={
             "may_draw": may_draw,
-            "may_promote": may_draw
+            # Exactly the promotion routes' check (the orchestrator's review, minor 7): the board's
+            # own creator (`own_board`), `_PROMOTES`' rights and the case's Author level.
+            "may_promote": board.created_by == principal.id
             and await _may_promote(investigation.id, principal, investigations),
             "grading_scheme": grading.scheme,
             "grading_grades": grading.grades,
@@ -10329,6 +10331,8 @@ async def drawn_merge_sheet(
     await _audit_promotion(
         audit, principal, "read_drawn_merge_sheet", case_id, len(sheet.items),
         dataset_id=dataset_id, target_dataset_id=into.id,
+        # The mapping that chose which loaded nodes were offered (the fourth review, minor 7).
+        mapping=[c.model_dump() for c in chosen],
     )  # fmt: skip
     return sheet
 

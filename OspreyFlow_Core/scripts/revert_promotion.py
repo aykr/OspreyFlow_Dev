@@ -46,8 +46,12 @@ from services.api.case_views import PostgresCaseViewStore
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.datasets import PostgresDatasetStore
 from services.api.drawn_merge import MergeCommit
+from services.api.history import InvestigationHistoryStore
 from services.api.promotion_store import PostgresPromotionStore, PromotionRecord, PromotionStore
 from services.api.promotions import LAYER_DELETE_PREFIX, LAYER_DELETER, PromotionRefused
+from services.api.working_set.service import WorkingSetService
+from services.api.working_set.store import ValkeyWorkingSetStore
+from services.api.working_set_revert import WorkingSetReverter
 from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -284,13 +288,21 @@ async def _main(args: argparse.Namespace) -> int:
     graph = GraphArcadeDBAdapter(client, scheme)
     valkey_config = ValkeyConfig.from_env()
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    history = await InvestigationHistoryStore.connect(dsn)
+    # A drawn merge's copies and links are reverted as a load's own writes, so they leave every
+    # case's working set as a load's do (`scripts.revert_load`'s same reverter).
+    working_sets = WorkingSetReverter(
+        WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey),
+        valkey,
+        history,
+    )
     try:
         return await run(
             args.load_id, reverted_by=args.reverted_by, dry_run=args.dry_run, store=store,
             graph=graph, items=items, audit=audit,
             invalidate=lambda: invalidate_every_cache(valkey),
             merge=MergeCommit(promotions_store=store, graph=graph, datasets=datasets, views=views,
-                              items=items, scheme=scheme),
+                              items=items, scheme=scheme, working_sets=working_sets),
         )  # fmt: skip
     finally:
         await client.aclose()
@@ -299,6 +311,7 @@ async def _main(args: argparse.Namespace) -> int:
         await datasets.close()
         await views.close()
         await audit.close()
+        await history.close()
         await valkey.aclose()
 
 

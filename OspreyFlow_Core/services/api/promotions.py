@@ -869,9 +869,11 @@ class Promotions:
     async def recorded_counts(self, record: PromotionRecord) -> tuple[int, int]:
         """As recorded: a drawn merge's retyped copies counted with what it promotes."""
         copies = await self.store.copies_of(record.id) if record.trigger == "drawn_merge" else []
+        # Each written element once (two copies the adapter merged into one link are one).
+        written = {(c.kind, c.written_id or f"unwritten:{c.original}") for c in copies}
         return (
-            len(record.node_ids) + sum(1 for c in copies if c.kind == "node"),
-            len(record.edge_ids) + sum(1 for c in copies if c.kind != "node"),
+            len(record.node_ids) + sum(1 for kind, _ in written if kind == "node"),
+            len(record.edge_ids) + sum(1 for kind, _ in written if kind != "node"),
         )
 
     async def details(self, record: PromotionRecord, reviewer: Principal) -> PromotionDetails:
@@ -989,13 +991,25 @@ class Promotions:
                 "another of the dataset's Authors who may review promotions.",
                 status=403,
             )
-        matched_changed = matched == "changed"
+        # A drawn merge's own reasons (L3.9): its words, and its code for the audit trail.
+        merge_changed = {
+            "changed": ("One of its matches has changed since it was sent.", "matches"),
+            "item_changed": (
+                "One of its items going in as another type has changed since it was sent.",
+                "copies",
+            ),
+            "target_changed": (
+                "The dataset it goes into is no longer one this drawing may be merged into.",
+                "target",
+            ),
+        }.get(matched or "")
+        matched_changed = merge_changed is not None
         if len(live) != len(record.item_ids) or failing or matched_changed:
             why = (
                 f"{self._label(failing[0][0])} has changed since it was sent: {failing[0][1]}"
                 if failing
-                else "One of its matches has changed since it was sent."
-                if matched_changed
+                else merge_changed[0]
+                if merge_changed is not None
                 else "One of its items was withdrawn since it was sent."
             )
             # Rule 3: the record keeps fixed words (it is listed to readers who may not read the
@@ -1004,8 +1018,8 @@ class Promotions:
             code = (
                 problems[failing[0][0].item.item_id][0][0]
                 if failing
-                else "matches"
-                if matched_changed
+                else merge_changed[1]
+                if merge_changed is not None
                 else "withdrawn"
             )
             await self.reject(

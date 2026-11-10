@@ -303,6 +303,32 @@ async def test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole(
     ]  # fmt: skip
 
 
+async def test_only_a_committed_merges_written_copies_are_read_for_the_grading_change(
+    store: PostgresPromotionStore,
+) -> None:
+    """ADR-143 decision 11 for a drawn merge's copies (Amendment 7): what the grading change reads
+    beside the board registry, each written element once, none of a merge waiting or rejected."""
+    from datetime import UTC, datetime
+
+    from services.api.promotion_store import CopyRow
+
+    def row(original: str) -> CopyRow:
+        return CopyRow(kind="node", original=original, type="Organisation", properties="{}",
+                       handling="{}", provenance="{}", original_properties="{}")  # fmt: skip
+
+    committed = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-4")
+    waiting = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-5")
+    await store.add(committed, copies=[row("d1"), row("d2")])
+    await store.add(waiting, copies=[row("d3")])
+    await store.set_copy_ids(committed.id, [("w1", "s1"), ("w1", "s2")])
+    await store.set_copy_ids(waiting.id, [("w3", "s3")])
+    assert await store.committed_copies() == []
+    assert await store.decide(
+        committed.id, was="awaiting_review", now="committed", by=None, at=datetime.now(UTC)
+    )
+    assert await store.committed_copies() == [("node", "w1")]
+
+
 async def test_a_record_whose_copies_are_refused_is_not_written_either(
     store: PostgresPromotionStore,
 ) -> None:

@@ -356,3 +356,145 @@ async def test_the_together_check_fails_with_the_match_written_in_a_transaction_
         await adapter.promote_elements([drawn], [], SOURCE, LOAD, tx)
         await adapter.rollback_transaction(tx)
         assert await adapter.get_edges([same], EVERYONE) != []
+
+
+# --- a drawn merge's retyped copies (ADR-143 Amendment 7; L3.9) ----------------------------------
+#
+# A drawn item mapped onto another of the target's types is written by the merge's own load, in
+# the promotion's transaction, as a new element of that type in the target; a link onto it is
+# written in the same transaction, onto the copy not yet committed; the copy's `SAME_AS` back to its
+# drawn original names no dataset (ADR-099 Amendment 2 decision 3: the two share none), so no
+# reader of the target or of the drawing reads it, by id, among two nodes or by expanding; the
+# revert reverts the copies as a load's own writes (`revert_elements`).
+
+DRAWING = "drawn-dataset-1"
+#: A reader of the target alone, and the drawing's home case after the merge (the target and the
+#: drawing, read-only).
+TARGET_READER = Principal(id="t", clearance="OFFICIAL", org_unit="unit-1", datasets=[SOURCE])
+HOME_READER = Principal(
+    id="h", clearance="OFFICIAL", org_unit="unit-1", datasets=[SOURCE, DRAWING]
+)
+
+
+async def _retyped(adapter: GraphPort, *, commit: bool = True) -> dict[str, str]:
+    """A drawn incident and a drawn person in the drawing; the person promoted, the incident copied
+    as an Organisation with a MEMBER_OF from the person onto the uncommitted copy, and the copy's
+    SAME_AS back in no dataset: one transaction."""
+    (incident, person), _ = await _write(
+        adapter,
+        [
+            _node("Incident", classification="OFFICIAL", datasets=[DRAWING], name="Night fight"),
+            _node("Person", classification="OFFICIAL", datasets=[DRAWING], family_name="Mercer"),
+        ],
+        [],
+    )
+    tx = await adapter.begin_transaction()
+    try:
+        await adapter.promote_elements([person], [], SOURCE, LOAD, tx)
+        copy = _node("Organisation", classification="OFFICIAL", datasets=[SOURCE],
+                     load_id=LOAD, name="Night fight")  # fmt: skip
+        (copy_id,) = await adapter.upsert_nodes([copy], tx)
+        member, back = await adapter.upsert_edges(
+            [
+                _edge("MEMBER_OF", person, copy_id, classification="OFFICIAL", datasets=[SOURCE],
+                      load_id=LOAD),
+                _edge("SAME_AS", copy_id, incident, classification="OFFICIAL", datasets=[],
+                      load_id=LOAD),
+            ],
+            tx,
+        )  # fmt: skip
+    except Exception:
+        await adapter.rollback_transaction(tx)
+        raise
+    if commit:
+        await adapter.commit_transaction(tx)
+    else:
+        await adapter.rollback_transaction(tx)
+    return {"incident": incident, "person": person, "copy": copy_id, "member": member,
+            "back": back}  # fmt: skip
+
+
+async def test_a_retyped_copy_and_a_link_onto_it_land_with_the_promotion_in_one_transaction(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _retyped(adapter)
+        (copy,) = await adapter.get_nodes([ids["copy"]], TARGET_READER)
+        assert (copy.type, copy.datasets, copy.properties.get("name")) == (
+            "Organisation", [SOURCE], "Night fight",
+        )  # fmt: skip
+        (member,) = await adapter.get_edges([ids["member"]], TARGET_READER)
+        assert (member.source, member.target) == (ids["person"], ids["copy"])
+        # The original stays the drawing's alone, of its own type.
+        (original,) = await adapter.get_nodes([ids["incident"]], HOME_READER)
+        assert (original.type, original.datasets) == ("Incident", [DRAWING])
+
+
+async def test_a_retyped_copy_rolled_back_writes_neither_it_nor_its_links(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _retyped(adapter, commit=False)
+        assert await adapter.get_nodes([ids["copy"]], EVERYONE) == []
+        assert await adapter.get_edges([ids["member"], ids["back"]], EVERYONE) == []
+
+
+async def test_a_copys_same_as_back_names_no_dataset_and_no_reader_of_either_reads_it(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Read by id, among the two nodes and by expanding from either, as a reader of the target
+    and as the drawing's home case: never there."""
+    from schemas.domain import ExpandRequest
+
+    async with factory.context() as adapter:
+        ids = await _retyped(adapter)
+        (stored,) = await adapter.get_edges([ids["back"]], EVERYONE)
+        assert stored.datasets == []
+        for reader in (TARGET_READER, HOME_READER):
+            assert await adapter.get_edges([ids["back"]], reader) == []
+            among = await adapter.edges_among([ids["copy"], ids["incident"]], reader)
+            assert ids["back"] not in {e.id for e in among}
+            for start in (ids["copy"], ids["incident"]):
+                expanded = await adapter.expand(ExpandRequest(node_ids=[start]), reader)
+                assert ids["back"] not in {e.id for e in expanded.edges}
+
+
+async def test_reverting_the_copies_as_a_loads_own_writes_hides_them_from_every_reader(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        ids = await _retyped(adapter)
+        tx = await adapter.begin_transaction()
+        await adapter.revert_promotion(LOAD, SOURCE, tx)
+        await adapter.revert_elements([ids["copy"]], [ids["member"], ids["back"]], tx)
+        await adapter.commit_transaction(tx)
+        assert await adapter.get_nodes([ids["copy"]], EVERYONE) == []
+        assert await adapter.get_edges([ids["member"], ids["back"]], EVERYONE) == []
+        # The originals as they were: the person in the drawing alone again, the incident untouched.
+        (person,) = await adapter.get_nodes([ids["person"]], HOME_READER)
+        assert person.datasets == [DRAWING]
+        assert await adapter.get_nodes([ids["incident"]], HOME_READER)
+
+
+async def test_the_no_dataset_check_fails_with_the_back_link_put_in_the_drawing(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The plant: the `SAME_AS` back written into the drawing, as the merge first wrote it. The
+    home case's reads above then find it among the two nodes and by expanding."""
+    from schemas.domain import ExpandRequest
+
+    async with factory.context() as adapter:
+        (incident,), _ = await _write(
+            adapter, [_node("Incident", classification="OFFICIAL", datasets=[DRAWING])], []
+        )
+        (copy,), _ = await _write(
+            adapter, [_node("Organisation", classification="OFFICIAL", datasets=[SOURCE])], []
+        )
+        _, (back,) = await _write(
+            adapter, [], [_edge("SAME_AS", copy, incident, classification="OFFICIAL",
+                                datasets=[DRAWING])]
+        )  # fmt: skip
+        among = await adapter.edges_among([copy, incident], HOME_READER)
+        assert back in {e.id for e in among}
+        expanded = await adapter.expand(ExpandRequest(node_ids=[incident]), HOME_READER)
+        assert back in {e.id for e in expanded.edges}

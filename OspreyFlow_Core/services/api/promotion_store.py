@@ -179,6 +179,9 @@ class PromotionStore(Protocol):
     async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None: ...
     #: Its retyped items (Amendment 7), and the elements its load wrote for them.
     async def copies_of(self, promotion_id: str) -> list[CopyRow]: ...
+    #: Every committed drawn merge's written copies, as (kind, element id): the grading change's
+    #: drawn items beside the board registry's (ADR-143 decision 11).
+    async def committed_copies(self) -> list[tuple[str, str]]: ...
     async def set_copy_ids(
         self, promotion_id: str, written: Sequence[tuple[str, str | None]]
     ) -> None: ...
@@ -344,6 +347,17 @@ class InMemoryPromotionStore:
     async def copies_of(self, promotion_id: str) -> list[CopyRow]:
         return list(self.copies.get(promotion_id, []))
 
+    async def committed_copies(self) -> list[tuple[str, str]]:
+        return sorted(
+            {
+                (c.kind, c.written_id)
+                for pid, rows in self.copies.items()
+                if pid in self.records and self.records[pid].status == "committed"
+                for c in rows
+                if c.written_id
+            }
+        )
+
     async def set_copy_ids(
         self, promotion_id: str, written: Sequence[tuple[str, str | None]]
     ) -> None:
@@ -467,6 +481,15 @@ async def _insert_matches(conn: Any, promotion_id: str, rows: Sequence[MergeMatc
         "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
         [(promotion_id, n, r.drawn, r.loaded, r.score, r.handling) for n, r in enumerate(rows)],
     )
+
+
+#: Every committed drawn merge's written copies (the grading change reads it too, from its own
+#: process: `scripts.grading_change`).
+COMMITTED_COPIES_SQL = (
+    "SELECT DISTINCT c.kind, c.written_id FROM promotion_copies c "
+    "JOIN promotions p ON p.id = c.promotion_id "
+    "WHERE p.status = 'committed' AND c.written_id IS NOT NULL ORDER BY c.kind, c.written_id"
+)
 
 
 async def _insert_copies(conn: Any, promotion_id: str, rows: Sequence[CopyRow]) -> None:
@@ -735,6 +758,11 @@ class PostgresPromotionStore:
                 promotion_id,
             )
         return [CopyRow(**dict(r)) for r in rows]
+
+    async def committed_copies(self) -> list[tuple[str, str]]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(COMMITTED_COPIES_SQL)
+        return [(r["kind"], r["written_id"]) for r in rows]
 
     async def set_copy_ids(
         self, promotion_id: str, written: Sequence[tuple[str, str | None]]

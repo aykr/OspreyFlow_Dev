@@ -222,6 +222,9 @@ class BoardGraph(FakeGraphPort):
                 raise OntologyError(f"{write.type!r} is not a link type in the active ontology")
             edge_type = self.ontology.edge_type(write.type)
             assert edge_type is not None
+            # As the adapter (`upsert_edges`, its `validate_properties`): a link's properties are
+            # its type's (rule 15: the fake refuses what the real dependency refuses).
+            validate_properties(edge_type, write.properties)
             source_type = self._ends_type(write.source, tx)
             target_type = self._ends_type(write.target, tx)
             if source_type is None or target_type is None:
@@ -250,12 +253,22 @@ class BoardGraph(FakeGraphPort):
         for pending, edge_id in self._pending[tx][1]:
             if (
                 pending.type == write.type
-                and pending.source == write.source
-                and pending.target == write.target
+                and self._same_pair(write, pending.source, pending.target)
                 and audience_of(pending.handling, pending.datasets, SCHEME) == key
             ):
                 return edge_id
         return None
+
+    def _same_pair(self, write: EdgeWrite, source: str, target: str) -> bool:
+        """As the adapter's `_find_existing_edge`: the same ends, either way round for a type
+        that is not directed (`bothE`/`otherV`)."""
+        if (source, target) == (write.source, write.target):
+            return True
+        held = self.ontology.edge_type(write.type)
+        return held is not None and not held.directed and (target, source) == (
+            write.source,
+            write.target,
+        )
 
     def _ends_type(self, node_id: str, tx: str) -> str | None:
         held = self._graph_nodes.get(node_id)
@@ -396,8 +409,7 @@ class BoardGraph(FakeGraphPort):
         for edge in self._graph_edges:
             if (
                 edge.type == write.type
-                and edge.source == write.source
-                and edge.target == write.target
+                and self._same_pair(write, edge.source, edge.target)
                 and not edge.audit.reverted
                 and audience_of(edge.handling, edge.datasets, SCHEME) == key
             ):

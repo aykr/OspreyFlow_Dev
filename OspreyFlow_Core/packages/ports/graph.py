@@ -754,7 +754,10 @@ class GraphPort(Protocol):
     ) -> None:
         """Marks existing elements reverted (`AuditStub.reverted`,
         `01_DOMAIN_MODEL.md` §2.4) — `services/ingest/load_revert.py` is
-        the only caller. A reverted element is invisible to every read
+        its caller for a load, and `scripts/revert_promotion.py` (through
+        `drawn_merge.MergeCommit.undo_writes`) for a drawn merge's own
+        writes, its copies and links (ADR-143 Amendment 7). A reverted
+        element is invisible to every read
         method afterwards, any principal, the same way a hidden record is
         invisible to an unauthorised one; it is never actually deleted, so
         the audit trail stays intact. No `principal` argument, matching
