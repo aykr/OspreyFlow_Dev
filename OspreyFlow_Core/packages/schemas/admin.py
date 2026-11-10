@@ -389,7 +389,7 @@ class ScheduleRunView(BaseModel):
     left out: a count of what a load wrote is a read (rule 3)."""
 
     run_id: str
-    trigger: Literal["manual", "schedule", "watch", "release", "source_refresh"]
+    trigger: Literal["manual", "schedule", "watch", "release", "source_refresh", "external"]
     slot: datetime | None = None
     started_at: datetime
     finished_at: datetime | None = None

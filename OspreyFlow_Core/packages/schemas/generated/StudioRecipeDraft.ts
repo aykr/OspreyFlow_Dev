@@ -69,6 +69,7 @@ export type ScheduleSetAt = string | null;
 export type ScheduleCase = string | null;
 export type SchedulePaused = boolean;
 export type SchedulePausedReason = string | null;
+export type OwnedExternallyBy = string | null;
 export type FlaggedReason = string | null;
 export type DatasetId = string | null;
 export type Id = string;
@@ -137,6 +138,7 @@ export interface StudioRecipeDraft {
   schedule_case?: ScheduleCase;
   schedule_paused?: SchedulePaused;
   schedule_paused_reason?: SchedulePausedReason;
+  owned_externally_by?: OwnedExternallyBy;
   flagged_reason?: FlaggedReason;
   dataset_id?: DatasetId;
   pipeline?: PipelineGraph | null;
