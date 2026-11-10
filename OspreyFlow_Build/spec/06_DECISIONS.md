@@ -31395,6 +31395,94 @@ and was then refused at each of the three. It failed closed: nothing leaked, but
 `staged_run` and `reference_list_import`, which are the Studio lane's (`services/ingest/**`). Removing them would
 let mypy hold every caller as well. Studio carries that into L1.7 (its L1.5 report); it is not done here.
 
+### ADR-140, Amendment 17 (10 November 2026) — the recipes repository written in-process by dulwich, the git binary removed from the Conduit image, and the publish's refusals (L1.7a)
+
+Status: accepted. **The owner's ruling of 9 November 2026** ("Replace with dulwich", MORNING item 89), recorded here
+by rule 11. Written in the studio-b lane at step L1.7a, after the independent review's two rounds and the lane review.
+
+**Context.** Spec 09 §6 makes the repository on the recipe volume the record of what was published. So the Conduit
+committed `recipes/<id>.yaml` at runtime with the `git` binary (GPL-2.0-only), which its image carried from round
+13bf for that alone. The image gate admitted it through an AWAITING_OWNER entry, never through `make licence-check`.
+
+**Decision.**
+1. **The commit is made by `dulwich`** 1.2.21, in the Conduit's process, taken under the Apache-2.0 half of its
+   `Apache-2.0 OR GPL-2.0-or-later` licence. It is not pure Python: its wheels carry optional compiled extensions
+   (cp312 among them). `git` leaves the Conduit's image, and the gate's AWAITING_OWNER entry with it (both in
+   L1.7a, by the orchestrator's ratification). That ends ADR-147 Amendment 2's "until that carry lands": the gate
+   names nothing as not yet passed, and a `git` put back fails (`tests/licence_check/test_runtime_licences.py`,
+   `tests/test_connectors_are_carried_into_the_image.py`). The repository
+   stays a git repository that `git log` reads, and one the old code made is opened as it is.
+2. **No config-driven program runs.** The commit object is built directly, with one path changed in the parent's
+   tree. So no hook, signer, file-system monitor, filter or credential helper runs, as dulwich's own worktree
+   commit and stage would run them. Config is still read, and none of it runs a program:
+   - **The repository's own config**, as dulwich reads it to open any repository. That covers its format and
+     `extensions.*`, `core.bare`, `core.worktree` and `core.sharedRepository`, the object store's settings and
+     `objects/info/alternates`, a `commondir` file and `config.worktree`, and any file it includes by
+     `include.path` or `includeIf`. A repository whose config names another working tree is refused. So is a
+     `.git` that is not the root's own directory, checked after the open: a `.git` file naming another
+     repository's directory, a link, or a linked worktree's `commondir` naming another's. So the index, lock,
+     objects and refs are this repository's, unless a link inside `.git` points elsewhere (point 4).
+   - **Not dulwich's default stack of the user's and the system's config**, at first use or for the index,
+     which is opened with an empty config. A file the repository's own config includes by name is still read.
+3. **A recipe id is one plain file name**: a letter or digit, then letters, digits, `.`, `_` or `-`, checked again
+   by dulwich's `validate_path`. No `..` or `.git` tree entry can be written.
+4. **No link is followed on the recipe's own path, and `.git` and the lock file are not links.**
+   - Each directory below the root is opened with `O_NOFOLLOW`, and a link where the file goes is refused.
+   - `.git` must be a real directory, and the lock file is opened with `O_NOFOLLOW`.
+   - Inside the git directory, dulwich's own reads and writes follow links as git does.
+   - The bytes go to a new file, fsynced, which `os.replace` puts in place. A temporary file a crash left behind
+     is swept by the next publish.
+5. **`HEAD` moves by compare-and-swap.** A publish whose parent moved under it is refused (`GitCommitError`, "publish
+   again"), and the other writer's commit stands.
+6. **One lock over write, index and commit.**
+   - Within the process, a lock. Across processes (the Prison Intelligence seed beside a running Conduit), an
+     exclusive `flock` on `osprey-publish.lock` in the git directory.
+   - Both are waited for under one 30 s deadline: a lock held for a moment (the seed's own publish) is waited
+     for and the publish commits, and one held past the deadline refuses it. So publishes queued behind a
+     process stopped while holding the `flock` are refused within one wait, none holding a worker thread for a
+     wait of its own.
+   - First use makes the git directory aside, with `HEAD` already on `refs/heads/main`, and renames it into
+     place. A rival's made at the same moment is joined, not refused. An aside directory a crashed first use
+     left (`tempfile.mkdtemp`'s own shape only) is swept by any later publish, under the lock, once it is ten
+     minutes old.
+   - A writer that takes neither lock, such as an operator's own `git commit`, can still race the index. It
+     cannot lose its commit (point 5).
+
+**Tests** (`OspreyFlow_Build/tests/services/api/test_recipe_repository.py` and `test_studio_publish_commit_file.py`).
+Each is red by a plant at its call site (`process/lanes/studio-b/l1.7a/red_plants.py`, 36 plants). Where a plant
+names the reason it must fail for, each test it names is checked to fail for that reason; the others are checked
+by name.
+- **Point 1:** `test_publish_writes_a_commit_real_git_reads`, `test_a_second_publish_keeps_the_first_in_the_history`,
+  `test_publish_commits_on_top_of_a_repository_real_git_made`, all under `fsck --strict`.
+- **Point 2:** `test_publish_never_execs_a_binary`, with every config-driven program planted.
+  - Three plants fire its trap: the hooks (dulwich's worktree commit), the signer `gpg.program` (that commit with
+    hooks skipped) and the clean filter (its worktree stage).
+  - `core.hooksPath`, the `reference-transaction` and `post-index-change` hooks, `core.fsmonitor` and the
+    credential helper are inert in dulwich 1.2.21. They stay planted because git honours them.
+  - Also `test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says`,
+    `test_a_repository_whose_config_names_another_tree_is_refused` and
+    `test_a_git_directory_that_is_not_the_root_s_own_is_refused` (a `.git` file, a link, a `commondir`).
+- **Point 3:** `test_a_recipe_id_that_is_not_one_file_name_is_refused`, with
+  `test_an_id_of_the_shapes_the_studio_mints_is_accepted` (a ULID).
+- **Point 4:** `test_a_symlinked_recipes_directory_is_refused`, `test_a_symlinked_recipe_file_is_refused`,
+  `test_a_linked_publish_lock_is_refused`, `test_a_git_directory_that_is_not_the_root_s_own_is_refused` and
+  `test_a_temporary_file_a_crash_left_is_swept`.
+- **Point 5:** `test_a_real_writer_moving_head_mid_commit_is_refused` (a real `git commit` in the window) and
+  `test_a_failed_commit_is_an_error_not_a_quiet_success`.
+- **Point 6:**
+  - `test_the_index_is_read_and_written_under_a_lock_another_process_honours`, probed from a second open at the
+    file's write, the index's read and write, the commit and the swap. It is red with the lock narrowed to the
+    swap, and with it taken after the write.
+  - `test_concurrent_publishes_each_commit_their_own_bytes`.
+  - `test_a_publish_waits_for_a_lock_held_briefly_then_commits`, `test_a_publish_held_off_too_long_is_refused_not_hung`
+    and `test_publishes_queued_behind_a_held_lock_share_one_wait`.
+  - `test_a_rival_making_the_repository_first_is_joined_not_refused` (the rival is the real `git`, run once in
+    the window; not a second dulwich publish), `test_an_aside_directory_a_crashed_first_use_left_is_swept` and
+    `test_an_aside_directory_left_after_the_repository_exists_is_swept`.
+
+**Cost and what is open.** A horizontally scaled deployment still has one checkout per instance (the stated gap in
+`write_and_commit_recipe`). An operator's own git on the volume is not serialised with a publish (point 6).
+
 ### ADR-145, Amendment 8 (9 November 2026) — Disable and the items an administrator may not see (L3.8)
 
 **The owner's ruling of 9 November 2026** (case-b's L3.8 question, access): when a person being disabled owns

@@ -1,0 +1,1062 @@
+Running on ospreyflow-test (stack b, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261110T073443Z/log: sh -c sh process/lanes/studio-b/l1.7a/live_set.sh; echo "# live_set exit $?"; sh process/lanes/studio-b/l1.7a/live_seed_slow.sh; echo "# seed exit $?"
+................sss........................ssss...........F.ssssssssssss [ 62%]
+sssssssssssssss..F....FFFFF................                              [100%]
+=================================== FAILURES ===================================
+____________________ test_phase8_exit_criterion_end_to_end _____________________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x7dc307647d90>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x7dc3076479b0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_phase8_exit_criterion_end0')
+git_repo = PosixPath('/tmp/pytest-of-root/pytest-289/test_phase8_exit_criterion_end0/repo')
+
+    def test_phase8_exit_criterion_end_to_end(
+        api_env: None,
+        keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+        tmp_path: Path,
+        git_repo: Path,
+    ) -> None:
+        import asyncio
+    
+        private_key, _ = keypair
+        import time as _time
+    
+        # A one-hour expiry, not the default 300s (`tests/conftest.py::default_claims`) — this
+        # walkthrough's own real ArcadeDB/Postgres round trips run measurably longer than that,
+        # confirmed directly (a real run's own token expired mid-test at the B14 jump call before
+        # this fix, `401 signature has expired`, not assumed).
+        # An analyst who loads too: since ADR-112 a `loader` alone holds no `create_case`, and B14's
+        # address asks for the queue's read and Rules and Monitoring (ADR-146 Amendment 2).
+        headers = _bearer(private_key, roles=["analyst", "loader"], exp=int(_time.time()) + 3600)
+    
+        from services.api.app import app
+    
+        # === Scenario B ===============================================================================
+    
+        # B1-B3
+        cdr_ids = asyncio.run(_ingest_cdr_fixture(tmp_path))
+    
+        async def _build_b_graph() -> dict[str, object]:
+            client, graph = await _graph_client()
+            try:
+                # B4-B7: two cohorts, one on the shared CDR endpoint, one on a shared handle.
+                cohort_1_person_ids = await _seed_cohort(
+                    graph, shared_endpoint_id=cdr_ids["b_party_endpoint_id"], prefix="c1"
+                )
+                cohort_2_person_ids, handle_id = await _seed_handle_cohort(graph, prefix="c2")
+    
+                # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
+                # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
+                # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
+                # (`spec/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+                # stand-in for something else.
+    
+                # B9/B10: the real Person pair — see this file's own helper docstring for why neither
+                # cohort above can serve this, and why this pair is provably the same generator's own
+                # output.
+                b9_a_id, b9_b_id, b9_cluster_id, b9_score = await _seed_and_resolve_b9_b10_person_pair(
+                    graph, scheme=load_uk_le_scheme()
+                )
+    
+                # B15: the seizure record's device/SIM legs.
+                seizure_ids = await _write_seizure_device_legs(graph)
+    
+                return {
+                    "cohort_1_person_ids": cohort_1_person_ids,
+                    "cohort_2_person_ids": cohort_2_person_ids,
+                    "handle_id": handle_id,
+                    "b9_a_id": b9_a_id,
+                    "b9_b_id": b9_b_id,
+                    "b9_cluster_id": b9_cluster_id,
+                    "b9_score": b9_score,
+                    **seizure_ids,
+                }
+            finally:
+                await client.aclose()
+    
+        b_graph = asyncio.run(_build_b_graph())
+    
+        with TestClient(app) as client:
+            investigation_b = client.post("/v1/investigations", headers=headers, json=new_case())
+            assert investigation_b.status_code == 201, investigation_b.text
+            inv_b_id = investigation_b.json()["id"]
+    
+            async def _fetch(node_id: str) -> dict:
+                _client, graph = await _graph_client()
+                try:
+                    node = await graph.get_node(node_id, PRINCIPAL)
+                    assert node is not None
+                    return node.model_dump(mode="json")
+                finally:
+                    await _client.aclose()
+    
+            # === B4: seed the four first-cohort Person entities, no edges between them.
+            cohort_1_nodes = [asyncio.run(_fetch(pid)) for pid in b_graph["cohort_1_person_ids"]]
+            seeded_b4 = client.post(
+                f"/v1/investigations/{inv_b_id}/seed",
+                headers=headers,
+                json={"nodes": cohort_1_nodes, "edges": []},
+            )
+            assert seeded_b4.status_code == 200, seeded_b4.text
+>           assert len(seeded_b4.json()["delta"]["nodes"]) == 4
+E           assert 0 == 4
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py:768: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:47:46] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+____ test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds _____
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x7dc2e2347110>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_a_snapshot_tells_its_load0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dc2e2344c50>
+
+    async def test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds(
+        runs: RecipeRunStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       alone = await _told(runs, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:269: in _told
+    return await _three_runs(
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:281: in _three_runs
+    await world.run(loader, ours, [A, B])
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:160: in run
+    report = await run_module.run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:149: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:713: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:713: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-289/test_a_snapshot_tells_its_load0/alone/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+_ test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_a_returning_rows_revert_i0')
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x7dc35d10bd70>
+
+    async def test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live(
+        tmp_path: Path, runs: RecipeRunStore
+    ) -> None:
+        """ADR-110 Amendment 16, rule 3, live: another case's refresh of the same pair merges into the
+        link after B came back (the raw adapter stamps no dataset, so the two share it). The returning
+        load's revert is refused, nothing changes, and the words name no other case or load."""
+        async with (
+            arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+            duckdb_adapter([], SCHEME) as analytics,
+        ):
+            ours = Refresh(tmp_path / "ours", runs, graph, analytics)
+            theirs = Refresh(tmp_path / "theirs", runs, graph, analytics)
+>           await ours.snapshot([A, B, C])
+
+../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py:112: in snapshot
+    report = await run_published_recipe(
+services/api/studio_publish.py:713: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:713: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-289/test_a_returning_rows_revert_i0/ours/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+_ test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7dc3079c3350>, cases=<services.api.investigations....igationStore object at 0x7dc3079cdee0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7dc34c736930>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_a_studio_load_tells_and_s0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dc35d41a300>
+
+    async def test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       alone = await _loader_alone_or_beside(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:240: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:231: in _loader_alone_or_beside
+    owner, said = await world.run(loader, ours, [PAIR])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:169: in run
+    report = await executor.run(owner, self.draft, case, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:11716: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:156: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:713: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:713: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-289/test_a_studio_load_tells_and_s0/alone/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+_ test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7dc35d69b170>, cases=<services.api.investigations....igationStore object at 0x7dc34c7362d0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7dc35d36ddc0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_two_cases_loading_into_on0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dc3e56d2570>
+
+    async def test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        world, opened = await _in_a_world(stores, tmp_path, monkeypatch, "shared")
+        first, second, third = _loader("first"), _loader("second"), _loader("third")
+        shared = await _dataset(stores, first)
+        one, two = await _case(stores, first, shared), await _case(stores, second, shared)
+        elsewhere = await _case(stores, third, await _dataset(stores, third))
+        async with opened as raw:
+            world.graph = await _conduits_graph(raw, stores)
+>           one_owner, _ = await world.run(first, one, [PAIR])
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:169: in run
+    report = await executor.run(owner, self.draft, case, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:11716: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:156: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:713: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:713: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-289/test_two_cases_loading_into_on0/shared/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+______ test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset ______
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7dc35d3cbe90>, cases=<services.api.investigations....igationStore object at 0x7dc35dbf2ed0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7dc35da00410>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_one_tick_stamps_each_sche0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dc35d62f560>
+
+    async def test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The scheduler itself (`ScheduleExecutor.tick` and `run_now`) over the real `check_case` and
+        `run`: `run` scopes nothing of its own, so each run's stamp is whatever its own `_owner` set
+        just before it (`_consider_slot`, `run_now`). Two pipelines due in one tick, in two cases on two
+        datasets, and a third run now in a third, each read their own link alone. Red if owners are
+        resolved for every recipe before any runs (`L1.2a_RED_RECORD.md`). A source refresh through
+        `case_for_dataset` is not driven here: this fixture's pipeline names no dataset, which a watch
+        refuses."""
+        from services.api.config import ValkeyConfig
+        from services.api.scheduler import ScheduleExecutor
+        from valkey.asyncio import Valkey
+    
+        owners = [
+            Principal(id=f"owner-{new_id()}", clearance="SECRET", org_unit="unit-1",
+                      roles=["source_approver"])
+            for _ in range(3)
+        ]  # fmt: skip
+        cases = [await _case(stores, o, await _dataset(stores, o)) for o in owners]
+        set_at, slot = (
+            datetime(2026, 6, 1, 12, tzinfo=UTC),
+            datetime(2026, 6, 2, 5, tzinfo=UTC),
+        )
+        published = [fresh_published_draft(tmp_path / f"pipeline-{n}") for n in range(3)]
+        repos = {draft.recipe_id: repo for repo, draft in published}
+        drafts = [
+            draft.model_copy(update={
+                "schedule_cron": "0 6 * * *", "schedule_owner": o.id, "schedule_set_at": set_at,
+                "schedule_case": case,
+            })
+            for (_, draft), o, case in zip(published, owners, cases, strict=True)
+        ]  # fmt: skip
+        for draft in drafts:
+            _write(Path(draft.source_location), [PAIR])
+    
+        async def execute(deps: Any, **kwargs: Any) -> Any:
+            recipe = kwargs["recipe"]
+            return await run_published_recipe(
+                recipe, kwargs["principal"], graph=deps.graph, ontology=ONTOLOGY, load_id=new_id(),
+                investigation_scope=kwargs["investigation_id"], repo_root=repos[recipe.recipe_id],
+                analytics=None, media=kwargs["media"], scheme=SCHEME, sink=kwargs["sink"],
+            )  # fmt: skip
+    
+        monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
+        monkeypatch.setattr(run_module, "resolve_source_handling", lambda draft: SOURCE)
+        monkeypatch.setattr(
+            "services.api.scheduler.resolve_source_handling", lambda draft: SOURCE
+        )
+    
+        class Due:
+            async def scheduled(self) -> list[Any]:
+                return drafts[:2]
+    
+            async def set_paused(self, *_: Any, **__: Any) -> None:
+                return None
+    
+        async def resolve(owner_id: str) -> Principal:
+            return next(o for o in owners if o.id == owner_id)
+    
+        async def notify(*_: Any) -> None:
+            return None
+    
+        config = ValkeyConfig.from_env()
+        valkey = Valkey(host=config.host, port=config.port)
+        world = World(stores, None, published[0][0], drafts[0], monkeypatch)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as raw:
+                world.graph = await _conduits_graph(raw, stores)
+                closures = world.executor()
+                scheduler = ScheduleExecutor(
+                    recipes=Due(), runs=stores.runs, valkey=valkey, scheme=SCHEME,  # type: ignore[arg-type]
+                    resolve_owner=resolve, check_case=closures.check_case, run=closures.run,
+                    notify=notify, watch_files=None, source_watches=None, case_for_dataset=None,
+                )  # fmt: skip
+                await scheduler.tick(slot + timedelta(seconds=20))
+>               await scheduler.run_now(drafts[2])
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:361: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/scheduler.py:495: in run_now
+    return await self.run(owner, recipe, case, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:11716: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:323: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:713: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:713: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-289/test_one_tick_stamps_each_sche0/pipeline-2/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+------------------------------ Captured log call -------------------------------
+ERROR    services.api.scheduler:scheduler.py:386 scheduled run of recipe private-cash-01m7276p8d12s1gz1q55yvk6rv failed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/scheduler.py", line 384, in _consider_slot
+    await self.run(owner, recipe, case, latest)
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py", line 11716, in run
+    return await run_recipe_as(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 173, in run_recipe_as
+    report = await _execute_recipe_run(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py", line 323, in execute
+    return await run_published_recipe(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 713, in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 713, in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 191, in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 111, in _confined
+    raise SourceUnreadableError(NOT_THIS_DATASETS)
+services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+ERROR    services.api.scheduler:scheduler.py:386 scheduled run of recipe private-cash-01m7276p8sb91g76cddcbhvq1j failed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/scheduler.py", line 384, in _consider_slot
+    await self.run(owner, recipe, case, latest)
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py", line 11716, in run
+    return await run_recipe_as(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 173, in run_recipe_as
+    report = await _execute_recipe_run(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py", line 323, in execute
+    return await run_published_recipe(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 713, in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 713, in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 191, in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 111, in _confined
+    raise SourceUnreadableError(NOT_THIS_DATASETS)
+services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+_ test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7dc3e56d0110>, cases=<services.api.investigations....igationStore object at 0x7dc2e27380b0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7dc34c0cab40>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-289/test_run_now_tells_and_shows_i0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7dc35d43ac00>
+routed = None
+
+    async def test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace,  # noqa: F811
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        routed: None,
+    ) -> None:
+>       alone = await _told(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:188: in _told
+    said = await _run_now(world, client, accounts, loader, ours)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:127: in _run_now
+    response = await client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:511: in app
+    solved_result = await solve_dependencies(
+.venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:640: in solve_dependencies
+    solved_result = await solve_dependencies(
+.venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:674: in solve_dependencies
+    solved = await call(**solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:2252: in dependency
+    return await with_derived_packs(case, datasets, models)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:2224: in with_derived_packs
+    derived = await packs_of_case(case.id, datasets, models)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+investigation_id = '01M72776C4P5GN0FN4N2X1VR8G'
+datasets = <services.api.datasets.PostgresDatasetStore object at 0x7dc34c0cab40>
+models = <tests.services.api.test_studio_run_now_stamps_its_case_dataset_live._Nothing object at 0x7dc2e2276330>
+
+    async def packs_of_case(
+        investigation_id: str, datasets: _ChosenOf, models: TargetModelStore
+    ) -> list[str] | None:
+        """A case's packs, derived (ADR-126 Amendment 2): its chosen dataset's live model's (a
+        composite's own). `None` while that dataset has no model yet (one `scripts.seed_target_models`
+        has not reached, ADR-126 Amendment 3), when the case's stored packs still stand."""
+        chosen = await datasets.chosen_of_case(investigation_id)
+        if not chosen:
+            return None
+        live = await models.live(chosen[0].id)
+>       return sorted(live.packs) if live is not None else None
+                      ^^^^^^^^^^
+E       AttributeError: 'list' object has no attribute 'packs'
+
+services/api/target_models.py:79: AttributeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:34:57] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 2 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:35:04] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 2 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+___________________ test_hotlist_create_and_list_round_trip ____________________
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:45:27] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 2 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.app:app.py:1121 start-up flagged 2 published recipe(s) as stale: 01M7269DD2EKE0ZJ0JHDN4GC6V, 01M72688PH39JRFPVWDGCT6RTE
+____________ test_monitor_create_requires_owning_the_pattern_first _____________
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:45:32] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:45:40] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 07:45:48] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+__ test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets ___
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:45:59] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_b14_an_alert_opens_at_its_address_in_its_case_with_its_entities _____
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:46:13] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_________ test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling _________
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:46:27] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 3 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:46:37] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:46:45] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:46:53] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_running_a_published_recipe_attributes_load_id_recipe_id_and_version
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_flagging_a_recipe_after_an_ontology_edit_actually_blocks_its_run
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_publishing_stamps_the_pack_versions_in_the_row_and_the_committed_file
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_pack_bump_blocks_the_run_of_a_recipe_naming_that_pack
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_build_recipe_without_pack_versions_is_refused
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_backfilled_row_whose_file_has_no_pins_runs
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_file_with_its_own_pins_wins_over_the_row_s
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_row_and_file_both_unpinned_writing_fibo_is_refused
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_two_source_branches_both_load_each_under_its_own_load_id
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_a_full_snapshot_of_a_two_source_pipeline_is_refused_in_words_before_any_load[None-a full snapshot of one would withdraw]
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_a_full_snapshot_of_a_two_source_pipeline_is_refused_in_words_before_any_load[refresh1-a full snapshot of one would withdraw]
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_a_full_snapshot_of_a_two_source_pipeline_is_refused_in_words_before_any_load[refresh2-watermark is one source's]
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_extract_handling_override_without_a_reason_is_refused
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_an_unwired_library_is_refused_in_words
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_a_document_above_the_loaders_clearance_is_not_extracted
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_enrich_matches_the_local_gazetteer_with_an_inferred_same_as
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_enrich_online_without_a_provider_is_refused_in_words
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_enrich_online_allowlist_geocodes_discloses_and_persists
+PASSED ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py::test_a_fibo_pipeline_loads_accounts_the_bare_core_refuses
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_a_join_s_provenance_survives_to_the_link_it_makes
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_every_element_names_the_source_rows_it_came_from
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_every_booking_is_accounted_for
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_the_load_s_raw_rows_are_the_sources_rows
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_a_source_load_s_raw_rows_are_never_replaced
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_a_list_version_names_one_set_of_rows
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_a_refused_run_writes_no_raw_or_list_rows
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_only_a_staged_run_may_leave_its_raw_rows_to_the_caller
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_no_row_key_raw_or_hashed_reaches_an_element_or_test
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_a_recipe_with_staging_is_never_run_over_one_source_s_rows
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_a_recipe_with_staging_commits_its_steps_as_they_are
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_run.py::test_test_and_the_load_reject_the_same_rows
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py::test_two_concurrent_runs_of_one_source_never_share_a_raw_file
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py::test_a_staged_run_meters_the_rows_its_steps_staged_and_their_parquet
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py::test_a_withdrawing_refresh_of_a_staged_pipeline_is_refused_in_words
+PASSED ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py::test_a_run_s_metering_carries_what_its_steps_staged_and_none_for_an_unstaged_run
+PASSED ../OspreyFlow_Build/tests/ingest/test_phase7_exit.py::test_visits_and_contacts_runs_with_every_element_traceable
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_hotlist_create_and_list_round_trip
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_monitor_create_requires_owning_the_pattern_first
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_b14_an_alert_opens_at_its_address_in_its_case_with_its_entities
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_pool_with_no_declared_minimum_is_named
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_cross_cutting_no_filter_removes_a_node_only_dims
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py::test_starting_the_conduit_stamps_legacy_pins_before_it_flags
+PASSED ../OspreyFlow_Build/tests/services/api/test_pin_calls_refresh_live.py::test_the_pin_call_file_read_again_creates_nothing_and_holds_each_event_once
+PASSED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_revert_restores_them
+PASSED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_row_that_comes_back_is_loaded_again_once
+PASSED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_row_dropped_again_after_coming_back_is_left_in_place_in_words
+PASSED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_returning_rows_load_reverts_and_the_chain_unwinds_live
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_item_is_read_only_by_someone_who_may_view_everything_it_rests_on
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_reorder_moves_only_the_readers_own_slots
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_the_draft_and_the_history_say_withheld_as_a_yes_or_no
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_entity_item_is_withheld_when_the_reader_cannot_see_it_now
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_assessment_is_frozen_as_written
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_note_is_marked_as_its_author_says_never_above_their_clearance
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_published_version_is_unchanged_after_the_draft_is_edited
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_refreshed_snapshot_keeps_the_old_one_in_history
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_the_history_says_withheld_when_an_earlier_snapshot_is_one_the_reader_may_not_see
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_publisher_cannot_publish_what_they_cannot_see
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_reading_published_packs_needs_read_reports_and_a_level
+PASSED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_assembling_and_publishing_need_editor_and_record_assessment
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py:368: spaCy is not installed here
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py:406: spaCy is not installed here
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py:433: spaCy is not installed here
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:230: seeds the whole dataset against real stores: set OSPREYFLOW_RUN_SLOW=1
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:294: seeds the whole dataset against real stores: set OSPREYFLOW_RUN_SLOW=1
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:396: seeds the whole dataset against real stores: set OSPREYFLOW_RUN_SLOW=1
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:424: seeds the whole dataset against real stores: set OSPREYFLOW_RUN_SLOW=1
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:381: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:397: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:832: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1019: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1246: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1297: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1337: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1382: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1482: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1506: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1537: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1571: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1611: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1670: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1834: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1880: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1903: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:1949: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2017: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2108: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2189: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2287: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2356: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2389: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2492: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2580: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+SKIPPED [1] ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py:2719: needs a rendered local-lite deployment with --demo-analyst; opt in with OSPREY_TEST_OVER_THE_WIRE=1 and OSPREY_LIVE_INVESTIGATION_ID
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py::test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+7 failed, 74 passed, 34 skipped, 1 warning in 1213.10s (0:20:13)
+# live_set exit 1
+.FF.                                                                     [100%]
+=================================== FAILURES ===================================
+_____________ test_the_rehearsal_reset_restores_the_starting_state _____________
+
+seeded = "Loading as osprey-demo-engineer, the demo engineer's username: no --run-as was given, so this is a local stack withou...nIf a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes\n"
+
+    async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> None:
+        ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+        reports_id = seed_pid.reports_recipe_id()
+        plan = pid_plan.build_plan("demo")
+        async with opened() as live:
+            # The starting state (ADR-127 Amendment 45): the reports recipe a draft, mapped from the
+            # committed file, neither verified nor published, listed once, not live.
+            assert reports_id not in [r.recipe_id for r in await live.store.feeding([PID.id])], (
+                "the reports recipe is not published at the start"
+            )
+            drafts = [
+                d for d in await live.store.list_drafts(live.persona) if d.recipe_id == reports_id
+            ]
+            committed = seed_pid._recipe(seed_pid.reports_recipe_file())
+            assert len(drafts) == 1 and drafts[0].row_template == committed.row_template
+            assert drafts[0].verified_at is None
+            start_analysts = await _make_an_analysts_link(live, plan)
+            start = await snapshot(live)
+            start_version = drafts[0].version
+            start_reports = (seed_pid.listed_folder(INGEST) / pid_files.REPORTS).read_bytes()
+    
+            # Chapter 4: the fallback publication, the reports (twice), then the incident links.
+            fallback_principal = live.persona.model_copy(update={"datasets": [PID.id]})
+            published = await seed_pid.publish_reports_fallback(
+                live.store, fallback_principal, ontology=ontology, scheme=scheme, repo_root=RECIPES,
+                commit=commit_recipe_file, audit=live.resources.audit, now=datetime.now(UTC),
+                source_location=seed_pid.source_of(INGEST, pid_files.REPORTS),
+            )  # fmt: skip
+            assert published.status is StudioRecipeStatus.PUBLISHED and published.pipeline is not None
+            # The deployment's own path: its real job queue and its configured switch (off).
+            deps = live.resources.run_deps()
+            assert deps.config.post_ingest_resolution is False
+            queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+            queued_before = await live.resources.valkey.xlen(queue)
+            rows = {
+                reports_id: published,
+                seed_pid.incidents_recipe_id(): await live.store.get(seed_pid.incidents_recipe_id()),
+                seed_pid.comms_recipe_id(): await live.store.get(seed_pid.comms_recipe_id()),
+            }
+    
+            async def run(item: seed_pid.Resolved) -> Any:
+                return await run_recipe_as(
+                    deps, principal=live.persona, recipe=rows[item.recipe_id],
+                    investigation_id=live.case_id, source_location=item.source, trigger="manual",
+                )  # fmt: skip
+    
+            stages = [seed_pid.resolve(s, INGEST) for s in pid_files.SEED_ORDER[15:]]
+            loaded = await seed_pid.loaded_so_far(live.resources.recipe_runs, live.case_id, stages)
+>           reports_report = (await seed_pid.run_stages(stages[:1], loaded, run=run))[0].report
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:342: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/seed_pid.py:829: in run_stages
+    report = await run(item)
+             ^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:335: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+services/api/recipe_run.py:248: in _execute_recipe_run
+    report = await run_published_pipeline(
+services/api/pipeline_run.py:704: in run_published_pipeline
+    branch_report = await run_published_recipe(
+services/api/studio_publish.py:713: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:713: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pid-seed-live/ingest/uploaded/prison-intelligence/pid_intel_reports.csv'
+dataset_id = 'prison-intelligence'
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+>           raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+E           services.api.studio_profile.SourceUnreadableError: That file is not in the ingest folder. Choose it from the folder's files, or upload it.
+
+services/api/studio_profile.py:106: SourceUnreadableError
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job _____
+
+seeded = "Loading as osprey-demo-engineer, the demo engineer's username: no --run-as was given, so this is a local stack withou...nIf a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes\n"
+
+    async def test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job(seeded: str) -> None:
+        ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+        async with opened(resolution=True) as live:
+            deps = live.resources.run_deps()
+            assert deps.config.post_ingest_resolution is True
+            queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+            before = await live.resources.valkey.xlen(queue)
+>           published = await seed_pid.publish_reports_fallback(
+                live.store,
+                live.persona.model_copy(update={"datasets": [PID.id]}),
+                ontology=ontology, scheme=scheme, repo_root=RECIPES, commit=commit_recipe_file,
+                audit=live.resources.audit, now=datetime.now(UTC),
+            )  # fmt: skip
+E           TypeError: publish_reports_fallback() missing 1 required keyword-only argument: 'source_location'
+
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:403: TypeError
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+==================================== PASSES ====================================
+_______________________ test_a_second_seed_adds_nothing ________________________
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_the_demo_analyst_fetches_one_picture_through_the_picture_route ______
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+PASSED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_the_demo_analyst_fetches_one_picture_through_the_picture_route
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_the_rehearsal_reset_restores_the_starting_state
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job
+2 failed, 2 passed in 2617.06s (0:43:37)
+# seed exit 1
+# remote exit 0

@@ -59,23 +59,10 @@ FROM python:3.12-slim
 # on packages this service does not touch.
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-# **`git`, because the Conduit shells out to it and the image did not have it.**
-# `09_INGEST_STUDIO.md` §6: "Publishing writes the recipe to version control, not only to the
-# database. The studio is the editor; the repository is the record." `services/api/studio_publish.
-# py` implements that with `asyncio.create_subprocess_exec("git", ...)`, so the binary is a
-# runtime dependency of the Conduit in exactly the way a Python package is — and it was absent
-# from every image this project has ever built. Publish returned a bare 500
-# (`FileNotFoundError` from the exec) in every rendered deployment, while
-# `tests/ingest/test_studio_publish_pipeline.py` passed throughout because it runs on the host,
-# where `git` exists and the test `git init`s its own repository. Round 13bf, found walking the
-# chain over the wire. `tests/test_connectors_are_carried_into_the_image.py` is what fails if it
-# is dropped again.
-RUN apt-get update && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/*
-# `git` is GPL-2.0-only, which the licence register does not pass: declared, so `make licence-check`
-# names it on every run. The owner's ruling of 9 November 2026: replaced by dulwich (Apache-2.0),
-# studio-b's carry in L1.7a, and then removed from this image.
-LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"
+# No `git`: publishing commits a recipe in-process with dulwich (Apache-2.0), so nothing this image
+# carries execs the binary, which is GPL-2.0-only (the owner's ruling of 9 November 2026; ADR-140
+# Amendment 17). `tests/test_connectors_are_carried_into_the_image.py` fails if `git` is installed
+# again, and `make licence-check` names it as an offender.
 
 COPY --from=java /opt/jre /opt/java
 LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"

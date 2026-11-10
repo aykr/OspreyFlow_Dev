@@ -18,13 +18,29 @@ ledger now keeps each load's record (ADR-127 decision 6).
 from __future__ import annotations
 
 import asyncio
+import fcntl
+import logging
 import os
-from collections.abc import Collection, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager, AsyncExitStack
+import re
+import secrets
+import shutil
+import stat
+import tempfile
+import threading
+import time
+from collections.abc import Collection, Iterator, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, contextmanager, suppress
 from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
+from dulwich.config import ConfigFile, StackedConfig
+from dulwich.errors import NotGitRepository
+from dulwich.index import index_entry_from_stat, validate_path
+from dulwich.object_store import commit_tree_changes, tree_lookup_path
+from dulwich.objects import ZERO_SHA, Blob, Commit, ObjectID, Tree
+from dulwich.refs import HEADREF, Ref
+from dulwich.repo import Repo
 from services.ingest.engine import (
     RowRejected,
     recipe_handlings,
@@ -113,7 +129,8 @@ fixture) and so never exercised this default at all.
 
 
 class GitCommitError(Exception):
-    """Raised when `git add`/`git commit` fails for any reason other than
+    """Raised when committing a published recipe fails (dulwich since the owner's ruling of
+    9 November 2026; the `git` binary before) for any reason other than
     "nothing to commit" (treated as success below — republishing identical
     content is not an error). Never swallowed into a bare 500: the registry
     row is not flipped to `published` unless the commit that makes "the
@@ -240,38 +257,292 @@ def recipe_git_relative_path(recipe_id: str) -> str:
     return f"recipes/{recipe_id}.yaml"
 
 
-async def _run_git(*args: str, cwd: Path) -> tuple[int, str]:
-    proc = await asyncio.create_subprocess_exec(
-        "git",
-        *args,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-    stdout, _ = await proc.communicate()
-    return proc.returncode or 0, stdout.decode(errors="replace")
+#: The platform's own identity on every publish commit (§6: `published_by` on the registry row
+#: records the accountable human; the commit is the platform's record of what was published).
+_COMMIT_IDENTITY = b"OspreyFlow Ingest Studio <osprey@localhost>"
+
+#: A recipe id is one plain file name under `recipes/`: a letter or digit, then letters, digits,
+#: `.`, `_` or `-`. So `recipes/<id>.yaml` can name no other directory, no `..` and no `.git`
+#: (the independent review of L1.7a, item 1). Every id the Studio mints (a ULID) and every
+#: committed recipe's id (`site-grid`, `osm-gazetteer`, the seed's) is of this shape.
+_RECIPE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,199}")
+
+#: The file under the repository's git directory that a publish holds an exclusive `flock` on,
+#: from writing the recipe file to moving `HEAD`.
+PUBLISH_LOCK_NAME = "osprey-publish.lock"
+
+#: How long a publish waits for another to let the repository go before it is refused (a seed
+#: process stopped while holding the lock must not hang every publish; the re-review's minor).
+PUBLISH_LOCK_WAIT_SECONDS = 30.0
+
+#: The directory a first use makes its git directory in before renaming it into place; one a
+#: crashed first use left is swept once it is older than any live first use could be.
+_ASIDE_PREFIX = ".git-init-"
+_ASIDE = re.compile(re.escape(_ASIDE_PREFIX) + r"[a-z0-9_]{8}")
+_ASIDE_STALE_SECONDS = 600.0
+
+#: A temporary file `_write_recipe_file` makes beside a recipe; one a crash left is swept.
+_TEMPORARY = re.compile(r"\.[A-Za-z0-9][A-Za-z0-9._-]*\.yaml\.[0-9a-f]{16}\.tmp")
+
+#: One publish at a time in this process, from writing the file to moving `HEAD`, and, with the
+#: `flock` on `PUBLISH_LOCK_NAME`, one at a time across processes (the Prison Intelligence seed
+#: beside a running Conduit): the index is read, changed and written under both, so neither loses
+#: the other's entry, and two publishes never refuse each other or commit each other's bytes. A
+#: writer that takes neither, such as an operator's own `git commit` on the volume, is held off at
+#: `HEAD` by the compare-and-swap, and at the index only by git's own `index.lock` on each write,
+#: so its index change and a publish's can still race; the commit it makes cannot be lost.
+_REPOSITORY_LOCK = threading.Lock()
+
+_log = logging.getLogger(__name__)
 
 
-async def _ensure_repository(repo_root: Path) -> None:
-    """Make `repo_root` a git repository if it is not one already — round 13bf.
+def _open_repository(repo_root: Path) -> Repo:
+    """The repository at `repo_root`, made on first use — round 13bf.
 
     A rendered deployment's recipe root is an empty directory on a fresh persistent volume, so
-    the first publish would otherwise fail `git add` with "not a git repository" and surface as
-    the same bare 500 this round came to fix. Initialising on first use keeps the operator's
-    install step at "start the deployment", which is what `05_DEPLOYMENT.md` promises.
+    initialising on first use keeps the operator's install step at "start the deployment", which
+    is what `05_DEPLOYMENT.md` promises. `HEAD` names `refs/heads/main`, as
+    `git init --initial-branch=main` made it before the dulwich swap; a repository the old code
+    (or anyone) made is opened as it is, on whichever ref its `HEAD` names.
 
-    The identity is set locally on this repository, never globally: the commits are the
-    platform's own record of what was published, not any person's, and `published_by` on the
-    registry row is where the accountable human is recorded (§6).
+    The first use cannot race another process's (the re-review, item 3): the git directory is
+    made beside the root's own, its `HEAD` already naming `refs/heads/main`, and renamed into
+    place in one step. If another process's lands first, the rename fails and that repository is
+    opened instead, so neither publish is refused and none lands on a ref `HEAD` then leaves. The
+    user's and the system's git config are not read for it (such as the first ref it names).
+
+    The repository's own config is read when it is opened (its format, `core.bare` and
+    `core.worktree`); one that is bare or names a worktree other than `repo_root` is refused, so
+    the index can describe no tree but the one the file is written to.
     """
-    if (repo_root / ".git").exists():
-        return
+    try:
+        repo = Repo(str(repo_root))
+    except NotGitRepository:
+        repo = _initialise(repo_root)
+    own = repo_root / ".git"
+    try:
+        own_is_a_directory = stat.S_ISDIR(os.lstat(own).st_mode)
+    except FileNotFoundError:
+        own_is_a_directory = False
+    if not own_is_a_directory or Path(repo.commondir()).resolve() != own.resolve():
+        # A `.git` file naming another repository's directory, a link at `.git`, or a linked
+        # worktree's `commondir`: the objects, refs and config written or read would be another
+        # repository's. Checked after the open, so a link put there by a first use's rival is
+        # seen too.
+        repo.close()
+        raise GitCommitError("the recipe repository's .git is not a directory of its own")
+    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():
+        repo.close()
+        raise GitCommitError(
+            "the recipe repository is bare or its config names another working tree"
+        )
+    return repo
+
+
+def _sweep_asides(repo_root: Path) -> None:
+    """Remove an aside directory a crashed first use left, once older than any live first use
+    could be; only `tempfile.mkdtemp`'s own shape, so an operator's directory is never touched."""
+    for left in repo_root.iterdir():
+        if _ASIDE.fullmatch(left.name):
+            with suppress(OSError):
+                if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:
+                    shutil.rmtree(left)
+
+
+def _initialise(repo_root: Path) -> Repo:
     repo_root.mkdir(parents=True, exist_ok=True)
-    code, output = await _run_git("init", "--initial-branch=main", cwd=repo_root)
-    if code != 0:
-        raise GitCommitError(f"git init in {str(repo_root)!r} failed: {output}")
-    await _run_git("config", "user.email", "osprey@localhost", cwd=repo_root)
-    await _run_git("config", "user.name", "OspreyFlow Ingest Studio", cwd=repo_root)
+    _sweep_asides(repo_root)
+    making = Path(tempfile.mkdtemp(prefix=_ASIDE_PREFIX, dir=repo_root))
+    try:
+        with Repo.init(str(making), config=StackedConfig([ConfigFile()])) as made:
+            made.refs.set_symbolic_ref(HEADREF, Ref(b"refs/heads/main"))
+        os.rename(making / ".git", repo_root / ".git")
+    except OSError:
+        if not (repo_root / ".git" / "objects").is_dir():
+            raise  # no other process's repository is there: the real failure, kept
+    finally:
+        shutil.rmtree(making, ignore_errors=True)
+    return Repo(str(repo_root))
+
+
+def _held_off() -> GitCommitError:
+    return GitCommitError(
+        f"another publish has held the recipe repository for over {PUBLISH_LOCK_WAIT_SECONDS:g} s; "
+        "publish again"
+    )
+
+
+@contextmanager
+def _publish_lock(repo: Repo, deadline: float) -> Iterator[None]:
+    """The exclusive `flock` on `PUBLISH_LOCK_NAME`, its file opened without following a link,
+    waited for until `deadline` (the same one the in-process lock was waited for under)."""
+    path = os.path.join(repo.controldir(), PUBLISH_LOCK_NAME)
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o666)
+    except OSError as exc:
+        raise GitCommitError(
+            f"the recipe repository's {PUBLISH_LOCK_NAME} is a symbolic link or cannot be opened"
+        ) from exc
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise _held_off() from None
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.stat_result:
+    """Write `data` to `relative_path` under `repo_root` without following a symbolic link at any
+    component below the root (item 1): each directory is opened with `O_NOFOLLOW` relative to the
+    one above it, a link where the file goes is refused, and the bytes go to a new file beside it
+    that `os.replace` then puts in its place. Returns the written file's own `lstat`."""
+    *directories, name = relative_path.split("/")
+    fd = os.open(repo_root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for directory in directories:
+            try:
+                os.mkdir(directory, dir_fd=fd)
+            except FileExistsError:
+                pass
+            try:
+                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            except OSError as exc:
+                raise GitCommitError(
+                    f"{directory!r} in the recipe repository is a symbolic link or not a "
+                    f"directory, so {relative_path!r} is not written"
+                ) from exc
+            os.close(fd)
+            fd = inner
+        try:
+            existing = os.lstat(name, dir_fd=fd)
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(existing.st_mode):
+                raise GitCommitError(
+                    f"{relative_path!r} in the recipe repository is a symbolic link or not a "
+                    "file, so it is not written"
+                )
+        # A temporary file a crash left behind (under the lock, so it is no live publish's).
+        for left in os.listdir(fd):
+            if _TEMPORARY.fullmatch(left):
+                with suppress(FileNotFoundError):
+                    os.unlink(left, dir_fd=fd)
+        temporary = f".{name}.{secrets.token_hex(8)}.tmp"
+        out = os.open(
+            temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666, dir_fd=fd
+        )
+        try:
+            with os.fdopen(out, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
+            os.fsync(fd)
+        except BaseException:
+            with suppress(FileNotFoundError):
+                os.unlink(temporary, dir_fd=fd)
+            raise
+        return os.lstat(name, dir_fd=fd)
+    finally:
+        os.close(fd)
+
+
+def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str) -> None:
+    """Commit `data` at `relative_path` exactly as `git add <path>` then
+    `git commit -m <message> -- <path>` did, with dulwich and without the `git` binary (the
+    owner's ruling of 9 November 2026). The commit object is built here rather than through
+    dulwich's porcelain on purpose: porcelain reads the repository's config, and its config can
+    name a hook, a signer, a file-system monitor, a filter or a credential helper, each an
+    executable it would run. No config-driven program runs: the repository's own config is read
+    only for its format, `core.bare` and `core.worktree` (`_open_repository`), and the index is
+    opened with an empty config, not the user's or the system's.
+
+    Only this one path changes between the parent's tree and the new one, so anything else staged
+    in the index stays staged and out of the commit, as `git commit -- <path>` left it. A file
+    whose bytes are already the committed ones makes no commit (republishing identical content is
+    not an error), but its index entry is still refreshed.
+
+    The file is written, staged and committed under the locks above, from `data` itself, so a
+    concurrent publish of the same recipe cannot commit the other's bytes under this one's
+    message. The index is written before `HEAD` moves, the order `git add` then `git commit` had:
+    a failure after the index leaves the recipe staged and uncommitted, never committed while the
+    registry row is left unpublished.
+    """
+    path = relative_path.encode("utf-8")
+    # One limit for both locks, so publishes queued behind a held `flock` are refused within one
+    # wait, none holding a worker thread for a wait of its own after another's.
+    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS
+    if not _REPOSITORY_LOCK.acquire(timeout=PUBLISH_LOCK_WAIT_SECONDS):
+        raise _held_off()
+    try:
+        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):
+            _sweep_asides(repo_root)
+            written = _write_recipe_file(repo_root, relative_path, data)
+            _stage_and_commit(repo, path, written, data, message)
+    finally:
+        _REPOSITORY_LOCK.release()
+
+
+def _stage_and_commit(
+    repo: Repo, path: bytes, written: os.stat_result, data: bytes, message: str
+) -> None:
+    blob = Blob.from_string(data)
+    head: ObjectID | None
+    try:
+        head = repo.refs[HEADREF]
+    except KeyError:
+        head = None  # `HEAD` names a ref with no commit yet
+    parent: Commit | None = None
+    if head is not None:
+        found = repo[head]
+        if not isinstance(found, Commit):
+            raise GitCommitError("the recipe repository's HEAD is not a commit")
+        parent = found
+    parent_tree = parent.tree if parent is not None else None
+
+    # What `git add` did: the index says the working-tree file is this blob, so `git status`
+    # on the volume is clean once the commit lands.
+    repo.object_store.add_object(blob)
+    index = repo.open_index(config=ConfigFile())  # its settings from no config, not the user's
+    index[path] = index_entry_from_stat(written, blob.id)
+    index.write()
+
+    unchanged = False
+    if parent_tree is not None:
+        try:
+            _, committed = tree_lookup_path(repo.object_store.__getitem__, parent_tree, path)
+            unchanged = committed == blob.id
+        except KeyError:
+            pass
+
+    if not unchanged:
+        base: ObjectID | Tree = parent_tree if parent_tree is not None else Tree()
+        commit = Commit()
+        commit.tree = commit_tree_changes(repo.object_store, base, [(path, 0o100644, blob.id)])
+        commit.parents = [head] if head is not None else []
+        commit.author = commit.committer = _COMMIT_IDENTITY
+        commit.author_time = commit.commit_time = int(time.time())
+        commit.author_timezone = commit.commit_timezone = 0
+        commit.message = message.encode("utf-8") + b"\n"  # `git commit -m` ends it so
+        repo.object_store.add_object(commit)
+        if not repo.refs.set_if_equals(
+            HEADREF, head if head is not None else ZERO_SHA, commit.id,
+            committer=_COMMIT_IDENTITY, message=b"commit: " + message.encode("utf-8"),
+        ):  # fmt: skip
+            raise GitCommitError(
+                f"the recipe repository's HEAD moved while {path.decode()!r} was being "
+                "committed; publish again"
+            )
 
 
 async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROOT) -> str:
@@ -280,7 +551,7 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     only to the database." Returns the git-relative path stored as the
     registry row's own `git_path`. A commit with nothing changed
     (republishing byte-identical content) is not an error — every other
-    non-zero exit is.
+    failure is.
 
     **A stated gap, not a silent one**: this commits to whichever local checkout `repo_root` names —
     correct for the single-instance dev deployment this phase targets, not
@@ -302,28 +573,27 @@ async def commit_recipe_file(
     <id> v<version>`, and returns the git-relative path. The Prison Intelligence seed copies each
     committed recipe here byte for byte (ADR-127 Amendment 23), which `serialise_recipe` would not
     keep (it drops comments and reorders). A commit with nothing changed is not an error; every
-    other non-zero exit is."""
+    other failure raises `GitCommitError`.
+
+    The commit is dulwich's (`_commit_file`), run on a worker thread because dulwich's file I/O is
+    synchronous; the repository it writes is an ordinary git repository, which `git log` reads."""
+    if _RECIPE_ID.fullmatch(recipe_id) is None:
+        raise GitCommitError(
+            f"the recipe id {recipe_id!r} is not one file name the recipe repository can hold"
+        )
     relative_path = recipe_git_relative_path(recipe_id)
-    absolute_path = repo_root / relative_path
-    absolute_path.parent.mkdir(parents=True, exist_ok=True)
-    absolute_path.write_bytes(data)
-
-    await _ensure_repository(repo_root)
-
-    code, output = await _run_git("add", relative_path, cwd=repo_root)
-    if code != 0:
-        raise GitCommitError(f"git add {relative_path!r} failed: {output}")
-
-    code, output = await _run_git(
-        "commit",
-        "-m",
-        f"ingest: publish {recipe_id} v{version}",
-        "--",
-        relative_path,
-        cwd=repo_root,
-    )
-    if code != 0 and "nothing to commit" not in output:
-        raise GitCommitError(f"git commit {relative_path!r} failed: {output}")
+    if not validate_path(relative_path.encode("utf-8")):  # dulwich's own check, as git's fsck
+        raise GitCommitError(f"{relative_path!r} is not a path the recipe repository can hold")
+    message = f"ingest: publish {recipe_id} v{version}"
+    try:
+        await asyncio.to_thread(_commit_file, repo_root, relative_path, data, message)
+    except GitCommitError:
+        raise
+    except Exception as exc:  # dulwich's errors share no base; any failure is this typed one
+        # The text reaches the client (app.py's handler), so it names the recipe's path and the
+        # failure's kind, never the volume's path or the exception's own text; both are logged.
+        _log.exception("committing %s in %s failed", relative_path, repo_root)
+        raise GitCommitError(f"committing {relative_path!r} failed ({type(exc).__name__})") from exc
     return relative_path
 
 

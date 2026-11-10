@@ -1,0 +1,8 @@
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_second_publish_keeps_the_first_in_the_history
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_commits_on_top_of_a_repository_real_git_made
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
+2 failed, 5 passed in 1.48s

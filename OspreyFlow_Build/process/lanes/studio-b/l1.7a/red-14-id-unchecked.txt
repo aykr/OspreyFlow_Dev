@@ -1,0 +1,43 @@
+# head 22ff1e3; plant: neither the id's pattern nor dulwich's path check asked
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
+# must fail: test_a_recipe_id_that_is_not_one_file_name_is_refused[../x], test_a_recipe_id_that_is_not_one_file_name_is_refused[.git/x], test_a_recipe_id_that_is_not_one_file_name_is_refused[../../outside], test_a_recipe_id_that_is_not_one_file_name_is_refused[a/b], test_a_recipe_id_that_is_not_one_file_name_is_refused[..], test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden], test_a_recipe_id_that_is_not_one_file_name_is_refused[]; all failed: yes
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_second_publish_keeps_the_first_in_the_history
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_commits_on_top_of_a_repository_real_git_made
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_concurrent_publishes_each_commit_their_own_bytes
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_root_inside_another_repository_gets_its_own
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_detached_head_moves_as_git_commit_moved_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipes_directory_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipe_file_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_repository_whose_config_names_another_tree_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[01JC5Q8K3ZP6V2T9XR4W7HMNBD]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[../x] - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.git/x] - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[../../outside] - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[a/b] - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[..] - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden] - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[] - Failed: DID NOT RAISE GitCommitError
+7 failed, 32 passed in 8.59s

@@ -1,0 +1,12 @@
+# services/api/studio_publish.py as on main before the swap (git CLI)
+        offenders = [
+>       assert offenders == [], (
+            f"of 9 November 2026); commit with dulwich as studio_publish.py does: {offenders}"
+E       AssertionError: code the Conduit's image carries execs `git`, which leaves the image (the owner's ruling of 9 November 2026); commit with dulwich as studio_publish.py does: ['OspreyFlow_Core/services/api/studio_publish.py: \'create_subprocess_exec(\\n        "git\'']
+PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_the_repository_has_connector_profiles_to_carry
+PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_carries_the_connector_profiles
+PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_the_git_scan_finds_the_call_the_conduit_used_to_make
+PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_carries_every_product_file_a_route_loads_at_runtime
+PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_no_conduit_module_loads_a_path_under_tests
+FAILED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_nothing_the_conduit_image_carries_execs_git
+1 failed, 5 passed in 0.32s
