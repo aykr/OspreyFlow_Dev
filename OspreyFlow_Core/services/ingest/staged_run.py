@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -51,6 +52,8 @@ from .staging_catalogue import (
     stage_sources_and_lists,
     stage_table_counted,
 )
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -243,13 +246,32 @@ async def prepare_staged_load(
     )
 
 
+#: The ceiling's refusals made by `run_recipe`'s own row check, before raw staging, its first write
+#: (ADR-148 Amendment 2 decision 2). The backstop's ("write") comes later, when the load's raw and
+#: resolved rows are already staged, so it is not answered by removing the step tables alone.
+ROW_REFUSALS = frozenset({"load", "unreadable"})
+
+
 def remove_step_tables(prepared: PreparedStaging, storage: ObjectStorageConfig) -> None:
-    """Remove the step tables a staged load wrote (ADR-148 Amendment 2 decision 2, L1.10b): a load
-    the deployment's ceiling refuses is judged after them, since its rows are the last step's table,
-    and a refused load leaves nothing behind. Only this load's own tables, by the paths it wrote."""
+    """Remove the step tables a staged load wrote (ADR-148 Amendment 3 point 2): a load the
+    deployment's ceiling refuses is judged after them, since its rows are the last step's table,
+    and a refused load leaves nothing behind. Only this load's own tables, by the paths it wrote.
+    A table the store will not remove is logged and the rest still removed: the caller's refusal,
+    not a store error, is what the person is told."""
     fs = _staging.filesystem(storage)
     for path in prepared.paths.values():
-        fs.delete_file(path)
+        try:
+            fs.delete_file(path)
+        except OSError as error:
+            _log.warning("a refused load's step table %s was not removed: %s", path, error)
+
+
+async def remove_step_tables_on(
+    refused: AboveTheDeploymentCeiling, prepared: PreparedStaging, storage: ObjectStorageConfig
+) -> None:
+    """On the ceiling's row refusal, the step tables removed (`remove_step_tables`)."""
+    if refused.kind in ROW_REFUSALS:
+        await asyncio.to_thread(remove_step_tables, prepared, storage)
 
 
 def finish_staged_report(report: LoadReport, prepared: PreparedStaging) -> None:
@@ -314,8 +336,8 @@ async def run_staged_recipe(
             stage_raw=prepared.stage_raw,
             **engine,
         )
-    except AboveTheDeploymentCeiling:
-        await asyncio.to_thread(remove_step_tables, prepared, storage)
+    except AboveTheDeploymentCeiling as refused:
+        await remove_step_tables_on(refused, prepared, storage)
         raise
     finish_staged_report(report, prepared)
     return StagedLoad(

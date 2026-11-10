@@ -22,6 +22,7 @@ from services.ingest.recipe_rules import marked_columns
 
 from ontology.handling import load_uk_le_scheme
 from schemas.ingest import Recipe
+from tests.ingest.recipe_test_support import ValidatingGraph, local_staging  # noqa: F401
 
 from .test_seed_internal import SUBS, Runner
 
@@ -144,22 +145,55 @@ class _Recording:
         return [e.id for e in edges]
 
 
+class _Stored(ValidatingGraph):
+    """The test store, answering a lookup with what it holds, as HMP's places step reads it."""
+
+    async def find_node(self, entity_type: str, field: str, value: str, principal: Any) -> Any:
+        for node in [*self.committed_nodes, *self.open_nodes]:
+            if node.type == entity_type and str(node.properties.get(field)) == value:
+                return node
+        return None
+
+    async def list_nodes(self, entity_type: str, principal: Any, *, cursor: Any = None) -> Any:
+        held = [n for n in self.committed_nodes if n.type == entity_type]
+        return SimpleNamespace(nodes=held, next_cursor=None)
+
+
 def test_hmps_declaration_is_the_highest_it_writes() -> None:
-    """HMP's recipes load at OFFICIAL with no column setting a marking, its incident links at
-    OFFICIAL, and its network holds one SECRET conflict: SECRET is the highest, and reached."""
-    from demo_fixtures import hmp_graph
-    from demo_fixtures.hmp_network import plan_network
+    """The seed's own three steps, run against a store that records them: the recipes (through the
+    engine, which judges them as a load), the network and the places; with every event they give
+    the analytics store and the map's geometry. One SECRET conflict, by design: SECRET is the
+    highest, and reached."""
+    from demo_fixtures.hmp_graph import build_hmp_graph
+    from demo_fixtures.hmp_network import geometry_records, write_hmp_network, write_hmp_places
+    from ontology.packs import load_deployment_ontology
+    from schemas.domain import Principal
 
     declared = DATASETS["hmp"].highest_marking
     assert declared == "SECRET"
-    for path in sorted(hmp_graph.FIXTURES.glob("hmp_*_recipe.yaml")):
-        _recipe_within(load_recipe(path), [], "OFFICIAL")
-        assert not marked_columns(load_recipe(path).row_template, None), path.name
-    assert _within("OFFICIAL", hmp_graph._HANDLING.classification)
-    network = plan_network()
-    marked = {e.classification for e in network.edges}
-    assert all(_within(declared, c) for c in marked)
+    ontology = load_deployment_ontology()
+    graph = _Stored(ontology)
+    seeder = Principal(id="seed", clearance="SECRET", org_unit="hmp-hollywood")
+
+    async def seed() -> list[Any]:
+        built = await build_hmp_graph(
+            graph=graph, ontology=ontology, principal=seeder, investigation_scope="case-hmp"
+        )
+        network = await write_hmp_network(
+            graph=graph, person_ids=built.person_node_ids, principal=seeder,
+            investigation_scope="case-hmp",
+        )  # fmt: skip
+        assert await write_hmp_places(graph=graph, principal=seeder)
+        return [*built.current_window_events, *built.prior_period_events, *network]
+
+    events = asyncio.run(seed())
+    written = [*graph.committed_nodes, *graph.committed_edges, *events, *geometry_records()]
+    assert graph.committed_nodes and graph.committed_edges and events
+    marked = {w.handling.classification for w in written}
+    assert all(_within(declared, c) for c in marked), "a write above the declaration"
     assert declared in marked, "a declaration higher than anything the pack writes"
+    # Everything but the one SECRET conflict and its events is OFFICIAL.
+    assert marked == {"OFFICIAL", "SECRET"}, marked
 
 
 def test_fixture_corps_declaration_is_the_highest_it_writes() -> None:
@@ -304,13 +338,6 @@ def test_enrons_declaration_holds_for_every_write() -> None:
     assert events and all(e.handling == probe for e in events)
 
 
-#: Every pack whose declaration a test in this file proves.
-PROVED = {
-    "hmp", "ledger", "fixture-corp", "paysim", "prison-intelligence",
-    "prison-intelligence-scale", "cyber-intrusion", "public", "enron",
-}  # fmt: skip
-
-
 def test_cyber_intrusions_declaration_holds_for_every_write() -> None:
     from scripts.seed_cyber_intrusion import edge_writes, node_writes
 
@@ -346,3 +373,18 @@ def test_paysims_declaration_holds_for_every_write() -> None:
     nodes, edges = build_graph_writes(rows, created_by="seed", handling=probe)
     assert nodes and edges
     assert all(w.handling == probe for w in [*nodes, *edges]), "a write at another marking"
+
+
+#: Every pack and the test in this file that proves its declaration: the functions themselves, so a
+#: pack named here without a proof does not import (the lane review of L1.10b, item 12).
+PROVED = {
+    "hmp": test_hmps_declaration_is_the_highest_it_writes,
+    "ledger": test_ledgers_declaration_holds_for_every_write,
+    "fixture-corp": test_fixture_corps_declaration_is_the_highest_it_writes,
+    "paysim": test_paysims_declaration_holds_for_every_write,
+    "prison-intelligence": test_prison_intelligences_declaration_holds_for_every_write,
+    "prison-intelligence-scale": test_the_scale_cohorts_declaration_holds_for_every_write,
+    "cyber-intrusion": test_cyber_intrusions_declaration_holds_for_every_write,
+    "public": test_the_public_datasets_declaration_holds_for_every_recipe,
+    "enron": test_enrons_declaration_holds_for_every_write,
+}

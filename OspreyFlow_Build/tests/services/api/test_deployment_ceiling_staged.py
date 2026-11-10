@@ -15,7 +15,11 @@ What a mistake would do, and the case that catches it:
 - a run the ceiling passes losing its step tables, which a re-map reads —
   `test_a_staged_run_within_the_ceiling_keeps_its_step_tables`;
 - the staged engine's own load (`run_staged_recipe`) leaving them —
-  `test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal`.
+  `test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal`;
+- a table the store will not remove turning the refusal into a store error, or stopping the rest
+  being removed — `test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was`;
+- the backstop's later refusal ("write"), after the load's raw rows are staged, taken for the row
+  check's — `test_only_the_row_check_s_refusals_remove_the_step_tables`.
 
 The fixture is phase 7's staged pipeline (`test_staged_pipeline_run.py`, synthetic: rule 9), its
 bookings given a `marking` column the booking's classification is bound to.
@@ -27,6 +31,7 @@ import csv
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -187,3 +192,91 @@ async def test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal(
             load_id="ld-run-r", investigation_scope="case-1", storage=STORAGE, scheme=SCHEME,
         )  # fmt: skip
     assert _step_tables(store, "ld-run-r") == [], "a refused staged load left its step tables"
+
+
+def _staged_engine_load(store: Path, load_id: str) -> Any:
+    from services.ingest.staged_run import run_staged_recipe
+    from services.ingest.staging_catalogue import source_table
+
+    from tests.ingest.test_staged_run import _rows, inputs
+
+    sources, lists = inputs()
+    bookings = [
+        {**row, "marking": "SECRET" if row["booking_id"] == PLANTED else "OFFICIAL"}
+        for row in _rows("visit_bookings.csv")
+    ]
+    sources["visit_bookings"] = source_table(
+        "visit_bookings", bookings, load_id="ld-vb-1", key=["booking_id"]
+    )
+    entities = [
+        e.model_copy(update={"handling": {"classification": {"field": "marking"}}})
+        if e.ref == "booking" else e
+        for e in RECIPE.row_template.entities
+    ]  # fmt: skip
+    recipe = RECIPE.model_copy(
+        update={"row_template": RECIPE.row_template.model_copy(update={"entities": entities})}
+    )
+    graph = ValidatingGraph(ONTOLOGY)
+
+    async def load() -> Any:
+        tx = await graph.begin_transaction()
+        return await run_staged_recipe(
+            recipe, sources=sources, lists=lists, dataset_id="pid",
+            graph=graph, ontology=ONTOLOGY, tx=tx, principal=LOADER,  # type: ignore[arg-type]
+            load_id=load_id, investigation_scope="case-1", storage=STORAGE, scheme=SCHEME,
+        )  # fmt: skip
+
+    return load()
+
+
+async def test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was(
+    store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.ingest.recipe_test_support import LocalStore
+
+    monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+    removed = LocalStore.delete_file
+    refused_once: list[str] = []
+
+    def stubborn(self: LocalStore, path: str) -> None:
+        if not refused_once:
+            refused_once.append(path)
+            raise OSError("the store would not remove it")
+        removed(self, path)
+
+    monkeypatch.setattr(LocalStore, "delete_file", stubborn)
+    with pytest.raises(AboveTheDeploymentCeiling) as refused:
+        await _staged_engine_load(store, "ld-run-s")
+    assert refused.value.kind == "load"
+    assert refused_once, "the store was never asked"
+    left = _step_tables(store, "ld-run-s")
+    assert left == [refused_once[0].rsplit("/", 1)[1]], left
+
+
+async def test_only_the_row_check_s_refusals_remove_the_step_tables(
+    tmp_path: Path, store: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.ingest.staged_run import remove_step_tables_on
+
+    monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+    draft, repo = await _published(tmp_path, planted="OFFICIAL")
+    await _run(draft, repo, "run-k")
+    held = _step_tables(store, "run-k")
+    prepared = SimpleNamespace(
+        paths={
+            name.removesuffix(".parquet"): f"{STORAGE.bucket}/loads/run-k/staged/{name}"
+            for name in held
+        }
+    )
+    await remove_step_tables_on(
+        AboveTheDeploymentCeiling("OFFICIAL", "write"),
+        prepared,
+        STORAGE,  # type: ignore[arg-type]
+    )
+    assert _step_tables(store, "run-k") == held
+    await remove_step_tables_on(
+        AboveTheDeploymentCeiling("OFFICIAL", "unreadable"),
+        prepared,
+        STORAGE,  # type: ignore[arg-type]
+    )
+    assert _step_tables(store, "run-k") == []

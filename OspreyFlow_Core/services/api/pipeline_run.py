@@ -89,7 +89,7 @@ from services.ingest.reference_list_import import lists_for_run
 from services.ingest.staged_run import (
     finish_staged_report,
     prepare_staged_load,
-    remove_step_tables,
+    remove_step_tables_on,
 )
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import StagingError
@@ -587,10 +587,10 @@ async def _run_staged_branch(
             sink=sink,
             staged=prepared,
         )
-    except AboveTheDeploymentCeiling:
-        # ADR-148 Amendment 2 decision 2: a marking a column sets is judged by `run_recipe`, after
-        # the step tables were written; a refused load leaves none of them behind.
-        await asyncio.to_thread(remove_step_tables, prepared, storage)
+    except AboveTheDeploymentCeiling as refused:
+        # ADR-148 Amendment 3 point 2: a marking a column sets is judged by `run_recipe`, after the
+        # step tables were written; a load its row check refuses leaves none of them behind.
+        await remove_step_tables_on(refused, prepared, storage)
         raise
     finish_staged_report(branch, prepared)
     if meter is not None:
