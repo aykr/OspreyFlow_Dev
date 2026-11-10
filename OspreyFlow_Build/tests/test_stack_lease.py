@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -625,3 +626,83 @@ def test_a_run_in_the_old_layout_is_seen_and_its_folders_never_pruned(lease, tmp
     assert "osprey-runs/case/.runs/last/pid" in text  # the old place asked
     prune = next(l for l in text.splitlines() if l.startswith("skip=("))
     assert '".runs"' in prune and '".osprey-lease"' in prune
+
+
+
+# --- Every server run names its slowest tests and its wall time (admin's T1 part 1, 10 November 2026) ---------
+# Studio's L1.7 live set ran 2½ hours on stack f with nothing in its log saying where the time went.
+
+
+def _started(text: str) -> str:
+    return next(l for l in text.splitlines() if "nohup setsid" in l)
+
+
+def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its_stack_and_lease(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")  # stack b, on the server
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests").returncode == 0
+    text = log.read_text()
+    export = next(l for l in text.splitlines() if l.startswith("stdin export "))
+    assert "PYTEST_ADDOPTS=--durations=30" in export, export
+    start = _started(text)
+    assert "Wall time:" in start and "stack b, the lease case took at 20" in start, start
+    assert "/wall" in start and "set-up before it" in start, start  # the seconds kept beside the log, for a table
+    assert "cp osprey-runs/case.meta/lease/stack-b.lease/info osprey-runs/case.meta/runs/" in text, text  # kept with the run
+
+
+def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    lease("status")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
+                         cwd=wt / "OspreyFlow_Build", env=env, capture_output=True, text=True)
+    assert off.returncode == 0, off.stderr
+    text = log.read_text()
+    assert "PYTEST_ADDOPTS=--durations=30" in next(l for l in text.splitlines() if l.startswith("stdin export "))
+    start = _started(text)
+    assert "Wall time:" in start and "no stack, no lease" in start, start
+
+
+def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code(lease, tmp_path: Path) -> None:
+    """The start call exactly as ssh received it (after this machine's own quoting), run as the host runs it, with
+    HOME a folder here: red if a lost backslash expands $? or $$ on this machine, or the line goes missing."""
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    home = tmp_path / "home"
+    (home / "osprey-runs" / "case" / "OspreyFlow_Build").mkdir(parents=True)
+    (home / "osprey-runs" / "case.meta" / "lease" / "stack-b.lease").mkdir(parents=True)
+    (home / "osprey-runs" / "case.meta" / "lease" / "stack-b.lease" / "info").write_text("holder=case\n")
+    bin_dir = tmp_path / "bin"
+    # The recording ssh, which also runs the start call (the one holding nohup setsid) on its own stdin, as the
+    # host would; setsid is stood in for here, since macOS has none.
+    (bin_dir / "ssh").write_text(
+        f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\nprintf "%s\\n" "$in" | sed "s/^/stdin /" >> "{log}"\n'
+        f'for a; do last="$a"; done\n'
+        f'case "$last" in *"nohup setsid"*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last";; esac\nexit 0\n'
+    )
+    (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
+    for tool in ("ssh", "setsid"):
+        (bin_dir / tool).chmod(0o755)
+    wt = _lane_worktree(tmp_path)
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "sh", "-c", 'echo hello; echo "runner $(ps -o ppid= -p $PPID)"; exit 7')
+    assert ran.returncode == 0, ran.stderr
+    runs = home / "osprey-runs" / "case.meta" / "runs"
+    run = next(p for p in runs.iterdir() if p.name != "last")
+    for _ in range(100):
+        if (run / "exit").exists():
+            break
+        time.sleep(0.05)
+    assert (run / "exit").read_text().strip() == "7", (run / "log").read_text()
+    assert (run / "wall").read_text().strip().isdigit()
+    lines = (run / "log").read_text().splitlines()
+    # The pid file holds the host's own shell, the one running cmd.sh (what follow's tail --pid waits on).
+    assert lines[1] == f"runner {(run / 'pid').read_text().strip()}", lines
+    assert lines[0] == "hello", lines
+    assert lines[-1].startswith("Wall time: ") and "exit 7 (stack b, the lease case took at 20" in lines[-1], lines
+    assert "set-up before it" in lines[-1], lines
+    assert (run / "lease").read_text() == "holder=case\n"

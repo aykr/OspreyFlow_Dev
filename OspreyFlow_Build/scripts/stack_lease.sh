@@ -85,8 +85,9 @@ follow() {
 # committed), make the venv there, and start the command detached in the same relative folder with the given
 # exports, then follow it. Arguments: lane, host, exports, lease lock name (empty for none), stack name, command.
 run_on_host() {
-  local who="$1" h="$2" exports="$3" lockname="$4" s="$5" top rel rroot rmeta run rc
+  local who="$1" h="$2" exports="$3" lockname="$4" s="$5" top rel rroot rmeta run rc where holder since setup t_setup keep
   shift 5
+  t_setup="$(date +%s)"   # the copy, venv and packages before the command: logged beside its wall time
   rroot="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
   rmeta="$rroot.meta"   # the runs and the lease mirror, beside the copy, never in it
   top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run remote from your lane's checkout." >&2; return 1; }
@@ -133,13 +134,26 @@ for d,ds,fs in os.walk(\".\"):
   # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
   # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
   run="$rmeta/runs/$(date -u +%Y%m%dT%H%M%SZ)"
+  # The log ends with its wall time, naming the stack and lease it ran under (rule 14), and keeps the seconds in
+  # <run>/wall; pytest names its 30 slowest tests, whatever the command (admin's T1 part 1, 10 November 2026).
+  # The lease is named by its holder and since (its lock directory is the same for every lease on a stack); both
+  # are kept to safe characters, since they go inside the single-quoted bash -c below. <run>/lease keeps its info.
+  if [ -n "$lockname" ]; then
+    holder="$(sed -n 's/^holder=//p' "$(lock_of "$s")/info" | tr -cd 'A-Za-z0-9_.-')"
+    since="$(sed -n 's/^since=//p' "$(lock_of "$s")/info" | tr -cd 'A-Za-z0-9:_.-')"
+    where="stack $s, the lease $holder took at $since"
+  else
+    where="no stack, no lease"
+  fi
   { printf 'cd %q || exit 1\n' "$rroot/$rel"
-    printf 'export %s OSPREY_LEASE_DIR=$HOME/%s/lease PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta"
+    printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta"
     printf '%q ' "$@"; echo; } > "$list.cmd"
   rc=0
+  setup=$(( $(date +%s) - t_setup ))
+  keep=""; [ -n "$lockname" ] && keep="cp $rmeta/lease/$lockname/info $run/lease &&"
   rssh "$h" "if [ -f $rmeta/runs/last/pid ] && kill -0 \$(cat $rmeta/runs/last/pid) 2>/dev/null; then exit 3; fi
-    mkdir -p $run && cat > $run/cmd.sh && ln -sfn \$HOME/$run $rmeta/runs/last
-    cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; bash $run/cmd.sh; echo \$? > $run/exit' > $run/log 2>&1 < /dev/null &
+    mkdir -p $run && cat > $run/cmd.sh && $keep ln -sfn \$HOME/$run $rmeta/runs/last
+    cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; t0=\$(date +%s); bash $run/cmd.sh; c=\$?; w=\$((\$(date +%s)-t0)); echo \$w > $run/wall; echo \"Wall time: \$w s, exit \$c ($where; set-up before it $setup s)\"; echo \$c > $run/exit' > $run/log 2>&1 < /dev/null &
     exit 0" < "$list.cmd" || rc=$?
   case $rc in
     0) ;;
