@@ -1,0 +1,13 @@
+## plant 1 at 5a1fb61: a notice given a queue kind (alerts._KIND_SQL: schedule:% read as monitor); stack c, the rules lease, 2026-11-10T14:42:44Z
+ OspreyFlow_Core/services/api/alerts.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+E               AssertionError: assert '01M72YK1PC99SRCN05J04GCXNX' not in {'01M72YK1PC99SRCN05J04GCXNX'}
+E                +  where '01M72YK1PC99SRCN05J04GCXNX' = Alert(id='01M72YK1PC99SRCN05J04GCXNX', rule_id='schedule:01M72YK1PADCXHVEQWRNFQK5HJ', owner_id='owner-01M72YK1PADCXHVE...d_at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None).id
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py::test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queue
+1 failed in 1.08s
+## plant 2 at 5a1fb61: send-back's own_change answer removed (the except names another exception); 2026-11-10T14:42:59Z
+ OspreyFlow_Core/services/api/app.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+E           KeyError: 'detail'
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py::test_neither_the_author_nor_the_asker_sends_a_make_live_back
+1 failed, 8 passed, 2 warnings in 4.56s

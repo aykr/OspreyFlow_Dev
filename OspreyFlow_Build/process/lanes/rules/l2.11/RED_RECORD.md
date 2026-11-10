@@ -135,3 +135,28 @@ All offline (480 passed across the rule suites at 17fc646). The live cases run a
 - **Axe:** two editor states, `tab=rules&editor=tested` and `tab=rules&editor=bpmn`, scanned at the local axe gate.
 
 - **Make live offered only with `deploy_rules`** (the orchestrator's minor, after the review): `RuleEditor.test.tsx` 10 passed; red with the gate opened (Make live shown to a Rule author): only that case.
+
+## §11 The live delta at 56e3c73, and its two lane failures (gates `56e3c73.live.txt`, `8c1aaa0.live.txt`, `5a1fb61.live.txt`, `5a1fb61.plants.txt`)
+
+`stack_lease.sh live rules` plus the lane's named files: 3305 passed and 38 failed. 36 of the failures are the
+server's, not the lane's:
+- no model or recogniser server (the model_port, recognise_port and golden suites, and the scenarios);
+- `test_apply_env`'s preflight, refused on ports;
+- `test_worker`, `test_ws_ticket` and `resolve/test_trigger`, which use stack a's default ports with no lease;
+- `test_media_blob`, with no Azurite;
+- `test_alert_address_live`'s 250 ms quantum, by one request at 259 ms.
+
+None of these files is touched by the lane's diff. The other two failures were the lane's:
+- **A send-back by a make-live's author or asker** answered 409 `rule_change_refused`, because
+  `OwnChangeRefused` is a `RuleChangeRefused`. Approve already answered 403 `own_change`; reject now does
+  too. Red with the `except` naming another exception:
+  `test_neither_the_author_nor_the_asker_sends_a_make_live_back`, `KeyError: 'detail'`.
+- **`test_schedule_notice`, repointed at the one queue**, asserted that a notice is in it. It isn't: a
+  notice is no kind (`alerts._KIND_SQL`) and is in its owner's own list alone. The test now states that,
+  and asks the shared database's queue only whether this notice is in it, through a graph in which
+  nothing is readable (the rows of other tests cite evidence). Red with a notice given a kind (`schedule:%`
+  read as `monitor`): the notice is found in the queue. Whether a notice still reaches a screen after
+  L2.10 is carried in REPORT, not built.
+
+Run alone, `test_rule_editor_routes.py` gave a 500 on the versions route, which read a names directory
+left on `app.state` by another file. Its world now has its own. The file passes alone (9) and in company (31).
