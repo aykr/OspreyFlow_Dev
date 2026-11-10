@@ -204,7 +204,7 @@ def test_the_same_key_in_every_store(side):
         for write in STORES.values():
             write("write")
         _barrier("written")
-        seen = {name: read("read") for name, read in STORES.items()}
+        seen.update({name: read("read") for name, read in STORES.items()})  # keeping "names", for the check after
         _barrier("read")
     finally:
         failures = []
