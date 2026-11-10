@@ -124,3 +124,19 @@ def test_a_stand_in_only_file_passes_only_while_it_runs_no_real_process(tmp_path
         "store_volumes._subprocess(argv)\n" + stand_in, encoding="utf-8"
     )
     assert teardowns_that_do_not_ask(tmp_path) == ["test_store_volumes.py"]
+
+
+def test_a_guard_argv_only_file_passes_only_while_it_starts_no_process(tmp_path: Path) -> None:
+    """P5b's live driver's test hands `down -v` argvs to the driver's guard as data, and its fake
+    Docker answers with `subprocess.CompletedProcess`; it starts nothing. The moment it starts a
+    process, it is a teardown like any other."""
+    data = (
+        "import subprocess\n"
+        'argvs = [["docker", "compose", "-f", mine, "down", "-v"]]\n'
+        "answer = subprocess.CompletedProcess(argv, 0)\n"
+    )
+    (tmp_path / "test_live_driver_own_tags.py").write_text(data, encoding="utf-8")
+    assert teardowns_that_do_not_ask(tmp_path) == []
+    for start in ("subprocess.run(argvs[0])\n", "subprocess.Popen(argvs[0])\n", "os.system(cmd)\n"):
+        (tmp_path / "test_live_driver_own_tags.py").write_text(data + start, encoding="utf-8")
+        assert teardowns_that_do_not_ask(tmp_path) == ["test_live_driver_own_tags.py"], start

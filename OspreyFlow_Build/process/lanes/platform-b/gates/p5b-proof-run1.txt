@@ -1,0 +1,166 @@
+P5b owed proof, run 1 at 55e4d52 on stack c (11 November 2026): NOT ACHIEVED.
+The install succeeded through the Docker Hub mirror. The driver's own seeding then called harness.apply as a first install, whose preflight found the deployment's own ports (8090, 2500) held and refused; no backup, rollback or restore step was reached. At teardown the put-back of osprey/superset:local failed: the build had left its old image untagged and it was gone ('No such image'). The after-check also counted another lane's test containers and a test image tag that came and went during the run. Nothing of another's was removed: the run's images were untagged by name only while each still named the run's image. Fixed at 9214d6b: the images held under the run's own tag before the build, fixture-corp seeded by the install's own demo pack, the after-check failing on the run's own doing and listing another's.
+
+P5b owed live proof at 55e4d52, under platform-b's lease on stack c (its containers left down):
+Running on ospreyflow-test (stack c, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T115512Z/log: sh -c cd ../OspreyFlow_Core && PYTHONPATH=.:packages:cli .venv/bin/python ../OspreyFlow_Build/process/lanes/platform-b/gates/p5b_live_update.py
+p5b-live: docker before: 34 image tags: alpine/helm:3.16.3 alpine:3.20 alpine:latest aquasec/trivy:0.76.1 arcadedata/arcadedb:26.10.1 busybox:1.36 caddy:2.11.4-alpine chrislusf/seaweedfs:4.48 clickhouse/clickhouse-keeper:25.8.33.6 clickhouse/clickhouse-server:25.8.33.6 ghcr.io/opentofu/opentofu:1.10.6 ghcr.io/sigstore/cosign/cosign:v2.4.1 ghcr.io/yannh/kubeconform:v0.6.7 nginx:1.30-alpine node:22-slim opensearchproject/opensearch:2.17.1 osprey-test-workspace:proxy osprey/superset:local ospreyflow/api:ci ospreyflow/harness:ci ospreyflow/ingest:ci ospreyflow/ner:ci ospreyflow/report-sync:ci ospreyflow/superset:ci ospreyflow/worker:ci ospreyflow/workspace:ci postgres:16 postgres:16.4 public.ecr.aws/docker/library/registry:2 python:3.12-slim quay.io/keycloak/keycloak:26.0 ubuntu:24.04 valkey/valkey:8 valkey/valkey:8.0
+p5b-live: docker before: 49 containers: osprey-small-api-1 osprey-small-arcadedb-1 osprey-small-keycloak-1 osprey-small-keycloak-db-1 osprey-small-litellm-1 osprey-small-ner-1 osprey-small-objectstore-1 osprey-small-ollama-1 osprey-small-ollama-models-1 osprey-small-opensearch-1 osprey-small-postgres-1 osprey-small-proxy-1 osprey-small-valkey-1 osprey-small-whisper-1 osprey-small-whisper-models-1 osprey-small-workspace-1 osprey-test-b-arcadedb osprey-test-b-clickhouse osprey-test-b-objectstore osprey-test-b-pg osprey-test-b-valkey osprey-test-c-arcadedb osprey-test-c-clickhouse osprey-test-c-objectstore osprey-test-c-pg osprey-test-c-valkey osprey-test-d-arcadedb osprey-test-d-clickhouse osprey-test-d-objectstore osprey-test-d-pg osprey-test-d-valkey osprey-test-e-arcadedb osprey-test-e-clickhouse osprey-test-e-objectstore osprey-test-e-pg osprey-test-e-valkey osprey-test-f-arcadedb osprey-test-f-clickhouse osprey-test-f-objectstore osprey-test-f-pg osprey-test-f-valkey osprey-test-g-arcadedb osprey-test-g-clickhouse osprey-test-g-objectstore osprey-test-g-pg osprey-test-g-valkey osprey-test-idp-28d6b824 osprey-test-idp-e8caa5d2 osprey-test-idp-ebf82f5a
+p5b-live: docker before: 74 volumes: 057a2b2935beb9ca88523e61c07e0eee8927da133198e6866beed5653a8515b8 08181354f0775d54c1ee15c51b088160e69564f46d751763ac707f8f2322e537 09c552fc0901407389938bbab7b62a382986fa165a64ddfbc83a3b9c2e605ce2 0ac84105cb07aae3f395dfa412b4bbc4ed1871f5b117cd8373db399e02f35ef5 0b3b698b7538d5ee3329e5f563477eb5743753eb97a887e45dc683d3d3ac0633 0eb757671b498f30deb4fb2168dd774a3ca90f4700179c61959c5853e7cdf9b9 0f3bf20a2209ddc035c3c7c622ddf2df0d9b8cca63f1255ca0b79dabc3c0ef57 0fb9a98e5df776f967957d24fff5e7dc81cee4811c85a85550fb182e4c596061 120ea4393e48f296fafd906398b5fb1fea03f43ed07e34630adf2e223adbe951 1bbbbad31f36d4ea08598d96274f5e8c78747cee55c22cef36790ad644ac2cc5 236c6f36b1019e7bcea5980e8bd517eb47e3e716da626bed80a1a3975ba5fc74 254e8c7029a521a4f28e35ece5ffc58df44447d9d518b3870941aba61978a829 25dd7b8d53cd67c3f04efaabd9e7e225bb2494d0bd9bb74afab25f123fa6f94c 2c47bfd7f206b6c39d05bca586c0a9d2828129c9eb33a2201614600792b10861 2c8a8a57dc3c4e288dbf0cdb58cfc6675eb6529af6724cca444ee4f5154ebfc5 2f9b4e6f8c2d590ade98ab115b3bdf1d7feeaad84943ea1a5868ad0817c45487 3068daa1a375f8b7e702a683f1f1747112a54264dc005e7943615f9874daf60e 31c6f9d438ac07e8cd19eef303f5578c40b3e92820641edde193ad5008f820ae 329c64ed70d2376602295e379d5673ac17fc69fc51111b566913913137c8cd99 339a7b3fa80aed1fd77e6e576f3beffd6e7c827695b0f8f46ccb7a501414e74a 3557dba603f3acdaa47925e3569d9fcd70a26cb6e472b2baf47e56a4be86e043 446ff7df72cf726ce0c10b976e223caae0717b6cae8dd6c0a06cc4fa5c40fa8a 447a357188617c8176aae422b33ae69676bf22369edf3d9d454fbc5371e49533 4570b2f9843c26f1ff119b62aa690a99bf097110ebc51eb29640b21d104f44ce 4c370ec0630788e3b3dac17c44da40302f5baa1a179781bb10f069c9ae7f9b56 4c8a5a58b7a03ec4fbec321594efbb7e5e46563f0fa808315cb6f6a72c396e80 4e4769e34d4748ff997cdbb4f886c583681a92d8c4862cbfdb023168f713313f 52b542c8ac4520fd3a4ac1f4d36ec9e2c89c76c4376ef344d8d483a037578512 539db76ac0d1c5114c92af129abf0442cd0373662c79912bb46ae3bc03f51569 56e26540d3e836b11a9b406d3599a65ecb9c0ccba6155e71e177f7ca538f4660 57c53bcb4df3d730a417b91ea160199d3f33092d570067f0af2fac0ecc919fcf 5859b26618f2f16945dba04857565d9f89ca6c88f3f02788bd4c3e99d1806e85 5b578d64de2b2db0ae6f57fe2a0bab7fde8ff36b35c9d58eb8004bdd4be0e485 5d4c74e298a5c5bb74cc919042a2dae1967e3b5aa7ae613009900992b3e1d3ee 61d6d9f20353defb351a0cd9e1b2d867f368ac4ad792841b6208897c017e10ae 67c627e05b0d601405e6cf1e18abf95c98fa0c9e846e4e87200da82fd406c42f 6b9197d5996a4b63878052c83e7194a4510f0a56f5bd2cf15e943424da372f09 7410790a6f58bfa6b12450aefa5548be48eca750e91ce8bb7ad5e80fc8eff1c5 76d1cc8e9ff6e40b9207d75373192be71179d2c7fe2c8c9e8453c28d9accd821 7bf0c72749cebdd23cad0b8d60196a68142a2f60118ba6872b315b13adc968c4 7d0c87eaf76523e60b6a9c4d3e9cfcfeb2a761a011e851b94bbac3c5ae2dc037 7f597e2fb14d4429be334ccb770aeda0787602f6cfc1bbb9f1c5dda7905ff492 81b0ee065c09b701f6c88c24a7daf1810fb198719bf4ad8d97d12a83c9bba743 8364fe1211dd5f2b2aef61bbee924e6b1c03a875b3c3ec514b6e80185380ee27 86e1a96e0f651f9ff8f12908dd685bdac0e54218cf7b321cd899afbd3936ca1e 8c10faf274dd1c264fe6638512fe3d842db179fb17862929df1f70db5afa25a7 8f739fe814af18a2f16431ac1095bae8f4a016c614a4768c0df2c85c5d75e860 9b21be4a0e0b00290719a02cb5779f23270ac8b60994713fa0423a4050afb00a 9e5a3b417c3bd9fe7704f727b8608b4f5aeba202cc493672b75ec7e287707e63 a340917da481f8955bdc743c0b16b2e9e78bf4d9c5f81b1414bf4bdb6e74cc2d b06e48d2114e311891ae16615a9799d4c6268f7ebb146b84bae5569b74df3b44 b773870cc8d75df9d89f3f6fe2ea92082d4757900c9f42fbfbe51a9db77878ee be9406d707ca95473c6fc3e052bc8aad2fbed4289a4825b6a7e8551cb1be6216 bfb85689dcd99fe1b5903db8c02fad6d9a4cbc80defeaf5b2db7b4d64e51b88f cd0bdb5277223d4849072cf1229ed76e275a322d6cdc99ebb465e5de9ecf2699 d82ec0c7b6bd10fa27108ac55ac8af524002746d534764f2835153663d805ebc d86d66b394e7d6658b15ee732839e227b792eebe9ac7912d546be3d8280dcc7c db30bf41db491b005f2e9ddae3ebcae73cabef53759ac503bd35118504f125fd dcdf0f513a06d629e290733f4990dae8eaafecc84c0c4af8362cefaae9c3ce54 e046d1071664c36e6479c5d6d8f2140450fe42c89433e14c08c5ba6027b99386 ec41a5d7d1a1dbd21d70aa25fa69771949f81119cad5921961c90420f9091e26 ed519c3659176a51f6a99ca2ee6c66d3ae2c1ba9d2e2592326ede5c02f622983 f15299753c035ad37266649ecb69e527549eac6e27894d96bc6d2fc74de54048 f726afa9dee04126ea921685841080a4f4514ea918766abc5e0857afaf9f8463 fc5e31b06b02b4907a069b446d6620ceea124eee5db96ff287a474e2751eb470 osprey-small_arcadedb-config osprey-small_arcadedb-databases osprey-small_objectstore-data osprey-small_ollama-models osprey-small_opensearch-data osprey-small_osprey-data osprey-small_postgres-data osprey-small_valkey-data osprey-small_whisper-models
+p5b-live: $ ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/bin/python -m ospreyflow install --mode lite --name osprey-p5b-test --config /tmp/osprey-p5b-w0raancy/answers.yaml --yes --no-demo-accounts
+✔ Docker is installed.
+✔ Docker is running.
+✔ Docker Compose version 5 is available (version 2 or later is needed).
+✔ Docker has 67.3 GB of memory; OspreyFlow needs at least 16 GB (32 GB is comfortable).
+✔ 807 GB of disk is free here; OspreyFlow needs at least 60 GB plus the demo packs you choose.
+✔ Git is installed.
+✔ uv is installed.
+✔ Port 8090 is free.
+✔ Port 2500 is free.
+Wrote /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test/osprey.yaml.
+apply: downloading the extraction model, qwen2.5:7b-instruct (4.7 GB), with the smaller models beside it; a large model takes minutes. OspreyFlow is not ready until it is in.
+apply: local-lite ready in 272s
+  render     [  0s]  7 artefact(s) → /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test
+  preflight  [  2s]  all checks pass or skip
+  build      [156s]  owned images built from this checkout
+  uploads    [  3s]  /tmp/osprey-p5b-w0raancy/ingest/uploaded: given to the Conduit (uid 10001); /tmp/osprey-p5b-w0raancy/tiles/built: given to the Conduit (uid 10001)
+  up         [110s]  12 service(s) healthy
+  model keys [  0s]  no model key to move
+  models     [  0s]  qwen2.5:7b-instruct downloaded and verified
+  grants     [  1s]  impersonation + view-users on the Conduit's service account
+  verify     [  0s]  3/3 assertions green
+
+  the Glass:   http://osprey-p5b-test.localhost:8090/
+  the Conduit: http://osprey-p5b-test.localhost:8090/healthz (through the workspace proxy)
+
+OspreyFlow is installed. Open it at http://osprey-p5b-test.localhost:8090
+The sign-in details are in /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test/deployment.env
+Look after it with: ospreyflow status --name osprey-p5b-test, ospreyflow open --name osprey-p5b-test
+p5b-live: the run's images: {'osprey/workspace:local': 'sha256:05f18386cdaf6bf96e61d8f2c08e17c6ef347eb2e2a81b7f5eb6a04dcb7f89ee', 'osprey/api:local': 'sha256:fc92eeeb8460588d7b8c7ffa9ae1e382b8933c5c966211b2047c4b8704a08a47', 'osprey/ner:local': 'sha256:60580e8c90f0aed6c2d5605bd304baf3afbdeabe09b1a12e4bea73581c422ec3', 'osprey/superset:local': 'sha256:effe141c6495c997daf4991beb87b8d676d5fcd282efb01026fa69e42d30e89c'}
+p5b-live: $ ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/bin/python -m harness.apply --config /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test/osprey.yaml --out-root /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments --seed fixture-corp --no-build
+
+apply: FAILED at stage 'preflight'
+  ports: 2 of 2 port(s) this deployment publishes are already in use: 8090 (proxy), 2500 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test
+p5b-live: teardown: down -v on osprey-p5b-test only, its volumes, the run's images, the folders
+p5b-live: $ docker compose -p osprey-p5b-test -f /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test/compose.yaml --env-file /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test/deployment.env down -v --remove-orphans
+ Container osprey-p5b-test-whisper-1 Stopping 
+ Container osprey-p5b-test-objectstore-1 Stopping 
+ Container osprey-p5b-test-ner-1 Stopping 
+ Container osprey-p5b-test-workspace-1 Stopping 
+ Container osprey-p5b-test-ollama-models-1 Stopping 
+ Container osprey-p5b-test-proxy-1 Stopping 
+ Container osprey-p5b-test-report-sync-1 Stopping 
+ Container osprey-p5b-test-superset-1 Stopping 
+ Container osprey-p5b-test-opensearch-1 Stopping 
+ Container osprey-p5b-test-workspace-1 Stopped 
+ Container osprey-p5b-test-workspace-1 Removing 
+ Container osprey-p5b-test-workspace-1 Removed 
+ Container osprey-p5b-test-proxy-1 Stopped 
+ Container osprey-p5b-test-proxy-1 Removing 
+ Container osprey-p5b-test-proxy-1 Removed 
+ Container osprey-p5b-test-opensearch-1 Stopped 
+ Container osprey-p5b-test-opensearch-1 Removing 
+ Container osprey-p5b-test-opensearch-1 Removed 
+ Container osprey-p5b-test-whisper-1 Stopped 
+ Container osprey-p5b-test-whisper-1 Removing 
+ Container osprey-p5b-test-whisper-1 Removed 
+ Container osprey-p5b-test-whisper-models-1 Stopping 
+ Container osprey-p5b-test-whisper-models-1 Stopped 
+ Container osprey-p5b-test-whisper-models-1 Removing 
+ Container osprey-p5b-test-whisper-models-1 Removed 
+ Container osprey-p5b-test-ner-1 Stopped 
+ Container osprey-p5b-test-ner-1 Removing 
+ Container osprey-p5b-test-ner-1 Removed 
+ Container osprey-p5b-test-superset-1 Stopped 
+ Container osprey-p5b-test-superset-1 Removing 
+ Container osprey-p5b-test-superset-1 Removed 
+ Container osprey-p5b-test-report-sync-1 Stopped 
+ Container osprey-p5b-test-report-sync-1 Removing 
+ Container osprey-p5b-test-objectstore-1 Stopped 
+ Container osprey-p5b-test-objectstore-1 Removing 
+ Container osprey-p5b-test-ollama-models-1 Stopped 
+ Container osprey-p5b-test-ollama-models-1 Removing 
+ Container osprey-p5b-test-report-sync-1 Removed 
+ Container osprey-p5b-test-api-1 Stopping 
+ Container osprey-p5b-test-objectstore-1 Removed 
+ Container osprey-p5b-test-ollama-models-1 Removed 
+ Container osprey-p5b-test-api-1 Stopped 
+ Container osprey-p5b-test-api-1 Removing 
+ Container osprey-p5b-test-api-1 Removed 
+ Container osprey-p5b-test-keycloak-1 Stopping 
+ Container osprey-p5b-test-arcadedb-1 Stopping 
+ Container osprey-p5b-test-litellm-1 Stopping 
+ Container osprey-p5b-test-valkey-1 Stopping 
+ Container osprey-p5b-test-valkey-1 Stopped 
+ Container osprey-p5b-test-valkey-1 Removing 
+ Container osprey-p5b-test-valkey-1 Removed 
+ Container osprey-p5b-test-keycloak-1 Stopped 
+ Container osprey-p5b-test-keycloak-1 Removing 
+ Container osprey-p5b-test-keycloak-1 Removed 
+ Container osprey-p5b-test-keycloak-db-1 Stopping 
+ Container osprey-p5b-test-keycloak-db-1 Stopped 
+ Container osprey-p5b-test-keycloak-db-1 Removing 
+ Container osprey-p5b-test-keycloak-db-1 Removed 
+ Container osprey-p5b-test-arcadedb-1 Stopped 
+ Container osprey-p5b-test-arcadedb-1 Removing 
+ Container osprey-p5b-test-arcadedb-1 Removed 
+ Container osprey-p5b-test-litellm-1 Stopped 
+ Container osprey-p5b-test-litellm-1 Removing 
+ Container osprey-p5b-test-litellm-1 Removed 
+ Container osprey-p5b-test-litellm-db-1 Stopping 
+ Container osprey-p5b-test-ollama-1 Stopping 
+ Container osprey-p5b-test-litellm-db-1 Stopped 
+ Container osprey-p5b-test-litellm-db-1 Removing 
+ Container osprey-p5b-test-litellm-db-1 Removed 
+ Container osprey-p5b-test-postgres-1 Stopping 
+ Container osprey-p5b-test-ollama-1 Stopped 
+ Container osprey-p5b-test-ollama-1 Removing 
+ Container osprey-p5b-test-ollama-1 Removed 
+ Container osprey-p5b-test-postgres-1 Stopped 
+ Container osprey-p5b-test-postgres-1 Removing 
+ Container osprey-p5b-test-postgres-1 Removed 
+ Volume osprey-p5b-test_valkey-data Removing 
+ Network osprey-p5b-test_osprey Removing 
+ Volume osprey-p5b-test_arcadedb-databases Removing 
+ Network osprey-p5b-test_egress Removing 
+ Volume osprey-p5b-test_arcadedb-config Removing 
+ Volume osprey-p5b-test_map-settings Removing 
+ Volume osprey-p5b-test_whisper-models Removing 
+ Volume osprey-p5b-test_postgres-data Removing 
+ Volume osprey-p5b-test_ollama-models Removing 
+ Volume osprey-p5b-test_opensearch-data Removing 
+ Volume osprey-p5b-test_model-settings Removing 
+ Volume osprey-p5b-test_objectstore-data Removing 
+ Volume osprey-p5b-test_valkey-data Removed 
+ Volume osprey-p5b-test_arcadedb-databases Removed 
+ Volume osprey-p5b-test_osprey-data Removing 
+ Volume osprey-p5b-test_map-settings Removed 
+ Network osprey-p5b-test_egress Removed 
+ Network osprey-p5b-test_osprey Removed 
+ Volume osprey-p5b-test_ollama-models Removed 
+ Volume osprey-p5b-test_arcadedb-config Removed 
+ Volume osprey-p5b-test_objectstore-data Removed 
+ Volume osprey-p5b-test_model-settings Removed 
+ Volume osprey-p5b-test_opensearch-data Removed 
+ Volume osprey-p5b-test_postgres-data Removed 
+ Volume osprey-p5b-test_whisper-models Removed 
+ Volume osprey-p5b-test_osprey-data Removed 
+Untagged: osprey/workspace:local
+Deleted: sha256:05f18386cdaf6bf96e61d8f2c08e17c6ef347eb2e2a81b7f5eb6a04dcb7f89ee
+Untagged: osprey/api:local
+Deleted: sha256:fc92eeeb8460588d7b8c7ffa9ae1e382b8933c5c966211b2047c4b8704a08a47
+Untagged: osprey/ner:local
+Deleted: sha256:60580e8c90f0aed6c2d5605bd304baf3afbdeabe09b1a12e4bea73581c422ec3
+Error response from daemon: No such image: sha256:1d058b39f61f469d4b9b9d2f54aa906a0d6816d08754b3f70233a64553a8071d
+p5b-live: image osprey/workspace:local: the run's own, removed
+p5b-live: image osprey/api:local: the run's own, removed
+p5b-live: image osprey/ner:local: the run's own, removed
+p5b-live: image osprey/superset:local: put back to sha256:1d058b39f61f469d4b9b9d2f54aa906a0d6816d08754b3f70233a64553a8071d
+p5b-live: docker after: 34 image tags: alpine/helm:3.16.3 alpine:3.20 alpine:latest aquasec/trivy:0.76.1 arcadedata/arcadedb:26.10.1 busybox:1.36 caddy:2.11.4-alpine chrislusf/seaweedfs:4.48 clickhouse/clickhouse-keeper:25.8.33.6 clickhouse/clickhouse-server:25.8.33.6 ghcr.io/opentofu/opentofu:1.10.6 ghcr.io/sigstore/cosign/cosign:v2.4.1 ghcr.io/yannh/kubeconform:v0.6.7 nginx:1.30-alpine node:22-slim opensearchproject/opensearch:2.17.1 osprey-test-workspace:proxy osprey/superset:local ospreyflow/api:ci ospreyflow/harness:ci ospreyflow/ingest:ci ospreyflow/ner:ci ospreyflow/report-sync:ci ospreyflow/superset:ci ospreyflow/worker:ci ospreyflow/workspace:ci postgres:16 postgres:16.4 public.ecr.aws/docker/library/registry:2 python:3.12-slim quay.io/keycloak/keycloak:26.0 ubuntu:24.04 valkey/valkey:8 valkey/valkey:8.0
+p5b-live: docker after: 50 containers: osprey-small-api-1 osprey-small-arcadedb-1 osprey-small-keycloak-1 osprey-small-keycloak-db-1 osprey-small-litellm-1 osprey-small-ner-1 osprey-small-objectstore-1 osprey-small-ollama-1 osprey-small-ollama-models-1 osprey-small-opensearch-1 osprey-small-postgres-1 osprey-small-proxy-1 osprey-small-valkey-1 osprey-small-whisper-1 osprey-small-whisper-models-1 osprey-small-workspace-1 osprey-test-b-arcadedb osprey-test-b-clickhouse osprey-test-b-objectstore osprey-test-b-pg osprey-test-b-valkey osprey-test-c-arcadedb osprey-test-c-clickhouse osprey-test-c-objectstore osprey-test-c-pg osprey-test-c-valkey osprey-test-d-arcadedb osprey-test-d-clickhouse osprey-test-d-objectstore osprey-test-d-pg osprey-test-d-valkey osprey-test-e-arcadedb osprey-test-e-clickhouse osprey-test-e-objectstore osprey-test-e-pg osprey-test-e-valkey osprey-test-f-arcadedb osprey-test-f-clickhouse osprey-test-f-objectstore osprey-test-f-pg osprey-test-f-valkey osprey-test-g-arcadedb osprey-test-g-clickhouse osprey-test-g-objectstore osprey-test-g-pg osprey-test-g-valkey osprey-test-idp-af1f01bc osprey-test-idp-c63dc0a4 osprey-test-idp-e2139bea osprey-test-opensearch-memory-04ceecbf
+p5b-live: docker after: 74 volumes: 057a2b2935beb9ca88523e61c07e0eee8927da133198e6866beed5653a8515b8 08181354f0775d54c1ee15c51b088160e69564f46d751763ac707f8f2322e537 09c552fc0901407389938bbab7b62a382986fa165a64ddfbc83a3b9c2e605ce2 0ac84105cb07aae3f395dfa412b4bbc4ed1871f5b117cd8373db399e02f35ef5 0b3b698b7538d5ee3329e5f563477eb5743753eb97a887e45dc683d3d3ac0633 0eb757671b498f30deb4fb2168dd774a3ca90f4700179c61959c5853e7cdf9b9 0f3bf20a2209ddc035c3c7c622ddf2df0d9b8cca63f1255ca0b79dabc3c0ef57 0fb9a98e5df776f967957d24fff5e7dc81cee4811c85a85550fb182e4c596061 120ea4393e48f296fafd906398b5fb1fea03f43ed07e34630adf2e223adbe951 1bbbbad31f36d4ea08598d96274f5e8c78747cee55c22cef36790ad644ac2cc5 236c6f36b1019e7bcea5980e8bd517eb47e3e716da626bed80a1a3975ba5fc74 254e8c7029a521a4f28e35ece5ffc58df44447d9d518b3870941aba61978a829 25dd7b8d53cd67c3f04efaabd9e7e225bb2494d0bd9bb74afab25f123fa6f94c 2c47bfd7f206b6c39d05bca586c0a9d2828129c9eb33a2201614600792b10861 2c8a8a57dc3c4e288dbf0cdb58cfc6675eb6529af6724cca444ee4f5154ebfc5 2f9b4e6f8c2d590ade98ab115b3bdf1d7feeaad84943ea1a5868ad0817c45487 3068daa1a375f8b7e702a683f1f1747112a54264dc005e7943615f9874daf60e 31c6f9d438ac07e8cd19eef303f5578c40b3e92820641edde193ad5008f820ae 329c64ed70d2376602295e379d5673ac17fc69fc51111b566913913137c8cd99 339a7b3fa80aed1fd77e6e576f3beffd6e7c827695b0f8f46ccb7a501414e74a 3557dba603f3acdaa47925e3569d9fcd70a26cb6e472b2baf47e56a4be86e043 446ff7df72cf726ce0c10b976e223caae0717b6cae8dd6c0a06cc4fa5c40fa8a 447a357188617c8176aae422b33ae69676bf22369edf3d9d454fbc5371e49533 4570b2f9843c26f1ff119b62aa690a99bf097110ebc51eb29640b21d104f44ce 4c370ec0630788e3b3dac17c44da40302f5baa1a179781bb10f069c9ae7f9b56 4c8a5a58b7a03ec4fbec321594efbb7e5e46563f0fa808315cb6f6a72c396e80 4e4769e34d4748ff997cdbb4f886c583681a92d8c4862cbfdb023168f713313f 52b542c8ac4520fd3a4ac1f4d36ec9e2c89c76c4376ef344d8d483a037578512 539db76ac0d1c5114c92af129abf0442cd0373662c79912bb46ae3bc03f51569 56e26540d3e836b11a9b406d3599a65ecb9c0ccba6155e71e177f7ca538f4660 57c53bcb4df3d730a417b91ea160199d3f33092d570067f0af2fac0ecc919fcf 5859b26618f2f16945dba04857565d9f89ca6c88f3f02788bd4c3e99d1806e85 5b578d64de2b2db0ae6f57fe2a0bab7fde8ff36b35c9d58eb8004bdd4be0e485 5d4c74e298a5c5bb74cc919042a2dae1967e3b5aa7ae613009900992b3e1d3ee 61d6d9f20353defb351a0cd9e1b2d867f368ac4ad792841b6208897c017e10ae 67c627e05b0d601405e6cf1e18abf95c98fa0c9e846e4e87200da82fd406c42f 6b9197d5996a4b63878052c83e7194a4510f0a56f5bd2cf15e943424da372f09 7410790a6f58bfa6b12450aefa5548be48eca750e91ce8bb7ad5e80fc8eff1c5 76d1cc8e9ff6e40b9207d75373192be71179d2c7fe2c8c9e8453c28d9accd821 7bf0c72749cebdd23cad0b8d60196a68142a2f60118ba6872b315b13adc968c4 7d0c87eaf76523e60b6a9c4d3e9cfcfeb2a761a011e851b94bbac3c5ae2dc037 7f597e2fb14d4429be334ccb770aeda0787602f6cfc1bbb9f1c5dda7905ff492 81b0ee065c09b701f6c88c24a7daf1810fb198719bf4ad8d97d12a83c9bba743 8364fe1211dd5f2b2aef61bbee924e6b1c03a875b3c3ec514b6e80185380ee27 86e1a96e0f651f9ff8f12908dd685bdac0e54218cf7b321cd899afbd3936ca1e 8c10faf274dd1c264fe6638512fe3d842db179fb17862929df1f70db5afa25a7 8f739fe814af18a2f16431ac1095bae8f4a016c614a4768c0df2c85c5d75e860 9b21be4a0e0b00290719a02cb5779f23270ac8b60994713fa0423a4050afb00a 9e5a3b417c3bd9fe7704f727b8608b4f5aeba202cc493672b75ec7e287707e63 a340917da481f8955bdc743c0b16b2e9e78bf4d9c5f81b1414bf4bdb6e74cc2d b06e48d2114e311891ae16615a9799d4c6268f7ebb146b84bae5569b74df3b44 b773870cc8d75df9d89f3f6fe2ea92082d4757900c9f42fbfbe51a9db77878ee be9406d707ca95473c6fc3e052bc8aad2fbed4289a4825b6a7e8551cb1be6216 bfb85689dcd99fe1b5903db8c02fad6d9a4cbc80defeaf5b2db7b4d64e51b88f cd0bdb5277223d4849072cf1229ed76e275a322d6cdc99ebb465e5de9ecf2699 d82ec0c7b6bd10fa27108ac55ac8af524002746d534764f2835153663d805ebc d86d66b394e7d6658b15ee732839e227b792eebe9ac7912d546be3d8280dcc7c db30bf41db491b005f2e9ddae3ebcae73cabef53759ac503bd35118504f125fd dcdf0f513a06d629e290733f4990dae8eaafecc84c0c4af8362cefaae9c3ce54 e046d1071664c36e6479c5d6d8f2140450fe42c89433e14c08c5ba6027b99386 ec41a5d7d1a1dbd21d70aa25fa69771949f81119cad5921961c90420f9091e26 ed519c3659176a51f6a99ca2ee6c66d3ae2c1ba9d2e2592326ede5c02f622983 f15299753c035ad37266649ecb69e527549eac6e27894d96bc6d2fc74de54048 f726afa9dee04126ea921685841080a4f4514ea918766abc5e0857afaf9f8463 fc5e31b06b02b4907a069b446d6620ceea124eee5db96ff287a474e2751eb470 osprey-small_arcadedb-config osprey-small_arcadedb-databases osprey-small_objectstore-data osprey-small_ollama-models osprey-small_opensearch-data osprey-small_osprey-data osprey-small_postgres-data osprey-small_valkey-data osprey-small_whisper-models
+p5b-live: changed outside osprey-p5b-*: ['osprey-test-idp-28d6b824', 'osprey-test-idp-af1f01bc', 'osprey-test-idp-c63dc0a4', 'osprey-test-idp-e2139bea', 'osprey-test-idp-e8caa5d2', 'osprey-test-idp-ebf82f5a', 'osprey-test-opensearch-memory-04ceecbf']
+p5b-live: osprey-p5b-* left: nothing
+p5b-live: image tags changed or left: ['osprey-test-workspace:proxy', 'osprey/superset:local']
+p5b-live: FAILED (1): ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/bin/python -m harness.apply --config /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments/osprey-p5b-test/osprey.yaml --out-root /tmp/osprey-p5b-w0raancy/home/.ospreyflow/deployments --seed fixture-corp --no-build
+Wall time: 299 s, exit 1 (stack c, the lease platform-b took at 2026-11-10T11:55:00Z; set-up before it 12 s)

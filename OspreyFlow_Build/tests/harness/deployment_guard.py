@@ -40,6 +40,14 @@ FAKE_RUNNER_ONLY = frozenset({"test_uninstall.py"})
 STAND_IN_ONLY = frozenset({"test_store_volumes.py"})
 _REAL_PROCESS = re.compile(r"import subprocess|_subprocess\(")
 
+#: Hand teardown argvs to a guard as data, and model Docker's answers with `subprocess`'s own types
+#: (P5b's live driver's own test), never starting a process. Passed only while the file calls no
+#: process: the moment it does, the scan treats it like any other teardown.
+GUARD_ARGV_ONLY = frozenset({"test_live_driver_own_tags.py"})
+_STARTS_A_PROCESS = re.compile(
+    r"subprocess\.(run|Popen|call|check_call|check_output)\(|os\.(system|exec\w*|spawn\w*)\("
+)
+
 _THIS_FILE_AND_ITS_TEST = frozenset({"deployment_guard.py", "test_deployment_guard.py"})
 
 
@@ -103,6 +111,8 @@ def teardowns_that_do_not_ask(tests_root: Path) -> list[str]:
         if path.name in FAKE_RUNNER_ONLY and "use_real_runner" not in text:
             continue
         if path.name in STAND_IN_ONLY and not _REAL_PROCESS.search(text):
+            continue
+        if path.name in GUARD_ARGV_ONLY and not _STARTS_A_PROCESS.search(text):
             continue
         if (
             _DOWN.search(text)
