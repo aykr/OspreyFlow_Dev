@@ -1,4 +1,4 @@
-# as of 2026-11-10T17:02Z
+# as of 2026-11-10T17:11Z
 studio	L1.7	gated; rebase (6 conflicts on the run path), re-gate, review	~19:30	A
 rules	L2.11	review: 4 must-fixes (schedule reach, template drafts, run-as right, asker test); re-gate	~19:00	A
 docs	D2b	the decks, after L2.11	~20:30	A
@@ -8,4 +8,5 @@ platform	P7	fresh session from HANDOFF; ConfigMap, review points	~11 Nov, midday
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
 studio-b	L1.9	S3 and Athena, after P7	~11 Nov, afternoon	B
 docs	D2c	Cloud Platform guide, after P10	~12 Nov	B
-platform	P11	held until the client asks for AI	—	B
+platform	P11	the model route: the client's gateway or Bedrock, after P7	~12 Nov	B
+platform	P12	Laurium: licence check first, then the adapter; after P7	~12 Nov	B
