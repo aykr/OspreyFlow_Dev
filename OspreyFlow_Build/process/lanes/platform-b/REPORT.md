@@ -2,23 +2,11 @@
 
 The preflight ports fix merged at dc93d13; its report is in main's history.
 
-1. **Exit, met.** A gazetteer is added to and removed from the case's dataset in the Glass, by keyboard. `keyboard/map-view.spec.ts` covers:
-   - add, with the change held open: the button keeps focus, and a second press does nothing;
-   - the place search asked again, and offering the added gazetteer's place;
-   - remove at once, and removal from a preset;
-   - a panel that offers no change.
-   The registry ids are `add-a-gazetteer-by-keyboard` and `remove-a-gazetteer-by-keyboard`, sent as `registry-P6.patch` for the orchestrator to apply at merge. Axe scans 8 panel states in dark, light and GOV.UK (`gates/6704abd.a11y.txt`, 48 passed), each checked drawn at scan time.
+1. **Exit, met.** A gazetteer is added to and removed from the case's dataset in the Glass, by keyboard (`keyboard/map-view.spec.ts`): add with the change held open (focus kept, a second press ignored), the place search asked again and offering the added gazetteer's place, remove at once and from a preset, and a panel offering no change. The registry ids `add-a-gazetteer-by-keyboard` and `remove-a-gazetteer-by-keyboard` are in `registry-P6.patch`, for the orchestrator at merge. Axe scans 8 panel states in dark, light and GOV.UK (`gates/6704abd.a11y.txt`, 48 passed), each checked drawn at scan time.
 2. **Red first.** Uncovered ids: the coverage case red. A `disabled` busy button: focus lost in Chromium. A faint token: color-contrast red in all three themes. Plus 17 vitest plants (`plants.md`).
 3. **Spec.** ADR-147 Amendment 4 is written (reserved by the orchestrator). It records the four empty cases in words naming no dataset, the Glass's own refusal words, buttons not drawn without `run_pipelines`, focus kept while busy, and the search following a change.
 4. **Review.** The lane-reviewer found 8 must-fixes and 8 minors. All the must-fixes are fixed, among them a case that would have been red, focus lost against a slow copy, a drawn case told it read a composite, and the shared registry file on the branch. The BRIEF's "As built" section records where the build departs from the plan.
-5. **Ratify:**
-   - `apps/workspace/src/map/**`, `keyboard/map-view{-harness.tsx,.spec.ts}` and `a11y/every-harness.spec.ts`'s states (platform's map area, assigned to P6);
-   - `src/App.tsx`'s binding;
-   - `test_place_routes.py`'s comment (ratified).
-6. **Left, and why.**
-   - The places census can't see a client bound in `App.tsx`; a non-entry route of a place is the orchestrator's carry.
-   - A misspelt `EXTRA_STATES` entry scans the default page, and every-harness doesn't fail on axe's "incomplete" (a 1:1 colour passes). Both are in the shared spec.
-   - The App wiring (`rights?.has("run_pipelines")`) has no test of its own; the Conduit refuses regardless.
-   - `gazetteers.ts` reads the case's datasets itself, not through `caseDatasets`, for its own refusal words and an injectable fetch.
+5. **Ratify:** `apps/workspace/src/map/**`, `keyboard/map-view{-harness.tsx,.spec.ts}` and `a11y/every-harness.spec.ts`'s states (platform's map area, assigned to P6); `src/App.tsx`'s binding; `test_place_routes.py`'s comment (ratified).
+6. **Left, and why.** The places census can't see a client bound in `App.tsx` (a non-entry route of a place: the orchestrator's carry). A misspelt `EXTRA_STATES` entry scans the default page, and every-harness doesn't fail on axe's "incomplete" (a 1:1 colour passes): both in the shared spec, folded into the orchestrator's carry. The App wiring (`rights?.has("run_pipelines")`) has no test of its own; the Conduit refuses regardless. `gazetteers.ts` reads the case's datasets itself, not through `caseDatasets`, for its own refusal words and an injectable fetch.
 7. **Gates.** `make test` (offline, on the server) and `make -k ci` (here) at the ready-to-merge head. The counts go in the message.
 8. **Friction:** `process/friction/2026-11-10-platform-b-gazetteer-panel.md`. **Route:** none added. **Questions:** none.
