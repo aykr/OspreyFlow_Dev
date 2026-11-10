@@ -283,6 +283,13 @@ OPEN_TO_ANY_SIGNED_IN = {
     "removed_case_layers", "read_layer_merge",
 }  # fmt: skip
 
+#: L1.7 (ADR-141 decision 10), weighed at its rebase on 10 November: the run API names no right
+#: because a person never reaches it. It asks a service identity's token (`get_service_identity`),
+#: so any person's, a Reports Viewer's among them, is refused 403 before anything is read
+#: (`test_external_run_routes.py`'s `test_a_persons_token_is_refused_by_the_run_api`, and
+#: `test_route_rights.py`'s no-role sweep for the read).
+SERVICE_IDENTITY_ONLY = {"start_external_run_route", "read_external_run"}
+
 
 def _routes_by_right() -> dict[str, tuple[str, str, str | None]]:
     """Every route of the app with the right it declares, read from the app itself (the same
@@ -315,7 +322,9 @@ def _guarded_routes() -> dict[str, tuple[str, str, str]]:
 def test_every_route_naming_no_right_is_one_weighed_for_the_viewer() -> None:
     """The other half of "and nothing else": the routes the sweep cannot ask by a right. Each route
     that names none is one of the list above, and all of them read or are the reader's own."""
-    rightless = {name for name, (_, _, right) in _routes_by_right().items() if right is None}
+    rightless = {
+        name for name, (_, _, right) in _routes_by_right().items() if right is None
+    } - SERVICE_IDENTITY_ONLY
     assert rightless == OPEN_TO_ANY_SIGNED_IN, (
         f"named no right, not weighed: {sorted(rightless - OPEN_TO_ANY_SIGNED_IN)}; "
         f"weighed, now naming one or gone: {sorted(OPEN_TO_ANY_SIGNED_IN - rightless)}"
@@ -323,7 +332,7 @@ def test_every_route_naming_no_right_is_one_weighed_for_the_viewer() -> None:
     writes = {
         name
         for name, (method, _, right) in _routes_by_right().items()
-        if right is None and method != "GET"
+        if right is None and method != "GET" and name not in SERVICE_IDENTITY_ONLY
     }
     assert writes == {"set_tab_state", "issue_ws_ticket"}
 

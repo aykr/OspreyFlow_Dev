@@ -118,6 +118,10 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "update_studio_recipe_pipeline",
         "update_studio_recipe_pipeline_yaml",
         "update_studio_recipe_row_template",
+        # L1.7 (ADR-141 decision 11): a deployed pipeline handed to an orchestrator's client, and
+        # taken back.
+        "mark_pipeline_owned_externally",
+        "clear_pipeline_owned_externally",
         "add_ingest_connection",
         # Case's L3.4 (ADR-143 Amendment 5): promotions of drawn items, their review, rejection
         # and revert (the operator command's, refused or done), and a removed case's layer merged
@@ -187,6 +191,13 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         # it is left out by default.
         "add_dataset_gazetteer",
         "remove_dataset_gazetteer",
+        # L1.7: a dataset's release exported, its import planned (`dry_run`) and imported as drafts
+        # (ADR-140 Amendment 9 decision 4), and a dataset's or unit's quota of runs a day set
+        # (ADR-141 decision 6).
+        "export_dataset_release",
+        "plan_dataset_release_import",
+        "import_dataset_release",
+        "set_run_quota",
     ),
 }
 _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for a in actions)

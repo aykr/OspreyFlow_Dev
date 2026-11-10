@@ -17635,7 +17635,13 @@ async def operations_runs(
 
 @app.put(
     "/v1/admin/operations/quotas/{scope}/{key}",
-    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+    # Setting a quota's own right first (decision (f) of L1.7: it limits every unit's runs;
+    # `test_route_rights.py` reads the first), then Operations', as each of the section's routes
+    # asks (`test_admin_sections.py`).
+    dependencies=[
+        Depends(require_right(Right.ADMINISTER_SYSTEM)),
+        Depends(require_right(Right.OPERATE_SCHEDULES)),
+    ],
 )
 async def set_run_quota(
     scope: QuotaScope,
