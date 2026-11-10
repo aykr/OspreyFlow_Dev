@@ -61,7 +61,7 @@ docs	D2c	M	todo	The Cloud Platform deployment guide (after P7–P10; ADR-148)
 platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-114 Am 37) (merged f8df603)
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
-rules-b	L2.11a	S	building	The rule editor's standards: BPMN 2.0 and DMN, export, import refusal, Show as BPMN (split from L2.11)
+rules-b	L2.11a	S	done	The rule editor's standards: BPMN 2.0 and DMN, export, import refusal, Show as BPMN (split from L2.11) (merged 1d01f49)
 admin	T1	M	building	Faster live test runs: measure, store-only live sets, selection by change, parallel workers, the slow few
 platform-b	preflight	S	done	A named install's preflight checks its own published ports (merged dc93d13)
 platform-b	ADR-147 Am 3	S	done	The six gazetteer-only identifiers withheld from every reader (merged 6db8ce8)

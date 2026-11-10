@@ -1,10 +1,9 @@
-# as of 2026-11-10T11:49Z
+# as of 2026-11-10T12:22Z
 admin	T1	part 1 merged; batched DDL in proof; parts 2–5 next	DDL ~13:30; 2–3 ~16:00; 4–5 ~11 Nov	A
 studio-b	tips	Studio's tips patches plus L1.7a's carries, starting now	~13:30	A
 studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
 studio	L1.7	operations, releases, carries	~17:00–19:00	A
 rules	L2.11	rule editor (form, draft/test/live, migration), after L2.10	~17:00–18:30	A
-rules-b	L2.11a	BPMN/DMN codec, export, import refusal, Show as BPMN	~15:00	A
 case	L3.6	drawn-watch alerts, starting now	~15:00–16:00	A
 platform	P7	kind proved stores, UIDs, egress; 18 review points, a fresh session from HANDOFF	~11 Nov, midday	B
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
