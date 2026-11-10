@@ -1,0 +1,34 @@
+# rules-hyg item 2: what axe saw in the metrics panel's rarity note (CARRIES; rules-b T3's listing, "partly
+# covered, by axe's reading; the probe found nothing"). Local browser slot 8 (port 5984), granted by the
+# orchestrator, 10 November ~21:30 UTC; the probe (rarity-note-probe.spec.ts, kept here, not a gate) loads
+# metrics-panel-harness.html?filter=rarity exactly as every-harness.spec.ts does, in dark, light and GOV.UK.
+#
+# FINDING: a harness artefact, not the product's. axe's own reason, in all three themes: color-contrast
+# incomplete, messageKey "elmPartiallyObscuring" ("Element's background color could not be determined
+# because it partially overlaps other elements"), relatedNodes []. My first lead (a clipping scroll parent)
+# was REFUTED: no clipping ancestor, the note fully in the viewport and topmost at every point, and no
+# element's box meeting it. The full stack at its bottom edge was: P > DIV > ... > SECTION.panel > HTML,
+# skipping the harness's wrapper divs and BODY. The harness fixes its root and the panel's column at
+# 600px with no overflow; the Filters section ends at 610.6px, so the panel spilled 10.6px past its column
+# and the page's body, and the note straddled that edge (its backdrop body above, html below). In the
+# product the panel sits in SidePanelStack's slot, overflow: auto, and scrolls inside it.
+# FIX: the harness's column scrolls, as the product's slot does (keyboard/metrics-panel-harness.tsx).
+# After: axe measures the note, incomplete 0, violations 0, in all three; every-harness's metrics-panel
+# scans 16 of 16 and the keyboard file 8 of 8 pass. The product's MetricsPanel is unchanged.
+#
+# --- probe 1 (before; the lead tested), axe's data and the geometry:
+PROBE dark: {"incomplete":[{"target":["p:nth-child(7)"],"any":[{"id":"color-contrast","message":"Element's background color could not be determined because it partially overlaps other elements","data":{"contrastRatio":0,"fontSize":"9.0pt (12px)","fontWeight":"normal","messageKey":"elmPartiallyObscuring","expectedContrastRatio":"4.5:1"},"related":[]}]}],"violations":[],"geometry":{"found":true,"box":[562.5625,610.5625,817,1083],"viewport":[1280,720],"clippers":[],"atPoints":["0.05,0.1: the note","0.5,0.1: the note","0.95,0.1: the note","0.05,0.5: the note","0.5,0.5: the note","0.95,0.5: the note","0.05,0.9: the note","0.5,0.9: the note","0.95,0.9: the note"]}}
+PROBE light: {"incomplete":[{"target":["p:nth-child(7)"],"any":[{"id":"color-contrast","message":"Element's background color could not be determined because it partially overlaps other elements","data":{"contrastRatio":0,"fontSize":"9.0pt (12px)","fontWeight":"normal","messageKey":"elmPartiallyObscuring","expectedContrastRatio":"4.5:1"},"related":[]}]}],"violations":[],"geometry":{"found":true,"box":[562.5625,610.5625,817,1083],"viewport":[1280,720],"clippers":[],"atPoints":["0.05,0.1: the note","0.5,0.1: the note","0.95,0.1: the note","0.05,0.5: the note","0.5,0.5: the note","0.95,0.5: the note","0.05,0.9: the note","0.5,0.9: the note","0.95,0.9: the note"]}}
+PROBE govuk: {"incomplete":[{"target":["p:nth-child(7)"],"any":[{"id":"color-contrast","message":"Element's background color could not be determined because it partially overlaps other elements","data":{"contrastRatio":0,"fontSize":"9.0pt (12px)","fontWeight":"normal","messageKey":"elmPartiallyObscuring","expectedContrastRatio":"4.5:1"},"related":[]}]}],"violations":[],"geometry":{"found":true,"box":[562.5625,610.5625,817,1083],"viewport":[1280,720],"clippers":[],"atPoints":["0.05,0.1: the note","0.5,0.1: the note","0.95,0.1: the note","0.05,0.5: the note","0.5,0.5: the note","0.95,0.5: the note","0.05,0.9: the note","0.5,0.9: the note","0.95,0.9: the note"]}}
+# --- probe 3 (before): the note's text line boxes and the full stacks
+PROBE dark: {"incomplete":[{"target":["p:nth-child(7)"],"any":[{"id":"color-contrast","message":"Element's background color could not be determined because it partially overlaps other elements","data":{"contrastRatio":0,"fontSize":"9.0pt (12px)","fontWeight":"normal","messageKey":"elmPartiallyObscuring","expectedContrastRatio":"4.5:1"},"related":[]}]}],"violations":[],"geometry":{"lines":["[562.6,577.6] x[817.0,1048.1]","[578.6,593.6] x[817.0,1057.7]","[594.6,609.6] x[817.0,966.3]"],"overlapping":[],"stacks":["P. > DIV. > DIV.accordion-section__content > DIV.accordion-section > DIV. > DIV.panel__body > SECTION.panel metrics-panel > DIV. > DIV. > DIV. > BODY. > HTML.","P. > DIV. > DIV.accordion-section__content > DIV.accordion-section > DIV. > DIV.panel__body > SECTION.panel metrics-panel > HTML."],"found":true,"box":[562.5625,610.5625,817,1083],"viewport":[1280,720],"clippers":[],"atPoints":["0.05,0.1: the note","0.5,0.1: the note","0.95,0.1: the note","0.05,0.5: the note","0.5,0.5: the note","0.95,0.5: the note","0.05,0.9: the note","0.5,0.9: the note","0.95,0.9: the note"]}}
+# --- probe 4 (after the harness fix)
+PROBE dark: {"incomplete":[],"violations":[],"geometry":{"lines":["[562.6,577.6] x[817.0,1048.1]","[578.6,593.6] x[817.0,1057.7]","[594.6,609.6] x[817.0,966.3]"],"overlapping":[],"stacks":["P. > DIV. > DIV.accordion-section__content > DIV.accordion-section > DIV. > DIV.panel__body > SECTION.panel metrics-panel > DIV. > DIV. > DIV. > BODY. > HTML.","HTML."],"found":true,"box":[562.5625,610.5625,817
+PROBE light: {"incomplete":[],"violations":[],"geometry":{"lines":["[562.6,577.6] x[817.0,1048.1]","[578.6,593.6] x[817.0,1057.7]","[594.6,609.6] x[817.0,966.3]"],"overlapping":[],"stacks":["P. > DIV. > DIV.accordion-section__content > DIV.accordion-section > DIV. > DIV.panel__body > SECTION.panel metrics-panel > DIV. > DIV. > DIV. > BODY. > HTML.","HTML."],"found":true,"box":[562.5625,610.5625,81
+PROBE govuk: {"incomplete":[],"violations":[],"geometry":{"lines":["[562.6,577.6] x[817.0,1060.0]","[578.6,593.6] x[817.0,1045.1]","[594.6,609.6] x[817.0,909.2]"],"overlapping":[],"stacks":["P. > DIV. > DIV.accordion-section__content > DIV.accordion-section > DIV. > DIV.panel__body > SECTION.panel metrics-panel > DIV. > DIV. > DIV. > BODY. > HTML.","HTML."],"found":true,"box":[562.5625,610.5625,81
+  3 passed (3.5s)
+# --- every-harness, -g metrics-panel-harness (after)
+[16/16] a11y/every-harness.spec.ts:351:5 › metrics-panel-harness.html composition=client_parity: every labelled field's name contains its visible label (2.5.3)
+  16 passed (17.4s)
+# --- keyboard/metrics-panel.spec.ts (after)
+  8 passed (7.3s)
