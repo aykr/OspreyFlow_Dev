@@ -7,8 +7,8 @@ then reads back what is under that key. With `tests.worker_isolation` each worke
 red, each finds both, in every store. Each worker removes what it wrote, and the plugin removes its databases.
 
 DuckDB's path is a file path, proved distinct offline (`tests/test_worker_isolation.py`); ClickHouse is not redirected.
-Live only: listed in the Makefile `test` target's `--ignore` list (`makefile-T1p4.diff`), and run under
-`stack_lease.sh`.
+Live only: in the Makefile `test` target's `--ignore` list and CI's `conformance` job (`makefile-T1p4.diff`,
+`ci-yml-T1p4.diff`), and run under `stack_lease.sh`.
 """
 
 from __future__ import annotations
@@ -51,7 +51,9 @@ async def _arcadedb(step):
     kind = f"T1Probe_{RUN}"
     try:
         if step == "write":
-            await client.create_database_if_absent()
+            if client._config.database not in await client.list_databases():
+                await client.create_database_if_absent()
+                (SHARED / f"made-arcadedb-{WORKER}").touch()  # the red run made the stack's shared one: removed after
             try:
                 await client.sql(f"CREATE DOCUMENT TYPE {kind} IF NOT EXISTS")
             except Exception:
@@ -65,6 +67,9 @@ async def _arcadedb(step):
             await client.sql(f"DROP TYPE {kind} IF EXISTS UNSAFE")
         except Exception:
             pass  # the other worker's removal got there first
+        _barrier("arcadedb-removed")  # both workers' rows gone before a database the red run made is dropped
+        if (SHARED / f"made-arcadedb-{WORKER}").exists():
+            await client.drop_database()
     finally:
         await client.aclose()
 
@@ -85,6 +90,8 @@ async def _postgres(step):
             return sorted({r["worker"] for r in await conn.fetch(f"SELECT worker FROM {table} WHERE k = 'same'")})
         async with conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(4242)")
+            if await conn.fetchval("SELECT to_regclass($1)", table) is None:
+                return None  # never made: this worker's write failed first
             await conn.execute(f"DELETE FROM {table} WHERE worker = $1", WORKER)
             left = await conn.fetchval(f"SELECT count(*) FROM {table}")
             if left == 0:
@@ -115,14 +122,29 @@ def _objects(step):
     from services.ingest.staging import ObjectStorageConfig, filesystem
     s3 = filesystem(ObjectStorageConfig.named("MINIO_BUCKET", "staging"))
     folder = f"{s3_bucket('MINIO_BUCKET', 'staging')}/t1probe-{RUN}"
+    bucket = folder.split("/")[0]
     if step == "write":
-        s3.create_dir(folder.split("/")[0])
+        if s3.get_file_info(bucket).type == pa_fs.FileType.NotFound:
+            (SHARED / f"made-bucket-{WORKER}").touch()
+        s3.create_dir(bucket)
         with s3.open_output_stream(f"{folder}/{WORKER}") as out:
             out.write(b"same")
         return None
     if step == "read":
         return sorted(i.base_name for i in s3.get_file_info(pa_fs.FileSelector(folder, allow_not_found=True)))
-    s3.delete_file(f"{folder}/{WORKER}")
+    if s3.get_file_info(f"{folder}/{WORKER}").type != pa_fs.FileType.NotFound:
+        s3.delete_file(f"{folder}/{WORKER}")
+    if (SHARED / f"made-bucket-{WORKER}").exists():  # the red run made the stack's shared bucket: removed once empty
+        config = ObjectStorageConfig.named("MINIO_BUCKET", "staging")
+        admin = pa_fs.S3FileSystem(
+            endpoint_override=config.endpoint, access_key=config.access_key, secret_key=config.secret_key,
+            scheme="https" if config.use_ssl else "http", region=config.region, allow_bucket_deletion=True,
+        )
+        deadline = time.monotonic() + 60
+        while admin.get_file_info(pa_fs.FileSelector(bucket, recursive=True)) and time.monotonic() < deadline:
+            time.sleep(0.2)  # the other worker's object still there
+        if not admin.get_file_info(pa_fs.FileSelector(bucket, recursive=True)):
+            admin.delete_dir(bucket)
 
 
 STORES = {
@@ -143,9 +165,14 @@ def test_the_same_key_in_every_store(side):
         seen = {name: read("read") for name, read in STORES.items()}
         _barrier("read")
     finally:
-        for remove in STORES.values():
-            remove("remove")
+        failures = []
+        for remove in STORES.values():  # each store on its own: one that fails does not leave the others behind
+            try:
+                remove("remove")
+            except Exception as error:
+                failures.append(error)
         (SHARED / f"{WORKER}.json").write_text(json.dumps(seen))
+        assert not failures, failures
 '''
 
 
@@ -154,8 +181,10 @@ def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], 
     out = tmp_path / "out"
     out.mkdir()
     env = {
-        **{k: v for k, v in os.environ.items() if k not in ("PYTEST_ADDOPTS", "OSPREY_STORE_MARK")},
+        **{k: v for k, v in os.environ.items()
+           if k not in ("PYTEST_ADDOPTS", "OSPREY_STORE_MARK") and not k.startswith("PYTEST_XDIST_")},
         "T1_OUT": str(out),
+        "OSPREY_WORKER_STORES": "1",
         "PYTHONPATH": os.pathsep.join(
             [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
             + [str(BUILD), str(CORE), str(CORE / "packages")]
@@ -172,7 +201,10 @@ def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], 
 STORES = ("arcadedb", "postgres", "valkey", "objects")
 
 
-@pytest.mark.skipif(not os.environ.get("OSPREY_LANE"), reason="live: under stack_lease.sh only")
+@pytest.mark.skipif(
+    not os.environ.get("OSPREY_LANE") and os.environ.get("CI", "").lower() != "true",
+    reason="live: under stack_lease.sh, or CI's conformance job",
+)
 def test_two_workers_writing_the_same_names_never_see_each_other_s(tmp_path: Path) -> None:
     ran, seen = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "2", "--dist", "loadgroup")
     assert ran.returncode == 0, ran.stdout + ran.stderr
@@ -181,7 +213,10 @@ def test_two_workers_writing_the_same_names_never_see_each_other_s(tmp_path: Pat
         assert {s: stores[s] for s in STORES} == {s: [worker] for s in STORES}, (worker, seen)
 
 
-@pytest.mark.skipif(not os.environ.get("OSPREY_LANE"), reason="live: under stack_lease.sh only")
+@pytest.mark.skipif(
+    not os.environ.get("OSPREY_LANE") and os.environ.get("CI", "").lower() != "true",
+    reason="live: under stack_lease.sh, or CI's conformance job",
+)
 def test_without_the_plugin_each_worker_sees_both_in_every_store_the_red(tmp_path: Path) -> None:
     """The planted cross-worker leak, caught: the same run on the stack's shared names."""
     ran, seen = _run(tmp_path, "-n", "2")

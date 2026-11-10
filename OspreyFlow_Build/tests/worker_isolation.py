@@ -2,8 +2,8 @@
 
     pytest -p tests.worker_isolation -n 4 --dist loadgroup …
 
-Loaded on the command line, so a run without `-n` is untouched. In a worker (`PYTEST_XDIST_WORKER` is `gwN`), at
-`pytest_configure`, before any test module is imported:
+Loaded on the command line, so a run without `-n` is untouched. In a worker (xdist's `config.workerinput`, which a
+child process never inherits, unlike `PYTEST_XDIST_WORKER`), at `pytest_configure`, before any test module is imported:
 
 - ArcadeDB: `ArcadeDBConfig.from_env("ospreyflow")` gives `ospreyflow_x<run>_gwN`, made here with the deployment's
   schema, as the Conduit makes its own. The name is hard-coded where the
@@ -16,12 +16,16 @@ Loaded on the command line, so a run without `-n` is untouched. In a worker (`PY
 - ClickHouse is left alone: its live tests already name their own databases, and `CLICKHOUSE_DATABASE` would override
   those names (`analytics_clickhouse/client.py`'s `from_env`).
 
-At the end each worker removes what it made. The controller first removes what a killed earlier run left behind
-(`*_x*_gw*` names only; the leased stack is the lane's own).
+At the end each worker removes what it made, each store tried on its own. A killed earlier run's names
+(`*_x*_gw*`) are swept only when the top-level command asks (`OSPREY_WORKER_SWEEP=1`): nothing can tell them from a
+running run's.
 
 **What cannot be redirected in-process runs on one worker** (`SERIAL`, as `xdist_group("serial")`, which is why
-`--dist loadgroup` is required with `-n`): the tests that start a child process that opens `ospreyflow` itself, and the
-ones that hard-code `Valkey(db=0)`. Its proof is `tests/test_worker_isolation.py` (offline) and
+`--dist loadgroup` is required with `-n`): the tests that start a child process opening `ospreyflow` itself, and the
+ones whose Valkey client ignores `VALKEY_DB` (`db=0`, or no `db` at all). During a serial test the in-process
+redirect is off too, so the test and its children open the one shared graph, as today; the serial tests run one at a
+time on that worker and no other test opens the shared name. Valkey's pub/sub channels are not per database, so they
+stay shared (investigation ids keep them apart). Its proof is `tests/test_worker_isolation.py` (offline) and
 `tests/test_worker_isolation_live.py` (two workers, the same names, on a leased stack).
 """
 
@@ -32,6 +36,7 @@ import os
 import re
 import shutil
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -53,6 +58,9 @@ SERIAL = {
     "tests/services/api/test_worker.py": "Valkey(..., db=0)",
     "tests/services/api/test_revoked_principal_precheck.py": "ValkeyConfig(..., db=0)",
     "tests/services/api/test_valkey_store.py": "Valkey(host='localhost', port=port, db=0)",
+    "tests/services/api/test_schedule_executor.py": "Valkey(host=config.host, port=config.port): db 0, VALKEY_DB unread",
+    "tests/services/api/test_studio_load_stamps_its_case_dataset_live.py": "Valkey(host=..., port=...): db 0",
+    "tests/test_worker_isolation_live.py": "its red run's child pytest opens the shared names",
 }
 
 _LEFT = re.compile(r"^ospreyflow[_-]x[0-9a-f]{8}[_-]gw\d+")
@@ -79,15 +87,20 @@ def worker_names(worker: str, run: str) -> dict[str, str]:
     }
 
 
+#: Where `from_env("ospreyflow")` goes now: the worker's own name, or the shared one during a serial test.
+_TARGET: dict[str, str] = {}
+
+
 def redirect_arcadedb(target: str) -> None:
     """`ArcadeDBConfig.from_env("ospreyflow")` opens `target` instead; any other name is left as it is. The
     parameter keeps its name, since callers pass it by keyword (`from_env(database="ospreyflow")`)."""
     from adapters.graph_arcadedb.client import ArcadeDBConfig
 
+    _TARGET["database"] = target
     original = ArcadeDBConfig.__dict__["from_env"].__func__
 
     def from_env(cls: type[ArcadeDBConfig], database: str) -> ArcadeDBConfig:
-        return cast(ArcadeDBConfig, original(cls, target if database == SHARED else database))
+        return cast(ArcadeDBConfig, original(cls, _TARGET["database"] if database == SHARED else database))
 
     from_env.__wrapped__ = original  # type: ignore[attr-defined]
     ArcadeDBConfig.from_env = classmethod(from_env)  # type: ignore[method-assign,assignment]
@@ -181,8 +194,9 @@ def _buckets(prefix_pattern: re.Pattern[str] | str) -> list[str]:
 
 
 def _live() -> bool:
-    """A store is there to isolate only under a lease (offline runs connect to nothing)."""
-    return bool(os.environ.get("OSPREY_LANE"))
+    """Stores are there to make and clear only on a live run: under a lease (`OSPREY_LANE`), or where a live job says
+    so (`OSPREY_WORKER_STORES=1`, the live proof's own inner run, in CI too). An offline run connects to nothing."""
+    return bool(os.environ.get("OSPREY_LANE")) or os.environ.get("OSPREY_WORKER_STORES") == "1"
 
 
 # --- the hooks ----------------------------------------------------------------------------------------------------
@@ -193,6 +207,7 @@ class _Worker:
         self.admin = os.environ.get("POSTGRES_DB", SHARED)
         self.names = worker_names(worker, run)
         self.folder = Path(tempfile.mkdtemp(prefix=f"osprey-{worker}-"))
+        self.made: list[str] = []  # what start() has made, so finish() removes exactly that, even after a failed start
 
     def start(self) -> None:
         names = self.names
@@ -201,39 +216,63 @@ class _Worker:
         os.environ["OSPREY_ARCADEDB_DATABASE"] = names["OSPREY_ARCADEDB_DATABASE"]  # for the report, and the tests
         redirect_arcadedb(names["OSPREY_ARCADEDB_DATABASE"])
         if _live():
-            asyncio.run(_postgres(self.admin, names["POSTGRES_DB"]))
-            asyncio.run(_arcadedb_create(names["OSPREY_ARCADEDB_DATABASE"]))
+            self.made.append("valkey")
             _valkey_flush(int(names["VALKEY_DB"]))
+            self.made.append("postgres")
+            asyncio.run(_postgres(self.admin, names["POSTGRES_DB"]))
+            self.made.append("arcadedb")
+            asyncio.run(_arcadedb_create(names["OSPREY_ARCADEDB_DATABASE"]))
+            self.made.append("buckets")  # made on first use, by the code under test
 
     def finish(self) -> None:
+        """Each store on its own: one that fails to clear does not leave the others behind. The first failure is
+        raised once all have been tried."""
         names = self.names
-        try:
-            if _live():
-                asyncio.run(_arcadedb(names["OSPREY_ARCADEDB_DATABASE"]))
-                asyncio.run(_postgres(self.admin, None, drop=[names["POSTGRES_DB"]]))
-                _valkey_flush(int(names["VALKEY_DB"]))
-                _buckets(names["MINIO_BUCKET_PREFIX"])
-        finally:
-            shutil.rmtree(self.folder, ignore_errors=True)
+        steps: dict[str, Callable[[], object]] = {
+            "arcadedb": lambda: asyncio.run(_arcadedb(names["OSPREY_ARCADEDB_DATABASE"])),
+            "postgres": lambda: asyncio.run(_postgres(self.admin, None, drop=[names["POSTGRES_DB"]])),
+            "valkey": lambda: _valkey_flush(int(names["VALKEY_DB"])),
+            "buckets": lambda: _buckets(names["MINIO_BUCKET_PREFIX"]),
+        }
+        failures: list[BaseException] = []
+        for store in [s for s in steps if s in self.made]:
+            try:
+                steps[store]()
+            except Exception as error:  # noqa: BLE001  (each store tried; the first failure raised below)
+                failures.append(error)
+        shutil.rmtree(self.folder, ignore_errors=True)
+        if failures:
+            raise failures[0]
 
 
 _STATE: dict[str, _Worker] = {}
 
 
+def _sweep() -> None:
+    """What a killed earlier run left: every `ospreyflow_x*_gw*` name on the stack. Only when the run asks for it
+    (`OSPREY_WORKER_SWEEP=1`, the lane's own top-level command), since it cannot tell a killed run's names from a
+    running one's, and a nested or second run would otherwise drop the first's."""
+    asyncio.run(_arcadedb(None, left=True))
+    asyncio.run(_postgres(os.environ.get("POSTGRES_DB", SHARED), None, left=True))
+    _buckets(re.compile(r"^ospreyflow-x[0-9a-f]{8}-gw\d+-"))
+
+
 def pytest_configure(config: pytest.Config) -> None:
-    worker = os.environ.get("PYTEST_XDIST_WORKER")
-    workers = config.getoption("numprocesses", default=None)
-    if worker is None:
-        if workers and config.getoption("dist", default="no") != "loadgroup":
+    workerinput = getattr(config, "workerinput", None)  # xdist's own mark of a worker, never inherited by a child
+    if workerinput is None:
+        workers = config.getoption("numprocesses", default=None)
+        if not workers:
+            return
+        if config.getoption("dist", default="no") != "loadgroup":
             raise pytest.UsageError("tests.worker_isolation needs --dist loadgroup with -n: the serial files share one worker")
-        if workers and _live():  # the controller: what a killed earlier run left
-            asyncio.run(_arcadedb(None, left=True))
-            asyncio.run(_postgres(os.environ.get("POSTGRES_DB", SHARED), None, left=True))
-            _buckets(re.compile(r"^ospreyflow-x[0-9a-f]{8}-gw\d+-"))
+        if isinstance(workers, int) and workers > MOST_WORKERS:
+            raise pytest.UsageError(f"at most {MOST_WORKERS} workers: Valkey has 16 databases, db 0 the serial files'")
+        if _live() and os.environ.get("OSPREY_WORKER_SWEEP") == "1":
+            _sweep()
         return
-    state = _Worker(worker, os.environ.get("PYTEST_XDIST_TESTRUNUID", "00000000"))
+    state = _Worker(workerinput["workerid"], workerinput.get("testrunuid") or "00000000")
+    _STATE["worker"] = state  # before start(), so a start that fails part-way is still cleared
     state.start()
-    _STATE["worker"] = state
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
@@ -242,12 +281,31 @@ def pytest_unconfigure(config: pytest.Config) -> None:
         state.finish()
 
 
+def _serial(item: pytest.Item) -> bool:
+    extra = {p for p in os.environ.get("OSPREY_WORKER_SERIAL_EXTRA", "").split(os.pathsep) if p}  # the proof's plants
+    return _relative(item) in SERIAL or str(Path(str(item.path)).resolve()) in extra
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Before xdist reads the groups (its own hook, in each worker)."""
     for item in items:
-        if _relative(item) in SERIAL:
+        if _serial(item):
             item.add_marker(pytest.mark.xdist_group("serial"))
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None):  # type: ignore[no-untyped-def]
+    """A serial test opens the shared `ospreyflow` in-process too, as its child processes do: one graph, not two. The
+    serial tests all run on one worker, one at a time, and no other test opens the shared name."""
+    serial = _STATE.get("worker") is not None and _serial(item)
+    if serial:
+        _TARGET["database"] = SHARED
+    try:
+        yield
+    finally:
+        if serial:
+            _TARGET["database"] = _STATE["worker"].names["OSPREY_ARCADEDB_DATABASE"]
 
 
 def _relative(item: pytest.Item) -> str:

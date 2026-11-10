@@ -1,6 +1,7 @@
 # T1 part 4 · parallel live runs · plan (admin, 10 November 2026 evening)
 
-From the brief on main (`BRIEF.md`, T1 part 4) and spec 04 §1.4 (the test database lifecycle). No shared test file is
+From the brief on main (`BRIEF.md`, T1 part 4). The spec is silent on parallel test workers; the test database
+lifecycle is `packages/adapters/graph_arcadedb/testing.py`'s docstring. No shared test file is
 touched: the isolation is one plugin, `tests/worker_isolation.py`, loaded with `-p tests.worker_isolation` on the run's
 own command line, so no conftest changes tonight.
 
@@ -16,12 +17,15 @@ own command line, so no conftest changes tonight.
 | Object store | `ospreyflow-*` buckets | `ospreyflow-xR-gwN-*` | `MINIO_BUCKET_PREFIX` |
 
 Teardown: each worker drops its Postgres and ArcadeDB databases, flushes its Valkey db, deletes its buckets and its
-folder. The controller sweeps leftovers of a killed earlier run (`*_x*_gw*` names only, on the lane's own leased stack).
+folder, each store tried on its own. A killed earlier run's leftovers (`*_x*_gw*`) are swept only when the top-level
+command sets `OSPREY_WORKER_SWEEP=1`.
 
 **What the plugin cannot redirect goes to one worker** (`xdist_group("serial")`, `--dist loadgroup`, required when
 `-n` is given): child processes (two `uvicorn` Conduits in `test_statelessness*.py`, `scripts.seed_pid` in
-`test_pid_seed_live.py`, which also has a fixed scratch folder) and the four files that hard-code
-`Valkey(..., db=0)`. They run one at a time, as today, while the rest runs in parallel.
+`test_pid_seed_live.py`, which also has a fixed scratch folder, and the live proof's own child pytest) and the files
+whose Valkey client ignores `VALKEY_DB` (`db=0`, or no `db` at all). During a serial test the in-process redirect is
+off too, so the test and its children open the one shared `ospreyflow` (the lane review's finding: in-process and
+child had been on two graphs). The serial tests run one at a time on that worker; nothing else opens the shared name.
 
 ## Tests first (rule 15)
 
@@ -35,7 +39,18 @@ folder. The controller sweeps leftovers of a killed earlier run (`*_x*_gw*` name
 
 ## Decisions taken
 
+- (After the lane review) a worker is known by xdist's `config.workerinput`, never by the inherited
+  `PYTEST_XDIST_WORKER`, so a nested pytest is not taken for its parent's worker; the sweep of a killed run's names
+  runs only when the top-level command sets `OSPREY_WORKER_SWEEP=1`; stores are made and cleared only under a lease
+  or `OSPREY_WORKER_STORES=1` (the live proof's inner run, so it also runs in CI's conformance job).
+- Valkey pub/sub channels are server-wide, not per database: left shared, since investigation ids keep them apart.
+- `test_revoked_principal_precheck.py` stays serial though it never connects (its `ValkeyConfig(db=0)` matches the
+  check): one small file, and the check stays simple.
+- Rule 3's live tests under the plugin: the 18 live access-control and withheld-read files plus `test_route_rights.py`,
+  serial and at 4 workers, the same pass and fail set (graph_port's own databases are per test, so it measures the
+  workers, not the redirect).
 - pytest-xdist 3.8.0 and execnet 2.1.2 (both MIT) in Core's dev group, as their own commit at the branch's head.
 - The plugin goes on the command line, not into `tests/conftest.py`: the brief says no shared test file tonight. Wiring
   it into the conftest, the lease's `live` verb and the Makefile is a diff for the orchestrator.
-- ClickHouse is left alone (see above). The graph_port sweep's one-hour window is kept; no test runs that long.
+- ClickHouse is left alone (see above), a departure from the brief's list put to the orchestrator. The graph_port
+  sweep's one-hour window is kept; no test runs that long.
