@@ -24,6 +24,7 @@ import asyncio
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -212,8 +213,9 @@ async def test_publish_never_execs_a_binary(
 
 @needs_git
 async def test_concurrent_publishes_each_commit_their_own_bytes(tmp_path: Path) -> None:
-    """The lock's invariant (rule 12): publishes of one recipe at once never refuse each other,
-    and each version's commit holds that version's bytes, not another's."""
+    """The lock's invariant (rule 12): eight publishes of one recipe at once all succeed, never
+    refusing each other or failing on each other's files, with one commit each holding its own
+    version's bytes."""
     repo = tmp_path / "repo"
     versions = range(1, 9)
     await asyncio.gather(
@@ -421,12 +423,15 @@ async def test_the_index_is_read_and_written_under_a_lock_another_process_honour
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Item 7, and the re-review's item 3: the file's write, the index's read-modify-write and the
-    commit all hold an exclusive `flock` on the repository's publish lock, so the Prison
+    commit (and the index's read and the swap on `HEAD`) all hold an exclusive `flock` on the
+    repository's publish lock, so the Prison
     Intelligence seed beside a running Conduit cannot lose the other's index entry. Probed from a
     second open of the lock file, as another process would take it, at each of the three."""
     import fcntl
 
     from dulwich.index import Index
+    from dulwich.refs import DiskRefsContainer
+    from dulwich.repo import Repo
 
     repo = tmp_path / "repo"
     await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
@@ -457,8 +462,14 @@ async def test_the_index_is_read_and_written_under_a_lock_another_process_honour
     monkeypatch.setattr(
         studio_publish, "commit_tree_changes", wrap("commit", studio_publish.commit_tree_changes)
     )
+    monkeypatch.setattr(Repo, "open_index", wrap("index read", Repo.open_index))
+    monkeypatch.setattr(
+        DiskRefsContainer, "set_if_equals", wrap("swap", DiskRefsContainer.set_if_equals)
+    )
     await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
-    assert held == {"write": True, "index": True, "commit": True}
+    assert held == {
+        "write": True, "index read": True, "index": True, "commit": True, "swap": True,
+    }  # fmt: skip
 
 
 @needs_git
@@ -487,7 +498,8 @@ async def test_a_rival_making_the_repository_first_is_joined_not_refused(
     """First use on a fresh volume, with another process making the repository at the same moment
     (the lane review's item 3): the publish's own git directory is made aside, so the rival's
     lands first and the publish commits on top of it. Nothing is refused, no ref is left behind
-    and the aside directory is gone."""
+    and the aside directory is gone. The rival is the real `git`, run once in the window between
+    the aside directory being made and its rename; it is not a second dulwich publish."""
     from dulwich.repo import Repo
 
     root = tmp_path / "fresh"
@@ -507,11 +519,11 @@ async def test_a_rival_making_the_repository_first_is_joined_not_refused(
     monkeypatch.setattr(Repo, "init", staticmethod(rival_first))
     await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=root)
 
-    assert made_aside == [True]
     assert _git(root, "log", "--format=%s").splitlines() == ["ingest: publish alpha v1", "theirs"]
     assert _git(root, "for-each-ref", "--format=%(refname)").split() == ["refs/heads/main"]
     assert sorted(p.name for p in root.iterdir()) == [".git", "recipes", "theirs"]
     _git(root, "fsck", "--strict")
+    assert made_aside == [True]  # last, so a collision fails on what it does, not on this flag
 
 
 @needs_git
@@ -620,3 +632,79 @@ async def test_a_temporary_file_a_crash_left_is_swept(tmp_path: Path) -> None:
 
     assert not left.exists()
     assert kept.exists()  # only the shape the publish itself makes is swept
+
+
+@needs_git
+@pytest.mark.parametrize("how", ["gitfile", "link"])
+async def test_a_git_directory_that_is_not_the_root_s_own_is_refused(
+    tmp_path: Path, how: str
+) -> None:
+    """A `.git` file naming another repository's directory, or a link at `.git`, is refused (the
+    lane review's round 3, item 2): the index, the objects, the lock and `HEAD` written would be
+    another repository's. That repository is left as it was."""
+    other = tmp_path / "other"
+    await commit_recipe_file("alpha", b"other's\n", version=1, repo_root=other)
+    before = _git(other, "rev-parse", "HEAD")
+    root = tmp_path / "root"
+    root.mkdir()
+    if how == "gitfile":
+        (root / ".git").write_text(f"gitdir: {other / '.git'}\n")
+    else:
+        (root / ".git").symlink_to(other / ".git", target_is_directory=True)
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"ours\n", version=2, repo_root=root)
+
+    assert _git(other, "rev-parse", "HEAD") == before
+    assert _git(other, "status", "--porcelain") == ""
+    assert not (root / "recipes").exists()
+
+
+async def test_publishes_queued_behind_a_held_lock_share_one_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wait has one limit for both locks (the lane review's round 3, item 3): with the
+    `flock` held elsewhere, two publishes queued in this process are both refused within about
+    one wait, not one after the other, so queued publishes cannot each hold a worker thread for
+    a further wait."""
+    import fcntl
+    import threading
+
+    wait = 1.0
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", wait)
+    other = (repo / ".git" / studio_publish.PUBLISH_LOCK_NAME).open("a")
+    fcntl.flock(other, fcntl.LOCK_EX)
+    release = threading.Timer(6.0, lambda: (fcntl.flock(other, fcntl.LOCK_UN), other.close()))
+    release.start()
+    try:
+        started = time.monotonic()
+        outcomes = await asyncio.gather(
+            commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo),
+            commit_recipe_file("alpha", b"version: 3\n", version=3, repo_root=repo),
+            return_exceptions=True,
+        )
+        elapsed = time.monotonic() - started
+    finally:
+        release.join()
+    assert all(isinstance(outcome, GitCommitError) for outcome in outcomes), outcomes
+    assert elapsed < 1.6 * wait, f"the second publish waited {elapsed:.2f} s, a second wait"
+
+
+@needs_git
+async def test_an_aside_directory_a_crashed_first_use_left_is_swept(tmp_path: Path) -> None:
+    """A first use killed before its rename leaves `.git-init-*` with a whole repository in it;
+    the next first use sweeps one older than a live first use could be, so `git add -A` cannot add
+    it as an embedded repository (the lane review's round 3, minor)."""
+    root = tmp_path / "fresh"
+    root.mkdir()
+    stale = root / ".git-init-crashed"
+    (stale / ".git").mkdir(parents=True)
+    old = time.time() - 3600
+    os.utime(stale, (old, old))
+
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=root)
+
+    assert sorted(p.name for p in root.iterdir()) == [".git", "recipes"]
+    assert _git(root, "status", "--porcelain") == ""
