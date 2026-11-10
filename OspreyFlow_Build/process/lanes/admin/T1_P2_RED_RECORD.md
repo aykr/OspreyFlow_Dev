@@ -32,3 +32,12 @@ can be made by a fixture's teardown too. pytest therefore lists it as an error, 
     `git ls-files`, and the copy is no repository). The other is **a defect on main**: the live
     `tests/services/api/test_schedule_notice.py` imports `alert_to_view` from `services.api.watch_routes`, which L2.10
     removed. `make test` leaves live files out, so nothing caught it. It was reported to the orchestrator.
+
+**`make live-collect`** (`makefile-T1p2-collect.diff`, the orchestrator's addition; the owner's Makefile, applied at
+merge). `make test` gains a step that imports every live file, offline, and runs none of their tests. It needs no
+marks, since pytest imports a file before `-m` deselects anything, so it works today.
+- At main 94a74c5 it is **red on the real defect**: exit 2, `ERROR ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py`.
+- With that one file left out of the same collection, it is green (exit 0).
+
+So `test_schedule_notice.py` is the only live file on main that cannot import. The orchestrator has carried its fix to
+rules, since rules knows what replaced `alert_to_view`. Until then the step is red on main, and that is its purpose.
