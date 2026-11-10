@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Build/tests/services/api/test_admin_routes.py b/OspreyFlow_Build/tests/services/api/test_admin_routes.py
-index 515649f..e1fa90c 100644
+index 515649f..1010b2e 100644
 --- a/OspreyFlow_Build/tests/services/api/test_admin_routes.py
 +++ b/OspreyFlow_Build/tests/services/api/test_admin_routes.py
-@@ -455,6 +455,17 @@ def test_the_system_screen_says_the_deployments_version_and_the_last_check(
+@@ -455,6 +455,22 @@ def test_the_system_screen_says_the_deployments_version_and_the_last_check(
      assert body["update"] == notice
  
  
@@ -11,6 +11,11 @@ index 515649f..e1fa90c 100644
 +) -> None:
 +    """ADR-148 decision 10: System says the deployment's marking ceiling, the scheme's highest
 +    when none is set."""
++    from services.api.app import app
++
++    # The route prefers the ceiling the start read; one left by an earlier test's start is not
++    # this test's, so the environment is read as a start with no ceiling held would.
++    monkeypatch.delattr(app.state, "deployment_ceiling", raising=False)
 +    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "OFFICIAL-SENSITIVE")
 +    assert _system(client, monkeypatch).json()["highest_marking"] == "OFFICIAL-SENSITIVE"
 +    monkeypatch.delenv("OSPREY_HIGHEST_MARKING")
@@ -43,7 +48,7 @@ index 8039b2c..5930457 100644
  describe("the System tab's version", () => {
    it("says the version and an update offered, with its notes and address", async () => {
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx
-index 5a3598d..28699a9 100644
+index 5a3598d..e35dc4c 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx
 @@ -72,6 +72,15 @@ export function System({ api }: { api: AdminApi }) {
@@ -97,10 +102,10 @@ index 5ad9a19..7bc302b 100644
  }
  /**
 diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
-index 4749f75..a99696f 100644
+index 1b7367e..ba10dd0 100644
 --- a/OspreyFlow_Core/services/api/app.py
 +++ b/OspreyFlow_Core/services/api/app.py
-@@ -16782,7 +16782,10 @@ async def system_status_route(
+@@ -16793,7 +16793,10 @@ async def system_status_route(
          converted = ConvertedViews(
              problem=f"Not known: the count could not be read ({type(e).__name__})"
          )
