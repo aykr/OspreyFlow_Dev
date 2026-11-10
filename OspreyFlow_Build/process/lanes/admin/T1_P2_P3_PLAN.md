@@ -38,7 +38,7 @@ run nowhere offline.
 
 ## Part 3: selection by change
 
-Built on today's live set, the Makefile's `--ignore` list, which part 2's marks replace later. `OspreyFlow_Build/scripts/live_select.py` and `OspreyFlow_Build/scripts/live_map.tsv` give, for
+Built on today's live set, the Makefile's `--ignore` list, which part 2's marks replace later. `OspreyFlow_Build/tools/live_select.py` and `OspreyFlow_Build/tools/live_map.tsv` give, for
 a lane's diff against main:
 - the live test files whose imports reach a changed Python file (including imports inside functions, and
   modules named in a string);
@@ -51,8 +51,7 @@ orchestrator's to schedule.
 - Red first: a change under an unmapped path selects the full set; an empty diff selects route rights; a change
   to the graph adapter selects `conformance/graph_port`.
 
-Measured over the last 13 lane merges, import reach alone would have run half the live files or fewer for six of
-them. The rest touch modules nearly everything imports, such as the schemas and the root conftest.
+Measured over main's last 18 lane merges, each merge's diff selects 184.5 of the 291 live files on average (63%); 11 needed all of them, since they touch modules nearly every live test imports (`T1_P3_RED_RECORD.md`).
 
 ## Order
 

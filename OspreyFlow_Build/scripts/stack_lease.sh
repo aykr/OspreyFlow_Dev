@@ -15,8 +15,8 @@
 #                                                                          beside its containers (9 November 2026)
 #   OspreyFlow_Build/scripts/stack_lease.sh offline <lane> -- <command…>  the same on the server with no stack: the closed
 #                                                                          ports and no lane, e.g. make -k test SKIP_JS=1
-#   OspreyFlow_Build/scripts/stack_lease.sh live <lane> [--all] [-- <pytest args…>]   the live test files the lane's change
-#                                                                          against main can reach (scripts/live_select.py, admin's
+#   OspreyFlow_Build/scripts/stack_lease.sh live <lane> [--all | --base <ref>] [-- <pytest args…>]   the live test files the
+#                                                                          lane's change against main (or <ref>) can reach (tools/live_select.py, admin's
 #                                                                          T1 part 3), run with remote on its stack; --all, every one
 #   OspreyFlow_Build/scripts/stack_lease.sh remote-log <lane>             follow the lane's last remote run again (after
 #                                                                          a dropped ssh session), exiting with its code
@@ -320,10 +320,13 @@ case "$cmd" in
     run_on_host "$who" "$h" "ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994" "" "offline" "$@"
     ;;
   live)
-    who="${2:?usage: stack_lease.sh live <lane> [--all] [-- <pytest args…>]}"
+    who="${2:?usage: stack_lease.sh live <lane> [--all | --base <ref>] [-- <pytest args…>]}"
     shift 2
     all=""
-    [ "${1:-}" = "--all" ] && { all="--all"; shift; }
+    case "${1:-}" in
+      --all) all="--all"; shift ;;
+      --base) all="--base ${2:?usage: stack_lease.sh live <lane> --base <ref>}"; shift 2 ;;
+    esac
     [ "${1:-}" = "--" ] && shift
     s="$(held_by "$who")"
     [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
@@ -333,14 +336,14 @@ case "$cmd" in
     cd "$top/OspreyFlow_Build"
     # The selection is made here, from the lane's own diff; OSPREY_LIVE_SELECT stands in for it in the tests.
     # shellcheck disable=SC2086
-    picks="$(${OSPREY_LIVE_SELECT:-../OspreyFlow_Core/.venv/bin/python -m scripts.live_select} $all --why)" \
+    picks="$(${OSPREY_LIVE_SELECT:-../OspreyFlow_Core/.venv/bin/python -m tools.live_select} $all --why)" \
       || { echo "The selection failed: nothing was run." >&2; exit 1; }
     files=()
     while IFS= read -r f; do [ -n "$f" ] && files+=("../OspreyFlow_Build/$f"); done <<< "$picks"
     [ "${#files[@]}" -gt 0 ] || { echo "The selection came out empty, which it never should (route rights is its floor): nothing was run." >&2; exit 1; }
-    echo "live: ${#files[@]} live test files${all:+ (the full set)}." >&2
+    echo "live: ${#files[@]} live test files${all:+ ($all)}." >&2
     run_on_host "$who" "$h" "$(ports_line "$s" "$who")" "$(basename "$(lock_of "$s")")" "$s" \
-      sh -c 'cd ../OspreyFlow_Core && exec .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:randomly "$@"' sh "${files[@]}" "$@"
+      sh -c 'cd ../OspreyFlow_Core && exec .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE "$@"' sh "${files[@]}" "$@"
     ;;
   remote-log)
     who="${2:?usage: stack_lease.sh remote-log <lane>}"
@@ -369,7 +372,7 @@ case "$cmd" in
     done
     ;;
   *)
-    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | live <lane> [--all] | offline <lane> -- <command…> | remote-log <lane> | release <lane> | status" >&2
+    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | live <lane> [--all | --base <ref>] [-- <pytest args…>] | offline <lane> -- <command…> | remote-log <lane> | release <lane> | status" >&2
     exit 2
     ;;
 esac

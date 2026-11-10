@@ -1,23 +1,28 @@
 """The live test files a change can reach (admin's T1 part 3, 10 November 2026).
 
-    ../OspreyFlow_Core/.venv/bin/python -m scripts.live_select [--base main] [--all] [--why]   (from OspreyFlow_Build)
+    ../OspreyFlow_Core/.venv/bin/python -m tools.live_select [--base main] [--all] [--why]   (from OspreyFlow_Build)
 
 prints one live test path per line, relative to OspreyFlow_Build, for the lane's change against `--base`
-(`git diff --name-only <merge-base>`, plus untracked files). `stack_lease.sh live <lane>` runs them.
+(`git diff --name-only --no-renames <merge-base>`, so a rename is its old path and its new one, plus untracked files).
+`stack_lease.sh live <lane>` runs them.
 
-- **The live set** is the Makefile's `test` target's `--ignore` list: the files `make test` leaves out because they
-  need a store (`test-file-coverage-check` already holds every live file to that list). When T1 part 2's
-  `pytest.mark.store` replaces that list, `Repo.live_set` reads the marks instead.
+- **The live set** is the Makefile's `test` target's `--ignore` list, read by `test_file_coverage_check`'s own parser:
+  the files `make test` leaves out because they need a store. When T1 part 2's `pytest.mark.store` replaces that
+  list, `Repo.live_set` reads the marks instead.
 - **Each changed path** is decided by the first of:
-  1. a rule in `scripts/live_map.tsv` (a glob, then `none`, `all` or test paths), for the paths imports cannot see:
+  1. a rule in `tools/live_map.tsv` (a glob, then `none`, `all` or test paths), for the paths imports cannot see:
      documents, the Glass, configuration;
-  2. for a Python file on disk, every live test file whose run imports it: its own imports, its conftest files', and
-     theirs in turn, including imports inside functions and modules named in a string (the worker's job registry and
-     the harness's sub-commands load modules so);
-  3. otherwise **the full set**: a path no rule covers is never taken to need nothing, and nor is a removed Python
-     file.
+  2. for a Python file on disk, every live test file whose run imports it: its own imports, its package's
+     `__init__` files, its conftest files', and theirs in turn, including imports inside functions and modules named
+     in a string (the worker's job registry and the harness's sub-commands load modules so; an f-string's constant
+     package prefix stands for every module under it);
+  3. otherwise **the full set**: a path no rule covers is never taken to need nothing, and nor is a removed Python file.
+
+  A rule whose selection starts with `+` **adds** to what the other two give, rather than deciding the path: for a
+  live test that reads other Python files as text or loads them by glob, which imports cannot see. Every matching `+`
+  rule adds.
 - `tests/services/api/test_route_rights.py` is selected for every change (the lanes' rule), so the selection is never
-  empty.
+  empty. A rule naming tests no live file matches is refused, so a typo cannot select nothing.
 
 `--all` prints the full set, the nightly run on main. `--why` prints to stderr what each changed path chose.
 """
@@ -30,12 +35,23 @@ import re
 import subprocess
 import sys
 from collections.abc import Iterable
+from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+
+from tools.test_file_coverage_check import makefile_test_ignored
 
 ALWAYS = "tests/services/api/test_route_rights.py"
 SKIP = frozenset({".venv", "node_modules", "__pycache__", ".git", ".pytest_cache"})
 _DOTTED = re.compile(r"[A-Za-z_]\w*(\.[A-Za-z_]\w*)+")
+
+
+@dataclass(frozen=True)
+class Rule:
+    pattern: re.Pattern[str]
+    glob: str
+    kind: str  # none, all, list, or add
+    tests: tuple[str, ...]
 
 
 class Repo:
@@ -51,12 +67,10 @@ class Repo:
 
     # --- the live set and the map ---------------------------------------------------------------------------
 
-    def live_set(self) -> list[str]:
-        """Every live test file, from the Makefile's `test` target's --ignore list, relative to OspreyFlow_Build."""
-        text = (self.build / "Makefile").read_text()
-        body = text.split("\ntest:\n", 1)[1].split("\n\n", 1)[0] if "\ntest:\n" in text else text.split("test:\n", 1)[1]
+    @cached_property
+    def live(self) -> list[str]:
         out: set[str] = set()
-        for entry in re.findall(r"--ignore=\.\./OspreyFlow_Build/(\S+)", body):
+        for entry in makefile_test_ignored((self.build / "Makefile").read_text(encoding="utf-8")):
             target = self.build / entry
             if target.is_dir():
                 out |= {str(p.relative_to(self.build)) for p in target.rglob("test_*.py") if not SKIP & set(p.parts)}
@@ -66,15 +80,33 @@ class Repo:
             raise SystemExit(f"{ALWAYS} is not in the Makefile's live set: the selection's floor is gone.")
         return sorted(out)
 
-    def rules(self) -> list[tuple[re.Pattern[str], str, list[str]]]:
-        path = self.build / "scripts" / "live_map.tsv"
+    def live_set(self) -> list[str]:
+        """Every live test file, relative to OspreyFlow_Build."""
+        return list(self.live)
+
+    def matching(self, word: str) -> set[str]:
+        """The live files a rule's word names: the file, or every one under the folder."""
+        return {t for t in self.live if t == word or t.startswith(word.rstrip("/") + "/")}
+
+    @cached_property
+    def rules(self) -> list[Rule]:
+        path = self.build / "tools" / "live_map.tsv"
         out = []
-        for line in path.read_text().splitlines() if path.exists() else []:
+        for n, line in enumerate(path.read_text().splitlines() if path.exists() else [], 1):
             if not line.strip() or line.startswith("#"):
                 continue
             glob, selects, *_ = line.split("\t")
             words = selects.split()
-            out.append((_glob(glob), words[0] if words[0] in ("none", "all") else "list", words))
+            if words[0] in ("none", "all"):
+                rule = Rule(_glob(glob), glob, words[0], ())
+            else:
+                kind = "add" if words[0].startswith("+") else "list"
+                tests = tuple(w.lstrip("+") for w in words)
+                for t in tests:
+                    if not self.matching(t):
+                        raise SystemExit(f"live_map.tsv line {n}: {t!r} names no live test file, so it would select nothing.")
+                rule = Rule(_glob(glob), glob, kind, tests)
+            out.append(rule)
         return out
 
     # --- modules and imports --------------------------------------------------------------------------------
@@ -112,6 +144,20 @@ class Repo:
                 out.add(f)
         return out
 
+    def _under(self, prefix: str) -> set[Path]:
+        """Every module under a package prefix (`import_module(f"services.api.{name}")`)."""
+        return {f for name, f in self.index.items() if name.startswith(prefix)} | self._named(prefix.rstrip("."))
+
+    def _string(self, value: str) -> set[Path]:
+        """A module a string names: `pkg.mod`, `pkg.mod:attr` or `pkg.mod.attr`."""
+        dotted = value.partition(":")[0]
+        if not _DOTTED.fullmatch(dotted):
+            return set()
+        if dotted in self.index:
+            return self._named(dotted)
+        base = dotted.rpartition(".")[0]
+        return self._named(base) if base in self.index and "." in base else set()
+
     def imports(self, path: Path) -> frozenset[Path]:
         if path in self._imports:
             return self._imports[path]
@@ -136,10 +182,11 @@ class Repo:
                 for alias in node.names:
                     out |= self._named(f"{base}.{alias.name}")
             elif isinstance(node, ast.Constant) and isinstance(node.value, str) and "." in node.value:
-                # "services.api.x:handler" or "harness.backup": a module loaded by name (import_module).
-                dotted = node.value.partition(":")[0]
-                if _DOTTED.fullmatch(dotted) and dotted in self.index:
-                    out |= self._named(dotted)
+                out |= self._string(node.value)
+            elif isinstance(node, ast.JoinedStr) and node.values and isinstance(node.values[0], ast.Constant):
+                head = node.values[0].value
+                if isinstance(head, str) and head.endswith(".") and _DOTTED.fullmatch(head.rstrip(".") + ".x"):
+                    out |= self._under(head)
         out.discard(path)
         self._imports[path] = frozenset(out)
         return self._imports[path]
@@ -154,10 +201,14 @@ class Repo:
             d = d.parent
 
     def reach(self, test: str) -> set[Path]:
-        """Every file a live test file's run loads, through imports and its conftest files."""
+        """Every file a live test file's run loads: its imports, its package's `__init__` files (pytest imports
+        them for a test beneath them), its conftest files and theirs, in turn."""
         start = (self.build / test).resolve()
         seen: set[Path] = set()
         todo = [start, *self.conftests(start)]
+        for f in list(todo):
+            for name in self.modules_of(f):
+                todo.extend(self._named(name))
         while todo:
             f = todo.pop()
             if f not in seen:
@@ -185,19 +236,21 @@ def select(changed: Iterable[str], repo: Repo | None = None, *, why: list[str] |
     repo = repo or Repo()
     live = repo.live_set()
     chosen: set[str] = {ALWAYS}
-    table = repo.rules()
     reaches: dict[str, set[Path]] | None = None
     note = why.append if why is not None else (lambda _: None)
     for c in changed:
-        rule = next(((kind, words) for pattern, kind, words in table if pattern.match(c)), None)
+        for rule in (r for r in repo.rules if r.kind == "add" and r.pattern.match(c)):
+            for t in rule.tests:
+                chosen |= repo.matching(t)
+            note(f"{c}: live_map.tsv adds {' '.join(rule.tests)}")
+        rule = next((r for r in repo.rules if r.kind != "add" and r.pattern.match(c)), None)
         if rule is not None:
-            kind, words = rule
-            if kind == "all":
+            if rule.kind == "all":
                 chosen |= set(live)
-            elif kind == "list":
-                for w in words:
-                    chosen |= {t for t in live if t == w or t.startswith(w.rstrip("/") + "/")}
-            note(f"{c}: live_map.tsv says {' '.join(words)}")
+            elif rule.kind == "list":
+                for t in rule.tests:
+                    chosen |= repo.matching(t)
+            note(f"{c}: live_map.tsv says {rule.kind if rule.kind != 'list' else ' '.join(rule.tests)}")
             continue
         p = (repo.root / c).resolve()
         if c.endswith(".py") and p.is_file():
@@ -213,20 +266,23 @@ def select(changed: Iterable[str], repo: Repo | None = None, *, why: list[str] |
 
 
 def changed_paths(repo: Repo, base: str) -> list[str]:
+    """The lane's change against `base`: every path its diff names (a rename as both its paths), and untracked files."""
     git = ["git", "-C", str(repo.root)]
     merge_base = subprocess.run([*git, "merge-base", base, "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    tracked = subprocess.run([*git, "diff", "--name-only", merge_base], capture_output=True, text=True, check=True).stdout
+    tracked = subprocess.run(
+        [*git, "diff", "--name-only", "--no-renames", merge_base], capture_output=True, text=True, check=True
+    ).stdout
     untracked = subprocess.run([*git, "ls-files", "-o", "--exclude-standard"], capture_output=True, text=True, check=True).stdout
     return sorted((set(tracked.splitlines()) | set(untracked.splitlines())) - {""})
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, repo: Repo | None = None) -> int:
     parser = argparse.ArgumentParser(description="The live test files a change can reach.")
     parser.add_argument("--base", default="main")
     parser.add_argument("--all", action="store_true", help="the full live set (the nightly run)")
     parser.add_argument("--why", action="store_true", help="say on stderr what each changed path chose")
     args = parser.parse_args(argv)
-    repo = Repo()
+    repo = repo or Repo()
     why: list[str] = []
     picked = repo.live_set() if args.all else select(changed_paths(repo, args.base), repo, why=why)
     if args.why:

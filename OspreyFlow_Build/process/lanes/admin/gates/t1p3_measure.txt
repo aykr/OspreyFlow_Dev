@@ -1,0 +1,19 @@
+d79b087   291/291  merge(lane/rules-b): L2.11a, the rule's standards: BPMN 2.0 and DMN stored beside each ver
+c92eeff   291/291  merge(lane/admin-ddl): T1, the graph schema applied as one script for the Conduit's start-
+e94c501     1/291  merge(lane/admin-pidpad): T1's start-line test reads the line by field, so Linux's right-a
+e324d9f   291/291  merge(lane/platform-b): ADR-147 Amendment 3, the six gazetteer-only identifiers withheld f
+a0b2437    11/291  merge(lane/admin): T1 part 1, every server run measured: --durations=30, vitest's 30 slowe
+2bfa898   291/291  merge(lane/rules): L2.10, one queue, team routing and the lead's tools (46be527)
+95b5e19    11/291  merge(lane/platform-b): P6, the case's gazetteer panel beside place search (364da1a)
+8e5b5ed   291/291  merge(lane/studio-b): L1.7a part 1, the recipes repository written in-process by dulwich, 
+dd48f5e     1/291  merge(lane/docs): P5b's guide rows, and L2.5b's and L2.5c's lines (6d3a926)
+90325cd    17/291  merge(lane/platform-b): preflight checks a named deployment's own published ports, read fr
+899b8b8   291/291  merge(lane/case): L3.9, a drawn dataset merged into a target, its types mapped onto the ta
+6497208   291/291  merge(lane/platform-b): P5b, backups in a folder the administrator names at setup, never i
+0c1c0fd    68/291  merge(lane/admin): L2.5c, Admin's Delete for a removed case's layer and refusals that name
+b89132e   291/291  merge(lane/admin): L2.5b, Disable's full transfer list (0d838db)
+d0dfe8a   291/291  merge(lane/platform): the numeric user 10001:10001 in every image (3cf8685, 3905f4f), ahea
+99d927d    11/291  merge(lane/docs): D2a, the guides as built (f802594)
+e55e825   291/291  merge(lane/platform): P5, the owner's map rulings (78bb4ae)
+1571bfd   291/291  merge(lane/studio): L1.5, the expert steps (8d997d4)
+mean 184.5 of 291 (63%) over 18 lane merges
