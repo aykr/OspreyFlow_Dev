@@ -65,10 +65,12 @@ def test_a_case_s_own_location_keeps_its_uprn_and_loses_the_gazetteer_only_ident
     a gazetteer carries are withheld from every node for every request reader, whatever dataset it
     is in. A `uprn` an analyst loaded into the case is the case's data and is kept (Amendment 1
     point 3a), and `postcode` is an address."""
-    sent = withhold_sources(_place("case-a"), READER)
-    assert sent.properties == {
-        "name": "Cranford", "geometry_ref": "g1", "postcode": "TW5 9QQ", "uprn": IDS["uprn"],
-    }  # fmt: skip
+    # A case that reads no gazetteer at all, and one that reads one beside its own dataset.
+    for reader in (READER.model_copy(update={"datasets": ["case-a"]}), READER):
+        sent = withhold_sources(_place("case-a"), reader)
+        assert sent.properties == {
+            "name": "Cranford", "geometry_ref": "g1", "postcode": "TW5 9QQ", "uprn": IDS["uprn"],
+        }  # fmt: skip
 
 
 def test_the_gazetteer_only_identifiers_are_the_seven_less_uprn() -> None:

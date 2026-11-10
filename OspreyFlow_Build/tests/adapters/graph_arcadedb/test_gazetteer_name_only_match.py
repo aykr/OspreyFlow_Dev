@@ -90,3 +90,12 @@ def test_a_search_by_a_gazetteer_only_identifier_alone_matches_nothing() -> None
     case_reader = READER.model_copy(update={"datasets": ["case-a"]})
     query = SearchNodesBuilder(("osm_id",), "node/1").render_gremlin(access, case_reader)
     assert "__.has('osm_id'" not in query
+    # Exactly the step that keeps no node, before the access step, dedup and limit: never a
+    # bare or() or a fall-back that matches every node. ArcadeDB's answer to it is proven live
+    # (`test_gazetteer_only_ids_withheld_everywhere_live.py`).
+    assert query.startswith("g.V().or(__.not(__.identity())).")
+    for builder in (
+        SuggestNodesBuilder(("Location",), ("osm_id", "os_place_id"), "7"),
+        SearchNodesBuilder(("osm_id", "os_place_id"), "7"),
+    ):
+        assert ".or(__.not(__.identity()))." in builder.render_gremlin(access, case_reader)

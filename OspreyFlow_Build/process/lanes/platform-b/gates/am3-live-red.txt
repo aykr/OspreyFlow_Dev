@@ -1,0 +1,57 @@
+ADR-147 Am 3 live RED at 22f5b65: ontology/handling.py and graph_arcadedb/builders.py reverted to main's (Amendment 1's read and match), stack g (platform-b's lease)
+Running on ospreyflow-test (stack g, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T104025Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_case_s_own_place_is_sent_and_found_without_a_gazetteer_only_identifier _
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x70a3f54e2470>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x70a3f54e2670>)
+
+    def test_a_case_s_own_place_is_sent_and_found_without_a_gazetteer_only_identifier(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        private_key, _ = keypair
+        headers = {"Authorization": f"Bearer {sign_token(private_key, default_claims())}"}
+        PLANTED.clear()
+        cases: list[str] = []
+    
+        from services.api.app import app
+    
+        try:
+            place_id = _run(_plant())
+            with TestClient(app) as client:
+                made = client.post("/v1/investigations", headers=headers, json=new_case())
+                case_id = made.json()["id"]
+                cases.append(case_id)
+                _run(_give_case(case_id))
+                search = f"/v1/investigations/{case_id}/search"
+                suggest = f"/v1/investigations/{case_id}/suggest"
+    
+                # Found by no identifier only a gazetteer carries: neither the exact search nor the
+                # type-ahead on its prefix, which says no `more` though twelve places share it.
+                for query in (OSM_ID, OS_PLACE_ID):
+                    by_id = client.post(search, headers=headers, json={"query": query})
+>                   assert by_id.status_code == 200 and by_id.json()["nodes"] == [], by_id.text
+E                   AssertionError: {"nodes":[{"id":"01M72GQ4Y96FSA47Y22ANZTK1Y","type":"Location","properties":{"name":"Wrexbury 53814407","osm_id":"753814407","os_place_id":"osgb53814407","uprn":"953814407"},"provenance":{"state":"asserted","sources":[{"document_id":"studio-load","locator":"1","excerpt_hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}],"sources_withheld":false,"extracted_by":null,"extraction_confidence":null,"first_seen":"2026-11-10T10:40:32.713782Z","last_confirmed":null,"confirmed_by":null},"handling":{"classification":"OFFICIAL","handling_code":"P","action_code":null,"sanitisation_code":null,"originator":"unit-1","owning_unit":"unit-1","review_date":null,"legal_basis":null},"resolution":{"cluster_id":null,"cluster_score":null,"resolution_run":null,"manually_linked":[],"manually_split":[]},"audit":{"created_at":"2026-11-10T10:40:32.713846Z","created_by":"loader-1","revision":1,"superseded_by":null,"load_id":null,"recipe_id":null,"recipe_version":null,"reverted":false,"withdrawn_by_load":null},"datasets":["case-own-am3-live-53814407"]}]}
+E                   assert (200 == 200 and [{'id': '01M7...e, ...}, ...}] == []
+E                    +  where 200 = <Response [200 OK]>.status_code
+E                     
+E                     Left contains one more item: {'id': '01M72GQ4Y96FSA47Y22ANZTK1Y', 'type': 'Location', 'properties': {'name': 'Wrexbury 53814407', 'osm_id': '753814...fffffffffffffffffffffffffffffffffffffffffffffffffffffff'}], 'sources_withheld': False, 'extracted_by': None, ...}, ...}
+E                     Use -v to get more diff)
+
+../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py:199: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 10:40:48] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 10:40:54] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_case_s_own_place_is_sent_and_found_without_a_gazetteer_only_identifier
+1 failed, 1 warning in 35.62s

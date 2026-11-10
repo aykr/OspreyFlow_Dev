@@ -75,8 +75,8 @@ GAZETTEER_DATASET_PREFIX = "gazetteer-"
 #: (`ontology.handling.withhold_sources`); the Conduit's own work and a load read them whole. Only
 #: the OSM build loads such a dataset today (`osm_id`); the others are named so a gazetteer dataset
 #: of theirs is covered the day one is built. A Studio load of a gazetteer into a case's own
-#: dataset is the case's data and keeps them (ADR-147 Amendment 1, Open). `postcode` is an address
-#: and stays.
+#: dataset arrives unmarked, so Amendment 3 withholds the six below from every node; the `uprn` it
+#: carries is kept there as a case's own. `postcode` is an address and stays.
 GAZETTEER_SOURCE_IDENTIFIERS: tuple[str, ...] = (
     "osm_id",
     "uprn",

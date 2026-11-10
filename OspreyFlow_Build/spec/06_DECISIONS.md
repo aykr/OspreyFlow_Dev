@@ -32284,7 +32284,20 @@ row 23, raised by studio). The owner chose the strict reading (MORNING item 11, 
    them. This is how the reservation's "a Location matched on its name alone" is read here: a node is never
    matched on an identifier its reads withhold.
 3. **The Conduit's own work keeps them** (`datasets is None`), and so does a read inside `sources_in_full` (a
-   read written back, a gazetteer load), as in point 3a; `find_node` matches its one named field unguarded.
+   read written back, a gazetteer load), as in point 3a.
+4. **A load's own match key is the load's work** (the orchestrator's ruling, 10 November 2026, on the lane
+   review's question): `find_node` on a recipe's `match_on` (a Studio load's, and its Test's) matches its one
+   named field unguarded, so a gazetteer re-loaded through the Studio by its `os_place_id` updates its places
+   rather than doubling them. It runs as the reader's scoped principal, so it never reaches a node in a dataset
+   the case does not read, and the Test's `referenced` count counts only nodes the reader may see; the node it
+   reaches comes back without the six, as every node read does. The Test's preview of a node the file would
+   create is the uploader's own file, not a node read, and keeps the file's values. Proved by
+   `tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_a_load_s_match_reaches_no_node_the_reader_cannot_see`.
+   A matched existing node in the Test's answer is the Test's to pass through `withhold_sources` as well (a
+   carry to the studio lane).
+5. **Amendment 1's "Left" line on a gazetteer loaded through the Studio** ("is the case's data and keeps its
+   identifiers on every read") **is closed by this amendment**, and the port's contract
+   (`ports/graph.py`'s `search_nodes` and `suggest_nodes`) states the wider rule.
 
 **Cost.** An analyst's own data loses those six identifiers in reads and searches (the owner's ruling, MORNING
 item 11).
@@ -32292,9 +32305,11 @@ item 11).
 **Tests.** `tests/ontology/test_gazetteer_identifiers_withheld.py` (a case's own Location keeps its `uprn` and
 loses the six; any type of node; the Conduit keeps them); `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`
 (no node matched on one of the six; the Conduit matches them; a search by one alone matches nothing);
-`tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py` (through the real routes over ArcadeDB: a
-case's own Location found by neither `osm_id` nor `os_place_id`, by search or type-ahead, with no `more`; found
-by its name and its `uprn`, and sent with its `uprn` alone). Each shown red at its call site (`plants.md`).
+`tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py` (over ArcadeDB, through the real routes and at
+the adapter: a case's own Location found by neither `osm_id` nor `os_place_id`, by search or type-ahead, with
+no `more`; the step a search on those alone is sent keeps no node, the Conduit's own read finding it; found by
+its name and its `uprn`, and sent with its `uprn` alone; decision 4's load match). The match and the read each
+shown red by its own plant at its call site, the unit cases too (`plants.md`).
 
 **Built by:** the platform-b lane, after P6.
 
