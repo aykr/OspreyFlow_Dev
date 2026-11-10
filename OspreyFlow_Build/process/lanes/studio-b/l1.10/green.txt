@@ -1,4 +1,4 @@
-# head de1e6f6; no plant
+# head 8ce215b; no plant
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_no_ceiling_set_renders_the_scheme_s_highest
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_ceiling_the_scheme_does_not_know_is_refused_at_render
@@ -34,4 +34,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_cei
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
-35 passed, 1 warning in 25.94s
+35 passed, 1 warning in 24.76s

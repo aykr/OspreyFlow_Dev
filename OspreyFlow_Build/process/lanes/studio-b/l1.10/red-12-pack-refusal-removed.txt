@@ -1,4 +1,4 @@
-# head de1e6f6; plant: a demo pack's declared highest not judged before its seed
+# head 8ce215b; plant: a demo pack's declared highest not judged before its seed
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts, test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
@@ -7,4 +7,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intru
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts - Failed: DID NOT RAISE SeedRefused
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest - Failed: DID NOT RAISE SeedRefused
-2 failed, 4 passed in 0.36s
+2 failed, 4 passed in 0.38s

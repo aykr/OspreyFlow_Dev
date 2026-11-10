@@ -1,8 +1,8 @@
-# head de1e6f6; plant: an upload refused in a load's words
+# head 8ce215b; plant: an upload refused in a load's words
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py
 # must fail: test_a_document_above_the_ceiling_is_refused_before_anything_is_stored; for the reason 'This load would write rows'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_above_the_ceiling_is_refused_before_anything_is_stored - assert ('OFFICIAL-SENSITIVE' in "This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployment cleared to ...
-1 failed, 3 passed, 1 warning in 1.73s
+1 failed, 3 passed, 1 warning in 1.56s

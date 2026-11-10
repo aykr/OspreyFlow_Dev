@@ -1,4 +1,4 @@
-# head de1e6f6; plant: the row judged by its whole marking, widened when any part fails (the engine's `_resolve_markings`), not by its classification
+# head 8ce215b; plant: the row judged by its whole marking, widened when any part fails (the engine's `_resolve_markings`), not by its classification
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_a_row_whose_classification_reads_is_judged_by_it_alone, test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -21,4 +21,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_reads_is_judged_by_it_alone - services.ingest.ceiling.AboveTheDeploymentCeiling: This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployment cleared to h...
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so - assert ('cannot be read' in "This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployment cleared to hold...
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_missing_column_is_not_read_as_an_empty_one - assert 'cannot be read' in "This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployment cleared to hold it."
-4 failed, 16 passed in 27.50s
+4 failed, 16 passed in 25.58s

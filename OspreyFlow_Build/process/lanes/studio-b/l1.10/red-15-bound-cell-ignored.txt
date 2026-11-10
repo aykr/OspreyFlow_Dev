@@ -1,4 +1,4 @@
-# head de1e6f6; plant: a column's classification never counted, only the element's default
+# head 8ce215b; plant: a column's classification never counted, only the element's default
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_a_row_whose_units_conflict_is_still_judged, test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -21,4 +21,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing - Failed: DID NOT RAISE AboveTheDeploymentCeiling
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_units_conflict_is_still_judged - Failed: DID NOT RAISE AboveTheDeploymentCeiling
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination - Failed: DID NOT RAISE AboveTheDeploymentCeiling
-3 failed, 17 passed in 27.96s
+3 failed, 17 passed in 25.23s
