@@ -1,4 +1,4 @@
-# head d257fb6; no plant
+# head 22ff1e3; no plant
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_second_publish_keeps_the_first_in_the_history
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
@@ -51,4 +51,4 @@ PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::
 PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_does_not_install_git
 PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_carries_every_product_file_a_route_loads_at_runtime
 PASSED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_no_conduit_module_loads_a_path_under_tests
-52 passed in 8.85s
+52 passed in 9.78s

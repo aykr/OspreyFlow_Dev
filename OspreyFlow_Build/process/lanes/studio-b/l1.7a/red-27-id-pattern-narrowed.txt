@@ -1,4 +1,4 @@
-# head d257fb6; plant: the id pattern narrowed to lower-case words: a ULID refused
+# head 22ff1e3; plant: the id pattern narrowed to lower-case words: a ULID refused
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_an_id_of_the_shapes_the_studio_mints_is_accepted[01JC5Q8K3ZP6V2T9XR4W7HMNBD], test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1], test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[01JC5Q8K3ZP6V2T9XR4W7HMNBD] - services.api.studio_publish.GitCommitError: the recipe id '01JC5Q8K3ZP6V2T9XR4W7HMNBD' is not one file name the recipe repository can hold
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1] - services.api.studio_publish.GitCommitError: the recipe id 'a_b.c-1' is not one file name the recipe repository can hold
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9] - services.api.studio_publish.GitCommitError: the recipe id '9' is not one file name the recipe repository can hold
-3 failed, 36 passed in 8.27s
+3 failed, 36 passed in 9.03s

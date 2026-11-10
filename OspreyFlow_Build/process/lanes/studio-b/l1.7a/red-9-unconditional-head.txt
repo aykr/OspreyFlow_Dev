@@ -1,4 +1,4 @@
-# head d257fb6; plant: HEAD set whatever it holds: `set_if_equals(HEADREF, <head>, …)` -> `set_if_equals(HEADREF, None, …)`, which dulwich takes as no comparison
+# head 22ff1e3; plant: HEAD set whatever it holds: `set_if_equals(HEADREF, <head>, …)` -> `set_if_equals(HEADREF, None, …)`, which dulwich takes as no comparison
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_real_writer_moving_head_mid_commit_is_refused; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - Failed: DID NOT RAISE GitCommitError
-1 failed, 38 passed in 8.47s
+1 failed, 38 passed in 8.25s

@@ -1,4 +1,4 @@
-# head d257fb6; plant: the publish flock taken around the compare-and-swap alone (the independent re-review, item 3): not over the write, the index or the commit
+# head 22ff1e3; plant: the publish flock taken around the compare-and-swap alone (the independent re-review, item 3): not over the write, the index or the commit
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_the_index_is_read_and_written_under_a_lock_another_process_honours; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: outside the lock: ['write', 'index read', 'index', 'commit']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - AssertionError: assert b'version: 2\n' == b'version: 1\n'
-2 failed, 37 passed in 8.12s
+2 failed, 37 passed in 9.22s

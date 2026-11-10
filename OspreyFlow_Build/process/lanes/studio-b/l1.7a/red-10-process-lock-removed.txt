@@ -1,4 +1,4 @@
-# head d257fb6; plant: the thread lock kept, the publish flock not taken: `fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)` -> `pass`
+# head 22ff1e3; plant: the thread lock kept, the publish flock not taken: `fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)` -> `pass`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_the_index_is_read_and_written_under_a_lock_another_process_honours; for the reason "'commit', 'swap']"; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_th
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: ['recipes/alpha.yaml', 'recipes/alpha.yaml']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits - AssertionError: committed after 0.00 s, without waiting for the lock
-4 failed, 35 passed in 6.48s
+4 failed, 35 passed in 6.59s

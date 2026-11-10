@@ -1,4 +1,4 @@
-# head d257fb6; plant: the commit never written: `if not unchanged:` -> `if False:`
+# head 22ff1e3; plant: the commit never written: `if not unchanged:` -> `if False:`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_publish_writes_a_commit_real_git_reads, test_a_second_publish_keeps_the_first_in_the_history, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
@@ -46,4 +46,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_changed_bytes_are_a_second_commit - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
-33 failed, 12 passed in 8.41s
+33 failed, 12 passed in 9.24s

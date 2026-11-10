@@ -1,4 +1,4 @@
-# head d257fb6; plant: a `git status` exec after the commit in commit_recipe_file
+# head 22ff1e3; plant: a `git status` exec after the commit in commit_recipe_file
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_publish_never_execs_a_binary, test_the_module_names_no_process_api; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary - AssertionError: the publish spawned: ["'git'"]
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api - AssertionError: subprocess
-2 failed, 37 passed in 9.51s
+2 failed, 37 passed in 9.35s

@@ -39,4 +39,8 @@ seeded the whole dataset, committing each recipe through `commit_recipe_file`.
   in `live_seed_slow.sh`, as above. The earlier runs' "not failed" for it meant skipped.
 - `test_route_rights.py` and the rest: `live-51600c6.txt` lists every case.
 
-Every one of L1.7a's own tests is offline. They run in `make test` and are green there (`gates/51600c6.test.*`).
+**After the rebases** (main `6379dd1`, then `ec28c67`), the live run at `51600c6` stands. Main changed neither
+`studio_publish.py` nor the seed, and the branch's later commits are the image, the licence gate, the spec and
+the records, none of which a live file reaches.
+
+Every one of L1.7a's own tests is offline. They run in `make test` and are green there (`gates/22ff1e3.test.*`).
