@@ -1,4 +1,4 @@
-# head 8eb8d46; plant: the removal clears every load's tables, not the refused run's own
+# head e4fdc56; plant: the removal clears every load's tables, not the refused run's own
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py
 # must fail: test_the_removal_touches_no_other_run_s_tables; for the reason "AssertionError: assert [] == ['titled.parq"; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
@@ -7,4 +7,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py:
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_only_the_row_check_s_refusals_remove_the_step_tables
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables - AssertionError: assert [] == ['titled.parq...wner.parquet']
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was - AssertionError: the store was never asked
-2 failed, 4 passed, 1 warning in 2.35s
+2 failed, 4 passed, 1 warning in 2.12s

@@ -1,4 +1,4 @@
-# head 8eb8d46; plant: a staged public dataset that cannot be read seeded under a ceiling
+# head e4fdc56; plant: a staged public dataset that cannot be read seeded under a ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
@@ -18,4 +18,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_decl
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling - Failed: DID NOT RAISE SeedRefused
-1 failed, 16 passed in 8.28s
+1 failed, 16 passed in 7.76s

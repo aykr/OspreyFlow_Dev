@@ -1,4 +1,4 @@
-# head 8eb8d46; no plant
+# head e4fdc56; no plant
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
@@ -31,4 +31,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py:
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
-32 passed, 1 warning in 11.67s
+32 passed, 1 warning in 10.41s

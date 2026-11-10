@@ -1,4 +1,4 @@
-# head 8eb8d46; plant: the rest of the file judged for an author not cleared for it
+# head e4fdc56; plant: the rest of the file judged for an author not cleared for it
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py
 # must fail: test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it; for the reason 'above_the_deployments_highest_marking'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
@@ -10,4 +10,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py:
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it - AssertionError: {"error":"above_the_deployments_highest_marking","detail":"This load would write rows marked above this deployment's highest marking, OFFICIAL, so nothing was loaded. Mark the source no higher than OFFICIAL, or load it into a d...
-1 failed, 8 passed, 1 warning in 3.21s
+1 failed, 8 passed, 1 warning in 3.34s
