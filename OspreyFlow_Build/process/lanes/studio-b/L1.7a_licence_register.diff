@@ -1,16 +1,19 @@
 diff --git a/OspreyFlow_Build/spec/00_ARCHITECTURE.md b/OspreyFlow_Build/spec/00_ARCHITECTURE.md
-index 1392332..8372c3c 100644
+index 1392332..7394e3b 100644
 --- a/OspreyFlow_Build/spec/00_ARCHITECTURE.md
 +++ b/OspreyFlow_Build/spec/00_ARCHITECTURE.md
-@@ -988,6 +988,12 @@ lock files beside the modules. Nothing of Terraform's BSL-licensed core is used.
+@@ -988,6 +988,15 @@ lock files beside the modules. Nothing of Terraform's BSL-licensed core is used.
  `python-dateutil`, is already in the set) reads a scheduled recipe's cron expression; time zones
  come from the standard library's `zoneinfo`.
  
-+**The owner's ruling of 9 November 2026 (MORNING item 89) addition:** `dulwich` 1.2.21, dual-licensed
-+`Apache-2.0 OR GPL-2.0-or-later` and taken under Apache-2.0 (its one dependency, `urllib3`, MIT),
-+commits a published recipe to the repository on the recipe volume (`09_INGEST_STUDIO.md` §6) in
-+pure Python. The `git` binary (GPL-2.0-only), which the Conduit's image carried from round 13bf
-+for that commit alone, leaves the image, and `make licence-check` admits no GPL package for it.
++**The owner's ruling of 9 November 2026 (MORNING item 89; ADR-140 Amendment 16 point 6) addition:**
++`dulwich` 1.2.21, dual-licensed `Apache-2.0 OR GPL-2.0-or-later` and taken under Apache-2.0 (its one
++dependency, `urllib3`, MIT), commits a published recipe to the repository on the recipe volume
++(`09_INGEST_STUDIO.md` §6) as a library inside the Conduit's process. It is not pure Python: its wheels
++carry optional compiled extensions (cp312 among them), under the same licence. The `git` binary
++(GPL-2.0-only), which the Conduit's image carried from round 13bf for that commit alone, leaves the image.
++`git` was admitted by the image gate's AWAITING_OWNER entry, never by `make licence-check`'s package lists,
++which hold Python and Node packages; that entry goes with the binary.
 +
  **ADR-114 decision 13 addition (13 October 2026, Amendment 8):** cosign 2.4.1 (Apache-2.0, Sigstore)
  signs the released images keyless in the user repository's `release.yml` and verifies them before

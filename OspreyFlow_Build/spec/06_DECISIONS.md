@@ -31367,6 +31367,23 @@ and was then refused at each of the three. It failed closed: nothing leaked, but
    database, where LATIN1 counts one byte for `é` and UTF-8 two), the rows the server sends may come to more
    than the cap in the file's bytes. At most that is the source's own ratio of file bytes to its bytes:
    2 for LATIN1 text, and under 2 for booleans. The read's own count is then the one that refuses.
+6. **Publish commits a recipe with dulwich, not the `git` binary** (added at L1.7a; the owner's ruling of
+   9 November 2026, MORNING item 89, recorded here by rule 11). Spec 09 §6 makes the repository on the recipe
+   volume the record, so the Conduit committed `recipes/<id>.yaml` at runtime with the `git` binary
+   (GPL-2.0-only), which the image carried for that alone. The ruling (option b): the commit is made by
+   `dulwich` 1.2.21 inside the Conduit's process, taken under the Apache-2.0 half of its
+   `Apache-2.0 OR GPL-2.0-or-later` licence (its wheels carry optional compiled extensions, so it is not pure
+   Python), and `git` leaves the image with the image gate's AWAITING_OWNER entry that admitted it. The
+   repository stays a git repository that `git log` reads. As built (`services/api/studio_publish.py`):
+   - the commit object is built directly, one path changed in the parent's tree, and `HEAD` is moved by
+     compare-and-swap; no config is read, so no hook, signer, file-system monitor, filter or credential helper
+     runs;
+   - a recipe id is one plain file name (a letter or digit, then letters, digits, `.`, `_`, `-`), checked
+     again by dulwich's `validate_path`; no symbolic link below the recipe root is followed, and the file is
+     written to a new file and put in place by `os.replace`;
+   - one publish at a time, in a process (a lock) and across processes (an `flock` in the git directory),
+     from writing the file to moving `HEAD`. A writer that takes neither, such as an operator's own
+     `git commit`, can race the index but cannot lose its commit: the compare-and-swap refuses the publish.
 
 **Tests** (`OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py`; red records in
 `process/lanes/studio-b/l1.8/red-carry-subscribed.txt`):
@@ -31390,6 +31407,10 @@ and was then refused at each of the three. It failed closed: nothing leaked, but
 - The byte cap's own UTF-8 count: `test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer`
   (`tests/connectors/test_sql_connector_live.py`), 300 truth values under the cap in the database's count and
   over it in the file's. It is red with the read's own count removed, live.
+- Point 6: `tests/services/api/test_recipe_repository.py` and `test_studio_publish_commit_file.py` (real git
+  reads the history back; nothing execs a binary with every config-driven command planted; ids and links
+  that would escape `recipes/` refused; a real second writer racing `HEAD` refused; the `flock` probed from a
+  second open). Each is red by a plant at its call site (`process/lanes/studio-b/l1.7a/red_plants.py`).
 
 **Cost and what is open.** The `subscribed: Collection[str] = ()` defaults remain in `staging_catalogue`,
 `staged_run` and `reference_list_import`, which are the Studio lane's (`services/ingest/**`). Removing them would
