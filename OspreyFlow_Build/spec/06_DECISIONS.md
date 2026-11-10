@@ -31407,7 +31407,10 @@ committed `recipes/<id>.yaml` at runtime with the `git` binary (GPL-2.0-only), w
 **Decision.**
 1. **The commit is made by `dulwich`** 1.2.21, in the Conduit's process, taken under the Apache-2.0 half of its
    `Apache-2.0 OR GPL-2.0-or-later` licence. It is not pure Python: its wheels carry optional compiled extensions
-   (cp312 among them). `git` leaves the image with the AWAITING_OWNER entry (platform's Dockerfile). The repository
+   (cp312 among them). `git` leaves the Conduit's image, and the gate's AWAITING_OWNER entry with it (both in
+   L1.7a, by the orchestrator's ratification). That ends ADR-147 Amendment 2's "until that carry lands": the gate
+   names nothing as not yet passed, and a `git` put back fails (`tests/licence_check/test_runtime_licences.py`,
+   `tests/test_connectors_are_carried_into_the_image.py`). The repository
    stays a git repository that `git log` reads, and one the old code made is opened as it is.
 2. **No config-driven program runs.** The commit object is built directly, with one path changed in the parent's
    tree. So no hook, signer, file-system monitor, filter or credential helper runs, as dulwich's own worktree
