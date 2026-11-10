@@ -1,0 +1,116 @@
+# keyboard at 0553678, port 5291 (an untracked copy of keyboard/playwright.config.ts, 5185 being another lane's)
+
+Running 108 tests using 4 workers
+
+[1/108] keyboard/studio-tips.spec.ts:27:1 › a refused Studio action is reached by keyboard, says why and who can, and does nothing
+[2/108] keyboard/ingest-studio.spec.ts:37:1 › each of the four places opens by keyboard
+[3/108] keyboard/admin.spec.ts:203:1 › a person's roles are saved by keyboard
+[4/108] keyboard/sources-connectors.spec.ts:142:1 › a dataset subscribes to a list by its id, and reads it
+[5/108] keyboard/sources-connectors.spec.ts:154:1 › a list is imported through a format's template, refreshed now, and scheduled
+[6/108] keyboard/admin.spec.ts:214:1 › a dashboard is registered and removed by keyboard
+[7/108] keyboard/studio-tips.spec.ts:47:1 › Roles, teams and Authors opens from the Studio by keyboard, and goes back
+[8/108] keyboard/ingest-studio.spec.ts:50:1 › the dataset is switched by keyboard, through the case that loads into it
+[9/108] keyboard/sources-connectors.spec.ts:192:1 › a client's own list is imported through the blank template's column picks
+[10/108] keyboard/admin.spec.ts:229:1 › a dataset's egress is set by keyboard
+[11/108] keyboard/studio-tips.spec.ts:60:1 › every registered Studio tips action has its own proving test case above
+[12/108] keyboard/admin.spec.ts:266:1 › a dataset's owners are changed by keyboard
+[13/108] keyboard/ingest-studio.spec.ts:61:1 › a day's run report opens from its cell by keyboard, and its held rows from it
+[14/108] keyboard/sources-connectors.spec.ts:220:1 › a dataset's own list's rows are imported from one of its files
+[15/108] keyboard/admin.spec.ts:285:1 › a dataset's promotion policy is set by keyboard
+[16/108] keyboard/sources-connectors.spec.ts:236:1 › a source is registered through a SQL connection by its read
+[17/108] keyboard/ingest-studio.spec.ts:78:1 › a deployed pipeline is run from Runs by keyboard
+[18/108] keyboard/admin.spec.ts:304:1 › a removed case's layer is merged, as a dry run, by keyboard
+[19/108] keyboard/ingest-studio.spec.ts:94:1 › a paused watch is resumed from Runs, and the runs read again, by keyboard
+[20/108] keyboard/sources-connectors.spec.ts:296:1 › a source is registered through an API connection by its read
+[21/108] keyboard/admin.spec.ts:318:1 › a removed case's layer is deleted, as a dry run, by keyboard
+[22/108] keyboard/ingest-studio.spec.ts:109:1 › Add files opens on Sources by keyboard
+[23/108] keyboard/admin.spec.ts:331:1 › a removed case's layer is deleted by keyboard after its dry run
+[24/108] keyboard/sources-connectors.spec.ts:309:1 › a source is registered through a JSON connection by its read
+[25/108] keyboard/ingest-studio.spec.ts:117:1 › a source is registered by keyboard, through every step
+[26/108] keyboard/admin.spec.ts:347:1 › who may own a dataset is set in System by keyboard
+[27/108] keyboard/sources-connectors.spec.ts:322:1 › a dataset unsubscribes from a list, and no longer reads it
+[28/108] keyboard/admin.spec.ts:363:1 › the system is asked again by keyboard
+[29/108] keyboard/ingest-studio.spec.ts:141:1 › a source's governance is edited by keyboard, and says which pipelines need attention
+[30/108] keyboard/sources-connectors.spec.ts:335:1 › a list's schedule is stopped, so it is refreshed by hand only
+[31/108] keyboard/admin.spec.ts:374:1 › a person is invited by keyboard and their one-time code is shown
+[32/108] keyboard/sources-connectors.spec.ts:348:1 › a SQL source is read again by Refresh now
+[33/108] keyboard/ingest-studio.spec.ts:154:1 › a source's refresh is set to read only rows past a watermark, by keyboard
+[34/108] keyboard/admin.spec.ts:389:1 › a person's access is edited by keyboard
+[35/108] keyboard/sources-connectors.spec.ts:358:1 › every registered Sources connector action has its own proving test case above
+[36/108] keyboard/ingest-studio.spec.ts:174:1 › a source's refresh is paused with why and resumed, by keyboard
+[37/108] keyboard/admin.spec.ts:399:1 › a person is disabled and enabled again by keyboard
+[38/108] keyboard/ingest-studio.spec.ts:190:1 › a source is re-profiled and opened in a pipeline by keyboard
+[39/108] keyboard/admin.spec.ts:411:1 › a person's sign-in is reset by keyboard and the new code shown
+[40/108] keyboard/ingest-studio.spec.ts:203:1 › a pipeline's source is chosen from the registered sources by keyboard
+[41/108] keyboard/admin.spec.ts:421:1 › a person is removed by keyboard once the removal is confirmed
+[42/108] keyboard/admin.spec.ts:434:1 › a refused organisation arrival is joined to an account by keyboard
+[43/108] keyboard/ingest-studio.spec.ts:218:1 › a file is registered as a source and used in a new pipeline by keyboard, asking no marking there
+[44/108] keyboard/admin.spec.ts:450:1 › a demo pack's command is copied by keyboard
+[45/108] keyboard/admin.spec.ts:462:1 › a schedule is paused and resumed by keyboard
+[46/108] keyboard/ingest-studio.spec.ts:264:1 › a draft is deployed as its version by keyboard, without running
+[47/108] keyboard/admin.spec.ts:474:1 › a schedule's runs are shown by keyboard
+[48/108] keyboard/ingest-studio.spec.ts:276:1 › a draft is deployed and run at once by keyboard
+[49/108] keyboard/admin.spec.ts:486:1 › a schedule is run now by keyboard, as its owner
+[50/108] keyboard/admin.spec.ts:495:1 › a schedule is changed by keyboard, keeping its owner
+[51/108] keyboard/ingest-studio.spec.ts:295:1 › a step's drawer opens beside the canvas by keyboard, and the canvas stays
+[52/108] keyboard/ingest-studio.spec.ts:306:1 › a source step is previewed as its rows by keyboard
+[53/108] keyboard/admin.spec.ts:512:1 › a connection is named by keyboard
+[54/108] keyboard/ingest-studio.spec.ts:318:1 › Map is previewed as the graph it would make by keyboard
+[55/108] keyboard/admin.spec.ts:527:1 › a SQL and a JSON connection are named with their fields by keyboard
+[56/108] keyboard/ingest-studio.spec.ts:330:1 › the whole pipeline is tested in the drawer by keyboard, beside the pipeline
+[WebServer] 10:34:08 [vite] (client) [console.error] Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+[57/108] keyboard/admin.spec.ts:565:1 › the grading scheme is read and its change command copied by keyboard
+[58/108] keyboard/ingest-studio.spec.ts:340:1 › guided and expert mode are switched by keyboard, and the person's choice is kept
+[59/108] keyboard/admin.spec.ts:580:1 › an API connection is named with its fields, and a connection tested, by keyboard
+[60/108] keyboard/ingest-studio.spec.ts:356:1 › a step opens its drawer from guided mode's numbered list by keyboard
+[61/108] keyboard/admin.spec.ts:612:1 › Admin's sections are moved between by keyboard
+[62/108] keyboard/ingest-studio.spec.ts:366:1 › an expert step reads whole and read-only in guided mode, by keyboard
+[63/108] keyboard/admin.spec.ts:632:1 › a coming section is opened by keyboard, and calls nothing
+[64/108] keyboard/ingest-studio.spec.ts:383:1 › a step on the Map editor's strip goes back to the pipeline with it chosen, by keyboard
+[65/108] keyboard/admin.spec.ts:648:1 › a person is given the Super user preset by keyboard
+[66/108] keyboard/admin.spec.ts:660:1 › a person is given a custom role by keyboard
+[67/108] keyboard/ingest-studio.spec.ts:394:1 › a column is bound in the Map editor by choosing it and the binding, then Enter
+[68/108] keyboard/admin.spec.ts:673:1 › an Author is named for a case with none by keyboard
+[69/108] keyboard/ingest-studio.spec.ts:463:1 › the reports pipeline is built from scratch in guided mode by keyboard, into the committed map
+[70/108] keyboard/admin.spec.ts:686:1 › a person's case is transferred and they are disabled by keyboard
+[71/108] keyboard/admin.spec.ts:709:1 › a built-in role is copied into a new role by keyboard
+[72/108] keyboard/admin.spec.ts:725:1 › a custom role is made by keyboard
+[73/108] keyboard/admin.spec.ts:741:1 › a right's tip is read with its box, and Roles, teams and Authors is opened and left, by keyboard
+[74/108] keyboard/admin.spec.ts:758:1 › a custom role's versions are shown by keyboard
+[75/108] keyboard/admin.spec.ts:768:1 › a custom role is edited by keyboard into its next version
+[76/108] keyboard/admin.spec.ts:781:1 › a role's team is saved, its lead handed over and a cover named by keyboard
+[77/108] keyboard/admin.spec.ts:818:1 › the audit is read by kind and person by keyboard
+[78/108] keyboard/admin.spec.ts:838:1 › a case's rule audit is read in Audit by keyboard
+[79/108] keyboard/admin.spec.ts:854:1 › the audit is paged by keyboard
+[80/108] keyboard/admin.spec.ts:866:1 › when promotions are overdue is set in Operations by keyboard
+[81/108] keyboard/admin.spec.ts:883:1 › a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard
+[82/108] keyboard/admin.spec.ts:906:1 › every registered Admin action has its own proving test case above
+[83/108] keyboard/ingest-studio.spec.ts:490:1 › the reports pipeline is edited in expert mode by keyboard, and the save carries it
+[84/108] keyboard/ingest-studio.spec.ts:535:1 › a reports map leaving a declared part of the marking unbound is refused at save, by keyboard
+[85/108] keyboard/ingest-studio.spec.ts:557:1 › an expert step cannot be removed in guided mode: Remove is refused once it is chosen
+[86/108] keyboard/ingest-studio.spec.ts:570:1 › the step feeding an expert step cannot be removed in guided mode, so its input edge stays
+[87/108] keyboard/ingest-studio.spec.ts:585:1 › a step is edited in expert mode from the canvas by keyboard, and the save carries it
+[88/108] keyboard/ingest-studio.spec.ts:607:1 › the load rules open from the Load step's drawer by keyboard
+[89/108] keyboard/ingest-studio.spec.ts:617:1 › a chosen column is let go in the Map editor by keyboard, and no binding then offers it
+[90/108] keyboard/ingest-studio.spec.ts:629:1 › a step's drawer goes back from Preview to its Settings by keyboard
+[91/108] keyboard/ingest-studio.spec.ts:643:1 › a Map Preview does not count as Test: Deploy is refused until Test runs
+[92/108] keyboard/ingest-studio.spec.ts:663:1 › a graph Preview is refused in words to a person without the right to test
+[93/108] keyboard/ingest-studio.spec.ts:680:1 › removing the Load step is refused by the save gate in its own words
+[94/108] keyboard/ingest-studio.spec.ts:687:1 › Deploy is refused in words to a person without the source approver's role
+[95/108] keyboard/ingest-studio.spec.ts:790:1 › a staging step is added beside the pipeline and opens its drawer, by keyboard
+[96/108] keyboard/ingest-studio.spec.ts:802:1 › the Visits and contacts steps are set in their drawers by keyboard, each with its sample
+[97/108] keyboard/ingest-studio.spec.ts:810:1 › a filter is set in its drawer by keyboard, a condition added and removed
+[98/108] keyboard/ingest-studio.spec.ts:829:1 › a union and a dedupe are set in their drawers by keyboard
+[99/108] keyboard/ingest-studio.spec.ts:848:1 › a step's sample is read again, and its Preview shows the sample alone, by keyboard
+[100/108] keyboard/ingest-studio.spec.ts:862:1 › a drawer refuses what the save gate refuses, in the same words, by keyboard
+[101/108] keyboard/ingest-studio.spec.ts:874:1 › a staging step is removed by keyboard, and Map reads the step before it
+[102/108] keyboard/ingest-studio.spec.ts:889:1 › phase 7's exit: Visits and contacts is built by keys, mapped over its staged table, tested and deployed
+[103/108] keyboard/ingest-studio.spec.ts:962:1 › a SQL step is added in expert mode, its SQL checked and set in its drawer, by keyboard
+[104/108] keyboard/ingest-studio.spec.ts:969:1 › a fuzzy match is set in its drawer by keyboard, its threshold and SAME_AS saved with it
+[105/108] keyboard/ingest-studio.spec.ts:994:1 › without the right, expert mode offers no expert step and reads one whole and read-only
+[106/108] keyboard/ingest-studio.spec.ts:1008:1 › the pipeline's YAML is shown and saved in expert mode by keyboard, through the save's gates
+[107/108] keyboard/ingest-studio.spec.ts:1027:1 › Test discloses the pipeline's expert steps, read by keyboard
+[108/108] keyboard/ingest-studio.spec.ts:1038:1 › every registered Ingest Studio action has its own proving test case above
+  108 passed (39.9s)
+# exit 0
