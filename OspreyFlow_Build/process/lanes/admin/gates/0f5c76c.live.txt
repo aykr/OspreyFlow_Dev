@@ -1,0 +1,35 @@
+# admin L2.5b live run at 0f5c76c, stack c under the admin lease (orchestrator's grant), via stack_lease.sh remote, 10 Nov 2026 07:17Z: 14 live plants all red; 517 live tests passed, test_route_rights.py among them.
+# Two earlier re-runs on the same lease found test defects, both fixed: at f20513c a two-dataset case the real store refuses (one dataset per case; 7a9c9f5), and at 7a9c9f5 the composite plant not red, its members' marking equal to the scheme's top (0f5c76c).
+Running on ospreyflow-test (stack c, osprey-runs/admin/OspreyFlow_Core/), logged at osprey-runs/admin.meta/runs/20261110T071741Z/log: sh -c .venv/bin/python ../OspreyFlow_Build/process/lanes/admin/plants_L2.5b.py --live; echo PLANTS_EXIT=$?; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:randomly -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_disable_l38_transfers.py ../OspreyFlow_Build/tests/services/api/test_admin_converted_views.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_route.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_promotions.py ../OspreyFlow_Build/tests/services/api/test_admin_dataset_cases.py ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py ../OspreyFlow_Build/tests/services/api/test_admin_routes.py ../OspreyFlow_Build/tests/services/api/test_admin_sections.py 2>&1 | tail -30; echo LIVE_EXIT=$?
+Unplanted: 33 passed in 32.63s
+| L3.8's items left out of the plan | `services/api/admin_people.py` | test_each_of_the_four_kinds_is_offered_moved_and_audited | 1 failed in 7.05s |
+| a view's owner column left as it was | `services/api/admin_people.py` | test_each_of_the_four_kinds_is_offered_moved_and_audited | 1 failed in 5.03s |
+| a watch's owner column left as it was | `services/api/admin_people.py` | test_each_of_the_four_kinds_is_offered_moved_and_audited | 1 failed in 4.10s |
+| the plan read at every marking, not the administrator's clearance | `services/api/admin_people.py` | test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable | 1 failed in 4.07s |
+| the visible transfers rolled back when something is withheld (refused inside the transaction) | `services/api/admin_people.py` | test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable | 1 failed in 4.08s |
+| the transfer ending the covers itself | `services/api/admin_people.py` | test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable | 1 failed in 4.09s |
+| a watch on an unmarked dataset, or none, read as unmarked | `services/api/admin_people.py` | test_an_unmarked_dataset_or_none_is_read_at_the_schemes_highest_for_the_recipient | 2 failed in 4.74s |
+| a view or board given to someone below its case's highest (Amendment 9) | `services/api/admin_people.py` | test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest | 4 failed in 6.01s |
+| a case's composite members left out of its highest | `services/api/admin_people.py` | test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest | 1 failed, 3 passed in 6.16s |
+| the case's unit-wide level not counted | `services/api/admin_people.py` | test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view | 1 failed in 4.08s |
+| a level on the case not asked of L3.8's items | `services/api/admin_people.py` | test_a_recipient_without_the_case_level_or_the_marking_is_refused_and_nothing_moves | 3 failed, 2 passed in 6.69s |
+| a proposal or watch given to someone not cleared to its marking | `services/api/admin_people.py` | test_a_recipient_without_the_case_level_or_the_marking_is_refused_and_nothing_moves | 2 failed, 3 passed in 6.61s |
+| System's count across every unit | `services/api/admin_people.py` | test_the_count_is_of_the_administrators_unit_and_open_cases_only | 1 failed in 1.43s |
+| System's count of a removed case's views | `services/api/admin_people.py` | test_the_count_is_of_the_administrators_unit_and_open_cases_only | 1 failed in 1.42s |
+PLANTS_EXIT=0
+........................................................................ [ 13%]
+........................................................................ [ 27%]
+........................................................................ [ 41%]
+........................................................................ [ 55%]
+........................................................................ [ 69%]
+........................................................................ [ 83%]
+........................................................................ [ 97%]
+.............                                                            [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+517 passed, 1 warning in 49.84s
+LIVE_EXIT=0
