@@ -204,6 +204,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    Terminal window, then run `bash OspreyFlow_Build/scripts/lanes_launch.sh resume case --account sol` from the
    repository root. It resumes from its HANDOFF.md.
 
+29. **A join between a table with a security marking and one with none is refused.** A row with no marking counts
+   as unknown, not as OFFICIAL, which is how L1.7 built it. The Studio's join guard compares markings, and studio-b
+   asked whether an unmarked table should take the dataset's default instead. I kept the refusal: guessing a
+   marking is the silent lowering the guard exists to prevent. The lawful route is for a source to declare a default
+   marking, which is audited (ADR-140 Amendment 19, reserved for studio, after v0.5.0). Overrule here.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
