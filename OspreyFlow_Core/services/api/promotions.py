@@ -86,6 +86,12 @@ _CHANGED = "Nothing was written: its items changed since it was sent."
 CHECKS = ("marking", "types", "graded", "ends")
 
 
+def deployment_ceiling(scheme: Any) -> DeploymentCeiling:
+    """The deployment's highest marking (ADR-148 decision 10), the rendered setting read as
+    `run_recipe` reads it when no caller passes one, so no promotion or merge can leave it out."""
+    return DeploymentCeiling.of((os.environ.get(CEILING_ENV) or "").strip(), scheme)
+
+
 class PromotionRefused(Exception):
     """A promotion, a review or a layer action refused in words, before anything is written."""
 
@@ -189,9 +195,7 @@ class Promotions:
         return dataset.highest_marking or self._top()
 
     def ceiling(self) -> DeploymentCeiling:
-        """The deployment's highest marking (ADR-148 decision 10), the rendered setting read as
-        `run_recipe` reads it when no caller passes one, so no promotion can leave it out."""
-        return DeploymentCeiling.of((os.environ.get(CEILING_ENV) or "").strip(), self.boards.scheme)
+        return deployment_ceiling(self.boards.scheme)
 
     def above_the_ceiling(self, marking: str, ceiling: DeploymentCeiling) -> str | None:
         """The words for an item's marking above the deployment's ceiling, for the per-item

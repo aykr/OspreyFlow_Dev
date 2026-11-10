@@ -15,14 +15,24 @@ What a mistake would do, and the case that catches it (each red by its plant, in
 
 - an item above the ceiling promoted, the sheet saying nothing:
   `test_an_item_above_the_deployments_ceiling_is_refused_at_the_sheet_and_at_the_route`;
-- a picture above it going with its node: `test_a_picture_above_the_ceiling_is_named_and_left_behind`;
+- a picture above it going with its node:
+  `test_a_picture_above_the_ceiling_is_named_and_left_behind`;
 - a write above it reaching the store when the per-item check misses it (a match, a picture's
   document, a path to come): `test_the_promotions_own_record_is_refused_above_the_ceiling`;
 - a promotion sent for review committed after the ceiling was lowered:
   `test_an_approval_after_the_ceiling_was_lowered_promotes_nothing`, and the load's own last
   check, `test_the_load_itself_is_refused_above_the_ceiling_and_the_promotion_rejected`;
 - a drawn merge's chosen match marked above the ceiling written:
-  `test_a_drawn_merges_match_above_the_ceiling_refuses_the_merge_and_writes_nothing`.
+  `test_a_drawn_merges_match_above_the_ceiling_refuses_the_merge_and_writes_nothing`, and one
+  waiting when the ceiling is lowered approved:
+  `test_a_waiting_drawn_merge_whose_match_is_above_a_lowered_ceiling_is_rejected`;
+- every sibling path of a promotion given the same check (the independent review, item 2): a
+  removed case's layer merge, `test_a_layer_merge_of_an_item_above_the_ceiling_is_refused`; a drawn
+  merge's own item, `test_a_drawn_merges_item_above_the_ceiling_refuses_the_merge`; and an item
+  going in as another type, its copy marked as its original,
+  `test_a_drawn_merges_retyped_item_above_the_ceiling_writes_no_copy`, and a copy raised after its
+  item was judged,
+  `test_a_copy_raised_after_its_item_was_judged_is_refused_before_anything_is_written`.
 """
 
 from __future__ import annotations
@@ -35,7 +45,19 @@ from services.api.promotions import Promotions
 from services.ingest.ceiling import CEILING_ENV
 
 from .test_boards import K, _as, _board, _item
-from .test_drawn_merge import _ids, _nothing_written, _said, _step, _three, mw  # noqa: F401
+from .test_drawn_merge import (  # noqa: F401
+    RETYPE,
+    _approved_by_sam,
+    _draw,
+    _ids,
+    _incident,
+    _nothing_written,
+    _said,
+    _sent_and_waiting,
+    _step,
+    _three,
+    mw,
+)
 from .test_promotions import _policy, _promote, _sheet, _studio, pw, world  # noqa: F401
 
 LIMIT = "OFFICIAL"
@@ -203,3 +225,105 @@ def test_a_drawn_merges_match_above_the_ceiling_refuses_the_merge_and_writes_not
         "OFFICIAL."
     )
     _nothing_written(mw, drawn.mercer["element_id"])
+
+
+def test_a_waiting_drawn_merge_whose_match_is_above_a_lowered_ceiling_is_rejected(
+    mw: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sent with its match at OFFICIAL-SENSITIVE and no ceiling; the ceiling lowered to OFFICIAL
+    while it waits: the approval's re-check answers as for every other change (409
+    `items_changed`), the merge rejected, nothing written."""
+    loaded = mw.graph._graph_nodes["p-loaded"]
+    mw.graph._graph_nodes["p-loaded"] = loaded.model_copy(
+        update={"handling": loaded.handling.model_copy(
+            update={"classification": "OFFICIAL-SENSITIVE"})}
+    )  # fmt: skip
+    drawn, promotion = _sent_and_waiting(mw)
+    monkeypatch.setenv(CEILING_ENV, LIMIT)
+    assert _said(_approved_by_sam(mw, promotion)) == (409, "items_changed")
+    assert mw.store.records[promotion].status == "rejected"
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == [mw.drawn]
+
+
+def test_a_layer_merge_of_an_item_above_the_ceiling_is_refused(
+    pw: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A removed case's layer merged by one of the dataset's Authors (trigger `layer_merge`): an
+    item above the ceiling is named at its sheet and refuses the merge, nothing written."""
+    from .test_boards import K as CASE
+
+    board = _board()
+    made = _item(board, label="Tall", marking="OFFICIAL-SENSITIVE")
+    pw.removed.add(CASE)
+    monkeypatch.setenv(CEILING_ENV, LIMIT)
+    sheet = _as("dana").post(f"/v1/datasets/src/removed-cases/{CASE}/merge-sheet").json()
+    (item,) = sheet["items"]
+    assert item["problems"] == [
+        "Marked OFFICIAL-SENSITIVE, above this deployment's highest marking, OFFICIAL."
+    ]
+    merged = _as("dana").post(f"/v1/datasets/src/layer-merges/{sheet['grant_id']}",
+                              json={"item_ids": [made["item_id"]]})  # fmt: skip
+    assert _said(merged) == (422, "check_failed"), merged.text
+    assert "above this deployment's highest marking, OFFICIAL" in merged.json()["detail"]
+    assert not pw.store.records
+    _nothing_promoted(pw)
+
+
+def test_a_drawn_merges_item_above_the_ceiling_refuses_the_merge(
+    mw: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A drawn item (not a match) above the ceiling, within the target's highest: refused, naming
+    the limit, nothing written."""
+    high = _draw(mw, label="High", properties={"family_name": "High"}, marking="OFFICIAL-SENSITIVE")
+    monkeypatch.setenv(CEILING_ENV, LIMIT)
+    answer = _step(mw, "merge", "dana", item_ids=[high["item_id"]], matches=[])
+    assert _said(answer) == (422, "check_failed"), answer.text
+    assert "above this deployment's highest marking, OFFICIAL" in answer.json()["detail"]
+    _nothing_written(mw, high["element_id"])
+
+
+def test_a_drawn_merges_retyped_item_above_the_ceiling_writes_no_copy(
+    mw: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An item going in as another type is written as a new copy, marked as its original (never
+    lower): an original above the ceiling refuses the merge before any copy is written."""
+    drawn = _incident(mw, marking="OFFICIAL-SENSITIVE")
+    monkeypatch.setenv(CEILING_ENV, LIMIT)
+    answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert _said(answer) == (422, "check_failed"), answer.text
+    assert "above this deployment's highest marking, OFFICIAL" in answer.json()["detail"]
+    assert not mw.store.copies
+    _nothing_written(mw, drawn.fight["element_id"])
+
+
+def test_a_copy_raised_after_its_item_was_judged_is_refused_before_anything_is_written(
+    mw: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retyped item's copy is built from a second, whole read of its original, after the items
+    were judged (my reviewer's item 5): its marking raised above the ceiling between the two reads
+    is judged on the record too, so nothing is stored, rather than reaching the stamping graph's
+    backstop inside the load's transaction."""
+    from services.api.drawn_merge import DrawnMerges
+
+    drawn = _incident(mw)
+    monkeypatch.setenv(CEILING_ENV, LIMIT)
+    real = DrawnMerges.whole
+
+    async def raised(self: DrawnMerges, node_ids: Any, edge_ids: Any, read: Any) -> Any:
+        held = await real(self, node_ids, edge_ids, read)
+        return {
+            i: e.model_copy(update={"handling": e.handling.model_copy(
+                update={"classification": "OFFICIAL-SENSITIVE"})})
+            for i, e in held.items()
+        }  # fmt: skip
+
+    monkeypatch.setattr(DrawnMerges, "whole", raised)
+    answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert _said(answer) == (422, "above_the_deployments_highest_marking"), answer.text
+    assert not mw.store.copies
+    _nothing_written(mw, drawn.fight["element_id"])
