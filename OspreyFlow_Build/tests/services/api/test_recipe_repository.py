@@ -474,9 +474,9 @@ async def test_the_index_is_read_and_written_under_a_lock_another_process_honour
         DiskRefsContainer, "set_if_equals", wrap("swap", DiskRefsContainer.set_if_equals)
     )
     await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
-    assert held == {
-        "write": True, "index read": True, "index": True, "commit": True, "swap": True,
-    }  # fmt: skip
+    outside = [where for where, inside in held.items() if not inside]
+    assert outside == [], f"outside the lock: {outside}"
+    assert sorted(held) == ["commit", "index", "index read", "swap", "write"]
 
 
 @needs_git
@@ -757,7 +757,7 @@ async def test_an_aside_directory_a_crashed_first_use_left_is_swept(tmp_path: Pa
     await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=root)
 
     assert not stale.exists(), "the crashed first use's aside directory is still there"
-    assert kept.exists()
+    assert kept.exists(), "a directory not of the aside shape was swept"
     assert sorted(p.name for p in root.iterdir()) == [
         ".git",
         ".git-init-the-operators-own",
