@@ -21,12 +21,19 @@ IMAGE_TESTS = "../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_im
 
 INDEX_BLOCK = """    repo.object_store.add_object(blob)
     index = repo.open_index()
-    index[path] = index_entry_from_stat(os.stat(absolute_path), blob.id)
+    index[path] = index_entry_from_stat(written, blob.id)
     index.write()
 """
 AFTER_REF = """                "committed; publish again"
             )
 """
+CAS_CLOSE = """        ):  # fmt: skip
+            raise GitCommitError(
+                f"the recipe repository's HEAD moved"""
+ID_CASES = [f"test_a_recipe_id_that_is_not_one_file_name_is_refused[{case}]"
+            for case in ("../x", ".git/x", "../../outside", "a/b", "..", ".hidden", "")]  # fmt: skip
+RACE = "test_a_real_writer_moving_head_mid_commit_is_refused"
+FAKE_REFUSAL = "test_a_failed_commit_is_an_error_not_a_quiet_success"
 
 #: (slug, what the plant does, [(old, new)], test files, the tests that must go red)
 PLANTS = [
@@ -58,15 +65,49 @@ PLANTS = [
     ("index-after-head", "the index written after HEAD moves (the order the review flagged)",
      [(INDEX_BLOCK, ""), (AFTER_REF, AFTER_REF + "\n" + INDEX_BLOCK)], [REPO_TESTS],
      ["test_a_failure_after_staging_leaves_nothing_committed"]),
-    ("lock-removed", "no serialisation: `with _REPOSITORY_LOCK:` -> `with threading.Lock():`",
-     [("    with _REPOSITORY_LOCK:\n", "    with threading.Lock():  # PLANT\n")], [REPO_TESTS],
-     ["test_concurrent_publishes_each_commit_their_own_bytes"]),
-    ("refusal-ignored", "a refused compare-and-swap ignored: `if not repo.refs.set_if_equals(` "
-     "-> `if False and not repo.refs.set_if_equals(`",
-     [("        if not repo.refs.set_if_equals(", "        if False and not repo.refs.set_if_equals(")],
-     [COMMIT_TESTS], ["test_a_failed_commit_is_an_error_not_a_quiet_success"]),
+    ("locks-removed", "no serialisation: neither the thread lock nor the publish flock taken",
+     [("    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo, _publish_lock(repo):\n",
+       "    with _open_repository(repo_root) as repo:  # PLANT\n")], [REPO_TESTS],
+     ["test_concurrent_publishes_each_commit_their_own_bytes",
+      "test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
+    ("refusal-discarded", "the compare-and-swap called and its answer discarded (the independent "
+     "review, item 3): `if not repo.refs.set_if_equals(...)` -> `if repo.refs.set_if_equals(...) "
+     "and False`",
+     [("        if not repo.refs.set_if_equals(\n", "        if repo.refs.set_if_equals(\n"),
+      (CAS_CLOSE, CAS_CLOSE.replace("        ):  # fmt: skip", "        ) and False:  # PLANT"))],
+     [REPO_TESTS, COMMIT_TESTS], [FAKE_REFUSAL, RACE]),
+    ("unconditional-head", "HEAD set whatever it holds: `set_if_equals(HEADREF, <head>, …)` -> "
+     "`set_if_equals(HEADREF, None, …)`, which dulwich takes as no comparison",
+     [("            HEADREF, head if head is not None else ZERO_SHA, commit.id,\n",
+       "            HEADREF, None, commit.id,  # PLANT\n")], [REPO_TESTS], [RACE]),
+    ("process-lock-removed", "the thread lock kept, the publish flock not taken: "
+     "`fcntl.flock(lock, fcntl.LOCK_EX)` -> `pass`",
+     [("        fcntl.flock(lock, fcntl.LOCK_EX)\n", "        pass  # PLANT\n")], [REPO_TESTS],
+     ["test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
+    ("porcelain-commit", "the commit made by dulwich's worktree commit, which reads the config "
+     "(hooks, signer, filters) as git does (the independent review, item 2)",
+     [("    if not unchanged:\n",
+       "    if not unchanged:\n        repo.get_worktree().commit(message=message.encode(), "
+       "committer=_COMMIT_IDENTITY, author=_COMMIT_IDENTITY)  # PLANT\n        return\n")],
+     [REPO_TESTS], ["test_publish_never_execs_a_binary"]),
+    ("id-unchecked", "neither the id's pattern nor dulwich's path check asked",
+     [("    if _RECIPE_ID.fullmatch(recipe_id) is None:\n", "    if False:  # PLANT\n"),
+      ("    if not validate_path(relative_path.encode(\"utf-8\")):", "    if False:  # PLANT")],
+     [REPO_TESTS], ID_CASES),
+    ("id-pattern-only-removed", "the id's pattern not asked, dulwich's path check kept: the ids "
+     "it alone lets through (a `..` or `.git` element it refuses itself)",
+     [("    if _RECIPE_ID.fullmatch(recipe_id) is None:\n", "    if False:  # PLANT\n")],
+     [REPO_TESTS], [ID_CASES[3], ID_CASES[5], ID_CASES[6]]),
+    ("directory-link-followed", "a symbolic link followed at `recipes/`: `O_NOFOLLOW` dropped from "
+     "the directory's open",
+     [("os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)",
+       "os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)  # PLANT")], [REPO_TESTS],
+     ["test_a_symlinked_recipes_directory_is_refused"]),
+    ("file-link-replaced", "a symbolic link where the file goes not refused: "
+     "`if not stat.S_ISREG(...)` -> `if False`",
+     [("            if not stat.S_ISREG(existing.st_mode):\n", "            if False:  # PLANT\n")],
+     [REPO_TESTS], ["test_a_symlinked_recipe_file_is_refused"]),
 ]
-
 
 def run(files: list[str]) -> str:
     done = subprocess.run(
@@ -75,8 +116,9 @@ def run(files: list[str]) -> str:
         cwd=CORE, capture_output=True, text=True,
     )  # fmt: skip
     keep = ("PASSED", "FAILED", "ERROR")
-    lines = [line for line in done.stdout.splitlines() if line.startswith(keep)]
-    return "\n".join(lines + [done.stdout.strip().splitlines()[-1]])
+    out = done.stdout.replace("\x00", "\\x00")  # one id case holds a NUL
+    lines = [line for line in out.splitlines() if line.startswith(keep)]
+    return "\n".join(lines + [out.strip().splitlines()[-1]])
 
 
 def main() -> int:
