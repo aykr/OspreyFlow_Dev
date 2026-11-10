@@ -92,6 +92,7 @@ from services.ingest.recipe_rules import (
     template_elements,
 )
 from services.ingest.staging import ObjectStorageConfig
+from services.ingest.staging_catalogue import DEPLOYMENT_WIDE
 from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
@@ -1725,7 +1726,7 @@ def get_target_models(request: Request) -> TargetModelStore:
 TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
 
 
-async def _rules_on_list_refresh(state: Any, done: ListImport) -> None:
+async def _rules_on_list_refresh(state: Any, done: ListImport, owner: str) -> None:
     """ADR-146 decision 3, *When* a screening list refreshes: a new version kept starts every
     running rule that names the list, each as its author, recorded with its runs. A refresh that
     kept nothing new starts none."""
@@ -1736,7 +1737,7 @@ async def _rules_on_list_refresh(state: Any, done: ListImport) -> None:
     if executor is None:
         return
     try:
-        await executor.on_list_refreshed(done.list_id, datetime.now(UTC))
+        await executor.on_list_refreshed(done.list_id, owner, datetime.now(UTC))
     except Exception:  # noqa: BLE001 - the refresh stands; each rule's run says what became of it
         logger.exception("the rules naming list %s could not be started", done.list_id)
 
@@ -1751,6 +1752,18 @@ def _rule_lists_of(state: Any) -> rule_editor.RuleListReader:
         lists=getattr(state, "list_store", None),
         rows_kept=getattr(state, "list_rows", None),
     )  # fmt: skip
+
+
+def _rule_reach_from(state: Any) -> rule_editor.RuleReach:
+    datasets = getattr(state, "datasets", None)
+    return rule_editor.rule_reach_of(datasets if datasets is not None else InMemoryDatasetStore())
+
+
+def get_rule_reach(request: Request) -> rule_editor.RuleReach:
+    return _rule_reach_from(request.app.state)
+
+
+RuleReachDep = Annotated[rule_editor.RuleReach, Depends(get_rule_reach)]
 
 
 def get_rule_lists(request: Request) -> rule_editor.RuleListReader:
@@ -9908,7 +9921,7 @@ async def refresh_deployment_list(
         done = await import_list(list_id, store=lists, rows_kept=rows_kept)
     except ListNotFound as missing:
         raise _list_not_found() from missing
-    await _rules_on_list_refresh(request.app.state, done)
+    await _rules_on_list_refresh(request.app.state, done, DEPLOYMENT_WIDE)
     await audit.record(principal=principal, action="deployment_list_refreshed",
                        investigation_id=None,
                        resolved_query={"list_id": list_id, "outcome": done.outcome,
@@ -10122,7 +10135,7 @@ async def import_dataset_own_list(
                        result_cardinality=1)  # fmt: skip
     done = ListImport(list_id=list_id, outcome=outcome, version=reference.version, words=words)
     # ADR-146 decision 3: a rule that runs when this list refreshes runs now.
-    await _rules_on_list_refresh(request.app.state, done)
+    await _rules_on_list_refresh(request.app.state, done, dataset_id)
     return done
 
 
@@ -12942,6 +12955,7 @@ async def run_studio_recipe(
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
     list_store: ListStoreDep = None,  # type: ignore[assignment]
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
+    rule_reach: RuleReachDep = None,  # type: ignore[assignment]
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -13030,6 +13044,7 @@ async def run_studio_recipe(
             staging_storage=staging_storage,
             list_store=list_store,
             rule_lists=rule_lists,
+            rule_reach=rule_reach,
             watch_reach=watch_reach,
         ),
         principal=principal,
@@ -13156,6 +13171,7 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
             screening=state.screening_lists, compute=state.compute, patterns=state.patterns_store,
             hotlists=state.hotlists_store, ontology=state.ontology,
             influencers=state.strength_influencers, rule_lists=_rule_lists_of(state),
+            rule_reach=_rule_reach_from(state),
         )  # fmt: skip
         return await run_scheduled_rule(rule, author, gate, now=slot)
 
@@ -13164,6 +13180,12 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
         async def as_author(owner_id: str) -> Principal | None:
             return author if owner_id == author.id else None
 
+        # Within the rule's declared dataset alone, as a load and Test read it (the lane-reviewer's
+        # item 7): never the whole case, its layer with it.
+        reach = await _rule_reach_from(state)(rule)
+        if reach is None:
+            raise RuntimeError("the rule's case no longer reads its dataset")
+        author = author.model_copy(update={"datasets": reach})
         gate = RuleGate(
             rules=[rule], investigation_id=rule.investigation_id, graph=state.graph,
             analytics=state.analytics, scheme=state.handling_scheme, alert_store=state.alerts_store,
@@ -13171,8 +13193,16 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
             screening=state.screening_lists, compute=state.compute, patterns=state.patterns_store,
             hotlists=state.hotlists_store, ontology=state.ontology,
             influencers=state.strength_influencers, rule_lists=_rule_lists_of(state),
+            rule_reach=_rule_reach_from(state),
         )  # fmt: skip
         return await run_on_list_refresh(rule, author, gate, now=now)
+
+    async def reads_list(rule: TypologyRule, list_id: str, owner: str) -> bool:
+        return await rule_editor.reads_the_list(
+            rule, list_id, owner, datasets=state.datasets,
+            models=getattr(state, "target_models", None),
+            lists=getattr(state, "list_store", None), rows_kept=getattr(state, "list_rows", None),
+        )  # fmt: skip
 
     return RuleScheduleExecutor(
         rules=state.typology_rules,
@@ -13183,6 +13213,7 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
         check_case=check_case,
         judge=judge,
         judge_on_refresh=judge_on_refresh,
+        reads_list=reads_list,
     )
 
 
@@ -13246,7 +13277,7 @@ def _deployment_list_scheduler(application: FastAPI) -> DeploymentListScheduler:
         done = await import_list(
             list_id, store=state.list_store, rows_kept=state.list_rows, trigger="schedule"
         )
-        await _rules_on_list_refresh(state, done)
+        await _rules_on_list_refresh(state, done, DEPLOYMENT_WIDE)
         # Audited as the person the schedule runs as, as ADR-133's scheduled refresh is.
         owner = await resolve(owner_id)
         await state.audit.record(
@@ -14751,6 +14782,7 @@ async def approve_rule_change(
     dependencies=[
         Depends(require_right(Right.DEPLOY_RULES)),
         Depends(require_rules_place),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
     ],
 )
 async def reject_rule_change(
@@ -14807,6 +14839,7 @@ async def change_rule_sentence(
     if not isinstance(current.params, SentenceRuleParams):
         raise ReleaseRefused("only a rule written as a sentence is changed here")
     sentence = normalised(body.sentence)
+    _refuse_outside_just_me(sentence, current)
     await _authorize_sentence_scope(sentence, investigation.id, principal, investigations, audit)
     await _refuse_an_unknown_team(sentence, request)
     if is_deployment_wide(current):
@@ -14844,7 +14877,7 @@ async def read_rule_versions(
     ids = {v.proposed_by for v in versions} | {v.decided_by for v in versions if v.decided_by}
     names = await principal_names.display_names(sorted(ids))
     named = [
-        v.model_copy(
+        _only_the_testers_count(v, principal).model_copy(
             update={
                 "proposed_by_name": names.get(v.proposed_by),
                 "decided_by_name": names.get(v.decided_by or ""),
@@ -14875,7 +14908,7 @@ async def read_rule_schedule(
     """A scheduled rule's schedule in words, its next run (or why it will not run), and its latest
     runs (ADR-133 decision 1, stage (d)). A rule that runs as data loads is refused in words."""
     rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
-    if rule.trigger != "schedule":
+    if rule.trigger not in ("schedule", "list_refresh"):
         raise ReleaseRefused("this rule runs as data loads, not on a schedule")
     runs = await typology_rules.rule_runs(rule.id)
     runs = runs_for_reader(rule, runs, principal)
@@ -15050,6 +15083,7 @@ async def deploy_rule_sentence(
     `keep_watches` (decision 6: engineers attach rules, they do not author analyst rules)."""
     _require_rule_author(principal)
     sentence = normalised(body.sentence)
+    _refuse_outside_just_me(sentence)
     await _authorize_sentence_scope(sentence, investigation.id, principal, investigations, audit)
     await _refuse_an_unknown_team(sentence, request)
     spec = await _compiled_rule(body, sentence, principal, patterns_store, ontology)
@@ -15190,6 +15224,18 @@ async def _save_rule_draft(
                     "message": "Choose the dataset this rule watches first."},
         )  # fmt: skip
     dataset = await rule_editor.declared_dataset(investigation_id, body.dataset_id, datasets)
+    if rule_id is not None:
+        # Refused before anything is written, so a refused save leaves no drawn pattern behind
+        # (the lane-reviewer's item 20); the store checks the same again under its lock.
+        current = await typology_rules.get_listed(rule_id, investigation_id, principal)
+        if current.status == "retired":
+            raise RuleChangeRefused("a retired rule cannot be changed")
+        if current.dataset_id != dataset.id:
+            raise RuleDatasetFixed("a rule's dataset is chosen first and never changed")
+        if current.pending_action is not None:
+            raise RuleChangeRefused(
+                "this rule is waiting for a second person's approval; send it back to change it"
+            )
     sentence = normalised(body.sentence)
     if sentence.scope == "deployment":
         raise HTTPException(
@@ -15216,7 +15262,12 @@ async def _save_rule_draft(
         if relationship.list_id not in {o.id for o in offered if o.kind == "screening"}:
             raise rule_editor.ListNotOffered(relationship.list_id)
     model = await rule_editor.dataset_ontology(dataset, ontology, datasets=datasets, models=models)
-    spec = await _compiled_rule(body, sentence, principal, patterns_store, model)
+    # The drawn pattern is saved in the rule's own dataset, which every run reads it within (the
+    # lane-reviewer's item 3, at the save): never the case's first dataset.
+    spec = await _compiled_rule(
+        body, sentence, principal.model_copy(update={"datasets": [dataset.id]}), patterns_store,
+        model,
+    )  # fmt: skip
     try:
         files = _rule_files_renderer(request)(body.model_copy(update={"sentence": sentence}))
     except ValueError as refused:
@@ -15344,7 +15395,7 @@ async def test_rule_draft(
     if draft is None or not isinstance(draft.params, SentenceRuleParams) or rule.dataset_id is None:
         raise RuleChangeRefused("this rule has no draft written as a sentence to test")
     dataset = await rule_editor.declared_dataset(investigation.id, rule.dataset_id, datasets)
-    tester = principal.model_copy(update={"datasets": [dataset.id]})
+    tester = principal.model_copy(update={"datasets": rule_editor.rule_reach(dataset)})
     model = await rule_editor.dataset_ontology(dataset, ontology, datasets=datasets, models=models)
     sentence = draft.params.sentence
     check_sentence(sentence, model)
@@ -15410,6 +15461,33 @@ async def make_rule_live(
         result_cardinality=1,
     )  # fmt: skip
     return made
+
+
+class UseTheRuleEditor(Exception):
+    """ADR-146 Amendment 6: a rule for a case, or the whole deployment, is written in the rule
+    editor, on its dataset, through draft, Test and Make live; the older form keeps rules just for
+    their author (the lane-reviewer's L2.11 item 2: these routes passed every gate by)."""
+
+
+@app.exception_handler(UseTheRuleEditor)
+async def _use_the_rule_editor_handler(request: Request, exc: UseTheRuleEditor) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "use_the_rule_editor",
+            "message": "A rule for this case is written in the rule editor, on its dataset, and "
+            "goes live once tested; this form keeps rules just for you.",
+        },
+    )
+
+
+def _refuse_outside_just_me(sentence: RuleSentence, current: TypologyRule | None = None) -> None:
+    if sentence.scope != "just_me":
+        raise UseTheRuleEditor()
+    if current is not None and isinstance(current.params, SentenceRuleParams) and (
+        current.params.sentence.scope != "just_me"
+    ):
+        raise UseTheRuleEditor()
 
 
 class UnknownTeamError(Exception):
@@ -15575,6 +15653,7 @@ async def release_held_rows_route(
     recipe_runs: RecipeRunsDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
+    rule_reach: RuleReachDep = None,  # type: ignore[assignment]
 ) -> LoadReportView:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
@@ -15605,6 +15684,7 @@ async def release_held_rows_route(
         recipe_id=recipe.recipe_id,
         influencers=influencers_store,
         rule_lists=rule_lists,
+        rule_reach=rule_reach,
     ) or RuleGate(
         rules=[],
         investigation_id=investigation.id,

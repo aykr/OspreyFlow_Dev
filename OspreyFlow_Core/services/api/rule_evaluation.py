@@ -799,6 +799,9 @@ class RuleGate:
     #: ADR-146 decision 3 (L2.11's list picker): a sentence's named Studio list, read within the
     #: rule's own dataset (`rule_editor.rule_list_reader`). None where no run reads one.
     rule_lists: Callable[[TypologyRule, str, str], Awaitable[list[Any]]] | None = None
+    #: ADR-146 decision 3: what a rule on a declared dataset reads, its composite's members with it
+    #: (`rule_editor.rule_reach_of`). None: the rule's dataset id alone, as before L2.11.
+    rule_reach: Callable[[TypologyRule], Awaitable[list[str] | None]] | None = None
     #: ADR-133 decision 6, stage (d): what a hit of a rule does at this pipeline, as its "Checks on
     #: load" step chose ("alert" or "hold"), by rule id. A rule not named keeps its author's choice.
     on_hit: dict[str, str] = field(default_factory=dict)
@@ -839,7 +842,11 @@ class RuleGate:
     async def _deployer(self, rule: TypologyRule) -> Principal | None:
         deployer = await self.principal_for_owner(rule.owner_id)
         if deployer is not None and rule.dataset_id is not None:
-            deployer = deployer.model_copy(update={"datasets": [rule.dataset_id]})
+            reach: list[str] | None = [rule.dataset_id]
+            if self.rule_reach is not None:
+                reach = await self.rule_reach(rule)
+            # A case that no longer reads the rule's dataset reads nothing through it (rule 3).
+            deployer = deployer.model_copy(update={"datasets": reach or []})
         from .sentence_rules import is_deployment_wide
 
         if deployer is not None and is_deployment_wide(rule):

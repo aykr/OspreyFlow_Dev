@@ -319,11 +319,15 @@ class RuleSentence(BaseModel):
                 "schedule runs within one case, so a scheduled rule is for this case or for you"
             )
         if self.runs == "list_refresh" and (
-            self.relationship is None or self.relationship.kind != "on_screening_list"
+            self.relationship is None
+            or self.relationship.kind != "on_screening_list"
+            or self.relationship.list_id is None
         ):
+            # ADR-146 decision 3: it runs when *that* list refreshes, so it names the list; a rule
+            # with this When and no list would never run (the orchestrator's condition).
             raise ValueError(
-                "a rule that runs when a screening list refreshes reads one: its subject is on a "
-                "screening list"
+                "a rule that runs when a screening list refreshes names the list: its subject is "
+                "on that screening list"
             )
         if self.runs == "list_refresh" and self.scope == "deployment":
             raise ValueError("a rule for the whole deployment is converted per dataset")

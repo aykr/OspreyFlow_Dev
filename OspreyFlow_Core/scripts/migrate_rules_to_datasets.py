@@ -21,8 +21,14 @@ For each whole-deployment rule not yet retired, oldest first:
    twice, and a rule retired before every dataset had its copy would leave that one unwatched. A
    second run, once the home case is made, converts it.
 
+5. **Each copy has its own drawn pattern,** the original's latest definition saved again in the
+   copy's dataset, as its owner: a run reads a rule's pattern within the rule's dataset, so a shared one
+   would be unreadable to every copy but one. A rule whose pattern cannot be read is left whole.
+
 Each rule is converted in one transaction, so a failure part-way leaves it whole-deployment and
-untouched. A second run finds no whole-deployment rule to convert and changes nothing.
+untouched. The rule is read again, locked, inside it: the Conduit may keep running, and a rule
+retired, approved or changed since the snapshot is left for the next run. A second run finds no
+whole-deployment rule to convert and changes nothing.
 
 **The dry run writes nothing by construction,** twice over. It never opens `TypologyRuleStore`,
 whose `connect` adds columns, tables and indexes: it reads the rules, the datasets and the home
@@ -64,6 +70,9 @@ class WideRule:
     budget_ms: int
     status: str
     version: int
+    #: Its drawn pattern's latest definition and name, which each copy keeps as its own pattern in
+    #: its own dataset (a run reads a pattern within the rule's dataset); None when it has none.
+    pattern: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +97,7 @@ class Report:
 
 class Writer(Protocol):
     async def write(self, said: str, sql: str, *args: Any) -> None: ...
+    async def still(self, rule: WideRule) -> bool: ...
 
 
 class Recorded:
@@ -98,6 +108,9 @@ class Recorded:
 
     async def write(self, said: str, sql: str, *args: Any) -> None:
         self._writes.append(said)
+
+    async def still(self, rule: WideRule) -> bool:
+        return True
 
 
 class Written:
@@ -110,6 +123,15 @@ class Written:
     async def write(self, said: str, sql: str, *args: Any) -> None:
         await self._conn.execute(sql, *args)
         self._writes.append(said)
+
+    async def still(self, rule: WideRule) -> bool:
+        """The rule read again, locked, inside its own transaction: the Conduit may keep running,
+        so a rule retired, approved or changed since the snapshot is left for the next run (the
+        lane-reviewer's item 10)."""
+        row = await self._conn.fetchrow(
+            "SELECT status, version FROM typology_rules WHERE id = $1 FOR UPDATE", rule.id
+        )
+        return row is not None and (row["status"], row["version"]) == (rule.status, rule.version)
 
 
 def _json(value: Any) -> Any:
@@ -134,14 +156,23 @@ async def snapshot(conn: asyncpg.Connection) -> tuple[list[WideRule], list[Sourc
         f"{version} FROM typology_rules WHERE {_WIDE} AND status <> 'retired' "
         "ORDER BY created_at, id"
     )
-    rules = [
-        WideRule(
+    patterns = await conn.fetchval("SELECT to_regclass('saved_patterns') IS NOT NULL")
+    rules: list[WideRule] = []
+    for r in rows:
+        params = _json(r["params"])
+        pattern: tuple[str, str] | None = None
+        if patterns and params.get("pattern_id"):
+            found = await conn.fetchrow(
+                "SELECT definition, name FROM saved_patterns WHERE pattern_id = $1 "
+                "ORDER BY version DESC LIMIT 1",
+                params["pattern_id"],
+            )
+            pattern = None if found is None else (found["definition"], found["name"])
+        rules.append(WideRule(
             id=r["id"], investigation_id=r["investigation_id"], owner_id=r["owner_id"],
-            name=r["name"], params=_json(r["params"]), trigger=r["trigger"],
-            budget_ms=r["budget_ms"], status=r["status"], version=r["version"],
-        )
-        for r in rows
-    ]  # fmt: skip
+            name=r["name"], params=params, trigger=r["trigger"], budget_ms=r["budget_ms"],
+            status=r["status"], version=r["version"], pattern=pattern,
+        ))  # fmt: skip
     homes: dict[str, str] = {}
     if await conn.fetchval("SELECT to_regclass('home_cases') IS NOT NULL"):
         homes = {
@@ -162,7 +193,18 @@ async def convert(
 ) -> None:
     """One whole-deployment rule converted, every write through `writer`."""
     now = datetime.now(UTC)
-    params = {**rule.params, "sentence": {**rule.params["sentence"], "scope": "this_case"}}
+    if rule.pattern is None:
+        report.unplaced.append(
+            f"{rule.name!r} ({rule.id}) left whole and running: its drawn pattern could not be "
+            "read, so no copy could run"
+        )
+        return
+    if not await writer.still(rule):
+        report.unplaced.append(
+            f"{rule.name!r} ({rule.id}) left as it is: it changed while this ran; run this again"
+        )
+        return
+    definition, pattern_name = rule.pattern
     live = rule.status == "active"
     words = f"Converted from the whole-deployment rule {rule.name!r} ({rule.id})."
     missing = [d for d in datasets if d.home_case is None]
@@ -176,6 +218,15 @@ async def convert(
     for dataset in datasets:
         assert dataset.home_case is not None
         copy_id = new_id()
+        pattern_id = new_id()
+        params = {**rule.params, "pattern_id": pattern_id,
+                  "sentence": {**rule.params["sentence"], "scope": "this_case"}}  # fmt: skip
+        await writer.write(
+            f"save the drawn pattern of {copy_id} in {dataset.id}",
+            "INSERT INTO saved_patterns (id, pattern_id, version, name, owner_id, created_at, "
+            "definition, dataset_id) VALUES ($1, $2, 1, $3, $4, $5, $6, $7)",
+            new_id(), pattern_id, pattern_name, rule.owner_id, now, definition, dataset.id,
+        )  # fmt: skip
         await writer.write(
             f"copy {rule.name!r} ({rule.id}) to {dataset.name!r} ({dataset.id}) in its home case "
             f"{dataset.home_case} as {'live' if live else 'a draft'}",

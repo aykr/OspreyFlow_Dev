@@ -32,7 +32,7 @@ from schemas.domain import OntologySchema, TypologyRule
 from schemas.list_connector import OfferedList
 from schemas.rule_editor import RuleDatasetOffer
 
-from .datasets import COMPOSITE, SOURCE, Dataset, DatasetStore
+from .datasets import COMPOSITE, SOURCE, Dataset, DatasetStore, read_set
 from .link_types import public_ontology
 from .list_connector import ListRows, ListStore, deployment_references, offered_lists
 from .screening import ScreeningEntry
@@ -72,9 +72,10 @@ async def _members(dataset: Dataset, datasets: DatasetStore) -> list[Dataset]:
 async def needs_second_person(dataset: Dataset, datasets: DatasetStore) -> bool:
     """Whether *Make live* waits for another person: the dataset's own policy, or for a composite
     any member's."""
-    return any(
-        d.promotion_policy == "second_person_reviews" for d in await _members(dataset, datasets)
-    )
+    members = await _members(dataset, datasets)
+    if dataset.kind == COMPOSITE and len(members) < len(dataset.members):
+        return True  # a member it can no longer read is asked about as strictly as it could be
+    return any(d.promotion_policy == "second_person_reviews" for d in members)
 
 
 async def _packs(
@@ -265,12 +266,69 @@ def rule_list_reader(
     async def read(rule: TypologyRule, list_id: str, entity_type: str) -> list[ScreeningEntry]:
         if rule.dataset_id is None:
             raise ListNotOffered(list_id)
-        dataset = (await datasets.egress_of([rule.dataset_id])).get(rule.dataset_id)
-        if dataset is None or dataset.kind not in RULE_DATASET_KINDS:
-            raise ListNotOffered(list_id)
+        # The rule's case must still read its dataset (rule 3, the lane-reviewer's item 13).
+        try:
+            dataset = await declared_dataset(rule.investigation_id, rule.dataset_id, datasets)
+        except DatasetNotOffered as gone:
+            raise ListNotOffered(list_id) from gone
         return await list_entries(
             dataset, list_id, entity_type, datasets=datasets, models=models, lists=lists,
             rows_kept=rows_kept,
         )  # fmt: skip
 
     return read
+
+
+def rule_reach(dataset: Dataset) -> list[str]:
+    """What a rule on `dataset` reads, as its author: the dataset, and a composite's members with
+    it (`datasets.read_set`, no layer). A run, a refresh and *Test* each read exactly this."""
+    return read_set([dataset], None)
+
+
+#: (the rule) -> the dataset ids its author reads it within; `None` when its case no longer reads
+#: its dataset, which no run then reads at all.
+RuleReach = Callable[[TypologyRule], Awaitable[list[str] | None]]
+
+
+def rule_reach_of(datasets: DatasetStore) -> RuleReach:
+    async def reach(rule: TypologyRule) -> list[str] | None:
+        if rule.dataset_id is None:
+            return None
+        try:
+            dataset = await declared_dataset(rule.investigation_id, rule.dataset_id, datasets)
+        except DatasetNotOffered:
+            return None
+        return rule_reach(dataset)
+
+    return reach
+
+
+async def reads_the_list(
+    rule: TypologyRule,
+    list_id: str,
+    owner: str,
+    *,
+    datasets: DatasetStore,
+    models: TargetModelStore | None,
+    lists: ListStore | None,
+    rows_kept: ListRows | None,
+) -> bool:
+    """Whether `rule` reads the list `list_id` kept by `owner` (a dataset, or the deployment's
+    `DEPLOYMENT_WIDE`): list ids repeat across datasets, so a refresh of one dataset's list starts
+    only the rules that read that dataset's (the lane-reviewer's item 6)."""
+    if rule.dataset_id is None or models is None or lists is None or rows_kept is None:
+        return False
+    try:
+        dataset = await declared_dataset(rule.investigation_id, rule.dataset_id, datasets)
+    except DatasetNotOffered:
+        return False
+    wide = await deployment_references(lists)
+    for member in await _members(dataset, datasets):
+        own = await own_lists(member.id, models, rows_kept)
+        readable, clashes = readable_lists(
+            [*own, *wide], dataset_id=member.id, subscribed=await lists.subscribed(member.id)
+        )
+        if any(r.id == list_id and r.dataset_id == owner and r.name not in clashes
+               for r in readable.values()):  # fmt: skip
+            return True
+    return False

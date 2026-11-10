@@ -138,7 +138,7 @@ _COLUMNS = (
 _READ = (
     "id, investigation_id, owner_id, name, params, trigger, budget_ms, status, created_at, "
     "retired_at, dataset_id, version, "
-    "(SELECT row_to_json(p) FROM (SELECT action, proposed_by, version, "
+    "(SELECT row_to_json(p) FROM (SELECT action, proposed_by, version, asked_by, "
     "tested_at IS NOT NULL AS make_live "
     "FROM typology_rule_versions v "
     "WHERE v.rule_id = typology_rules.id AND v.status = 'pending') p) AS pending"
@@ -225,6 +225,7 @@ def _row_to_rule(row: asyncpg.Record) -> TypologyRule:
         pending_by=pending["proposed_by"] if pending else None,
         pending_version=pending["version"] if pending else None,
         pending_make_live=bool(pending.get("make_live")) if pending else False,
+        pending_asked_by=pending.get("asked_by") if pending else None,
     )
 
 
@@ -393,7 +394,7 @@ class TypologyRuleStore:
             row = await conn.fetchrow(
                 "UPDATE typology_rules SET status = 'retired', retired_at = $3, "
                 "version = version + 1 "
-                f"WHERE id = $1 AND investigation_id = $2 AND status = 'active'{reach} "
+                f"WHERE id = $1 AND investigation_id = $2 AND status IN ('active', 'draft'){reach} "
                 f"RETURNING {_COLUMNS}, version",
                 rule_id,
                 investigation_id,
@@ -493,6 +494,12 @@ class TypologyRuleStore:
                 budget_ms=waiting.budget_ms,
             )  # fmt: skip
             if waiting.action == "deploy":
+                if waiting.tested_at is not None:
+                    # A make-live (ADR-146 decision 3): the version approved is the one that runs.
+                    author = principal.model_copy(update={"id": waiting.proposed_by})
+                    await self._apply(
+                        conn, rule, spec, author, waiting.version, dataset=rule.dataset_id
+                    )
                 await conn.execute(
                     "UPDATE typology_rules SET status = 'active' WHERE id = $1", rule.id
                 )
@@ -518,6 +525,16 @@ class TypologyRuleStore:
         rule = await self.get_listed(rule_id, investigation_id, principal)
         now = datetime.now(UTC)
         async with self._pool.acquire() as conn, conn.transaction():
+            asked = await conn.fetchrow(
+                "SELECT proposed_by, asked_by FROM typology_rule_versions "
+                "WHERE rule_id = $1 AND status = 'pending' AND tested_at IS NOT NULL FOR UPDATE",
+                rule.id,
+            )
+            if asked is not None and principal.id in (asked["proposed_by"], asked["asked_by"]):
+                # ADR-146 Amendment 6 point 4: decided by another, never its author or the asker.
+                raise OwnChangeRefused(
+                    "you wrote this draft or asked for it to go live; another Author decides it"
+                )
             back = await conn.fetchrow(
                 "UPDATE typology_rule_versions SET status = 'draft', asked_by = NULL, words = $2 "
                 "WHERE rule_id = $1 AND status = 'pending' AND tested_at IS NOT NULL "
@@ -598,31 +615,51 @@ class TypologyRuleStore:
             raise RuleChangeRefused(
                 "this rule is waiting for a second person's approval; send it back to change it"
             )
-        async with self._pool.acquire() as conn, conn.transaction():
-            version = await conn.fetchval(
-                "SELECT version FROM typology_rule_versions "
-                "WHERE rule_id = $1 AND status = 'draft' FOR UPDATE",
-                rule.id,
-            )
-            if version is None:
-                version = await self._next_version(conn, rule.id)
-                action = "deploy" if rule.status == "draft" else "change"
-                await self._keep_version(
-                    conn, rule.id, version, action, spec, principal.id, now, status="draft"
+        try:
+            async with self._pool.acquire() as conn, conn.transaction():
+                # The rule's row locked first, and what was checked above checked again under it, so
+                # a Make live (or a second save) between the two cannot be passed over (the
+                # lane-reviewer's L2.11 item 9).
+                await conn.execute("SELECT 1 FROM typology_rules WHERE id = $1 FOR UPDATE", rule.id)
+                if await conn.fetchval(
+                    "SELECT 1 FROM typology_rule_versions "
+                    "WHERE rule_id = $1 AND status = 'pending'",
+                    rule.id,
+                ):
+                    raise RuleChangeRefused(
+                        "this rule is waiting for a second person's approval; send it back to "
+                        "change it"
+                    )
+                version = await conn.fetchval(
+                    "SELECT version FROM typology_rule_versions "
+                    "WHERE rule_id = $1 AND status = 'draft' FOR UPDATE",
+                    rule.id,
                 )
-            else:
-                await conn.execute(
-                    "UPDATE typology_rule_versions SET name = $3, params = $4, trigger = $5, "
-                    "budget_ms = $6, proposed_by = $7, proposed_at = $8, words = NULL, "
-                    "tested_at = NULL, tested_by = NULL, tested_days = NULL, would_raise = NULL "
-                    "WHERE rule_id = $1 AND version = $2",
-                    rule.id, version, spec.name, spec.params.model_dump_json(), spec.trigger,
-                    spec.budget_ms, principal.id, now,
-                )  # fmt: skip
-            await self._keep_files(conn, rule.id, version, files)
-            if rule.status == "draft":
-                # Never live: the rule is its draft, so the list shows what was last saved.
-                await self._apply(conn, rule, spec, principal, version, dataset=rule.dataset_id)
+                if version is None:
+                    version = await self._next_version(conn, rule.id)
+                    action = "deploy" if rule.status == "draft" else "change"
+                    await self._keep_version(
+                        conn, rule.id, version, action, spec, principal.id, now, status="draft"
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE typology_rule_versions SET name = $3, params = $4, trigger = $5, "
+                        "budget_ms = $6, proposed_by = $7, proposed_at = $8, words = NULL, "
+                        "tested_at = NULL, tested_by = NULL, tested_days = NULL, "
+                        "would_raise = NULL "
+                        "WHERE rule_id = $1 AND version = $2",
+                        rule.id, version, spec.name, spec.params.model_dump_json(), spec.trigger,
+                        spec.budget_ms, principal.id, now,
+                    )  # fmt: skip
+                await self._keep_files(conn, rule.id, version, files)
+                if rule.status == "draft":
+                    # Never live: the rule is its draft, so the list shows what was last saved.
+                    await self._apply(conn, rule, spec, principal, version, dataset=rule.dataset_id)
+        except asyncpg.UniqueViolationError as raced:
+            # Two first saves of one live rule's draft at once: the second is told, in words.
+            raise RuleChangeRefused(
+                "someone saved this rule's draft at the same moment; open it again"
+            ) from raced
         return await self._read(rule.id)
 
     @staticmethod

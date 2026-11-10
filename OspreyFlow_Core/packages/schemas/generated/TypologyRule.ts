@@ -315,6 +315,7 @@ export type PendingAction = ("deploy" | "change" | "retire") | null;
 export type PendingBy = string | null;
 export type PendingVersion = number | null;
 export type PendingMakeLive = boolean;
+export type PendingAskedBy = string | null;
 export type PendingByName = string | null;
 
 /**
@@ -343,6 +344,7 @@ export interface TypologyRule {
   pending_by?: PendingBy;
   pending_version?: PendingVersion;
   pending_make_live?: PendingMakeLive;
+  pending_asked_by?: PendingAskedBy;
   pending_by_name?: PendingByName;
   [k: string]: unknown;
 }

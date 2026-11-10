@@ -64,6 +64,15 @@ async def _seed(dsn: str) -> str:
         await conn.executemany("INSERT INTO datasets VALUES ($1, $2, $3)", [
             ("ds-a", "Prison records", "source"), ("ds-b", "Custody suites", "source"),
             ("ds-both", "Both", "composite")])  # fmt: skip
+        await conn.execute(
+            "CREATE TABLE saved_patterns (id TEXT PRIMARY KEY, pattern_id TEXT NOT NULL, "
+            "version INTEGER NOT NULL, name TEXT NOT NULL, owner_id TEXT NOT NULL, "
+            "created_at TIMESTAMPTZ NOT NULL, definition TEXT NOT NULL, dataset_id TEXT)"
+        )
+        await conn.execute(
+            "INSERT INTO saved_patterns VALUES ('sp-1', 'p', 1, 'Rule: Okafor anywhere', 'admin', "
+            "now(), '{\"nodes\": [], \"edges\": []}', 'ds-admin')"
+        )
         await conn.executemany("INSERT INTO home_cases VALUES ($1, $2)",
                                [("ds-a", "home-a"), ("ds-b", "home-b")])  # fmt: skip
         # The rule store as it stood before L2.11, so a dry run that opened it (whose `connect`
@@ -124,8 +133,14 @@ async def test_the_real_run_leaves_no_whole_deployment_rule_and_one_per_dataset(
         assert [(c["investigation_id"], c["dataset_id"], c["status"]) for c in copies] == [
             ("home-a", "ds-a", "active"), ("home-b", "ds-b", "active")]  # fmt: skip
         for copy in copies:
-            sentence = json.loads(copy["params"])["sentence"]
+            params = json.loads(copy["params"])
+            sentence = params["sentence"]
             assert sentence["conditions"] == CONDITIONS and sentence["scope"] == "this_case"
+            # Each copy's own pattern, saved in its own dataset, which its runs read it within.
+            mine = await conn.fetchval(
+                "SELECT dataset_id FROM saved_patterns WHERE pattern_id = $1", params["pattern_id"]
+            )
+            assert mine == copy["dataset_id"]
         rows = await _rows(conn)
         assert await _main([], dsn=dsn) == 0  # a second run
         assert await _rows(conn) == rows

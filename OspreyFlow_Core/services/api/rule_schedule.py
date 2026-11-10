@@ -95,9 +95,11 @@ def schedule_view(
     """The rule's schedule as the rules list says it: in words, with its next run, or why it will
     not run."""
     schedule = _schedule_of(rule)
-    if schedule is None:
+    on_refresh = rule.trigger == "list_refresh"
+    if schedule is None and not on_refresh:
         raise ValueError("this rule runs as data loads, not on a schedule")
-    said = schedule_words(schedule)
+    # ADR-146 decision 3: a rule run as its screening list refreshes says so, with its runs.
+    said = "when its screening list refreshes" if schedule is None else schedule_words(schedule)
     newest_first = sorted(runs, key=lambda r: (r.slot, r.ran_at), reverse=True)
     if rule.status == "draft":
         return RuleScheduleView(
@@ -122,6 +124,11 @@ def schedule_view(
             words=("Stopped after three refused runs in a row; the last: "
                    f"{_core(refusals[0].words)}. Change the rule to start it again."),
             runs=newest_first,
+        )  # fmt: skip
+    if schedule is None:
+        return RuleScheduleView(
+            rule_id=rule.id, schedule=said, state="scheduled",
+            words="Runs each time its screening list keeps a new version.", runs=newest_first,
         )  # fmt: skip
     return RuleScheduleView(
         rule_id=rule.id, schedule=said, state="scheduled",
@@ -179,16 +186,25 @@ class RuleScheduleExecutor:
     judge: Callable[[TypologyRule, Principal, datetime], Awaitable[int]]
     #: ADR-146 decision 3: judges a rule as its screening list refreshes, as the author.
     judge_on_refresh: Callable[[TypologyRule, Principal, datetime], Awaitable[int]] | None = None
+    #: Whether a rule reads the list refreshed, kept by that owner (a dataset, or the
+    #: deployment): list ids repeat across datasets, so the id alone never decides
+    #: (`rule_editor.reads_the_list`).
+    reads_list: Callable[[TypologyRule, str, str], Awaitable[bool]] | None = None
 
-    async def on_list_refreshed(self, list_id: str, now: datetime) -> int:
+    async def on_list_refreshed(self, list_id: str, owner: str, now: datetime) -> int:
         """ADR-146 decision 3, *When* a screening list refreshes: each running rule that names the
         list is judged once, as its author resolved afresh, and the run recorded with the rule's
         runs in words, whatever became of it. One rule's trouble never stops the others. Returns
         how many rules ran."""
-        if self.judge_on_refresh is None:
+        if self.judge_on_refresh is None or self.reads_list is None:
             return 0
         ran = 0
         for rule in await self.rules.list_refresh_rules(list_id):
+            if not await self.reads_list(rule, list_id, owner):
+                continue  # another dataset's list of the same id
+            runs = await self.rules.rule_runs(rule.id, limit=REFUSALS_BEFORE_STOP + 1)
+            if len(_refused_in_a_row(rule, runs)) >= REFUSALS_BEFORE_STOP:
+                continue  # stopped, and said so on the rule, as a schedule is
             claim = f"rule-refresh:claim:{rule.id}:{list_id}:{now.isoformat()}"
             if not await reply(self.valkey.set(claim, "1", nx=True, ex=_CLAIM_SECONDS)):
                 continue

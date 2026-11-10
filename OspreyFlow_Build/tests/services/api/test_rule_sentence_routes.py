@@ -176,18 +176,19 @@ def test_each_sentence_route_needs_the_case_and_its_right(world: dict[str, Any])
 
 
 def test_the_scope_decides_the_level_and_right_needed(world: dict[str, Any]) -> None:
+    """ADR-146 Amendment 6 (L2.11): this older form keeps rules just for their author; a rule for
+    the case, or the whole deployment, is written in the rule editor, through draft, Test and Make
+    live, and refused here in words whoever asks (the lane-reviewer's item 2)."""
     assert _deploy(EDITOR, scope="just_me").status_code == 201
-    assert _deploy(EDITOR).status_code == 403  # this case: an Author's
-    assert _deploy(AUTHOR).status_code == 201
-    refused = _deploy(AUTHOR, scope="deployment")
-    assert refused.status_code == 403 and refused.json()["detail"]["right"] == "administer_system"
-    assert _deploy(ADMIN_AUTHOR, scope="deployment").status_code == 201
+    for who, scope in ((AUTHOR, "this_case"), (ADMIN_AUTHOR, "this_case"), (ADMIN_AUTHOR, "deployment")):
+        refused = _deploy(who, scope=scope)
+        assert (refused.status_code, refused.json()["error"]) == (409, "use_the_rule_editor"), (who.id, scope)
     scopes = [r.params.sentence.scope for r in world["rules"].created]  # type: ignore[union-attr]
-    assert scopes == ["just_me", "this_case", "deployment"]
+    assert scopes == ["just_me"]
 
 
 def test_a_deployed_sentence_saves_its_drawn_pattern_as_the_authors_and_points_at_it(world: dict[str, Any]) -> None:
-    response = _deploy(AUTHOR, severity="high")
+    response = _deploy(AUTHOR, severity="high", scope="just_me")
     assert response.status_code == 201, response.text
     (owner, name, pattern), = world["patterns"].saved
     assert (owner, name) == ("au", "Rule: Okafor")
@@ -200,7 +201,7 @@ def test_a_deployed_sentence_saves_its_drawn_pattern_as_the_authors_and_points_a
 def test_a_sentence_naming_an_undeclared_property_is_refused_and_nothing_is_saved(world: dict[str, Any]) -> None:
     bad = {"subject": "Person", "conditions": [{"op": "equals", "property": "shoe_size", "value": "9"}]}
     for path, body in (("sentence/compile", bad), ("preview", {"sentence": bad}),
-                       ("sentence", {"name": "n", "sentence": bad})):  # fmt: skip
+                       ("sentence", {"name": "n", "sentence": {**bad, "scope": "just_me"}})):  # fmt: skip
         response = _as(AUTHOR).post(f"{BASE}/{path}", json=body)
         assert response.status_code == 422, path
         assert response.json() == {"error": "sentence_refused", "blank": "conditions[0]", "reason": "unknown_property",
