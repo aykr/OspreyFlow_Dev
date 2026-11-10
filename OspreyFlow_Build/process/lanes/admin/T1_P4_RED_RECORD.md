@@ -51,6 +51,21 @@ had missed:
 
 ## Live (stack b, the lease admin took at 17:45:01Z)
 
-Pending the leased run: `tests/test_worker_isolation_live.py`, two workers writing the same key in ArcadeDB,
-Postgres, Valkey and the object store, with the plugin each sees only its own; without it (the planted leak) each sees
-both.
+Two runs, one lease, logs in `gates/` (`t1p4_live_stack_b.txt` is the second, secrets masked).
+
+- **First run, at `b5d8000`.** The isolation proof's red failed for the wrong reason. One worker dropped the probe type
+  in the shared `ospreyflow` while the other's DELETE ran (`SchemaException`, "Type with name 'T1Probe_3208680a' was
+  not found"). The fix at `4a66115` adds a barrier before DROP TYPE, waits for the type before writing, and adds a
+  `clean` step. That step removed what the first run had left: one Postgres table, one Valkey key and one object
+  folder, all under `3208680a`.
+- **Second run, at `4a66115` (3436 s).** Both tests passed (70 s): with the plugin, each of two workers wrote the same
+  key in ArcadeDB, Postgres, Valkey and the object store and saw only its own; without it, each saw both, in all four
+  stores.
+- **Rule 3's access set: 124 passed serially (1155 s), not the same set at 4 workers (2209 s): 49 passed, 5 failed, 71
+  errors.** Every failure and error is `asyncpg.exceptions.TooManyConnectionsError` ("sorry, too many clients
+  already"), at a Conduit's start (`TestClient` lifespan) or a store's `connect`. No test saw another worker's row.
+  The cause is the stack, not the redirect. One Conduit opens 46 asyncpg pools whose `min_size` adds up to 47
+  connections. The test stack's Postgres keeps its default `max_connections` of 100, which ADR text at
+  `06_DECISIONS.md:29434` already names. So two Conduits starting at once nearly fill it and four overflow it. A
+  serial run starts one at a time. **Not yet shown equal at any N.** The next leased check is `-n 2` (2 × 47 = 94, under
+  100), or `-n 4` once the test stacks raise `max_connections`: a stack file, the orchestrator's.
