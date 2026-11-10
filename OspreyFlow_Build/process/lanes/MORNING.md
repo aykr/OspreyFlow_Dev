@@ -13,6 +13,15 @@ The full failed-job log is in the orchestrator's scratch (`ci/gh_e89d44a.log`), 
 
 **Pushing (your instruction, about 06:20 UTC):** CI runs locally on every merge, and `main` goes to `origin` in one push at the very end, not after each merge.
 
+
+## Decided on my recommendation while you were away (from 10 November, about 05:40 UTC)
+
+Your word, 10 November: "going forward can you go ahead with the recommended option, for all the options that are
+decided this way, draw up a summary for me, when i come back online". Each entry: the question, what I chose and why,
+where it is recorded, and how to overrule it. Overrule any of them and I'll reverse it.
+
+*(None yet.)*
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
