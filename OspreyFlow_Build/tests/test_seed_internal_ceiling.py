@@ -16,7 +16,11 @@ from typing import Any
 import pytest
 from scripts import seed_internal
 from scripts.seed_internal import DATASETS, SeedRefused
-from services.ingest.ceiling import DeploymentCeiling, refuse_rows_above_the_ceiling
+from services.ingest.ceiling import (
+    AboveTheDeploymentCeiling,
+    DeploymentCeiling,
+    refuse_rows_above_the_ceiling,
+)
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import marked_columns
 
@@ -56,10 +60,10 @@ def _render(repo: Path, ceiling: str | None) -> None:
     env.write_text("OSPREY_KEYCLOAK_PORT=8081\n" + line, encoding="utf-8")
 
 
-def _seed(repo: Path, dataset: str, runner: Runner) -> list[str]:
+def _seed(repo: Path, dataset: str, runner: Runner, **more: Any) -> list[str]:
     return seed_internal.seed_internal(
         dataset, repo, run=runner, lookup_subs=lambda directory: SUBS,
-        api_running=lambda compose: False, permitted=lambda name, use: True,
+        api_running=lambda compose: False, permitted=lambda name, use: True, **more,
     )  # fmt: skip
 
 
@@ -70,6 +74,8 @@ def test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts(repo: Path) 
         _seed(repo, "fixture-corp", runner)
     words = str(raised.value)
     assert "OFFICIAL-SENSITIVE" in words and "fixture-corp" in words
+    # Its declared marking, said as the declaration's words, not as an undeclared pack's.
+    assert "holds data marked up to SECRET" in words, words
     assert runner.calls == [], "something ran before the refusal"
 
 
@@ -104,12 +110,18 @@ def test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest(
 def test_every_pack_declares_its_highest_marking() -> None:
     """L1.10b: every pack declares, each proved below, so none is judged as the scheme's highest
     for want of a declaration; a new pack is added with its own and its proof."""
-    assert {n for n, spec in DATASETS.items() if spec.highest_marking is None} == set()
+    undeclared = {
+        n
+        for n, spec in DATASETS.items()
+        if spec.highest_marking is None and not spec.judged_when_staged
+    }
+    assert undeclared == set()
     assert set(DATASETS) == set(PROVED), "a pack whose declaration no test below proves"
 
 
 def _within(declared: str, classification: str) -> bool:
-    return SCHEME.classification.index(classification) <= SCHEME.classification.index(declared)
+    """The ceiling's own judgement: a marking the scheme does not know counts as above it."""
+    return not DeploymentCeiling(declared, SCHEME).above(classification)
 
 
 def _recipe_within(recipe: Recipe, rows: list[dict[str, str]], declared: str) -> None:
@@ -220,32 +232,31 @@ def test_fixture_corps_declaration_is_the_highest_it_writes() -> None:
 
 def test_ledgers_declaration_holds_for_every_write() -> None:
     """Every recipe the Ledger loads (its six, the mid-demo steps' included) sets no marking from a
-    column and loads at most OFFICIAL; its direct writes and geometry take `_HANDLING`."""
+    column and loads at most OFFICIAL. Its real builder is run against a store that finds only what
+    it holds, so its direct writes (the nodes it makes when they are not found, and its links) are
+    recorded, with the map's geometry."""
     from demo_fixtures import ledger
+    from ontology.packs import load_deployment_ontology
+    from schemas.domain import Principal
 
     declared = DATASETS["ledger"].highest_marking
     assert declared == "OFFICIAL"
     recipes = sorted(ledger.FIXTURES.glob("ledger_*_recipe.yaml"))
     assert len(recipes) == 6
-    rows = {
-        "ledger_kyc_recipe.yaml": ledger.kyc_rows(),
-        "ledger_companies_recipe.yaml": ledger.company_rows(),
-        "ledger_ownership_recipe.yaml": ledger.ownership_rows(),
-        "ledger_transactions_recipe.yaml": ledger.transaction_rows(),
-        "ledger_sar_recipe.yaml": ledger.sar_rows(),
-    }
     for path in recipes:
         recipe = load_recipe(path)
-        _recipe_within(recipe, rows.get(path.name, []), declared)
+        _recipe_within(recipe, [], declared)
         assert not marked_columns(recipe.row_template, recipe.defaults.handling_columns), path.name
-    graph = _Recording()
-    principal = SimpleNamespace(id="seed")
-    asyncio.run(ledger._direct_writes(graph, principal, "ld"))  # type: ignore[arg-type]
-    assert graph.writes
-    assert all(_within(declared, w.handling.classification) for w in graph.writes), (
+    ontology = load_deployment_ontology()
+    graph = _Stored(ontology)
+    seeder = Principal(id="seed", clearance="SECRET", org_unit="unit-fincrime")
+    asyncio.run(ledger.build_ledger_graph(graph=graph, ontology=ontology, principal=seeder))
+    direct = [w for w in graph.committed_nodes if (w.load_id or "").endswith("-direct")]
+    assert direct, "the builder's own nodes were never recorded"
+    written = [*graph.committed_nodes, *graph.committed_edges, *ledger.geometry_records()]
+    assert all(_within(declared, w.handling.classification) for w in written), (
         "a write above the declaration"
     )
-    assert all(_within(declared, g.handling.classification) for g in ledger.geometry_records())
 
 
 def test_prison_intelligences_declaration_holds_for_every_write(tmp_path: Path) -> None:
@@ -296,17 +307,67 @@ def test_the_scale_cohorts_declaration_holds_for_every_write() -> None:
     )
 
 
-def test_the_public_datasets_declaration_holds_for_every_recipe() -> None:
-    """A public dataset is staged with the catalogue's own recipe (`scripts.public_dataset`), and
-    each sets no marking from a column: every row loads at the recipe's own, within OFFICIAL."""
-    declared = DATASETS["public"].highest_marking
-    assert declared == "OFFICIAL"
-    catalogue = sorted(PUBLIC_CATALOGUE.glob("*_recipe.yaml"))
-    assert catalogue
-    for path in catalogue:
-        recipe = load_recipe(path)
-        _recipe_within(recipe, [], declared)
-        assert not marked_columns(recipe.row_template, recipe.defaults.handling_columns), path.name
+def _stage_public(repo: Path, markings: list[str], *, checksum: bool = True) -> str:
+    """A public dataset staged as `scripts.public_dataset stage` leaves it: the catalogue's
+    manifest with the file's checksum pinned, its recipe with one element's classification bound
+    to a `cls` column, and the file. Synthetic rows (rule 9)."""
+    import hashlib
+
+    import yaml
+
+    folder = repo.parent / "OspreyFlow_Data" / "public" / "vast-2008-mc3"
+    folder.mkdir(parents=True)
+    rows = "".join(f"{i},{m}\n" for i, m in enumerate(markings))
+    data = f"call,cls\n{rows}".encode()
+    manifest = yaml.safe_load((PUBLIC_CATALOGUE / "vast-2008-mc3.dataset.yaml").read_text())
+    manifest["file"]["sha256"] = hashlib.sha256(data).hexdigest() if checksum else "0" * 64
+    (folder / "dataset.yaml").write_text(yaml.safe_dump(manifest), encoding="utf-8")
+    recipe = yaml.safe_load((PUBLIC_CATALOGUE / manifest["recipe"]).read_text())
+    recipe["row_template"]["entities"][0]["handling"] = {"classification": {"field": "cls"}}
+    (folder / "recipe.yaml").write_text(yaml.safe_dump(recipe), encoding="utf-8")
+    (folder / manifest["file"]["name"]).write_bytes(data)
+    return "vast-2008-mc3"
+
+
+def test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts(
+    repo: Path,
+) -> None:
+    """No declaration can hold for a recipe the administrator stages, so its rows are judged on
+    the host, as the load would judge them, before the seed makes its case or writes anything."""
+    public_id = _stage_public(repo, ["OFFICIAL", "SECRET"])
+    _render(repo, "OFFICIAL")
+    runner = Runner()
+    with pytest.raises(SeedRefused) as raised:
+        _seed(repo, "public", runner, public_id=public_id)
+    assert AboveTheDeploymentCeiling("OFFICIAL").problems[0] in str(raised.value)
+    assert runner.calls == [], "something ran before the refusal"
+
+
+def test_a_staged_public_dataset_within_the_ceiling_is_seeded(repo: Path) -> None:
+    public_id = _stage_public(repo, ["OFFICIAL", "OFFICIAL"])
+    _render(repo, "OFFICIAL")
+    runner = Runner()
+    _seed(repo, "public", runner, public_id=public_id)
+    assert any("scripts.seed_public" in call for call in runner.calls)
+
+
+def test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling(
+    repo: Path,
+) -> None:
+    public_id = _stage_public(repo, ["OFFICIAL"], checksum=False)
+    _render(repo, "OFFICIAL")
+    runner = Runner()
+    with pytest.raises(SeedRefused, match="could not be read to judge its markings"):
+        _seed(repo, "public", runner, public_id=public_id)
+    assert runner.calls == []
+
+
+def test_with_no_ceiling_a_staged_public_dataset_is_seeded_as_before(repo: Path) -> None:
+    public_id = _stage_public(repo, ["SECRET"])
+    _render(repo, None)
+    runner = Runner()
+    _seed(repo, "public", runner, public_id=public_id)
+    assert any("scripts.seed_public" in call for call in runner.calls)
 
 
 def test_enrons_declaration_holds_for_every_write() -> None:
@@ -385,6 +446,6 @@ PROVED = {
     "prison-intelligence": test_prison_intelligences_declaration_holds_for_every_write,
     "prison-intelligence-scale": test_the_scale_cohorts_declaration_holds_for_every_write,
     "cyber-intrusion": test_cyber_intrusions_declaration_holds_for_every_write,
-    "public": test_the_public_datasets_declaration_holds_for_every_recipe,
+    "public": test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts,
     "enron": test_enrons_declaration_holds_for_every_write,
 }

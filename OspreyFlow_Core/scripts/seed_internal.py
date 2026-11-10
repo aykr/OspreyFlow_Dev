@@ -50,6 +50,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from harness.apply import _compose
 from harness.first_admin import FIRST_ADMIN_USERNAME
@@ -61,6 +62,9 @@ from harness.realm import (
 )
 from scripts import real_data_acknowledgement
 from scripts.refresh import NothingToRefresh, _deployment_dir, _identity_origin
+
+if TYPE_CHECKING:
+    from services.ingest.ceiling import DeploymentCeiling
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 #: Where the data folder is mounted inside the seed's container.
@@ -98,6 +102,10 @@ class Dataset:
     #: proves every write it makes is within it (`tests/test_seed_internal_ceiling.py`). None is
     #: judged as the scheme's highest, so a pack is refused under a lower ceiling (fails closed).
     highest_marking: str | None = None
+    #: ADR-148 Amendment 3: a pack whose recipe is staged by the administrator (`public`), so none
+    #: can be declared: its staged recipe and rows are judged against the ceiling instead, as a load
+    #: would judge them, before the seed starts.
+    judged_when_staged: bool = False
     #: Whether the seed has a rehearsal reset and two mid-demo commands (`--reset-live`,
     #: `--release-batch-2`, `--publish-reports-fallback`: ADR-127 Amendment 23).
     rehearsal: bool = False
@@ -165,11 +173,13 @@ DATASETS: dict[str, Dataset] = {
     ),
     # ADR-138 decision 3: a public dataset the administrator downloaded, placed by
     # `scripts.public_dataset stage` under `public/<id>/`; its case is named from its manifest.
+    # ADR-148 Amendment 3: no declaration can hold for a recipe the administrator stages, so the
+    # staged recipe and its rows are judged on the host before the seed starts.
     "public": Dataset(
         script="scripts.seed_public",
         case_name="",
         data_folder=PUBLIC_DATA,
-        highest_marking="OFFICIAL",
+        judged_when_staged=True,
     ),
     # ADR-114 Amendment 23: real data, an optional download each user makes and accepts.
     "enron": Dataset(
@@ -228,7 +238,9 @@ def _switch_args(directory: Path) -> list[str]:
     return ["-e", f"{RESOLUTION_SWITCH}={value}"]
 
 
-def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) -> None:
+def _refuse_a_pack_above_the_ceiling(
+    name: str, spec: Dataset, directory: Path, data_root: Path | None = None
+) -> None:
     """ADR-148 decision 10: a pack whose data is marked above the deployment's highest marking (its
     rendered `OSPREY_HIGHEST_MARKING`) is refused before its seed starts, so a pack written in
     several transactions is never partly written. Its declared highest, or the scheme's highest
@@ -248,6 +260,9 @@ def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) 
         ceiling = DeploymentCeiling.of(rendered, scheme)
     except CeilingUnknown as error:
         raise SeedRefused(f"{error}, so no pack is loaded") from error
+    if spec.judged_when_staged and data_root is not None and spec.data_folder:
+        _refuse_staged_rows_above_the_ceiling(name, data_root / spec.data_folder, ceiling)
+        return
     held = spec.highest_marking or scheme.classification[-1]
     if ceiling.above(held):
         holds = (
@@ -259,6 +274,29 @@ def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) 
             f"the {name} demo pack {holds}, above this deployment's highest marking, "
             f"{ceiling.marking}, so nothing was loaded"
         )
+
+
+def _refuse_staged_rows_above_the_ceiling(
+    name: str, folder: Path, ceiling: DeploymentCeiling
+) -> None:
+    """The staged recipe and every row of its file, judged as `run_recipe` judges a load
+    (`refuse_rows_above_the_ceiling`), before the seed makes its case or writes anything."""
+    if ceiling.is_the_scheme_s_highest:
+        return
+    from scripts.seed_public import PublicSeedRefused, read_staged
+    from services.ingest.ceiling import AboveTheDeploymentCeiling, refuse_rows_above_the_ceiling
+
+    try:
+        _manifest, recipe, rows = read_staged(folder)
+    except (PublicSeedRefused, OSError, ValueError) as error:
+        raise SeedRefused(
+            f"the {name} demo pack could not be read to judge its markings, so nothing was "
+            f"loaded: {error}"
+        ) from error
+    try:
+        refuse_rows_above_the_ceiling(recipe, rows, ceiling)
+    except AboveTheDeploymentCeiling as refused:
+        raise SeedRefused(f"the {name} demo pack: {refused.problems[0]}") from refused
 
 
 def _run_as_args(subs: Mapping[str, str]) -> list[str]:
@@ -582,7 +620,7 @@ def seed_internal(
     if revert_load is not None:
         return _revert_load(repo_root, directory, run, api_running, stop_api, *revert_load)
     if not (inspect or inspect_record or compare_vaults or check):
-        _refuse_a_pack_above_the_ceiling(dataset, spec, directory)
+        _refuse_a_pack_above_the_ceiling(dataset, spec, directory, data_root)
     if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
