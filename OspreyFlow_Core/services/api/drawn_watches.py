@@ -152,10 +152,17 @@ class DrawnWatchRun:
     raise_alert: Callable[[DrawnWatchMatch], Awaitable[None]]
 
     async def after_load(
-        self, dataset_id: str, node_ids: Sequence[str], *, load_id: str | None = None
+        self,
+        dataset_id: str,
+        node_ids: Sequence[str],
+        *,
+        load_id: str | None = None,
+        counted_for: str | None = None,
     ) -> int:
         """Every live drawn watch on `dataset_id`, run against the nodes a load wrote there. The
-        number of alerts raised (for the run's report): never of what was read (rule 7)."""
+        number of alerts raised, never of what was read (rule 7); with `counted_for`, only those
+        raised for that account (the run's report: a drawn watch's alert is its owner's alone, so
+        another owner's is neither counted nor said to the loader)."""
         if not node_ids:
             return 0
         raised = 0
@@ -167,7 +174,9 @@ class DrawnWatchRun:
                 # One watch's failure (its owner's resolution, its save) never skips the rest; the
                 # first is raised once every watch has run, for the caller to audit.
                 try:
-                    raised += await self._run(watch, dataset_id, node_ids, load_id)
+                    made = await self._run(watch, dataset_id, node_ids, load_id)
+                    if counted_for is None or watch.owner == counted_for:
+                        raised += made
                 except Exception as error:  # noqa: BLE001 - raised again below
                     failed = failed or error
         if failed is not None:

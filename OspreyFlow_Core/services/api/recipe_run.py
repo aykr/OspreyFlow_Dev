@@ -351,7 +351,8 @@ async def _execute_recipe_run(
             principal_resolver=deps.principal_resolver,
             watch_reach=deps.watch_reach,
         )
-        await _run_drawn_watches_best_effort(
+        # L3.H1: the run's report says how many drawn-watch alerts it raised for its own principal.
+        report.drawn_watch_alerts = await _run_drawn_watches_best_effort(
             deps, entry, dataset_id=recipe.dataset_id, principal=principal,
             investigation_id=investigation_id, load_id=load_id,
         )  # fmt: skip
@@ -459,7 +460,7 @@ async def _run_drawn_watches_best_effort(
     principal: Principal,
     investigation_id: str,
     load_id: str,
-) -> None:
+) -> int:
     """L3.6 (ADR-143 Amendment 2 decision 8; ADR-146 decision 4): every live drawn watch on the
     dataset the load wrote into, run against the nodes it wrote or matched (`DrawnWatchRun`), each
     match raised into the one queue as the watch owner's alert. Each owner is resolved afresh, as
@@ -471,7 +472,7 @@ async def _run_drawn_watches_best_effort(
         or deps.investigations is None
         or dataset_id is None
     ):
-        return
+        return 0
     run = DrawnWatchRun(
         items=deps.board_items,
         graph=deps.graph,
@@ -482,7 +483,9 @@ async def _run_drawn_watches_best_effort(
         raise_alert=raise_into(deps.alerts_store),
     )
     try:
-        await run.after_load(dataset_id, entry.node_ids, load_id=load_id)
+        return await run.after_load(
+            dataset_id, entry.node_ids, load_id=load_id, counted_for=principal.id
+        )
     except Exception as exc:  # noqa: BLE001 - as `_evaluate_watches_best_effort`'s: audited
         await deps.audit.record(
             principal=principal,
@@ -491,6 +494,7 @@ async def _run_drawn_watches_best_effort(
             resolved_query={"load_id": load_id, "drawn_watches": True, "error": str(exc)},
             result_cardinality=0,
         )
+        return 0
 
 
 async def _evaluate_watches_best_effort(

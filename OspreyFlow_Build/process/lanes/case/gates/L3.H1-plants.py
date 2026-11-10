@@ -23,6 +23,17 @@ PLANTS = [
    "    if await datasets.dataset_of_home_case(investigation.id) is not None:\n        raise HTTPException(",
    "    if False:\n        raise HTTPException(",
    T + "test_home_cases.py", "home_case_cannot_be_removed"),
+  # Part 3: the run report's drawn-watch count, the run's own principal's alone.
+  ("every owner's drawn-watch alerts counted for the loader",
+   "services/api/drawn_watches.py",
+   "                    if counted_for is None or watch.owner == counted_for:\n                        raised += made\n",
+   "                    raised += made\n",
+   T + "test_drawn_watch_alerts.py", "counts_only_the_drawn_watch_alerts"),
+  ("the run's count never put on its report",
+   "services/api/recipe_run.py",
+   "        report.drawn_watch_alerts = await _run_drawn_watches_best_effort(",
+   "        await _run_drawn_watches_best_effort(",
+   T + "test_drawn_watch_alerts.py", "dataset_it_loaded_into"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 env.pop("OSPREY_LANE", None)

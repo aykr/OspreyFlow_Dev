@@ -1,0 +1,4 @@
+## the load result never saying the drawn-watch count (PublishScreen.tsx line removed), then restored
+     × is said in the load result beside the counts 1072ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 2 passed (3)
