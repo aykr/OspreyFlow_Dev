@@ -30,11 +30,11 @@ const ROLLUP: OperationsRollup = {
       succeeded: 1, refused: 0, failed: 0, wall_ms: 900, rows_read: null, graph_writes: null, withheld: true },
   ],
   scheduler: { skipped: 1, missed: 0, running_now: 0, paused: [],
-    refused: [{ reason: "the dataset's quota of 1 run a day is used (1 run today)", count: 1 }] },
+    refused: [{ reason: "the dataset's quota of 1 run a day is used", count: 1 }] },
   external: [{ run_id: "r1", pipeline_label: "Visits", service_identity: "airflow-prod", ran_as_name: "Sam Rowe",
     started_at: "2026-11-10T09:00:00Z", outcome: "succeeded", wall_ms: 2100, withheld: false }],
   quotas: [{ scope: "dataset", key: "pid", runs_per_day: 1, alert_at_share: 0.8 }],
-  alerts: [{ scope: "dataset", key: "pid", day: "2026-11-10", words: "The dataset's runs today reach 1 of its quota of 1 run a day" }],
+  alerts: [{ scope: "dataset", key: "pid", day: "2026-11-10", words: "The dataset's runs today reached 80% of its quota of 1 run a day" }],
 }; // prettier-ignore
 
 function serve(...answers: { status: number; body: unknown }[]) {
@@ -78,10 +78,10 @@ describe("OperationsFigures", () => {
     expect(within(table).getByText("Sam Rowe")).toBeTruthy();
     expect(
       screen.getByText(
-        "1 refused: the dataset's quota of 1 run a day is used (1 run today)",
+        "1 refused: the dataset's quota of 1 run a day is used",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("2026-11-10: The dataset's runs today reach 1 of its quota of 1 run a day.")).toBeTruthy();
+    expect(screen.getByText("2026-11-10: The dataset's runs today reached 80% of its quota of 1 run a day.")).toBeTruthy();
   });
 
   it("saves a quota for the scope chosen, and reads the figures again", async () => {

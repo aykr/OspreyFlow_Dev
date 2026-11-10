@@ -18,7 +18,7 @@ const CALLS = { recipe_id: "r-calls", version: 3, status: "published", label: "W
   created_by: "e", created_at: "", ready_for_profile: true } as StudioRecipeDraft;  // prettier-ignore
 const SCHEDULED = { ...CALLS, recipe_id: "r-sched", label: "Scheduled", schedule_cron: "0 6 * * *" } as StudioRecipeDraft;
 
-function serve(owned: unknown = null, quota: unknown = { quota: { scope: "dataset", key: "ds", runs_per_day: 4 }, runs_today: 3 }) {
+function serve(owned: unknown = null, quota: unknown = { quota: { scope: "dataset", key: "ds", runs_per_day: 4 }, runs_today: 3, used: false }) {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -47,8 +47,23 @@ describe("ExternalOrchestration", () => {
     expect(screen.getByRole("meter", { name: "Runs today against the dataset's quota" }).getAttribute("value")).toBe("3");
   });
 
+  it("tells a reader not given the count only whether the quota is used, with no bar", async () => {
+    serve(null, { quota: { scope: "dataset", key: "ds", runs_per_day: 4 }, runs_today: null, used: true });
+    open();
+    expect(await screen.findByText(ORCHESTRATION_WORDS.quotaUsed(4))).toBeTruthy();
+    expect(screen.queryByRole("meter")).toBeNull();
+    expect(screen.queryByText(/^\d+ of 4 runs a day$/)).toBeNull();
+  });
+
+  it("says a quota is set and not used, without a count", async () => {
+    serve(null, { quota: { scope: "dataset", key: "ds", runs_per_day: 1 }, runs_today: null, used: false });
+    open();
+    expect(await screen.findByText("This dataset's quota is 1 run a day; it is not used today.")).toBeTruthy();
+    expect(screen.queryByRole("meter")).toBeNull();
+  });
+
   it("says when no quota is set, and draws no bar", async () => {
-    serve(null, { quota: null, runs_today: 2 });
+    serve(null, { quota: null, runs_today: 2, used: false });
     open();
     expect(await screen.findByText(ORCHESTRATION_WORDS.noQuota)).toBeTruthy();
     expect(screen.queryByRole("meter")).toBeNull();

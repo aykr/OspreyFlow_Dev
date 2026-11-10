@@ -262,7 +262,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   // a dry run when asked, the drafts it wrote otherwise.
   // ADR-141 (L1.7): a deployed pipeline's quota and whether it is owned externally.
   if (path.endsWith("/quota") && method === "GET")
-    return reply({ quota: { scope: "dataset", key: "harbour-extract", runs_per_day: 4, alert_at_share: 0.8 }, runs_today: 1 });
+    return reply({ quota: { scope: "dataset", key: "harbour-extract", runs_per_day: 4, alert_at_share: 0.8 }, runs_today: 1, used: false });
   if (path.endsWith("/owned-externally") && method === "GET") return reply(null);
   if (path.endsWith("/owned-externally") && method === "PUT") return reply(JSON.parse(String(init?.body)));
   if (path.endsWith("/owned-externally") && method === "DELETE") return new Response(null, { status: 204 });

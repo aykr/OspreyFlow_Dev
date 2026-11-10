@@ -26,7 +26,7 @@ const rollup = () => ({
       runs: 1, succeeded: 1, refused: 0, failed: 0, wall_ms: 900, rows_read: null, graph_writes: null, withheld: true },
   ],
   scheduler: { skipped: 1, missed: 0, running_now: 0, paused: [],
-    refused: [{ reason: "the dataset's quota of 1 run a day is used (1 run today)", count: 1 }] },
+    refused: [{ reason: "the dataset's quota of 1 run a day is used", count: 1 }] },
   external: [{ run_id: "SYN-RUN-1", pipeline_label: "Wing phone calls", service_identity: "syn-airflow",
     ran_as_name: "Sam Example", started_at: "2026-11-10T09:00:00Z", outcome: "succeeded", wall_ms: 2100, withheld: false }],
   quotas,

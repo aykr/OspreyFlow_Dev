@@ -25,7 +25,13 @@ export const ORCHESTRATION_WORDS = {
   noRight: "Handing a pipeline to an orchestrator needs Schedule pipelines.",
   hasSchedule: "This pipeline has a schedule of its own: clear it first, so nobody sets both.",
   noQuota: "No quota of runs a day is set for this dataset.",
+  quotaSet: (limit: number) => `This dataset's quota is ${runs(limit)} a day; it is not used today.`,
+  quotaUsed: (limit: number) => `This dataset's quota of ${runs(limit)} a day is used today; the next run may start after midnight.`,
 } as const;
+
+function runs(n: number): string {
+  return `${n} run${n === 1 ? "" : "s"}`;
+}
 
 function recipeUrl(apiBaseUrl: string, investigationId: string, recipeId: string): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/ingest/recipes/${encodeURIComponent(recipeId)}`;
@@ -146,7 +152,7 @@ export function ExternalOrchestration(props: ExternalOrchestrationProps) {
         </Select>
       </label>
       <div aria-label="The dataset's quota today">
-        {quota && limit !== null ? (
+        {quota && limit !== null && quota.runs_today != null ? (
           <>
             <meter
               aria-label="Runs today against the dataset's quota"
@@ -157,6 +163,10 @@ export function ExternalOrchestration(props: ExternalOrchestrationProps) {
             />{" "}
             <span>{`${quota.runs_today} of ${limit} runs a day`}</span>
           </>
+        ) : quota && limit !== null ? (
+          // The day's count is every unit's runs, given to an administrator of the system alone
+          // (rules 3 and 7; ADR-141 Amendment 1): anyone else is told whether the quota is used.
+          <span>{quota.used ? ORCHESTRATION_WORDS.quotaUsed(limit) : ORCHESTRATION_WORDS.quotaSet(limit)}</span>
         ) : (
           <span className="caption">{quota ? ORCHESTRATION_WORDS.noQuota : ""}</span>
         )}
