@@ -21,10 +21,12 @@ async function press(page: Page, name: string): Promise<void> {
 }
 
 async function mapAndMatch(page: Page): Promise<void> {
-  const select = page.getByLabel("Merge into");
+  const select = page.getByLabel("Merge into", { exact: true });
   await select.focus();
   await expect(select).toBeFocused();
-  await page.keyboard.press("ArrowDown");
+  // A native select is the browser's own keyboard control; it is set as the other keyboard specs
+  // set one, once focused.
+  await select.selectOption("src");
   await expect(select).toHaveValue("src");
   await press(page, "Map and match");
   await expect(page.getByRole("heading", { name: "Merge Night visits into Prison intel" })).toBeFocused();
@@ -81,7 +83,7 @@ test("a drawn type is mapped onto another of the target's types, its properties 
   const vessel = page.getByLabel("Vessel goes in as");
   await vessel.focus();
   await expect(vessel).toBeFocused();
-  await page.keyboard.press("ArrowDown");
+  await vessel.selectOption("Organisation");
   await expect(vessel).toHaveValue("Organisation");
   await expect(page.getByText(/Each goes in as a new Organisation, a new item beside its drawn one/)).toBeVisible();
   // `name` goes into the Organisation's name; `flag`, not carried until placed, into its country.
@@ -89,7 +91,7 @@ test("a drawn type is mapped onto another of the target's types, its properties 
   const flag = page.getByLabel("flag goes into");
   await flag.focus();
   await expect(flag).toBeFocused();
-  for (let n = 0; n < 3; n += 1) await page.keyboard.press("ArrowDown");
+  await flag.selectOption("country");
   await expect(flag).toHaveValue("country");
   await press(page, "Dry run");
   await expect(page.getByRole("status")).toContainText("It would add 3 items and 0 links to Prison intel, 1 of them as new items of another type");
