@@ -42,14 +42,25 @@ def _driver() -> ModuleType:
 
 
 class FakeDocker:
-    """`docker tag` and `rmi` over a table of tag -> image ID; `inspect` reads it."""
+    """`docker tag` and `rmi` over a table of tag -> image ID, and the images that exist; `inspect`
+    reads it. As docker does, a tag of an image that no longer exists is refused, and `prune`
+    deletes every image no tag names: on the server an image left untagged by a rebuild was gone
+    by teardown (11 November 2026)."""
 
     def __init__(self, tags: dict[str, str]) -> None:
         self.tags = dict(tags)
+        self.images = set(tags.values())
         self.calls: list[list[str]] = []
 
     def inspect(self, name: str) -> str | None:
         return self.tags.get(name)
+
+    def build(self, name: str, image_id: str) -> None:
+        self.images.add(image_id)
+        self.tags[name] = image_id
+
+    def prune(self) -> None:
+        self.images &= set(self.tags.values())
 
     def __call__(self, argv: Sequence[str], check: bool = False, **_: Any) -> Any:
         argv = list(argv)
@@ -57,7 +68,12 @@ class FakeDocker:
         verb, *rest = argv[1:]
         if verb == "tag":
             source, target = rest
-            self.tags[target] = self.tags.get(source, source)
+            image_id = self.tags.get(source, source)
+            if image_id not in self.images:
+                if check:
+                    raise subprocess.CalledProcessError(1, argv)
+                return subprocess.CompletedProcess(argv, 1)
+            self.tags[target] = image_id
         elif verb == "rmi":
             for name in rest:
                 if name not in self.tags:
@@ -72,10 +88,12 @@ BEFORE = {"osprey/superset:local": "sha256:old-superset", "python:3.12-slim": "s
 
 
 def _ran(docker: FakeDocker) -> Any:
-    """The run: its build makes `osprey/api:local` and rebuilds `osprey/superset:local`."""
+    """The run: its old images held first, then its build makes `osprey/api:local` and rebuilds
+    `osprey/superset:local`, leaving the old superset image untagged but for the hold."""
     images = _driver().OwnImages(dict(docker.tags), inspect=docker.inspect, runner=docker)
-    docker.tags["osprey/api:local"] = "sha256:ours-api"
-    docker.tags["osprey/superset:local"] = "sha256:ours-superset"
+    images.hold(run="r1")
+    docker.build("osprey/api:local", "sha256:ours-api")
+    docker.build("osprey/superset:local", "sha256:ours-superset")
     images.claim(["osprey/api:local", "osprey/superset:local"])
     return images
 
@@ -96,25 +114,52 @@ def test_a_tag_the_run_made_is_removed_only_while_it_names_the_run_s_image() -> 
 def test_a_tag_that_existed_before_is_put_back() -> None:
     docker = FakeDocker(BEFORE)
     images = _ran(docker)
+    docker.prune()  # another lane prunes while the run goes on: the hold keeps the old image
     images.restore()
     assert docker.tags["osprey/superset:local"] == "sha256:old-superset"
     assert "osprey/api:local" not in docker.tags  # the run's own, new: removed
     assert docker.tags["python:3.12-slim"] == "sha256:py"
     assert images.made_ids() == {"sha256:ours-api", "sha256:ours-superset"}
+    assert not any(tag.startswith("osprey-p5b-hold/") for tag in docker.tags), docker.tags
+    assert images.unrestored() == []
 
 
 def test_the_after_check_fails_on_a_tag_changed_or_left() -> None:
+    """It fails on what the run did, and lists, without failing, what another lane did on the same
+    server meanwhile (on 11 November its test images and containers came and went during the
+    run)."""
     driver = _driver()
     made = {"sha256:ours"}
-    assert driver.tags_changed(BEFORE, dict(BEFORE), made) == []
-    # Another lane's new tag is its own business, not a failure.
-    assert driver.tags_changed(BEFORE, {**BEFORE, "theirs:1": "sha256:t"}, made) == []
+    claimed = {"osprey/superset:local"}
+    assert driver.tags_changed(BEFORE, dict(BEFORE), made, claimed) == []
+    # Another lane's new tag, or one of its own it changed, is its business, not a failure.
+    assert driver.tags_changed(BEFORE, {**BEFORE, "theirs:1": "sha256:t"}, made, claimed) == []
+    theirs = {**BEFORE, "python:3.12-slim": "sha256:rebuilt-by-another"}
+    assert driver.tags_changed(BEFORE, theirs, made, claimed) == []
+    # A tag the run's build moved, not put back; the run's image or a hold left behind.
     moved = {**BEFORE, "osprey/superset:local": "sha256:ours"}
-    assert driver.tags_changed(BEFORE, moved, made) == ["osprey/superset:local"]
+    assert driver.tags_changed(BEFORE, moved, made, claimed) == ["osprey/superset:local"]
     left = {**BEFORE, "osprey/api:local": "sha256:ours"}
-    assert driver.tags_changed(BEFORE, left, made) == ["osprey/api:local"]
+    assert driver.tags_changed(BEFORE, left, made, claimed) == ["osprey/api:local"]
+    held = {**BEFORE, "osprey-p5b-hold/osprey-superset-local:r1": "sha256:old-superset"}
+    assert driver.tags_changed(BEFORE, held, made, claimed) == [
+        "osprey-p5b-hold/osprey-superset-local:r1"
+    ]
+    # A pre-existing tag the run claimed and could not put back is the run's failure too.
     gone = {"python:3.12-slim": "sha256:py"}
-    assert driver.tags_changed(BEFORE, gone, made) == ["osprey/superset:local"]
+    assert driver.tags_changed(BEFORE, gone, made, claimed) == ["osprey/superset:local"]
+
+
+def test_a_rebuilt_image_pruned_meanwhile_is_still_put_back_because_it_was_held() -> None:
+    """Without the hold, the old superset image is untagged by the build and pruned, and the
+    put-back has nothing to tag: the failure seen on the server."""
+    docker = FakeDocker(BEFORE)
+    images = _driver().OwnImages(dict(docker.tags), inspect=docker.inspect, runner=docker)
+    docker.build("osprey/superset:local", "sha256:ours-superset")  # no hold first
+    images.claim(["osprey/superset:local"])
+    docker.prune()
+    images.restore()
+    assert images.unrestored() == ["osprey/superset:local"]
 
 
 @pytest.fixture
@@ -169,5 +214,5 @@ def test_the_driver_removes_images_by_its_record_alone() -> None:
     """No removal by a difference of the machine's tags, and `rmi` only in the record's restore."""
     source = DRIVER.read_text(encoding="utf-8")
     assert not re.search(r"image_tags\(\)\s*-(?!>)|-\s*tags_before|\.keys\(\)\s*-", source)
-    assert source.count('["docker", "rmi"') == 1  # sent once, by OwnImages.restore
+    assert source.count('["docker", "rmi"') == 1  # sent once, by OwnImages's own untag
     assert "REFUSED: not to be run" not in source  # the owed proof's conditions are met

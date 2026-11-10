@@ -23,8 +23,9 @@ On a shared server (CARRIES' owed-proof row; on 10 November 2026 a cleanup by a 
   `--project-name`) and compose file of this run's alone, volumes and containers named
   `osprey-p5b-*` alone, no image removal but `OwnImages`'s; a refusal in teardown is said and the
   rest of the cleanup runs;
-- the after-check fails if anything outside `osprey-p5b-*` changed, anything of the run's is left,
-  or an image tag that existed before names another image or is gone (`tags_changed`).
+- the after-check fails if anything of the run's is left (a container, a volume, its own image or a
+  hold) or a tag its build moved is not back on its old ID (`tags_changed`); what another lane did
+  on the same server meanwhile is listed, not failed (`others_changed`).
 """
 
 from __future__ import annotations
@@ -42,6 +43,8 @@ from typing import Any
 import yaml
 
 NAME = "osprey-p5b-test"
+#: Where the run holds the images a build may rename, until each is put back (`OwnImages.hold`).
+HOLD = "osprey-p5b-hold/"
 CORE = Path.cwd()
 
 
@@ -95,9 +98,11 @@ def inspect_image(name: str) -> str | None:
 
 class OwnImages:
     """The image tags this run's build names, claimed with the IDs it made (CARRIES' owed-proof
-    row): put back to the ID each named before, or removed if it was new, and in either case only
-    while it still names the run's image. Never a before-and-after difference of the machine's
-    tags."""
+    row):
+    put back to the ID each named before, or removed if it was new, and in either case only while it
+    still names the run's image. Never a before-and-after difference of the machine's tags. Before
+    the build, each image a build may rename (`osprey/*:local`) is held under a tag of this run's
+    own, so a rebuild cannot leave it untagged for a prune to delete before it is put back."""
 
     def __init__(
         self,
@@ -110,6 +115,15 @@ class OwnImages:
         self.inspect = inspect
         self.runner = runner
         self.made: dict[str, str] = {}
+        self.holds: dict[str, str] = {}
+
+    def hold(self, *, run: str) -> None:
+        for name, image_id in self.before.items():
+            if name.startswith("osprey/") and name.endswith(":local"):
+                held = f"{HOLD}{name.replace('/', '-').replace(':', '-')}:{run}"
+                self.runner(["docker", "tag", image_id, held], check=False)
+                if self.inspect(held) == image_id:
+                    self.holds[name] = held
 
     def claim(self, names: Iterable[str]) -> None:
         """Each name as the run's build left it, read at once."""
@@ -121,6 +135,12 @@ class OwnImages:
     def made_ids(self) -> set[str]:
         return set(self.made.values())
 
+    def claimed(self) -> set[str]:
+        return set(self.made)
+
+    def _untag(self, name: str) -> None:
+        self.runner(["docker", "rmi", name], check=False)
+
     def restore(self) -> list[str]:
         said: list[str] = []
         for name, made_id in self.made.items():
@@ -128,20 +148,47 @@ class OwnImages:
             if now != made_id:
                 said.append(f"{name}: left alone, another build names it now ({now})")
             elif name in self.before:
-                self.runner(["docker", "tag", self.before[name], name], check=False)
-                said.append(f"{name}: put back to {self.before[name]}")
+                source = self.holds.get(name, self.before[name])
+                self.runner(["docker", "tag", source, name], check=False)
+                back = self.inspect(name) == self.before[name]
+                verdict = "put back" if back else "NOT put back"
+                said.append(f"{name}: {verdict} to {self.before[name]}")
             else:
-                self.runner(["docker", "rmi", name], check=False)
+                self._untag(name)
                 said.append(f"{name}: the run's own, removed")
+        for name, held in self.holds.items():
+            if self.inspect(held) == self.before[name]:
+                self._untag(held)
         return said
 
+    def unrestored(self) -> list[str]:
+        """The tags that existed before, that the run's build moved, not back on their old IDs."""
+        return sorted(
+            name
+            for name in self.made
+            if name in self.before and self.inspect(name) != self.before[name]
+        )
 
-def tags_changed(before: dict[str, str], after: dict[str, str], made_ids: set[str]) -> list[str]:
-    """Tags the run must not have touched and did: one that existed before naming another image or
-    gone, or one naming the run's own image left behind. Another lane's new tag is not one."""
-    changed = [tag for tag, image_id in before.items() if after.get(tag) != image_id]
-    left = [tag for tag, image_id in after.items() if tag not in before and image_id in made_ids]
-    return sorted(changed + left)
+
+def tags_changed(
+    before: dict[str, str], after: dict[str, str], made_ids: set[str], claimed: set[str]
+) -> list[str]:
+    """The run's failures on image tags: a tag its build moved, not back on its old ID or gone; one
+    naming the run's own image left behind; a hold left. Another lane's changes are not among
+    them."""
+    moved = [t for t in claimed if t in before and after.get(t) != before[t]]
+    left = [t for t, image_id in after.items() if t not in before and image_id in made_ids]
+    holds = [t for t in after if t.startswith(HOLD)]
+    return sorted(set(moved + left + holds))
+
+
+def others_changed(
+    before: dict[str, str], after: dict[str, str], made_ids: set[str], claimed: set[str]
+) -> list[str]:
+    """What another lane did to the machine's tags meanwhile: listed in the record, never failed."""
+    mine = set(tags_changed(before, after, made_ids, claimed)) | claimed
+    changed = {t for t in before.keys() | after.keys() if before.get(t) != after.get(t)}
+    return sorted(t for t in changed - mine if after.get(t) not in made_ids)
 
 
 def ours(name: str) -> bool:
@@ -228,6 +275,8 @@ def main() -> int:
     python = str(CORE / ".venv" / "bin" / "python")
     own_images = OwnImages(tags_before)
     ok = False
+    own_images.hold(run=scratch.name.replace("_", "-").lower())
+    say(f"images held for the run: {own_images.holds or 'none'}")
     try:
         answers = scratch / "answers.yaml"
         answers.write_text(
@@ -239,7 +288,8 @@ def main() -> int:
                         "ingest": str(scratch / "ingest"),
                         "tiles": str(scratch / "tiles"),
                     },
-                    "demo_packs": [],
+                    # Synthetic and in-repo (rule 9), seeded by the install itself.
+                    "demo_packs": ["fixture-corp"],
                 }
             )
         )
@@ -261,11 +311,6 @@ def main() -> int:
         config = directory / "osprey.yaml"
         stored = yaml.safe_load(config.read_text())["components"]["storage"]["backups"]
         assert stored == str(backups), stored
-        run(
-            [python, "-m", "harness.apply", "--config", str(config), "--out-root",
-             str(directory.parent), "--seed", "fixture-corp", "--no-build"],
-            env,
-        )  # fmt: skip
         run([*compose, "stop", "api"], env)
 
         os.environ.update(env)  # the harness reads HOME for its fallback folder
@@ -346,11 +391,17 @@ def main() -> int:
         others = {x for x in containers_before ^ containers_after if not ours(x)}
         others |= {x for x in volumes_before ^ volumes_after if not ours(x)}
         left_ours = {x for x in containers_after | volumes_after if ours(x)}
-        tags = tags_changed(tags_before, tags_after, own_images.made_ids())
-        say(f"changed outside osprey-p5b-*: {sorted(others) or 'nothing'}")
+        made_ids, claimed = own_images.made_ids(), own_images.claimed()
+        tags = tags_changed(tags_before, tags_after, made_ids, claimed)
+        theirs = others_changed(tags_before, tags_after, made_ids, claimed)
+        # Another lane's containers, volumes and tags come and go on a shared server while this
+        # runs: they are listed, and the guard is what keeps this run's hands off them.
+        came_or_went = sorted(others) or "none"
+        say(f"another's containers and volumes that came or went meanwhile: {came_or_went}")
+        say(f"another's image tags that changed meanwhile: {theirs or 'none'}")
         say(f"osprey-p5b-* left: {sorted(left_ours) or 'nothing'}")
-        say(f"image tags changed or left: {tags or 'nothing'}")
-        if others or left_ours or tags:
+        say(f"the run's image tags not put back or left: {tags or 'nothing'}")
+        if left_ours or tags:
             ok = False
     say("PASSED" if ok else "FAILED")
     return 0 if ok else 1
