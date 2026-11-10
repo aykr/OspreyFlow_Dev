@@ -168,6 +168,7 @@ class RunResources:
             watch_reach=self.watch_reach,
             board_items=self.board_items,
             datasets=self.datasets_store,
+            investigations=self.investigations,
         )
 
     async def close(self) -> None:

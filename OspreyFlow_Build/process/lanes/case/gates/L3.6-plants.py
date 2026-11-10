@@ -37,8 +37,8 @@ PLANTS = [
    "", W, "unalike_of_another_type_or_drawn"),
   ("a watch run for an owner gone",
    "services/api/drawn_watches.py",
-   "        owner = await self.owner_of(watch.owner)\n        if owner is None:\n            return 0",
-   "        owner = await self.owner_of(watch.owner) or Principal(id=watch.owner, clearance=\"SECRET\", org_unit=\"unit-1\")",
+   "        owner = await self.owner_of(watch.owner)\n        if owner is None or not await self.holds_a_level(owner, watch.case_id):",
+   "        owner = await self.owner_of(watch.owner) or Principal(id=watch.owner, clearance=\"SECRET\", org_unit=\"unit-1\")\n        if not await self.holds_a_level(owner, watch.case_id):",
    W, "owner_gone"),
   ("a node of another type taken as alike",
    "services/api/boards.py",
@@ -67,7 +67,7 @@ PLANTS = [
    W, "failing_drawn_watch_run"),
   ("a run without the drawn watch stores running them (no fail-closed check)",
    "services/api/recipe_run.py",
-   "    if deps.board_items is None or deps.datasets is None or dataset_id is None:\n        return\n    run = DrawnWatchRun(",
+   "    if (\n        deps.board_items is None\n        or deps.datasets is None\n        or deps.investigations is None\n        or dataset_id is None\n    ):\n        return\n    run = DrawnWatchRun(",
    "    run = DrawnWatchRun(",
    W, "without_the_drawn_watch_stores"),
   ("the route not handing the run the board items",
@@ -82,6 +82,29 @@ PLANTS = [
    "services/api/run_resources.py",
    "        await self.board_items.close()\n",
    "", "../OspreyFlow_Build/tests/services/api/test_run_resources.py", "closing_closes"),
+  ("a watch run for an owner who may no longer open its case (no level check)",
+   "services/api/drawn_watches.py",
+   "        if owner is None or not await self.holds_a_level(owner, watch.case_id):",
+   "        if owner is None:",
+   W, "may_no_longer_open_the_case"),
+  ("a member's load never meeting a watch on its composite",
+   "services/api/drawn_watches.py",
+   "        watched = [dataset_id, *(c.id for c in await self.datasets.composites_of(dataset_id))]",
+   "        watched = [dataset_id]",
+   W, "reading_a_composite"),
+  ("a claim kept when its alert could not be saved",
+   "services/api/drawn_watches.py",
+   "                await self.items.release_match(watch, node.id)\n",
+   "", W, "could_not_be_saved"),
+  ("a borrowed layer read for an owner who may not open its case",
+   "services/api/drawn_watches.py",
+   "            if original is None or not await holds_a_level(owner, original):",
+   "            if original is None:",
+   W, "borrowed_layer"),
+  ("a run without the case store running the drawn watches",
+   "services/api/recipe_run.py",
+   "        or deps.investigations is None\n",
+   "", W, "without_the_drawn_watch_stores"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 out = []
@@ -99,6 +122,6 @@ for words, f, old, new, test, k in PLANTS:
     tail += [l for l in lines if l.startswith("E  ")][:3]
     out.append(f"## {words}\nplant in {f}; -k {k}; exit {r.returncode}\n" + "\n".join(tail) + "\n")
     print(words, "->", "RED" if r.returncode else "GREEN (plant not caught!)")
-r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", W, B, Q, "-q", "-p", "no:cacheprovider"], cwd=CORE, env=env, capture_output=True, text=True)
+r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", W, B, Q, "../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py", "../OspreyFlow_Build/tests/services/api/test_run_resources.py", "-q", "-p", "no:cacheprovider"], cwd=CORE, env=env, capture_output=True, text=True)
 out.append("## restored\n" + r.stdout.strip().splitlines()[-1] + "\n")
 pathlib.Path(sys.argv[1]).write_text("\n".join(out))

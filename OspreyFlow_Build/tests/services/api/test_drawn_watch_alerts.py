@@ -25,7 +25,14 @@ from typing import Any
 
 import pytest
 from services.api.change_stream import ChangeStreamEntry
-from services.api.drawn_watches import DrawnWatchMatch, DrawnWatchRun
+from services.api.datasets import COMPOSITE, Dataset
+from services.api.drawn_watches import (
+    DrawnWatchMatch,
+    DrawnWatchRun,
+    case_read_set,
+    holds_a_level_in,
+)
+from services.api.investigations import AccessLevel
 from services.api.recipe_run import _run_drawn_watches_best_effort
 
 from schemas.domain import Alert, Principal
@@ -41,17 +48,14 @@ def run(world: SimpleNamespace) -> Iterator[SimpleNamespace]:  # noqa: F811
     async def owner_of(account: str) -> Principal | None:
         return None if account in gone else PEOPLE.get(account)
 
-    async def case_datasets(case_id: str) -> list[str]:
-        return list(await world.datasets.ids_of_case(case_id))
-
     async def raise_alert(match: DrawnWatchMatch) -> None:
         raised.append(match)
 
     yield SimpleNamespace(
         world=world, raised=raised, gone=gone,
         run=DrawnWatchRun(items=world.items, graph=world.graph, ontology=ONTOLOGY,
-                          owner_of=owner_of, case_datasets=case_datasets,
-                          raise_alert=raise_alert),
+                          owner_of=owner_of, datasets=world.datasets,
+                          holds_a_level=holds_a_level_in(world.cases), raise_alert=raise_alert),
     )  # fmt: skip
 
 
@@ -204,7 +208,8 @@ LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
 def _deps(run: SimpleNamespace, alerts: _Alerts, **over: Any) -> Any:
     held = {"board_items": run.world.items, "datasets": run.world.datasets,
             "graph": run.world.graph, "ontology": ONTOLOGY, "principal_resolver": _Owners(),
-            "alerts_store": alerts, "audit": run.world.audit}  # fmt: skip
+            "alerts_store": alerts, "audit": run.world.audit,
+            "investigations": run.world.cases}  # fmt: skip
     return SimpleNamespace(**{**held, **over})
 
 
@@ -246,8 +251,11 @@ async def test_a_run_without_the_drawn_watch_stores_or_a_dataset_raises_nothing(
     alerts = _Alerts()
     await _after_run(_deps(run, alerts, board_items=None), alike)
     await _after_run(_deps(run, alerts, datasets=None), alike)
+    await _after_run(_deps(run, alerts, investigations=None), alike)
     await _after_run(_deps(run, alerts), alike, dataset=None)
     assert alerts.saved == [] and run.world.items.matches == {}
+    # Nothing tried at all: no failure to audit either.
+    assert [r for r in run.world.audit.records if r["action"] == "watch_evaluation_failed"] == []
 
 
 async def test_a_failing_drawn_watch_run_is_audited_never_the_loads_failure(
@@ -316,6 +324,71 @@ async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
         deps, principal=LOADER, recipe=recipe,  # type: ignore[arg-type]
         investigation_id=K, source_location="x.csv", trigger="manual",
     )  # fmt: skip
-    (call,) = seen
+    assert len(seen) == 1, "the drawn watches were not run after the load"
+    call = seen[0]
     assert (call["node_ids"], call["dataset_id"], call["investigation_id"]) == (["p-new"], "src", K)
     assert call["principal"] is LOADER and call["load_id"]
+
+
+async def test_nothing_is_raised_for_an_owner_who_may_no_longer_open_the_case(
+    run: SimpleNamespace,
+) -> None:
+    """Rule 3: removed from the case, Alice is read as nothing of it — no claim, no alert — though
+    her account still resolves and the case still reads the dataset."""
+    _tall()
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+    run.world.cases.grants[K].pop("alice")
+    assert await run.run.after_load("src", [alike]) == 0
+    assert run.raised == [] and run.world.items.matches == {}
+    run.world.cases.grants[K]["alice"] = AccessLevel.VIEWER  # any level is enough to be told
+    assert await run.run.after_load("src", [alike]) == 1
+
+
+async def test_a_watch_in_a_case_reading_a_composite_is_run_by_a_load_into_a_member(
+    run: SimpleNamespace,
+) -> None:
+    """The watch is set on what the case chose, the composite; a load writes into a member."""
+    run.world.datasets.add(
+        Dataset(id="comp", name="Both", owning_unit="unit-1", created_by="eng", kind=COMPOSITE,
+                members=["src"], created_at=datetime(2026, 11, 1, tzinfo=UTC))
+    )  # fmt: skip
+    run.world.datasets.cases[K] = ["comp"]
+    _tall()
+    assert [w.dataset_id for w in run.world.items.watches.values()] == ["comp"]
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+    assert await run.run.after_load("src", [alike]) == 1
+    assert run.raised[0].loaded.id == alike
+
+
+async def test_a_match_whose_alert_could_not_be_saved_is_raised_by_the_next_load(
+    run: SimpleNamespace,
+) -> None:
+    """The claim is given back when the save fails, so "one per match" never becomes none."""
+    _tall()
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+    alerts = _Alerts(fails=True)
+    await _after_run(_deps(run, alerts), alike)
+    assert run.world.items.matches == {}
+    alerts.fails = False
+    await _after_run(_deps(run, alerts), alike)
+    assert len(alerts.saved) == 1
+    await _after_run(_deps(run, alerts), alike)
+    assert len(alerts.saved) == 1  # and claimed once raised
+
+
+async def test_a_borrowed_layer_is_read_only_for_an_owner_holding_a_level_on_its_case() -> None:
+    """`case_read_set` as `scope_to_case`: a case made from another before L3.2 reads the
+    original's layer only for one who may open the original."""
+    from services.api.datasets import InMemoryDatasetStore
+
+    store = InMemoryDatasetStore()
+    store.cases["copy"] = ["src"]
+    original_layer = await store.ensure_layer("orig", unit="unit-1", created_by="alice")
+    store.layer_reads["copy"] = original_layer
+    allowed: set[tuple[str, str]] = {("alice", "orig")}
+
+    async def holds(p: Principal, case: str) -> bool:
+        return (p.id, case) in allowed
+
+    assert original_layer in await case_read_set(store, "copy", PEOPLE["alice"], holds)
+    assert original_layer not in await case_read_set(store, "copy", PEOPLE["bob"], holds)

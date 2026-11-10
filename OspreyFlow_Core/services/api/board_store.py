@@ -72,6 +72,8 @@ class BoardItemStore(Protocol):
     #: case): true for the first claim alone, so one alert is raised per match per case, whatever
     #: loads it again. The claim is the dedupe; it is kept when the watch ends.
     async def claim_match(self, watch: DrawnWatch, loaded_id: str, at: datetime) -> bool: ...
+    #: L3.6: a claim given back when its alert could not be saved, so the next load raises it.
+    async def release_match(self, watch: DrawnWatch, loaded_id: str) -> None: ...
     #: L3.4: a promotion's items marked when it commits, cleared when it is reverted.
     async def mark_promoted(
         self, case_id: str, item_ids: Sequence[str], at: datetime | None
@@ -180,6 +182,9 @@ class InMemoryBoardItemStore:
             return False
         self.matches[key] = at
         return True
+
+    async def release_match(self, watch: DrawnWatch, loaded_id: str) -> None:
+        self.matches.pop((watch.case_id, watch.element_id, loaded_id), None)
 
     async def mark_promoted(
         self, case_id: str, item_ids: Sequence[str], at: datetime | None
@@ -363,6 +368,14 @@ class PostgresBoardItemStore:
                 watch.case_id, watch.element_id, loaded_id, watch.id, at,
             )  # fmt: skip
         return bool(done == "INSERT 0 1")
+
+    async def release_match(self, watch: DrawnWatch, loaded_id: str) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM drawn_watch_matches WHERE case_id = $1 AND element_id = $2 "
+                "AND loaded_id = $3 AND watch_id = $4",
+                watch.case_id, watch.element_id, loaded_id, watch.id,
+            )  # fmt: skip
 
     async def mark_promoted(
         self, case_id: str, item_ids: Sequence[str], at: datetime | None

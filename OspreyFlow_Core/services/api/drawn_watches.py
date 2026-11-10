@@ -8,9 +8,15 @@ board's own rule (`boards.resembles`: the same identifier, or a name alike, of t
 raises one `drawn_watch` alert in the watch's case, once per match per case
 (`BoardItemStore.claim_match`), whose action is *Open the board*.
 
-**Read as the owner, in the adapter** (rule 3): the drawn item is read through the owner scoped to
-the case's read set, the loaded nodes through the owner scoped to the load's dataset, each filtered
-by the adapter. A node the owner may not see is never read, so never matched, claimed or counted; a
+**Only while the owner may still open the case** (rule 3): each watch is run only for an owner
+who holds a level on its case now (the case's own Viewer check, `holds_a_level`; none to ask, none
+run), and reads only what that case reads, as a request under it would (`case_read_set`: a borrowed
+read-only layer only for one holding a level on its own case, as `scope_to_case`). A watch on a
+composite is run by a load into any of its members.
+
+**Read as the owner, in the adapter**: the drawn item is read through the owner scoped to the
+case's read set, the loaded nodes through the owner scoped to the load's dataset, each filtered by
+the adapter. A node the owner may not see is never read, so never matched, claimed or counted; a
 drawn item they may no longer see raises nothing. A pair already decided on the board (*Same* or
 *Not the same*) raises nothing either. What a reader of the queue is shown is the queue's own read
 (L2.10): the alert cites the drawn item, so it is withheld whole from a reader who may not see it.
@@ -38,6 +44,7 @@ from schemas.domain import NOT_SAME_AS, SAME_AS, Alert, AlertMode, Handling, Nod
 from .alerts import AlertStore
 from .board_store import BoardItemStore
 from .boards import resembles
+from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
 
 
 @dataclass(frozen=True)
@@ -90,6 +97,37 @@ def raise_into(store: AlertStore) -> Callable[[DrawnWatchMatch], Awaitable[None]
     return raise_alert
 
 
+#: Whether a principal holds any level on a case now (its Viewer check), as `app.holds_a_level_in`.
+HoldsALevel = Callable[[Principal, str], Awaitable[bool]]
+
+
+def holds_a_level_in(investigations: Any) -> HoldsALevel:
+    async def holds(principal: Principal, case_id: str) -> bool:
+        try:
+            await investigations.get_authorized(case_id, principal, need=AccessLevel.VIEWER)
+        except (InvestigationNotFoundError, InsufficientAccessError):
+            return False
+        return True
+
+    return holds
+
+
+async def case_read_set(
+    datasets: Any, case_id: str, owner: Principal, holds_a_level: HoldsALevel
+) -> list[str]:
+    """What a request under `case_id` reads for `owner`, as `dataset_scope.scope_to_case` decides
+    it, without setting the request's scope (this runs inside the loader's request): a case's
+    borrowed read-only layer only for one holding a level on its own case."""
+    read = await datasets.ids_of_case(case_id)
+    if read and not await datasets.layer_of_case(case_id):
+        borrowed = await datasets.read_only_layer_of(case_id)
+        if borrowed is not None and borrowed in read:
+            original = await datasets.case_of_layer(borrowed)
+            if original is None or not await holds_a_level(owner, original):
+                read = [d for d in read if d != borrowed]
+    return list(read)
+
+
 @dataclass
 class DrawnWatchRun:
     items: BoardItemStore
@@ -98,8 +136,10 @@ class DrawnWatchRun:
     #: The watch's owner, resolved afresh (G16); `None` for an account gone: its watches run no
     #: more.
     owner_of: Callable[[str], Awaitable[Principal | None]]
-    #: A case's read set (its datasets, its layer, a merged drawing), as the app scopes its readers.
-    case_datasets: Callable[[str], Awaitable[list[str]]]
+    #: The dataset store: each case's read set (`case_read_set`) and the composites of a dataset.
+    datasets: Any
+    #: Whether the owner holds a level on the watch's case now (`holds_a_level_in`).
+    holds_a_level: HoldsALevel
     #: The one queue's raise, given each match (`raise_into`, the alert store's).
     raise_alert: Callable[[DrawnWatchMatch], Awaitable[None]]
 
@@ -111,17 +151,20 @@ class DrawnWatchRun:
         if not node_ids:
             return 0
         raised = 0
-        for watch in await self.items.active_watches_on(dataset_id):
-            raised += await self._run(watch, dataset_id, node_ids, load_id)
+        # A watch on a composite is on each of its members (the case reads them all).
+        watched = [dataset_id, *(c.id for c in await self.datasets.composites_of(dataset_id))]
+        for on in watched:
+            for watch in await self.items.active_watches_on(on):
+                raised += await self._run(watch, dataset_id, node_ids, load_id)
         return raised
 
     async def _run(
         self, watch: DrawnWatch, dataset_id: str, node_ids: Sequence[str], load_id: str | None
     ) -> int:
         owner = await self.owner_of(watch.owner)
-        if owner is None:
-            return 0
-        read_set = await self.case_datasets(watch.case_id)
+        if owner is None or not await self.holds_a_level(owner, watch.case_id):
+            return 0  # an account gone, or one who may no longer open the case
+        read_set = await case_read_set(self.datasets, watch.case_id, owner, self.holds_a_level)
         if dataset_id not in read_set:
             return 0  # the case reads that dataset no more
         in_case = owner.model_copy(update={"datasets": read_set})
@@ -155,10 +198,15 @@ class DrawnWatchRun:
             now = datetime.now(UTC)
             if not await self.items.claim_match(watch, node.id, now):
                 continue  # one alert per match per case
-            await self.raise_alert(
-                DrawnWatchMatch(watch=watch, drawn=drawn[0], loaded=node, score=score, why=why,
-                                load_id=load_id, matched_at=now)
-            )  # fmt: skip
+            try:
+                await self.raise_alert(
+                    DrawnWatchMatch(watch=watch, drawn=drawn[0], loaded=node, score=score,
+                                    why=why, load_id=load_id, matched_at=now)
+                )  # fmt: skip
+            except BaseException:
+                # Not raised, so not claimed: the next load meeting it raises it.
+                await self.items.release_match(watch, node.id)
+                raise
             raised += 1
         return raised
 
@@ -168,6 +216,8 @@ __all__: Sequence[str] = (
     "DrawnWatchMatch",
     "DrawnWatchRun",
     "drawn_watch_alert",
+    "case_read_set",
     "drawn_watch_rule",
+    "holds_a_level_in",
     "raise_into",
 )

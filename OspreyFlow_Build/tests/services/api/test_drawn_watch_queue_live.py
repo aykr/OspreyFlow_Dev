@@ -68,13 +68,15 @@ async def test_a_drawn_watch_alert_reaches_its_owner_in_its_case(alerts: AlertSt
     owner, case = _person(), f"case-{new_id()}"
     alert = _drawn_watch_alert(owner, case)
     await alerts.save(alert)
-    (row,) = await alert_queue.monitoring_queue(
+    rows = await alert_queue.monitoring_queue(
         alerts,
         _graph(),
         NO_TRANSACTIONS,
         case,
         owner,
     )
+    assert [r.alert.id for r in rows] == [alert.id], "its owner is not given it in its case"
+    row = rows[0]
     assert row.alert.id == alert.id
     assert (row.kind, row.severity, row.audience) == ("drawn_watch", "medium", "owner")
     assert default_severity("drawn_watch", None) == "medium"
