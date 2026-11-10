@@ -1,0 +1,16 @@
+# folders-* red: NOT_YET_IN_THE_GUIDE deleted, both guides as on main 6379dd1 (no folders.backups), branch head e7737c7 + the test change
+    @each_guide
+    @pytest.mark.parametrize("key", sorted(_TOP))
+    def test_every_answers_file_setting_is_in_the_guide(name: str, key: str) -> None:
+        GUIDE = GUIDES[name]
+        keys = [key] if key not in _SECTIONS else [f"{key}.{child}" for child in _SECTIONS[key]]
+        for setting in keys:
+>           assert f"`{setting}`" in GUIDE or f"{setting}`" in GUIDE, f"{setting} is not in {name}"
+E           AssertionError: folders.backups is not in administration-guide.md
+E           assert ('`folders.backups`' in "# OspreyFlow — Installation and Administration Guide\n\nOspreyFlow is an open-source intelligence mapping platform fo...ction names one. The NVIDIA driver and Container Toolkit are the administrator's to install. |\n<!-- options:end -->\n" or 'folders.backups`' in "# OspreyFlow — Installation and Administration Guide\n\nOspreyFlow is an open-source intelligence mapping platform fo...ction names one. The NVIDIA driver and Container Toolkit are the administrator's to install. |\n<!-- options:end -->\n")
+
+../OspreyFlow_Build/tests/test_admin_guide.py:67: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_answers_file_setting_is_in_the_guide[folders-10_ADMINISTRATION_GUIDE.md]
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_answers_file_setting_is_in_the_guide[folders-administration-guide.md]
+2 failed, 59 deselected in 0.27s
