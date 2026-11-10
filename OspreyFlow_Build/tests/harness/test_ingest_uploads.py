@@ -318,7 +318,8 @@ def test_the_conduits_user_is_the_dockerfiles() -> None:
     # uid (10001 on the first server, by `docker exec … id`).
     assert "--gid" not in text and "groupadd" not in text
     assert CONDUIT_USER[1] == CONDUIT_USER[0]
-    assert re.search(r"^USER osprey$", text, re.MULTILINE)
+    # ADR-148 decision 3: the image runs as that user by its number.
+    assert re.search(rf"^USER {CONDUIT_USER[0]}:{CONDUIT_USER[1]}$", text, re.MULTILINE)
 
 
 # --- at each place that runs before `up` ----------------------------------------------------------

@@ -1929,9 +1929,9 @@ def write_private(path: Path, text: str) -> None:
 
 #: What a rendered file that holds no secret is written as, and a folder of them, whatever the
 #: installer's umask: readable by every account, because a container that does not run as the
-#: installer reads it through a bind mount (Keycloak as uid 1000, the workspace as `nginx`, the
-#: Conduit as `osprey`). Found on the first server, 4 November 2026 (ADR-114 Amendment 33): an
-#: install under `umask 077` wrote `realm.json` 600 and Keycloak could not import it.
+#: installer reads it through a bind mount (Keycloak as uid 1000, the workspace and the Conduit
+#: as 10001, ADR-148 decision 3). Found on the first server, 4 November 2026 (ADR-114 Amendment
+#: 33): an install under `umask 077` wrote `realm.json` 600 and Keycloak could not import it.
 SHARED_FILE_MODE = 0o644
 SHARED_FOLDER_MODE = 0o755
 

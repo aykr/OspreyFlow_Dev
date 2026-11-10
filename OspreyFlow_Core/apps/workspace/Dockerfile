@@ -70,9 +70,11 @@ COPY --from=builder /app/apps/workspace/dist /usr/share/nginx/html
 
 RUN touch /var/run/nginx.pid \
     && rm -f /etc/nginx/conf.d/default.conf \
-    && chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /usr/share/nginx/html /etc/nginx/conf.d
+    && chown -R 10001:10001 /var/run/nginx.pid /var/cache/nginx /usr/share/nginx/html /etc/nginx/conf.d
 
-USER nginx
+# ADR-148 decision 3: one numeric non-root user for all our images, so a platform that refuses a
+# named user (`runAsNonRoot` cannot check a name) runs it as it is.
+USER 10001:10001
 EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 \

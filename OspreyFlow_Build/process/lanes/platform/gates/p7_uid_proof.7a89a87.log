@@ -1,0 +1,96 @@
+commit: 7a89a876cd820002c319d364ec1180ab7db8adea (the copy's own: 51462d4)
+deploy/superset/Dockerfile:12:USER root
+deploy/superset/Dockerfile:40:RUN old_uid="$(id -u superset)" && old_gid="$(id -g superset)" \
+deploy/superset/Dockerfile:49:USER 10001:10001
+harness/Dockerfile:180:USER 10001:10001
+apps/workspace/Dockerfile:77:USER 10001:10001
+
+== 1. our images' users, before and after
+api old: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+api new: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+PASS  api runs as 10001:10001
+ingest old: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+ingest new: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+PASS  ingest runs as 10001:10001
+worker old: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+worker new: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+PASS  worker runs as 10001:10001
+report-sync old: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+report-sync new: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+PASS  report-sync runs as 10001:10001
+ner old: uid=10001(ner) gid=10001(ner) groups=10001(ner)
+ner new: uid=10001(ner) gid=10001(ner) groups=10001(ner)
+PASS  ner runs as 10001:10001
+harness old: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey),10002(docker)
+harness new: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+PASS  harness runs as 10001:10001
+workspace old: uid=101(nginx) gid=101(nginx) groups=101(nginx),101(nginx)
+workspace new: uid=10001 gid=10001 groups=10001
+PASS  workspace runs as 10001:10001
+superset old: uid=1000(superset) gid=1000(superset) groups=1000(superset)
+superset new: uid=10001(superset) gid=10001(superset) groups=10001(superset)
+PASS  superset runs as 10001:10001
+
+== 1a. Superset: its base's own ids, what is left of them, its home, its step red, its start
+Unable to find image 'apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88' locally
+docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88: Pulling from apache/superset
+Digest: sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+Status: Downloaded newer image for apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+superset base: uid=1000(superset) gid=1000(superset) groups=1000(superset)
+PASS  superset: nothing keeps the base's uid 1000 or gid 1000
+uid=10001(superset) gid=10001(superset) groups=10001(superset)
+SUPERSET_HOME=/app/superset_home
+-rw-r--r-- 1 10001 10001 0 Nov 10 06:47 /app/superset_home/.p7
+PASS  superset: writes into $SUPERSET_HOME as its running user
+chown lines left in the planted Dockerfile: 0
+PASS  superset: the step refuses itself with its chown removed (exit code: 1)
+PASS  superset: started and answers /health as uid=10001(superset) gid=10001(superset) groups=10001(superset)
+
+== 1b. the harness's docker group, and the workspace
+harness by name, the group line kept (the old image): uid=10001(osprey) gid=10001(osprey) groups=10001(osprey),10002(docker)
+harness by number, the group line kept: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+PASS  harness: by name, the docker group is there
+PASS  harness: a user given by number takes no group from /etc/group
+PASS  harness: none baked in
+the daemon answers: 29.9.3
+PASS  harness: as 10001 with --group-add 988 it reaches the docker socket
+PASS  workspace: nginx serves on 8080 as 10001
+
+== 2. an installed deployment's named volumes, written by the old image, then by the new
+/var/lib/osprey/data:
+total 12
+drwxr-xr-x 2 10001 10001 4096 Nov 10 06:48 sub
+-rw-r--r-- 1 10001 10001    2 Nov 10 06:48 written-by-new
+-rw-r--r-- 1 10001 10001    8 Nov 10 06:48 written-by-old
+
+/var/lib/osprey/data/sub:
+total 8
+-rw-r--r-- 1 10001 10001 2 Nov 10 06:48 f
+-rw-r--r-- 1 10001 10001 2 Nov 10 06:48 g
+PASS  osprey-data: the new api image reads and writes what the old one wrote
+/run/osprey/map-settings:
+total 12
+drwxr-xr-x 2 10001 10001 4096 Nov 10 06:48 sub
+-rw-r--r-- 1 10001 10001    2 Nov 10 06:48 written-by-new
+-rw-r--r-- 1 10001 10001    8 Nov 10 06:48 written-by-old
+
+/run/osprey/map-settings/sub:
+total 8
+-rw-r--r-- 1 10001 10001 2 Nov 10 06:48 f
+-rw-r--r-- 1 10001 10001 2 Nov 10 06:48 g
+PASS  map-settings: the new api image reads and writes what the old one wrote
+/run/osprey/model-settings:
+total 12
+drwxr-xr-x 2 10001 10001 4096 Nov 10 06:48 sub
+-rw-r--r-- 1 10001 10001    2 Nov 10 06:48 written-by-new
+-rw-r--r-- 1 10001 10001    8 Nov 10 06:48 written-by-old
+
+/run/osprey/model-settings/sub:
+total 8
+-rw-r--r-- 1 10001 10001 2 Nov 10 06:48 f
+-rw-r--r-- 1 10001 10001 2 Nov 10 06:48 g
+PASS  model-settings: the new api image reads and writes what the old one wrote
+sh: 1: cannot create /var/lib/osprey/staging/written-by-old: Permission denied
+PASS  osprey-staging: unchanged: neither the old nor the new ingest image writes a fresh volume there (the image makes no /var/lib/osprey/staging)
+
+== result: 0 failure(s)

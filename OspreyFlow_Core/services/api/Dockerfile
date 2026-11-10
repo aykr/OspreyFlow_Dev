@@ -121,7 +121,7 @@ RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model
 RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings \
     && chmod 700 /run/osprey/map-settings
 
-USER osprey
+USER 10001:10001
 EXPOSE 8000
 
 # `GET /healthz` — `03_CONDUIT_MIDDLEWARE.md` §3.0, the owner's decision of
