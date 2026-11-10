@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.65** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.66** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.66 | 2026-11-10 | Appendix A: `deployment.highest_marking`, the deployment's marking ceiling (studio-b's L1.10, ADR-148 Amendment 2): a load or an import marked above it is refused before anything is written. |
 | 1.65 | 2026-11-10 | §13: *Where sets are* names the checkout as the folder holding `OspreyFlow_Core`, since the guide ships in Core and never names the build folder. |
 | 1.64 | 2026-11-10 | The backups folder as built (platform-b's P5b; ADR-114 Amendments 37 and 38). §13: every install's set in `<backups folder>/<deployment>/`, the folder asked at setup (`folders.backups`, the Folders screen's **Backups folder**, the prompt); new *Where sets are, and cleaning them up*, *A synced folder* and *Cleaning up*; Small on your own server's `server.backups` its older name. §1a.1, §5a.3, the files table, §14's update row and appendix A's `components.storage.backups` say where sets now go. §5: the answers file's `folders.backups`. No longer coming; appendix A's row is the schema's own. Admin's L2.5b and L2.5c as built: §9.9, *Disable…* lists and transfers views, boards, link-type proposals and drawn items' watches, the recipient cleared to the item's marking (ADR-145 Amendment 9) and holding its case's level, and refuses to disable someone who owns items you may not see; §9.10, Admin's own *Delete ‹case›'s layer now* after its dry run. |
 | 1.63 | 2026-11-10 | Admin's L2.7 and platform's P5 as built. §9.1: Proposed types removed, Connections' four kinds, Grading scheme built. §9.2: the role tips, *What each role and level lets a person do*, the refusal that names the roles, `write_sql_transforms` given on its own. §8: `map build --unit`. §10a: the unit the place names are held by, and a dataset's gazetteers (on screen, coming). |
