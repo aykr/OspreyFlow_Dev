@@ -1165,8 +1165,11 @@ it on; under **Cover for** and **Cover's last day**, **Save cover** names someon
 lead is away, and **End cover** ends it. Only a member of the team may be its lead or cover, the lead
 cannot cover for themselves, a cover needs a last day (today or later), and a service account is never
 a lead or a cover. A team can answer for a dataset (section 9.10); its members do while they are in
-it, and not after. *Coming:* a case level given to a team, and a rule's alerts routed to a team for
-its lead to hand out.
+it, and not after. A rule's alerts can be routed to one team (**‹Team› only**, under the rule's *Alert
+goes to*): only its members and the Authors of the dataset's home case read them, enforced in the
+query, and the lead, or their cover while it lasts, gives each to a member (**Give to (a member of
+the team)**) or sets it aside with **Suppress until…**, up to 90 days ahead, when it stays open and
+counted. *Coming:* a case level given to a team.
 
 ### 9.9 Disable, and what a person owns
 

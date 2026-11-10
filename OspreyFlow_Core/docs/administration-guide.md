@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.67** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.68** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.68 | 2026-11-10 | Rules' L2.10 and platform-b's P6 as built, no longer *coming*. §9.8: a rule's alerts routed to one team (*‹Team› only*), read by its members and the home case's Authors, enforced in the query; the lead's or cover's *Give to* and *Suppress until…*. §10a: the case map's *Gazetteers in this case's dataset*, with *Add* and *Remove* for `run_pipelines` |
 | 1.67 | 2026-11-10 | §8's commands: `ospreyflow release export` and `import [--dry-run]` (a dataset's release as a YAML bundle) and `ospreyflow run` (an orchestrator's trigger as a service identity), the studio lane's L1.7 (ADR-140 Amendment 9 decision 4, ADR-141). |
 | 1.66 | 2026-11-10 | Appendix A: `deployment.highest_marking`, the deployment's marking ceiling (studio-b's L1.10, ADR-148 Amendment 2): a load or an import marked above it is refused before anything is written. |
 | 1.65 | 2026-11-10 | §13: *Where sets are* names the checkout as the folder holding `OspreyFlow_Core`, since the guide ships in Core and never names the build folder. |
@@ -1383,8 +1384,11 @@ it on; under **Cover for** and **Cover's last day**, **Save cover** names someon
 lead is away, and **End cover** ends it. Only a member of the team may be its lead or cover, the lead
 cannot cover for themselves, a cover needs a last day (today or later), and a service account is never
 a lead or a cover. A team can answer for a dataset (section 9.10); its members do while they are in
-it, and not after. *Coming:* a case level given to a team, and a rule's alerts routed to a team for
-its lead to hand out.
+it, and not after. A rule's alerts can be routed to one team (**‹Team› only**, under the rule's *Alert
+goes to*): only its members and the Authors of the dataset's home case read them, enforced in the
+query, and the lead, or their cover while it lasts, gives each to a member (**Give to (a member of
+the team)**) or sets it aside with **Suppress until…**, up to 90 days ahead, when it stays open and
+counted. *Coming:* a case level given to a team.
 
 ### 9.9 Disable, and what a person owns
 
@@ -1589,7 +1593,9 @@ line (section 8).
   its own unit (`PUT`, `DELETE /v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}`, with `run_pipelines`):
   its places are copied into the dataset, so a case still reads one dataset; removing it deletes
   nothing ("…its places stay in this dataset as its own, and the map's place search no longer offers
-  them…"). *Coming:* doing this on screen.
+  them…"). On screen, the case's map shows **Gazetteers in this case's dataset** beside its place
+  search, each "added" or "not added", with **Add** and **Remove** for holders of `run_pipelines`; a
+  case reading a composite dataset or a drawing takes none.
 - **Prefetch areas**: areas whose tiles are fetched ahead of use, and **Fetch every area** by hand
   only, every 6 hours, every day or every week.
 
