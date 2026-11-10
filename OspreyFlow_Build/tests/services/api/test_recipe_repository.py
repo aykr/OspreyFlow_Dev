@@ -293,18 +293,25 @@ def test_the_module_names_no_process_api() -> None:
         assert spawn not in source, spawn
 
 
-async def test_a_failed_write_is_a_typed_error_not_a_bare_500(tmp_path: Path) -> None:
+async def test_a_failed_write_is_a_typed_error_not_a_bare_500(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """GitCommitError is what the Conduit maps to its typed response (app.py's handler); a
-    dulwich or filesystem failure must surface as it, never as a bare exception."""
-    blocker = tmp_path / "repo"
-    blocker.mkdir()
-    (blocker / ".git").write_text("not a repository\n")  # a file where the git dir should be
+    dulwich or filesystem failure must surface as it, never as a bare exception, and its text
+    (which names the volume's path here) must not reach the client."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
 
+    def broken(*args: object, **kwargs: object) -> object:
+        raise OSError(f"[Errno 5] Input/output error: '{repo / '.git' / 'objects'}'")
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", broken)
     with pytest.raises(GitCommitError) as raised:
-        await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=blocker)
+        await commit_recipe_file("alpha", b"id: alpha\nversion: 2\n", version=2, repo_root=repo)
     # The text is the client's (app.py's handler returns it): no volume path in it.
     assert str(tmp_path) not in str(raised.value)
     assert "recipes/alpha.yaml" in str(raised.value)
+    assert isinstance(raised.value.__cause__, OSError)
 
 
 def test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative() -> None:
