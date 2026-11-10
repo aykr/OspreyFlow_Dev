@@ -9,7 +9,7 @@ studio	L1.2d	S	done	A link merge rewrites only its own type (upsert_edges untype
 studio	L1.2b	M	done	Phase 6's exit: from scratch in guided mode, an expert-mode edit, a live walk
 studio	L1.3	L	done	Phase 7a: the staging catalogue's engine; screening lists in it
 studio	L1.4	M	done	Phase 7b: the drawers for each step
-studio	L1.5	L	building	Phase 8: expert steps
+studio	L1.5	L	done 1ddbc9a	Phase 8: expert steps
 studio-b	L1.6	L	done	Phase 9: connectors; the screening-list connector and templates
 studio	L1.7	L	building	Phase 10: Operations, external orchestration; Releases as YAML
 studio-b	L1.8	S	done	The Studio's tips and who-can refusals; Domain model wording
@@ -47,7 +47,7 @@ platform	P1	L	done	Models in Admin: engines, each job's model, keys write-only, 
 platform	P2	M	done	Model usage and limits
 platform	P3	L	done	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
 platform	P4	M	done	The analyst's map: basemap switch, place search, contrast in three themes
-platform	P5	M	building	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2)
+platform	P5	M	done 1ddbc9a	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2)
 platform	P7	L	building	The cloud-platform profile: Ingress, numeric UIDs, managed stores, StatefulSets, deny-egress, ECR, cp-policy-check (ADR-148)
 platform	P8	M	todo	Nothing on a shared disk: S3 for uploads, staging, tiles, models; settings and recipes per the owner's rulings (ADR-148)
 platform	P9	M	todo	Running it on the platform: backups to S3, restore rehearsed, alerts, runbook (ADR-148)

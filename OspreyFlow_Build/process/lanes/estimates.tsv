@@ -1,6 +1,4 @@
-# as of 2026-11-10T06:03Z
-studio	L1.5	merged in batch with P5, gating (server test, local ci)	~07:15	A
-platform	P5	merged in batch with L1.5, gating	~07:15	A
+# as of 2026-11-10T06:17Z
 docs	D2a	fixes in; re-review and its heavy runs, then merge	~09:00	A
 rules	L2.10	last plants, re-review, merge	~08:30	A
 studio-b	L1.7a	fixes reviewed; Am 17, gates at one head, the lock probe	~11:00	A
