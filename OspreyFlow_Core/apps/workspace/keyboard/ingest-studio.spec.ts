@@ -1035,6 +1035,41 @@ test("Test discloses the pipeline's expert steps, read by keyboard", async ({ pa
   registerCovered(REGISTRY, "read-the-expert-steps-a-test-disclosed-by-keyboard");
 });
 
+// ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases, by keyboard alone.
+test("a release is exported by keyboard, and its files listed", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "5 Releases");
+  const version = page.getByLabel("Release version");
+  await version.focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("2");
+  await press(page, "Export");
+  await expect(page.getByText("The release has 2 files.")).toBeVisible();
+  const sent = (await asked(page)).find((a) => a.path === "/v1/datasets/harbour-extract/release");
+  expect(sent).toBeTruthy();
+  await expect(page.getByRole("button", { name: "Download model.yaml" })).toBeVisible();
+  registerCovered(REGISTRY, "export-a-release-by-keyboard");
+});
+
+test("a release is checked, then imported as drafts, by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "5 Releases");
+  // A folder is chosen in the system's own picker, which the page cannot drive; the files are set on
+  // the input as the picker sets them, and every step after is the keyboard's.
+  await page.getByLabel("Choose the release's folder").setInputFiles([
+    { name: "release.yaml", mimeType: "application/yaml", buffer: Buffer.from("apiVersion: ospreyflow.io/v1\n") },
+  ]);
+  await expect(page.getByRole("button", { name: "Check the release" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Import as drafts" })).toBeDisabled();
+  await press(page, "Check the release");
+  await expect(page.getByText("Would write Wing phone calls as a new draft.")).toBeVisible();
+  await press(page, "Import as drafts");
+  await expect(page.getByText("Everything imported is a draft. Make the model live in 1 Model when it is ready.")).toBeVisible();
+  const imports = (await asked(page)).filter((a) => a.path === "/v1/datasets/harbour-extract/release/import");
+  expect(imports).toHaveLength(2);
+  registerCovered(REGISTRY, "check-and-import-a-release-by-keyboard");
+});
+
 test("every registered Ingest Studio action has its own proving test case above", () => {
   assertAllCovered("INGEST_STUDIO_ACTIONS", INGEST_STUDIO_ACTIONS);
 });

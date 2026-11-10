@@ -2,7 +2,7 @@
 // the page itself: for `ingest-studio.spec.ts` (rule 13) and the every-harness axe scan
 // (`a11y/every-harness.spec.ts`), in both themes and under GOV.UK (`?brand=govuk`). Nothing here
 // reaches a server; every request is recorded on `window.__asked` for the spec to prove an action
-// reached its route. `?tab=model|sources|runs` opens a place; `&cell=1` opens a day's run report on
+// reached its route. `?tab=model|sources|runs|releases` opens a place; `&cell=1` opens a day's run report on
 // Runs, `&held=1` its held rows. The data is synthetic (rule 9): invented names, `SYN-` ids.
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
@@ -252,6 +252,15 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return reply({ promotions_overdue: [], proposals: startParams.get("proposed") === "1"
       ? [{ dataset_id: "harbour-extract", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2 }] : [] }); // prettier-ignore
   if (path === "/v1/handling-scheme") return reply(SCHEME);
+  // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases. The export's files; an import's plan,
+  // a dry run when asked, the drafts it wrote otherwise.
+  if (path === "/v1/datasets/harbour-extract/release" && method === "GET")
+    return reply({ files: { "release.yaml": "apiVersion: ospreyflow.io/v1\n", "model.yaml": "packs: {}\n" }, left_out: 0 });
+  if (path === "/v1/datasets/harbour-extract/release/import" && method === "POST") {
+    const dryRun = new URL(String(input)).searchParams.get("dry_run") === "true";
+    return reply({ dry_run: dryRun, items: [{ role: "pipeline", name: "Wing phone calls", action: "new_draft" }],
+      refused: [], missing_connections: [], notes: [] }); // prettier-ignore
+  }
   if (path === "/v1/ingest/connectors") return reply([{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }]);
   if (path === "/v1/ingest/connections") return reply([{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: day(30) }]);
   if (path === "/v1/datasets/harbour-extract/source-files")
@@ -479,7 +488,7 @@ function Host() {
         investigationId={caseId}
         onOpenCase={setCaseId}
         // The rights the harness's routes grant, so the Studio offers what they would take (L1.8).
-        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
+        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "edit_target_model", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
         username="engineer-1"
       />
       <p role="status" aria-label="Case the Studio works through">{caseId}</p>
@@ -502,7 +511,7 @@ const press = (match: (b: HTMLButtonElement) => boolean) => {
 };
 const params = new URLSearchParams(window.location.search);
 const tab = params.get("tab");
-const labels: Record<string, string> = { model: "1 Model", sources: "2 Sources", runs: "4 Runs" };
+const labels: Record<string, string> = { model: "1 Model", sources: "2 Sources", runs: "4 Runs", releases: "5 Releases" };
 if (tab && labels[tab]) for (let i = 0; i < 40 && !press((b) => b.textContent === labels[tab]); i++) await settle();
 if (tab === "runs" && params.get("cell"))
   for (let i = 0; i < 40; i++) {
