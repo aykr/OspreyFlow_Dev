@@ -31129,6 +31129,78 @@ Decision 7 has no test, because nothing enforces it yet. That is the gap it name
 
 Open: decision 7's detection (which checkout made a set).
 
+### ADR-114, Amendment 39 (10 November 2026) — refresh refuses a deployment it cannot bring up to date; it never mints a secret
+
+**Why.** The v0.5.0 upgrade rehearsal (the rules lane, 10 November 2026) found that `ospreyflow
+update` from v0.4.12 rolled back at its `pull`, and that `start --build` failed too, on every
+deployment rendered before ADR-135 Amendment 2. Refresh's files pass rewrote the compose file so that
+it required the gateway's secrets (`${OSPREY_LITELLM_…:?}`, through the moved images' settings and
+the gateway's new database), which only `harness.apply` mints. It also mounted volumes on the
+Conduit (`map-settings`, `model-settings`) that it never declared. Compose then refused every
+command, and `apply` and `stop` with it. Minting the missing secrets in refresh was tried and failed
+the rehearsal: the gateway itself stayed as v0.4.12 rendered it (a fixed master key, no database),
+so it would refuse the Conduit's new key. And a provider's key (a hosted engine, such as Gemini)
+moves into the gateway only through `apply`'s key move. Bringing a deployment across Amendment 2 is
+a render, which `apply` is and refresh is not.
+
+**Decisions:**
+
+1. **Refused before anything is written.** Refresh's files pass (run by `update`, through
+   `scripts.refresh --files-only`, and by `start --build`; plain `start` runs no refresh) refuses a
+   deployment whose gateway has no `LITELLM_SALT_KEY`, as rendered before Amendment 2. It says so in
+   one line, which is the line `update` reports before it rolls back: back up, then `ospreyflow
+   apply` (it keeps every secret and an install from a release on its own images), then
+   `ospreyflow update` and `ospreyflow apply` once more for an install from a release (the second
+   apply moves the providers' keys into the gateway, on the new images), or `ospreyflow start
+   --build` for one built from a checkout. Each step is given with `--name <deployment>` for a
+   deployment kept by name, and with the checkout at the version being moved to. Refresh never
+   mints a secret, and Amendment 8 point 6a's "never touch a secret" stands.
+2. **Nothing Compose cannot read.** The files pass runs on a staged copy beside the deployment. Only
+   a result whose every required name (`${NAME:?…}`) has a value in `deployment.env` is moved into
+   place. Otherwise refresh refuses, naming the names, never a value, and the folder is left byte
+   for byte as it was. This catches a future required name too, and a deployment a half-run refresh
+   left.
+3. **Every named volume a mount refers to is declared.** A mount the files pass gives a service names
+   a volume the top level then declares, as the render declares it.
+4. **The files step reaches the deployment being updated.** `update` names it to refresh
+   (`OSPREYFLOW_DEPLOYMENT_DIR`). An update from an earlier release names none (v0.4.12's did not, so
+   a deployment kept by name had its checkout's own deployment refreshed instead), so `--files-only`
+   given none takes the rendered deployment, the checkout's or one kept by name, whose newest rollback
+   point is under an hour old. The marker is v0.4.12's own: `rollback/<version>-<UTC
+   %Y%m%dT%H%M%SZ>/` holding `.commit`, which its `harness/update.py` writes in `_keep_rollback_point`
+   (964a2a9, lines 278-287), called at line 430 just before the checkout (435) and the files step
+   (437); nothing else in `rollback/` counts. Several such are refused, naming them and telling the
+   operator to check out the new version and run `ospreyflow update --name <deployment>` from it
+   (the CLI is installed editable from the checkout, `install.sh` line 46, so that is today's
+   `update`, which names the deployment); none is as before. So a `--files-only` run by hand with
+   no `OSPREYFLOW_DEPLOYMENT_DIR` also takes a deployment updated within the hour. A stamp in the
+   future, or one no clock writes, marks nothing.
+5. **Moved into place whole.** The staged folder is its owner's alone, and each changed file is
+   renamed over its old one, `deployment.env` last, so an interruption leaves whole files and the
+   secrets as they were. A file a service mounts on its own (`glass.json`, `Caddyfile`,
+   `litellm.yaml`) is written in place instead, before the renames, so its inode and the running
+   container's view of it stay; none holds a secret. The words name the deployment always:
+   `--name default` for the checkout's own.
+6. **Left for a later step (CARRIES):** `update` doing the render itself for such a deployment
+   (`apply`'s render with the release's lock and the key move), which is the end state.
+
+| Invariant | Test |
+| --- | --- |
+| a v0.4.12 deployment, from a release or built from source, is refused in one line, and nothing in its folder changes | `tests/test_refresh_before_the_gateway.py::test_a_v0_4_12_deployment_is_refused_and_nothing_in_its_folder_changes` |
+| `start --build` says it in words and starts nothing; `update`'s own files step reports it as a step | `::test_start_build_says_the_refusal_in_words_and_starts_nothing`, `::test_updates_own_files_step_reports_the_refusal_as_a_step` |
+| the gateway's settings read in list form too; no gateway, no refusal on its account | `::test_a_list_form_gateway_environment_is_read_too`, `::test_no_gateway_is_no_refusal_on_its_account` |
+| a required secret not held is refused by name, and nothing changes | `::test_a_required_secret_the_deployment_does_not_hold_is_refused_and_nothing_changes` |
+| every named volume a mount refers to is declared, and Compose itself accepts the project (on the test server) | `::test_every_named_volume_a_mount_refers_to_is_declared`, `::test_compose_itself_accepts_the_refreshed_project` |
+| the words always name the deployment (`--name default` for the checkout's own) | `::test_the_refusal_words_always_name_the_deployment` |
+| the top-of-pass check alone refuses a v0.4.12 gateway whose secrets are held, with no pass run | `::test_the_salt_check_alone_refuses_a_v0_4_12_gateway_whose_secrets_are_held` |
+| a file a service mounts on its own keeps its inode; a long-syntax mount declares its volume; a future or impossible stamp marks nothing | `::test_a_file_a_service_mounts_on_its_own_keeps_its_inode`, `::test_a_long_syntax_mount_declares_its_own_named_volume`, `::test_a_rollback_point_from_the_future_or_no_clock_marks_nothing` |
+| an update's files step reaches the deployment it is moving, by v0.4.12's own marker, on the owner's shape; several under way refused by name; none as before; today's update names it | `::test_an_update_from_an_earlier_release_reaches_the_deployment_it_is_moving`, `::test_on_the_owners_shape_only_the_deployment_under_way_is_reached`, `::test_on_the_owners_shape_two_under_way_are_refused_by_name`, `::test_two_updates_under_way_are_refused_and_nothing_changes`, `::test_with_no_update_under_way_the_checkouts_own_is_found_as_before`, `::test_todays_update_names_its_deployment_to_the_files_step` |
+| the stage is private, and an interrupted move leaves whole files and the secrets as they were | `::test_the_stage_is_private_while_the_pass_runs`, `::test_an_interrupted_move_into_place_leaves_whole_files_and_the_secrets_as_they_were` |
+
+**Proved end to end by** the rules lane's rehearsal run 3, on a fresh v0.4.12 install from a release.
+
+**Built by:** the platform-b lane, on `lane/platform-b-upgfix`.
+
 ### ADR-145, Amendment 6 (8 November 2026) — Audit and Operations' ageing as built (L2.6)
 
 Status: built in Lane 2's L2.6 (admin), recorded for review; the lane's decisions are logged in
