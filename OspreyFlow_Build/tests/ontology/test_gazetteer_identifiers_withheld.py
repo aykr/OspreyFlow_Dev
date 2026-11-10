@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 from ontology.handling import sources_in_full, withhold_sources
 from schemas.domain import AuditStub, Node, Principal, Provenance, ProvenanceState, SourceRef
-from schemas.mapconfig import GAZETTEER_SOURCE_IDENTIFIERS
+from schemas.mapconfig import GAZETTEER_ONLY_IDENTIFIERS, GAZETTEER_SOURCE_IDENTIFIERS
 
 IDS = {"osm_id": "node/31337", "uprn": "100023336956", "os_place_id": "osgb4000000074564391",
        "gss_code": "E05000001", "gnis_feature_id": "1", "tiger_geoid": "2", "nad_address_id": "3"}  # fmt: skip
@@ -59,10 +59,32 @@ def test_the_conduits_own_work_and_a_read_written_back_keep_them() -> None:
         assert withhold_sources(_place("gazetteer-osm-rutland"), READER).properties["uprn"]
 
 
-def test_a_case_s_own_location_keeps_its_identifiers() -> None:
-    """A `uprn` an analyst loaded into the case is the case's data, not a gazetteer's."""
+def test_a_case_s_own_location_keeps_its_uprn_and_loses_the_gazetteer_only_identifiers() -> None:
+    """ADR-147 Amendment 3 (CARRIES row 23, the strict reading): a gazetteer loaded through the
+    Studio arrives in the case's own dataset as a plain file, unmarked, so the six identifiers only
+    a gazetteer carries are withheld from every node for every request reader, whatever dataset it
+    is in. A `uprn` an analyst loaded into the case is the case's data and is kept (Amendment 1
+    point 3a), and `postcode` is an address."""
     sent = withhold_sources(_place("case-a"), READER)
-    assert sent.properties["uprn"] == IDS["uprn"]
+    assert sent.properties == {
+        "name": "Cranford", "geometry_ref": "g1", "postcode": "TW5 9QQ", "uprn": IDS["uprn"],
+    }  # fmt: skip
+
+
+def test_the_gazetteer_only_identifiers_are_the_seven_less_uprn() -> None:
+    assert set(GAZETTEER_ONLY_IDENTIFIERS) == set(GAZETTEER_SOURCE_IDENTIFIERS) - {"uprn"}
+
+
+def test_any_type_of_node_loses_them_and_the_conduit_keeps_them() -> None:
+    """Not only a Location: a node of any type carrying one is sent without it."""
+    person = _place("case-a").model_copy(
+        update={"type": "Person", "properties": {"family_name": "Smith", "osm_id": "node/1"}}
+    )
+    assert withhold_sources(person, READER).properties == {"family_name": "Smith"}
+    unlimited = READER.model_copy(update={"datasets": None})
+    assert withhold_sources(_place("case-a"), unlimited).properties["os_place_id"]
+    with sources_in_full():
+        assert withhold_sources(_place("case-a"), READER).properties["osm_id"]
 
 
 def test_a_case_s_copy_of_a_gazetteer_place_is_sent_without_its_identifiers() -> None:
