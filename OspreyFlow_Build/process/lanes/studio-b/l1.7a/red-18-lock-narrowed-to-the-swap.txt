@@ -1,4 +1,4 @@
-# head dc1e683; plant: the publish flock taken around the compare-and-swap alone (the independent re-review, item 3): not over the write, the index or the commit
+# head f5e1727; plant: the publish flock taken around the compare-and-swap alone (the independent re-review, item 3): not over the write, the index or the commit
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_the_index_is_read_and_written_under_a_lock_another_process_honours; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -31,6 +31,10 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': Fal...ommit': False} == {'write': Tru...commit': True}
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': Fal...': False, ...} == {'write': Tru...t': True, ...}
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - AssertionError: assert b'version: 2\n' == b'version: 1\n'
-2 failed, 30 passed in 5.74s
+2 failed, 34 passed in 11.71s

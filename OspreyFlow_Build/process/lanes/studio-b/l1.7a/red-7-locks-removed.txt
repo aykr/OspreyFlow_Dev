@@ -1,4 +1,4 @@
-# head dc1e683; plant: no serialisation: neither the thread lock nor the publish flock taken
+# head f5e1727; plant: no serialisation: neither the thread lock nor the publish flock taken
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_concurrent_publishes_each_commit_their_own_bytes, test_the_index_is_read_and_written_under_a_lock_another_process_honours; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -29,8 +29,12 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_concurrent_publishes_each_commit_their_own_bytes - services.api.studio_publish.GitCommitError: committing 'recipes/alpha.yaml' failed (FileNotFoundError)
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': Fal...ommit': False} == {'write': Tru...commit': True}
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-1237/test_a_linked_publish_lock_is_0/repo/.git/osprey-publish.lock'
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': Fal...': False, ...} == {'write': Tru...t': True, ...}
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-1670/test_a_linked_publish_lock_is_0/repo/.git/osprey-publish.lock'
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - Failed: DID NOT RAISE GitCommitError
-4 failed, 28 passed in 6.02s
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: ['recipes/alpha.yaml', GitCommitError("committing 'recipes/alpha.yaml' failed (FileLocked)")]
+5 failed, 31 passed in 11.90s

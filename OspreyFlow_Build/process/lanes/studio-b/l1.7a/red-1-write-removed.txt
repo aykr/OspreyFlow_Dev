@@ -1,14 +1,14 @@
-# head dc1e683; plant: the commit never written: `if not unchanged:` -> `if False:`
+# head f5e1727; plant: the commit never written: `if not unchanged:` -> `if False:`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_publish_writes_a_commit_real_git_reads, test_a_second_publish_keeps_the_first_in_the_history, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
-PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[01JC5Q8K3ZP6V2T9XR4W7HMNBD]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_in_the_repository_is_the_bytes_given
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_write_and_commit_recipe_goes_through_the_same_commit
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s', '--', 'recipes/alpha.yaml']' returned non-zero exit status 128.
@@ -20,6 +20,7 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_co
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_root_inside_another_repository_gets_its_own - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_detached_head_moves_as_git_commit_moved_it - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[../x] - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.git/x] - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[../../outside] - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
@@ -30,13 +31,16 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipes_directory_is_refused - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipe_file_is_refused - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': True, 'index': True} == {'write': Tru...commit': True}
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': Tru...'index': True} == {'write': Tru...t': True, ...}
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused - AssertionError: assert ['theirs'] == ['ingest: pub...v1', 'theirs']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_repository_whose_config_names_another_tree_is_refused - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile] - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link] - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept - AssertionError: assert 'A  recipes/alpha.yaml\n' == ''
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_changed_bytes_are_a_second_commit - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
-28 failed, 10 passed in 5.71s
+32 failed, 10 passed in 11.87s

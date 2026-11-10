@@ -1,4 +1,4 @@
-# head dc1e683; plant: a dulwich or filesystem failure left untyped: `except Exception` -> `except ZeroDivisionError`
+# head f5e1727; plant: a dulwich or filesystem failure left untyped: `except Exception` -> `except ZeroDivisionError`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_failed_write_is_a_typed_error_not_a_bare_500; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -31,6 +31,10 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - OSError: index.lock is held
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - ValueError: Expected file to start with 'gitdir: '
-2 failed, 30 passed in 5.91s
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - OSError: [Errno 5] Input/output error: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-1666/test_a_failed_write_is_a_typed0/repo/.git/objects'
+2 failed, 34 passed in 12.24s
