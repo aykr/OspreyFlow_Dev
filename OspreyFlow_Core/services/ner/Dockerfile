@@ -36,6 +36,6 @@ RUN cd /models \
 
 COPY services/ner/app.py ./app.py
 RUN useradd --create-home --uid 10001 ner && chown -R ner /models /srv
-USER ner
+USER 10001:10001
 EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

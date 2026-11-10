@@ -32,6 +32,20 @@ COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
 COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
 COPY osprey_entrypoint.py /app/osprey_entrypoint.py
 COPY osprey_setup.py osprey_palette.py /app/
-USER superset
+# ADR-148 decision 3: the base image's `superset` user takes the one numeric UID all our images run
+# as, and keeps everything it owned: what its old uid owned is given the new uid, and what its old
+# group owned the new gid alone (a file of another owner in that group keeps its owner). Checked in
+# the same step: the base's ids are an ordinary user's (never root's, whose files would all be handed
+# over, nor already 10001), the new ids are 10001, and nothing keeps the old uid or the old gid.
+RUN old_uid="$(id -u superset)" && old_gid="$(id -g superset)" \
+    && test "$old_uid" -ge 1000 && test "$old_uid" != 10001 \
+    && test "$old_gid" -ge 1000 && test "$old_gid" != 10001 \
+    && usermod -u 10001 superset && groupmod -g 10001 superset \
+    && find / -xdev -uid "$old_uid" -exec chown -h 10001 {} + \
+    && find / -xdev -gid "$old_gid" -exec chgrp -h 10001 {} + \
+    && test "$(id -u superset)" = 10001 && test "$(id -g superset)" = 10001 \
+    && test -z "$(find / -xdev -uid "$old_uid" -print -quit)" \
+    && test -z "$(find / -xdev -gid "$old_gid" -print -quit)"
+USER 10001:10001
 EXPOSE 8088
 ENTRYPOINT ["python", "/app/osprey_entrypoint.py"]

@@ -167,17 +167,17 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 
 # The docker socket mounted at run time (`-v /var/run/docker.sock:/var/run/docker.sock`, this
 # image's own one documented privilege — see `ENTRYPOINT` below) is commonly group-owned on a
-# Linux host, and membership in that group is what lets `osprey` use a mounted socket without the
-# socket itself needing to be world-writable or this process needing to run as root. **Disclosed
-# limit, not solved here:** the host's own docker group GID is not knowable at image-build time: an
-# operator whose host GID does not match this image's `docker` group re-creates it with the host's
-# own GID (`--group-add`, or `docker run --user root` for a one-off) — the same accommodation every
-# "docker outside of docker" image needs, not one specific to this image. Docker Desktop's own
-# socket (macOS, Windows) is typically reachable without this at all, since its proxy does not
-# enforce host-side Unix group ownership the way a native Linux daemon's socket does.
-RUN groupadd docker && usermod -aG docker osprey
+# Linux host. The image runs as the number 10001:10001 (ADR-148 decision 3), and a user given by
+# number takes no supplementary group from the image's `/etc/group` (measured on the test server,
+# 10 November 2026: a `docker` group baked in here was gone from `id`), so none is baked in: an
+# operator on a Linux host gives the process the socket's own group at run time, `--group-add
+# "$(stat -c %g /var/run/docker.sock)"` — the accommodation every "docker outside of docker" image
+# needs, and the one an image-built group needed anyway, since the host's docker GID is not
+# knowable at image-build time. Docker Desktop's own socket (macOS, Windows) is typically reachable
+# without it, since its proxy does not enforce host-side Unix group ownership the way a native
+# Linux daemon's socket does.
 
-USER osprey
+USER 10001:10001
 
 # **The one privilege this image needs, and only while running** (`spec/05_DEPLOYMENT.md` §2.5).
 # `-v /var/run/docker.sock:/var/run/docker.sock` is not baked in here — it cannot be, a `Dockerfile`

@@ -41,7 +41,7 @@ def _dockerfile_runtime() -> tuple[str, dict[str, str]]:
     env = dict(re.findall(r"^ENV (\w+)=(\S+)", runtime, flags=re.MULTILINE))
     copied = "COPY apps/workspace/nginx.conf.template /etc/nginx/templates/default.conf.template"
     assert copied in runtime
-    assert "USER nginx" in runtime
+    assert "USER 10001:10001" in runtime  # ADR-148 decision 3
     return image, env
 
 

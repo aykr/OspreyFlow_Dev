@@ -33,5 +33,5 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     HOME="/app"
 
-USER osprey
+USER 10001:10001
 ENTRYPOINT ["python", "-m", "services.api.worker_main"]

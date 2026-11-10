@@ -46,5 +46,5 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1
 
-USER osprey
+USER 10001:10001
 ENTRYPOINT ["python", "-m", "services.ingest"]
