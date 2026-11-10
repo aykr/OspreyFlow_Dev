@@ -18057,16 +18057,21 @@ class LayerActionRefused(Exception):
     """A removed case's *Merge into the dataset* or *Delete* refused, in words (ADR-143 Amendment
     2 decision 1)."""
 
-    def __init__(self, status_code: int, error: str, words: str) -> None:
+    def __init__(
+        self, status_code: int, error: str, words: str, right: Right | None = None
+    ) -> None:
         super().__init__(words)
         self.status_code, self.error, self.words = status_code, error, words
+        #: The right whose roles the Glass names (ADR-145 Amendment 4 decision 12), never a person.
+        self.right = right
 
 
 @app.exception_handler(LayerActionRefused)
 async def _layer_action_refused_handler(request: Request, exc: LayerActionRefused) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code, content={"error": exc.error, "detail": exc.words}
-    )
+    content: dict[str, str] = {"error": exc.error, "detail": exc.words}
+    if exc.right is not None:
+        content["right"] = exc.right.value
+    return JSONResponse(status_code=exc.status_code, content=content)
 
 
 def _size_words(size: int) -> str:
@@ -18132,12 +18137,15 @@ async def layer_action_dry_run_route(
         home = await datasets.home_case_of(dataset_id)
         authors = await _authors_of(investigations, home.investigation_id) if home else []
         if principal.id not in authors:
-            names = await get_principal_names(request).display_names(authors) if authors else {}
+            # ADR-145 Amendment 4 decision 12, as the owner ruled it ((c), Amendment 7; L2.5c): the
+            # level and the right that may act, whose roles the Glass names, never who holds them.
             raise LayerActionRefused(
                 403, "not_an_author",
-                "Only one of the dataset's Authors may merge a removed case's layer into it. "
-                + ("Its Authors: " + ", ".join(names.get(a, a) for a in authors) + "."
-                   if authors else "It has no Authors yet: they are named at its first Make live."),
+                "Only one of the dataset's Authors may merge a removed case's layer into it, in "
+                "the Ingest Studio's 4 Runs: an Author of its home case."
+                + ("" if authors else
+                   " It has no Authors yet: they are named at its first Make live."),
+                right=Right.INVESTIGATE,
             )  # fmt: skip
     counts = f"{row.items} items and {row.links} links ({_size_words(row.size_bytes)})"
     policy = "the Author promotes" if dataset.promotion_policy == "author_promotes" else (
@@ -18147,8 +18155,11 @@ async def layer_action_dry_run_route(
         f"Would merge {counts} from {row.name}'s layer into {dataset.name}, as one load under its "
         f"promotion policy ({policy}). Nothing has been written."
         if action == "merge"
-        else f"Would delete {counts} from {row.name}'s layer. Promoted items are never touched. "
-        "Nothing has been written."
+        # ADR-143 Amendment 5 decision 11: the layer's counts and what deleting withdraws, never
+        # "would delete N" (the counts include promoted items, which the delete never touches);
+        # the Studio's dry run's words (L2.5c).
+        else f"{row.name}'s layer holds {counts}. Deleting it withdraws those not promoted; "
+        "promoted items are never touched. Nothing has been written."
     )
     await audit.record(
         principal=principal,

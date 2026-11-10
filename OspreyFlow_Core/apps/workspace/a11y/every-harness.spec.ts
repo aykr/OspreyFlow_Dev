@@ -207,6 +207,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=administer_system&serve=datasets&show=details",
     "rights=administer_system&serve=datasets&show=owner",
     "rights=administer_system&serve=datasets&show=dry-run",
+    // L2.5c: a delete's dry run with Admin's own Delete after it.
+    "rights=administer_system&serve=datasets&show=delete",
     "rights=administer_system&serve=datasets&open=System",
     // L2.5: People's row with its case levels and a case with no Author, Disable… with its
     // transfers, and Roles: the lists, a role's form, a team with its lead and cover.

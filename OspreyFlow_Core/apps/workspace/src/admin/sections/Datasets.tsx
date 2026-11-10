@@ -3,7 +3,7 @@
 // promotion policy; its Authors and *Change owner…*; every linked case with its layer as counts, and a
 // removed case's *Merge into the dataset* and *Delete*, each run dry. Never a layer's contents: the
 // Conduit sends counts only. Behind `administer_system`.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   AdminDataset,
@@ -17,6 +17,7 @@ import {
   changeDatasetOwners,
   datasetAuthors,
   datasetCases,
+  deleteRemovedLayer,
   layerDryRun,
   listDatasets,
   setDatasetEgress,
@@ -176,7 +177,18 @@ function DatasetDetails({
         <PromotionPolicy api={api} dataset={dataset} authors={authors} onChanged={onChanged} />
       )}
       {authors && <Authors api={api} dataset={dataset} authors={authors} onChanged={setAuthors} />}
-      {cases && <LinkedCases api={api} dataset={dataset} cases={cases} />}
+      {cases && (
+        <LinkedCases
+          api={api}
+          dataset={dataset}
+          cases={cases}
+          onChanged={() =>
+            void datasetCases(api, dataset.id)
+              .then((found) => setCases(found.cases))
+              .catch((e: Error) => setProblem(e.message))
+          }
+        />
+      )}
     </section>
   );
 }
@@ -347,12 +359,25 @@ function Authors({
 
 /** ADR-143 Amendment 2 decisions 1 and 2: every linked case, member or not, with its layer as
  * counts; a removed case's layer offers *Merge into the dataset* and *Delete*, each run dry. */
-function LinkedCases({ api, dataset, cases }: { api: AdminApi; dataset: AdminDataset; cases: AdminLinkedCase[] }) {
+function LinkedCases({
+  api,
+  dataset,
+  cases,
+  onChanged,
+}: {
+  api: AdminApi;
+  dataset: AdminDataset;
+  cases: AdminLinkedCase[];
+  onChanged: () => void;
+}) {
   const [result, setResult] = useState<LayerDryRun | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // ADR-143 Amendment 5 (L2.5c): what Admin's own Delete said, in the Conduit's words.
+  const [deleted, setDeleted] = useState<string | null>(null);
   const dry = (row: AdminLinkedCase, action: LayerDryRun["action"]) => {
     setResult(null);
     setProblem(null);
+    setDeleted(null);
     void layerDryRun(api, dataset.id, row.investigation_id, action)
       .then(setResult)
       .catch((e: Error) => setProblem(e.message));
@@ -421,14 +446,81 @@ function LinkedCases({ api, dataset, cases }: { api: AdminApi; dataset: AdminDat
           {`${result.would} ${doneWhere(result.action)}`}
         </p>
       )}
+      {result?.action === "delete" && (
+        <DeleteLayer
+          api={api}
+          dataset={dataset}
+          row={cases.find((c) => c.investigation_id === result.investigation_id)}
+          onDeleted={(words) => {
+            setResult(null);
+            setDeleted(words);
+            onChanged();
+          }}
+          onProblem={(words) => {
+            // Refused (another unit's dataset reads as none, or the layer has gone): the dry run's
+            // counts no longer stand, so they and the Delete go, and the cases are read again.
+            setResult(null);
+            setProblem(words);
+            onChanged();
+          }}
+        />
+      )}
+      {deleted && <DeletedWords words={deleted} />}
     </div>
   );
 }
 
-/** Where the merge or delete itself is done (ADR-143 Amendment 2 decision 1, L3.4): by one of the
- * dataset's Authors, in the Ingest Studio's *4 Runs*, after their own dry run. */
+/** ADR-143 Amendment 5 decision 7 (L2.5c): Admin's own *Delete*, offered only after its dry run,
+ * confirmed by the dry run's words above it; the Conduit refuses another unit's dataset as unknown. */
+function DeleteLayer({
+  api,
+  dataset,
+  row,
+  onDeleted,
+  onProblem,
+}: {
+  api: AdminApi;
+  dataset: AdminDataset;
+  row: AdminLinkedCase | undefined;
+  onDeleted: (words: string) => void;
+  onProblem: (words: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (!row) return null;
+  return (
+    <div style={{ display: "flex", gap: "var(--sp-6)", alignItems: "baseline", flexWrap: "wrap" }}>
+      <Button
+        aria-disabled={busy}
+        onClick={() => {
+          if (busy) return;
+          setBusy(true);
+          void deleteRemovedLayer(api, dataset.id, row.investigation_id)
+            .then((done) => onDeleted(`${row.name}: ${done.words}`))
+            .catch((e: Error) => onProblem(e.message))
+            .finally(() => setBusy(false));
+        }}
+      >{`Delete ${row.name}'s layer now`}</Button>
+      <span className="label">It cannot be undone.</span>
+    </div>
+  );
+}
+
+/** What the Delete said; focus moves to it, since the button it was pressed from has gone. */
+function DeletedWords({ words }: { words: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => ref.current?.focus(), [words]);
+  return (
+    <p ref={ref} role="status" tabIndex={-1} style={{ margin: 0 }}>
+      {words}
+    </p>
+  );
+}
+
+/** Where the merge or delete itself is done (ADR-143 Amendment 2 decision 1, L3.4): a merge by one
+ * of the dataset's Authors, in the Ingest Studio's *4 Runs*, after their own dry run; a delete here
+ * too, by Admin's own *Delete* (L2.5c), or there. */
 export function doneWhere(action: LayerDryRun["action"]): string {
   return action === "merge"
     ? "One of the dataset's Authors merges it in the Ingest Studio, under 4 Runs, after their own dry run."
-    : "One of the dataset's Authors deletes it in the Ingest Studio, under 4 Runs, after their own dry run.";
+    : "You may delete it below; one of the dataset's Authors may also delete it in the Ingest Studio, under 4 Runs.";
 }
