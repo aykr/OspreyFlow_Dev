@@ -99,6 +99,23 @@ def main() -> int:
     python = str(CORE / ".venv" / "bin" / "python")
     ok = False
     try:
+        # A defect older than P5b, routed to the orchestrator: the preflight resolves the published
+        # `${OSPREY_ARCADEDB_PORT:-2480}` against the process environment, not the deployment's
+        # own deployment.env, so a named install fails wherever 2480 is held (osprey-small holds
+        # it here). The driver puts the port the install will choose into the environment itself,
+        # chosen as the install chooses it, and checks the install chose the same.
+        import socket
+
+        sys.path[:0] = [str(CORE / "cli")]
+        from ospreyflow.deployments import FIRST_GRAPH_PORT, next_free_port
+
+        def port_free(port: int) -> bool:
+            with socket.socket() as probe:
+                return probe.connect_ex(("127.0.0.1", port)) != 0
+
+        graph = next_free_port(FIRST_GRAPH_PORT, (), port_free)
+        env["OSPREY_ARCADEDB_PORT"] = str(graph)
+        say(f"OSPREY_ARCADEDB_PORT={graph} (the preflight's environment; see above)")
         answers = scratch / "answers.yaml"
         answers.write_text(yaml.safe_dump({
             "mode": "lite",
@@ -111,6 +128,8 @@ def main() -> int:
         config = directory / "osprey.yaml"
         stored = yaml.safe_load(config.read_text())["components"]["storage"]["backups"]
         assert stored == str(backups), stored
+        chosen = yaml.safe_load(config.read_text())["deployment"]["graph_port"]
+        assert chosen == graph, f"the install chose {chosen}, the environment says {graph}"
         run([python, "-m", "harness.apply", "--config", str(config), "--out-root",
              str(directory.parent), "--seed", "fixture-corp"], env)  # fmt: skip
         run([*compose, "stop", "api"], env)
