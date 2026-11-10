@@ -1,10 +1,12 @@
 P5b live update run (ADR-114 Amendment 38 decision 9): NOT ACHIEVED on ospreyflow-test, 10 November 2026.
 Decided by the orchestrator: decision 9's live proof is owed, to run once the server has a Docker Hub mirror or login.
-The rollback's git checkout step: NOT EXERCISED (no .git in the server's copy).
+No step of the backup, the rollback or the restore was reached in any attempt: each stopped at the install or the apply, before the update's backup. Nothing of decision 9 was exercised live (the git checkout step included, which the server's copy could not have run anyway: it holds no .git).
+The driver now refuses to run (the orchestrator's decision) until the owed proof's CARRIES row is closed.
 Each attempt held platform-b's lease on stack b, with its containers left down, released at the end.
 Attempt 1 (e149562): the install's preflight read 2480 for a named deployment on 2500 (osprey-small holds 2480): harness/preflight/ports.py ignores deployment.env, platform-b's next step. Teardown clean.
 Attempt 2 (9f3b8a4): the build's --pull hit Docker Hub's 429 on node:22-slim. Teardown clean.
 Attempt 3 (add54b9): built without --pull; apply --no-build stopped at 'uploads' (ghcr.io pull denied). Teardown removed three image tags another lane built mid-run (localhost:5001/ospreyflow/{api,ner,worker}:9fa5b19a…): the cleanup took a before/after difference. Fixed in the driver (OwnTags: only names recorded when made), held by tests/test_live_driver_own_tags.py. Containers and volumes outside osprey-p5b-* unchanged in all three.
+CORRECTION to attempt 3's own log below: its line "image tags changed: nothing" is false as a record of what happened. It compared the tags after the run with those before, so it could not show tags made and removed within the run, and it never failed on tags: P7's three images were deleted. And osprey/superset:local, which existed before the run, was rebuilt by the run's compose build and left pointing at that build, not at the image it named before.
 The driver's graph-port workaround comes out once the preflight fix lands.
 
 ===== attempt 1 =====

@@ -1028,8 +1028,9 @@ def _git_checkout(product: Path) -> Path | None:
 
 def _is_inside(folder: Path, root: Path, *, ignore_case: bool = False) -> bool:
     """`harness.backup.is_inside`: compared by the folder each existing ancestor is, so a link, a
-    bind mount or another letter case on a disk that ignores case is the folder it shows; a root
-    that does not exist yet is compared by spelling, without case where the disk has none."""
+    mount of the checkout itself, or another letter case on a disk that ignores case is the folder
+    it shows; a root that does not exist yet is compared by spelling, without case where the disk
+    has none."""
     target = folder.expanduser().resolve()
     if root.exists():
         for candidate in (target, *target.parents):

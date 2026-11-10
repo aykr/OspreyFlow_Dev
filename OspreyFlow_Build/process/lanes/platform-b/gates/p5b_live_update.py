@@ -112,7 +112,25 @@ def guarded(argv: list[str], home: Path) -> list[str]:
     return ["docker", "compose", "-p", NAME, *argv[2:]]
 
 
+#: The orchestrator's decision, 10 November 2026: the driver is not run again until the owed live
+#: proof's CARRIES row is closed. `OwnTags` removes `osprey/*:local` by a name any lane's build may
+#: share, an existing tag (`osprey/superset:local`) was left pointing at this run's build, and the
+#: after-check never failed on tags. The carry names what the next run needs: unique run names or an
+#: image-ID-checked `rmi`, the old IDs put back, and an after-check that fails on tags.
+REFUSAL = (
+    "p5b-live: REFUSED: not to be run until CARRIES' owed-proof row is closed: OwnTags removes by "
+    "shared name"
+)
+
+
 def main() -> int:
+    print(REFUSAL, file=sys.stderr)
+    return 2
+
+
+def _the_run_as_it_was() -> int:
+    """The run as attempted on 10 November (gates/live-attempts.txt); kept for the owed proof, and
+    reached by nothing."""
     scratch = Path(tempfile.mkdtemp(prefix="osprey-p5b-"))
     home = scratch / "home"
     backups = scratch / "backups"

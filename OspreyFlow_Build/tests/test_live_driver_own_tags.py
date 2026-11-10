@@ -86,3 +86,18 @@ def test_a_tag_is_recorded_only_when_the_run_made_it(existed: bool) -> None:
     own = driver.OwnTags(runner=docker)
     own.built("osprey/ner:local", existed=existed)
     assert own.remove() == ([] if existed else ["osprey/ner:local"])
+
+
+def test_the_driver_refuses_to_run_until_the_owed_proof_is_closed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The orchestrator's decision: the driver exits non-zero before touching anything, until the
+    owed live proof's CARRIES row is closed."""
+    driver = _driver()
+
+    def no_docker(*_: object, **__: object) -> None:
+        raise AssertionError("the driver ran a command")
+
+    monkeypatch.setattr(driver.subprocess, "run", no_docker)
+    assert driver.main() != 0
+    assert "not to be run until CARRIES' owed-proof row is closed" in capsys.readouterr().err

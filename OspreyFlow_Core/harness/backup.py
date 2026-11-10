@@ -164,9 +164,9 @@ def checkout_root() -> Path:
 def is_inside(folder: Path, root: Path) -> bool:
     """Whether `folder`, once made, would be `root` or under it. Compared by the file each existing
     ancestor is (`os.path.samefile`), not by spelling: on a case-insensitive disk
-    `ospreyflow_core/backups` is `OspreyFlow_Core/backups`, and a bind mount or link is the folder
-    it shows. Resolved as the system resolves it (`..` after a link is the link's own parent), never
-    by tidying the spelling first."""
+    `ospreyflow_core/backups` is `OspreyFlow_Core/backups`, and a link, or a mount of the checkout
+    itself, is the folder it shows. Resolved as the system resolves it (`..` after a link is the
+    link's own parent), never by tidying the spelling first."""
     target = folder.expanduser().resolve()
     for candidate in (target, *target.parents):
         try:
