@@ -28360,38 +28360,57 @@ nothing is refused.
 498–499). It is access-filtered, so it tells no one of a link they cannot read; it is recorded,
 not changed here.
 
-### ADR-110, Amendment 19 (10 November 2026) — a scheduled load's notice reaches its owner in *Needs you*
+### ADR-110, Amendment 19 (10 November 2026) — a scheduled load's notice reaches its owner in *Needs you*, in fixed words
 
-Status: written 10 November 2026 by the rules lane (rules-hyg item 3), on the orchestrator's ruling
-of that evening (reserved 6327743). It amends Amendment 3 point 1, whose "owner's own inbox" L2.10
-removed (ADR-146 decision 1, one queue; the inbox's routes gone, 7d5d8b3), leaving the notice
-written and read by nothing: `AlertStore.list_authorized` had no caller left, so a failed or refused
+Status: written 10 November 2026 by the rules lane (rules-hyg item 3), on the orchestrator's rulings
+of that evening (reserved 6327743; the reach and the words ruled after the merger's and Admin's
+reviews). It amends Amendment 3 point 1, whose "owner's own inbox" L2.10 removed (ADR-146 decision
+1, one queue; the inbox's routes gone, 7d5d8b3), leaving the notice written and read by nothing:
+`AlertStore.list_authorized` had no route left that called it for notices, so a failed or refused
 scheduled load was said to no one. It keeps point 1's intent, since *Needs you* is now the owner's
 own place (ADR-145 decision 11).
 
-1. **A notice is any alert whose `rule_id` is `schedule:<recipe id>`** (`scheduler.NOTICE_RULE_PREFIX`),
-   with no typology, as point 1 has always written it; so the notices written before this amendment
-   are served too, and none needs migrating. It still never enters any queue.
+1. **A notice is any alert whose `rule_id` is `schedule:<recipe id>` and that has no typology**
+   (`schedule_notices.NOTICE_RULE_PREFIX`), as point 1 has always written it; so the notices written
+   before this amendment are served too, and none needs migrating. It still never enters any queue.
 2. **It reaches its owner in *Needs you*** (`GET /v1/me/needs-you`, `NeedsYou.schedule_notices`), as a
    focusable entry in its own words with a tip saying where its pipeline's Runs are; it opens nothing,
    so the top bar needs no new action. A reader who owns no schedule sees none.
-3. **Only its owner reads or counts it.** `AlertStore.list_schedule_notices` filters `owner_id` in the
-   query itself, the list and the total alike, within the reader's dataset reach as every alert read
-   is: an administrator, a team lead or anyone else reads none of another's and counts none (rule 3).
-   No right gates it, as nothing but the owner's own is served.
-4. **Open notices of the last seven days, newest first, at most twenty, with the total.** More than
-   twenty is said in words ("n more notices…"), never cut silently (rule 2); the count on *Needs you ·
-   n* is the total. A notice leaves *Needs you* after seven days; it is not dismissed (each pipeline's
-   Runs keep every run, and Admin › Schedules a paused schedule).
+3. **Only its owner reads or counts it, by owner alone, with no dataset reach.**
+   `AlertStore.list_schedule_notices` filters `owner_id` in the query itself, the list and the total
+   alike, from one statement (`count(*) OVER ()`, so the total is read at the list's moment). No dataset
+   reach is applied: a notice is about the owner's own schedule and carries no data, and a run refused
+   because it no longer reaches its dataset is exactly what its owner must read; while the reader of
+   *Needs you* is outside any case (`datasets=[]`), so a reach would hide every notice once
+   `scripts.stamp_datasets` placed it in its case's dataset. An administrator, a team lead, anyone else
+   or an unknown principal reads and counts none of another's (rule 3). No right gates it, as nothing
+   but the owner's own is served.
+4. **Open notices of the last seven days, newest first, at most twenty, with the total.** More are
+   said in words ("n more notices of your scheduled loads, not listed here"), never cut silently
+   (rule 2); the count on *Needs you · n* is the total. A notice leaves *Needs you* after seven days; it
+   is not dismissed (each pipeline's Runs keep every run, and Admin › Schedules a paused schedule).
+5. **A notice says one fixed sentence per kind, never an error's own text** (rule 7): an error can carry
+   a host, a table or a source row's key (an `ArcadeDBError` carries the server's whole reply), and it
+   stays in the run's ledger and the log. The sentence follows the run's name (`The scheduled run of
+   <recipe> due <time>`, or `The run of <recipe> on the file <name>`), by kind (`scheduler.NoticeKind`):
+   *failed* (any error), *timed out* (a `TimeoutError`), *refused for reach* (the run no longer reaches
+   its case or its dataset), *refused for rights* (its owner may no longer run it: a right, a clearance,
+   a sign-in), *the sign-in service did not answer* (not the owner's doing, so it never pauses the
+   schedule; the slot is not run again, so nothing is promised), and two the scheduler already said in
+   fixed words: *an earlier run into its case was still going* and *a refresh with no deduplication key*.
+   The kinds are the orchestrator's four and its fifth for the sign-in service, plus those two.
 
-**Tests.** Live, against Postgres: `test_schedule_notices_needs_you.py` (another person, an
-administrator and a team lead read and count none of the owner's; a notice written before the
-amendment served and a rule's alert not; the window and status; the total past the limit). The
-route's wiring: `test_needs_you.py::test_a_schedule_notice_is_served_to_its_owner_alone`. The Glass:
-`NeedsYou.test.tsx` (the entry and its tip; the count and the "more" line; a Conduit from before
-served as no notices), `keyboard/needs-you.spec.ts` (each notice and the "more" line reached by
-Tab with its tip), and every-harness's `needs-you-harness.html open=1&notices=1` in three themes.
-Each shown red at its call site (`process/lanes/rules/hyg/3-schedule-notices-red.txt`).
+**Tests.** Live, against Postgres, each reader made as the route makes it: `test_schedule_notices_needs_you.py`
+(another person, an administrator, a team lead and an unknown principal read and count none of the
+owner's; a stamped notice and an unstamped one both served; a notice written before the amendment
+served, and a rule's alert or a typed `schedule:` alert not; the window and the status; the total past
+the limit). The words: `test_schedule_notice_words.py` (offline: each kind's sentence; an error told by
+its kind alone) and `test_schedule_executor.py` (live: the executor's own call sites, with an error
+planted in `ArcadeDBError`'s shape whose text never reaches the words). The route:
+`test_needs_you.py` (the owner alone served; twenty listed and the true total; the seven-day window).
+The Glass: `NeedsYou.test.tsx`, `keyboard/needs-you.spec.ts` (each notice and the "more" line reached by
+Tab with its tip; Escape closes), and every-harness's `needs-you-harness.html open=1&notices=1` in three
+themes. Each shown red at its call site (`process/lanes/rules/hyg/3-schedule-notices-red.txt`).
 
 ### ADR-143, Amendment 3 (7 November 2026) — where a fresh drawing's items live, and who merges a drawn dataset
 

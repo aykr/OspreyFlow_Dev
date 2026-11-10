@@ -1,20 +1,69 @@
-# rules-hyg item 3, ADR-110 Amendment 19: each case shown red at its call site, then green.
-# --- plant 1 (route, app.py my_needs_you_route): the store's notices not served, schedule_notices=[]
-1
-FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_schedule_notice_is_served_to_its_owner_alone
-1 failed, 10 passed, 1 warning in 1.74s
-# --- plant 2 (needs_you.schedule_notices_for): another's notices asked for, the store given a principal not the reader's (id of the notice's owner)
-FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_schedule_notice_is_served_to_its_owner_alone
-1 failed, 10 passed, 1 warning in 1.71s
-11 passed, 1 warning in 1.53s
-# --- plant 3 (NeedsYou.tsx): the notices not drawn (schedule_notices?.map dropped)
-     × lists the reader's own scheduled loads' notices with their tip, and counts every one (ADR-110 Amendment 19) 6ms
+# rules-hyg item 3, ADR-110 Amendment 19: each case shown red at its own call site, then green.
+# Every plant is a change to the product code a test guards, made and reverted from a saved copy
+# (cmp-checked), never by git checkout. Offline runs: this Mac, closed ports.
+#
+# Round 1 (e7e4cb2), kept for the record: two route plants (the notices not served; another's
+# principal asked) and two Glass plants (not drawn; left out of the count), each red then green.
+# The reviews (merger, Admin) found the store's SQL never planted, the reach unruled, and the total,
+# limit and window unpinned at the route; all of round 2 below answers them.
+#
+# == Round 2: the route (test_needs_you.py, 13 cases)
+# --- plant (needs_you.schedule_notices_for: the total taken as the number listed)
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_twenty_newest_notices_are_listed_and_the_true_total_said
+1 failed, 12 passed, 1 warning in 1.64s
+# --- plant (needs_you.schedule_notices_for: the limit dropped)
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_twenty_newest_notices_are_listed_and_the_true_total_said
+1 failed, 12 passed, 1 warning in 1.61s
+# --- plant (needs_you.schedule_notices_for: the window widened)
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_notice_older_than_seven_days_is_neither_listed_nor_counted
+1 failed, 12 passed, 1 warning in 1.62s
+# --- green after each was reverted
+13 passed, 1 warning in 1.56s
+
+# == Round 2: the words (test_schedule_notice_words.py, 12 cases, offline)
+# --- plant (scheduler.failure_kind: a timeout told as a plain failure)
+             "failed"),
+            (ValueError("column amount is missing"), "failed"),
+E       AssertionError: assert 'failed' == 'timed_out'
+E         + failed
+             "failed"),
+            (ValueError("column amount is missing"), "failed"),
+E       AssertionError: assert 'failed' == 'timed_out'
+E         + failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error2-timed_out]
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error3-timed_out]
+2 failed, 10 passed in 0.56s
+# --- plant (scheduler.failure_kind: a run still going told as a plain failure)
+             "failed"),
+            (ValueError("column amount is missing"), "failed"),
+E       AssertionError: assert 'failed' == 'in_progress'
+E         + failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error4-in_progress]
+1 failed, 11 passed in 0.49s
+# --- plant (scheduler._NOTICE_ENDINGS: a sentence that differs from the one written (refused for reach))
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[refused_reach]
+1 failed, 11 passed in 0.49s
+# --- green after each was reverted
+12 passed in 0.47s
+
+# == Round 2: the Glass (NeedsYou.test.tsx, 17 cases)
+# --- plant (NeedsYou.tsx: the 'more' line never drawn)
+     × says how many notices are not listed, never cutting them silently (rule 2) 6ms
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-      Tests  1 failed | 15 passed (16)
-# --- plant 4 (needsYouApi.ts needsYouCount): the notices left out of the count
-     × lists the reader's own scheduled loads' notices with their tip, and counts every one (ADR-110 Amendment 19) 1005ms
-     × says how many notices are not listed, never cutting them silently (rule 2) 2ms
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
-      Tests  2 failed | 14 passed (16)
-# --- green after both reverted
-      Tests  16 passed (16)
+      Tests  1 failed | 16 passed (17)
+# --- plant (needsYouApi.ts: the old copy, 'the newest twenty shown')
+     × says how many notices are not listed, never cutting them silently (rule 2) 7ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 16 passed (17)
+# --- plant (needsYouApi.ts: an older Conduit's missing notices not defaulted)
+     × reads a Conduit from before the amendment as no notices, not a failed read 2ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 16 passed (17)
+# --- plant (needsYouApi.ts: the total's type not checked)
+     × says an answer whose notice total is not a number as a failed read, never as nothing waiting 6ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 16 passed (17)
+# --- green after each was reverted
+      Tests  17 passed (17)
+
+# == Live, under the rules lease (to come at the gates): the store's SQL (owner filter dropped from the list, from the total; typology, status and window dropped; a dataset reach put back), and the executor's ArcadeDB-shaped plant (the error's text put back into the words).
