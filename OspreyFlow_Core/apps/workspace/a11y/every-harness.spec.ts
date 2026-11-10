@@ -325,6 +325,72 @@ const CONTRAST_FINDINGS: Record<string, ListedFindings> = Object.fromEntries([
       { [selector]: { text: "G", ratio, owner: "home" } },
     ]),
   ),
+  // Case's (L3.3, the boards): the board's link lines are one SVG laid over the board, so the items'
+  // "⟶" handles and the photo's label lie over or under it, and so does the blank board's words.
+  // Which of the label's selectors a state draws follows whether the item is a button there.
+  ...(
+    [
+      ["board=b-wing&pictured=1&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)", "button"],
+      ["board=b-wing", "plain"],
+      ["board=b-wing&as=bob", "label"],
+      ["board=b-night", "empty"],
+      ["board=b-wing&press=Declare%20a%20Location", "button"],
+      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)", "button"],
+      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6", "button"],
+      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D", "plain"],
+      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D", "button"],
+      ["board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)", "button"],
+      ["board=b-wing&press=Promote%E2%80%A6", "plain"],
+      ["board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review", "plain"],
+    ] as const
+  ).flatMap(([state, kind]) => {
+    const lines = { ratio: "unmeasurable", reason: "over or under svg.board__lines", owner: "case" } as const;
+    const label = (button: boolean): ListedFindings => ({
+      [`div[data-board-item="doc-photo"] > .board-item__body${button ? '[type="button"]' : ""} > .board-item__label`]:
+        { text: "Photo of Mercer, 3 Nov", ...lines },
+    });
+    const handles: ListedFindings = Object.fromEntries(
+      ["p-mercer", "p-ward", "d-tall", "d-ms", "doc-photo", "d-bob"].map((id) => [
+        `div[data-board-item="${id}"] > .board-item__handle[title="Drag to draw a link"][aria-hidden="true"]`,
+        { text: "⟶", ...lines },
+      ]),
+    );
+    const found: ListedFindings =
+      kind === "empty"
+        ? { ".board__empty": { text: "A blank board. Choose a type and declare", ...lines } }
+        : kind === "label"
+          ? label(false)
+          : { ...handles, ...label(kind === "button") };
+    return (["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
+      `boards-harness.html ${state} (${variant})`,
+      found,
+    ]);
+  }),
+  // The metrics panel's rarity note and the views' delete question (under GOV.UK): axe reads each as
+  // partly covering another element and names none, and the probe finds nothing either; kept closed
+  // (Glass's metrics panel; case's views).
+  ...(["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
+    `metrics-panel-harness.html filter=rarity (${variant})`,
+    {
+      "p:nth-child(7)": {
+        text: "Filters dim, they never remove: what fal",
+        ratio: "unmeasurable",
+        reason: "partly covered, by axe's reading; the probe found nothing",
+        owner: "glass (metrics panel)",
+      },
+    },
+  ]),
+  [
+    "views-harness.html asking=delete (govuk)",
+    {
+      ".govuk-body-s": {
+        text: "Delete this view? Nothing on the case is",
+        ratio: "unmeasurable",
+        reason: "partly covered, by axe's reading; the probe found nothing",
+        owner: "case (views)",
+      },
+    },
+  ],
   // Shell's: the top bar's More views drawn open under GOV.UK lies over the notification banner's
   // words, so what is under them is the menu.
   [
