@@ -39,7 +39,7 @@ case	L3.2b	M	done	No branches in the Glass: the Views panel, keyboard and axe; t
 case	L3.3	L	done	Drawing boards; drawn datasets; drawn items watched; marking ceiling
 case	L3.4	L	done	Promotion; a removed case's layer merged or deleted
 case-b	L3.5	M	done	Analyst-defined link types
-case	L3.6	S	building	drawn_watch alerts in the one queue (with L2.10)
+case	L3.6	S	done	drawn_watch alerts in the one queue (with L2.10) (merged 26050c6)
 case-b	L3.7	S	done	The grading scheme setting and command
 case-b	L3.8	S	done	The ownership route for Disable
 case	L3.9	L	done	Merging a drawn dataset; the drawing as a case view (L5, L6 ruled) (merged 97e6689)
