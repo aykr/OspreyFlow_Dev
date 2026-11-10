@@ -4,7 +4,6 @@ rules	UPG	the upgrade rehearsal on the server: migrations, then the update re-ru
 studio	L1.7	rebased with its review's fixes; server make test, ci and live; merge	~20:30	A
 docs	D2b	the decks; rule-editor slides after L2.11; review against CLAIMS.md	~21:00	A
 orchestrator	publish	v0.5.0 from main, after L1.7, the upgrade fix and the rehearsal	~01:00	A
-platform-b	T2	per-lane ports (browser tests side by side on the server); reviews running	~20:00	A
 rules-b	T3	dialogs' colour contrast gated; runs in progress	~20:30	A
 admin	T1	part 4 tonight; make test in parallel and the marks tomorrow morning	11 Nov, ~11:00	A
 case	L3.H2	built; both reviews running; Am 4; one round of gates (moves to sol at 20:50)	~21:00	B
