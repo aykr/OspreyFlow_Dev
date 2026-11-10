@@ -1,0 +1,7 @@
+upg-run: osprey.yaml: models.local_only false, provider gemini (extraction); defaults left local
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+ospreyflow: The step 'apply the changed settings' failed (exit 1); nothing after it was run.
+upg-run: apply exit 1
+upg-run: provider key lines in deployment.env: 0

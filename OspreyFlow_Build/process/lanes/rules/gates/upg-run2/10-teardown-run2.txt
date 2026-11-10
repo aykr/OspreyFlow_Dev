@@ -1,0 +1,27 @@
+$ dc down -v --remove-orphans (run 2)
+service "api" refers to undefined volume map-settings: invalid compose project
+volumes left: osprey-upg_arcadedb-config
+osprey-upg_arcadedb-databases
+osprey-upg_objectstore-data
+osprey-upg_ollama-models
+osprey-upg_opensearch-data
+osprey-upg_osprey-data
+osprey-upg_postgres-data
+osprey-upg_valkey-data
+osprey-upg_whisper-models
+Error response from daemon: remove osprey-upg_arcadedb-config: volume is in use - [69b452313087dfdf2165609ef9c3da4911b92e9561cb8c41ac8ad6cb5c34bf51]
+Error response from daemon: remove osprey-upg_arcadedb-databases: volume is in use - [69b452313087dfdf2165609ef9c3da4911b92e9561cb8c41ac8ad6cb5c34bf51]
+Error response from daemon: remove osprey-upg_objectstore-data: volume is in use - [ca8c88d91783cfe0feb66eab343c75abbc3a533ccd6b782c71f61a91421a8d99]
+Error response from daemon: remove osprey-upg_ollama-models: volume is in use - [60b40a3adee57b9b2c86365bfe5a14545640fd538228e506da685bd2cd8f7e8a, 365c1864a2cbbce878f656f24b02a5b3c3caffc59150732f2385e41a583de496]
+Error response from daemon: remove osprey-upg_opensearch-data: volume is in use - [f1d83dd3bbd071725b0da6a4bc28d019ab547f2fda1ae2a0c0cc267586878a0f]
+Error response from daemon: remove osprey-upg_osprey-data: volume is in use - [763f7519c7e990000124cf67dec1ba03ebb48ff7cdc03441d80d55a7c49c6f40]
+Error response from daemon: remove osprey-upg_postgres-data: volume is in use - [4ef5235f80b25ceff8a13d05497bb60a11b6f35a87b86e5ff2eb385594d51c39]
+Error response from daemon: remove osprey-upg_valkey-data: volume is in use - [b4ba2f5246e8efabfa2d5b0e17f703c063d89f657017f369a13f9c19372263b1]
+Error response from daemon: remove osprey-upg_whisper-models: volume is in use - [5aad50847789b5b958fcc4df64d076ed92f0b6c91735fa2c0010a74e14290739, 818b144d54a1037b1b1807a2aa0c921301aaec303e41f9b943cc3afd182f01cf]
+18
+--- teardown by name (the compose file could not be read; the folder was removed too early)
+containers: 18
+removed
+osprey-upg_egress
+osprey-upg_osprey
+left: containers 0, volumes 0, networks 0

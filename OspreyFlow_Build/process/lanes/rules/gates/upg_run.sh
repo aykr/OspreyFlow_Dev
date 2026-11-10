@@ -45,7 +45,8 @@ open(path, "w").write(yaml.safe_dump(doc, sort_keys=False))
 print("upg-run: osprey.yaml: models.local_only false, provider gemini (extraction); defaults left local")
 EOF
   # A synthetic key (rule 9): not a credential anywhere, so the assert is not vacuous and nothing leaks.
-  OSPREY_MODEL_KEY_GEMINI=upg-synthetic-not-a-real-key-0000 $CLI .venv/bin/python -m ospreyflow apply --name osprey-upg < /dev/null
+  # v0.4.12's apply has the same 2480 preflight defect as its install.
+  OSPREY_ARCADEDB_PORT=2500 OSPREY_MODEL_KEY_GEMINI=upg-synthetic-not-a-real-key-0000 $CLI .venv/bin/python -m ospreyflow apply --name osprey-upg < /dev/null
   say "apply exit $?"
   say "provider key lines in deployment.env: $(grep -c '^OSPREY_MODEL_KEY_' $D/deployment.env)" ;;
 fixtures)
@@ -135,7 +136,22 @@ teardown)
   left=$(docker ps -a -q --filter label=com.docker.compose.project=$UPG | wc -l)
   [ $rc = 0 ] && [ "$left" = 0 ] || { say "REFUSED to go on: down -v exit $rc, $left containers left (take them down by project label first)"; exit 2; }
   rm_volumes $(docker volume ls -q --filter label=com.docker.compose.project=$UPG) || exit 2
-  (cd $R/tools && $PY upg_images.py restore $R/logs/images-state.json && $PY upg_images.py check $R/logs/images-state.json) || exit 2
+  if [ -f $R/logs/images-state.json ]; then
+    (cd $R/tools && $PY upg_images.py restore $R/logs/images-state.json && $PY upg_images.py check $R/logs/images-state.json) || exit 2
+  else
+    say "no image was held or built in this run: no tag to put back"
+  fi
   say "nothing of $UPG is left: containers $left, volumes $(docker volume ls -q --filter name=^$UPG | wc -l)" ;;
+capture)
+  # Which containers a step recreated, and the stores' mounts (platform-b's ask): `capture <label>`.
+  say "--- containers ($2)"; dc ps -a --format '{{.Name}} {{.ID}} {{.CreatedAt}}' | sort
+  say "--- stores' mounts ($2)"
+  for s in postgres arcadedb clickhouse opensearch valkey; do
+    c=$UPG-$s-1; docker inspect -f "$c {{range .Mounts}}{{.Name}}:{{.Destination}} {{end}}" $c 2>/dev/null
+  done
+  say "--- data ($2)"; sh $R/tools/snap.sh | head -11
+  for v in $(docker volume ls -q --filter label=com.docker.compose.project=$UPG | sort); do
+    echo "$v $(docker run --rm -v $v:/v:ro busybox:1.36 du -s /v 2>/dev/null | cut -f1)KiB"
+  done ;;
 *) say "no phase $1"; exit 2 ;;
 esac
