@@ -16,9 +16,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { assertAllCovered, registerCovered, SIGN_IN_ACTIONS } from "./actionRegistry";
 
 // `src/auth/oidcConfig.ts`'s own default derivation: this harness's origin is
-// `http://localhost:5185` (`playwright.config.ts`'s `webServer`), so the computed authority is
-// `http://localhost:8081/realms/osprey` — `05_DEPLOYMENT.md` §3's own default Keycloak port,
-// unrelated to and not reachable from this suite; every request to it is intercepted below.
+// `http://localhost:<this run's port>` (`playwright.config.ts`'s `webServer`; 5185 on main), so
+// the computed authority is `http://localhost:8081/realms/osprey` — `05_DEPLOYMENT.md` §3's own
+// default Keycloak port, unrelated to and not reachable from this suite; every request to it is
+// intercepted below.
 const AUTHORITY = "http://localhost:8081/realms/osprey";
 
 async function serveIdentityProvider(page: Page) {

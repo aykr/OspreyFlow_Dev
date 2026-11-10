@@ -43,6 +43,11 @@ set -euo pipefail
 DIR="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}"
 TABLE="$(cd "$(dirname "$0")" && pwd)/lane_stacks.tsv"
 HOSTS="$(cd "$(dirname "$0")" && pwd)/lane_stack_hosts.tsv"
+PORTS="$(cd "$(dirname "$0")" && pwd)/lane_ports.tsv"   # each lane's Playwright port slot (T2)
+
+# A lane's Playwright port slot, by its exact row; a lane with none is "unlisted-<lane>", which
+# OspreyFlow_Core/apps/lanePorts.ts refuses in words (a sub-lane never takes its parent's by prefix).
+ports_slot() { awk -F'\t' -v l="$1" '!/^#/ && $1 == l { print $2; found = 1; exit } END { if (!found) print "unlisted-" l }' "$PORTS" 2>/dev/null || echo "unlisted-$1"; }
 STACKS="$(grep -v '^#' "$TABLE" | cut -f1 | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
 mkdir -p "$DIR"
 
@@ -149,7 +154,9 @@ for d,ds,fs in os.walk(\".\"):
     where="no stack, no lease"
   fi
   { printf 'cd %q || exit 1\n' "$rroot/$rel"
-    printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta"
+    # OSPREY_PORTS_LANE and OSPREY_PORTS_SLOT: the lane and its own Playwright ports (OspreyFlow_Core/apps/lanePorts.ts),
+    # as lanes' copies run side by side here; not OSPREY_LANE, which an offline run must not name (the port guard's).
+    printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease OSPREY_PORTS_LANE=%s OSPREY_PORTS_SLOT=%s PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta" "$who" "$(ports_slot "$who")"
     printf '%q ' "$@"; echo; } > "$list.cmd"
   rc=0
   setup=$(( $(date +%s) - t_setup ))

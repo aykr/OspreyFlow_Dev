@@ -30,14 +30,28 @@
 // `actionRegistry.ts`'s own docstring has the full reasoning for why this exists now.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { assertAllCovered, CANVAS_ACTIONS, registerCovered } from "./actionRegistry";
+import { KEYBOARD_PORT } from "./ports";
+
+import {
+  assertAllCovered,
+  CANVAS_ACTIONS,
+  registerCovered,
+} from "./actionRegistry";
 
 /** Tabs until `target` is focused — never a counted number of Tabs, which breaks whenever the
  * menu gains an item (seen 9 October 2026: *Set picture…* and the Depicts link row joined the
  * node menu and every counted walk in this file went red at once). */
-async function tabUntilFocused(page: Page, target: Locator, max = 12): Promise<void> {
+async function tabUntilFocused(
+  page: Page,
+  target: Locator,
+  max = 12,
+): Promise<void> {
   await expect(target).toBeVisible();
-  for (let i = 0; i < max && !(await target.evaluate((el) => el === document.activeElement)); i++) {
+  for (
+    let i = 0;
+    i < max && !(await target.evaluate((el) => el === document.activeElement));
+    i++
+  ) {
     await page.keyboard.press("Tab");
   }
   await expect(target).toBeFocused();
@@ -53,7 +67,10 @@ async function stubSmallExpansionPreview(page: Page): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 3, candidate_edge_count: 0 }),
+      body: JSON.stringify({
+        candidate_node_count: 3,
+        candidate_edge_count: 0,
+      }),
     });
   });
 }
@@ -108,7 +125,12 @@ test("Tab leaves the canvas and reaches the next real focusable element on the p
   // and its Arrange button, the selection bar, Clear view, the zoom cluster and the legend), so the way out is "keep pressing Tab and
   // arrive", not an exact count that every new control would break. Bounded, so a real trap fails.
   for (let presses = 0; presses < 24; presses++) {
-    if (await page.locator("#after-canvas").evaluate((el) => el === document.activeElement)) break;
+    if (
+      await page
+        .locator("#after-canvas")
+        .evaluate((el) => el === document.activeElement)
+    )
+      break;
     await page.keyboard.press("Tab");
   }
 
@@ -118,7 +140,9 @@ test("Tab leaves the canvas and reaches the next real focusable element on the p
 
 // GDS remediation plan A2 (WCAG 4.1.3): as focus moves between nodes, the canvas says which node it
 // is on — its name, type and links — in a polite live region, not only "Selection of 1".
-test("the focused node's name and type are announced as arrow keys move focus", async ({ page }) => {
+test("the focused node's name and type are announced as arrow keys move focus", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   const said = page.getByTestId("canvas-focus-announcement");
@@ -127,14 +151,18 @@ test("the focused node's name and type are announced as arrow keys move focus", 
   await canvas.focus();
   await expect(said).toHaveText(/^n0, Person, \d+ links?$/);
   await page.keyboard.press("ArrowRight");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n1");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("n1");
   await expect(said).toHaveText(/^n1, Person, \d+ links?$/);
   // The canvas keeps the focus: the announcement is a status message, not a focus move.
   await expect(canvas).toBeFocused();
   registerCovered("CANVAS_ACTIONS", "focused-node-is-announced");
 });
 
-test("arrow keys walk from the focused node to a real neighbour", async ({ page }) => {
+test("arrow keys walk from the focused node to a real neighbour", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
@@ -187,7 +215,8 @@ test("Ctrl+Shift+Arrow reaches a node arrow-walk cannot, and Space pairs the two
   let reached = false;
   for (let i = 0; i < 12 && !reached; i++) {
     await page.keyboard.press("Control+Shift+ArrowRight");
-    reached = (await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n5";
+    reached =
+      (await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n5";
   }
   expect(
     reached,
@@ -205,35 +234,45 @@ test("Ctrl+Shift+Arrow reaches a node arrow-walk cannot, and Space pairs the two
   await page.keyboard.press("\\");
   const menu = page.locator(".radial-menu__list[role='menu']");
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /Find paths to/ })).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /Find paths to/ }),
+  ).toBeVisible();
 
   registerCovered("CANVAS_ACTIONS", "ctrl-shift-arrow-walks-every-node");
 });
 
 // 9 October 2026: the pair's actions read "Link to 01M46CSD…", the other node's id. Every fixture
 // person but n5 is labelled by its id, so this asks the menu on n0 about n5 ("n5, Zed").
-test("a pair's actions name the other node as the canvas labels it, not by its id", async ({ page }) => {
+test("a pair's actions name the other node as the canvas labels it, not by its id", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0, in the ring
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press("Control+Shift+ArrowRight");
-    if ((await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n5") break;
+    if ((await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n5")
+      break;
   }
   await page.keyboard.press(" "); // ring: {n0, n5}
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press("Control+Shift+ArrowRight");
-    if ((await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n0") break;
+    if ((await page.evaluate(() => window.__KEYBOARD__?.focused)) === "n0")
+      break;
   }
   expect(await page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n0");
   await page.keyboard.press("\\");
   const menu = page.locator(".radial-menu__list[role='menu']");
   for (const verb of ["Link to", "Split from", "Find paths to"]) {
-    await expect(menu.getByRole("menuitem", { name: `${verb} n5, Zed` })).toBeVisible();
+    await expect(
+      menu.getByRole("menuitem", { name: `${verb} n5, Zed` }),
+    ).toBeVisible();
   }
 });
 
-test("backslash opens the radial menu as a keyboard-navigable list", async ({ page }) => {
+test("backslash opens the radial menu as a keyboard-navigable list", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // establishes n0 immediately — see the focus-establishes-ring test above
@@ -253,32 +292,48 @@ test("backslash opens the radial menu as a keyboard-navigable list", async ({ pa
 // was asked for, because the deployed image's address is `""` (this origin, through nginx) and
 // the canvas took an empty address for no Conduit. The harness's own address had never been empty.
 for (const [shape, query, origin] of [
-  ["the deployed same-origin address", "?api=same-origin", "http://localhost:5185/v1/"],
+  [
+    "the deployed same-origin address",
+    "?api=same-origin",
+    `http://localhost:${KEYBOARD_PORT}/v1/`,
+  ],
   ["an explicit address", "", "http://keyboard-test.invalid/v1/"],
 ] as const) {
-  test(`the menu shows each link type's count, asked of the Conduit at ${shape}`, async ({ page }) => {
+  test(`the menu shows each link type's count, asked of the Conduit at ${shape}`, async ({
+    page,
+  }) => {
     const asked: string[] = [];
-    await page.route("**/v1/investigations/keyboard-fixture/expand/preview", async (route) => {
-      asked.push(route.request().url());
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ candidate_node_count: 500, candidate_edge_count: 0 }),
-      });
-    });
+    await page.route(
+      "**/v1/investigations/keyboard-fixture/expand/preview",
+      async (route) => {
+        asked.push(route.request().url());
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            candidate_node_count: 500,
+            candidate_edge_count: 0,
+          }),
+        });
+      },
+    );
     await page.goto(`/keyboard/harness.html${query}`);
     const canvas = page.getByRole("application", { name: "Network canvas" });
     await canvas.focus();
     await page.keyboard.press("\\");
 
-    const counts = page.locator(".radial-menu__list[role='menu'] .radial-menu__count");
+    const counts = page.locator(
+      ".radial-menu__list[role='menu'] .radial-menu__count",
+    );
     await expect(counts.first()).toHaveText(/^\s*\(\d+\)$/);
     expect(asked.length).toBeGreaterThan(0);
     expect(asked.every((url) => url.startsWith(origin))).toBe(true);
   });
 }
 
-test("Enter expands the focused node — a real network call, not a stub", async ({ page }) => {
+test("Enter expands the focused node — a real network call, not a stub", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
 
   await stubSmallExpansionPreview(page);
@@ -316,8 +371,17 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
     id,
     type: "Person",
     properties: { family_name: id },
-    provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" },
-    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    provenance: {
+      state: "asserted",
+      sources: [],
+      first_seen: "2026-01-01T00:00:00Z",
+    },
+    handling: {
+      classification: "OFFICIAL",
+      handling_code: "P",
+      originator: "unit-1",
+      owning_unit: "unit-1",
+    },
     audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
   });
   const link = (id: string, source: string, target: string) => ({
@@ -325,8 +389,17 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
     type: "ASSOCIATE_OF",
     source,
     target,
-    provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" },
-    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    provenance: {
+      state: "asserted",
+      sources: [],
+      first_seen: "2026-01-01T00:00:00Z",
+    },
+    handling: {
+      classification: "OFFICIAL",
+      handling_code: "P",
+      originator: "unit-1",
+      owning_unit: "unit-1",
+    },
     audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
   });
   await page.route("**/*/expand", async (route) => {
@@ -344,18 +417,24 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
     });
   });
   const positions = () =>
-    page.evaluate((ids) => ids.map((id) => window.__CANVAS__?.viewportPositionOf(id)), ["n0", "n1", "n2", "n3", "n4"]);
+    page.evaluate(
+      (ids) => ids.map((id) => window.__CANVAS__?.viewportPositionOf(id)),
+      ["n0", "n1", "n2", "n3", "n4"],
+    );
   const camera = () => page.evaluate(() => window.__CANVAS__?.cameraState());
 
   // Let the first layout settle, then move the camera as an analyst would, by zooming in.
   let last = "";
   await expect
-    .poll(async () => {
-      const now = JSON.stringify(await positions());
-      const still = now === last;
-      last = now;
-      return still;
-    }, { intervals: [300], timeout: 20_000 })
+    .poll(
+      async () => {
+        const now = JSON.stringify(await positions());
+        const still = now === last;
+        last = now;
+        return still;
+      },
+      { intervals: [300], timeout: 20_000 },
+    )
     .toBe(true);
   const canvas = page.getByRole("application", { name: "Network canvas" });
   const box = (await canvas.boundingBox())!;
@@ -369,7 +448,11 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
   await canvas.focus();
   await page.keyboard.press("ArrowRight"); // focus n1
   await page.keyboard.press("Enter"); // expand it: x1 and x2 arrive beside it
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.viewportPositionOf("x2") !== null)).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__CANVAS__?.viewportPositionOf("x2") !== null),
+    )
+    .toBe(true);
   await page.waitForTimeout(1200); // past the layout's delay and its animation
 
   // The camera did not move or re-zoom by itself, and the nodes that were already settled stayed put.
@@ -379,7 +462,10 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
     expect(Math.abs(after[i]!.x - before[i]!.x), `node ${i} x`).toBeLessThan(1);
     expect(Math.abs(after[i]!.y - before[i]!.y), `node ${i} y`).toBeLessThan(1);
   }
-  registerCovered("CANVAS_ACTIONS", "an-expansion-leaves-the-view-and-the-settled-nodes-where-they-were");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "an-expansion-leaves-the-view-and-the-settled-nodes-where-they-were",
+  );
 });
 
 test("Ctrl+ArrowRight cycles the focused node forward through an existing ring", async ({
@@ -429,7 +515,9 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
           reason: "manual link",
           affected_cluster_ids: { n0: "c-linked", n1: "c-linked" },
         },
-        merged: 1, split: 0, affected: 2,
+        merged: 1,
+        split: 0,
+        affected: 2,
       }),
     });
   });
@@ -455,7 +543,10 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   // `radialMenuItems` appends after them. `RadialMenu` focuses the first item (`ASSOCIATE_OF`) on
   // open; two native Tabs (past `USES`) reach "Link to n0". Nothing here calls `preventDefault`
   // on Tab while a menu is open (`onKeyDown`'s own guard).
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Link to n0/ }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: /Link to n0/ }),
+  );
   await page.keyboard.press("Enter");
 
   await expect.poll(() => linkRequestBody !== null).toBe(true);
@@ -464,7 +555,12 @@ test("Space, then the radial list, reaches manual link — a real POST, not a st
   // ADR-124: the answer is a `ResolutionOutcome`; the canvas applies the delta inside it, so the
   // clusters it names are what the working set now holds (applying the whole answer would not).
   await expect
-    .poll(() => page.evaluate(() => [window.__CANVAS__?.clusterOf("n0"), window.__CANVAS__?.clusterOf("n1")]))
+    .poll(() =>
+      page.evaluate(() => [
+        window.__CANVAS__?.clusterOf("n0"),
+        window.__CANVAS__?.clusterOf("n1"),
+      ]),
+    )
     .toEqual(["c-linked", "c-linked"]);
   registerCovered("CANVAS_ACTIONS", "menu-item-manual-link");
 });
@@ -487,7 +583,9 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
           reason: "manual split",
           affected_cluster_ids: { n0: "c-apart-0", n1: "c-apart-1" },
         },
-        merged: 0, split: 1, affected: 2,
+        merged: 0,
+        split: 1,
+        affected: 2,
       }),
     });
   });
@@ -504,7 +602,10 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
   // Item order on n1: `ASSOCIATE_OF`, `USES` (see the manual-link test above for why there are two
   // edge-type items on a `Person` node), then "Link to n0", then "Split from n0" —
   // `radialMenuItems`' own push order. Three Tabs past the auto-focused first item reaches it.
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Split from n0/ }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: /Split from n0/ }),
+  );
   await page.keyboard.press("Enter");
 
   await expect.poll(() => splitRequestBody !== null).toBe(true);
@@ -513,7 +614,12 @@ test("the radial list also reaches Split, not only Link", async ({ page }) => {
   // ADR-124: the canvas applies the delta inside the `ResolutionOutcome`, so the clusters it names
   // are what the working set now holds.
   await expect
-    .poll(() => page.evaluate(() => [window.__CANVAS__?.clusterOf("n0"), window.__CANVAS__?.clusterOf("n1")]))
+    .poll(() =>
+      page.evaluate(() => [
+        window.__CANVAS__?.clusterOf("n0"),
+        window.__CANVAS__?.clusterOf("n1"),
+      ]),
+    )
     .toEqual(["c-apart-0", "c-apart-1"]);
   registerCovered("CANVAS_ACTIONS", "menu-item-manual-split");
 });
@@ -534,7 +640,9 @@ test("the radial list's own auto-focused first item is itself reachable and acti
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "add", nodes: [], edges: [] },
+      }),
     });
   });
 
@@ -545,12 +653,16 @@ test("the radial list's own auto-focused first item is itself reachable and acti
   await page.keyboard.press("\\");
   const menu = page.locator(".radial-menu__list[role='menu']");
   await expect(menu).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /^Associate of/ })).toBeFocused();
+  await expect(
+    page.getByRole("menuitem", { name: /^Associate of/ }),
+  ).toBeFocused();
 
   await page.keyboard.press("Enter");
 
   await expect.poll(() => expandRequestBody !== null).toBe(true);
-  expect(expandRequestBody).toMatchObject({ request: { node_ids: ["n0"], depth: 1 } });
+  expect(expandRequestBody).toMatchObject({
+    request: { node_ids: ["n0"], depth: 1 },
+  });
   await expect(menu).toBeHidden();
   registerCovered("CANVAS_ACTIONS", "menu-item-expand-by-edge-type");
 });
@@ -611,7 +723,10 @@ test("the radial list reaches Explain cluster, and the explanation actually rend
   // manual-link test above for why a `Person` node gets two of them — come before the cluster
   // item), then "Explain cluster". Two native Tabs past the auto-focused first item reaches it,
   // the same navigation shape the manual-link test above already proves.
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: "Explain cluster" }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: "Explain cluster" }),
+  );
   await page.keyboard.press("Enter");
 
   await expect.poll(() => explainRequestUrl !== null).toBe(true);
@@ -638,7 +753,11 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ cluster_id: "n2", member_node_ids: ["n2", "n3"], pairs: [] }),
+      body: JSON.stringify({
+        cluster_id: "n2",
+        member_node_ids: ["n2", "n3"],
+        pairs: [],
+      }),
     });
   });
 
@@ -647,7 +766,10 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowLeft"); // focus n2 — see the Explain-cluster test above
   await page.keyboard.press("\\");
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: "Explain cluster" }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: "Explain cluster" }),
+  );
   await page.keyboard.press("Enter");
   await expect(page.getByText("Cluster explanation")).toBeVisible();
 
@@ -657,7 +779,9 @@ test("Escape dismisses the cluster-explanation overlay, reachable by keyboard al
   registerCovered("CANVAS_ACTIONS", "overlay-dismiss-cluster-explain");
 });
 
-test("the radial list reaches View messages on an Endpoint node", async ({ page }) => {
+test("the radial list reaches View messages on an Endpoint node", async ({
+  page,
+}) => {
   // `08_ACCEPTANCE_SCENARIOS.md` B6 / Phase 6a Stage 4: single-node trigger, `Endpoint`-type
   // only — `n4` is the harness's own `Endpoint` fixture, one `USES` hop past `n3`.
   await page.goto("/keyboard/harness.html");
@@ -685,7 +809,9 @@ test("the radial list reaches View messages on an Endpoint node", async ({ page 
   // messages", the only item after it (no other edge type, no cluster, no selected pair).
   await expect(page.getByRole("menuitem", { name: "USES" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("menuitem", { name: "View messages" })).toBeFocused();
+  await expect(
+    page.getByRole("menuitem", { name: "View messages" }),
+  ).toBeFocused();
   await page.keyboard.press("Enter");
 
   await expect
@@ -694,7 +820,9 @@ test("the radial list reaches View messages on an Endpoint node", async ({ page 
   registerCovered("CANVAS_ACTIONS", "menu-item-view-messages");
 });
 
-test("the radial list reaches Mark for suppression, and the mark toggles", async ({ page }) => {
+test("the radial list reaches Mark for suppression, and the mark toggles", async ({
+  page,
+}) => {
   // **Owner ruling R7 (TENTATIVE, 27 September 2026) — step one of two-step retraction, proven
   // reachable by keyboard.** `CLAUDE.md` rule 13: a canvas action is not reachable-by-keyboard
   // until this file has a case proving it end to end, and its own author owns adding that case in
@@ -703,23 +831,26 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
   // Both directions are asserted, because "reversible" is R7's own word for it and a mark that
   // cannot be taken off is a different feature from the one that was ruled.
   const calls: { method: string; body: unknown }[] = [];
-  await page.route("**/v1/investigations/*/nodes/*/suppression-mark", async (route) => {
-    calls.push({
-      method: route.request().method(),
-      body: route.request().postDataJSON?.() ?? null,
-    });
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        node_id: "n4",
-        investigation_id: "inv-1",
-        marked_by: "analyst-1",
-        marked_at: "2026-09-27T00:00:00Z",
-        reason: "Marked from the canvas",
-      }),
-    });
-  });
+  await page.route(
+    "**/v1/investigations/*/nodes/*/suppression-mark",
+    async (route) => {
+      calls.push({
+        method: route.request().method(),
+        body: route.request().postDataJSON?.() ?? null,
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          node_id: "n4",
+          investigation_id: "inv-1",
+          marked_by: "analyst-1",
+          marked_at: "2026-09-27T00:00:00Z",
+          reason: "Marked from the canvas",
+        }),
+      });
+    },
+  );
 
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -745,7 +876,9 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
   await canvas.focus();
   await page.keyboard.press("\\");
   await expect(menu).toBeVisible();
-  const remove = page.getByRole("menuitem", { name: "Remove suppression mark" });
+  const remove = page.getByRole("menuitem", {
+    name: "Remove suppression mark",
+  });
   await expect(
     remove,
     "the item did not flip after marking, so an analyst has no keyboard route back",
@@ -761,11 +894,15 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
 // ADR-105 Amendment 1: Set picture… on a node whose type a picture may depict selects the node
 // and hands over to the Inspector's Picture part — proven end to end, since the walkthrough is
 // hardcoded and cannot discover a new action on its own (rule 13).
-test("Set picture… on a node's menu, by keyboard, selects it and asks for the Picture part", async ({ page }) => {
+test("Set picture… on a node's menu, by keyboard, selects it and asks for the Picture part", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  const focused = await page.evaluate(() => window.__KEYBOARD__?.focused ?? null);
+  const focused = await page.evaluate(
+    () => window.__KEYBOARD__?.focused ?? null,
+  );
   await page.keyboard.press("\\");
   const menu = page.locator(".radial-menu__list[role='menu']");
   await expect(menu).toBeVisible();
@@ -774,9 +911,13 @@ test("Set picture… on a node's menu, by keyboard, selects it and asks for the 
   await item.focus();
   await page.keyboard.press("Enter");
   await expect
-    .poll(() => page.evaluate(() => window.__KEYBOARD__?.pictureRequested ?? null))
+    .poll(() =>
+      page.evaluate(() => window.__KEYBOARD__?.pictureRequested ?? null),
+    )
     .toBe(focused);
-  expect(await page.evaluate(() => window.__KEYBOARD__?.selection ?? [])).toEqual([focused]);
+  expect(
+    await page.evaluate(() => window.__KEYBOARD__?.selection ?? []),
+  ).toEqual([focused]);
   registerCovered("CANVAS_ACTIONS", "menu-item-set-picture");
 });
 
@@ -792,10 +933,21 @@ function pathNode(id: string): unknown {
     properties: { family_name: id },
     provenance: {
       state: "asserted",
-      sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }],
+      sources: [
+        {
+          document_id: "fixture-doc",
+          locator: "p.1",
+          excerpt_hash: "a".repeat(64),
+        },
+      ],
       first_seen: "2026-01-01T00:00:00Z",
     },
-    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    handling: {
+      classification: "OFFICIAL",
+      handling_code: "P",
+      originator: "unit-1",
+      owning_unit: "unit-1",
+    },
     audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
   };
 }
@@ -808,17 +960,30 @@ function pathEdge(id: string, source: string, target: string): unknown {
     target,
     provenance: {
       state: "asserted",
-      sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }],
+      sources: [
+        {
+          document_id: "fixture-doc",
+          locator: "p.1",
+          excerpt_hash: "a".repeat(64),
+        },
+      ],
       first_seen: "2026-01-01T00:00:00Z",
     },
-    handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+    handling: {
+      classification: "OFFICIAL",
+      handling_code: "P",
+      originator: "unit-1",
+      owning_unit: "unit-1",
+    },
     audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
   };
 }
 
 // Shared by all three pathfinder tests below: builds the ring `{n0, n3}` (three hops apart in
 // this file's own `n0`—`n1`—`n2`—`n3` chain) and opens the radial menu on `n3`, the focused node.
-async function selectN0AndN3ThenOpenMenu(page: import("@playwright/test").Page): Promise<void> {
+async function selectN0AndN3ThenOpenMenu(
+  page: import("@playwright/test").Page,
+): Promise<void> {
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // ring: {n0}
   await page.keyboard.press("ArrowRight"); // focus n1
@@ -834,7 +999,10 @@ async function selectN0AndN3ThenOpenMenu(page: import("@playwright/test").Page):
   // Item order on `n3` (a `Person`): `ASSOCIATE_OF`, `USES` (both qualify, same reasoning the
   // manual-link test above already gives), "Link to n0", "Split from n0", "Find paths to n0" —
   // `radialMenuItems`' own push order. Auto-focused first item; four Tabs reach the last one.
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Find paths to n0/ }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: /Find paths to n0/ }),
+  );
 }
 
 test("the radial list reaches Find paths, and a real found path renders in its own overlay", async ({
@@ -850,8 +1018,17 @@ test("the radial list reaches Find paths, and a real found path renders in its o
       contentType: "application/json",
       body: JSON.stringify([
         {
-          nodes: [pathNode("n3"), pathNode("n2"), pathNode("n1"), pathNode("n0")],
-          edges: [pathEdge("e2", "n2", "n3"), pathEdge("e1", "n1", "n2"), pathEdge("e0", "n0", "n1")],
+          nodes: [
+            pathNode("n3"),
+            pathNode("n2"),
+            pathNode("n1"),
+            pathNode("n0"),
+          ],
+          edges: [
+            pathEdge("e2", "n2", "n3"),
+            pathEdge("e1", "n1", "n2"),
+            pathEdge("e0", "n0", "n1"),
+          ],
           length: 3,
         },
       ]),
@@ -879,11 +1056,24 @@ test("the pathfinder result's own selector cycles which of several found paths i
       contentType: "application/json",
       body: JSON.stringify([
         {
-          nodes: [pathNode("n3"), pathNode("n2"), pathNode("n1"), pathNode("n0")],
-          edges: [pathEdge("e2", "n2", "n3"), pathEdge("e1", "n1", "n2"), pathEdge("e0", "n0", "n1")],
+          nodes: [
+            pathNode("n3"),
+            pathNode("n2"),
+            pathNode("n1"),
+            pathNode("n0"),
+          ],
+          edges: [
+            pathEdge("e2", "n2", "n3"),
+            pathEdge("e1", "n1", "n2"),
+            pathEdge("e0", "n0", "n1"),
+          ],
           length: 3,
         },
-        { nodes: [pathNode("n1"), pathNode("n0")], edges: [pathEdge("e0", "n0", "n1")], length: 1 },
+        {
+          nodes: [pathNode("n1"), pathNode("n0")],
+          edges: [pathEdge("e0", "n0", "n1")],
+          length: 1,
+        },
       ]),
     });
   });
@@ -914,8 +1104,17 @@ test("Escape dismisses the pathfinder result overlay, reachable by keyboard alon
       contentType: "application/json",
       body: JSON.stringify([
         {
-          nodes: [pathNode("n3"), pathNode("n2"), pathNode("n1"), pathNode("n0")],
-          edges: [pathEdge("e2", "n2", "n3"), pathEdge("e1", "n1", "n2"), pathEdge("e0", "n0", "n1")],
+          nodes: [
+            pathNode("n3"),
+            pathNode("n2"),
+            pathNode("n1"),
+            pathNode("n0"),
+          ],
+          edges: [
+            pathEdge("e2", "n2", "n3"),
+            pathEdge("e1", "n1", "n2"),
+            pathEdge("e0", "n0", "n1"),
+          ],
           length: 3,
         },
       ]),
@@ -938,13 +1137,19 @@ test("a failed path search announces an error, distinguishable from 'No path fou
   await page.goto("/keyboard/harness.html");
 
   await page.route("**/*/v1/investigations/*/paths", async (route) => {
-    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "internal error",
+    });
   });
 
   await selectN0AndN3ThenOpenMenu(page);
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("alert")).toHaveText("Path search failed (500). Try again.");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Path search failed (500). Try again.",
+  );
   // Not `pathResult`'s own "No path found" — the search did not complete, a different finding.
   await expect(page.getByText("No path found")).not.toBeVisible();
 
@@ -962,7 +1167,11 @@ test("a failed manual link announces an error and does not silently leave the an
   await page.goto("/keyboard/harness.html");
 
   await page.route("**/*/resolution/link", async (route) => {
-    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "internal error",
+    });
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -971,10 +1180,15 @@ test("a failed manual link announces an error and does not silently leave the an
   await page.keyboard.press("Space"); // ring: {n0, n1}
 
   await page.keyboard.press("\\");
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: /Link to n0/ }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: /Link to n0/ }),
+  );
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("alert")).toHaveText("Link failed (500). Not recorded — try again.");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Link failed (500). Not recorded — try again.",
+  );
 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
@@ -988,14 +1202,20 @@ test("a failed expand announces an error instead of leaving the analyst to wonde
 
   await stubSmallExpansionPreview(page);
   await page.route("**/*/expand", async (route) => {
-    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "internal error",
+    });
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
   await page.keyboard.press("Enter"); // direct Enter-expand, no menu open — the fallback anchor path
 
-  await expect(page.getByRole("alert")).toHaveText("Expand failed (500). Try again.");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Expand failed (500). Try again.",
+  );
 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
@@ -1008,7 +1228,11 @@ test("a failed explain-cluster announces an error rather than leaving the analys
   await page.goto("/keyboard/harness.html");
 
   await page.route("**/*/resolution/explain/*", async (route) => {
-    await route.fulfill({ status: 500, contentType: "text/plain", body: "internal error" });
+    await route.fulfill({
+      status: 500,
+      contentType: "text/plain",
+      body: "internal error",
+    });
   });
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1020,10 +1244,15 @@ test("a failed explain-cluster announces an error rather than leaving the analys
   // Tab until the item, never a counted number of Tabs: a new menu item (Set picture…, ADR-105
   // Amendment 1) broke the two-Tab version of this walk, exactly the fragility the action
   // registry's own comment warns about.
-  await tabUntilFocused(page, page.getByRole("menuitem", { name: "Explain cluster" }));
+  await tabUntilFocused(
+    page,
+    page.getByRole("menuitem", { name: "Explain cluster" }),
+  );
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("alert")).toHaveText("Explain cluster failed (500). Try again.");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Explain cluster failed (500). Try again.",
+  );
 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
@@ -1045,7 +1274,9 @@ async function chooseOption(
   chars = 4,
 ): Promise<void> {
   await expect(select).toBeFocused();
-  const label = ((await select.locator(`option[value="${value}"]`).textContent()) ?? "").trim();
+  const label = (
+    (await select.locator(`option[value="${value}"]`).textContent()) ?? ""
+  ).trim();
   if (label === "") throw new Error(`no option with value ${value}`);
   // The browser joins letters typed within about a second into one search, so a second choice on
   // the same select must not run on from the first.
@@ -1054,27 +1285,44 @@ async function chooseOption(
   await expect(select).toHaveValue(value);
 }
 
-async function tabTo(page: Page, control: ReturnType<Page["getByRole"]>, limit = 24): Promise<void> {
+async function tabTo(
+  page: Page,
+  control: ReturnType<Page["getByRole"]>,
+  limit = 24,
+): Promise<void> {
   for (let presses = 0; presses < limit; presses++) {
-    if (await control.evaluate((el) => el === document.activeElement).catch(() => false)) return;
+    if (
+      await control
+        .evaluate((el) => el === document.activeElement)
+        .catch(() => false)
+    )
+      return;
     await page.keyboard.press("Tab");
   }
   await expect(control).toBeFocused();
 }
 
-test("Delete takes the selected nodes out of the view, through a real DELETE", async ({ page }) => {
+test("Delete takes the selected nodes out of the view, through a real DELETE", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   let body: unknown = null;
   await page.route("**/*/investigations/*/nodes", async (route) => {
     body = route.request().postDataJSON();
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 5 }) });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ seq: 5 }),
+    });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0 selected
   await page.keyboard.press("Delete");
 
   await expect.poll(() => body).toEqual({ node_ids: ["n0"] });
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([]);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection))
+    .toEqual([]);
   registerCovered("CANVAS_ACTIONS", "delete-removes-selected-nodes");
 });
 
@@ -1085,55 +1333,87 @@ test("in an opened view the canvas offers nothing that changes the case, and say
   await page.route("**/*/investigations/*/**", async (route) => {
     // Reads sent as POST are not writes: the pictures looked up and an expansion's preview counts.
     const path = new URL(route.request().url()).pathname;
-    const read = route.request().method() === "GET" || /\/(pictures|expand\/preview)$/.test(path);
+    const read =
+      route.request().method() === "GET" ||
+      /\/(pictures|expand\/preview)$/.test(path);
     if (!read) writes.push(`${route.request().method()} ${path}`);
-    await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "{}",
+    });
   });
   await page.goto("/keyboard/harness.html?lens=1");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0 selected
   const bar = page.getByRole("toolbar", { name: "Selection" });
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole("button", { name: "Save as a view" })).toBeVisible();
+  await expect(
+    bar.getByRole("button", { name: "Save as a view" }),
+  ).toBeVisible();
   for (const name of ["Expand", "Remove from view", "Show links among these"]) {
     await expect(bar.getByRole("button", { name })).toHaveCount(0);
   }
   for (const name of ["Clear view", "Add files", "Show links among all"]) {
-    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+      0,
+    );
   }
   // A node's menu offers only what changes nothing: no link type to expand by, no mark, no files.
   await page.keyboard.press("\\");
   const menu = page.getByRole("menuitem");
   await expect(menu.first()).toBeVisible();
   const offered = await menu.allTextContents();
-  expect(offered.every((label) => /^Save selected \(1\) as a view/.test(label) || /Read full screen|View messages|Expand group/.test(label))).toBe(true);
+  expect(
+    offered.every(
+      (label) =>
+        /^Save selected \(1\) as a view/.test(label) ||
+        /Read full screen|View messages|Expand group/.test(label),
+    ),
+  ).toBe(true);
   await page.keyboard.press("Escape");
   // Delete, asked by key, is said and not done.
   await canvas.focus();
   await page.keyboard.press("Delete");
-  await expect(page.getByText("This is a view: nothing in it changes the case. Go back to the case to change it.")).toBeVisible();
+  await expect(
+    page.getByText(
+      "This is a view: nothing in it changes the case. Go back to the case to change it.",
+    ),
+  ).toBeVisible();
   expect(writes).toEqual([]);
-  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([
+    "n0",
+  ]);
 });
 
-test("Clear view asks first, and clears only after Enter on the confirmation", async ({ page }) => {
+test("Clear view asks first, and clears only after Enter on the confirmation", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   let body: { node_ids: string[] } | null = null;
   await page.route("**/*/investigations/*/nodes", async (route) => {
     body = route.request().postDataJSON();
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ seq: 6 }) });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ seq: 6 }),
+    });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
   await tabTo(page, page.getByRole("button", { name: "Clear view" }));
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("alertdialog", { name: "Clear the view" })).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog", { name: "Clear the view" }),
+  ).toBeVisible();
   expect(body).toBeNull();
 
   await tabTo(page, page.getByRole("button", { name: /^Clear all/ }));
   await page.keyboard.press("Enter");
 
-  await expect.poll(() => body?.node_ids.slice().sort()).toEqual(["n0", "n1", "n2", "n3", "n4", "n5"]);
+  await expect
+    .poll(() => body?.node_ids.slice().sort())
+    .toEqual(["n0", "n1", "n2", "n3", "n4", "n5"]);
   registerCovered("CANVAS_ACTIONS", "clear-view-by-keyboard");
 });
 
@@ -1141,13 +1421,25 @@ test("Save as a view saves the selected nodes as a private view of the case, by 
   page,
 }) => {
   await page.goto("/keyboard/harness.html");
-  let body: { name?: string; node_ids?: string[]; layout?: Record<string, unknown> } | null = null;
+  let body: {
+    name?: string;
+    node_ids?: string[];
+    layout?: Record<string, unknown>;
+  } | null = null;
   await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "view-1", case_id: "keyboard-fixture", name: "Selection of 1 node", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+      body: JSON.stringify({
+        id: "view-1",
+        case_id: "keyboard-fixture",
+        name: "Selection of 1 node",
+        created_by: "k",
+        created_at: "2026-11-08T10:00:00Z",
+        shared: false,
+        chosen: 1,
+      }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1167,12 +1459,18 @@ test("Save as a view saves the selected nodes as a private view of the case, by 
     .poll(() =>
       page.evaluate(
         () =>
-          (window as unknown as { __KEYBOARD__?: { savedView?: string | null } }).__KEYBOARD__
-            ?.savedView,
+          (
+            window as unknown as {
+              __KEYBOARD__?: { savedView?: string | null };
+            }
+          ).__KEYBOARD__?.savedView,
       ),
     )
     .toBe("view-1");
-  registerCovered("CANVAS_ACTIONS", "save-selected-as-a-view-from-the-selection-bar");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "save-selected-as-a-view-from-the-selection-bar",
+  );
 });
 
 test("a selected node's own menu offers Save selected as a view for the whole selection (ADR-144 decision 4)", async ({
@@ -1185,16 +1483,28 @@ test("a selected node's own menu offers Save selected as a view for the whole se
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "view-2", case_id: "keyboard-fixture", name: "Selection of 2 nodes", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+      body: JSON.stringify({
+        id: "view-2",
+        case_id: "keyboard-fixture",
+        name: "Selection of 2 nodes",
+        created_by: "k",
+        created_at: "2026-11-08T10:00:00Z",
+        shared: false,
+        chosen: 1,
+      }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0 selected and focused
   await page.keyboard.press("Control+Shift+ArrowRight"); // focus the next node in the working set
   await page.keyboard.press("Space"); // add it to the selection: two selected, the focused one among them
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection?.length)).toBe(2);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection?.length))
+    .toBe(2);
   await page.keyboard.press("\\");
-  const item = page.getByRole("menuitem", { name: /^Save selected \(2\) as a view/ });
+  const item = page.getByRole("menuitem", {
+    name: /^Save selected \(2\) as a view/,
+  });
   await expect(item).toBeVisible();
   await item.focus();
   await page.keyboard.press("Enter");
@@ -1203,7 +1513,10 @@ test("a selected node's own menu offers Save selected as a view for the whole se
   await expect.poll(() => body).not.toBeNull();
   expect(body!.node_ids).toEqual(expect.arrayContaining(["n0"]));
   expect(body!.node_ids).toHaveLength(2);
-  registerCovered("CANVAS_ACTIONS", "save-selected-as-a-view-from-a-selected-nodes-menu");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "save-selected-as-a-view-from-a-selected-nodes-menu",
+  );
 });
 
 // --- Select what is lit (ADR-128 decision 2, B3) ----------------------------------------------
@@ -1215,13 +1528,22 @@ test("a selected node's own menu offers Save selected as a view for the whole se
 
 const LIT_HISTOGRAM = {
   bucketing: "fixed_interval",
-  buckets: [{ start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", count: 1 }],
+  buckets: [
+    { start: "2026-01-01T00:00:00Z", end: "2026-01-02T00:00:00Z", count: 1 },
+  ],
   total: 1,
 };
 
-async function stubTheTimelineReads(page: Page, lit: Record<string, string>): Promise<void> {
+async function stubTheTimelineReads(
+  page: Page,
+  lit: Record<string, string>,
+): Promise<void> {
   await page.route("**/*/v1/analytics/histogram", async (route) => {
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(LIT_HISTOGRAM) });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(LIT_HISTOGRAM),
+    });
   });
   await page.route("**/*/v1/analytics/first-seen", async (route) => {
     await route.fulfill({
@@ -1232,9 +1554,18 @@ async function stubTheTimelineReads(page: Page, lit: Record<string, string>): Pr
   });
 }
 
-async function shiftTabTo(page: Page, control: Locator, limit = 24): Promise<void> {
+async function shiftTabTo(
+  page: Page,
+  control: Locator,
+  limit = 24,
+): Promise<void> {
   for (let presses = 0; presses < limit; presses++) {
-    if (await control.evaluate((el) => el === document.activeElement).catch(() => false)) return;
+    if (
+      await control
+        .evaluate((el) => el === document.activeElement)
+        .catch(() => false)
+    )
+      return;
     await page.keyboard.press("Shift+Tab");
   }
   await expect(control).toBeFocused();
@@ -1242,9 +1573,19 @@ async function shiftTabTo(page: Page, control: Locator, limit = 24): Promise<voi
 
 /** Sets the window by keyboard alone: the timeline's overflow menu, Set exact dates, then the two
  * boxes, each committed by leaving it. Leaves focus on the end box. */
-async function setExactDatesByKeyboard(page: Page, from: string, to: string): Promise<void> {
-  await expect(page.getByRole("button", { name: "More timeline options" })).toBeVisible();
-  await tabTo(page, page.getByRole("button", { name: "More timeline options" }), 60);
+async function setExactDatesByKeyboard(
+  page: Page,
+  from: string,
+  to: string,
+): Promise<void> {
+  await expect(
+    page.getByRole("button", { name: "More timeline options" }),
+  ).toBeVisible();
+  await tabTo(
+    page,
+    page.getByRole("button", { name: "More timeline options" }),
+    60,
+  );
   await page.keyboard.press("Enter");
   await tabTo(page, page.getByRole("button", { name: "Set exact dates" }), 6);
   await page.keyboard.press("Enter");
@@ -1257,7 +1598,11 @@ async function setExactDatesByKeyboard(page: Page, from: string, to: string): Pr
 
 async function selectWhatIsLitByKeyboard(page: Page): Promise<void> {
   await page.keyboard.press("Tab"); // leaving the end box commits the window
-  await shiftTabTo(page, page.getByRole("button", { name: "Select what is lit" }), 12);
+  await shiftTabTo(
+    page,
+    page.getByRole("button", { name: "Select what is lit" }),
+    12,
+  );
   await page.keyboard.press("Enter");
 }
 
@@ -1267,35 +1612,54 @@ test("Set exact dates, Select what is lit, then Save as a view keeps the lit sli
   page,
 }) => {
   await stubTheTimelineReads(page, LIT_LINKS);
-  let body: { node_ids: string[]; name?: string; window?: unknown } | null = null;
+  let body: { node_ids: string[]; name?: string; window?: unknown } | null =
+    null;
   await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "view-lit-1", case_id: "keyboard-fixture", name: "5 Jan – 1 May 2026, selected", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+      body: JSON.stringify({
+        id: "view-lit-1",
+        case_id: "keyboard-fixture",
+        name: "5 Jan – 1 May 2026, selected",
+        created_by: "k",
+        created_at: "2026-11-08T10:00:00Z",
+        shared: false,
+        chosen: 1,
+      }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=lit");
-  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await setExactDatesByKeyboard(
+    page,
+    "2026-01-05T00:00:00Z",
+    "2026-05-01T00:00:00Z",
+  );
   await selectWhatIsLitByKeyboard(page);
 
   // The lit nodes are the ones a lit link touches; n3 and n4 are joined only by links with no event
   // in the window, and n5 by none, so they are not selected.
   await expect
-    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()))
+    .poll(() =>
+      page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()),
+    )
     .toEqual(["n0", "n1", "n2"]);
   await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText(
     "undated links are not included",
   );
   // The window's end is lit, so the note names the day it falls on.
-  await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText("Lit in 5 Jan – 1 May 2026");
+  await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText(
+    "Lit in 5 Jan – 1 May 2026",
+  );
 
   await page.getByRole("application", { name: "Network canvas" }).focus();
   await tabTo(page, page.getByRole("button", { name: "Save as a view" }));
   await page.keyboard.press("Enter");
   // Offered under the window's name.
-  await expect(page.getByLabel("View name")).toHaveValue("5 Jan – 1 May 2026, selected");
+  await expect(page.getByLabel("View name")).toHaveValue(
+    "5 Jan – 1 May 2026, selected",
+  );
   await page.keyboard.press("Enter");
 
   await expect.poll(() => body).not.toBeNull();
@@ -1309,63 +1673,115 @@ test("Set exact dates, Select what is lit, then Save as a view keeps the lit sli
     .poll(() =>
       page.evaluate(
         () =>
-          (window as unknown as { __KEYBOARD__?: { savedView?: string | null } }).__KEYBOARD__
-            ?.savedView,
+          (
+            window as unknown as {
+              __KEYBOARD__?: { savedView?: string | null };
+            }
+          ).__KEYBOARD__?.savedView,
       ),
     )
     .toBe("view-lit-1");
-  registerCovered("CANVAS_ACTIONS", "select-what-is-lit-then-save-as-a-view-by-keyboard");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "select-what-is-lit-then-save-as-a-view-by-keyboard",
+  );
 });
 
-test("Undo select what is lit gives back the selection that was there before, once", async ({ page }) => {
+test("Undo select what is lit gives back the selection that was there before, once", async ({
+  page,
+}) => {
   await stubTheTimelineReads(page, LIT_LINKS);
   await page.goto("/keyboard/harness.html?fixture=lit");
   await page.getByRole("application", { name: "Network canvas" }).focus(); // n0 selected
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
-  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection))
+    .toEqual(["n0"]);
+  await setExactDatesByKeyboard(
+    page,
+    "2026-01-05T00:00:00Z",
+    "2026-05-01T00:00:00Z",
+  );
   await selectWhatIsLitByKeyboard(page);
   await expect
-    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()))
+    .poll(() =>
+      page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()),
+    )
     .toEqual(["n0", "n1", "n2"]);
 
   await page.getByRole("application", { name: "Network canvas" }).focus();
-  await tabTo(page, page.getByRole("button", { name: "Undo select what is lit" }));
+  await tabTo(
+    page,
+    page.getByRole("button", { name: "Undo select what is lit" }),
+  );
   await page.keyboard.press("Enter");
 
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection))
+    .toEqual(["n0"]);
   // One level: with the earlier selection back, there is nothing further to undo.
-  await expect(page.getByRole("button", { name: "Undo select what is lit" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Undo select what is lit" }),
+  ).toHaveCount(0);
   registerCovered("CANVAS_ACTIONS", "undo-select-what-is-lit-by-keyboard");
 });
 
-test("a window that lights nothing says so and leaves the selection as it was", async ({ page }) => {
+test("a window that lights nothing says so and leaves the selection as it was", async ({
+  page,
+}) => {
   await stubTheTimelineReads(page, {});
   await page.goto("/keyboard/harness.html?fixture=lit");
   await page.getByRole("application", { name: "Network canvas" }).focus(); // n0 selected
-  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await setExactDatesByKeyboard(
+    page,
+    "2026-01-05T00:00:00Z",
+    "2026-05-01T00:00:00Z",
+  );
   await selectWhatIsLitByKeyboard(page);
 
-  await expect(page.getByRole("dialog")).toContainText("Nothing is lit in this window");
-  await expect(page.getByRole("dialog")).toContainText("undated links are not included");
-  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  await expect(page.getByRole("dialog")).toContainText(
+    "Nothing is lit in this window",
+  );
+  await expect(page.getByRole("dialog")).toContainText(
+    "undated links are not included",
+  );
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([
+    "n0",
+  ]);
 });
 
-test("a window changed after Select what is lit names the view plainly and keeps the window now", async ({ page }) => {
+test("a window changed after Select what is lit names the view plainly and keeps the window now", async ({
+  page,
+}) => {
   await stubTheTimelineReads(page, LIT_LINKS);
-  let body: { node_ids: string[]; name?: string; window?: unknown } | null = null;
+  let body: { node_ids: string[]; name?: string; window?: unknown } | null =
+    null;
   await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "view-lit-2", case_id: "keyboard-fixture", name: "Selection of 3 nodes", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
+      body: JSON.stringify({
+        id: "view-lit-2",
+        case_id: "keyboard-fixture",
+        name: "Selection of 3 nodes",
+        created_by: "k",
+        created_at: "2026-11-08T10:00:00Z",
+        shared: false,
+        chosen: 1,
+      }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=lit");
-  await setExactDatesByKeyboard(page, "2026-01-05T00:00:00Z", "2026-05-01T00:00:00Z");
+  await setExactDatesByKeyboard(
+    page,
+    "2026-01-05T00:00:00Z",
+    "2026-05-01T00:00:00Z",
+  );
   await selectWhatIsLitByKeyboard(page);
   await expect
-    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()))
+    .poll(() =>
+      page.evaluate(() => window.__KEYBOARD__?.selection.slice().sort()),
+    )
     .toEqual(["n0", "n1", "n2"]);
   // The window moves on, so what was lit no longer describes it.
   await page.getByLabel("Brush window end").focus();
@@ -1376,19 +1792,30 @@ test("a window changed after Select what is lit names the view plainly and keeps
   await page.getByRole("application", { name: "Network canvas" }).focus();
   await tabTo(page, page.getByRole("button", { name: "Save as a view" }));
   await page.keyboard.press("Enter");
-  await expect(page.getByLabel("View name")).toHaveValue("Selection of 3 nodes");
+  await expect(page.getByLabel("View name")).toHaveValue(
+    "Selection of 3 nodes",
+  );
   await page.keyboard.press("Enter");
 
   await expect.poll(() => body).not.toBeNull();
   expect(body!.node_ids.slice().sort()).toEqual(["n0", "n1", "n2"]);
   expect(body!.name).toBe("Selection of 3 nodes");
-  expect(body!.window).toEqual({ valid_from: "2026-01-05T00:00:00Z", valid_to: "2026-04-01T00:00:00Z" });
+  expect(body!.window).toEqual({
+    valid_from: "2026-01-05T00:00:00Z",
+    valid_to: "2026-04-01T00:00:00Z",
+  });
 });
 
-test("Save as a view says a refusal on the form, and saves nothing", async ({ page }) => {
+test("Save as a view says a refusal on the form, and saves nothing", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await page.route("**/*/investigations/*/views", async (route) => {
-    await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ detail: "forbidden" }) });
+    await route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "forbidden" }),
+    });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
@@ -1396,19 +1823,21 @@ test("Save as a view says a refusal on the form, and saves nothing", async ({ pa
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("dialog", { name: "Save as a view" })).toContainText(
-    "Saving a view needs the right to work this case.",
-  );
+  await expect(
+    page.getByRole("dialog", { name: "Save as a view" }),
+  ).toContainText("Saving a view needs the right to work this case.");
   expect(
     await page.evaluate(
       () =>
-        (window as unknown as { __KEYBOARD__?: { savedView?: string | null } }).__KEYBOARD__
-            ?.savedView,
+        (window as unknown as { __KEYBOARD__?: { savedView?: string | null } })
+          .__KEYBOARD__?.savedView,
     ),
   ).toBeNull();
 });
 
-test("the Layout menu is reached by Tab and changed by the arrow keys", async ({ page }) => {
+test("the Layout menu is reached by Tab and changed by the arrow keys", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
@@ -1419,7 +1848,9 @@ test("the Layout menu is reached by Tab and changed by the arrow keys", async ({
   registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-layout");
 });
 
-test("the Layout menu reaches the Force-directed tree by the arrow keys, and it spreads the nodes out", async ({ page }) => {
+test("the Layout menu reaches the Force-directed tree by the arrow keys, and it spreads the nodes out", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
@@ -1431,11 +1862,16 @@ test("the Layout menu reaches the Force-directed tree by the arrow keys, and it 
   const ids = ["n0", "n1", "n2", "n4", "n5"];
   await expect
     .poll(async () => {
-      const at = await page.evaluate((nodes) => nodes.map((id) => window.__CANVAS__?.viewportPositionOf(id) ?? null), ids);
+      const at = await page.evaluate(
+        (nodes) =>
+          nodes.map((id) => window.__CANVAS__?.viewportPositionOf(id) ?? null),
+        ids,
+      );
       if (at.some((p) => p === null)) return false;
       for (let i = 0; i < at.length; i++)
         for (let j = i + 1; j < at.length; j++)
-          if (Math.hypot(at[i]!.x - at[j]!.x, at[i]!.y - at[j]!.y) < 5) return false;
+          if (Math.hypot(at[i]!.x - at[j]!.x, at[i]!.y - at[j]!.y) < 5)
+            return false;
       return true;
     })
     .toBe(true);
@@ -1460,56 +1896,89 @@ test("the Layout menu reaches Clustered bubbles, draws a bubble for each group, 
   await chooseOption(page, by, "community");
   await expect(overlay).toContainText("Community 1");
   await expect(overlay).not.toContainText("Endpoint (1)");
-  registerCovered("CANVAS_ACTIONS", "layout-menu-chooses-clustered-bubbles-and-what-they-group-by");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "layout-menu-chooses-clustered-bubbles-and-what-they-group-by",
+  );
 });
 
-test("L steps through the focused node's links and Shift+L goes back, without a mouse", async ({ page }) => {
+test("L steps through the focused node's links and Shift+L goes back, without a mouse", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0
   await page.keyboard.press("ArrowRight"); // n1: links e0 and e1
   await page.keyboard.press("l");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge))
+    .toBe("e0");
   await page.keyboard.press("l");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e1");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge))
+    .toBe("e1");
   await page.keyboard.press("Shift+L");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge))
+    .toBe("e0");
   // Selecting a link leaves no node selected, so the Inspector shows one thing.
   expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual([]);
   // Choosing a node ends the link selection, so the Inspector never shows both.
   await page.keyboard.press("Space");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n1"]);
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBeNull();
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection))
+    .toEqual(["n1"]);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge))
+    .toBeNull();
   registerCovered("CANVAS_ACTIONS", "l-steps-through-the-focused-nodes-links");
 });
 
-test("Delete hides a selected link, and the Show hidden links button brings it back", async ({ page }) => {
+test("Delete hides a selected link, and the Show hidden links button brings it back", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("l");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBe("e0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge))
+    .toBe("e0");
 
   await page.keyboard.press("Delete");
-  await expect(page.getByRole("button", { name: "Show hidden links (1)" })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge)).toBeNull();
+  await expect(
+    page.getByRole("button", { name: "Show hidden links (1)" }),
+  ).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selectedEdge))
+    .toBeNull();
   registerCovered("CANVAS_ACTIONS", "delete-hides-selected-link");
 
-  await tabTo(page, page.getByRole("button", { name: "Show hidden links (1)" }));
+  await tabTo(
+    page,
+    page.getByRole("button", { name: "Show hidden links (1)" }),
+  );
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: /Show hidden links/ })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Show hidden links/ }),
+  ).toHaveCount(0);
   registerCovered("CANVAS_ACTIONS", "show-hidden-links-by-keyboard");
 });
 
-test("a very large expansion asks first; Escape cancels it and nothing is added", async ({ page }) => {
+test("a very large expansion asks first; Escape cancels it and nothing is added", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   let expandRequested = false;
   await page.route("**/*/expand/preview", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+      body: JSON.stringify({
+        candidate_node_count: 1200,
+        candidate_edge_count: 0,
+      }),
     });
   });
   await page.route("**/*/expand", async (route) => {
@@ -1517,7 +1986,9 @@ test("a very large expansion asks first; Escape cancels it and nothing is added"
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "add", nodes: [], edges: [] },
+      }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1525,21 +1996,30 @@ test("a very large expansion asks first; Escape cancels it and nothing is added"
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog", { name: "Large expansion" }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeHidden();
+  await expect(
+    page.getByRole("alertdialog", { name: "Large expansion" }),
+  ).toBeHidden();
   expect(expandRequested).toBe(false);
   registerCovered("CANVAS_ACTIONS", "overlay-dismiss-large-expansion");
 });
 
-test("a very large expansion can be accepted by keyboard, and only then does it go ahead", async ({ page }) => {
+test("a very large expansion can be accepted by keyboard, and only then does it go ahead", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   let expandBody: unknown = null;
   await page.route("**/*/expand/preview", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+      body: JSON.stringify({
+        candidate_node_count: 1200,
+        candidate_edge_count: 0,
+      }),
     });
   });
   await page.route("**/*/expand", async (route) => {
@@ -1547,19 +2027,25 @@ test("a very large expansion can be accepted by keyboard, and only then does it 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "add", nodes: [], edges: [] },
+      }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  await expect(
+    page.getByRole("alertdialog", { name: "Large expansion" }),
+  ).toBeVisible();
   expect(expandBody).toBeNull();
 
   await tabTo(page, page.getByRole("button", { name: /^Add all/ }));
   await page.keyboard.press("Enter");
-  await expect.poll(() => expandBody).toMatchObject({ request: { node_ids: ["n1"], depth: 1 } });
+  await expect
+    .poll(() => expandBody)
+    .toMatchObject({ request: { node_ids: ["n1"], depth: 1 } });
   registerCovered("CANVAS_ACTIONS", "large-expansion-add-all-by-keyboard");
 });
 
@@ -1568,7 +2054,9 @@ test("a very large expansion can be accepted by keyboard, and only then does it 
 // also reached the canvas's own key handler, which read it as "expand the focused node" and asked
 // the Conduit. A key pressed on a control belongs to that control. Not a registry action: it proves
 // that keys on a button do *not* act on the canvas.
-test("Enter on a button inside the canvas presses that button and does not expand the focused node", async ({ page }) => {
+test("Enter on a button inside the canvas presses that button and does not expand the focused node", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html?fixture=communities");
   await settle(page, "a0");
   let asked = 0;
@@ -1582,7 +2070,9 @@ test("Enter on a button inside the canvas presses that button and does not expan
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("a0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("a0");
   const button = page.getByRole("button", { name: "Communities" });
   await tabTo(page, button);
   await page.keyboard.press("Enter");
@@ -1595,15 +2085,21 @@ test("Enter on a button inside the canvas presses that button and does not expan
 // --- Labels (ADR-076) ------------------------------------------------------------------------
 // Six people of one family were each drawn as "Volkov". The analyst chooses, per type, which
 // property names its nodes; the choice is kept in this browser only.
-test("the Labels control is reached by Tab, and a property chosen with the arrow keys becomes the label", async ({ page }) => {
+test("the Labels control is reached by Tab, and a property chosen with the arrow keys becomes the label", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   // Let the layout stop moving first: while it runs the renderer redraws every frame, which would
   // update a label whether or not the choice told the canvas to draw again.
   await settle(page, "n0");
   await page.waitForTimeout(500);
   // n5 has given names, so its default label is "family, given"; the others have a family name only.
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("n5, Zed");
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).toBe("n0");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5")))
+    .toBe("n5, Zed");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0")))
+    .toBe("n0");
 
   await page.getByRole("application", { name: "Network canvas" }).focus();
   const button = page.getByRole("button", { name: "Labels" });
@@ -1614,9 +2110,13 @@ test("the Labels control is reached by Tab, and a property chosen with the arrow
   const picker = page.getByRole("combobox", { name: "Label for Person" });
   await tabTo(page, picker);
   await chooseOption(page, picker, "given_names", 5);
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5")))
+    .toBe("Zed");
   // A person with no given names keeps a name rather than going blank.
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).toBe("n0");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0")))
+    .toBe("n0");
 
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
@@ -1624,28 +2124,44 @@ test("the Labels control is reached by Tab, and a property chosen with the arrow
   registerCovered("CANVAS_ACTIONS", "labels-menu-by-keyboard");
 });
 
-test("a chosen label is still there after the page is reloaded, and Default puts it back", async ({ page }) => {
+test("a chosen label is still there after the page is reloaded, and Default puts it back", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await settle(page, "n0");
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Labels" }).click();
-  await page.getByRole("combobox", { name: "Label for Person" }).selectOption("given_names");
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
+  await page
+    .getByRole("combobox", { name: "Label for Person" })
+    .selectOption("given_names");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5")))
+    .toBe("Zed");
 
   await page.reload();
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("Zed");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5")))
+    .toBe("Zed");
 
   await page.getByRole("button", { name: "Labels" }).click();
-  await page.getByRole("combobox", { name: "Label for Person" }).selectOption("Default");
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5"))).toBe("n5, Zed");
+  await page
+    .getByRole("combobox", { name: "Label for Person" })
+    .selectOption("Default");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n5")))
+    .toBe("n5, Zed");
 });
 
 // --- Icons (ADR-079) --------------------------------------------------------------------------
 
-const svgOf = (uri: string | null | undefined) => decodeURIComponent((uri ?? "").replace(/^data:image\/svg\+xml;utf8,/, ""));
-const nodeImage = (page: Page, id: string) => page.evaluate((n) => window.__CANVAS__?.nodeImage(n), id);
+const svgOf = (uri: string | null | undefined) =>
+  decodeURIComponent((uri ?? "").replace(/^data:image\/svg\+xml;utf8,/, ""));
+const nodeImage = (page: Page, id: string) =>
+  page.evaluate((n) => window.__CANVAS__?.nodeImage(n), id);
 
-test("the Icons control is reached by Tab, and a drawing chosen with the arrow keys is drawn in the node", async ({ page }) => {
+test("the Icons control is reached by Tab, and a drawing chosen with the arrow keys is drawn in the node", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await settle(page, "n0");
   // The ontology's own icon is drawn in every person before anything is chosen.
@@ -1667,7 +2183,9 @@ test("the Icons control is reached by Tab, and a drawing chosen with the arrow k
   expect(svgOf(await nodeImage(page, "n4"))).toContain("<g ");
 
   await chooseOption(page, picker, "none", 2); // "No…": None
-  await expect.poll(async () => svgOf(await nodeImage(page, "n0"))).not.toContain("<g ");
+  await expect
+    .poll(async () => svgOf(await nodeImage(page, "n0")))
+    .not.toContain("<g ");
 
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
@@ -1677,10 +2195,17 @@ test("the Icons control is reached by Tab, and a drawing chosen with the arrow k
 
 // ADR-128 Decision 4 (B7). n4 is an Endpoint whose endpoint_kind is `handle`, which the ontology maps
 // to the keypad (ten dots), where the type's own drawing is a device (no dots).
-test("the legend says which value icon means what, reached by Tab, and the analyst's choice for the type takes over", async ({ page }) => {
+test("the legend says which value icon means what, reached by Tab, and the analyst's choice for the type takes over", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await settle(page, "n0");
-  const dots = (uri: string | null | undefined) => (svgOf(uri).match(/<g [\s\S]*<\/g>/)?.[0].match(/<circle/g) ?? []).length;
+  const dots = (uri: string | null | undefined) =>
+    (
+      svgOf(uri)
+        .match(/<g [\s\S]*<\/g>/)?.[0]
+        .match(/<circle/g) ?? []
+    ).length;
   await expect.poll(async () => dots(await nodeImage(page, "n4"))).toBe(10); // the keypad, not the device
 
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1688,7 +2213,9 @@ test("the legend says which value icon means what, reached by Tab, and the analy
   const toggle = page.getByRole("button", { name: "Legend", exact: true });
   await tabTo(page, toggle);
   const entries = page.locator('ul[aria-label="Icons by value"]');
-  const entry = entries.getByRole("listitem").filter({ hasText: "Keypad: Endpoint, endpoint kind handle" });
+  const entry = entries
+    .getByRole("listitem")
+    .filter({ hasText: "Keypad: Endpoint, endpoint kind handle" });
   await expect(entry).toBeVisible();
   await expect(entry).toContainText("1");
   // Folded with the legend by the keyboard, and open again.
@@ -1708,10 +2235,15 @@ test("the legend says which value icon means what, reached by Tab, and the analy
   await expect.poll(async () => dots(await nodeImage(page, "n4"))).toBe(0);
   // ...so the legend, which names only an icon the canvas draws, no longer lists the value icon.
   await expect(entry).toBeHidden();
-  registerCovered("CANVAS_ACTIONS", "legend-says-which-value-icon-means-what-by-keyboard");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "legend-says-which-value-icon-means-what-by-keyboard",
+  );
 });
 
-test("a picture given from a file is drawn in the shape, and is still there after a reload", async ({ page }) => {
+test("a picture given from a file is drawn in the shape, and is still there after a reload", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await settle(page, "n0");
   // ADR-115 Amendment 1: pictures are drawn from the neighbourhood band in (a camera ratio of 0.3),
@@ -1723,15 +2255,21 @@ test("a picture given from a file is drawn in the shape, and is still there afte
     await page.waitForTimeout(500);
   };
   await closeIn();
-  const box = (await page.getByRole("application", { name: "Network canvas" }).boundingBox())!;
+  const box = (await page
+    .getByRole("application", { name: "Network canvas" })
+    .boundingBox())!;
   // The position is read at each check, not once: the view is fitted a moment after the layout
   // settles, and a position kept from before that points beside the node under load.
   const centreOf = async () => {
     const position = await settle(page, "n0");
     const pixels = readPng(await page.screenshot());
-    return pixels.at(Math.round(box.x + position!.x), Math.round(box.y + position!.y));
+    return pixels.at(
+      Math.round(box.x + position!.x),
+      Math.round(box.y + position!.y),
+    );
   };
-  const isRed = ([r, g, b]: [number, number, number]) => r > 170 && g < 90 && b < 90;
+  const isRed = ([r, g, b]: [number, number, number]) =>
+    r > 170 && g < 90 && b < 90;
   expect(isRed(await centreOf())).toBe(false);
 
   const png = await page.evaluate(() => {
@@ -1749,7 +2287,9 @@ test("a picture given from a file is drawn in the shape, and is still there afte
     mimeType: "image/png",
     buffer: Buffer.from(png, "base64"),
   });
-  await expect(page.getByRole("combobox", { name: "Icon for Person" })).toHaveValue("image");
+  await expect(
+    page.getByRole("combobox", { name: "Icon for Person" }),
+  ).toHaveValue("image");
   await expect.poll(async () => isRed(await centreOf())).toBe(true);
   // At 100% the node is too small for it: drawn plain, the picture back on closing in.
   await page.evaluate(() => window.__CANVAS__?.zoomTo(1));
@@ -1763,7 +2303,11 @@ test("a picture given from a file is drawn in the shape, and is still there afte
   const again = await settle(page, "n0");
   await page.waitForTimeout(800);
   const pixels = readPng(await page.screenshot());
-  expect(isRed(pixels.at(Math.round(box.x + again!.x), Math.round(box.y + again!.y)))).toBe(true);
+  expect(
+    isRed(
+      pixels.at(Math.round(box.x + again!.x), Math.round(box.y + again!.y)),
+    ),
+  ).toBe(true);
   registerCovered("CANVAS_ACTIONS", "icon-picture-from-file");
 });
 
@@ -1774,9 +2318,13 @@ async function settle(page: Page, id: string) {
   return (await layoutSettled(page, [id]))[id]!;
 }
 
-const settleOnce = (page: Page, id: string) => page.evaluate((n) => window.__CANVAS__?.viewportPositionOf(n), id);
+const settleOnce = (page: Page, id: string) =>
+  page.evaluate((n) => window.__CANVAS__?.viewportPositionOf(n), id);
 
-const grouped = (page: Page) => page.evaluate(() => (window as unknown as { __GROUPED__?: number }).__GROUPED__);
+const grouped = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { __GROUPED__?: number }).__GROUPED__,
+  );
 
 async function communitiesOn(page: Page) {
   await page.goto("/keyboard/harness.html?fixture=communities");
@@ -1785,7 +2333,10 @@ async function communitiesOn(page: Page) {
   await page.getByRole("combobox", { name: "Layout" }).selectOption("circular");
   await expect
     .poll(async () => {
-      const [a, b] = await Promise.all([settleOnce(page, "a0"), settleOnce(page, "a3")]);
+      const [a, b] = await Promise.all([
+        settleOnce(page, "a0"),
+        settleOnce(page, "a3"),
+      ]);
       return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
     })
     .toBeGreaterThan(20);
@@ -1796,20 +2347,30 @@ async function communitiesOn(page: Page) {
   await page.keyboard.press("Enter");
 }
 
-test("the Communities button is reached by Tab, and Enter draws a box round each group", async ({ page }) => {
+test("the Communities button is reached by Tab, and Enter draws a box round each group", async ({
+  page,
+}) => {
   await communitiesOn(page);
-  await expect(page.getByRole("button", { name: "Communities" })).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "Communities" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("2 groups, 0 folded")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Fold group of 5 nodes" })).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: "Fold group of 5 nodes" }),
+  ).toHaveCount(2);
   registerCovered("CANVAS_ACTIONS", "communities-button-by-keyboard");
 });
 
-test("G on a focused node folds its group into one node, and G on that node opens it again", async ({ page }) => {
+test("G on a focused node folds its group into one node, and G on that node opens it again", async ({
+  page,
+}) => {
   await communitiesOn(page);
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
   await page.keyboard.press("Home").catch(() => undefined);
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("a0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("a0");
 
   await page.keyboard.press("g");
   await expect.poll(() => grouped(page)).toBe(5);
@@ -1817,19 +2378,28 @@ test("G on a focused node folds its group into one node, and G on that node open
 
   await page.keyboard.press("g");
   await expect.poll(() => grouped(page)).toBe(0);
-  registerCovered("CANVAS_ACTIONS", "g-folds-and-opens-the-focused-nodes-group");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "g-folds-and-opens-the-focused-nodes-group",
+  );
 });
 
-test("a box's own button folds that group, reached by Tab", async ({ page }) => {
+test("a box's own button folds that group, reached by Tab", async ({
+  page,
+}) => {
   await communitiesOn(page);
-  const fold = page.getByRole("button", { name: "Fold group of 5 nodes" }).first();
+  const fold = page
+    .getByRole("button", { name: "Fold group of 5 nodes" })
+    .first();
   await tabTo(page, fold, 24);
   await page.keyboard.press("Enter");
   await expect.poll(() => grouped(page)).toBe(5);
   registerCovered("CANVAS_ACTIONS", "box-fold-button-by-keyboard");
 });
 
-test("Collapse all and Expand all fold and open every group, by keyboard", async ({ page }) => {
+test("Collapse all and Expand all fold and open every group, by keyboard", async ({
+  page,
+}) => {
   await communitiesOn(page);
   await tabTo(page, page.getByRole("button", { name: "Collapse all" }), 24);
   await page.keyboard.press("Enter");
@@ -1843,15 +2413,27 @@ test("Collapse all and Expand all fold and open every group, by keyboard", async
 
 // The next cases are about what is drawn, not about a key, so they sit outside the registry.
 
-test("a folded group is drawn as one node: its members are drawn where the group is, and come back when it opens", async ({ page }) => {
+test("a folded group is drawn as one node: its members are drawn where the group is, and come back when it opens", async ({
+  page,
+}) => {
   await communitiesOn(page);
-  const before = { a0: await settle(page, "a0"), a3: await settle(page, "a3"), b2: await settle(page, "b2") };
-  expect(Math.hypot(before.a0!.x - before.a3!.x, before.a0!.y - before.a3!.y)).toBeGreaterThan(5);
+  const before = {
+    a0: await settle(page, "a0"),
+    a3: await settle(page, "a3"),
+    b2: await settle(page, "b2"),
+  };
+  expect(
+    Math.hypot(before.a0!.x - before.a3!.x, before.a0!.y - before.a3!.y),
+  ).toBeGreaterThan(5);
 
   await page.getByRole("button", { name: "Collapse all" }).click();
   await expect.poll(() => grouped(page)).toBe(10);
   await page.waitForTimeout(400);
-  const folded = { a0: await settle(page, "a0"), a3: await settle(page, "a3"), b2: await settle(page, "b2") };
+  const folded = {
+    a0: await settle(page, "a0"),
+    a3: await settle(page, "a3"),
+    b2: await settle(page, "b2"),
+  };
   expect(folded.a3).toEqual(folded.a0);
   expect(folded.b2).not.toEqual(folded.a0);
 
@@ -1859,10 +2441,14 @@ test("a folded group is drawn as one node: its members are drawn where the group
   await expect.poll(() => grouped(page)).toBe(0);
   await page.waitForTimeout(400);
   const after = await settle(page, "a3");
-  expect(Math.hypot(after.x - before.a3!.x, after.y - before.a3!.y)).toBeLessThan(2);
+  expect(
+    Math.hypot(after.x - before.a3!.x, after.y - before.a3!.y),
+  ).toBeLessThan(2);
 });
 
-test("a double-click inside a box folds the group, and a double-click on the Group Node opens it", async ({ page }) => {
+test("a double-click inside a box folds the group, and a double-click on the Group Node opens it", async ({
+  page,
+}) => {
   await communitiesOn(page);
   // The buttons over the canvas are right-aligned in a strip along its top, and every button added
   // to it pushes the rest left. A folded group can sit right under the strip, and the double-click
@@ -1872,12 +2458,16 @@ test("a double-click inside a box folds the group, and a double-click on the Gro
     const strip = button.parentElement?.parentElement;
     if (strip) strip.style.pointerEvents = "none";
   });
-  const members = await Promise.all(["a0", "a1", "a2", "a3", "a4"].map((id) => settle(page, id)));
+  const members = await Promise.all(
+    ["a0", "a1", "a2", "a3", "a4"].map((id) => settle(page, id)),
+  );
   const centre = {
     x: members.reduce((n, p) => n + p!.x, 0) / members.length,
     y: members.reduce((n, p) => n + p!.y, 0) / members.length,
   };
-  const box = await page.getByRole("application", { name: "Network canvas" }).boundingBox();
+  const box = await page
+    .getByRole("application", { name: "Network canvas" })
+    .boundingBox();
   await page.mouse.dblclick(box!.x + centre.x, box!.y + centre.y);
   await expect.poll(() => grouped(page)).toBe(5);
 
@@ -1891,23 +2481,33 @@ test("keyboard walks skip the nodes a folded group hides", async ({ page }) => {
   await communitiesOn(page);
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("a0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("a0");
   await page.keyboard.press("g");
   await expect.poll(() => grouped(page)).toBe(5);
   await page.keyboard.press("Control+Shift+ArrowRight");
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("b0");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
+    .toBe("b0");
 });
 
-test("switching Communities off puts everything back and forgets what was folded", async ({ page }) => {
+test("switching Communities off puts everything back and forgets what was folded", async ({
+  page,
+}) => {
   await communitiesOn(page);
   await page.getByRole("button", { name: "Collapse all" }).click();
   await expect.poll(() => grouped(page)).toBe(10);
   await page.getByRole("button", { name: "Communities" }).click();
   await expect.poll(() => grouped(page)).toBe(0);
-  await expect(page.getByRole("button", { name: "Fold group of 5 nodes" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Fold group of 5 nodes" }),
+  ).toHaveCount(0);
 });
 
-test("a count of judgements is drawn beside the node they rest on, and only there", async ({ page }) => {
+test("a count of judgements is drawn beside the node they rest on, and only there", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html?judged=n1:2,n3:1");
   const two = page.getByLabel("2 judgements");
   const one = page.getByLabel("1 judgement");
@@ -1917,7 +2517,9 @@ test("a count of judgements is drawn beside the node they rest on, and only ther
 
   const node = await settle(page, "n1");
   const box = await two.boundingBox();
-  const canvasBox = await page.getByRole("application", { name: "Network canvas" }).boundingBox();
+  const canvasBox = await page
+    .getByRole("application", { name: "Network canvas" })
+    .boundingBox();
   expect(box).not.toBeNull();
   expect(canvasBox).not.toBeNull();
   // Up and to the right of the node, close to it, in the page's own coordinates.
@@ -1928,10 +2530,14 @@ test("a count of judgements is drawn beside the node they rest on, and only ther
 
   // A picture only: it takes no clicks (the node under it is still pressed) and no focus.
   await page.mouse.click(nodeX + 1, nodeY + 1);
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n1"]);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection))
+    .toEqual(["n1"]);
 });
 
-test("choosing a search result draws three steps out from it, counted first, in one request", async ({ page }) => {
+test("choosing a search result draws three steps out from it, counted first, in one request", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const bodies: { preview?: unknown; expand?: unknown } = {};
   await page.route("**/*/expand/preview", async (route) => {
@@ -1939,7 +2545,10 @@ test("choosing a search result draws three steps out from it, counted first, in 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 20, candidate_edge_count: 0 }),
+      body: JSON.stringify({
+        candidate_node_count: 20,
+        candidate_edge_count: 0,
+      }),
     });
   });
   await page.route("**/*/expand", async (route) => {
@@ -1947,23 +2556,40 @@ test("choosing a search result draws three steps out from it, counted first, in 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "add", nodes: [], edges: [] },
+      }),
     });
   });
-  await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n5", 3));
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __CANVAS__: { expandFrom: (id: string, depth: number) => void };
+      }
+    ).__CANVAS__.expandFrom("n5", 3),
+  );
   await expect.poll(() => bodies.expand !== undefined).toBe(true);
-  expect(bodies.preview).toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
-  expect(bodies.expand).toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
+  expect(bodies.preview).toMatchObject({
+    request: { node_ids: ["n5"], depth: 3 },
+  });
+  expect(bodies.expand).toMatchObject({
+    request: { node_ids: ["n5"], depth: 3 },
+  });
 });
 
-test("a three-step draw that is very large asks first, and the answer keeps its three steps", async ({ page }) => {
+test("a three-step draw that is very large asks first, and the answer keeps its three steps", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   let expandBody: unknown = null;
   await page.route("**/*/expand/preview", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ candidate_node_count: 1200, candidate_edge_count: 0 }),
+      body: JSON.stringify({
+        candidate_node_count: 1200,
+        candidate_edge_count: 0,
+      }),
     });
   });
   await page.route("**/*/expand", async (route) => {
@@ -1971,18 +2597,32 @@ test("a three-step draw that is very large asks first, and the answer keeps its 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ delta: { seq: 2, op: "add", nodes: [], edges: [] } }),
+      body: JSON.stringify({
+        delta: { seq: 2, op: "add", nodes: [], edges: [] },
+      }),
     });
   });
-  await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n5", 3));
-  await expect(page.getByRole("alertdialog", { name: "Large expansion" })).toBeVisible();
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __CANVAS__: { expandFrom: (id: string, depth: number) => void };
+      }
+    ).__CANVAS__.expandFrom("n5", 3),
+  );
+  await expect(
+    page.getByRole("alertdialog", { name: "Large expansion" }),
+  ).toBeVisible();
   expect(expandBody).toBeNull();
   await tabTo(page, page.getByRole("button", { name: /^Add all/ }));
   await page.keyboard.press("Enter");
-  await expect.poll(() => expandBody).toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
+  await expect
+    .poll(() => expandBody)
+    .toMatchObject({ request: { node_ids: ["n5"], depth: 3 } });
 });
 
-test("switching to the light theme repaints the graph's nodes in the light palette, and back", async ({ page }) => {
+test("switching to the light theme repaints the graph's nodes in the light palette, and back", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const colour = () => page.evaluate(() => window.__CANVAS__?.nodeColour("n1"));
   await expect.poll(colour).toBe("#677bd6"); // indigo, dark
@@ -1992,27 +2632,44 @@ test("switching to the light theme repaints the graph's nodes in the light palet
   await expect.poll(colour).toBe("#677bd6");
 });
 
-test("an expansion that adds nothing says so, and Escape dismisses the message", async ({ page }) => {
+test("an expansion that adds nothing says so, and Escape dismisses the message", async ({
+  page,
+}) => {
   // The owner's right-click comment: every relationship chosen seemed to do nothing. The neighbours
   // were already drawn, and an expansion that adds nothing used to say nothing (ADR-077).
   await page.goto("/keyboard/harness.html");
   await stubSmallExpansionPreview(page);
   await page.route("**/*/expand", async (route) => {
-    const body = route.request().postDataJSON() as { request: { edge_types: string[] | null } };
+    const body = route.request().postDataJSON() as {
+      request: { edge_types: string[] | null };
+    };
     const alreadyDrawn = body.request.edge_types !== null;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         delta: alreadyDrawn
-          ? { seq: 2, op: "add", nodes: [{ id: "n0" }, { id: "n1" }], edges: [{ id: "e0" }] }
+          ? {
+              seq: 2,
+              op: "add",
+              nodes: [{ id: "n0" }, { id: "n1" }],
+              edges: [{ id: "e0" }],
+            }
           : { seq: 2, op: "add", nodes: [], edges: [] },
       }),
     });
   });
   // The server returns everything it found, drawn or not, so the n0 and n1 and e0 here are already on screen.
-  await page.evaluate(() => (window as unknown as { __CANVAS__: { expandFrom: (id: string, depth: number) => void } }).__CANVAS__.expandFrom("n0", 1));
-  const notice = page.getByRole("status").filter({ hasText: "No links from this node." });
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __CANVAS__: { expandFrom: (id: string, depth: number) => void };
+      }
+    ).__CANVAS__.expandFrom("n0", 1),
+  );
+  const notice = page
+    .getByRole("status")
+    .filter({ hasText: "No links from this node." });
   await expect(notice).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(notice).toBeHidden();
@@ -2025,8 +2682,12 @@ test("an expansion that adds nothing says so, and Escape dismisses the message",
   await page.keyboard.press("Enter");
   // The type by its display name (ADR-091), and the message found by its words: the canvas's
   // selection chip is a status region too (ADR-093).
-  const nothingNew = page.getByRole("status").filter({ hasText: /^Nothing new:/ });
-  await expect(nothingNew).toContainText(/^Nothing new: everything linked by \u2018[A-Z][a-z ]+\u2019 is already in view\.$/);
+  const nothingNew = page
+    .getByRole("status")
+    .filter({ hasText: /^Nothing new:/ });
+  await expect(nothingNew).toContainText(
+    /^Nothing new: everything linked by \u2018[A-Z][a-z ]+\u2019 is already in view\.$/,
+  );
   await page.keyboard.press("Escape");
   await expect(nothingNew).toBeHidden();
   registerCovered("CANVAS_ACTIONS", "expand-with-nothing-new-says-so");
@@ -2036,11 +2697,22 @@ test("an expansion that adds nothing says so, and Escape dismisses the message",
 
 // ADR-115 E4: the canvas handle's expandNode — what the Inspector's Expand calls — asks for the
 // expansion's preview, as the canvas's own menus do (counted in the store before anything is drawn).
-test("the canvas handle's expandNode asks for the node's expansion preview", async ({ page }) => {
+test("the canvas handle's expandNode asks for the node's expansion preview", async ({
+  page,
+}) => {
   const asked: string[] = [];
   await page.route("**/*/expand/preview", async (route) => {
     asked.push(JSON.stringify(route.request().postDataJSON()));
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ counts: {}, total: 0, cap: 2000, working_set_size: 6 }) });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        counts: {},
+        total: 0,
+        cap: 2000,
+        working_set_size: 6,
+      }),
+    });
   });
   await page.goto("/keyboard/harness.html");
   await layoutSettled(page, ["n0"]);
@@ -2049,10 +2721,13 @@ test("the canvas handle's expandNode asks for the node's expansion preview", asy
   expect(asked[0]).toContain("n0");
 });
 
-test("Zoom in and Zoom out move the camera by keyboard alone", async ({ page }) => {
+test("Zoom in and Zoom out move the camera by keyboard alone", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await layoutSettled(page, ["n0"]);
-  const ratio = async () => (await page.evaluate(() => window.__CANVAS__?.cameraState()))!.ratio;
+  const ratio = async () =>
+    (await page.evaluate(() => window.__CANVAS__?.cameraState()))!.ratio;
   const before = await ratio();
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
   await zoomIn.focus();
@@ -2070,10 +2745,9 @@ test("Zoom in and Zoom out move the camera by keyboard alone", async ({ page }) 
     .toBe(true);
   const zoomed = await ratio();
   // ADR-115 E4: the zoom group's readout says the camera's zoom, as a percentage.
-  await expect(page.getByRole("group", { name: "Zoom" }).locator(".canvas-zoom__readout")).toHaveAttribute(
-    "aria-label",
-    `Zoom ${Math.round(100 / zoomed)}%`,
-  );
+  await expect(
+    page.getByRole("group", { name: "Zoom" }).locator(".canvas-zoom__readout"),
+  ).toHaveAttribute("aria-label", `Zoom ${Math.round(100 / zoomed)}%`);
   const zoomOut = page.getByRole("button", { name: "Zoom out" });
   await zoomOut.focus();
   await page.keyboard.press("Enter");
@@ -2081,10 +2755,13 @@ test("Zoom in and Zoom out move the camera by keyboard alone", async ({ page }) 
   registerCovered("CANVAS_ACTIONS", "zoom-in-and-out-by-keyboard");
 });
 
-test("F on the canvas, and Fit to view by Enter, bring the whole graph back into view", async ({ page }) => {
+test("F on the canvas, and Fit to view by Enter, bring the whole graph back into view", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await layoutSettled(page, ["n0"]);
-  const ratio = async () => (await page.evaluate(() => window.__CANVAS__?.cameraState()))!.ratio;
+  const ratio = async () =>
+    (await page.evaluate(() => window.__CANVAS__?.cameraState()))!.ratio;
   await page.evaluate(() => window.__CANVAS__?.zoomTo(0.1));
   await expect.poll(ratio).toBeCloseTo(0.1);
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -2099,7 +2776,9 @@ test("F on the canvas, and Fit to view by Enter, bring the whole graph back into
   registerCovered("CANVAS_ACTIONS", "fit-to-view-by-keyboard");
 });
 
-test("the legend folds and opens by keyboard, and names the types in view", async ({ page }) => {
+test("the legend folds and opens by keyboard, and names the types in view", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const list = page.locator('ul[aria-label="Types in view"]');
   await expect(list).toBeVisible();
@@ -2116,11 +2795,14 @@ test("the legend folds and opens by keyboard, and names the types in view", asyn
 
 // ADR-117: the legend's links — a type left out of the view and brought back, by keyboard alone,
 // and the canvas stops drawing that type's links and draws them again.
-test("the legend leaves a link type out of the view and brings it back, by keyboard", async ({ page }) => {
+test("the legend leaves a link type out of the view and brings it back, by keyboard", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const links = page.locator('ul[aria-label="Links in view"]');
   await expect(links).toBeVisible();
-  const drawn = (id: string) => page.evaluate((edgeId) => window.__CANVAS__?.linkDrawn(edgeId), id);
+  const drawn = (id: string) =>
+    page.evaluate((edgeId) => window.__CANVAS__?.linkDrawn(edgeId), id);
   await expect.poll(() => drawn("e0")).toBe(true);
   // The fixture's chain is three "Associate of" links (e0 to e2) and one "Uses" link (e3).
   const box = links.getByRole("checkbox", { name: "Associate of" });
@@ -2134,13 +2816,18 @@ test("the legend leaves a link type out of the view and brings it back, by keybo
   await page.keyboard.press("Space");
   await expect(box).toBeChecked();
   await expect.poll(() => drawn("e0")).toBe(true);
-  registerCovered("CANVAS_ACTIONS", "legend-leaves-out-a-link-type-by-keyboard");
+  registerCovered(
+    "CANVAS_ACTIONS",
+    "legend-leaves-out-a-link-type-by-keyboard",
+  );
 });
 
 // The owner, 14 October 2026: on a narrow canvas the toolbar wraps to a second row, and the legend,
 // placed one row down, covered the controls there. It now docks below the toolbar as drawn, and
 // floats: its grip moves it, by keyboard as by pointer.
-test("the legend docks below a wrapped toolbar and moves by keyboard from its grip", async ({ page }) => {
+test("the legend docks below a wrapped toolbar and moves by keyboard from its grip", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 760, height: 900 });
   await page.goto("/keyboard/harness.html");
   const toolbar = page.getByRole("toolbar", { name: "Canvas tools" });
@@ -2148,7 +2835,9 @@ test("the legend docks below a wrapped toolbar and moves by keyboard from its gr
   await expect(legend).toBeVisible();
   const bar = (await toolbar.boundingBox())!;
   expect(bar.height).toBeGreaterThan(40); // wrapped: the case that was covered
-  await expect.poll(async () => (await legend.boundingBox())!.y).toBeGreaterThanOrEqual(bar.y + bar.height);
+  await expect
+    .poll(async () => (await legend.boundingBox())!.y)
+    .toBeGreaterThanOrEqual(bar.y + bar.height);
   const grip = page.getByRole("button", { name: "Move legend" });
   await grip.focus();
   await expect(grip).toBeFocused();
@@ -2156,27 +2845,38 @@ test("the legend docks below a wrapped toolbar and moves by keyboard from its gr
   const docked = (await legend.boundingBox())!;
   await page.keyboard.press("ArrowLeft");
   await page.keyboard.press("Shift+ArrowDown");
-  await expect.poll(async () => (await legend.boundingBox())!.x).toBeCloseTo(docked.x - 16, 0);
+  await expect
+    .poll(async () => (await legend.boundingBox())!.x)
+    .toBeCloseTo(docked.x - 16, 0);
   expect((await legend.boundingBox())!.y).toBeCloseTo(docked.y + 64, 0);
   await page.keyboard.press("Home");
-  await expect.poll(async () => (await legend.boundingBox())!.x).toBeCloseTo(docked.x, 0);
+  await expect
+    .poll(async () => (await legend.boundingBox())!.x)
+    .toBeCloseTo(docked.x, 0);
   registerCovered("CANVAS_ACTIONS", "legend-moves-by-keyboard");
 });
 
 // --- Reduced motion (02_GLASS_FRONTEND.md §3.4, ADR-097 step 3) ----------------------------------
 
-test("under reduced motion a new layout moves the nodes at once, and Show previous positions marks where they were", async ({ page }) => {
+test("under reduced motion a new layout moves the nodes at once, and Show previous positions marks where they were", async ({
+  page,
+}) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/keyboard/harness.html");
   const before = await layoutSettled(page, ["n0", "n1", "n2", "n3"]);
   // No control until something has moved.
-  await expect(page.getByRole("button", { name: "Show previous positions" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Show previous positions" }),
+  ).toHaveCount(0);
   const layout = page.getByRole("combobox", { name: "Layout" });
   await tabTo(page, layout);
   await chooseOption(page, layout, "circular");
   // An instant move: the nodes are at their new places within one frame or two, not 420ms later.
   await page.waitForTimeout(80);
-  const soon = await page.evaluate((ids) => ids.map((id) => window.__CANVAS__?.viewportPositionOf(id)), ["n0", "n1", "n2", "n3"]);
+  const soon = await page.evaluate(
+    (ids) => ids.map((id) => window.__CANVAS__?.viewportPositionOf(id)),
+    ["n0", "n1", "n2", "n3"],
+  );
   const settled = await layoutSettled(page, ["n0", "n1", "n2", "n3"]);
   expect(soon).toEqual(["n0", "n1", "n2", "n3"].map((id) => settled[id]));
   expect(JSON.stringify(settled)).not.toEqual(JSON.stringify(before));
@@ -2193,22 +2893,29 @@ test("under reduced motion a new layout moves the nodes at once, and Show previo
   registerCovered("CANVAS_ACTIONS", "show-previous-positions-by-keyboard");
 });
 
-test("without reduced motion there is no Show previous positions control: the move itself shows what moved", async ({ page }) => {
+test("without reduced motion there is no Show previous positions control: the move itself shows what moved", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   await layoutSettled(page, ["n0"]);
   const layout = page.getByRole("combobox", { name: "Layout" });
   await tabTo(page, layout);
   await chooseOption(page, layout, "circular");
   await layoutSettled(page, ["n0"]);
-  await expect(page.getByRole("button", { name: "Show previous positions" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Show previous positions" }),
+  ).toHaveCount(0);
 });
 
 // --- The grid switch (owner, 6 October 2026: "I need the ability to turn the grid lines off") -----
 
-test("Grid in the Show group turns the canvas grid off and on by keyboard, and the choice survives a reload", async ({ page }) => {
+test("Grid in the Show group turns the canvas grid off and on by keyboard, and the choice survives a reload", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
-  const gridImage = () => canvas.evaluate((el) => getComputedStyle(el).backgroundImage);
+  const gridImage = () =>
+    canvas.evaluate((el) => getComputedStyle(el).backgroundImage);
   const grid = page.getByRole("button", { name: "Grid" });
   await expect(grid).toHaveAttribute("aria-pressed", "true");
   expect(await gridImage()).toContain("linear-gradient");
@@ -2217,23 +2924,34 @@ test("Grid in the Show group turns the canvas grid off and on by keyboard, and t
   await expect(grid).toHaveAttribute("aria-pressed", "false");
   expect(await gridImage()).toBe("none");
   await page.reload();
-  await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   expect(await gridImage()).toBe("none");
   await tabTo(page, page.getByRole("button", { name: "Grid" }));
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Grid" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   expect(await gridImage()).toContain("linear-gradient");
   registerCovered("CANVAS_ACTIONS", "grid-toggles-by-keyboard");
 });
 
-test("Show links among all, in the canvas toolbar, asks for the links among every node in the view (ADR-098)", async ({ page }) => {
+test("Show links among all, in the canvas toolbar, asks for the links among every node in the view (ADR-098)", async ({
+  page,
+}) => {
   let body: { node_ids: string[] | null } | undefined;
   await page.route("**/*/investigations/*/links-among", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ added: 1, delta: { seq: 8, op: "add", nodes: [], edges: [] } }),
+      body: JSON.stringify({
+        added: 1,
+        delta: { seq: 8, op: "add", nodes: [], edges: [] },
+      }),
     });
   });
   await page.goto("/keyboard/harness.html");
@@ -2246,19 +2964,27 @@ test("Show links among all, in the canvas toolbar, asks for the links among ever
   registerCovered("CANVAS_ACTIONS", "show-links-among-all-by-keyboard");
 });
 
-test("Shift with an arrow key moves the selected node by keyboard, further with Alt (owner, 6 October 2026)", async ({ page }) => {
+test("Shift with an arrow key moves the selected node by keyboard, further with Alt (owner, 6 October 2026)", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.selection))
+    .toEqual(["n0"]);
   const before = (await layoutSettled(page, ["n0"]))["n0"]!;
   await page.keyboard.press("Shift+ArrowRight");
   await page.keyboard.press("Shift+ArrowRight");
-  const moved = (await page.evaluate(() => window.__CANVAS__?.viewportPositionOf("n0")))!;
+  const moved = (await page.evaluate(() =>
+    window.__CANVAS__?.viewportPositionOf("n0"),
+  ))!;
   expect(moved.x - before.x).toBeGreaterThan(12);
   expect(Math.abs(moved.y - before.y)).toBeLessThan(2);
   await page.keyboard.press("Shift+Alt+ArrowDown");
-  const down = (await page.evaluate(() => window.__CANVAS__?.viewportPositionOf("n0")))!;
+  const down = (await page.evaluate(() =>
+    window.__CANVAS__?.viewportPositionOf("n0"),
+  ))!;
   expect(down.y - moved.y).toBeGreaterThan(24);
   // Focus and selection are unchanged: the nudge moved the node, it did not walk to a neighbour.
   expect(await page.evaluate(() => window.__KEYBOARD__?.focused)).toBe("n0");
@@ -2273,13 +2999,21 @@ test("every registered keyboard action has its own proving test case above", () 
 // Seen on the Enron case: two searched addresses drawn as two unlabelled squares, and a right-click
 // menu that stayed open whatever was clicked and never said whose it was.
 
-test("in a small view every node is named, even one zoomed out with few links", async ({ page }) => {
+test("in a small view every node is named, even one zoomed out with few links", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0"))).not.toBe("");
-  await expect.poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n3"))).not.toBe("");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n0")))
+    .not.toBe("");
+  await expect
+    .poll(() => page.evaluate(() => window.__CANVAS__?.labelOf("n3")))
+    .not.toBe("");
 });
 
-test("a right-click menu names its node, and a click elsewhere closes it", async ({ page }) => {
+test("a right-click menu names its node, and a click elsewhere closes it", async ({
+  page,
+}) => {
   await page.goto("/keyboard/harness.html");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   const box = await canvas.boundingBox();
@@ -2293,6 +3027,9 @@ test("a right-click menu names its node, and a click elsewhere closes it", async
   // Elsewhere in the canvas, well away from every node and from the menu. The bottom-left corner:
   // the grouped list (ADR-078) is wider and taller than the old one and, opened low on the right as
   // here, reached the bottom-right corner this used to click.
-  await page.mouse.click((box?.x ?? 0) + 12, (box?.y ?? 0) + (box?.height ?? 0) - 12);
+  await page.mouse.click(
+    (box?.x ?? 0) + 12,
+    (box?.y ?? 0) + (box?.height ?? 0) - 12,
+  );
   await expect(menu).toHaveCount(0);
 });

@@ -156,6 +156,7 @@ def test_open_with_no_session_opens_one_window_on_the_lanes_prompt(launcher) -> 
     assert f'cd "{launcher.wt / "studio"}"' in text
     assert "export CLAUDE_CONFIG_DIR=" in text
     assert 'export OSPREY_LANE="studio"' in text  # the port guard lets only the lease's lane reach the stack
+    assert 'export OSPREY_PORTS_SLOT="10"' in text  # studio's own Playwright ports (lane_ports.tsv, T2)
     prompt = Path(text.split('$(cat "')[1].split('")')[0]).read_text()
     assert "You are the studio lane, on branch lane/studio." in prompt
     assert "L1.1: phase 4's remainder." in prompt

@@ -36,7 +36,9 @@ from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F40
 
 # `pytest.mark.store`, enforced at the connection (admin's T1 part 2): an unmarked test that reaches a store's port is
 # reported, or failed with OSPREY_STORE_MARK=fail (tests/store_mark.py).
-pytest_plugins = ["tests.store_mark"]
+# A test that calls the docker CLI skips at once, in words, where local stacks are off (T2,
+# tests/local_docker_guard.py).
+pytest_plugins = ["tests.store_mark", "tests.local_docker_guard"]
 
 
 @pytest.fixture(autouse=True)

@@ -1,0 +1,21 @@
+# Each lane's slot for its Playwright runs (T2, 10 November 2026: two lanes' runs met on vite's 5184/5185).
+# Every Playwright config but live/ and deck-capture/ serves on its own port plus 100 x $OSPREY_PORTS_SLOT
+# (OspreyFlow_Core/apps/lanePorts.ts, which knows no lane and no table). The slot is set from this table by
+# scripts/stack_lease.sh for every run on the test server (offline too) and by scripts/lanes_launch.sh for a lane's
+# session; by the lane's exact name only, so a sub-lane or a sister lane (admin-ddl, admin-b) never takes its
+# parent's: it is "unlisted-<lane>", refused in words by a Playwright run until it has a row here. With no slot a
+# main checkout keeps today's ports (slot 0) and a linked worktree is refused. The blocks stay clear of each other,
+# of the stacks' ports (lane_stacks.tsv) and of the owner's deployment's (2480, 5432, 80, 8000, 8080, 8081):
+# tests/test_lane_ports.py checks it, and that every lane folder under process/lanes/ has its row.
+# Tab-separated: lane, slot.
+admin	1
+case	2
+case-b	3
+docs	4
+glass	5
+platform	6
+platform-b	7
+rules	8
+rules-b	9
+studio	10
+studio-b	11
