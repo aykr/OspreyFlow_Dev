@@ -18,7 +18,6 @@ from typing import Any
 
 import pytest
 import yaml
-
 from tools.cp_policy_check import (
     FIXTURES,
     check_dockerfiles,
@@ -67,7 +66,8 @@ def test_the_render_is_valid_kubernetes(rendered: tuple[dict[str, Any], str]) ->
     values, _ = rendered
     docs = helm_template(yaml.safe_dump(values))
     done = subprocess.run(
-        ["docker", "run", "--rm", "-i", KUBECONFORM, "-strict", "-summary", "-ignore-missing-schemas",
+        ["docker", "run", "--rm", "-i", KUBECONFORM, "-strict", "-summary",
+         "-ignore-missing-schemas",
          "-kubernetes-version", "1.31.0", "-"],
         input=yaml.safe_dump_all(docs), capture_output=True, text=True, timeout=300, check=False,
     )  # fmt: skip

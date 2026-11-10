@@ -12,7 +12,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from tools.licence_check import _instructions
 
 CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"

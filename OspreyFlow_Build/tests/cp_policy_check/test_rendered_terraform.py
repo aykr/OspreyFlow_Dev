@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 from harness.render import load_config, render
-
 from tools.cp_policy_check import FIXTURES, _resolver
 
 TOFU = "ghcr.io/opentofu/opentofu:1.10.6"

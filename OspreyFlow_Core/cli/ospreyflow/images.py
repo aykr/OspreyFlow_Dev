@@ -86,19 +86,22 @@ def push(
 
 
 def add_parser(verbs: Any) -> None:
-    images = verbs.add_parser("images", help="copy a cloud-platform render's images to its registry")
+    images = verbs.add_parser(
+        "images", help="copy a cloud-platform render's images to its registry"
+    )
     actions = images.add_subparsers(dest="action", metavar="ACTION", required=True)
     push_verb = actions.add_parser(
         "push", help="build ours and copy the third-party ones, by digest, into the registry"
     )
     push_verb.add_argument("--registry", required=True, help="the namespace's registry (ECR)")
     push_verb.add_argument(
-        "--from", dest="folder", type=Path, help="the render's folder (default: deploy/generated/"
-        "cloud-platform)",
+        "--from",
+        dest="folder",
+        type=Path,
+        help="the render's folder (default: deploy/generated/cloud-platform)",
     )
     push_verb.add_argument("--dry-run", action="store_true", help="say each step; run none")
 
 
 def main_action(args: Any, product: Path, run: Runner) -> int:
     return push(product, run, registry=args.registry, folder=args.folder, dry_run=args.dry_run)
-

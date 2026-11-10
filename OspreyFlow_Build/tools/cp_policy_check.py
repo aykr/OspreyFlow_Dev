@@ -80,7 +80,9 @@ def _pod_rules(doc: dict[str, Any], spec: dict[str, Any], registry: str) -> Iter
     pod = spec.get("securityContext") or {}
     for volume in spec.get("volumes") or []:
         if "hostPath" in volume:
-            yield Violation("hostPath", where, f"volume {volume.get('name')} mounts the node's disk")
+            yield Violation(
+                "hostPath", where, f"volume {volume.get('name')} mounts the node's disk"
+            )
     for container in _containers(spec):
         at = f"{where} container {container.get('name')}"
         own = container.get("securityContext") or {}
@@ -114,7 +116,9 @@ def _claims_rwx(modes: Iterable[str] | None) -> bool:
 
 def _denies_egress(doc: dict[str, Any]) -> bool:
     """Calico's deny: every pod (`all()`), egress, a rule that denies with nothing to match."""
-    if not str(doc.get("apiVersion", "")).startswith(("projectcalico.org/", "crd.projectcalico.org/")):
+    if not str(doc.get("apiVersion", "")).startswith(
+        ("projectcalico.org/", "crd.projectcalico.org/")
+    ):
         return False
     if doc.get("kind") not in {"NetworkPolicy", "GlobalNetworkPolicy"}:
         return False
@@ -123,7 +127,9 @@ def _denies_egress(doc: dict[str, Any]) -> bool:
         return False
     if "Egress" not in (spec.get("types") or []):
         return False
-    return any(set(rule) == {"action"} and rule["action"] == "Deny" for rule in spec.get("egress") or [])
+    return any(
+        set(rule) == {"action"} and rule["action"] == "Deny" for rule in spec.get("egress") or []
+    )
 
 
 def check_manifests(docs: list[dict[str, Any]], registry: str) -> list[Violation]:
@@ -134,7 +140,9 @@ def check_manifests(docs: list[dict[str, Any]], registry: str) -> list[Violation
         if spec is not None:
             found += _pod_rules(doc, spec, registry)
         kind = doc.get("kind")
-        if kind == "PersistentVolumeClaim" and _claims_rwx((doc.get("spec") or {}).get("accessModes")):
+        if kind == "PersistentVolumeClaim" and _claims_rwx(
+            (doc.get("spec") or {}).get("accessModes")
+        ):
             found.append(Violation("rwx", _name(doc), "accessModes ReadWriteMany"))
         if kind == "StatefulSet":
             for claim in (doc.get("spec") or {}).get("volumeClaimTemplates") or []:
@@ -201,8 +209,12 @@ def render_values(config_path: Path) -> tuple[str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--config", type=Path, action="append",
-                        help="an osprey.yaml at profile: cloud-platform (default: the fixtures)")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        action="append",
+        help="an osprey.yaml at profile: cloud-platform (default: the fixtures)",
+    )
     args = parser.parse_args(argv)
     configs = args.config or sorted(FIXTURES.glob("*.yaml"))
     found = check_dockerfiles(our_dockerfiles())

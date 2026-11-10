@@ -103,24 +103,48 @@ def render_terraform(
         "osprey.yaml (profile: cloud-platform) — do not edit by hand. The providers are the\n"
         "platform pipeline's; the state is the platform's and holds the passwords made here.",
         [
-            ("terraform", [
-                ("required_version", _q(">= 1.10")),
-                ("required_providers", [
-                    ("aws", ({"source": _q("hashicorp/aws"), "version": _q("~> 5.80")})),
-                    ("kubernetes", ({"source": _q("hashicorp/kubernetes"),
-                                         "version": _q("~> 2.33")})),
-                    ("random", ({"source": _q("hashicorp/random"), "version": _q("~> 3.6")})),
-                ]),
-            ]),
-            ('provider "aws"', [
-                ("region", _q(platform.aws_region)),
-                ("default_tags", [("tags", ({
-                    "namespace": "var.namespace",
-                    "application": _q("ospreyflow"),
-                    "environment-name": _q(cp.environment),
-                    "is-production": _q("true" if production else "false"),
-                }))]),
-            ]),
+            (
+                "terraform",
+                [
+                    ("required_version", _q(">= 1.10")),
+                    (
+                        "required_providers",
+                        [
+                            ("aws", ({"source": _q("hashicorp/aws"), "version": _q("~> 5.80")})),
+                            (
+                                "kubernetes",
+                                ({"source": _q("hashicorp/kubernetes"), "version": _q("~> 2.33")}),
+                            ),
+                            (
+                                "random",
+                                ({"source": _q("hashicorp/random"), "version": _q("~> 3.6")}),
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                'provider "aws"',
+                [
+                    ("region", _q(platform.aws_region)),
+                    (
+                        "default_tags",
+                        [
+                            (
+                                "tags",
+                                (
+                                    {
+                                        "namespace": "var.namespace",
+                                        "application": _q("ospreyflow"),
+                                        "environment-name": _q(cp.environment),
+                                        "is-production": _q("true" if production else "false"),
+                                    }
+                                ),
+                            )
+                        ],
+                    ),
+                ],
+            ),
         ],  # fmt: skip
     )
     files["variables.tf"] = _file(
@@ -130,10 +154,13 @@ def render_terraform(
             ('variable "vpc_id"', [("type", "string")]),
             ('variable "subnet_ids"', [("type", "list(string)")]),
             ('variable "eks_oidc_provider_arn"', [("type", "string")]),
-            ('variable "eks_oidc_issuer"', [
-                ("type", "string"),
-                ("description", _q("The cluster's OIDC issuer, without https://")),
-            ]),
+            (
+                'variable "eks_oidc_issuer"',
+                [
+                    ("type", "string"),
+                    ("description", _q("The cluster's OIDC issuer, without https://")),
+                ],
+            ),
         ],
     )
     nets = "[" + ", ".join(_q(n) for n in platform.egress.managed_nets) + "]"
@@ -142,126 +169,202 @@ def render_terraform(
         "Decision 4: RDS PostgreSQL 16, the application's database (Keycloak's and the gateway's\n"
         "are made on it at start, as on a cluster), encrypted, reached over TLS.",
         [
-            ('resource "aws_db_subnet_group" "postgres"', [
-                ("name", '"${var.namespace}-postgres"'), ("subnet_ids", "var.subnet_ids")]),
-            ('resource "aws_security_group" "postgres"', [
-                ("name", '"${var.namespace}-postgres"'), ("vpc_id", "var.vpc_id"),
-                ("ingress", [("from_port", "5432"), ("to_port", "5432"), ("protocol", _q("tcp")),
-                             ("cidr_blocks", nets)]),
-            ]),
+            (
+                'resource "aws_db_subnet_group" "postgres"',
+                [("name", '"${var.namespace}-postgres"'), ("subnet_ids", "var.subnet_ids")],
+            ),
+            (
+                'resource "aws_security_group" "postgres"',
+                [
+                    ("name", '"${var.namespace}-postgres"'),
+                    ("vpc_id", "var.vpc_id"),
+                    (
+                        "ingress",
+                        [
+                            ("from_port", "5432"),
+                            ("to_port", "5432"),
+                            ("protocol", _q("tcp")),
+                            ("cidr_blocks", nets),
+                        ],
+                    ),
+                ],
+            ),
             ('resource "random_password" "postgres"', [("length", "32"), ("special", "false")]),
-            ('resource "aws_db_instance" "postgres"', [
-                ("identifier", '"${var.namespace}-postgres"'),
-                ("engine", _q("postgres")),
-                ("engine_version", _q("16")),
-                ("instance_class", _q("db.t4g.large" if production else "db.t4g.small")),
-                ("allocated_storage", "100" if production else "20"),
-                ("max_allocated_storage", "1000" if production else "100"),
-                ("storage_encrypted", "true"),
-                ("multi_az", "true" if production else "false"),
-                ("db_name", _q("ospreyflow")),
-                ("username", _q("osprey")),
-                ("password", "random_password.postgres.result"),
-                ("db_subnet_group_name", "aws_db_subnet_group.postgres.name"),
-                ("vpc_security_group_ids", "[aws_security_group.postgres.id]"),
-                ("backup_retention_period", "7"),
-                ("deletion_protection", "true" if production else "false"),
-                ("skip_final_snapshot", "false" if production else "true"),
-                ("final_snapshot_identifier",
-                 '"${var.namespace}-postgres-final"' if production else "null"),
-                ("ca_cert_identifier", _q("rds-ca-rsa2048-g1")),
-            ]),
-            _secret(secrets.postgres.name, {
-                pg["host"]: "aws_db_instance.postgres.address",
-                pg["port"]: "tostring(aws_db_instance.postgres.port)",
-                pg["user"]: "aws_db_instance.postgres.username",
-                pg["password"]: "random_password.postgres.result",
-                pg["database"]: "aws_db_instance.postgres.db_name",
-            }),
+            (
+                'resource "aws_db_instance" "postgres"',
+                [
+                    ("identifier", '"${var.namespace}-postgres"'),
+                    ("engine", _q("postgres")),
+                    ("engine_version", _q("16")),
+                    ("instance_class", _q("db.t4g.large" if production else "db.t4g.small")),
+                    ("allocated_storage", "100" if production else "20"),
+                    ("max_allocated_storage", "1000" if production else "100"),
+                    ("storage_encrypted", "true"),
+                    ("multi_az", "true" if production else "false"),
+                    ("db_name", _q("ospreyflow")),
+                    ("username", _q("osprey")),
+                    ("password", "random_password.postgres.result"),
+                    ("db_subnet_group_name", "aws_db_subnet_group.postgres.name"),
+                    ("vpc_security_group_ids", "[aws_security_group.postgres.id]"),
+                    ("backup_retention_period", "7"),
+                    ("deletion_protection", "true" if production else "false"),
+                    ("skip_final_snapshot", "false" if production else "true"),
+                    (
+                        "final_snapshot_identifier",
+                        '"${var.namespace}-postgres-final"' if production else "null",
+                    ),
+                    ("ca_cert_identifier", _q("rds-ca-rsa2048-g1")),
+                ],
+            ),
+            _secret(
+                secrets.postgres.name,
+                {
+                    pg["host"]: "aws_db_instance.postgres.address",
+                    pg["port"]: "tostring(aws_db_instance.postgres.port)",
+                    pg["user"]: "aws_db_instance.postgres.username",
+                    pg["password"]: "random_password.postgres.result",
+                    pg["database"]: "aws_db_instance.postgres.db_name",
+                },
+            ),
         ],  # fmt: skip
     )
     redis = secrets.redis.keys
     files["elasticache.tf"] = _file(
         "Decision 4: ElastiCache (Redis 7) for the working set and the job queue, TLS and a token.",
         [
-            ('resource "aws_elasticache_subnet_group" "redis"', [
-                ("name", '"${var.namespace}-redis"'), ("subnet_ids", "var.subnet_ids")]),
-            ('resource "aws_security_group" "redis"', [
-                ("name", '"${var.namespace}-redis"'), ("vpc_id", "var.vpc_id"),
-                ("ingress", [("from_port", "6379"), ("to_port", "6379"), ("protocol", _q("tcp")),
-                             ("cidr_blocks", nets)]),
-            ]),
+            (
+                'resource "aws_elasticache_subnet_group" "redis"',
+                [("name", '"${var.namespace}-redis"'), ("subnet_ids", "var.subnet_ids")],
+            ),
+            (
+                'resource "aws_security_group" "redis"',
+                [
+                    ("name", '"${var.namespace}-redis"'),
+                    ("vpc_id", "var.vpc_id"),
+                    (
+                        "ingress",
+                        [
+                            ("from_port", "6379"),
+                            ("to_port", "6379"),
+                            ("protocol", _q("tcp")),
+                            ("cidr_blocks", nets),
+                        ],
+                    ),
+                ],
+            ),
             ('resource "random_password" "redis"', [("length", "32"), ("special", "false")]),
-            ('resource "aws_elasticache_replication_group" "redis"', [
-                ("replication_group_id", '"${var.namespace}-redis"'),
-                ("description", _q("OspreyFlow's working set and job queue")),
-                ("engine", _q("redis")),
-                ("engine_version", _q("7.1")),
-                ("node_type", _q("cache.t4g.medium" if production else "cache.t4g.micro")),
-                ("num_cache_clusters", "2" if production else "1"),
-                ("automatic_failover_enabled", "true" if production else "false"),
-                ("port", "6379"),
-                ("subnet_group_name", "aws_elasticache_subnet_group.redis.name"),
-                ("security_group_ids", "[aws_security_group.redis.id]"),
-                ("at_rest_encryption_enabled", "true"),
-                ("transit_encryption_enabled", "true"),
-                ("auth_token", "random_password.redis.result"),
-            ]),
-            _secret(secrets.redis.name, {
-                redis["host"]: "aws_elasticache_replication_group.redis.primary_endpoint_address",
-                redis["port"]: _q("6379"),
-                redis["password"]: "random_password.redis.result",
-            }),
+            (
+                'resource "aws_elasticache_replication_group" "redis"',
+                [
+                    ("replication_group_id", '"${var.namespace}-redis"'),
+                    ("description", _q("OspreyFlow's working set and job queue")),
+                    ("engine", _q("redis")),
+                    ("engine_version", _q("7.1")),
+                    ("node_type", _q("cache.t4g.medium" if production else "cache.t4g.micro")),
+                    ("num_cache_clusters", "2" if production else "1"),
+                    ("automatic_failover_enabled", "true" if production else "false"),
+                    ("port", "6379"),
+                    ("subnet_group_name", "aws_elasticache_subnet_group.redis.name"),
+                    ("security_group_ids", "[aws_security_group.redis.id]"),
+                    ("at_rest_encryption_enabled", "true"),
+                    ("transit_encryption_enabled", "true"),
+                    ("auth_token", "random_password.redis.result"),
+                ],
+            ),
+            _secret(
+                secrets.redis.name,
+                {
+                    redis[
+                        "host"
+                    ]: "aws_elasticache_replication_group.redis.primary_endpoint_address",
+                    redis["port"]: _q("6379"),
+                    redis["password"]: "random_password.redis.result",
+                },
+            ),
         ],  # fmt: skip
     )
     if config.components.search is SearchBackend.OPENSEARCH:
         files["opensearch.tf"] = _file(
             "Decision 4: the platform's OpenSearch 2.x, encrypted, HTTPS only, inside the VPC.",
             [
-                ('resource "aws_opensearch_domain" "search"', [
-                    ("domain_name", '"${var.namespace}-search"'),
-                    ("engine_version", _q("OpenSearch_2.17")),
-                    ("cluster_config", [("instance_type", _q("t3.medium.search")),
-                                        ("instance_count", "2" if production else "1")]),
-                    ("ebs_options", [("ebs_enabled", "true"), ("volume_size", "50")]),
-                    ("encrypt_at_rest", [("enabled", "true")]),
-                    ("node_to_node_encryption", [("enabled", "true")]),
-                    ("domain_endpoint_options", [("enforce_https", "true"),
-                                                 ("tls_security_policy",
-                                                  _q("Policy-Min-TLS-1-2-2019-07"))]),
-                    ("vpc_options", [("subnet_ids", "[var.subnet_ids[0]]")]),
-                ]),
-                _secret(secrets.opensearch.name, {
-                    secrets.opensearch.keys["url"]:
-                        '"https://${aws_opensearch_domain.search.endpoint}"',
-                }),
+                (
+                    'resource "aws_opensearch_domain" "search"',
+                    [
+                        ("domain_name", '"${var.namespace}-search"'),
+                        ("engine_version", _q("OpenSearch_2.17")),
+                        (
+                            "cluster_config",
+                            [
+                                ("instance_type", _q("t3.medium.search")),
+                                ("instance_count", "2" if production else "1"),
+                            ],
+                        ),
+                        ("ebs_options", [("ebs_enabled", "true"), ("volume_size", "50")]),
+                        ("encrypt_at_rest", [("enabled", "true")]),
+                        ("node_to_node_encryption", [("enabled", "true")]),
+                        (
+                            "domain_endpoint_options",
+                            [
+                                ("enforce_https", "true"),
+                                ("tls_security_policy", _q("Policy-Min-TLS-1-2-2019-07")),
+                            ],
+                        ),
+                        ("vpc_options", [("subnet_ids", "[var.subnet_ids[0]]")]),
+                    ],
+                ),
+                _secret(
+                    secrets.opensearch.name,
+                    {
+                        secrets.opensearch.keys[
+                            "url"
+                        ]: '"https://${aws_opensearch_domain.search.endpoint}"',
+                    },
+                ),
             ],  # fmt: skip
         )
     bucket_list = "[" + ", ".join(_q(b) for b in BUCKETS) + "]"
     files["s3.tf"] = _file(
-        "Decisions 4 and 6: the buckets the services name as <prefix><name>, private and encrypted.",
+        "Decisions 4 and 6: the buckets the services name as <prefix><name>, private, encrypted.",
         [
             ("locals", [("buckets", f"toset({bucket_list})")]),
-            ('resource "aws_s3_bucket" "store"', [
-                ("for_each", "local.buckets"), ("bucket", '"${var.namespace}-${each.key}"')]),
-            ('resource "aws_s3_bucket_public_access_block" "store"', [
-                ("for_each", "local.buckets"),
-                ("bucket", "aws_s3_bucket.store[each.key].id"),
-                ("block_public_acls", "true"),
-                ("block_public_policy", "true"),
-                ("ignore_public_acls", "true"),
-                ("restrict_public_buckets", "true"),
-            ]),
-            ('resource "aws_s3_bucket_server_side_encryption_configuration" "store"', [
-                ("for_each", "local.buckets"),
-                ("bucket", "aws_s3_bucket.store[each.key].id"),
-                ("rule", [("apply_server_side_encryption_by_default",
-                           [("sse_algorithm", _q("aws:kms"))])]),
-            ]),
-            ('resource "aws_s3_bucket_versioning" "media"', [
-                ("bucket", 'aws_s3_bucket.store["media"].id'),
-                ("versioning_configuration", [("status", _q("Enabled"))]),
-            ]),
+            (
+                'resource "aws_s3_bucket" "store"',
+                [("for_each", "local.buckets"), ("bucket", '"${var.namespace}-${each.key}"')],
+            ),
+            (
+                'resource "aws_s3_bucket_public_access_block" "store"',
+                [
+                    ("for_each", "local.buckets"),
+                    ("bucket", "aws_s3_bucket.store[each.key].id"),
+                    ("block_public_acls", "true"),
+                    ("block_public_policy", "true"),
+                    ("ignore_public_acls", "true"),
+                    ("restrict_public_buckets", "true"),
+                ],
+            ),
+            (
+                'resource "aws_s3_bucket_server_side_encryption_configuration" "store"',
+                [
+                    ("for_each", "local.buckets"),
+                    ("bucket", "aws_s3_bucket.store[each.key].id"),
+                    (
+                        "rule",
+                        [
+                            (
+                                "apply_server_side_encryption_by_default",
+                                [("sse_algorithm", _q("aws:kms"))],
+                            )
+                        ],
+                    ),
+                ],
+            ),
+            (
+                'resource "aws_s3_bucket_versioning" "media"',
+                [
+                    ("bucket", 'aws_s3_bucket.store["media"].id'),
+                    ("versioning_configuration", [("status", _q("Enabled"))]),
+                ],
+            ),
             _secret(secrets.s3.name, {secrets.s3.keys["prefix"]: '"${var.namespace}-"'}),
         ],  # fmt: skip
     )
@@ -271,15 +374,25 @@ def render_terraform(
         "Decision 8: a repository for each image, scanned on push; `ospreyflow images push\n"
         "--registry` copies ours and the third-party ones into them, by digest.",
         [
-            ("locals", [("repositories", "toset([\n"
-                         + "".join(f"    {_q(r)},\n" for r in repositories) + "  ])")]),
-            ('resource "aws_ecr_repository" "image"', [
-                ("for_each", "local.repositories"),
-                ("name", "each.key"),
-                ("image_tag_mutability", _q("MUTABLE")),
-                ("image_scanning_configuration", [("scan_on_push", "true")]),
-                ("encryption_configuration", [("encryption_type", _q("KMS"))]),
-            ]),
+            (
+                "locals",
+                [
+                    (
+                        "repositories",
+                        "toset([\n" + "".join(f"    {_q(r)},\n" for r in repositories) + "  ])",
+                    )
+                ],
+            ),
+            (
+                'resource "aws_ecr_repository" "image"',
+                [
+                    ("for_each", "local.repositories"),
+                    ("name", "each.key"),
+                    ("image_tag_mutability", _q("MUTABLE")),
+                    ("image_scanning_configuration", [("scan_on_push", "true")]),
+                    ("encryption_configuration", [("encryption_type", _q("KMS"))]),
+                ],
+            ),
         ],  # fmt: skip
     )
     account = secrets.irsa.service_account
@@ -287,47 +400,94 @@ def render_terraform(
         "Decision 4: the service account the Conduit, ingest and the workers run as, given the\n"
         "buckets through its role (IRSA), so no S3 key exists anywhere.",
         [
-            ('data "aws_iam_policy_document" "buckets"', [
-                ("statement", [
-                    ("actions", '["s3:ListBucket", "s3:GetBucketLocation"]'),
-                    ("resources", "[for bucket in aws_s3_bucket.store : bucket.arn]"),
-                ]),
-                ("statement", [
-                    ("actions", '["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]'),
-                    ("resources", '[for bucket in aws_s3_bucket.store : "${bucket.arn}/*"]'),
-                ]),
-            ]),
-            ('resource "aws_iam_policy" "buckets"', [
-                ("name", '"${var.namespace}-buckets"'),
-                ("policy", "data.aws_iam_policy_document.buckets.json"),
-            ]),
-            ('data "aws_iam_policy_document" "trust"', [
-                ("statement", [
-                    ("actions", '["sts:AssumeRoleWithWebIdentity"]'),
-                    ("principals", [("type", _q("Federated")),
-                                    ("identifiers", "[var.eks_oidc_provider_arn]")]),
-                    ("condition", [
-                        ("test", _q("StringEquals")),
-                        ("variable", '"${var.eks_oidc_issuer}:sub"'),
-                        ("values", f'["system:serviceaccount:${{var.namespace}}:{account}"]'),
-                    ]),
-                ]),
-            ]),
-            ('resource "aws_iam_role" "service"', [
-                ("name", '"${var.namespace}-service"'),
-                ("assume_role_policy", "data.aws_iam_policy_document.trust.json"),
-            ]),
-            ('resource "aws_iam_role_policy_attachment" "buckets"', [
-                ("role", "aws_iam_role.service.name"),
-                ("policy_arn", "aws_iam_policy.buckets.arn"),
-            ]),
-            ('resource "kubernetes_service_account" "service"', [
-                ("metadata", [
-                    ("name", _q(account)),
-                    ("namespace", "var.namespace"),
-                    ("annotations", {_q("eks.amazonaws.com/role-arn"): "aws_iam_role.service.arn"}),
-                ]),
-            ]),
+            (
+                'data "aws_iam_policy_document" "buckets"',
+                [
+                    (
+                        "statement",
+                        [
+                            ("actions", '["s3:ListBucket", "s3:GetBucketLocation"]'),
+                            ("resources", "[for bucket in aws_s3_bucket.store : bucket.arn]"),
+                        ],
+                    ),
+                    (
+                        "statement",
+                        [
+                            ("actions", '["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]'),
+                            (
+                                "resources",
+                                '[for bucket in aws_s3_bucket.store : "${bucket.arn}/*"]',
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                'resource "aws_iam_policy" "buckets"',
+                [
+                    ("name", '"${var.namespace}-buckets"'),
+                    ("policy", "data.aws_iam_policy_document.buckets.json"),
+                ],
+            ),
+            (
+                'data "aws_iam_policy_document" "trust"',
+                [
+                    (
+                        "statement",
+                        [
+                            ("actions", '["sts:AssumeRoleWithWebIdentity"]'),
+                            (
+                                "principals",
+                                [
+                                    ("type", _q("Federated")),
+                                    ("identifiers", "[var.eks_oidc_provider_arn]"),
+                                ],
+                            ),
+                            (
+                                "condition",
+                                [
+                                    ("test", _q("StringEquals")),
+                                    ("variable", '"${var.eks_oidc_issuer}:sub"'),
+                                    (
+                                        "values",
+                                        f'["system:serviceaccount:${{var.namespace}}:{account}"]',
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                'resource "aws_iam_role" "service"',
+                [
+                    ("name", '"${var.namespace}-service"'),
+                    ("assume_role_policy", "data.aws_iam_policy_document.trust.json"),
+                ],
+            ),
+            (
+                'resource "aws_iam_role_policy_attachment" "buckets"',
+                [
+                    ("role", "aws_iam_role.service.name"),
+                    ("policy_arn", "aws_iam_policy.buckets.arn"),
+                ],
+            ),
+            (
+                'resource "kubernetes_service_account" "service"',
+                [
+                    (
+                        "metadata",
+                        [
+                            ("name", _q(account)),
+                            ("namespace", "var.namespace"),
+                            (
+                                "annotations",
+                                {_q("eks.amazonaws.com/role-arn"): "aws_iam_role.service.arn"},
+                            ),
+                        ],
+                    ),
+                ],
+            ),
         ],  # fmt: skip
     )
     keys = values["secrets"]["keys"]
@@ -339,7 +499,7 @@ def render_terraform(
         for k in made
     ]
     blocks += [
-        (f'variable {_q(k.lower())}', [("type", "string"), ("sensitive", "true")]) for k in given
+        (f"variable {_q(k.lower())}", [("type", "string"), ("sensitive", "true")]) for k in given
     ]
     data = {
         **{k: _q(defaults[k]) for k in keys if k in defaults},

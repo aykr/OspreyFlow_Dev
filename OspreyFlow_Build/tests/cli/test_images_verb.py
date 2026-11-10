@@ -6,17 +6,16 @@ What a mistake would do, and the case that catches it (rule 12):
   digest the registry does not hold) — `test_theirs_are_copied_by_their_digest`;
 - the Conduit pushed with Java on this profile (decision 12) —
   `test_ours_are_built_here_the_conduit_without_java`;
-- a push to a registry the values do not pull from — `test_a_registry_the_render_does_not_name_is_refused`;
+- a push to a registry the values do not pull from —
+  `test_a_registry_the_render_does_not_name_is_refused`;
 - a failed step followed by the rest — `test_a_failed_step_stops_the_push`.
 """
 
 from __future__ import annotations
 
-
 import pytest
 import yaml
 from harness.render import load_config, render
-
 from tools.cp_policy_check import FIXTURES, _resolver
 
 from .conftest import Rig
@@ -39,7 +38,11 @@ def plan(rig: Rig) -> dict[str, object]:
 
 def test_theirs_are_copied_by_their_digest(rig: Rig, plan: dict[str, object]) -> None:
     assert rig("images", "push", "--registry", REGISTRY) == 0
-    copies = [c.argv for c in rig.runner.calls if c.argv[:4] == ["docker", "buildx", "imagetools", "create"]]
+    copies = [
+        c.argv
+        for c in rig.runner.calls
+        if c.argv[:4] == ["docker", "buildx", "imagetools", "create"]
+    ]
     by_target = {argv[5]: argv[6] for argv in copies}
     arcadedb = f"{REGISTRY}/arcadedata/arcadedb:26.10.1"
     assert by_target[arcadedb].startswith("arcadedata/arcadedb:26.10.1@sha256:")
@@ -79,7 +82,9 @@ def test_a_failed_step_stops_the_push(rig: Rig, plan: dict[str, object]) -> None
     assert rig.runner.calls[-1].argv[:2] == ["docker", "push"]
 
 
-def test_a_dry_run_runs_nothing(rig: Rig, plan: dict[str, object], capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_dry_run_runs_nothing(
+    rig: Rig, plan: dict[str, object], capsys: pytest.CaptureFixture[str]
+) -> None:
     assert rig("images", "push", "--registry", REGISTRY, "--dry-run") == 0
     assert rig.runner.calls == []
     assert "would build" in capsys.readouterr().out
@@ -93,7 +98,9 @@ def test_no_render_is_refused_in_words(rig: Rig, capsys: pytest.CaptureFixture[s
 
 def test_the_plan_names_every_image_the_values_run(plan: dict[str, object], rig: Rig) -> None:
     values = yaml.safe_load(
-        render(load_config(FIXTURES / "production.yaml"), resolver=_resolver).artefacts["values.yaml"]
+        render(load_config(FIXTURES / "production.yaml"), resolver=_resolver).artefacts[
+            "values.yaml"
+        ]
     )
     run = {
         c["image"].split("@")[0].split(":sha256-")[0]
@@ -102,4 +109,3 @@ def test_the_plan_names_every_image_the_values_run(plan: dict[str, object], rig:
     }
     planned = {str(i["target"]).split(":sha256-")[0] for i in plan["images"]}  # type: ignore[attr-defined]
     assert run == planned
-

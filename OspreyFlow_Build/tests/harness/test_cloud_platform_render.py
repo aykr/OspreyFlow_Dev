@@ -28,9 +28,9 @@ from harness.cloud_platform import CloudPlatformNotRenderable, managed_variables
 from harness.cloud_platform.settings import load_platform
 from harness.render import UnpinnedImagesError, load_config, render
 from pydantic import ValidationError
+from tools.cp_policy_check import FIXTURES, _resolver
 
 from schemas.deployment import OspreyConfig
-from tools.cp_policy_check import FIXTURES, _resolver
 
 REGISTRY = "123456789012.dkr.ecr.eu-west-2.amazonaws.com"
 
@@ -140,7 +140,7 @@ def _secret_refs(values: dict[str, Any]) -> set[tuple[str, str]]:
 
 
 def _terraform_secrets(artefacts: dict[str, str]) -> dict[str, set[str]]:
-    """Each `kubernetes_secret`'s name and the keys of its data, read from the rendered Terraform."""
+    """Each `kubernetes_secret`'s name and the keys of its data, from the rendered Terraform."""
     found: dict[str, set[str]] = {}
     for name, text in artefacts.items():
         if not name.startswith("terraform/"):
@@ -293,7 +293,9 @@ def test_the_settings_belong_to_the_profile_alone() -> None:
 
 
 def test_a_namespace_and_a_registry_are_required() -> None:
-    with pytest.raises(ValidationError, match="cloud_platform.namespace and cloud_platform.registry"):
+    with pytest.raises(
+        ValidationError, match="cloud_platform.namespace and cloud_platform.registry"
+    ):
         OspreyConfig.model_validate(
             {"profile": "cloud-platform", "network": {"public_origin": "https://a.example.org"}}
         )
