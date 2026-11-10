@@ -1,0 +1,54 @@
+## a link type requiring a property offered and drawn
+plant in services/api/boards.py; -k requires_a_property; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_boards.py::test_a_link_type_whose_model_requires_a_property_is_not_offered_nor_drawn
+1 failed, 72 deselected, 1 warning in 1.43s
+E       AssertionError: assert 'ROLE_IN' not in ['ADJOINS', 'ASSOCIATE_OF', 'ATTRIBUTED_TO', 'BENEFICIAL_OWNER_OF', 'COMMUNICATED_WITH', 'COMPROMISES', ...]
+
+## a match raised again on every load (no claim)
+plant in services/api/drawn_watches.py; -k one_alert_per_match or each_case_gets; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_loaded_node_like_a_drawn_item_raises_one_alert_per_match_per_case
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_each_case_gets_its_own_alert_for_the_same_loaded_node
+2 failed, 6 deselected, 1 warning in 1.42s
+E       assert 1 == 0
+E       assert 2 == 0
+
+## the loaded nodes read above the owner (the handling filter not theirs)
+plant in services/api/drawn_watches.py; -k owner_may_not_see or counted_by_what; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_a_node_the_owner_may_not_see
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_load_counted_by_what_it_raised_never_by_what_it_read
+2 failed, 6 deselected, 1 warning in 1.42s
+E       assert 1 == 0
+E       assert 2 == 1
+
+## a watch run for a case that reads the dataset no more
+plant in services/api/drawn_watches.py; -k reads_the_dataset_no_more; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_once_the_case_reads_the_dataset_no_more
+1 failed, 7 deselected, 1 warning in 1.37s
+E       assert 1 == 0
+
+## a pair decided on the board raised all the same
+plant in services/api/drawn_watches.py; -k decided_on_the_board; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_pair_decided_on_the_board_raises_nothing
+1 failed, 7 deselected, 1 warning in 1.35s
+E       assert 1 == 0
+
+## a drawn node taken for a loaded one
+plant in services/api/drawn_watches.py; -k unalike_of_another_type_or_drawn; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_a_node_unalike_of_another_type_or_drawn
+1 failed, 7 deselected, 1 warning in 1.38s
+E       assert 1 == 0
+
+## a watch run for an owner gone
+plant in services/api/drawn_watches.py; -k owner_gone; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_another_datasets_load_an_ended_watch_or_an_owner_gone
+1 failed, 7 deselected, 1 warning in 1.35s
+E       assert 1 == 0
+
+## a node of another type taken as alike
+plant in services/api/boards.py; -k unalike_of_another_type_or_drawn; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_a_node_unalike_of_another_type_or_drawn
+1 failed, 7 deselected, 1 warning in 1.42s
+E       assert 2 == 0
+
+## restored
+81 passed, 1 warning in 2.10s
