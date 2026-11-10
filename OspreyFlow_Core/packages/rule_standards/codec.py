@@ -90,7 +90,7 @@ _ALLOWED: dict[str, frozenset[str]] = {
         "osprey:when": ("runs", "onHit"),
         "osprey:schedule": ("every", "hour", "weekday"),
         "osprey:limits": ("budgetMs", "maxMatches"),
-        "osprey:raise": ("severity", "team", "scope"),
+        "osprey:raise": ("severity", "team", "teamId", "scope"),
         "osprey:subject": ("type",),
         "osprey:relationship": ("kind", "linkType", "otherType", "steps", "minScore"),
         "osprey:frequency": ("kind", "linkType", "atLeast", "withinDays", "amountProperty", "over"),
@@ -219,10 +219,11 @@ def to_bpmn(rule: SentenceRuleInput, *, dataset_id: str) -> str:
         {"runs": sentence["runs"], "on_hit": sentence["on_hit"]},
         _osprey("schedule", schedule) if schedule is not None else "",
     )
-    raise_ = _osprey(
-        "raise",
-        {"severity": sentence["severity"], "team": sentence["team"], "scope": sentence["scope"]},
-    )
+    then = {"severity": sentence["severity"], "team": sentence["team"]}
+    # lane/rules' L2.10 names a team by its role id (ADR-146 decision 8); written when present.
+    if sentence.get("team_id") is not None:
+        then["team_id"] = sentence["team_id"]
+    raise_ = _osprey("raise", {**then, "scope": sentence["scope"]})
     limits = _osprey("limits", {"budget_ms": data["budget_ms"], "max_matches": data["max_matches"]})
     subject = _attr(sentence["subject"])
     return (

@@ -182,6 +182,19 @@ def test_export_then_import_gives_the_same_rule(shape: str) -> None:
     assert back == RuleFile(rule=rule, dataset_id=DATASET)
 
 
+@pytest.mark.skipif(
+    "team_id" not in RuleSentence.model_fields, reason="a named team arrives with lane/rules' L2.10"
+)
+def test_a_rule_for_a_named_team_keeps_its_team() -> None:
+    sentence = RuleSentence.model_validate(
+        {"subject": "Person", "team": "team", "team_id": "role-7"}
+    )
+    rule = SentenceRuleInput(name="Team rule", sentence=sentence)
+    bpmn, dmn = _files(rule)
+    assert 'teamId="role-7"' in bpmn
+    assert from_files(bpmn.encode(), dmn.encode()) == RuleFile(rule=rule, dataset_id=DATASET)
+
+
 def test_the_files_are_the_three_elements_and_one_decision_table() -> None:
     bpmn, dmn = _files()
     assert bpmn.count("<bpmn:startEvent ") == 1
