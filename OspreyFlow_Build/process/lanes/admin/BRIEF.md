@@ -22,7 +22,7 @@ or named. Prove it: the same commit's `make test` serial and parallel give the s
 time before and after. Its Makefile half as a diff for the orchestrator.
 
 **Decided by the orchestrator, 10 November evening (T1 part 4):** (a) the test stacks' Postgres `max_connections`
-raised to 400 through `scripts/stack_lease.sh`'s `up` (ratified for that one setting; test stacks only, never
+raised to 400 through `OspreyFlow_Build/scripts/stack_lease.sh`'s `up` (ratified for that one setting; test stacks only, never
 `osprey-small` or the product's settings), with a test, red first; ClickHouse left unredirected (its live tests name
 their own databases), recorded in the friction row.
 
