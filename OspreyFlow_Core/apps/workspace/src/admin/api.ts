@@ -26,6 +26,7 @@ import type {
   LayerDryRun,
   OrganisationArrival,
   PersonAccount,
+  PersonOwnership,
   RegisteredDashboard,
   ScheduleRunView,
   SignInDelivery,
@@ -195,6 +196,10 @@ export const setTeamCover = (api: AdminApi, roleId: string, cover: string | null
   call<Team>(api, `teams/${encodeURIComponent(roleId)}/cover`, { method: "PUT", body: JSON.stringify({ cover, until }) });
 export const peopleRows = (api: AdminApi) => call<AdminPeopleRows>(api, "people/rows");
 export const disablePlan = (api: AdminApi, userId: string) => call<DisablePlan>(api, person(userId, "disable-plan"));
+// ADR-145 Amendment 8 (L3.8, read by L2.5b): whether the person owns items this administrator may
+// not see, said and never named; the items themselves come in the plan.
+export const personOwnership = (api: AdminApi, userId: string) =>
+  call<PersonOwnership>(api, person(userId, "ownership"));
 export const transferAndDisable = (api: AdminApi, userId: string, transfers: OwnedTransfer[]) =>
   call<PersonAccount>(api, person(userId, "disable"), { method: "POST", body: JSON.stringify({ transfers }) });
 

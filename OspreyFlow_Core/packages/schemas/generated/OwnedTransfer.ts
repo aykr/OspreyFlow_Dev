@@ -9,7 +9,11 @@ export type Kind =
   | "saved_pattern"
   | "typology_rule"
   | "pipeline_schedule"
-  | "list_schedule";
+  | "list_schedule"
+  | "view"
+  | "board"
+  | "link_type_proposal"
+  | "drawn_watch";
 export type Id = string;
 export type To = string;
 

@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace, feedFreshness } from "./AdminPlace";
+import { convertedWords } from "./sections/System";
 
 afterEach(() => {
   cleanup();
@@ -296,6 +297,38 @@ describe("the Demo packs tab", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy the command for operation-ledger" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("ospreyflow demo add operation-ledger"));
     expect(await screen.findByText("Copied. Run it in a terminal on the machine OspreyFlow runs on.")).toBeTruthy();
+  });
+});
+
+// ADR-144 decision 6 (L2.5b): the System tab says how many cases made from another became views,
+// in how many cases, as the Conduit counted them in the administrator's unit.
+describe("the System tab's cases converted to views", () => {
+  it("says the counts, and that the dry-run report names any case not placed", async () => {
+    serve((path) => (path === "system" ? json(200, { components: [], converted_views: { views: 3, cases: 2 } }) : null));
+    place(["administer_system"], "System");
+    const section = await screen.findByRole("region", { name: "Cases converted to views" });
+    expect(section.textContent).toContain("3 cases made from another became views, in 2 cases of your unit.");
+    expect(section.textContent).toContain("its dry-run report, which the operator runs, names each and why.");
+  });
+
+  it("says when nothing became a view, and says so in words when the count is not known", async () => {
+    expect(convertedWords({ views: 0, cases: 0 })[0]).toBe("No case made from another has become a view in your unit.");
+    expect(convertedWords({ views: 1, cases: 1 })[0]).toBe(
+      "1 case made from another became a view, in 1 case of your unit.",
+    );
+    // The orchestrator's review of L2.5b: a count that could not be read is said, in words.
+    expect(convertedWords({ problem: "Not known: the count could not be read (OSError)" })[0]).toBe(
+      "Not known: the count could not be read (OSError)",
+    );
+    serve((path) =>
+      path === "system"
+        ? json(200, { components: [], converted_views: { views: 0, cases: 0, problem: "Not known: the count could not be read (OSError)" } })
+        : null,
+    );
+    place(["administer_system"], "System");
+    const section = await screen.findByRole("region", { name: "Cases converted to views" });
+    expect(section.textContent).toContain("Not known: the count could not be read");
+    expect(section.textContent).not.toContain("No case made from another");
   });
 });
 

@@ -1,57 +1,56 @@
-# admin lane · report · L2.7: *Needs you*, Admin's tips and Home's *What you can do* (9 November 2026)
+# admin lane · report · L2.5b: Disable's full transfer list (10 November 2026)
 
-This is round 2, after the orchestrator's independent review sent c8c9e44 back, and round 3, after my lane-reviewer's
-pass over round 2.
-- The branch is rebased onto main e76cef9 (round 1 was on 8e74fc8, not the f382e12 its records said). The head is in
-  `git log`.
-- Every case is red by a plant at its call site (`L2.7_RED_RECORD.md`, rounds 1 to 3).
-- Rules was told about `src/home/` by the orchestrator at about 19:15, and has no conflict.
+The branch is on main e5cc0db.
+- **Offline and local gates** ran at f20513c.
+- **The live run** was at 0f5c76c. f20513c..0f5c76c changes one live test file only.
+- **Red record:** `L2.5b_RED_RECORD.md`, with 12 offline and 14 live plants, plus the Glass plants.
 
 | Exit criterion | State | Proving test |
 | --- | --- | --- |
-| 1. *Needs you*: an overdue promotion served only to a current recipient, while it waits, cleared to the dataset's and the items' marking; proposals counted only in the reader's reach and only where they may read them, nothing said of the rest | met | `test_needs_you.py` (10); `test_waiting_promotions_contract.py` (with `items_marking`, C5 and C6); `test_promotion_ageing.py`; `needsYou/*.test.tsx`; keyboard `needs-you.spec.ts` |
-| 2. Admin's *Proposed types* removed | met | `AdminPlace.test.tsx`, `AdminSections.test.tsx`; `test_link_type_routes.py`'s list case |
-| 3. Connections' SQL, API and JSON fields; no secret returned | met | `test_admin_connection_fields.py`; `Connections.test.tsx`; keyboard (API, SQL, JSON, Test) |
-| 4. The grading scheme, read-only | met | `GradingScheme.test.tsx`; `test_admin_sections.py`'s `REFERENCE_READS` pin |
-| 5. Tips; refusals naming roles, never people; Home's section | met as far as sources exist (item 2) | `adminWords.test.tsx` (every section and Home, W1–W4); `refusals.test.tsx`; `home/answersFor.test.tsx` |
-| Keyboard (rule 13) | met | `gates/cb1b1fa.keyboard.txt`: 703 passed. Its 2 failures are main's `boards.spec.ts` |
-| axe in dark, light and GOV.UK | met | `gates/cb1b1fa.axe.txt`: 760/760 |
+| Disable completes when every item of a person's is visible: L3.8's views, boards, proposals and watches offered, moved and audited | met | `test_disable_l38_transfers.py` (live): `…four_kinds_is_offered_moved_and_audited`; keyboard `admin.spec.ts`, now with a watch |
+| Refused in words while anything is withheld (409 `withheld_items`, after the visible transfers commit, which stand, naming nothing) | met | `test_admin_roles_routes.py` (the fake drives the real `refuse_if_withheld`); live `…item_above_the_administrator…`; `PeopleAndRoles.test.tsx` |
+| Each recipient holds the rights its own route asks, a level on the case and the case's unit, and clears the marking (a view or board: the case's highest, Amendment 9) | met | `…l38_item_needs_the_right…`, `…another_unit`, live `…case_level_or_the_marking…`, `…unit_wide_level…`, `…unmarked_dataset…`, `…cleared_to_its_cases_highest` |
+| The admin dry run is kept to the dataset's own unit | met | `test_admin_dataset_cases.py::test_a_dry_run_is_for_an_administrator_of_the_datasets_own_unit` |
+| System's count of cases converted to views (ADR-144 decision 6), in words when it cannot be read | met, with the report's link recorded as a gap (Amendment 9 decision 4) | `test_admin_routes.py`, live `test_admin_converted_views.py`, `AdminPlace.test.tsx` |
+| The ownership route's line is gone from `NOT_A_SECTION_S`; the Datasets sentence names Studio › 4 Runs | met | `test_admin_sections.py`; `Datasets.test.tsx` |
+| Keyboard (rule 13) and axe in the dark, light and GOV.UK themes; a friction row | met | `gates/f20513c.keyboard.txt` 42/42; `gates/f20513c.axe.txt` 80/80 (`show=withheld` is new); `friction/2026-11-10-admin-disable-full-list.md` |
 
 1. **Gates.**
-   - `make -k ci` at b85a1b6 (`gates/b85a1b6.ci.txt`): green except Docker's checks (the 8 image scans, opentofu and chart).
-   - `make test` on the server at b85a1b6 (`gates/b85a1b6.test.txt`), and again at 1179875 after the re-review's test-only fix (`gates/1179875.test.txt`): pytest 9,674 passed and 2 failed (main's GPU and Valkey cases); test-js 2,869 of 2,870, with `MatrixView.budget` failing under load.
-   - Live on stack f at b85a1b6 under the admin lease (`gates/b85a1b6.live.txt`): 183 passed, including `test_route_rights.py`. 16 leftover `test_link_type_store` rows removed. Counted before and after, the set left no row.
-   - Keyboard and axe ran at cb1b1fa. After that the Glass changed only in test files and a harness comment.
-2. **Left, with why:**
-   - Home's *through a team*, *Lead of*, *Covering*, *Owner of watches* and the waiting counts on *Author of* lines. No
-     read gives them; spec 02 records this (rule 11).
-   - An overdue promotion opens nothing for an Author without `operate_schedules` until L3.4's review screen exists.
-   - The top bar re-reads on its minute.
-   - Done on top of case's L3.4, by agreement: `WaitingFromStore._as_pending` passes `items_marking`, the highest current marking of its items. The contract's case is now `p-item-high`, with a derivation test (round 5 of the red record).
-3. **Commits:** `git log e76cef9..HEAD`. The two schemas commits (`NeedsYou`, then the flag's removal) go before their code.
-4. **Requests at the merge:**
-   - Apply `registry-L2.7.diff`: 16 ids in all, made at this tree (the `index` line is its blob, 86c45ad).
-     - `NEEDS_YOU_ACTIONS`: 6.
-     - `ADMIN_ACTIONS`: 8 of this step's, plus rules-b's 2 from `admin-tips.patch`. Check main for duplicates of those two.
+   - `make -k ci` (`gates/f20513c.ci.txt`) ran with `ci-L2.5b.diff` applied. It is green except Docker's checks: 8
+     image scans, opentofu and chart; Docker is off here.
+   - `make test` on the server (`gates/f20513c.test.txt`):
+     - pytest: 10,036 passed. It has 2 failures, main's GPU and Valkey cases, and 2 errors, Docker Hub's 429
+       pull limit.
+     - test-js: 2,858 passed. `MatrixView` ×2 and the `App.test.tsx` hook timed out under load; all three pass
+       alone (58/58).
+   - Live at 0f5c76c on stack c (`gates/0f5c76c.live.txt`): 14 plants red and 517 passed, `test_route_rights.py`
+     included. The earlier re-runs found the test defects listed in the red record.
+2. **Reviews.**
+   - My lane-reviewer found 2 must-fixes: the red record missing, and the rollback unplanted. It also found 7 should-fixes: the cover race; the unit-wide level; the Glass's stale plan and its fail-open read; the unmarked dataset untested; spec 02 stale; no decisions logged. All are fixed.
+   - The orchestrator's review is built as Amendment 9: the case's highest marking, System's words, `reach`, covers after the identity provider, and the docstrings.
+   - The gates caught two problems, both now fixed:
+     - the two new live files had no CI wiring;
+     - System's waiting count named the migration's column, which `no-branches-check` refuses.
+3. **Left:**
+   - the Author-transfer route (Amendment 8 decision 4);
+   - Admin's own *Delete* for a removed case's layer (for the CARRIES row that follows L2.5b);
+   - a stored dry-run report System could link;
+   - case's per-reader count of a view, after which Amendment 9 decision 1 may relax.
+4. **Commits:** `git log e5cc0db..HEAD`. The schemas commit is first.
+5. **Requests at the merge:**
+   - Apply `ci-L2.5b.diff` (`ci.yml` and `Makefile`).
    - Ratify these files outside admin's map:
-     - rules': `home/{HomePage.tsx,answersFor.ts,answersFor.test.tsx,AnswersForSection.tsx}`, `shell/startScreen.tsx`,
-       `rights/visibility.ts`;
-     - studio's: `ingest/IngestStudio.tsx`, `keyboard/ingest-studio-harness.tsx`;
-     - case-b's: `linktypes/ModelProposals.tsx`, `services/api/{link_type_store,link_types}.py` (the narrowing and
-       `open_proposal_count`), `test_link_type_{routes,service,store}.py`, `test_analyst_link_types.py`;
-     - case's (L3.4's seam): `services/api/promotion_store.py` (`_as_pending`, the probe), `test_waiting_promotions_contract.py`, `test_promotion_sweep_live.py`;
-     - no listed owner: `App.tsx`, `a11y/every-harness.spec.ts`, `test_route_rights.py`, `test_reports_viewer_journey.py`,
-       `keyboard/{admin.spec.ts,admin-harness.tsx,needs-you.spec.ts,needs-you-harness.*,answers-harness.*}`, spec 02 and 03;
-     - from the two patches: `help/roles.ts`, `help/rightNames.test.ts`.
-   - Case-b: `linktypes/ProposedTypes.tsx` and its keyboard spec and harness have no screen now.
-5. **Decisions taken** (yours to overrule):
-   - (a) *Needs you* is one route naming no right, each half gated by what it lists.
-   - (b) Withdrawn in round 2 by your ruling: nothing is said of a dataset above the reader's clearance.
-   - (c) The routes for proposals naming no dataset are kept with no screen, their list narrowed in the query.
-   - (d) A secret's field that isn't name-shaped is never sent; the Conduit redacts what it refuses.
-   - (e) Grading scheme exempts its reference read, pinned to that one route.
-   - (f) *Why* names the reader's own roles.
-   - (g) Openings across a reload are held in the session.
-   - (h) `items_marking` is required with no default, read from the seam at each read, and not copied into the alert store.
-   - On case's L3.4 (round 5): `make test` on the server at fbd0722 (`gates/fbd0722.test.txt`): pytest 9,839 passed and 2 failed (main's GPU and Valkey cases), plus 2 errors from Docker Hub's pull limit on the server; test-js 2,884/2,885 (`MatrixView.budget`). Live at dbf925c on stack f (`gates/dbf925c.live.txt`): 25 passed.
-6. **Questions:** none. **Still running:** nothing. Stack f is down and its lease released; no agent of mine is running.
+     - case-b's `test_person_ownership_*` (untouched);
+     - `keyboard/{admin.spec.ts,admin-harness.tsx}` and `a11y/every-harness.spec.ts`;
+     - specs 02, 03 and 06 (Amendment 9);
+     - `test_route_rights.py` (untouched).
+   - No registry ids are new.
+6. **Decisions taken** (yours to overrule):
+   - (a) The plan reads L3.8's own SQL inside the transfer's transaction; the Glass reads the route only for `withheld`.
+   - (b) What each recipient needs, by kind (`LEVEL_NEEDED`, `NEEDS`), mirrors that kind's own route.
+   - (c) A watch's and a proposal's recipient must clear the dataset's marking, with an unmarked one read at the highest.
+   - (d) Covers end only after the identity provider disables the account.
+   - (e) The Glass says "could not check" when the ownership read fails.
+   - (f) The waiting count was dropped: the migration's own column stays out of the Conduit.
+   - (g) Admin's Delete button is left for a later step (a new destructive action needs its own keyboard id).
+7. **Questions:** none. **Still running:** nothing of mine. Stack c is down and released, and no agent is running.

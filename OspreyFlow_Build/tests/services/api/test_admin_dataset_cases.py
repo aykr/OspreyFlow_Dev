@@ -434,6 +434,26 @@ def test_a_dry_run_counts_and_writes_nothing(world: SimpleNamespace) -> None:
 
 
 @pytest.mark.parametrize("action", ["merge", "delete"])
+@pytest.mark.parametrize("unit", ["unit-2", ""])
+def test_a_dry_run_is_for_an_administrator_of_the_datasets_own_unit(
+    world: SimpleNamespace, action: str, unit: str | None
+) -> None:
+    """The owner's ruling (a) of 9 November 2026 (ADR-143 Amendment 5), as for Admin's Delete:
+    another unit's administrator, or one whose unit is blank, is answered exactly as for a dataset that
+    does not exist, and nothing is read or audited (rule 3: no count of another unit's layer)."""
+    PEOPLE["far"] = Principal(id="adm-9", clearance="SECRET", org_unit=unit, roles=["osprey-admin"])
+    try:
+        other = _dry(world, "far", "gone-1", action)
+        unknown = _dry(world, "far", "gone-1", action, ds="no-such")
+        assert other.status_code == unknown.status_code == 404, other.text
+        assert other.json() == unknown.json()
+        assert world.graph.asked == []
+        assert not [e for e in world.audit.entries if e["action"].startswith("dry_run_layer")]
+    finally:
+        del PEOPLE["far"]
+
+
+@pytest.mark.parametrize("action", ["merge", "delete"])
 def test_a_dry_run_refuses_an_open_case(world: SimpleNamespace, action: str) -> None:
     answer = _dry(world, "author_admin", "open-1", action)
     assert answer.status_code == 409 and answer.json()["error"] == "case_open"

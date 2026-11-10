@@ -31331,6 +31331,69 @@ alone; the refusal's words planted with a kind, a count, a reason and a place); 
 
 Open: the Author-transfer route and the unknown-marking limit, as decision 4 says.
 
+### ADR-145, Amendment 9 (10 November 2026) — Disable's transfer list as built (L2.5b): a view's recipient held to its case's highest marking; System's count of cases made views
+
+Status: written 10 November 2026 by the admin lane (L2.5b), under the orchestrator's reservation of the same day.
+**Decision 1 is the strict reading** of the owner's review list, item 8 of 10 November 2026: both options, the
+strict one first. The rest is as built. Amendments 5 and 8 stand except where this says so.
+
+1. **A view's or a board's recipient must clear the highest marking its case reads.** A view sends its node
+   count unfiltered (`case_views.CaseViewRecord.wire`'s `chosen`). A private view transferred at *Disable…*
+   would therefore show its new owner how many nodes the creator chose, some perhaps above the new owner's
+   clearance (rule 3).
+   - **The case's highest** is the highest marking of every dataset the case reads:
+     - its own analyst layer is not counted, being already capped at the case's ceiling;
+     - a composite's members are counted, and the composite's own marking where it has one;
+     - an unmarked dataset, a case reading none, or a marking the scheme does not know reads as the scheme's
+       highest (`admin_people.case_highest`, `_CASE_MARKINGS_SQL`).
+   - **How it is applied.** Each item of the plan carries `needs_clearance`. *Transfer to…* offers only people
+     who clear it. A recipient sent anyway is refused (409 `recipient_refused`) in the same words as any
+     recipient who is not cleared, naming neither the marking nor the item.
+   - A proposal's or a watch's recipient is held to its dataset's marking in the same way.
+   - **Carried to case:** count `chosen` per reader, which also fixes the same count on every shared view. A
+     later amendment may then relax this decision to the case's unit alone, as Amendment 8 reads.
+2. **Each recipient holds what the item's own route asks.**
+   - Rights: a view needs `investigate`. A board or a watch needs `draw_on_boards` and `investigate`. A
+     proposal needs `propose_types`.
+   - A level on the item's case: Viewer for a view, Editor otherwise. This is the level `InvestigationStore`
+     reads, a grant or the case's unit-wide level for a member of its unit; being made its Author in the same
+     transfer also counts.
+   - Membership of the case's unit.
+3. **The order of the refusals** comes after the transfers commit, which stand:
+   - 409 `untransferred` and `recipient_refused`, with nothing written;
+   - then 409 `other_unit`;
+   - then 409 `withheld_items`, asked through `refuse_if_withheld` on a connection of its own;
+   - then the identity provider. Only once it has disabled the account do the person's covers end
+     (`end_covers`). On the 502 `disable_incomplete` they stay, since the account is still enabled.
+4. ***Admin › System*'s count (ADR-144 decision 6)** is how many views were made from cases made from another,
+   in how many cases.
+   - It is counted in SQL in the administrator's own unit, open cases only (rule 7).
+   - A count that cannot be read is said in words ("Not known: the count could not be read (…)"), never left
+     undrawn.
+   - **The dry-run report is not linked (rule 11, a gap recorded):**
+     - the migration prints its report and stores none;
+     - the cases it did not place are marked only by the migration's own column, which ADR-144 Amendment 1
+       keeps out of the Conduit (`no_branches_check`).
+   - The screen says that the operator's dry-run report names each case not placed. A stored report, which
+     System could then link, is left for the case lane's migration.
+5. **Admin's dry run of a removed case's layer** is for an administrator of the dataset's own unit. Any other
+   is answered 404, as for no dataset, before anything is read. This is the owner's ruling (a) of 9 November
+   2026, as for Admin's Delete.
+
+**Tests (each red first by a plant at its real call site, `process/lanes/admin/L2.5b_RED_RECORD.md`):**
+- `test_disable_l38_transfers.py` (live), including `test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest`;
+- `test_admin_converted_views.py` (live);
+- `test_admin_roles_routes.py`, which covers the order and `case_highest`;
+- `test_admin_routes.py` (System's words);
+- `test_admin_dataset_cases.py`;
+- `PeopleAndRoles.test.tsx`, which shows only cleared recipients offered;
+- `AdminPlace.test.tsx`.
+
+**Left, by name:**
+- the Author-transfer route (Amendment 8 decision 4);
+- Admin's own *Delete* button for a removed case's layer (admin, a later step);
+- the stored dry-run report above.
+
 ## ADR-148 — Deploying into a namespace on a shared Kubernetes platform: the `cloud-platform` profile, first for the UK public sector client's Cloud Platform — ACCEPTED (design)
 
 *9 November 2026. **Accepted (design): the owner's decision of 9 November 2026** (the client call of 9 November), written from the owner's record checked against the UK public sector client's Cloud Platform's user guide and this repository at `8e74fc8`. Open questions 1 to 3 stay open for the owner; question 1 waits for P8's report.*

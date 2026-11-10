@@ -27,6 +27,7 @@ import {
   listRoles,
   nameAnAuthor,
   peopleRows,
+  personOwnership,
   removePerson,
   resetSignIn,
   setAccess,
@@ -253,25 +254,42 @@ function RemoveConfirmation({
 
 /** *Disable…* (ADR-145 decision 6, A4): everything the person owns, each with *Transfer to…*;
  * *Transfer and disable* is the Conduit's to refuse, in its words, while any item has no recipient. */
+/** Whether a clearance clears a marking, by the scheme's order; an unknown one clears nothing. */
+export function clearsMarking(levels: string[], clearance: string | null | undefined, marking: string): boolean {
+  const held = clearance ? levels.indexOf(clearance) : -1;
+  const needed = levels.indexOf(marking);
+  return held >= 0 && needed >= 0 && held >= needed;
+}
+
 function DisablePanel({
   api,
   person,
   people,
+  levels,
   onDone,
   onCancel,
 }: {
   api: AdminApi;
   person: PersonAccount;
   people: PersonAccount[];
+  levels: string[];
   onDone: (p: PersonAccount) => void;
   onCancel: () => void;
 }) {
   const [plan, setPlan] = useState<DisablePlan | null>(null);
   const [to, setTo] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
-  useEffect(() => {
+  // ADR-145 Amendment 8: L3.8's ownership read says whether anything is withheld from this
+  // administrator, never what; the plan already offers every item they may see.
+  // `null` when the read failed: the screen says it could not check, never that nothing blocks.
+  const [withheld, setWithheld] = useState<boolean | null>(false);
+  const read = () => {
     disablePlan(api, person.id).then(setPlan).catch((e: Error) => setProblem(e.message));
-  }, [api, person.id]);
+    personOwnership(api, person.id)
+      .then((o) => setWithheld(o.withheld ?? false))
+      .catch(() => setWithheld(null));
+  };
+  useEffect(read, [api, person.id]);
   const who = person.username;
   const others = people.filter((p) => p.id !== person.id && p.enabled && !p.system_account);
   const key = (kind: string, id: string) => `${kind}:${id}`;
@@ -306,7 +324,11 @@ function DisablePanel({
                 onChange={(e) => setTo({ ...to, [key(item.kind, item.id)]: e.target.value })}
               >
                 <option value="">Transfer to…</option>
-                {others.map((p) => (
+                {/* ADR-145 Amendment 9: only someone cleared to what the item needs is offered;
+                    the Conduit refuses anyone else in the same words, naming nothing. */}
+                {others
+                  .filter((p) => !item.needs_clearance || clearsMarking(levels, p.clearance, item.needs_clearance))
+                  .map((p) => (
                   <option key={p.id} value={p.id}>
                     {`${p.name} (${p.username})`}
                   </option>
@@ -314,6 +336,16 @@ function DisablePanel({
               </Select>
             </label>
           ))}
+          {withheld === null ? (
+            <p role="note" aria-label={`Items of ${who} you may not see`} style={{ margin: 0 }}>
+              {`Could not check whether ${who} owns items you may not see. If they do, the disable is refused once the transfers you choose here are made.`}
+            </p>
+          ) : null}
+          {withheld ? (
+            <p role="note" aria-label={`Items of ${who} you may not see`} style={{ margin: 0 }}>
+              {`${who} also owns items you may not see. The transfers you choose here go through, but ${who} stays enabled until an administrator who may see those items, or an Author of their case, transfers them.`}
+            </p>
+          ) : null}
           {plan.not_yet_listed?.length ? (
             <p className="label" style={{ margin: 0 }}>{`Not listed here yet: ${plan.not_yet_listed.join(", ")}.`}</p>
           ) : null}
@@ -327,7 +359,13 @@ function DisablePanel({
                   .map((i) => ({ kind: i.kind, id: i.id, to: to[key(i.kind, i.id)] ?? "" }));
                 void transferAndDisable(api, person.id, transfers)
                   .then(onDone)
-                  .catch((e: Error) => setProblem(e.message));
+                  .catch((e: Error) => {
+                    setProblem(e.message);
+                    // A refusal after the transfers (another unit's items, or withheld ones) leaves
+                    // those transfers standing: read the plan again, so they are not offered twice.
+                    setTo({});
+                    read();
+                  });
               }}
             >
               {plan.items.length ? "Transfer and disable" : "Confirm disabling"}
@@ -515,6 +553,7 @@ function PersonRow({
               api={api}
               person={person}
               people={people}
+              levels={scheme.levels}
               onCancel={() => setConfirming(false)}
               onDone={(saved) => {
                 setConfirming(false);
