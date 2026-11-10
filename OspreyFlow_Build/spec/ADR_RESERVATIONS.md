@@ -111,6 +111,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-114 Amendment 39 | Refresh refuses, in words and before writing anything, a deployment rendered before ADR-135 Amendment 2 (or holding any unset required secret), naming the one-time `ospreyflow apply` route; it never mints or changes a held secret; which deployment a named update reaches; files moved into place whole (the v0.4.12 to v0.5.0 upgrade; retitled from the withdrawn minting approach) | platform-b | 2026-11-10 | written |
 | ADR-142 Amendment 7 | A second merge session (the merger) prepares merges for lanes the orchestrator hands it; the orchestrator alone lands them on main, fast-forward only, and alone pushes (the owner's word, 10 November) | orchestrator | 2026-11-10 | written |
 | ADR-110 Amendment 19 | A scheduled load's notice (a failed or refused run) reaches its owner in *Needs you*, owner-filtered in the query, since L2.10 removed the owner's own inbox that Amendment 3 decision 10 named | rules | 2026-11-10 | reserved |
+| ADR-140 Amendment 19 | A Join's guard on markings: a table with no bound marking is unmarked and never joins a marked one (fail closed, as built in L1.7), unless its source declares a default marking, which its rows then carry before the join; the declaration audited | studio | 2026-11-10 | reserved |
 
 ## Baseline
 
