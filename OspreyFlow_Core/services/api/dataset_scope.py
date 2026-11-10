@@ -42,6 +42,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
+from services.ingest.ceiling import refuse_writes_above_the_ceiling
+
 from ports.graph import BulkGraphLoader, GraphPort, LinkCloned
 from schemas.domain import (
     Edge,
@@ -531,6 +533,7 @@ class DatasetStampingGraph:
         stamped = _stamp_nodes(nodes, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         await self._checked(stamped)
+        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop
         ids = await self._inner.upsert_nodes(stamped, tx)
         await self._written()
         return ids
@@ -539,6 +542,7 @@ class DatasetStampingGraph:
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         await self._checked(stamped)
+        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
         return ids
@@ -584,6 +588,7 @@ class DatasetStampingGraph:
     ) -> NodeId:
         held = await self._held_for(lambda reader: self._inner.get_nodes([node_id], reader))
         await self._refuse_correcting(held, replacement.datasets)
+        refuse_writes_above_the_ceiling([replacement])  # ADR-148 decision 10, the backstop
         # Each cloned link reported on, so the alerts' repoint journal records it (ADR-109 Am. 11).
         new_id = await self._inner.supersede_node(
             node_id, replacement, tx, on_link_cloned=on_link_cloned
@@ -596,6 +601,7 @@ class DatasetStampingGraph:
     ) -> str:
         held = await self._held_for(lambda reader: self._inner.get_edges([edge_id], reader))
         await self._refuse_correcting(held, replacement.datasets)
+        refuse_writes_above_the_ceiling([replacement])  # ADR-148 decision 10, the backstop
         new_id = await self._inner.supersede_edge(edge_id, replacement, tx, old_type=old_type)
         await self._written()
         return new_id
@@ -702,6 +708,7 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         await self._checked(stamped)
+        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
         return result

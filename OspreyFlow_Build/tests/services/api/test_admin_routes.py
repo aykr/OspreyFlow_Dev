@@ -455,6 +455,22 @@ def test_the_system_screen_says_the_deployments_version_and_the_last_check(
     assert body["update"] == notice
 
 
+def test_the_system_screen_says_the_deployments_highest_marking(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-148 decision 10: System says the deployment's marking ceiling, the scheme's highest
+    when none is set."""
+    from services.api.app import app
+
+    # The route prefers the ceiling the start read; one left by an earlier test's start is not
+    # this test's, so the environment is read as a start with no ceiling held would.
+    monkeypatch.delattr(app.state, "deployment_ceiling", raising=False)
+    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "OFFICIAL-SENSITIVE")
+    assert _system(client, monkeypatch).json()["highest_marking"] == "OFFICIAL-SENSITIVE"
+    monkeypatch.delenv("OSPREY_HIGHEST_MARKING")
+    assert _system(client, monkeypatch).json()["highest_marking"] == "SECRET"
+
+
 def test_the_notice_is_read_on_each_request_so_a_check_needs_no_restart(
     client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:

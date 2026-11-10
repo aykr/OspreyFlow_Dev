@@ -1,0 +1,24 @@
+# head 8ce215b; plant: an element's own fixed classification not judged, the defaults' alone
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
+# must fail: test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused; for the reason 'DID NOT RAISE'; all failed: yes
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_no_ceiling_set_renders_the_scheme_s_highest
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_ceiling_the_scheme_does_not_know_is_refused_at_render
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduit_reads_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_nothing_set_is_the_scheme_s_highest
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_unknown_ceiling_stops_the_conduit_rather_than_guessing
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_with_no_ceiling_set_a_secret_row_loads_as_before
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_recipe_whose_fixed_marking_is_above_the_ceiling_is_refused_before_any_staging
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_units_conflict_is_still_judged
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_reads_is_judged_by_it_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_empty_cell_takes_the_element_s_default_and_is_judged_by_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_bound_element_s_default_above_the_ceiling_is_refused_before_any_staging
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_missing_column_is_not_read_as_an_empty_one
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused - Failed: DID NOT RAISE AboveTheDeploymentCeiling
+1 failed, 19 passed in 24.84s

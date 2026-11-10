@@ -267,6 +267,23 @@ def marking_floor(config: OspreyConfig) -> str:
     return chosen
 
 
+def highest_marking(config: OspreyConfig) -> str:
+    """The highest marking the deployment may hold (ADR-148 decision 10): its own, or its handling
+    scheme's highest. The scheme is the one the Conduit loads (UK law enforcement)."""
+    from ontology.handling import load_uk_le_scheme
+
+    known = load_uk_le_scheme().classification
+    chosen = config.deployment.highest_marking
+    if chosen is None:
+        return known[-1]
+    if chosen not in known:
+        raise ValueError(
+            f"deployment.highest_marking {chosen!r} is not a classification of the handling "
+            f"scheme: use one of {', '.join(known)}"
+        )
+    return chosen
+
+
 def deployment_version() -> str:
     """What the welcome page's footer names: the commit the deployment was built from, short, until
     stage B5's release tags exist."""

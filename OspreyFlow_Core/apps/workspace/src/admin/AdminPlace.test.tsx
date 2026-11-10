@@ -414,6 +414,17 @@ describe("the System tab's engines", () => {
   });
 });
 
+// ADR-148 decision 10: the deployment's marking ceiling.
+describe("the System tab's highest marking", () => {
+  it("says the deployment's highest marking and what it refuses", async () => {
+    serve((path) => (path === "system" ? json(200, { version: "v0.4.1", components: [], models: [], model_notice: null, update: null, highest_marking: "OFFICIAL-SENSITIVE" }) : null));
+    place(["administer_system"], "System");
+    const ceiling = await screen.findByRole("region", { name: "Highest marking" });
+    expect(ceiling.textContent).toContain("OFFICIAL-SENSITIVE");
+    expect(ceiling.textContent).toContain("refused before anything is written");
+  });
+});
+
 // ADR-114 decision 13, Amendment 8 point 2: the version and the last update check.
 describe("the System tab's version", () => {
   it("says the version and an update offered, with its notes and address", async () => {

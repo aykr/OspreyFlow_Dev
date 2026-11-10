@@ -341,6 +341,9 @@ class SystemStatus(BaseModel):
     #: ADR-144 decision 6: what the migration made of cases made from another, in the
     #: administrator's own unit; none when the case views' store is not reachable.
     converted_views: ConvertedViews | None = None
+    #: ADR-148 decision 10: the highest marking this deployment may hold; a load or an import marked
+    #: above it is refused. None only from a Conduit that predates the setting.
+    highest_marking: str | None = None
 
 
 class EmbeddedDashboard(BaseModel):

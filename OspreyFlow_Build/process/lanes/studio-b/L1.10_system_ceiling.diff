@@ -1,0 +1,118 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_admin_routes.py b/OspreyFlow_Build/tests/services/api/test_admin_routes.py
+index 515649f..1010b2e 100644
+--- a/OspreyFlow_Build/tests/services/api/test_admin_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_admin_routes.py
+@@ -455,6 +455,22 @@ def test_the_system_screen_says_the_deployments_version_and_the_last_check(
+     assert body["update"] == notice
+ 
+ 
++def test_the_system_screen_says_the_deployments_highest_marking(
++    client: Any, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """ADR-148 decision 10: System says the deployment's marking ceiling, the scheme's highest
++    when none is set."""
++    from services.api.app import app
++
++    # The route prefers the ceiling the start read; one left by an earlier test's start is not
++    # this test's, so the environment is read as a start with no ceiling held would.
++    monkeypatch.delattr(app.state, "deployment_ceiling", raising=False)
++    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "OFFICIAL-SENSITIVE")
++    assert _system(client, monkeypatch).json()["highest_marking"] == "OFFICIAL-SENSITIVE"
++    monkeypatch.delenv("OSPREY_HIGHEST_MARKING")
++    assert _system(client, monkeypatch).json()["highest_marking"] == "SECRET"
++
++
+ def test_the_notice_is_read_on_each_request_so_a_check_needs_no_restart(
+     client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+ ) -> None:
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
+index 8039b2c..5930457 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
+@@ -414,6 +414,17 @@ describe("the System tab's engines", () => {
+   });
+ });
+ 
++// ADR-148 decision 10: the deployment's marking ceiling.
++describe("the System tab's highest marking", () => {
++  it("says the deployment's highest marking and what it refuses", async () => {
++    serve((path) => (path === "system" ? json(200, { version: "v0.4.1", components: [], models: [], model_notice: null, update: null, highest_marking: "OFFICIAL-SENSITIVE" }) : null));
++    place(["administer_system"], "System");
++    const ceiling = await screen.findByRole("region", { name: "Highest marking" });
++    expect(ceiling.textContent).toContain("OFFICIAL-SENSITIVE");
++    expect(ceiling.textContent).toContain("refused before anything is written");
++  });
++});
++
+ // ADR-114 decision 13, Amendment 8 point 2: the version and the last update check.
+ describe("the System tab's version", () => {
+   it("says the version and an update offered, with its notes and address", async () => {
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx
+index 5a3598d..e35dc4c 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx
+@@ -72,6 +72,15 @@ export function System({ api }: { api: AdminApi }) {
+       )}
+       {status?.engines && status.engines.length > 0 && <EnginesTable engines={status.engines} />}
+       {status && <VersionSection version={status.version} update={status.update} />}
++      {status?.highest_marking && (
++        // ADR-148 decision 10: the deployment's marking ceiling, said in words.
++        <section aria-label="Highest marking" style={{ display: "grid", gap: "var(--sp-6)" }}>
++          <p className="value" style={{ margin: 0 }}>{status.highest_marking}</p>
++          <p className="label" style={{ margin: 0 }}>
++            {`The highest marking this deployment may hold. A load or an import marked above ${status.highest_marking} is refused before anything is written.`}
++          </p>
++        </section>
++      )}
+       {status?.converted_views && <ConvertedSection converted={status.converted_views} />}
+       <Button onClick={ask}>Ask again</Button>
+       <OwnersMayBe api={api} />
+diff --git a/OspreyFlow_Core/packages/schemas/admin.py b/OspreyFlow_Core/packages/schemas/admin.py
+index 32d9a0e..31cc9af 100644
+--- a/OspreyFlow_Core/packages/schemas/admin.py
++++ b/OspreyFlow_Core/packages/schemas/admin.py
+@@ -341,6 +341,9 @@ class SystemStatus(BaseModel):
+     #: ADR-144 decision 6: what the migration made of cases made from another, in the
+     #: administrator's own unit; none when the case views' store is not reachable.
+     converted_views: ConvertedViews | None = None
++    #: ADR-148 decision 10: the highest marking this deployment may hold; a load or an import marked
++    #: above it is refused. None only from a Conduit that predates the setting.
++    highest_marking: str | None = None
+ 
+ 
+ class EmbeddedDashboard(BaseModel):
+diff --git a/OspreyFlow_Core/packages/schemas/generated/SystemStatus.ts b/OspreyFlow_Core/packages/schemas/generated/SystemStatus.ts
+index 5ad9a19..7bc302b 100644
+--- a/OspreyFlow_Core/packages/schemas/generated/SystemStatus.ts
++++ b/OspreyFlow_Core/packages/schemas/generated/SystemStatus.ts
+@@ -30,6 +30,7 @@ export type Problem = string | null;
+ export type Views = number;
+ export type Cases = number;
+ export type Problem1 = string | null;
++export type HighestMarking = string | null;
+ 
+ /**
+  * The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
+@@ -43,6 +44,7 @@ export interface SystemStatus {
+   model_notice?: ModelNotice;
+   update?: UpdateNotice | null;
+   converted_views?: ConvertedViews | null;
++  highest_marking?: HighestMarking;
+   [k: string]: unknown;
+ }
+ /**
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1b7367e..ba10dd0 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -16793,7 +16793,10 @@ async def system_status_route(
+         converted = ConvertedViews(
+             problem=f"Not known: the count could not be read ({type(e).__name__})"
+         )
++    held_ceiling = getattr(request.app.state, "deployment_ceiling", None)
+     return SystemStatus(
++        # ADR-148 decision 10: the deployment's marking ceiling, as the Conduit's start read it.
++        highest_marking=(held_ceiling or DeploymentCeiling.from_env()).marking,
+         converted_views=converted,
+         # ADR-114 Amendment 8: the version the deployment was rendered with, and the last check.
+         version=deployment_version(),

@@ -94,6 +94,10 @@ class Dataset:
     bulk: bool = False
     #: Whether the seed keeps its addresses and rewrites its links on `--replace-links`.
     rewrites_links: bool = False
+    #: ADR-148 decision 10: the highest marking the pack's data holds, declared only where a test
+    #: proves every write it makes is within it (`tests/test_seed_internal_ceiling.py`). None is
+    #: judged as the scheme's highest, so a pack is refused under a lower ceiling (fails closed).
+    highest_marking: str | None = None
     #: Whether the seed has a rehearsal reset and two mid-demo commands (`--reset-live`,
     #: `--release-batch-2`, `--publish-reports-fallback`: ADR-127 Amendment 23).
     rehearsal: bool = False
@@ -122,6 +126,7 @@ DATASETS: dict[str, Dataset] = {
     "paysim": Dataset(
         script="scripts.seed_paysim",
         case_name="PaySim mobile money (internal)",
+        highest_marking="OFFICIAL",
         data_folder="PaySIM_Dataset",
         sampled=True,
         bulk=True,
@@ -142,7 +147,9 @@ DATASETS: dict[str, Dataset] = {
     ),
     # ADR-138: the cyber starter's demo, a synthetic STIX 2.1 intrusion generated deterministically.
     "cyber-intrusion": Dataset(
-        script="scripts.seed_cyber_intrusion", case_name="Cyber intrusion (synthetic demo)"
+        script="scripts.seed_cyber_intrusion",
+        case_name="Cyber intrusion (synthetic demo)",
+        highest_marking="OFFICIAL",
     ),
     # ADR-138 decision 3: a public dataset the administrator downloaded, placed by
     # `scripts.public_dataset stage` under `public/<id>/`; its case is named from its manifest.
@@ -201,6 +208,39 @@ def _switch_args(directory: Path) -> list[str]:
             if line.startswith(f"{RESOLUTION_SWITCH}="):
                 value = line.partition("=")[2].strip() or "on"
     return ["-e", f"{RESOLUTION_SWITCH}={value}"]
+
+
+def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) -> None:
+    """ADR-148 decision 10: a pack whose data is marked above the deployment's highest marking (its
+    rendered `OSPREY_HIGHEST_MARKING`) is refused before its seed starts, so a pack written in
+    several transactions is never partly written. Its declared highest, or the scheme's highest
+    where it declares none. The engine and the stamping graph refuse each write too."""
+    from services.ingest.ceiling import CeilingUnknown, DeploymentCeiling
+
+    from ontology.handling import load_uk_le_scheme
+
+    scheme = load_uk_le_scheme()
+    rendered = ""
+    env = directory / "deployment.env"
+    if env.is_file():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.startswith("OSPREY_HIGHEST_MARKING="):
+                rendered = line.partition("=")[2].strip()
+    try:
+        ceiling = DeploymentCeiling.of(rendered, scheme)
+    except CeilingUnknown as error:
+        raise SeedRefused(f"{error}, so no pack is loaded") from error
+    held = spec.highest_marking or scheme.classification[-1]
+    if ceiling.above(held):
+        holds = (
+            f"holds data marked up to {held}"
+            if spec.highest_marking is not None
+            else f"declares no highest marking, so it is judged as the scheme's highest, {held}"
+        )
+        raise SeedRefused(
+            f"the {name} demo pack {holds}, above this deployment's highest marking, "
+            f"{ceiling.marking}, so nothing was loaded"
+        )
 
 
 def _run_as_args(subs: Mapping[str, str]) -> list[str]:
@@ -523,6 +563,8 @@ def seed_internal(
         raise SeedRefused(str(error)) from error
     if revert_load is not None:
         return _revert_load(repo_root, directory, run, api_running, stop_api, *revert_load)
+    if not (inspect or inspect_record or compare_vaults or check):
+        _refuse_a_pack_above_the_ceiling(dataset, spec, directory)
     if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"

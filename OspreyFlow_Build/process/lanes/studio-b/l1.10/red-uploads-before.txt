@@ -1,0 +1,5 @@
+# head 697b06b, the uploads without the ceiling's check: red first
+PASSED tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored
+PASSED tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored
+FAILED tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_above_the_ceiling_is_refused_before_anything_is_stored - AssertionError: {"document_id":"content:1","delta":{"seq":1,"op":"add","nodes":[],"edges":[]}}
+FAILED tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored - AssertionError: {"document_id":"content:1","deltas":[{"seq":1,"op":"add","nodes":[],"edges":[]}]}

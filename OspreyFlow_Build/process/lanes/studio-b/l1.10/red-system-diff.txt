@@ -1,0 +1,6 @@
+# head 31bd862: L1.10_system_ceiling.diff's tests with its code taken out (red), for admin to apply
+FAILED tests/services/api/test_admin_routes.py::test_the_system_screen_says_the_deployments_highest_marking - KeyError: 'highest_marking'
+1 failed, 164 deselected, 1 warning in 1.63s
+     × says the deployment's highest marking and what it refuses 1011ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 38 passed (39)
