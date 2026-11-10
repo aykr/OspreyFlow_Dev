@@ -859,7 +859,7 @@ The invariants, each with the test that fails if it is broken (rule 12):
   drawn type is mapped onto any type of the target's model (the owner's ruling), or left out; an item
   of a type mapped onto itself gains the target, the same element; one mapped onto another type is
   written as a new element of that type in the target, its properties as placed and its marking its
-  original's (never lower), with an `inferred` `SAME_AS` back to the drawn original (an element keeps
+  original's (never lower), with an `inferred` `SAME_AS` back to the drawn original in no dataset (ADR-099: they share none), so no case reads or collapses it (an element keeps
   its type for good, and nothing is collapsed: rule 6); a chosen match is written as an `inferred`, scored `SAME_AS`, never collapsed; afterwards its case
   reads the target and the drawing read-only, and its boards are views with annotations. Spec 03,
   *Merging a drawn dataset*, has the routes.

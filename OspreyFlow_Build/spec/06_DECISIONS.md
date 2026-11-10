@@ -32104,14 +32104,26 @@ dataset* have the detail.
    - An item mapped onto another type is written by the merge's load as a **new element** of that type
      in the target (an element's type is its store class, kept for good): its properties as placed, its
      handling its original's (never lower: the orchestrator's condition), its drawn provenance, grading
-     and source kept, its load id the merge's; a node's copy has an `inferred` `SAME_AS` back to its
-     drawn original, scored 1 (`model_version` drawn_merge_retype), in the drawn dataset, where both ends
-     are read (rule 5: a person confirms it; rule 6: two elements, never one). A link retyped, or
-     touching a retyped node, is written new with its ends resolved to the copies.
+     and source kept whole (read as written back, `sources_in_full`, ADR-130 Amendment 2: its sources
+     and its board as stored, not as the merger is shown them), its load id the merge's. A node's copy
+     has an `inferred` `SAME_AS` back to its drawn original (`model_version` drawn_merge_retype) in **no
+     dataset**: ADR-099 Amendment 2 decision 3 puts a `SAME_AS` in the datasets its records share, and the
+     copy (the target) and its original (the drawing) share none. So no case reads it and neither is
+     joined to the other at query time (rules 5 and 6); it is the load's record of where the copy came
+     from, written past the stamping graph as the resolver writes a cross-dataset match, and reverted
+     with it. A link retyped, or touching a retyped node, is written new with its ends resolved to the
+     copies.
    - Only an original the merger reads is copied: each copy is built from the element as read through
      them (the orchestrator's condition), so one above them is neither copied, counted nor named.
+   - The sheet takes the mapping chosen so far (`?mapping=`, a JSON list of `TypeChoice`; 422
+     `not_a_mapping` when it cannot be read), so Match offers each node's matches as it will go in, and
+     the screen reads them again whenever the mapping changes, letting go of a chosen pair no longer
+     offered.
    - A type outside the target's model, or a property outside the chosen type, refuses the merge (422
-     `not_a_type`, `not_a_property`, as does two drawn properties placed in one); a copy that breaks its
+     `not_a_type`, `not_a_property`, as does two drawn properties placed in one; a drawn type or property
+     chosen twice, `mapping_repeated`); a property not placed is said in the dry run (`not_carried`); a
+     link of a case's own proposed type touching a retyped node is its item's problem (the model cannot
+     say what it joins); a copy that breaks its
      new type's rules (a required property, the ends a link type joins) is its item's problem; an item of
      a type mapped onto none is left out with its reason, never refused for it; a picture or a board's
      *Same* or *Not the same* on a retyped node is left out with its reason, to be made again on the copy.
@@ -32124,29 +32136,34 @@ dataset* have the detail.
    It is written in the load's own transaction as a `SAME_AS` that is `inferred` and scored
    (`model_version` drawn_merge), in the target, marked as the stricter of its ends and within the
    target's highest.
-5. **Dry run** counts only what the merger may see (`retyped` among them) and writes nothing; the screen
+5. **Dry run** counts only what the merger may see (`retyped` among them: those going in as another
+   type, not a link written new only for its end) and writes nothing; the screen
    asks for it again after any change, the mapping included, and offers *Merge* only after it (the route
    does not require it, as Amendment 5's delete).
 6. **After the merge** (decision 7): the drawing's home case reads the target, and the drawn dataset
    read-only; its boards become views (drawing off, layout and sharing kept, the drawn nodes added to the
    selection); a merged view answers `annotations` read through each reader's own principal. One merge
    per drawing; one waiting at a time.
-7. **Revert** is the promotion's operator command; for a drawn merge it also withdraws, in its
-   transaction, the merge's matches and its copies with their links and `SAME_AS` back (refused while a
-   link written since rests on a copy, as on a promoted node), then puts the case back on the drawing and
-   the views back to boards; without those stores it refuses.
+7. **Revert** is the promotion's operator command; for a drawn merge it also reverts, in its
+   transaction, the merge's matches and its copies with their links and `SAME_AS` back, as a load's own
+   writes are (`revert_elements`, never a refresh's withdrawal, which `restore_withdrawn` would bring
+   back), refused while a link written since rests on a copy, as on a promoted node; then it puts the
+   case back on the drawing and the views back to boards; without those stores it refuses. It says and
+   audits the copies it reverts, as the merge and its approval audit the mapping and the copies.
 8. **Across the stores:** before the graph commits, the matches' and copies' ids are kept and the
    drawing's one merge claimed (`merge_drawn`, the case moved in the same Postgres transaction); of two
    merges at once one commits, the other is refused with nothing written; a failed graph commit undoes
    the claim. Only the boards' becoming views follows the commit: a failure there is logged and leaves
    them boards, on which nothing is drawn (`drawing_merged`).
 9. **Review:** a reviewer's *Details* list the matches and each retyped item (waiting: its original, with
-   the type it goes in as; committed: its copy), counted as shown; an approval checks each again, and a
-   match changed since, an original edited since or a mapped type gone from the target's model rejects
-   the merge (Amendment 5 decision 6: never left waiting).
+   the type it goes in as; committed: its copy, each written element once), counted as shown, in the list
+   as in *Details* whatever its status; an approval checks each again, and a match changed since, an
+   original whose marking, properties or drawn assertion changed since, or a mapped type gone from the
+   target's model rejects the merge (Amendment 5 decision 6: never left waiting), as does a copy the
+   adapter refuses at the commit (`items_changed`, never a bare error).
 
 **Tests.** `tests/services/api/test_drawn_merge.py` (each check red by its plant: `process/lanes/case/
-gates/L3.9-plants.txt`, 52 plants); the live store cases in `test_promotion_store.py` (the copies, and
+gates/L3.9-plants.txt`, 66 plants); the live store cases in `test_promotion_store.py` (the copies, and
 their transaction), `test_case_views_store.py`, `test_datasets_store.py` (`gates/L3.9-live-plants.py`);
 `tests/conformance/graph_port/test_promotion.py`'s merge transaction cases; `keyboard/drawn-merge.spec.ts`
 (mapping a type by keyboard among them), `keyboard/views.spec.ts`; axe in every harness, the mapping
@@ -32154,4 +32171,5 @@ state included.
 
 **Not done.** A copy carries no picture and no board decision of its original; a drawn property is placed
 by name, one value to one property, with no transform (guided mode's Knowledge Adapters are not offered
-here); a proposed link type of the drawing is mapped only by the name it reads as.
+here); a proposed link type of the drawing is mapped only by the name it reads as, and its refusal
+when touching a retyped node has no test (none of the fixtures draws one).

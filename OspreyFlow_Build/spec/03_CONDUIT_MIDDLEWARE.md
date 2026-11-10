@@ -280,7 +280,7 @@ merge_datasets on every route:
 
 ```
 GET    /v1/datasets/{drawn}/merge-targets              the datasets this reader may merge the drawing into (`MergeTargets`): each a source dataset of the drawing's unit that they are an Author of (its home case's), never a composite, a gazetteer, a drawn dataset or a layer
-GET    /v1/datasets/{drawn}/merge-sheet                 map and match for `?target=` (`DrawnMergeSheet`): each drawn type, the target type proposed for it (the same name when the target's model holds it, else none, saying why) and every type of the target's live model it may be mapped onto (`choices`, `target_types` with their properties); the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
+GET    /v1/datasets/{drawn}/merge-sheet                 map and match for `?target=`, under the mapping chosen so far in `?mapping=` (`DrawnMergeSheet`): each drawn type, the target type proposed for it (the same name when the target's model holds it, else none, saying why) and every type of the target's live model it may be mapped onto (`choices`, `target_types` with their properties); the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
 POST   /v1/datasets/{drawn}/merges/dry-run              the dry run (`DrawnMergeInput` → `DrawnMergeDryRun`): every check, what would be added and matched counting only what the merger may see, nothing written but its audit entry (dry_run_drawn_merge)
 POST   /v1/datasets/{drawn}/merges                      the merge (`DrawnMergeInput` → `Promotion`): one promotion (`promotion-<id>`, trigger drawn_merge) into the target under its policy, reviewed in the target's *Analyst promotions*; audited as merge_drawn_dataset
 ```
@@ -295,13 +295,18 @@ mapped onto its own name goes as L3.4's promotion: the same element gains the ta
 item mapped onto another type is written by the load as a **new element** of that type in the
 target (an element keeps its type, the store's class, for good): its properties as each was placed
 (`PropertyMapping`; one not placed is not carried and stays on the drawing), its handling its
-original's (never lower), its drawn provenance, grading and source kept, and, for a node, an
-`inferred` `SAME_AS` back to its drawn original (score 1, `model_version` drawn_merge_retype), in the
-drawn dataset, where both are read (rules 5 and 6). A link that is retyped, or touches a retyped
+original's (never lower), its drawn provenance, grading and source kept whole (read as written
+back, `sources_in_full`), and, for a node, an `inferred` `SAME_AS` back to its drawn original
+(`model_version` drawn_merge_retype) in no dataset (ADR-099 Amendment 2 decision 3: the copy and its
+original share none), so no case reads it and nothing is joined at query time (rules 5 and 6). A link
+that is retyped, or touches a retyped
 node, is written new with its ends resolved to the copies. Only what the merger reads is copied:
 every copy is built from an element read through them. A type outside the target's model, or a
 property outside the chosen type, refuses the merge (422 `not_a_type`, `not_a_property`, the same
-for two drawn properties placed in one); a copy that breaks its new type's rules (a required
+for two drawn properties placed in one; `mapping_repeated` for a type or property chosen twice); the
+dry run says each property a retyped type does not carry (`not_carried`); the sheet takes the mapping
+chosen so far (`?mapping=`, JSON, 422 `not_a_mapping` when unreadable) so that Match offers what the
+merge accepts; a copy that breaks its new type's rules (a required
 property missing, a link whose type does not join its ends' types) is a problem of its item (422
 `check_failed` when ticked); an item of a type mapped onto none is left out, saying so, never
 refused for it; a picture or a board's *Same* or *Not the same* on a retyped node is left out with
@@ -315,8 +320,10 @@ both nodes stay). An item above the target's highest marking refuses the merge, 
 nothing written. A drawing with a merge waiting is refused another (409 `merge_waiting`). A
 reviewer's *Details* list the merge's matches as they read them, and each retyped item (while it
 waits, its original with `goes_in_as`; once committed, its copy), and an approval checks each again:
-one changed since (an end withdrawn or raised, the target's highest lowered, an original edited, a
-mapped type gone from the target's model) rejects the merge, never leaves it waiting. Before the graph commits, the matches' link ids are kept and the drawing's one merge
+one changed since (an end withdrawn or raised, the target's highest lowered, an original's marking,
+properties or drawn assertion edited, a mapped type gone from the target's model, a copy the adapter
+refuses) rejects the merge, never leaves it waiting. The merge, its approval and its revert audit the
+mapping and the copies. Before the graph commits, the matches' link ids are kept and the drawing's one merge
 claimed (`DatasetStore.merge_drawn`, moving the case onto the target in the same Postgres
 transaction): of two merges at once one commits and the other is refused 409 `already_merged` with
 nothing written; a graph commit that fails after it undoes the claim. Once committed (decision 7) the
