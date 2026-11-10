@@ -602,8 +602,8 @@ export function MapView({
           )}
           {searchPlaces && (
             <PlaceSearch
-              // A gazetteer added or removed changes what the search offers: it starts afresh.
-              key={placesVersion}
+              // A gazetteer added or removed changes what the search offers: an answer is asked again.
+              asOf={placesVersion}
               search={searchPlaces}
               onGo={(place) =>
                 mapRef.current?.jumpTo({ center: [place.lon, place.lat], zoom: PLACE_ZOOM })

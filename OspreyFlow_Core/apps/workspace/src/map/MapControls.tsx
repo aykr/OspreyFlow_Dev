@@ -63,6 +63,9 @@ export type SearchPlaces = (query: string) => Promise<{ places: MapPlace[]; more
 export interface PlaceSearchProps {
   search: SearchPlaces;
   onGo: (place: MapPlace) => void;
+  /** Moves on when the places on offer change (P6: a gazetteer added or removed): an answer shown
+   * is asked again, so it never lists places no longer offered or leaves out new ones. */
+  asOf?: number;
 }
 
 type Found =
@@ -71,20 +74,22 @@ type Found =
   | { state: "found"; query: string; places: MapPlace[]; more: boolean }
   | { state: "failed"; words: string };
 
-export function PlaceSearch({ search, onGo }: PlaceSearchProps) {
+export function PlaceSearch({ search, onGo, asOf = 0 }: PlaceSearchProps) {
   const inputId = useId();
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found>({ state: "idle" });
   const [shown, setShown] = useState<string | null>(null);
+  const [answered, setAnswered] = useState(asOf);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const asked = query.trim();
-    setShown(null);
-    if (asked.length < 2) {
-      setFound({ state: "failed", words: "Type at least two letters of the place's name." });
-      return;
-    }
+  useEffect(() => {
+    if (asOf === answered) return;
+    setAnswered(asOf);
+    if (found.state === "found") void ask(found.query);
+    // `ask` and `found` are read as they stand when the places on offer change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asOf]);
+
+  async function ask(asked: string) {
     setFound({ state: "asking", query: asked });
     try {
       const answer = await search(asked);
@@ -96,6 +101,17 @@ export function PlaceSearch({ search, onGo }: PlaceSearchProps) {
           err instanceof PlaceSearchFailed ? err.message : "The place search failed. Try again.",
       });
     }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const asked = query.trim();
+    setShown(null);
+    if (asked.length < 2) {
+      setFound({ state: "failed", words: "Type at least two letters of the place's name." });
+      return;
+    }
+    await ask(asked);
   }
 
   return (
@@ -177,6 +193,9 @@ const EMPTY_WORDS: Record<Exclude<GazetteerPanelState["state"], "ready">, string
   not_one_source:
     "A gazetteer is added to the one dataset a case reads, and this case reads a composite or " +
     "more than one, so none can be added here.",
+  drawn:
+    "A gazetteer is added to a dataset loaded from sources, and this case reads a drawing, so none " +
+    "can be added here.",
   none_built:
     "No gazetteer is built for this case's dataset's unit yet: an administrator builds one in " +
     "Admin › Maps.",
@@ -195,6 +214,9 @@ export function CaseGazetteerPanel({ load, add, remove, mayChange, onChanged }: 
 
   useEffect(() => {
     let current = true;
+    // Another case, or another sign-in: nothing of the last one stays live while this one is read.
+    setPanel({ state: "loading" });
+    setWords("");
     load().then(
       (state) => current && setPanel(state),
       (err: unknown) =>
@@ -210,6 +232,9 @@ export function CaseGazetteerPanel({ load, add, remove, mayChange, onChanged }: 
   }, [load]);
 
   async function toggle(datasetId: string, gazetteer: CaseGazetteer) {
+    // The button stays focusable while its change runs (a copy takes seconds per thousand places,
+    // ADR-147 Amendment 2), so a keyboard user keeps their place: a press meanwhile does nothing.
+    if (busy) return;
     setBusy(true);
     setWords(gazetteer.added ? `Removing ${gazetteer.name}…` : `Adding ${gazetteer.name}…`);
     try {
@@ -227,6 +252,13 @@ export function CaseGazetteerPanel({ load, add, remove, mayChange, onChanged }: 
       onChanged();
     } catch (err) {
       setWords(err instanceof GazetteersFailed ? err.message : "The gazetteer could not be changed.");
+      // A copy that failed part way keeps its record (ADR-147 Amendment 2): read the list again,
+      // so the row says what the Conduit holds.
+      try {
+        setPanel(await load());
+      } catch {
+        // The words above already say the change failed; the old rows stay.
+      }
     } finally {
       setBusy(false);
     }
@@ -256,7 +288,7 @@ export function CaseGazetteerPanel({ load, add, remove, mayChange, onChanged }: 
                 <button
                   type="button"
                   className="btn btn--quiet"
-                  disabled={busy}
+                  aria-disabled={busy}
                   aria-label={`${gazetteer.added ? "Remove" : "Add"} ${gazetteer.name}`}
                   onClick={() => void toggle(panel.datasetId, gazetteer)}
                 >

@@ -68,6 +68,19 @@ describe("caseGazetteers", () => {
     expect(state).toEqual({ state: expected });
   });
 
+  it("tells a case that reads a drawing, which the Conduit offers no gazetteer", async () => {
+    const state = await caseGazetteers(
+      "http://conduit",
+      "t",
+      "case/1",
+      conduit({
+        [`GET ${GAZ}`]: { status: 200, body: { gazetteers: [] } },
+        [`GET ${DATASETS}`]: { status: 200, body: [{ id: "d", name: "D", owning_unit: "u", kind: "drawn" }] },
+      }),
+    );
+    expect(state).toEqual({ state: "drawn" });
+  });
+
   it("says none is built when the case reads one source dataset and its unit has none", async () => {
     const state = await caseGazetteers(
       "http://conduit",
@@ -112,7 +125,7 @@ describe("addGazetteer and removeGazetteer", () => {
 
   it.each([
     [403, "You may not change this dataset's gazetteers: it needs the right to run pipelines."],
-    [404, "There is no gazetteer of that name for this case's dataset's unit."],
+    [404, "That gazetteer cannot be changed for this case's dataset now: read the list again, or ask the dataset's Author."],
     [409, "This case's dataset takes no gazetteer: it is a composite or a drawing."],
     [500, "The gazetteer could not be changed (HTTP 500). Try again."],
   ])("says a %i in its own words, never the Conduit's", async (status, words) => {

@@ -1,0 +1,14 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 32d6e0d..1c44cfe 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -883,6 +883,9 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
+ export const MAP_VIEW_ACTIONS = defineActionRegistry("MAP_VIEW_ACTIONS", [
+   "switch-the-basemap-by-keyboard",
+   "find-a-place-by-keyboard",
++  // P6 (ADR-147 Amendment 2, the owner's ruling 6): the case's gazetteers beside the place search.
++  "add-a-gazetteer-by-keyboard",
++  "remove-a-gazetteer-by-keyboard",
+ ] as const);
+ 
+ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [

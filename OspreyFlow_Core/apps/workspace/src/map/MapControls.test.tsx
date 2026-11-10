@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The place search's words (`MapControls.tsx`), rule 2: an answer cut short is never told as "none".
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CaseGazetteerPanel, PlaceSearch } from "./MapControls";
@@ -114,14 +115,17 @@ describe("CaseGazetteerPanel", () => {
 
   it.each([
     ["reads_nothing", "This case reads no dataset yet, so it has no gazetteer to add."],
+    ["drawn", "A gazetteer is added to a dataset loaded from sources, and this case reads a drawing"],
     [
       "not_one_source",
       "A gazetteer is added to the one dataset a case reads, and this case reads a composite or more than one",
     ],
     ["none_built", "No gazetteer is built for this case's dataset's unit yet: an administrator builds one in Admin › Maps."],
-  ] as const)("shows the panel and says why when %s, naming no dataset", async (state, words) => {
+  ] as const)("shows the panel and says why when %s, in words of its own", async (state, words) => {
     const { region } = await panel({ state });
     expect(region.textContent).toContain(words);
+    // The state carries no dataset, so the words cannot name one: no id, no name.
+    expect(region.textContent).not.toMatch(/ds-|gazetteer-|OpenStreetMap/);
     expect(within(region).queryAllByRole("button")).toHaveLength(0);
   });
 
@@ -147,5 +151,113 @@ describe("CaseGazetteerPanel", () => {
     expect(screen.getByRole("region", { name: "Gazetteers in this case's dataset" }).textContent).toContain(
       "You may not change this dataset's gazetteers",
     );
+  });
+});
+
+
+describe("CaseGazetteerPanel while a change runs and after", () => {
+  it("keeps the pressed button focusable, says it is busy, and ignores a second press", async () => {
+    let release: (value: { gazetteers: (typeof OSM)[]; said: null }) => void = () => undefined;
+    const add = vi.fn(
+      () => new Promise<{ gazetteers: (typeof OSM)[]; said: null }>((resolve) => (release = resolve)),
+    );
+    await act(async () => {
+      render(
+        <CaseGazetteerPanel
+          load={async () => ({ state: "ready", datasetId: "ds-1", gazetteers: [OSM] })}
+          add={add}
+          remove={vi.fn()}
+          mayChange
+          onChanged={() => undefined}
+        />,
+      );
+    });
+    const button = screen.getByRole("button", { name: "Add OpenStreetMap places (UK)" });
+    button.focus();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(document.activeElement).toBe(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(add).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release({ gazetteers: [{ ...OSM, added: true }], said: null });
+    });
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Remove OpenStreetMap places (UK)");
+  });
+
+  it("reads the list again after a failed change, so the row says what the Conduit holds", async () => {
+    const { GazetteersFailed } = await import("./gazetteers");
+    const load = vi
+      .fn<() => Promise<GazetteerPanelState>>()
+      .mockResolvedValueOnce({ state: "ready", datasetId: "ds-1", gazetteers: [OSM] })
+      .mockResolvedValueOnce({ state: "ready", datasetId: "ds-1", gazetteers: [{ ...OSM, added: true }] });
+    await act(async () => {
+      render(
+        <CaseGazetteerPanel
+          load={load}
+          add={async () => {
+            throw new GazetteersFailed("The gazetteer could not be changed (HTTP 500). Try again.");
+          }}
+          remove={vi.fn()}
+          mayChange
+          onChanged={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Add OpenStreetMap places (UK)" }));
+    });
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Remove OpenStreetMap places (UK)" })).toBeTruthy();
+  });
+
+  it("shows nothing of the last case while another case's gazetteers are read", async () => {
+    const first = async (): Promise<GazetteerPanelState> => ({
+      state: "ready",
+      datasetId: "ds-1",
+      gazetteers: [OSM],
+    });
+    const second = () => new Promise<GazetteerPanelState>(() => undefined);
+    const props = { add: vi.fn(), remove: vi.fn(), mayChange: true, onChanged: () => undefined };
+    let rerender: (ui: React.ReactElement) => void = () => undefined;
+    await act(async () => {
+      rerender = render(<CaseGazetteerPanel load={first} {...props} />).rerender;
+    });
+    expect(screen.getByRole("button", { name: "Add OpenStreetMap places (UK)" })).toBeTruthy();
+    await act(async () => {
+      rerender(<CaseGazetteerPanel load={second} {...props} />);
+    });
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByText("Reading the gazetteers…")).toBeTruthy();
+  });
+});
+
+describe("PlaceSearch when the places on offer change", () => {
+  it("asks an answer shown again, and asks nothing when none was shown", async () => {
+    const search = vi.fn<(query: string) => Promise<{ places: never[]; more: boolean }>>(async () => ({
+      places: [],
+      more: false,
+    }));
+    let rerender: (ui: React.ReactElement) => void = () => undefined;
+    await act(async () => {
+      rerender = render(<PlaceSearch search={search} onGo={() => undefined} asOf={0} />).rerender;
+    });
+    await act(async () => {
+      rerender(<PlaceSearch search={search} onGo={() => undefined} asOf={1} />);
+    });
+    expect(search).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find a place" }), { target: { value: "cran" } });
+    await act(async () => {
+      fireEvent.submit(screen.getByRole("search", { name: "Find a place" }));
+    });
+    await act(async () => {
+      rerender(<PlaceSearch search={search} onGo={() => undefined} asOf={2} />);
+    });
+    expect(search.mock.calls.map((call) => call[0])).toEqual(["cran", "cran"]);
   });
 });

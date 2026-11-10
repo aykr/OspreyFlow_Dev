@@ -53,7 +53,9 @@ const EXTRA_STATES: Record<string, string[]> = {
     "gazetteers=reader",
     "gazetteers=nothing",
     "gazetteers=composite",
+    "gazetteers=drawn",
     "gazetteers=unbuilt",
+    "gazetteers=failed",
     "gazetteers=refused",
   ],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.

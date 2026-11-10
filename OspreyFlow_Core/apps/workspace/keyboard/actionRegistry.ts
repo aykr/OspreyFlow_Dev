@@ -883,9 +883,6 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
 export const MAP_VIEW_ACTIONS = defineActionRegistry("MAP_VIEW_ACTIONS", [
   "switch-the-basemap-by-keyboard",
   "find-a-place-by-keyboard",
-  // P6 (ADR-147 Amendment 2, the owner's ruling 6): the case's gazetteers beside the place search.
-  "add-a-gazetteer-by-keyboard",
-  "remove-a-gazetteer-by-keyboard",
 ] as const);
 
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [

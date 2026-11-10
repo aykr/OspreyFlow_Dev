@@ -16,6 +16,7 @@ export type GazetteerPanelState =
   | { state: "ready"; datasetId: string; gazetteers: CaseGazetteer[] }
   | { state: "reads_nothing" }
   | { state: "not_one_source" }
+  | { state: "drawn" }
   | { state: "none_built" };
 
 async function ask(
@@ -52,8 +53,12 @@ export async function caseGazetteers(
   const datasets = (await read.json()) as Dataset[];
   if (datasets.length === 0) return { state: "reads_nothing" };
   const [only] = datasets;
-  // An older Conduit sends no kind: a source, as every dataset was before composites.
-  if (datasets.length > 1 || only === undefined || (only.kind ?? "source") !== "source") {
+  // An older Conduit sends no kind: a source, as every dataset was before composites. A drawing
+  // (`kind: "drawn"`, ADR-143) is one dataset but no source, and the Conduit offers it none
+  // (`_own_dataset`); `cases.ts`'s `Dataset` does not name that kind, so it is read as a string.
+  const kind: string = only?.kind ?? "source";
+  if (datasets.length === 1 && kind === "drawn") return { state: "drawn" };
+  if (datasets.length > 1 || only === undefined || kind !== "source") {
     return { state: "not_one_source" };
   }
   if (gazetteers.length === 0) return { state: "none_built" };
@@ -80,7 +85,12 @@ async function change(
     );
   }
   if (response.status === 404) {
-    throw new GazetteersFailed("There is no gazetteer of that name for this case's dataset's unit.");
+    // The dataset's gate answers 404 too (a dataset this person may not load into, or one the
+    // case no longer reads): one answer for both, which says neither.
+    throw new GazetteersFailed(
+      "That gazetteer cannot be changed for this case's dataset now: read the list again, or ask " +
+        "the dataset's Author.",
+    );
   }
   if (response.status === 409) {
     throw new GazetteersFailed("This case's dataset takes no gazetteer: it is a composite or a drawing.");

@@ -95,3 +95,17 @@ folded into `lane/platform-b`'s BRIEF; no new brief is coming.
   case's dataset yet (Admin › Maps).
 - The record is the dataset's (ADR-147 Amendment 2), so an add shows as added in every case reading that dataset.
   The panel's words say "this case's dataset", not "this case".
+
+## As built, where it departs from the plan above (10 November 2026, after the lane review)
+- The client gives its own words for every refusal, never the Conduit's (rule 7). Only a removal's fixed
+  words are the Conduit's.
+- Without `run_pipelines` the buttons are not drawn at all, rather than drawn disabled: a line says what a
+  change needs. A disabled button cannot be reached by keyboard to read why.
+- The panel is a region headed "Gazetteers in this case's dataset", since the record is the dataset's.
+- `placesByRole.json` and the census are unchanged, by the orchestrator's ruling (option 1); the census's
+  blind spot is the orchestrator's carry.
+- Four empty cases, not three: a drawn dataset is told apart (the Conduit offers it no gazetteer).
+- The keyboard cases: add, then the search asked again and the place offered, then remove at once; a
+  separate removal from a preset; and a panel offering no change. The registry ids go to the orchestrator as
+  `registry-P6.patch`, not on the branch (`actionRegistry.ts` is shared).
+- The ADR text is `ADR-147-amendment-P6-draft.md`, for the orchestrator to reserve.

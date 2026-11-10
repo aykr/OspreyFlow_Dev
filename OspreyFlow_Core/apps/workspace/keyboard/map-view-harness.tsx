@@ -12,8 +12,10 @@
 // P6: the case's gazetteers beside the search, answered by a stand-in for the Conduit's routes that
 // records each change on `window.__GAZETTEER_CALLS__` (synthetic names, rule 9). `?gazetteers=`
 // draws a state for the axe scan: `added` (one added, one not), `reader` (no `run_pipelines`, so
-// no change offered), `nothing`, `composite` and `unbuilt` (the three empty cases), `refused` (a
-// change the Conduit refuses).
+// no change offered), `nothing`, `composite`, `drawn` and `unbuilt` (the empty cases), `failed` (the
+// list unreadable), `refused` (a change the Conduit refuses). The towns gazetteer offers Cranwell to
+// the place search while it is added. `window.__HOLD_GAZETTEER__ = true` holds a change open until
+// `window.__RELEASE_GAZETTEER__()`, as a real copy takes seconds (ADR-147 Amendment 2).
 import { useState } from "react";
 import Graph from "graphology";
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -34,6 +36,8 @@ declare global {
     __MAP__?: MapLibreMap;
     __PLACE_QUERIES__?: string[];
     __GAZETTEER_CALLS__?: string[];
+    __HOLD_GAZETTEER__?: boolean;
+    __RELEASE_GAZETTEER__?: () => void;
   }
 }
 
@@ -98,7 +102,8 @@ async function searchPlaces(query: string) {
   if (query === "zz-more") return { places: [], more: true };
   if (query === "zz-fail") throw new PlaceSearchFailed("The place search failed (HTTP 500). Try again.");
   const q = query.toLowerCase();
-  return { places: GAZETTEER.filter((p) => p.name.toLowerCase().includes(q)), more: false };
+  const offered = [...GAZETTEER, ...(held[0]!.added ? TOWNS : [])];
+  return { places: offered.filter((p) => p.name.toLowerCase().includes(q)), more: false };
 }
 
 // Synthetic gazetteers of the harness's unit (rule 9): names only, as the Conduit sends them.
@@ -114,13 +119,22 @@ window.__GAZETTEER_CALLS__ = [];
 const EMPTY: Record<string, GazetteerPanelState> = {
   nothing: { state: "reads_nothing" },
   composite: { state: "not_one_source" },
+  drawn: { state: "drawn" },
   unbuilt: { state: "none_built" },
 };
+// What the towns gazetteer's copies give the place search while it is added (synthetic, rule 9).
+const TOWNS: MapPlace[] = [{ id: "place-cranwell", name: "Cranwell", lon: -0.476, lat: 53.03 }];
+async function heldOpen() {
+  if (window.__HOLD_GAZETTEER__) await new Promise<void>((resolve) => (window.__RELEASE_GAZETTEER__ = resolve));
+}
 const GAZETTEERS: GazetteerControls = {
-  load: async () =>
-    EMPTY[gazetteerState] ?? { state: "ready", datasetId: "ds-harness", gazetteers: held },
+  load: async () => {
+    if (gazetteerState === "failed") throw new GazetteersFailed("The gazetteers could not be read (HTTP 500). Try again.");
+    return EMPTY[gazetteerState] ?? { state: "ready", datasetId: "ds-harness", gazetteers: held };
+  },
   add: async (datasetId, gazetteerId) => {
     window.__GAZETTEER_CALLS__!.push(`PUT ${datasetId} ${gazetteerId}`);
+    await heldOpen();
     if (gazetteerState === "refused") {
       throw new GazetteersFailed(
         "You may not change this dataset's gazetteers: it needs the right to run pipelines.",
@@ -131,6 +145,7 @@ const GAZETTEERS: GazetteerControls = {
   },
   remove: async (datasetId, gazetteerId) => {
     window.__GAZETTEER_CALLS__!.push(`DELETE ${datasetId} ${gazetteerId}`);
+    await heldOpen();
     held = held.map((g) => (g.dataset_id === gazetteerId ? { ...g, added: false } : g));
     return { gazetteers: held, said: REMOVED_WORDS };
   },

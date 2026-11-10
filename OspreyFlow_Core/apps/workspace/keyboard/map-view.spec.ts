@@ -139,51 +139,63 @@ test("a name the gazetteer does not hold is said in words, and nothing else is a
 });
 
 // P6 (ADR-147 Amendment 2, the owner's ruling 6): the case's gazetteers beside the place search,
-// added and removed by keyboard alone. The panel follows the search in the tab order.
+// added and removed by keyboard alone. The panel follows the search in the tab order. A change is
+// held open by the harness until the case releases it, as a real copy takes seconds, so the
+// pressed button is seen to keep the focus while it runs.
 
-async function toThePanel(page: import("@playwright/test").Page) {
-  await page.goto("/keyboard/map-view-harness.html");
-  await expect(page.getByRole("region", { name: "Gazetteers in this case's dataset" })).toBeVisible();
-  await page.getByRole("searchbox", { name: "Find a place" }).focus();
-  await page.keyboard.press("Tab"); // the Find button
-  await page.keyboard.press("Tab"); // the first gazetteer's button
-}
+const PANEL = "Gazetteers in this case's dataset";
 
-test("a gazetteer is added to the case's dataset by keyboard, and the search starts afresh", async ({ page }) => {
+test("a gazetteer is added by keyboard, the search asked again, then removed again", async ({ page }) => {
   await page.goto("/keyboard/map-view-harness.html");
-  // A search first, so a change can be seen to start it afresh.
   await page.getByRole("searchbox", { name: "Find a place" }).focus();
-  await page.keyboard.type("cranf");
+  await page.keyboard.type("cran");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Go to Cranford" })).toBeVisible();
-  await page.keyboard.press("Tab"); // the Find button
-  await page.keyboard.press("Tab"); // Go to Cranford
-  await page.keyboard.press("Tab"); // the first gazetteer's button
-  const panel = page.getByRole("region", { name: "Gazetteers in this case's dataset" });
+  await expect(page.getByRole("button", { name: "Go to Cranwell" })).toHaveCount(0);
+  // Tab past Find, Go to Cranford and Go to Cranbrook, to the first gazetteer's button.
+  for (let stop = 0; stop < 4; stop += 1) await page.keyboard.press("Tab");
+  const panel = page.getByRole("region", { name: PANEL });
   const add = panel.getByRole("button", { name: "Add Harness towns" });
   await expect(add).toBeFocused();
+  await page.evaluate(() => (window.__HOLD_GAZETTEER__ = true));
   await page.keyboard.press("Enter");
+  await expect(panel.getByRole("status")).toContainText("Adding Harness towns…");
+  await expect(add).toBeFocused();
+  await expect(add).toHaveAttribute("aria-disabled", "true");
+  await page.keyboard.press("Enter"); // a second press while it runs does nothing
+  await page.evaluate(() => window.__RELEASE_GAZETTEER__!());
   await expect(panel.getByRole("status")).toContainText(
     "Harness towns is added: its places are copied into this case's dataset",
   );
+  const remove = panel.getByRole("button", { name: "Remove Harness towns" });
+  await expect(remove).toBeFocused();
+  await expect(panel.getByRole("listitem").first()).toContainText("— added");
+  // The search shown is asked again, and now offers the added gazetteer's place.
+  await expect(page.getByRole("button", { name: "Go to Cranwell" })).toBeVisible();
+  expect(await page.evaluate(() => window.__PLACE_QUERIES__)).toEqual(["cran", "cran"]);
+  registerCovered(REGISTRY, "add-a-gazetteer-by-keyboard");
+
+  // Removed again at once: the Conduit's words, and the place no longer offered.
+  await page.evaluate(() => (window.__HOLD_GAZETTEER__ = false));
+  await page.keyboard.press("Enter");
+  await expect(panel.getByRole("status")).toContainText(
+    "The gazetteer is removed: its places stay in this dataset as its own",
+  );
+  await expect(add).toBeFocused();
+  await expect(page.getByRole("button", { name: "Go to Cranwell" })).toHaveCount(0);
   expect(await page.evaluate(() => window.__GAZETTEER_CALLS__)).toEqual([
     "PUT ds-harness gazetteer-harness-towns",
+    "DELETE ds-harness gazetteer-harness-towns",
   ]);
-  // The same button now removes it, and keeps the focus.
-  await expect(panel.getByRole("button", { name: "Remove Harness towns" })).toBeFocused();
-  await expect(panel.getByRole("listitem").first()).toContainText("— added");
-  await expect(page.getByRole("button", { name: "Go to Cranford" })).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "Find a place" })).toHaveValue("");
-  registerCovered(REGISTRY, "add-a-gazetteer-by-keyboard");
 });
 
-test("a gazetteer is removed by keyboard, and the Conduit's words say what stays", async ({ page }) => {
+test("a gazetteer already added is removed by keyboard", async ({ page }) => {
   await page.goto("/keyboard/map-view-harness.html?gazetteers=added");
-  await expect(page.getByRole("region", { name: "Gazetteers in this case's dataset" })).toBeVisible();
+  const panel = page.getByRole("region", { name: PANEL });
+  await expect(panel).toBeVisible();
   await page.getByRole("searchbox", { name: "Find a place" }).focus();
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  const panel = page.getByRole("region", { name: "Gazetteers in this case's dataset" });
+  await page.keyboard.press("Tab"); // the Find button
+  await page.keyboard.press("Tab"); // the first gazetteer's button
   await expect(panel.getByRole("button", { name: "Remove Harness towns" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(panel.getByRole("status")).toContainText(
@@ -198,11 +210,15 @@ test("a gazetteer is removed by keyboard, and the Conduit's words say what stays
 
 test("without run_pipelines no change is offered, and Tab passes the panel by", async ({ page }) => {
   await page.goto("/keyboard/map-view-harness.html?gazetteers=reader");
-  const panel = page.getByRole("region", { name: "Gazetteers in this case's dataset" });
+  const panel = page.getByRole("region", { name: PANEL });
   await expect(panel).toContainText("Adding or removing a gazetteer needs the right to run pipelines.");
   await expect(panel.getByRole("button")).toHaveCount(0);
-  await toThePanel(page);
-  expect(await page.evaluate(() => document.activeElement?.closest(".map-controls__gazetteers"))).toBeNull();
+  await page.getByRole("searchbox", { name: "Find a place" }).focus();
+  await page.keyboard.press("Tab"); // the Find button
+  await page.keyboard.press("Tab"); // past the panel: where an Add would be, there is none
+  expect(
+    await page.evaluate(() => document.activeElement?.closest(".map-controls__gazetteers") ?? null),
+  ).toBeNull();
   expect(await page.evaluate(() => window.__GAZETTEER_CALLS__)).toEqual([]);
 });
 
