@@ -1,0 +1,80 @@
+profile: local-lite
+components:
+  graph_store: arcadedb
+  analytics_engine: duckdb
+  post_ingest_resolution: true
+  search: opensearch
+  storage:
+    data: /var/lib/osprey/data
+    staging: /var/lib/osprey/staging
+    backups: /var/lib/osprey/backups
+    ingest: /var/lib/osprey/ingest
+    tiles: /var/lib/osprey/tiles
+  source_path: null
+models:
+  local_only: true
+  hosted_fallback: null
+  sendable_handling_codes: []
+  provider: null
+  providers: []
+  defaults: {}
+  extraction: qwen2.5:7b-instruct
+  vision: moondream:1.8b-v2-q4_K_M
+  transcription: Systran/faster-whisper-tiny.en
+  embedding: all-minilm:22m-l6-v2-fp16
+governance:
+  identity_provider: keycloak
+  handling_scheme: uk-law-enforcement
+  ontology: default
+  organisation_sign_in: null
+  organisation_provider: null
+  marking: null
+  real_data_exceptions: config/real_data_exceptions.yaml
+cluster:
+  hosts: []
+  namespace: ospreyflow
+  storage_class: null
+  shared_storage_class: null
+network:
+  expose_conduit: false
+  public_origin: http://ospreyflow.localhost
+  tls: null
+  redirect_http: false
+  listen_address: null
+map: null
+reporting:
+  sync: false
+  sync_interval_seconds: 900
+  sync_memory: 256m
+  superset: false
+  superset_memory: 2g
+monitoring:
+  hotlist_audience: only_me
+  hotlist_audience_editable: true
+mail: null
+welcome:
+  about: true
+  account_help: null
+  accessibility: null
+  privacy: null
+  service_status: null
+deployment:
+  name: null
+  graph_port: null
+appearance:
+  brand: ospreyflow
+  service_name: null
+  organisation: null
+  phase: none
+external:
+  postgres: null
+  object_store: null
+  media: null
+  valkey: null
+  search: null
+resources:
+  memory_gib: null
+  graph_heap_gib: null
+  search_heap_gib: null
+  postgres_shared_buffers_gib: null
+  gpu: none

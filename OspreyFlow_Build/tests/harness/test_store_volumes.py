@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -953,9 +954,16 @@ def _old_rendered_deployment(repo: Path) -> Path:
     for name, text in render(OspreyConfig(), allow_unpinned=True).artefacts.items():
         (out / name).parent.mkdir(parents=True, exist_ok=True)
         (out / name).write_text(text, encoding="utf-8")
+    # Every secret the compose file requires, held as an applied deployment holds them (`render`
+    # writes none): refresh refuses one Compose could not interpolate (ADR-114 Amendment 39).
+    required = set(
+        re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?", (out / "compose.yaml").read_text())
+    )
+    held = "OSPREY_ARCADEDB_PASSWORD=pw\n" + "".join(
+        f"{n}=held-{n.lower()}\n" for n in sorted(required - {"OSPREY_ARCADEDB_PASSWORD"})
+    )
     (out / "deployment.env").write_text(
-        (out / "deployment.env").read_text(encoding="utf-8") + "OSPREY_ARCADEDB_PASSWORD=pw\n",
-        encoding="utf-8",
+        (out / "deployment.env").read_text(encoding="utf-8") + held, encoding="utf-8"
     )
     tokens = repo / "apps" / "workspace" / "src" / "design" / "tokens.css"
     tokens.parent.mkdir(parents=True)

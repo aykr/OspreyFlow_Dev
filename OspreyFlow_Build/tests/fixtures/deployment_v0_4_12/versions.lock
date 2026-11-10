@@ -1,0 +1,21 @@
+images:
+- service: api
+  repository: ghcr.io/aykr/api
+  tag: v0.4.12
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+  source: registry
+- service: workspace
+  repository: ghcr.io/aykr/workspace
+  tag: v0.4.12
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+  source: registry
+- service: ingest
+  repository: ghcr.io/aykr/ingest
+  tag: v0.4.12
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000003
+  source: registry
+- service: ner
+  repository: ghcr.io/aykr/ner
+  tag: v0.4.12
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000004
+  source: registry

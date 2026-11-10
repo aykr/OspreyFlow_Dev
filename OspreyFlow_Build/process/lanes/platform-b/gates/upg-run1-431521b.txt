@@ -1,0 +1,60 @@
+Server run 1 for the upgrade fix at 431521b (offline, no stack): the 964a2a9 render against the fixture, and the two cases the Mac skips, green at the head and red with main's scripts/refresh.py. The script is the command below.
+
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T202032Z/log: sh -c set -u
+cd ../OspreyFlow_Core || exit 1
+M=$HOME/osprey-runs/platform-b.meta
+PY=$PWD/.venv/bin/python
+echo "== 1. v0.4.12 rendered here, from 964a2a9's own tree, against the fixture"
+rm -rf "$M/v0412-render" && mkdir -p "$M/v0412-render"
+(cd "$M/v0412/OspreyFlow_Core" && "$PY" -I -c "
+import sys; sys.path[:0]=['.','packages','cli']
+from harness.render import render
+from schemas.deployment import OspreyConfig
+arts = render(OspreyConfig(), allow_unpinned=True).artefacts
+for name, text in arts.items():
+    open('$M/v0412-render/' + name.replace('/', '_'), 'w').write(text)
+print('rendered:', sorted(arts))")
+"$PY" -I - "$M/v0412-render" "../OspreyFlow_Build/tests/fixtures/deployment_v0_4_12" <<'PYEOF'
+import re, sys
+from pathlib import Path
+here, fixture = Path(sys.argv[1]), Path(sys.argv[2])
+def drop(t):
+    return [l for l in t.splitlines() if not re.match(r"\s+(image|build|context|dockerfile):", l)]
+a, b = drop((here / "compose.yaml").read_text()), drop((fixture / "compose.yaml").read_text())
+print("compose.yaml (image and build lines aside):",
+      "IDENTICAL" if a == b else f"DIFFERS {[x for x in a if x not in b][:5]} / {[x for x in b if x not in a][:5]}")
+for name in ("Caddyfile", "glass.json"):
+    same = (here / name).read_text() == (fixture / name).read_text()
+    print(f"{name}:", "IDENTICAL" if same else "DIFFERS")
+env_r = (here / "deployment.env").read_text().splitlines()
+env_f = [l for l in (fixture / "deployment.env").read_text().splitlines() if "=held-" not in l]
+print("deployment.env (held values aside): render-only", [l for l in env_r if l not in env_f],
+      "fixture-only", [l for l in env_f if l not in env_r])
+PYEOF
+echo "== 2. the two cases the Mac skips: at the head"
+PYTHONPATH=../OspreyFlow_Build "$PY" -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rs \
+  ../OspreyFlow_Build/tests/test_refresh_before_the_gateway.py -k "compose_itself or start_build" 2>&1 | tail -3
+echo "== 3. the same with main's scripts/refresh.py"
+cp scripts/refresh.py "$M/refresh_head.py" && cp "$M/refresh_main.py" scripts/refresh.py
+PYTHONPATH=../OspreyFlow_Build "$PY" -m pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q \
+  ../OspreyFlow_Build/tests/test_refresh_before_the_gateway.py -k "compose_itself or start_build" 2>&1 \
+  | grep -E "^FAILED|^ERROR|passed|failed|undefined volume" | head -6
+cp "$M/refresh_head.py" scripts/refresh.py && cmp -s scripts/refresh.py "$M/refresh_head.py" && echo "head's refresh.py restored"
+== 1. v0.4.12 rendered here, from 964a2a9's own tree, against the fixture
+rendered: ['Caddyfile', 'RUNBOOK.md', 'compose.yaml', 'deployment.env', 'glass.json', 'versions.lock']
+compose.yaml (image and build lines aside): IDENTICAL
+Caddyfile: IDENTICAL
+glass.json: IDENTICAL
+deployment.env (held values aside): render-only ['OSPREY_RELEASE_VERSION=dev-unknown'] fixture-only ['OSPREY_RELEASE_VERSION=v0.4.12']
+== 2. the two cases the Mac skips: at the head
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+2 passed, 21 deselected in 1.21s
+== 3. the same with main's scripts/refresh.py
+E       AssertionError: service "api" refers to undefined volume map-settings: invalid compose project
+E        +  where 1 = CompletedProcess(args=['docker', 'compose', '-f', '/tmp/pytest-of-root/pytest-520/test_compose_itself_accepts_th0/home...'], returncode=1, stdout='', stderr='service "api" refers to undefined volume map-settings: invalid compose project\n').returncode
+FAILED ../OspreyFlow_Build/tests/test_refresh_before_the_gateway.py::test_start_build_says_the_refusal_in_words_and_starts_nothing
+FAILED ../OspreyFlow_Build/tests/test_refresh_before_the_gateway.py::test_compose_itself_accepts_the_refreshed_project
+2 failed, 21 deselected in 1.79s
+head's refresh.py restored
+Wall time: 4 s, exit 0 (no stack, no lease; set-up before it 9 s)

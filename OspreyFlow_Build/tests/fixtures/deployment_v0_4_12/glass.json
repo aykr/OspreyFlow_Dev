@@ -1,0 +1,18 @@
+{
+  "identity_provider": "http://id.ospreyflow.localhost",
+  "realm": "osprey",
+  "marking": "PUBLIC",
+  "organisation_sign_in": null,
+  "organisation_label": null,
+  "welcome": {
+    "about": true,
+    "links": {}
+  },
+  "appearance": {
+    "brand": "ospreyflow",
+    "service_name": null,
+    "organisation": null,
+    "phase": "none"
+  },
+  "version": "unknown"
+}

@@ -1082,10 +1082,12 @@ def reapply(
     realm: str = "osprey",
 ) -> set[str]:
     """ADR-137 decision 1: the deployment installed from `config_path` re-rendered from it, through
-    the staging folder, with every secret kept; then only the services whose rendered files changed
-    are started again (`services_to_restart`). Returns them. Never builds, seeds, makes accounts or
-    a first administrator, adds a demo pack, or removes a container's data: `up --force-recreate`
-    keeps every volume.
+    the staging folder, with every secret kept; then the whole project brought up first when the
+    render adds a service the deployment never had (ADR-114 Amendment 39) or the stores were moved,
+    and the services whose rendered files changed started again (`services_to_restart`). Returns
+    them; a failed start says the settings are written and to run `ospreyflow start`. Never
+    builds, seeds, makes accounts or a first administrator, adds a demo pack, or removes a
+    container's data: `up --force-recreate` keeps every volume.
 
     **Preflight's port check and a running deployment.** The deployment's own containers hold its
     published ports, so on a first install's terms its own apply would always be refused (as the
@@ -1134,6 +1136,14 @@ def reapply(
         )
         restart = services_to_restart(out_dir, stage)
         removed = set(_services(out_dir)) - set(_services(stage))
+        # A service the deployment never had, and one an install would start (no profile: a
+        # stopped or opt-in service is left as the operator has it).
+        added = {
+            name
+            for name, service in _services(stage).items()
+            if name not in _services(out_dir)
+            and not (isinstance(service, dict) and service.get("profiles"))
+        }
         # Defect 9 (Amendment 33, "as found on the first server"): a newly chosen model fetched,
         # and waited on, before anything that uses it starts again. From the staged files, so a
         # refused download changes nothing and the next apply sees the same change.
@@ -1151,16 +1161,30 @@ def reapply(
     # ADR-114 Amendment 35: the stores' data moved into their named volumes once; the move stops
     # the whole deployment, so all of it is started again afterwards.
     moved = stores_moved(compose_file, files_held)
-    if restart or removed:
-        _run(
-            _compose(compose_file)
-            + ["up", "-d", "--no-deps", "--force-recreate", "--wait"]
-            + (["--remove-orphans"] if removed else [])
-            + sorted(restart),
-            stage="up",
-        )
-    if moved.services:
-        _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
+    try:
+        if added or moved.services:
+            # The whole project, as an install starts it, so each service starts after what it
+            # depends on: a service the deployment never had (ADR-135 Amendment 2's `litellm-db`,
+            # which makes the gateway's database role; the v0.5.0 upgrade rehearsal, run 3, where
+            # the gateway restarted with `--no-deps` came up before its role existed), or the
+            # stores moved into their volumes (ADR-114 Amendment 35), which stopped it all.
+            _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
+        if restart or removed:
+            _run(
+                _compose(compose_file)
+                + ["up", "-d", "--no-deps", "--force-recreate", "--wait"]
+                + (["--remove-orphans"] if removed else [])
+                + sorted(restart),
+                stage="up",
+            )
+    except ApplyFailed as failed:
+        # The files are in place, so a re-run finds nothing to change: say what to run, last.
+        last = failed.detail.strip().splitlines()[-1] if failed.detail.strip() else ""
+        raise ApplyFailed(
+            "up",
+            f"{last}\nThe settings are written but not every service started; run `ospreyflow "
+            f"start --name {_deployment_name(out_dir)}` to start them.",
+        ) from failed
     # ADR-135 Amendment 2 decision 3: keys still in deployment.env go into the gateway.
     print(move_model_keys_into_gateway(compose_file))
     wanted = organisation_provider(config)
@@ -1169,6 +1193,12 @@ def reapply(
         # on or off, among others) reaches Keycloak, which reads none of the rendered files.
         _register_organisation_sign_in(config_path, out_root, out_dir.name, realm)
     return restart
+
+
+def _deployment_name(out_dir: Path) -> str:
+    """The name `ospreyflow --name` takes for the deployment in `out_dir` (ADR-138): its own for one
+    kept by name, `default` for the checkout's."""
+    return out_dir.name if out_dir.parent.name == "deployments" else "default"
 
 
 def _installed_organisation_sign_in(out_dir: Path) -> dict[str, Any] | None:
@@ -1213,8 +1243,19 @@ def reapply_main(
     if restarted:
         print(f"apply: the settings are applied; started again: {', '.join(sorted(restarted))}.")
     else:
-        print("apply: Nothing changed that a service reads; nothing was started again.")
+        print(
+            "apply: Nothing changed that a service reads; nothing was started again. If a service "
+            f"is not running, `ospreyflow start --name {_named_in(args)}` starts it."
+        )
     return 0
+
+
+def _named_in(args: argparse.Namespace) -> str:
+    """The `--name` of the deployment `args` re-apply, `default` when it cannot be read."""
+    try:
+        return _deployment_name(args.out_root / generated_folder(load_config(args.config)))
+    except Exception:  # noqa: BLE001 - the words fall back; the apply itself already succeeded
+        return "default"
 
 
 def own_certificate(config: OspreyConfig) -> tuple[str, str] | None:
