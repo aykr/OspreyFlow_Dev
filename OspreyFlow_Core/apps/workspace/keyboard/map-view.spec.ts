@@ -116,7 +116,7 @@ test("a place is found in the case's gazetteer and shown by keyboard", async ({ 
   await page.keyboard.press("Tab");
   await expect(go).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.locator(".map-controls [role=status]")).toContainText("Showing Cranford.");
+  await expect(page.locator(".map-controls__search [role=status]")).toContainText("Showing Cranford.");
   // The camera goes to the place (Cranford, 51.488 N 0.459 W), well away from the yards.
   await expect
     .poll(async () => {
@@ -132,10 +132,78 @@ test("a name the gazetteer does not hold is said in words, and nothing else is a
   await page.getByRole("searchbox", { name: "Find a place" }).focus();
   await page.keyboard.type("Atlantis");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".map-controls [role=status]")).toContainText(
+  await expect(page.locator(".map-controls__search [role=status]")).toContainText(
     "No place called “Atlantis” is in the gazetteer this case reads.",
   );
   expect(await page.evaluate(() => window.__PLACE_QUERIES__)).toEqual(["Atlantis"]);
+});
+
+// P6 (ADR-147 Amendment 2, the owner's ruling 6): the case's gazetteers beside the place search,
+// added and removed by keyboard alone. The panel follows the search in the tab order.
+
+async function toThePanel(page: import("@playwright/test").Page) {
+  await page.goto("/keyboard/map-view-harness.html");
+  await expect(page.getByRole("region", { name: "Gazetteers in this case's dataset" })).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find a place" }).focus();
+  await page.keyboard.press("Tab"); // the Find button
+  await page.keyboard.press("Tab"); // the first gazetteer's button
+}
+
+test("a gazetteer is added to the case's dataset by keyboard, and the search starts afresh", async ({ page }) => {
+  await page.goto("/keyboard/map-view-harness.html");
+  // A search first, so a change can be seen to start it afresh.
+  await page.getByRole("searchbox", { name: "Find a place" }).focus();
+  await page.keyboard.type("cranf");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Go to Cranford" })).toBeVisible();
+  await page.keyboard.press("Tab"); // the Find button
+  await page.keyboard.press("Tab"); // Go to Cranford
+  await page.keyboard.press("Tab"); // the first gazetteer's button
+  const panel = page.getByRole("region", { name: "Gazetteers in this case's dataset" });
+  const add = panel.getByRole("button", { name: "Add Harness towns" });
+  await expect(add).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(panel.getByRole("status")).toContainText(
+    "Harness towns is added: its places are copied into this case's dataset",
+  );
+  expect(await page.evaluate(() => window.__GAZETTEER_CALLS__)).toEqual([
+    "PUT ds-harness gazetteer-harness-towns",
+  ]);
+  // The same button now removes it, and keeps the focus.
+  await expect(panel.getByRole("button", { name: "Remove Harness towns" })).toBeFocused();
+  await expect(panel.getByRole("listitem").first()).toContainText("— added");
+  await expect(page.getByRole("button", { name: "Go to Cranford" })).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "Find a place" })).toHaveValue("");
+  registerCovered(REGISTRY, "add-a-gazetteer-by-keyboard");
+});
+
+test("a gazetteer is removed by keyboard, and the Conduit's words say what stays", async ({ page }) => {
+  await page.goto("/keyboard/map-view-harness.html?gazetteers=added");
+  await expect(page.getByRole("region", { name: "Gazetteers in this case's dataset" })).toBeVisible();
+  await page.getByRole("searchbox", { name: "Find a place" }).focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const panel = page.getByRole("region", { name: "Gazetteers in this case's dataset" });
+  await expect(panel.getByRole("button", { name: "Remove Harness towns" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(panel.getByRole("status")).toContainText(
+    "The gazetteer is removed: its places stay in this dataset as its own",
+  );
+  expect(await page.evaluate(() => window.__GAZETTEER_CALLS__)).toEqual([
+    "DELETE ds-harness gazetteer-harness-towns",
+  ]);
+  await expect(panel.getByRole("button", { name: "Add Harness towns" })).toBeFocused();
+  registerCovered(REGISTRY, "remove-a-gazetteer-by-keyboard");
+});
+
+test("without run_pipelines no change is offered, and Tab passes the panel by", async ({ page }) => {
+  await page.goto("/keyboard/map-view-harness.html?gazetteers=reader");
+  const panel = page.getByRole("region", { name: "Gazetteers in this case's dataset" });
+  await expect(panel).toContainText("Adding or removing a gazetteer needs the right to run pipelines.");
+  await expect(panel.getByRole("button")).toHaveCount(0);
+  await toThePanel(page);
+  expect(await page.evaluate(() => document.activeElement?.closest(".map-controls__gazetteers"))).toBeNull();
+  expect(await page.evaluate(() => window.__GAZETTEER_CALLS__)).toEqual([]);
 });
 
 test("every registered map view action has its own proving test case above", () => {

@@ -8,6 +8,12 @@
 // draws the search's answer already shown, for the axe scan (`a11y/every-harness.spec.ts`), and
 // `?searched=more` and `?searched=fail` its "more match" and refused words;
 // `?brand=govuk` the GOV.UK theme (`brandHarness.ts`).
+//
+// P6: the case's gazetteers beside the search, answered by a stand-in for the Conduit's routes that
+// records each change on `window.__GAZETTEER_CALLS__` (synthetic names, rule 9). `?gazetteers=`
+// draws a state for the axe scan: `added` (one added, one not), `reader` (no `run_pipelines`, so
+// no change offered), `nothing`, `composite` and `unbuilt` (the three empty cases), `refused` (a
+// change the Conduit refuses).
 import { useState } from "react";
 import Graph from "graphology";
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -16,6 +22,8 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { MapView } from "../src/map/MapView";
+import type { GazetteerControls } from "../src/map/MapControls";
+import { GazetteersFailed, type GazetteerPanelState } from "../src/map/gazetteers";
 import { PlaceSearchFailed } from "../src/map/places";
 import type { WorkingSetGraph } from "../src/workingset/store";
 import type { MapPlace, PublicMapProvider } from "../../../packages/schemas/generated";
@@ -25,6 +33,7 @@ declare global {
   interface Window {
     __MAP__?: MapLibreMap;
     __PLACE_QUERIES__?: string[];
+    __GAZETTEER_CALLS__?: string[];
   }
 }
 
@@ -92,6 +101,42 @@ async function searchPlaces(query: string) {
   return { places: GAZETTEER.filter((p) => p.name.toLowerCase().includes(q)), more: false };
 }
 
+// Synthetic gazetteers of the harness's unit (rule 9): names only, as the Conduit sends them.
+const REMOVED_WORDS =
+  "The gazetteer is removed: its places stay in this dataset as its own, and the map's place " +
+  "search no longer offers them. A re-build no longer refreshes them; adding it again does.";
+const gazetteerState = new URLSearchParams(window.location.search).get("gazetteers") ?? "";
+let held = [
+  { dataset_id: "gazetteer-harness-towns", name: "Harness towns", added: gazetteerState === "added" },
+  { dataset_id: "gazetteer-harness-villages", name: "Harness villages", added: false },
+];
+window.__GAZETTEER_CALLS__ = [];
+const EMPTY: Record<string, GazetteerPanelState> = {
+  nothing: { state: "reads_nothing" },
+  composite: { state: "not_one_source" },
+  unbuilt: { state: "none_built" },
+};
+const GAZETTEERS: GazetteerControls = {
+  load: async () =>
+    EMPTY[gazetteerState] ?? { state: "ready", datasetId: "ds-harness", gazetteers: held },
+  add: async (datasetId, gazetteerId) => {
+    window.__GAZETTEER_CALLS__!.push(`PUT ${datasetId} ${gazetteerId}`);
+    if (gazetteerState === "refused") {
+      throw new GazetteersFailed(
+        "You may not change this dataset's gazetteers: it needs the right to run pipelines.",
+      );
+    }
+    held = held.map((g) => (g.dataset_id === gazetteerId ? { ...g, added: true } : g));
+    return { gazetteers: held, said: null };
+  },
+  remove: async (datasetId, gazetteerId) => {
+    window.__GAZETTEER_CALLS__!.push(`DELETE ${datasetId} ${gazetteerId}`);
+    held = held.map((g) => (g.dataset_id === gazetteerId ? { ...g, added: false } : g));
+    return { gazetteers: held, said: REMOVED_WORDS };
+  },
+  mayChange: gazetteerState !== "reader",
+};
+
 function Harness() {
   const [height, setHeight] = useState(700);
   return (
@@ -106,6 +151,7 @@ function Harness() {
           provider={PROVIDER}
           providers={PROVIDERS}
           searchPlaces={searchPlaces}
+          gazetteers={GAZETTEERS}
           nodeCoordinates={COORDINATES}
           onMapReady={onMapReady}
         />
@@ -118,6 +164,15 @@ void applyHarnessBrand().then(() => {
   createRoot(document.getElementById("root")!).render(<Harness />);
   const searched = new URLSearchParams(window.location.search).get("searched") ?? "";
   const typed = ({ "1": "cran", more: "zz-more", fail: "zz-fail" } as Record<string, string>)[searched];
+  if (gazetteerState === "refused") {
+    // The harness's own hand: ask for a change, so the refusal's words are drawn for the scan.
+    const press = () => {
+      const add = document.querySelector<HTMLButtonElement>('button[aria-label="Add Harness towns"]');
+      if (!add) return void setTimeout(press, 50);
+      add.click();
+    };
+    press();
+  }
   if (typed) {
     // The harness's own hand, not the product's: type a name and submit, so the answer is drawn.
     const fill = () => {
