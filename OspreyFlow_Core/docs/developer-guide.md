@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.31** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.32** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.32 | 2026-11-10 | Admin's L2.5c as built. §7.8: after the delete's dry run, an administrator may delete a removed case's layer on Admin → Datasets' screen; the merge is still the Ingest Studio's only. |
 | 1.31 | 2026-11-10 | Studio's L1.5 and platform's P5 as built. §3.2: the expert steps offered by + Step in expert mode, with `write_sql_transforms`; new §3.4b: the SQL transform and the fuzzy match, their sandbox and limits, disclosed in Test, runs and 4 Runs; Admin → Connections' four kinds. §7.8: proposed link types only on 1 Model (Admin's Proposed types removed), its count and *Needs you*. §9.1: a dataset's gazetteers. |
 | 1.30 | 2026-11-10 | §3: 4 Runs lists Analyst promotions and Removed cases' layers. §9.1: the routes of promotion, its review and a removed case's layer, and Admin's delete of one. §7.8: Admin's screen offers dry runs, though its delete route exists. |
 | 1.29 | 2026-11-10 | Promotion as built (case lane's L3.4). §7.8: promotion as one load, the Studio's *Analyst promotions* in 4 Runs with its review, the revert command, and a removed case's layer merged or deleted. §9.1: an alert's address also asks Rules and Monitoring's gate. |
@@ -775,8 +776,8 @@ lets you read that one layer for that one merge (recorded in the audit, and ende
 sent or cancelled); the merge is a promotion like any other, under the same policy. **Delete…** shows
 what it would do, then "Its items are withdrawn and kept in the audit." Both need `investigate`, so a
 Reports Viewer does neither. A composite case's layer is never merged, only deleted. Nothing deletes a
-layer on its own. Admin → Datasets' screen offers the merge and the delete as a dry run only, though the
-administrator's delete route exists (section 9.1).
+layer on its own. Admin → Datasets' screen offers both as a dry run, and after the delete's dry run
+an administrator may delete the layer there too (section 9.1); the merge is done only here.
 
 **Coming:** merging a drawn dataset into another. A waiting promotion grows overdue after the days
 set in Admin → Operations (administration guide, section 9.11).
