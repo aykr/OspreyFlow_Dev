@@ -53,7 +53,7 @@ platform	P8	M	todo	Nothing on a shared disk: S3 for uploads, staging, tiles, mod
 platform	P9	M	todo	Running it on the platform: backups to S3, restore rehearsed, alerts, runbook (ADR-148)
 platform	P10	M	todo	Sign-in claims from Entra ID mapped by settings; no Keycloak on this profile (ADR-148)
 platform	P11	M	todo	(held until the client asks for AI) Bedrock as a model engine (ADR-135 Am 4)
-platform-b	P6	S	building	The case's gazetteer panel beside place search, by keyboard
+platform-b	P6	S	done fd171f7	The case's gazetteer panel beside place search, by keyboard
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	done 99d927d	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
 docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
