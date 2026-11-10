@@ -163,12 +163,16 @@ const EXTRA_STATES: Record<string, string[]> = {
     // ADR-139 Amendment 2: the figure on the client's scale.
     "tab=rules&sentence=strength-client",
     "tab=lists",
-    "tab=lists&lists=manage&refreshed=1",
+    // ADR-133 Amendment 9 (L2.11): the manager's Lists tab, read-only, with the latest refreshes.
+    "tab=lists&lists=manage",
+    // ADR-146 decision 3 (L2.11; the lane-reviewer's item 16): the rule editor on its dataset, a
+    // rule on a screening list saved and tested, then shown as BPMN.
+    "tab=rules&editor=tested",
+    "tab=rules&editor=bpmn",
     "tab=rules&template=high_risk_jurisdiction",
     // ADR-133 stage (d): a whole-deployment rule waiting for a second person (Approve and Reject
     // offered), a scheduled rule's runs and versions open, a sentence set to run every week, a
-    // high-severity alert whose close waits for approval, and a list refreshed on a schedule with
-    // its schedule form.
+    // high-severity alert whose close waits for approval, and a list refreshed on a schedule.
     "stage=d&tab=rules&opened=1",
     "stage=d&tab=rules&sentence=schedule",
     "stage=d&open=a-close",

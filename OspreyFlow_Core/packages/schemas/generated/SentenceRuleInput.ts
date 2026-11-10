@@ -210,6 +210,7 @@ export type LinkType1 = string;
 export type Kind3 = "on_hotlist";
 export type Kind4 = "on_screening_list";
 export type MinScore = number;
+export type ListId = string | null;
 export type Frequency = (CountFrequency | AmountFrequency | FirstTimeFrequency) | null;
 export type Kind5 = "count";
 export type LinkType2 = string;
@@ -234,12 +235,13 @@ export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team" | "team";
 export type TeamId = string | null;
-export type Runs = "pre_commit" | "post_commit" | "schedule";
+export type Runs = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type OnHit = "load" | "hold";
 export type Scope1 = "just_me" | "this_case" | "deployment";
 export type Every = "daily" | "weekly";
 export type Hour = number;
 export type Weekday = number | null;
+export type DatasetId = string | null;
 export type BudgetMs = number;
 export type MaxMatches = number;
 
@@ -250,6 +252,7 @@ export type MaxMatches = number;
 export interface SentenceRuleInput {
   name: Name;
   sentence: RuleSentence;
+  dataset_id?: DatasetId;
   budget_ms?: BudgetMs;
   max_matches?: MaxMatches;
   [k: string]: unknown;
@@ -373,6 +376,7 @@ export interface OnHotlistRelationship {
 export interface OnScreeningListRelationship {
   kind?: Kind4;
   min_score?: MinScore;
+  list_id?: ListId;
   [k: string]: unknown;
 }
 /**

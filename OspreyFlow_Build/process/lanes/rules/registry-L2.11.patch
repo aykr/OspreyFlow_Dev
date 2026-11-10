@@ -1,0 +1,40 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index e58f84f..e531d1a 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -641,6 +641,18 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
+   "suppress-a-team-alert-by-keyboard",
+   "filter-what-raises-alerts-by-keyboard",
+   "send-a-rules-alerts-to-a-named-team-by-keyboard",
++  // ADR-146 decision 3 (L2.11): the rule editor's dataset chosen first, its draft saved, tested
++  // and made live.
++  "choose-a-rules-dataset-by-keyboard",
++  "save-a-rule-draft-by-keyboard",
++  "test-a-rule-draft-by-keyboard",
++  "make-a-rule-live-by-keyboard",
++  // The lane-reviewer's L2.11 item 15: the list picker, the When of a list's refresh, and another
++  // Author deciding a rule going live.
++  "choose-a-rules-screening-list-by-keyboard",
++  "run-a-rule-when-its-list-refreshes-by-keyboard",
++  "approve-a-rule-going-live-by-keyboard",
++  "send-back-a-rule-going-live-by-keyboard",
+   "deploy-a-rule-by-keyboard",
+   "retire-a-rule-by-keyboard",
+   "release-held-rows-by-keyboard",
+@@ -663,8 +675,6 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
+   // list refreshed and a list subscribed to.
+   "deploy-an-aml-template-by-keyboard",
+   "read-the-screening-lists-by-keyboard",
+-  "refresh-a-screening-list-by-keyboard",
+-  "subscribe-to-a-screening-list-by-keyboard",
+ ] as const);
+ 
+ /** ADR-139 decision 3 in the Monitoring place's Connection strength tab: a waiting installation-wide
+@@ -697,7 +707,6 @@ export const MONITORING_STAGE_D_ACTIONS = defineActionRegistry("MONITORING_STAGE
+   "propose-closing-a-high-severity-alert-by-keyboard",
+   "approve-closing-a-high-severity-alert-by-keyboard",
+   "send-back-a-proposed-close-by-keyboard",
+-  "set-a-list-refresh-schedule-by-keyboard",
+ ] as const);
+ 
+ /** ADR-133 decision 6, stage (d): the Ingest Studio's "Checks on load" step reached from a pipeline,

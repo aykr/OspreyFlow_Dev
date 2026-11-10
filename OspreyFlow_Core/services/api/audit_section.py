@@ -217,6 +217,10 @@ READS_AND_OTHER: tuple[str, ...] = (
     "read_alert_sources",
     # Rules-b's L2.11a (ADR-146 decision 3): a rule's .bpmn or .dmn exported.
     "export_rule_file",
+    # Rules' L2.11 (ADR-146 decision 3, Amendment 6): the rule editor's datasets read, a draft
+    # saved, tested, made live or asked to go live; with the other rule actions.
+    "read_rule_datasets", "rule_draft_saved", "rule_tested", "rule_made_live",
+    "rule_make_live_proposed",
     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
     "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
     "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",

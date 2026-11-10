@@ -176,30 +176,29 @@ describe("the sentence builder", () => {
     await waitFor(() => expect((screen.getByLabelText("Condition 1: value") as HTMLInputElement).value).toBe("Okafor"));
   });
 
-  it("deploys the sentence with its name, and offers the whole deployment to an administrator only", async () => {
+  it("deploys a rule just for its author, and offers no other scope, an administrator's included (ADR-146 Amendment 6)", async () => {
     const sent = serve();
     const onDeployed = builder();
     await listedPeople();
     const scopes = () => [...(screen.getByLabelText("For (scope)") as HTMLSelectElement).options].map((o) => o.value);
-    expect(scopes()).toEqual(["just_me", "this_case"]);
+    expect(scopes()).toEqual(["just_me"]);
     fireEvent.change(screen.getByLabelText("Severity"), { target: { value: "high" } });
     fireEvent.change(screen.getByLabelText("Name of the sentence rule"), { target: { value: "Listed people" } });
     fireEvent.click(screen.getByRole("button", { name: "Deploy the sentence" }));
     await waitFor(() => expect(onDeployed).toHaveBeenCalled());
-    expect(sent.find((s) => s.path === "rules/sentence")?.body).toMatchObject({ name: "Listed people", sentence: { severity: "high", scope: "this_case" } });
+    expect(sent.find((s) => s.path === "rules/sentence")?.body).toMatchObject({ name: "Listed people", sentence: { severity: "high", scope: "just_me" } });
     cleanup();
     serve();
     builder("author", true);
     await screen.findByLabelText("For (scope)");
-    expect(scopes()).toEqual(["just_me", "this_case", "deployment"]);
+    expect(scopes()).toEqual(["just_me"]);
   });
 
   it("lets an Editor deploy for themselves only, and a Viewer not at all", async () => {
     serve();
     builder("editor");
     fireEvent.change(await screen.findByLabelText("Name of the sentence rule"), { target: { value: "Mine" } });
-    expect((screen.getByRole("button", { name: "Deploy the sentence" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("For (scope)"), { target: { value: "just_me" } });
+    expect((screen.getByLabelText("For (scope)") as HTMLSelectElement).value).toBe("just_me");
     expect((screen.getByRole("button", { name: "Deploy the sentence" }) as HTMLButtonElement).disabled).toBe(false);
     cleanup();
     serve();
@@ -209,9 +208,13 @@ describe("the sentence builder", () => {
     expect((screen.getByRole("button", { name: "Preview on the last 90 days" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("offers before-commit runs and holding only where the sentence allows them", async () => {
+  it("offers before-commit runs and holding only where the sentence allows them, on a case's rule in the editor", async () => {
     serve();
-    builder();
+    render(
+      <SentenceBuilder apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="author" isAdministrator={false}
+        patterns={[]} onDeployed={vi.fn()}
+        editor={{ dataset: { id: "ds-1", name: "Prison records", kind: "source", second_person: false, ontology: ONTOLOGY as never, lists: [] }, onSaved: vi.fn() }} />, // prettier-ignore
+    );
     const runs = async () => [...((await screen.findByLabelText("Runs")) as HTMLSelectElement).options].map((o) => o.value);
     expect(await runs()).toEqual(["post_commit", "pre_commit", "schedule"]);
     fireEvent.change(screen.getByLabelText("Runs"), { target: { value: "pre_commit" } });

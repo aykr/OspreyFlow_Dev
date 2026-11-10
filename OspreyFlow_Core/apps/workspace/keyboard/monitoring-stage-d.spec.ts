@@ -219,18 +219,6 @@ test("a second member approves a proposed close, and another is sent back, by ke
   registerCovered(REGISTRY, "send-back-a-proposed-close-by-keyboard");
 });
 
-test("a screening list's refresh schedule is set, by keyboard", async ({ page }) => {
-  const sent = await serve(page);
-  await page.goto("/keyboard/alerts-harness.html?lists=manage");
-  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
-  await page.getByRole("combobox", { name: "Refreshed" }).selectOption("weekly");
-  await page.getByRole("combobox", { name: "On (refresh day)" }).selectOption("1");
-  await press(page, page.getByRole("button", { name: "Save the schedule" }));
-  await expect(page.getByRole("status")).toContainText("is refreshed every Monday at 05:00 (Europe/London), as you.");
-  expect(sent.find((s) => s.method === "PUT")?.body).toEqual({ schedule: { every: "weekly", hour: 5, weekday: 1 } });
-  registerCovered(REGISTRY, "set-a-list-refresh-schedule-by-keyboard");
-});
-
 test("every registered stage (d) Monitoring action has its own proving test case above", () => {
   assertAllCovered("MONITORING_STAGE_D_ACTIONS", MONITORING_STAGE_D_ACTIONS);
 });

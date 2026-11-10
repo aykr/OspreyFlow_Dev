@@ -254,18 +254,32 @@ function answer(path: string, search: URLSearchParams): unknown {
       { id: "r-daily", rule_id: "typology:r-daily", name: "Listed people", source: "rule", kind: "rule", maker: "analyst-1", maker_name: "Ana Lyst", owner: "Prison intel", state: "live", alerts_30_days: 4, not_of_interest: 0.25, last_fired_at: hoursAgo(30), suppressed: [{ alert_id: "a1", until: "2026-12-01", reason: "A known pattern", by: "analyst-1" }] },
       { id: "hl-1", rule_id: "hotlist:hl-1", name: "Hotlist 07700 900918", source: "watch", kind: "hotlist", maker: "analyst-1", owner: "analyst-1", state: "live", expires_on: "2027-01-31", alerts_30_days: 1, suppressed: [] },
     ] };  // prettier-ignore
-  if (local === "alert-teams") return [{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["analyst-2"] }];
+  if (local === "alert-teams") return [{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["analyst-2"], member_count: 6 }];
+  // ADR-146 decision 3 (L2.11): the rule editor's dataset, its draft saved and tested.
+  if (local === "rules/datasets")
+    return [{ id: "ds-prison", name: "Prison records", kind: "source", second_person: true, ontology: ONTOLOGY,
+      lists: [{ id: "l-uk", name: "UK sanctions", kind: "screening", version: 3, deployment_wide: true }] }]; // prettier-ignore
+  if (local === "rules/drafts")
+    return { id: "r-new", investigation_id: "inv-1", owner_id: "analyst-1", name: "Listed visitors", status: "draft",
+      created_at: hoursAgo(1), trigger: "post_commit", budget_ms: 5000, dataset_id: "ds-prison", version: 1,
+      params: { typology: "sentence", pattern_id: "p", sentence: { subject: "Person", conditions: [] } } }; // prettier-ignore
+  if (local === "rules/r-new/test") return { rule_id: "r-new", version: 1, days: 30, would_raise: 2, words: "" };
   return null;
 }
 
+/** The `.bpmn` the codec writes, for *Show as BPMN* (rules-b's fixture). */
+const BPMN = (await import("../src/alerts/ruleStandards/fixtures/visits-to-listed-people.bpmn?raw")).default;
+
 window.fetch = async (input: RequestInfo | URL) => {
   const url = new URL(String(input));
+  if (url.pathname.endsWith("/export.bpmn")) return new Response(BPMN, { status: 200 });
   const body = answer(url.pathname, url.searchParams);
   return new Response(JSON.stringify(body ?? {}), { status: body === null ? 404 : 200 });
 };
 
 createRoot(document.getElementById("root")!).render(
   <RulesPlace
+    canMakeLive
     apiBaseUrl="http://monitoring-harness.invalid"
     bearerToken="unused"
     investigationId="inv-1"
@@ -361,12 +375,6 @@ if (template) {
   choose("High-risk jurisdictions", "XA, XB");
 }
 
-// `?lists=manage&tab=lists&refreshed=1`: a refresh just made, its words shown.
-if (params.get("refreshed")) {
-  for (let i = 0; i < 40 && !document.querySelector('[aria-label="Refresh now: Synthetic sanctions list"]'); i++) await settle();
-  document.querySelector<HTMLButtonElement>('[aria-label="Refresh now: Synthetic sanctions list"]')?.click();
-}
-
 // `?opened=1` (with `stage=d&tab=rules`): the scheduled rule's runs and its versions shown.
 if (params.get("opened")) {
   for (let i = 0; i < 40 && !document.querySelector('[aria-label="Schedule and runs of Listed people, every morning"]'); i++) await settle();
@@ -384,4 +392,29 @@ if (params.get("sentence") === "schedule") {
   await settle();
   choose("On (day of the week)", "1");
   choose("At (hour, Europe/London)", "7");
+}
+
+// `?editor=tested` (with `tab=rules`): the rule editor on its dataset, a rule on a screening list
+// written, saved as a draft and tested; `?editor=bpmn` then shows it as BPMN (axe, ADR-146).
+if (params.get("editor")) {
+  for (let i = 0; i < 40 && !choose("The dataset this rule watches", "ds-prison"); i++) await settle();
+  await settle();
+  pressButton("Choose the dataset");
+  for (let i = 0; i < 40 && !document.querySelector('[aria-label="Name of the rule"]'); i++) await settle();
+  choose("Subject", "Person");
+  await settle();
+  choose("Relationship", "on_screening_list");
+  await settle();
+  choose("Screening list", "l-uk");
+  choose("Alert goes to (team)", "team:team-7");
+  choose("Name of the rule", "Listed visitors");
+  await settle();
+  pressButton("Save the draft");
+  for (let i = 0; i < 40 && ![...document.querySelectorAll("button")].some((b) => b.textContent === "Test on the last 30 days"); i++) await settle();
+  pressButton("Test on the last 30 days");
+  await settle();
+  if (params.get("editor") === "bpmn") {
+    for (let i = 0; i < 40 && ![...document.querySelectorAll("button")].some((b) => b.textContent === "Show as BPMN"); i++) await settle();
+    pressButton("Show as BPMN");
+  }
 }

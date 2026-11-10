@@ -47,7 +47,7 @@ from .test_screening_refresh import SCHEME, _customer, _Graph, _Queue, _Rules
 from .unconverted import made_before_l3_2
 
 SOURCE = "shared-source"
-OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify")
+OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify", roles=["analyst"])  # deploy_rules: may have written a rule (ADR-146 Amendment 6 decision 13)
 COLLEAGUE = Principal(id="colleague", clearance="OFFICIAL", org_unit="verify")
 NOW = datetime(2026, 11, 7, 9, 0, tzinfo=UTC)
 NAME = "Elena Petrova"

@@ -3,7 +3,16 @@
 // the queue; deploy and retire a rule; release and reject held rows; page the rule audit — no
 // `page.mouse`, no `.click()`. Each action proves its effect reached the server (or the canvas
 // callback), not merely that a control received focus.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
+
+/** The `.bpmn` rules-b's codec writes (its fixture), served as the saved draft's file. */
+const BPMN_FILE = readFileSync(
+  fileURLToPath(new URL("../src/alerts/ruleStandards/fixtures/visits-to-listed-people.bpmn", import.meta.url)),
+  "utf8",
+);
 
 import { ALERTS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
 import { chooseByTyping } from "./chooseByTyping";
@@ -146,6 +155,8 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
     // ADR-133 stage (b): the ontology the sentence builder offers its blanks from, the preview,
     // the drawn pattern and the deploy.
     if (url.pathname === "/v1/ontology") return json(200, ONTOLOGY);
+    // ADR-146 decision 3 (L2.11): the datasets the rule editor offers; none unless a case asks.
+    if (path === "rules/datasets") return json(200, []);
     if (path === "rules/preview")
       return json(200, { days: 90, would_raise: 2, words: "When a Person…", examples: [
         { node_id: "p1", name: "Callum Okafor", entity_type: "Person", words: "Callum Okafor (Person)" },
@@ -428,12 +439,14 @@ test("a template fills the rule form, which is then deployed, by keyboard (ADR-1
   await expect(page.getByLabel("Rule name")).toBeFocused();
   await expect(page.getByLabel("Rule name")).toHaveValue("Circular flow");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Circular flow”.")).toBeVisible();
+  // ADR-146 Amendment 6 decision 12: the form keeps a rule just for its author.
+  await expect(page.getByText("Deployed “Circular flow”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Circular flow",
     params: { typology: "circular_flow", max_hops: 4, window_days: 30 },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "use-a-template-by-keyboard");
 });
@@ -442,16 +455,21 @@ test("a rule is deployed and another retired, by keyboard", async ({ page }) => 
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
   await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await expect(page.getByRole("form", { name: "Deploy a rule" })).toContainText(
+    "This rule raises alerts for you; to share it with the case, write it in the rule editor.",
+  );
   await page.getByLabel("Rule name").fill("Pass-through");
   await page.getByRole("combobox", { name: "Typology" }).selectOption("rapid_movement");
   await page.getByRole("combobox", { name: "When the rule runs" }).selectOption("pre_commit");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Pass-through”.")).toBeVisible();
+  // ADR-146 Amendment 6 decision 12: the form keeps a rule just for its author.
+  await expect(page.getByText("Deployed “Pass-through”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Pass-through",
     params: { typology: "rapid_movement", within_hours: 48, keep_fraction: 0.8 },
     trigger: "pre_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-a-rule-by-keyboard");
   await press(page, page.getByRole("button", { name: "Retire Deposits" }));
@@ -468,12 +486,13 @@ test("a KYC screening rule is deployed with its switch, by keyboard", async ({ p
   await page.getByRole("checkbox", { name: "Screen beneficial owners too" }).focus();
   await page.keyboard.press("Space");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Onboarding screen”.")).toBeVisible();
+  await expect(page.getByText("Deployed “Onboarding screen”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Onboarding screen",
     params: { typology: "kyc_screening", min_score: 0.9, owner_threshold: 25, screen_owners: false },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-a-kyc-rule-by-keyboard");
 });
@@ -488,12 +507,13 @@ test("a pattern drawn in the Query builder is deployed as a rule, by keyboard", 
   const form = page.getByRole("form", { name: "Deploy a rule" });
   await form.getByRole("combobox", { name: "Saved pattern", exact: true }).selectOption("pat-1");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Drawn: company with a phone”.")).toBeVisible();
+  await expect(page.getByText("Deployed “Drawn: company with a phone”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Drawn: company with a phone",
     params: { typology: "pattern", pattern_id: "pat-1", max_matches: 200 },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-a-drawn-pattern-rule-by-keyboard");
 });
@@ -561,7 +581,7 @@ const WRITTEN = {
   conditions: [{ op: "one_of", property: "listing", values: ["sanction", "pep"] }],
   relationship: null,
   frequency: { kind: "count", link_type: "PRESENT_AT", at_least: 3, within_days: 7 },
-  severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case",
+  severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "just_me",
 };  // prettier-ignore
 
 test("a rule is written as a sentence, shown as its drawn pattern and deployed, by keyboard", async ({ page }) => {
@@ -580,22 +600,148 @@ test("a rule is written as a sentence, shown as its drawn pattern and deployed, 
   registerCovered(REGISTRY, "build-a-rule-as-a-sentence-by-keyboard");
 });
 
-test("a sentence's alerts are sent to a named team, by keyboard (ADR-146 decision 8)", async ({ page }) => {
+test("a rule is written on a dataset, saved as a draft, tested and made live, by keyboard (ADR-146 decision 3)", async ({ page }) => {
   const state = await serve(page);
-  await page.route("**/*/v1/investigations/inv-1/alert-teams", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [] }]) }),
+  const draft = {
+    id: "r-new", investigation_id: "inv-1", owner_id: "analyst-1", name: "Listed people on the prison records",
+    status: "draft", created_at: "2026-11-10T09:00:00Z", trigger: "post_commit", budget_ms: 5000, dataset_id: "ds-prison",
+    params: { typology: "sentence", pattern_id: "p", sentence: WRITTEN },
+  };  // prettier-ignore
+  const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  const record = (path: string) => (route: import("@playwright/test").Route) => {
+    state.sent.push({ method: "POST", path, body: route.request().postDataJSON() });
+  };
+  await page.route("**/*/v1/investigations/inv-1/rules/datasets", (route) =>
+    route.fulfill(fulfil([{ id: "ds-prison", name: "Prison records", kind: "source", second_person: false, ontology: ONTOLOGY, lists: [] }])),
   );
-  await page.goto("/keyboard/alerts-harness.html");
-  await writeTheSentence(page);
-  await chooseByTyping(page, page.getByRole("combobox", { name: "Alert goes to (team)" }), "team:team-7");
-  await page.getByLabel("Name of the sentence rule").focus();
-  await page.keyboard.type("Listed people for the team");
-  await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
-  await expect.poll(() => (state.sent.find((s) => s.path === "rules/sentence")?.body as { sentence?: Record<string, unknown> } | undefined)?.sentence).toMatchObject({
-    team: "team",
-    team_id: "team-7",
+  await page.route("**/*/v1/investigations/inv-1/rules/drafts", (route) => {
+    record("rules/drafts")(route);
+    return route.fulfill(fulfil(draft, 201));
   });
+  await page.route("**/*/v1/investigations/inv-1/rules/r-new/export.bpmn", (route) =>
+    route.fulfill({ status: 200, contentType: "application/xml", body: BPMN_FILE }),
+  );
+  await page.route("**/*/v1/investigations/inv-1/rules/r-new/test", (route) => {
+    record("rules/r-new/test")(route);
+    return route.fulfill(fulfil({ rule_id: "r-new", version: 1, days: 30, would_raise: 2, words: "" }));
+  });
+  await page.route("**/*/v1/investigations/inv-1/rules/r-new/make-live", (route) => {
+    record("rules/r-new/make-live")(route);
+    return route.fulfill(fulfil({ ...draft, status: "active" }));
+  });
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await chooseByTyping(page, page.getByRole("combobox", { name: "The dataset this rule watches" }), "ds-prison");
+  await press(page, page.getByRole("button", { name: "Choose the dataset" }));
+  registerCovered(REGISTRY, "choose-a-rules-dataset-by-keyboard");
+  const form = page.getByRole("form", { name: "Write a rule on Prison records" });
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Subject" }), "Person");
+  await expect(form.getByRole("status", { name: "Where its alerts go" })).toHaveText("Its alerts will appear in Alerts, seen by this case's team.");
+  await form.getByLabel("Name of the rule").focus();
+  await page.keyboard.type("Listed people on the prison records");
+  await press(page, form.getByRole("button", { name: "Save the draft" }));
+  await expect.poll(() => (state.sent.find((s) => s.path === "rules/drafts")?.body as { dataset_id?: string } | undefined)?.dataset_id).toBe("ds-prison");
+  registerCovered(REGISTRY, "save-a-rule-draft-by-keyboard");
+  // ADR-146 decision 3: the saved draft drawn read-only, closed by Escape, focus back on its button.
+  const show = page.getByRole("button", { name: "Show as BPMN" });
+  await press(page, show);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(show).toBeFocused();
+  const live = page.getByRole("button", { name: "Make live" });
+  await expect(live).toBeDisabled();
+  await press(page, page.getByRole("button", { name: "Test on the last 30 days" }));
+  await expect(page.getByRole("status", { name: "Test result" })).toContainText("It would have raised 2 alerts in the last 30 days.");
+  registerCovered(REGISTRY, "test-a-rule-draft-by-keyboard");
+  await press(page, live);
+  await expect(page.getByText("“Listed people on the prison records” is live.")).toBeVisible();
+  expect(state.sent.some((s) => s.path === "rules/r-new/make-live")).toBe(true);
+  registerCovered(REGISTRY, "make-a-rule-live-by-keyboard");
+});
+
+/** The rule editor's routes for a keyboard case: one dataset with its lists, a draft saved, and
+ * every body sent kept. */
+async function serveTheEditor(page: Page, state: State) {
+  const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/*/v1/investigations/inv-1/rules/datasets", (route) =>
+    route.fulfill(fulfil([{ id: "ds-prison", name: "Prison records", kind: "source", second_person: false, ontology: ONTOLOGY,
+      lists: [{ id: "l-uk", name: "UK sanctions", kind: "screening", version: 3, deployment_wide: true }] }])),
+  );  // prettier-ignore
+  await page.route("**/*/v1/investigations/inv-1/alert-teams", (route) =>
+    route.fulfill(fulfil([{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [], member_count: 6 }])),
+  );
+  await page.route("**/*/v1/investigations/inv-1/rules/drafts", (route) => {
+    const body = route.request().postDataJSON();
+    state.sent.push({ method: "POST", path: "rules/drafts", body });
+    return route.fulfill(fulfil({ id: "r-new", investigation_id: "inv-1", owner_id: "analyst-1", name: body.name, status: "draft",
+      created_at: "2026-11-10T09:00:00Z", trigger: body.sentence.runs, budget_ms: 5000, dataset_id: "ds-prison",
+      params: { typology: "sentence", pattern_id: "p", sentence: body.sentence } }, 201)); // prettier-ignore
+  });
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await chooseByTyping(page, page.getByRole("combobox", { name: "The dataset this rule watches" }), "ds-prison");
+  await press(page, page.getByRole("button", { name: "Choose the dataset" }));
+  return page.getByRole("form", { name: "Write a rule on Prison records" });
+}
+
+const drafted = (state: State) => (state.sent.find((s) => s.path === "rules/drafts")?.body as { sentence?: Record<string, unknown> } | undefined)?.sentence;
+
+test("a rule's alerts are sent to a named team, said before saving, by keyboard (ADR-146 decisions 3 and 8)", async ({ page }) => {
+  const state = await serve(page);
+  const form = await serveTheEditor(page, state);
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Subject" }), "Person");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Alert goes to (team)" }), "team:team-7");
+  await expect(form.getByRole("status", { name: "Where its alerts go" })).toContainText("seen by the 6 members of Prison intel");
+  await form.getByLabel("Name of the rule").focus();
+  await page.keyboard.type("Listed people for the team");
+  await press(page, form.getByRole("button", { name: "Save the draft" }));
+  await expect.poll(() => drafted(state)).toMatchObject({ team: "team", team_id: "team-7" });
   registerCovered(REGISTRY, "send-a-rules-alerts-to-a-named-team-by-keyboard");
+});
+
+test("a rule names a screening list its dataset reads and runs as it refreshes, by keyboard (ADR-146 decision 3)", async ({ page }) => {
+  const state = await serve(page);
+  const form = await serveTheEditor(page, state);
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Subject" }), "Person");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Relationship" }), "on_screening_list");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Screening list" }), "l-uk");
+  registerCovered(REGISTRY, "choose-a-rules-screening-list-by-keyboard");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Runs" }), "list_refresh");
+  await form.getByLabel("Name of the rule").focus();
+  await page.keyboard.type("Listed people as the list refreshes");
+  await press(page, form.getByRole("button", { name: "Save the draft" }));
+  await expect.poll(() => drafted(state)).toMatchObject({ runs: "list_refresh", relationship: { kind: "on_screening_list", list_id: "l-uk" } });
+  registerCovered(REGISTRY, "run-a-rule-when-its-list-refreshes-by-keyboard");
+});
+
+test("another Author approves a rule going live, and sends another back, by keyboard (ADR-146 Amendment 6)", async ({ page }) => {
+  const state = await serve(page);
+  const waiting = (id: string, name: string) => ({
+    id, investigation_id: "inv-1", owner_id: "author-2", name, status: "draft", created_at: "2026-11-10T09:00:00Z",
+    trigger: "post_commit", budget_ms: 5000, dataset_id: "ds-prison", pending_action: "deploy", pending_by: "author-2",
+    pending_asked_by: "author-2", pending_make_live: true, pending_version: 1,
+    params: { typology: "sentence", pattern_id: "p", sentence: { ...WRITTEN, scope: "this_case" } },
+  });  // prettier-ignore
+  state.rules.push(waiting("r-go", "Going live") as never, waiting("r-back", "Sent back") as never);
+  const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  for (const [id, verb] of [["r-go", "approve"], ["r-back", "reject"]] as const) {
+    await page.route(`**/*/v1/investigations/inv-1/rules/${id}/${verb}`, (route) => {
+      state.sent.push({ method: "POST", path: `rules/${id}/${verb}`, body: route.request().postDataJSON() });
+      return route.fulfill(fulfil({ ...waiting(id, id), status: verb === "approve" ? "active" : "draft", pending_action: null }));
+    });
+  }
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await press(page, page.getByRole("button", { name: "Approve Going live" }));
+  await expect.poll(() => state.sent.some((s) => s.path === "rules/r-go/approve")).toBe(true);
+  registerCovered(REGISTRY, "approve-a-rule-going-live-by-keyboard");
+  await press(page, page.getByRole("button", { name: "Reject Sent back" }));
+  await page.getByLabel("Why reject the change to Sent back").focus();
+  await page.keyboard.type("test it on the full month");
+  await press(page, page.getByRole("button", { name: "Send the rejection of Sent back" }));
+  await expect.poll(() => state.sent.find((s) => s.path === "rules/r-back/reject")?.body).toEqual({ reason: "test it on the full month" });
+  registerCovered(REGISTRY, "send-back-a-rule-going-live-by-keyboard");
 });
 
 test("a sentence is previewed on the last 90 days, by keyboard, and nothing is deployed", async ({ page }) => {
@@ -620,12 +766,14 @@ test("an AML template is deployed with its jurisdiction list, by keyboard (ADR-1
   await page.getByRole("textbox", { name: "High-risk jurisdictions" }).focus();
   await page.keyboard.type("xa, xb");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “High-risk jurisdiction”.")).toBeVisible();
+  // ADR-146 Amendment 6 decision 12: the form keeps a rule just for its author.
+  await expect(page.getByText("Deployed “High-risk jurisdiction”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "High-risk jurisdiction",
     params: { typology: "high_risk_jurisdiction", jurisdictions: ["XA", "XB"] },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-an-aml-template-by-keyboard");
 });
@@ -641,26 +789,14 @@ test("the screening lists are read by keyboard, with no action offered to a read
   registerCovered(REGISTRY, "read-the-screening-lists-by-keyboard");
 });
 
-test("a screening list is refreshed and another subscribed to, by keyboard (ADR-133 stage c)", async ({ page }) => {
-  const state = await serve(page);
+test("whoever may load lists is offered no add, refresh or schedule on the Lists tab, by keyboard (ADR-133 Amendment 9)", async ({ page }) => {
+  await serve(page);
   await page.goto("/keyboard/alerts-harness.html?lists=manage");
   await press(page, page.getByRole("tab", { name: "What raises alerts" }));
-  await press(page, page.getByRole("button", { name: "Refresh now: Synthetic list" }));
-  await expect(page.getByRole("status")).toContainText("1 alert raised");
-  expect(state.sent.some((s) => s.path === "/v1/admin/screening-lists/Synthetic%20list/refresh")).toBe(true);
-  registerCovered(REGISTRY, "refresh-a-screening-list-by-keyboard");
-  const form = page.getByRole("form", { name: "Subscribe to a list" });
-  await form.getByLabel("List name").focus();
-  await page.keyboard.type("UN list");
-  await form.getByRole("combobox", { name: "Connector" }).selectOption("un_consolidated");
-  await form.getByLabel("File in the ingest folder").focus();
-  await page.keyboard.type("lists/consolidated.xml");
-  await press(page, form.getByRole("button", { name: "Subscribe" }));
-  await expect(page.getByRole("status")).toContainText("Subscribed to “UN list”");
-  expect(state.sent.find((s) => s.path === "/v1/admin/screening-lists")?.body).toEqual({
-    list_name: "UN list", source: "un_consolidated", location: "lists/consolidated.xml", dataset: null, use: "local_development",
-  });  // prettier-ignore
-  registerCovered(REGISTRY, "subscribe-to-a-screening-list-by-keyboard");
+  await expect(page.getByRole("table", { name: "Screening lists and their versions" })).toContainText("Synthetic list");
+  await expect(page.getByRole("button", { name: /Refresh now/ })).toHaveCount(0);
+  await expect(page.getByRole("form", { name: "Subscribe to a list" })).toHaveCount(0);
+  await expect(page.getByText(/imported, mapped and refreshed in the Ingest Studio's Sources/)).toBeVisible();
 });
 
 test("every registered Alerts action has its own proving test case above", () => {

@@ -1,0 +1,52 @@
+## rule 13 at 7ee2d56, registry patch applied: each new L2.11 keyboard action's handler removed at its call site, its case run alone (keyboard/alerts.spec.ts --grep), the file restored from git after each; local
+
+### choose-a-rules-dataset-by-keyboard: RuleEditor.tsx: `setDataset(offers.find((o) => o.id === choice) ?? null);` removed; 2026-11-10T14:50:36Z; exit 1
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+      - waiting for getByRole('form', { name: 'Write a rule on Prison records' }).getByRole('combobox', { name: 'Subject' })
+  1 failed
+
+### save-a-rule-draft-by-keyboard: RuleEditor.tsx: `              onSaved: (rule) => {
+                setSaved(rule);` removed; 2026-11-10T14:51:37Z; exit 1
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+      - waiting for getByRole('button', { name: 'Show as BPMN' })
+  1 failed
+
+### test-a-rule-draft-by-keyboard: RuleEditor.tsx: `setTested(await testRuleDraft(api, saved.id));` removed; 2026-11-10T14:51:46Z; exit 1
+    Error: expect(locator).toContainText(expected) failed
+    Expected substring: "It would have raised 2 alerts in the last 30 days."
+    Error: element(s) not found
+      - waiting for getByRole('status', { name: 'Test result' })
+      644 |   await expect(live).toBeDisabled();
+      649 |   await expect(page.getByText("“Listed people on the prison records” is live.")).toBeVisible();
+
+### make-a-rule-live-by-keyboard: RuleEditor.tsx: `const made = await makeRuleLive(api, saved.id);` removed; 2026-11-10T14:51:55Z; exit 1
+    Error: expect(locator).toBeVisible() failed
+    Expected: visible
+    Error: element(s) not found
+      - Expect "toBeVisible" getByText('“Listed people on the prison records” is live.') with timeout 5000ms
+      - waiting for getByText('“Listed people on the prison records” is live.')
+    > 649 |   await expect(page.getByText("“Listed people on the prison records” is live.")).toBeVisible();
+
+### choose-a-rules-screening-list-by-keyboard: SentenceBuilder.tsx: `onChange={(e) => change({ listId: e.target.value || undefined })}` removed; 2026-11-10T14:52:06Z; exit 1
+    Error: expect(locator).toHaveValue(expected) failed
+    Expected: "l-uk"
+      - Expect "toHaveValue" getByRole('form', { name: 'Write a rule on Prison records' }).getByRole('combobox', { name: 'Screening list' }) with timeout 5000ms
+      - waiting for getByRole('form', { name: 'Write a rule on Prison records' }).getByRole('combobox', { name: 'Screening list' })
+    > 14 |   await expect(select).toHaveValue(value);
+  1 failed
+
+### run-a-rule-when-its-list-refreshes-by-keyboard: SentenceBuilder.tsx: `{editor && draft.relationship === "on_screening_list" && <option value` removed; 2026-11-10T14:53:07Z; exit 1
+    Error: locator.textContent: Test timeout of 60000ms exceeded.
+      - waiting for getByRole('form', { name: 'Write a rule on Prison records' }).getByRole('combobox', { name: 'Runs' }).locator('option[value="list_refresh"]')
+  1 failed
+
+### approve-a-rule-going-live-by-keyboard: RuleChanges.tsx: `void approveRule(props, rule.id)` removed; 2026-11-10T14:53:14Z; exit 1
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: true
+    > 728 |   await expect.poll(() => state.sent.some((s) => s.path === "rules/r-go/approve")).toBe(true);
+  1 failed
+
+### send-back-a-rule-going-live-by-keyboard: RuleChanges.tsx: `void rejectRule(props, rule.id, reason.trim())` removed; 2026-11-10T14:53:20Z; exit 1
+    Error: expect(received).toEqual(expected) // deep equality
+    Expected: {"reason": "test it on the full month"}
+  1 failed

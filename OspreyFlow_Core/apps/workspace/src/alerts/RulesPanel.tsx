@@ -17,6 +17,7 @@ import { listPatterns } from "../patterns/api";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
 import { money, ruleTypologyLabel, when } from "./names";
 import { RuleApproval, RuleHistory, RuleSchedule } from "./RuleChanges";
+import { RuleEditor } from "./RuleEditor";
 import { SentenceBuilder } from "./SentenceBuilder";
 import { scheduleWords, sentenceSummary } from "./sentence";
 import { TEMPLATES, type RuleTemplate } from "./templates";
@@ -266,6 +267,8 @@ export interface RulesPanelProps extends AlertsApi {
   isAdministrator?: boolean;
   /** ADR-133 decision 7: who is reading, so their own proposal is not offered to them to approve. */
   accountId?: string | null;
+  /** `deploy_rules`: whether *Make live* is offered at all (the server refuses it either way). */
+  canMakeLive?: boolean;
 }
 
 /** When the rule runs, in words: before or after each load, or on its schedule (stage (d)). */
@@ -275,6 +278,8 @@ export function runsWords(rule: TypologyRule): string {
       .sentence?.schedule;
     return `Runs on a schedule, ${scheduleWords(schedule)} (Europe/London), as its author`;
   }
+  // ADR-146 decision 3: run each time the screening list it names keeps a new version.
+  if (rule.trigger === "list_refresh") return "Runs when its screening list refreshes, as its author";
   return rule.trigger === "pre_commit"
     ? `Judges each load before it commits (budget ${(rule.budget_ms ?? 5000).toLocaleString("en-GB")} ms; held if it cannot judge)`
     : "Runs after each load commits";
@@ -284,6 +289,9 @@ export function runsWords(rule: TypologyRule): string {
 export function statusWords(rule: TypologyRule): string {
   if (rule.status === "retired") return `retired ${rule.retired_at ? when(rule.retired_at) : ""}`.trim();
   if (rule.status === "pending") return "not running: waiting for a second person's approval";
+  // ADR-146 decision 3: saved and never yet made live, or asked to go live and waiting.
+  if (rule.status === "draft")
+    return rule.pending_action ? "a draft, waiting for a second person's approval to go live" : "a draft: not live";
   return `active${(rule.version ?? 1) > 1 ? `, version ${rule.version}` : ""}`;
 }
 
@@ -294,6 +302,8 @@ export function RulesPanel(props: RulesPanelProps) {
   const [said, setSaid] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<SavedPattern[]>([]);
   const [preset, setPreset] = useState<{ template: RuleTemplate; nonce: number } | null>(null);
+  // ADR-146 decision 5: the rule whose row opened the editor.
+  const [opening, setOpening] = useState<TypologyRule | null>(null);
   const author = level === "author";
 
   // ADR-109 phase D: the account's own saved patterns — what a drawn rule may be deployed from,
@@ -363,15 +373,28 @@ export function RulesPanel(props: RulesPanelProps) {
               <RuleApproval
                 {...props}
                 rule={rule}
-                canApprove={author && (props.isAdministrator ?? false) && rule.pending_by !== props.accountId}
+                // ADR-146 decision 3: a draft asked to go live under its dataset's second-person
+                // policy is another Author's to approve; a whole-deployment change, the administrator's.
+                canApprove={
+                  author &&
+                  ((props.isAdministrator ?? false) || (rule.pending_make_live ?? false)) &&
+                  rule.pending_by !== props.accountId &&
+                  rule.pending_asked_by !== props.accountId
+                }
                 onDone={(words) => {
                   setSaid(words);
                   reload();
                 }}
               />
               <span style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
+                {author && rule.dataset_id && rule.params.typology === "sentence" && rule.status !== "retired" &&
+                  (rule.params as unknown as { sentence: { scope?: string } }).sentence.scope !== "just_me" && (
+                    <Button aria-label={`Open ${rule.name} in the rule editor`} onClick={() => setOpening(rule)}>
+                      Open in the rule editor
+                    </Button>
+                  )}
                 <RuleHistory {...props} rule={rule} />
-                {rule.trigger === "schedule" && <RuleSchedule {...props} rule={rule} />}
+                {(rule.trigger === "schedule" || rule.trigger === "list_refresh") && <RuleSchedule {...props} rule={rule} />}
               </span>
             </span>
             {author && rule.status === "active" && !rule.pending_action && (
@@ -396,6 +419,17 @@ export function RulesPanel(props: RulesPanelProps) {
           </li>
         ))}
       </ul>
+      <RuleEditor
+        key={opening?.id ?? "new"}
+        {...props}
+        opening={opening}
+        patterns={patterns}
+        canMakeLive={props.canMakeLive ?? false}
+        onChanged={(words) => {
+          setSaid(words);
+          reload();
+        }}
+      />
       <SentenceBuilder
         {...props}
         isAdministrator={props.isAdministrator ?? false}
@@ -420,7 +454,7 @@ export function RulesPanel(props: RulesPanelProps) {
           preset={preset?.template ?? null}
           patterns={patterns}
           onDeployed={(rule) => {
-            setSaid(`Deployed “${rule.name}”.`);
+            setSaid(`Deployed “${rule.name}”, raising alerts for you alone.`);
             reload();
           }}
         />
@@ -503,9 +537,8 @@ function DeployForm(
       onSubmit={(e) => {
         e.preventDefault();
         setProblem(null);
-        deployRule(
-          props,
-          ruleInput(
+        deployRule(props, {
+          ...ruleInput(
             name,
             typology,
             values,
@@ -516,7 +549,10 @@ function DeployForm(
             patternId,
             { jurisdictions: jurisdictionCodes(codes), cashTypes, measure },
           ),
-        )
+          // ADR-146 Amendment 6 decision 12: this form keeps a rule just for its author; a rule
+          // for the case is written in the rule editor, drafted, tested and made live.
+          just_me: true,
+        })
           .then((rule) => {
             setName("");
             props.onDeployed(rule);
@@ -534,6 +570,9 @@ function DeployForm(
       <h3 className="value" style={{ margin: 0 }}>
         Deploy a rule
       </h3>
+      <p className="label" style={{ margin: 0 }}>
+        This rule raises alerts for you; to share it with the case, write it in the rule editor.
+      </p>
       <label className="label" style={FIELD}>
         Name
         <Input

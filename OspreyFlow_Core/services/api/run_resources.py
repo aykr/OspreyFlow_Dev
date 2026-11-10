@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from services.api.list_connector import PostgresListStore
+from services.api.list_connector import ParquetListRows, PostgresListStore
 from services.api.target_models import PostgresTargetModelStore, core_types_of
 from services.ingest.staging import ObjectStorageConfig
 from valkey.asyncio import Valkey
@@ -40,6 +40,7 @@ from ports.graph import GraphPort
 from ports.media import MediaStore
 from schemas.domain import OntologySchema
 
+from . import rule_editor
 from .alerts import AlertStore
 from .analytics_store import Close, open_analytics
 from .audit import AuditWriter
@@ -134,6 +135,22 @@ class RunResources:
         """The run's name for the datasets store (`RecipeRunDeps.datasets`)."""
         return self.datasets_store
 
+    @property
+    def rule_lists(self) -> rule_editor.RuleListReader:
+        """ADR-146 decision 3 (L2.11): a command-line run reads a rule's named Studio list within
+        the rule's own dataset, over the stores held here, as the Conduit's runs do."""
+        return rule_editor.rule_list_reader(
+            datasets=self.datasets_store,
+            models=self.target_models,
+            lists=self.list_store,
+            rows_kept=ParquetListRows(self.staging_storage),
+        )
+
+    @property
+    def rule_reach(self) -> rule_editor.RuleReach:
+        """What a rule on a declared dataset reads (a composite's members), over the stores here."""
+        return rule_editor.rule_reach_of(self.datasets_store)
+
     def run_deps(self) -> RecipeRunDeps:
         """The dependencies of `run_recipe_as`, over the objects held here."""
         return RecipeRunDeps(
@@ -165,6 +182,8 @@ class RunResources:
             target_models=self.target_models,
             staging_storage=self.staging_storage,
             list_store=self.list_store,
+            rule_lists=self.rule_lists,
+            rule_reach=self.rule_reach,
             watch_reach=self.watch_reach,
             board_items=self.board_items,
             datasets=self.datasets_store,

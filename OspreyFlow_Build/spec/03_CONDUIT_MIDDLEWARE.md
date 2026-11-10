@@ -937,13 +937,19 @@ GET    /v1/admin/screening-lists   the same, with the latest refreshes and what 
 POST   /v1/admin/screening-lists   subscribe a list through its connector to a file in the ingest folder, load_screening_lists
 POST   /v1/admin/screening-lists/{list_name}/refresh   "Refresh now": apply the list's new version, re-screen against its changed entries, load_screening_lists
 PUT    /v1/admin/screening-lists/{list_name}/schedule   set (or stop) the list's refresh schedule, run as the person setting it, load_screening_lists
-POST   /v1/investigations/{id}/rules/{rule_id}/approve   a second person approves the change waiting on a whole-deployment rule (never its proposer), Author and administrator
-POST   /v1/investigations/{id}/rules/{rule_id}/reject   reject (or, by its proposer, withdraw) a waiting change, with a reason, Author and administrator
+POST   /v1/investigations/{id}/rules/{rule_id}/approve   a second person approves the change waiting on a whole-deployment rule (never its proposer), Author and administrator; a tested draft waiting to go live under its dataset's second-person policy, another Author with deploy_rules (never its author or whoever asked, ADR-146 Amendment 6)
+POST   /v1/investigations/{id}/rules/{rule_id}/reject   reject (or, by its proposer, withdraw) a waiting change, with a reason, Author and administrator; a waiting make-live goes back to its draft, decided by the same people as its approval
 POST   /v1/investigations/{id}/rules/{rule_id}/change   a new version of a sentence rule: applied at once, or waiting for approval for a whole-deployment rule, deploy_rules and keep_watches
 GET    /v1/investigations/{id}/rules/{rule_id}/versions   every version of a rule, with who proposed and who decided each, Viewer
 GET    /v1/investigations/{id}/rules/{rule_id}/runs   a scheduled rule's schedule in words, its next run or why it will not run, its latest runs, Viewer
 GET    /v1/investigations/{id}/rules/{rule_id}/export.{kind}   the rule's `.bpmn` or `.dmn` (ADR-146 decision 3, Amendment 5): the files stored with its version; a rule the reader may not see is the same 404 as a missing one, read_alert_queue, Viewer
 POST   /v1/investigations/{id}/rules/import   a `.bpmn` and `.dmn` read back to a sentence rule and its dataset, never deployed; an unsupported element refused by name (422 `rule_file_unsupported`), each file capped at 256 KB (413), a dataset not the case's chosen source or composite refused as `dataset_not_found`, author_rules, Author
+GET    /v1/investigations/{id}/rules/datasets   the rule editor's datasets: the case's own sources and composites, each with its live model's types and links, the lists it may read and whether Make live waits for a second person (ADR-146 Amendment 6), author_rules and Author
+POST   /v1/investigations/{id}/rules/drafts   a new rule saved as a draft on its declared dataset, its .bpmn and .dmn beside it; 404 `dataset_not_found` for any dataset not the case's own source or composite, author_rules and Author
+PUT    /v1/investigations/{id}/rules/{rule_id}/draft   the rule's one draft saved again; 409 `rule_dataset_fixed` for another dataset, author_rules and Author
+GET    /v1/investigations/{id}/rules/{rule_id}/draft   the rule's draft, if any; Test's count to its tester alone (rule 7), Viewer
+POST   /v1/investigations/{id}/rules/{rule_id}/test   Test: the draft over its dataset's last 30 days as the person testing, kept on the version tested, author_rules and Author
+POST   /v1/investigations/{id}/rules/{rule_id}/make-live   the tested draft live, or waiting for another Author's approval under its dataset's second-person policy; 409 `rule_untested`, deploy_rules and Author
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor; the same 409 `composite_read_only` as the disposition
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/send-back   send a proposed close back to its proposer, with a reason, Editor
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   the pipeline's "Checks on load" step: the rules it may attach and what was chosen, edit_pipelines, Editor

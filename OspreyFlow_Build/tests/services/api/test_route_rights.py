@@ -372,6 +372,14 @@ ROUTE_RIGHTS = {
     "read_rule_sentence": "investigate",
     "preview_rule_sentence": "investigate",
     "deploy_rule_sentence": "deploy_rules",
+    # ADR-146 decision 3 (L2.11): the rule editor writes drafts and tests under author_rules; making
+    # one live is deploy_rules; the draft is read as the rules are.
+    "list_rule_datasets": "author_rules",
+    "save_new_rule_draft": "author_rules",
+    "save_rule_draft": "author_rules",
+    "read_rule_draft": "read_alert_queue",
+    "test_rule_draft": "author_rules",
+    "make_rule_live": "deploy_rules",
     # ADR-139: installation-wide influencers by maker–checker; the case's reads and its Author's
     # override are investigation (the case level applying).
     "list_strength_influencers_route": "manage_strength_influencers",
@@ -541,7 +549,8 @@ def test_every_right_guards_at_least_one_route() -> None:
     promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
     dataset's approvers in Admin › Datasets and guards the promotion's review (L3.4).
     `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1).
-    `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
+    `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6);
+    `author_rules` the rule editor's drafts and tests (L2.11)."""
     not_yet = {"revert_loads",
                "export_override",
                # ADR-112 Amendment 5's rights came with their steps' routes: `merge_datasets`
