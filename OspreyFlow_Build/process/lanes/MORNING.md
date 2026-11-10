@@ -141,6 +141,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    (2) a self-check list of today's recurring findings in every lane's prompt; (3) a lane rebases onto main just
    before its gates, never after; (4) `make test` in parallel on the server (admin's T1, tomorrow). Aim: a step's
    fix-and-check from 3–5 hours to 1–2.
+21. **About 30% of the lane work on the Sol account from 20:50 (your word, 10 November).** Platform already runs on
+   sol; case and studio-b switch at 20:50, each at a safe point (pause-done, then resumed on sol), so 3 of the 9
+   running sessions are on sol. The demo track (rules, studio, docs) stays on ayan through tonight's release.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

@@ -1,17 +1,17 @@
-# as of 2026-11-10T17:46Z
-rules	L2.11	rule editor: review's 4 must-fixes, then server ci, live, merge	~19:30	A
-studio	L1.7	rebased with the review's fixes; server make test, ci, live; merge	~20:30	A
-docs	D2b	the decks (rule-editor slides after L2.11; screenshots from the server)	~21:00	A
+# as of 2026-11-10T17:56Z
+rules	L2.11	rule editor: the review's must-fixes, then one round of server gates; merge	~19:45	A
+studio	L1.7	rebased with its review's fixes; server make test, ci and live; merge	~20:30	A
+docs	D2b	the decks; rule-editor slides after L2.11; review against CLAIMS.md	~21:00	A
 orchestrator	publish	the product repo from main at demo-ready (server ci/test/scans green)	~22:30	A
-admin	T1	part 4 (parallel runs) live tonight; the marks tomorrow morning	11 Nov	A
-platform-b	T2	tooling: per-lane ports (lets browser tests run side by side on the server)	~11 Nov, morning	A
-rules-b	T3	dialogs' colour contrast gated	~11 Nov, morning	A
-case	L3.H2	drawn watches on every load; the ceiling on promotions	~11 Nov, morning	B
-studio-b	L1.10b	the ceiling's carries (Am 3)	~11 Nov, morning	B
-platform	P7	cloud-platform profile: acceptance on kind tonight, then merge	11 Nov, midday	B
+platform-b	T2	per-lane ports (browser tests side by side on the server); reviews running	~20:00	A
+rules-b	T3	dialogs' colour contrast gated; runs in progress	~20:30	A
+admin	T1	part 4 tonight; make test in parallel and the marks tomorrow morning	11 Nov, ~11:00	A
+case	L3.H2	built; both reviews running; Am 4; one round of gates (moves to sol at 20:50)	~21:00	B
+studio-b	L1.10b	the ceiling's carries; Verify next (moves to sol at 20:50)	~22:00	B
+platform	P7	acceptance on kind tonight (down by 20:30), then review and merge	11 Nov, ~11:00	B
 studio-b	L1.9	S3 and Athena, after P7	11 Nov, afternoon	B
 platform	P11	the model route: the client's gateway or Bedrock, after P7	12 Nov	B
 platform	P12	Laurium: licence check first (stops for you if it fails), then the adapter	12 Nov	B
 platform	P8–P10	shared disk, backups, Entra; in turn after P7	12 Nov	B
-docs	D2c	Cloud Platform guide, with the extraction engine and Laurium, after P10–P12	13 Nov	B
-orchestrator	your laptop	rebuild your local deployment after the whole build (your word)	after D2c	B
+docs	D2c	Cloud Platform guide, with the extraction engine and Laurium	13 Nov	B
+orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
