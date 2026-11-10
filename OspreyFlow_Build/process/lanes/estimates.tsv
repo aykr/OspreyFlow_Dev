@@ -1,5 +1,5 @@
-# as of 2026-11-10T16:15Z
-studio	L1.7	releases, run API, quotas; make test, then ci and merge	~17:30	A
+# as of 2026-11-10T17:02Z
+studio	L1.7	gated; rebase (6 conflicts on the run path), re-gate, review	~19:30	A
 rules	L2.11	review: 4 must-fixes (schedule reach, template drafts, run-as right, asker test); re-gate	~19:00	A
 docs	D2b	the decks, after L2.11	~20:30	A
 orchestrator	release	your deployment rebuilt; product repo published	~22:00	A
