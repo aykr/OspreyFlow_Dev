@@ -91,7 +91,7 @@ A listed finding no longer found fails. A listed title that is not a scanned loo
 - **Home:** the start page's key cap "G" (`.home-key`, `opacity: 0.8`) is 4.12:1 in light and 3.92:1 under GOV.UK, on the primary button.
 - **Shell (places):** More views, drawn open under GOV.UK, lies over three of the banner's words.
 - **Case (L3.3, the boards):** the board's link lines are one SVG over the board, so each item's "⟶" handle and the photo's label are over or under it, as are the blank board's words. Unmeasurable in every theme, in each board state.
-- **Glass (the metrics panel) and case (views):** the rarity note, and the delete question under GOV.UK. axe reads each as partly covering another element and names none, and the dense probe finds nothing either. They are kept closed.
+- **Rules (the metrics panel, since the split) and case (views):** the rarity note, and the delete question under GOV.UK. axe reads each as partly covering another element and names none, and the dense probe finds nothing either. They are kept closed.
 - **Shell (L2.3's prototype variant b):** the rail's "⋯" sits on a transparent button over the rail, or over the GOV.UK banner.
 
 ## Limit, stated in the code

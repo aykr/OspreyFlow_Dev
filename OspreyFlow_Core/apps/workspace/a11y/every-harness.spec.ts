@@ -368,7 +368,7 @@ const CONTRAST_FINDINGS: Record<string, ListedFindings> = Object.fromEntries([
   }),
   // The metrics panel's rarity note and the views' delete question (under GOV.UK): axe reads each as
   // partly covering another element and names none, and the probe finds nothing either; kept closed
-  // (Glass's metrics panel; case's views).
+  // (the metrics panel, rules' since the split; case's views).
   ...(["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
     `metrics-panel-harness.html filter=rarity (${variant})`,
     {
@@ -376,7 +376,7 @@ const CONTRAST_FINDINGS: Record<string, ListedFindings> = Object.fromEntries([
         text: "Filters dim, they never remove: what fal",
         ratio: "unmeasurable",
         reason: "partly covered, by axe's reading; the probe found nothing",
-        owner: "glass (metrics panel)",
+        owner: "rules (metrics panel)",
       },
     },
   ]),
