@@ -74,3 +74,4 @@ case	L3.H2	S	building	Drawn watches on every load; the ceiling on promotions and
 studio-b	L1.10b	S	building	The ceiling's carries: packs' declarations, staged tables on refusal, Verify judging the ceiling
 platform-b	T2	S	building	Tooling: per-lane Playwright ports, docker-shelling tests skipped without local stacks, constant-named registries
 rules-b	T3	S	building	Dialogs' and invisible text's colour contrast actually gated in every-harness
+rules	UPG	S	building	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, before the publish

@@ -1,35 +1,30 @@
-# Rules lane · brief L2.10 · one queue, watches, team routing, Raise an alert
+# Rules lane · brief UPG · rehearse the v0.4.12 → v0.5.0 upgrade on the test server, before the publish
 
-Written by the orchestrator, 8 November 2026, after L2.9's merge (`057a10e`), for a **fresh rules session** on
-the orchestrator's account. Read `process/lanes/rules/REPORT.md` (L2.9) and ADR-146 with Amendments 1 and 2
-first. Rebase onto `main`. Opus, medium. Size L. **L2.10 is one of the docs lane's gating steps.** After it
-comes L2.11 (the rule editor). Rules-b (the sister lane) builds L2.12, reporting folded, beside you: its files
-are the plan's rules-b row; ask the orchestrator before touching any.
+Written by the orchestrator, 10 November 2026 evening, for the rules session, **from main** (075e240 or later).
+Docs found that `ospreyflow update` runs none of the six one-off migrations an existing v0.4.12 deployment needs, and
+nobody has run them on a real v0.4.12 deployment. Tonight's v0.5.0 publish waits for this rehearsal. Size S–M.
 
-**The lane, the stacks, the merge rule.** Rules' map minus rules-b's; a test stack by `stack_lease.sh acquire
-rules "<purpose>" && …` only; Prompt L's rules (never stop on a question; schemas ride with the step; your own
-lane-reviewer, then make -k ci and make test at a commit rebased onto main, saved under gates/, with a leased
-live run including `test_route_rights.py` and every live file the change reaches). Team routing is a new rule 3
-read, so this step gets the orchestrator's independent review.
+**The rule for this step.** On ospreyflow-test only, a throwaway named deployment, **project and volumes prefixed
+`osprey-upg-`**, synthetic data only. Never touch `osprey-small`, `osprey-test-*`, `osprey-p7-*`, the leased stacks, or
+another lane's images; no `docker image prune`; every `down -v` guarded on the project name (P5b's driver,
+`process/lanes/platform-b/gates/p5b_live_update.py`, shows the guards: reuse them); before/after container and
+volume lists recorded, failing on what the run itself left. Tear it all down at the end. It counts as one live slot;
+tell the orchestrator when it is up and down.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7, 12, 13 and 15 above all); ADR-146 and Amendments 1 and 2
-(*Suppress until…* included, R8 a); ADR-145 Amendment 5 (teams, leads, hand-over and cover, as admin's L2.5
-built them); ADR-109 Amendments 10–12 (repoints).
+**Do:**
+1. Install **v0.4.12** (the commit tagged `v0.4.12` in the user repository, 964a2a9 on main's history) as the named
+   deployment `osprey-upg`, through its own `ospreyflow install`, and load a synthetic demo pack (fixture-corp or the
+   prison pack) so there are cases, boards and rules to migrate.
+2. Update it to **main's head** through `ospreyflow update` as a user would, then run the six one-off migrations in
+   the order docs' CHANGELOG v0.5.0 section states, **each with `--dry-run` first**, through
+   `docker exec osprey-upg-api-1 python -m scripts.<name>`: migrate_cases_to_one_dataset, migrate_branches_to_views,
+   seed_target_models, make_home_cases, migrate_sources, remark_alert_nodes.
+3. Check the result: sign-in, Home, a case opens with its views and boards, the alert queue, the Studio's pipelines
+   and Runs, Admin's System; and each migration re-run is a no-op.
+4. Record every command, its output (masked), the order that worked, and anything that failed, in
+   `process/lanes/rules/gates/upg-rehearsal.txt`; tell the orchestrator and docs the exact steps, so the CHANGELOG's
+   upgrade section says only what was proven.
 
-**Build** (the plan's row L2.10): one queue (the inbox removed, *what fired it* on every watch alert); the
-queue's filters; the inventory *What raises alerts*; watches kept there and made from the Glass (*Watch for
-this*, *Save as a watch*); saved patterns on a schedule (G16); **team routing**, the new rule 3 read, tests
-first; the lead's hand-off and taken-back marking; *Raise an alert…* to the case or the dataset (R4). And the
-row's two carries: an alert repointed by a settle on a read path keeps a working-set copy at the old marking
-(purge it, test first); a monitor alert in a composite case's layer must not stop the KYC sweep whole (test
-first). From `process/lanes/CARRIES.md`: Ask to search shows `model_limit_reached` if platform's P3 hasn't (check
-main). The rule's list picker reading studio-b's offered lists waits for the owner's ruling on which
-screening-list store is of record; leave it to L2.11.
+**Not in this step:** making `ospreyflow update` run the migrations itself (code; a carry for tomorrow, recorded).
 
-**Tests first, each red by a plant at the real call site:** team routing reaches only the team's members who
-may read the alert (rule 3), red with the read check removed; a watch made from the Glass alerts only on what
-its maker may see; *Raise an alert…* refused to a case or dataset the raiser can't write; keyboard cases (rule
-13), registry ids as a diff; axe in dark, light and GOV.UK.
-
-**Exit.** The row's exit; make ci and make test green offline; live cases under a named lease and stack; a
-friction fragment. Report in Prompt L's format, then stop.
+**Exit.** The upgrade rehearsed end to end with every step recorded; the CHANGELOG's steps confirmed or corrected.

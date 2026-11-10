@@ -157,6 +157,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    so a minor bump): docs writes its CHANGELOG section (release notes and upgrade steps) and moves every guide to "For
    OspreyFlow v0.5.0" before the publish, and the user repository gets the tag `v0.5.0` with the release. **To
    overrule:** name another version.
+23. **The v0.5.0 publish waits for a rehearsed upgrade (docs found it).** `ospreyflow update` does not run the six
+   one-off migrations a v0.4.12 deployment needs; the release notes now list them in order, each dry run first. Before
+   the publish, rules installs v0.4.12 as a throwaway deployment on the test server, updates it to main, runs the six
+   and checks the result, so the notes say only what was proven. Making `update` run them itself is a carry for
+   tomorrow. This moves the publish later tonight (about midnight). **To overrule:** say "publish without rehearsal".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
