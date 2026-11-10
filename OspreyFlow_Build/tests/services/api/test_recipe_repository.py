@@ -27,6 +27,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from dulwich.objects import Blob
 from services.api import studio_publish
 from services.api.studio_publish import GitCommitError, commit_recipe_file
 
@@ -117,9 +118,35 @@ async def test_publish_commits_on_top_of_a_repository_real_git_made(tmp_path: Pa
     _git(repo, "fsck", "--strict")
 
 
+def _plant_every_config_driven_command(repo: Path, trap: Path) -> None:
+    """Everything in a repository's config or tree that makes a real `git commit` run a program:
+    a signer, a hooks directory and the hooks in it, a file-system monitor, a clean filter and a
+    credential helper. Each names `trap`, which leaves a file behind if anything runs it."""
+    trap.write_text(f"#!/bin/sh\necho ran >> {trap}.ran\nexit 1\n")
+    trap.chmod(0o755)
+    hooks = trap.parent / "hooks-path"
+    for hooks_dir in (repo / ".git" / "hooks", hooks):
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        for hook in ("pre-commit", "prepare-commit-msg", "commit-msg", "post-commit",
+                     "reference-transaction", "post-index-change"):  # fmt: skip
+            (hooks_dir / hook).write_text(trap.read_text())
+            (hooks_dir / hook).chmod(0o755)
+    with (repo / ".git" / "config").open("a") as config:
+        config.write(
+            f"[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = {trap}\n"
+            f"[core]\n\thooksPath = {hooks}\n\tfsmonitor = {trap}\n"
+            f'[filter "trap"]\n\tclean = {trap}\n\tsmudge = {trap}\n\tprocess = {trap}\n'
+            f"\trequired = true\n[credential]\n\thelper = {trap}\n"
+        )
+    (repo / ".gitattributes").write_text("* filter=trap\n")
+
+
 async def test_publish_never_execs_a_binary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """No config-driven command runs (the independent review of L1.7a, item 2): with every one a
+    real `git commit` would honour planted, the second publish spawns nothing. Shown red with the
+    commit made by dulwich's own worktree commit, which reads the config (`l1.7a/`)."""
     calls: list[object] = []
 
     def refuse(*args: object, **kwargs: object) -> None:
@@ -138,14 +165,25 @@ async def test_publish_never_execs_a_binary(
             monkeypatch.setattr(os, name, refuse)
 
     repo = tmp_path / "repo"
-    # A hook a real `git commit` would run: the publish must not run it either.
     await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
-    hook = repo / ".git" / "hooks" / "post-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
-    await commit_recipe_file("alpha", b"id: alpha\nversion: 2\n", version=2, repo_root=repo)
+    trap = tmp_path / "trap.sh"
+    _plant_every_config_driven_command(repo, trap)
+    second = b"id: alpha\nversion: 2\n"
+    await commit_recipe_file("alpha", second, version=2, repo_root=repo)
 
     assert calls == []
+    assert not Path(f"{trap}.ran").exists()
+    # The second commit holds the bytes given, unfiltered and unsigned.
+    from dulwich.object_store import tree_lookup_path
+    from dulwich.objects import Commit
+    from dulwich.repo import Repo
+
+    with Repo(str(repo)) as opened:
+        head = opened[opened.head()]
+        assert isinstance(head, Commit)
+        assert head.gpgsig is None
+        _, committed = tree_lookup_path(opened.__getitem__, head.tree, b"recipes/alpha.yaml")
+        assert committed == Blob.from_string(second).id
 
 
 @needs_git
@@ -258,3 +296,129 @@ def test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative(
     gpl_only = {**row, "License": row["License"].replace("Apache-2.0 OR ", "")}
     assert gpl_only["License"] != row["License"]
     assert find_offenders([gpl_only]) == [gpl_only]
+
+
+@needs_git
+@pytest.mark.parametrize(
+    "recipe_id", ["../x", ".git/x", "../../outside", "a/b", "..", ".hidden", "", "x\x00y"]
+)
+async def test_a_recipe_id_that_is_not_one_file_name_is_refused(
+    tmp_path: Path, recipe_id: str
+) -> None:
+    """A recipe id cannot escape `recipes/` (the independent review of L1.7a, item 1): an id that
+    is not one plain file name is refused before anything is written, the repository holds no
+    `..` or `.git` tree entry, and real git's strictest check stays clean."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
+    before = _git(repo, "rev-parse", "HEAD")
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file(recipe_id, b"id: x\n", version=1, repo_root=repo)
+
+    assert _git(repo, "rev-parse", "HEAD") == before
+    _git(repo, "fsck", "--strict")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["repo"]
+    assert _git(repo, "ls-files").split() == ["recipes/alpha.yaml"]
+    assert sorted(p.name for p in (repo / "recipes").iterdir()) == ["alpha.yaml"]
+
+
+@needs_git
+async def test_a_symlinked_recipes_directory_is_refused(tmp_path: Path) -> None:
+    """`recipes/` pointing elsewhere is refused, not written through (item 1)."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
+    before = _git(repo, "rev-parse", "HEAD")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    shutil.rmtree(repo / "recipes")
+    (repo / "recipes").symlink_to(elsewhere, target_is_directory=True)
+
+    with pytest.raises(GitCommitError) as raised:
+        await commit_recipe_file("beta", b"id: beta\n", version=1, repo_root=repo)
+
+    assert list(elsewhere.iterdir()) == []
+    assert _git(repo, "rev-parse", "HEAD") == before
+    assert str(tmp_path) not in str(raised.value)
+    _git(repo, "fsck", "--strict")
+
+
+@needs_git
+async def test_a_symlinked_recipe_file_is_refused(tmp_path: Path) -> None:
+    """`recipes/<id>.yaml` pointing at another file is refused, and that file is untouched
+    (item 1)."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
+    before = _git(repo, "rev-parse", "HEAD")
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"not the recipe's\n")
+    (repo / "recipes" / "alpha.yaml").unlink()
+    (repo / "recipes" / "alpha.yaml").symlink_to(victim)
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"id: alpha\nversion: 2\n", version=2, repo_root=repo)
+
+    assert victim.read_bytes() == b"not the recipe's\n"
+    assert (repo / "recipes" / "alpha.yaml").is_symlink()
+    assert _git(repo, "rev-parse", "HEAD") == before
+    _git(repo, "fsck", "--strict")
+
+
+@needs_git
+async def test_a_real_writer_moving_head_mid_commit_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The compare-and-swap against a real second writer (item 3; rule 15, not a fake refusal):
+    real git commits between the publish reading `HEAD` and moving it. The publish raises, the
+    other writer's commit is still `HEAD` with ours not on top of it, and fsck stays clean."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    first = _git(repo, "rev-parse", "HEAD").strip()
+    real = studio_publish.commit_tree_changes
+
+    def with_a_rival(*args: object, **kwargs: object) -> object:
+        (repo / "theirs").write_text("theirs\n")
+        _git(repo, "add", "theirs")
+        _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost",
+             "commit", "-q", "-m", "theirs", "--", "theirs")  # fmt: skip
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", with_a_rival)
+    with pytest.raises(GitCommitError) as raised:
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert "moved" in str(raised.value)
+    assert _git(repo, "log", "--format=%s").splitlines() == ["theirs", "ingest: publish alpha v1"]
+    assert _git(repo, "rev-parse", "HEAD~1").strip() == first
+    assert _git(repo, "show", "HEAD:recipes/alpha.yaml") == "version: 1\n"
+    _git(repo, "fsck", "--strict")
+
+
+async def test_the_index_is_read_and_written_under_a_lock_another_process_honours(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 7: the read-modify-write of the index, and the commit, hold an exclusive `flock` on
+    the repository's publish lock, so the Prison Intelligence seed beside a running Conduit cannot
+    lose the other's index entry. Probed from a second open of the lock file, as another process
+    would take it, while the publish is between staging and moving `HEAD`."""
+    import fcntl
+
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    lock = repo / ".git" / studio_publish.PUBLISH_LOCK_NAME
+    held: list[bool] = []
+    real = studio_publish.commit_tree_changes
+
+    def probe(*args: object, **kwargs: object) -> object:
+        with lock.open("a") as other:
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held.append(True)
+            else:
+                fcntl.flock(other, fcntl.LOCK_UN)
+                held.append(False)
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", probe)
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+    assert held == [True]
