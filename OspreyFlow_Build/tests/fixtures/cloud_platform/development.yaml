@@ -15,3 +15,16 @@ cloud_platform:
   egress_nets:
     s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
+# The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+map:
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "\xA9 OpenStreetMap contributors"

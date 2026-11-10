@@ -589,3 +589,29 @@ def test_the_lock_names_only_the_images_a_rendered_pod_runs(fixture: str) -> Non
         for e in yaml.safe_load(artefacts["versions.lock"])["images"]
     }
     assert locked <= run, f"locked but never run: {sorted(locked - run)}"
+
+
+def test_a_deployment_without_a_map_is_refused_in_words() -> None:
+    """Found on the kind cluster (10 November 2026): the Conduit reads `map:` from the
+    deployment's own `osprey.yaml` at start and exits without one (`KeyError: 'map'`), and this
+    profile has no install to write one in, so the render refuses rather than ship a Conduit that
+    cannot start."""
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw.pop("map", None)
+    with pytest.raises(CloudPlatformNotRenderable, match="map:"):
+        render(OspreyConfig.model_validate(raw), resolver=_resolver)
+
+
+def test_a_database_s_owner_is_granted_to_the_login_that_makes_it(values: dict[str, Any]) -> None:
+    """Found on the kind cluster's RDS stand-in (10 November 2026), which, as RDS, gives the
+    namespace's login no superuser: PostgreSQL 16 lets a login make a database owned by another
+    role only if it may SET ROLE to it ("must be able to SET ROLE \\"keycloak\\""). A role this
+    login made is one it administers, so it grants itself membership first."""
+    made = 0
+    for container in _containers(values):
+        script = "\n".join(container.get("args") or [])
+        for owner in re.findall(r"CREATE DATABASE (\w+) OWNER (\w+)", script):
+            made += 1
+            grant = script.find(f"GRANT {owner[1]} TO CURRENT_USER;")
+            assert 0 <= grant < script.find(f"CREATE DATABASE {owner[0]}"), container["name"]
+    assert made, "no init container makes a database: the test would pass on nothing"

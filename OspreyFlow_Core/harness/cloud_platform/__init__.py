@@ -118,6 +118,11 @@ def _cp(config: OspreyConfig) -> CloudPlatformConfig:
 
 
 def _refuse(config: OspreyConfig) -> None:
+    if config.map is None:
+        raise CloudPlatformNotRenderable(
+            "the Conduit reads its basemaps from osprey.yaml's map: section at start and cannot "
+            "start without one, and this profile has no install to write it: declare map:"
+        )
     if config.components.analytics_engine is not AnalyticsEngine.CLICKHOUSE:
         raise CloudPlatformNotRenderable(
             "a cloud platform's Conduits share ClickHouse (ADR-148 decision 5); set "
@@ -301,6 +306,24 @@ class _Copies:
                 f"{entry.get('source')}; the values would pin a copy `images push` never made"
             )
         return f"{target.split(':sha256-')[0]}@{digest}" if digest else target
+
+
+def _grant_what_it_owns(container: dict[str, Any]) -> None:
+    """A managed Postgres gives the namespace's login no superuser (RDS), and PostgreSQL 16 lets a
+    login make a database owned by another role only if it may SET ROLE to it; a role it made is
+    one it administers, so it grants itself membership first. The step's SQL is the cluster's own
+    (`harness.render`), so the other profiles' renders are unchanged."""
+    args = container.get("args")
+    if not args:
+        return
+    container["args"] = [
+        re.sub(
+            r"(SELECT 'CREATE DATABASE (\w+) OWNER (\w+)')",
+            lambda m: f"GRANT {m.group(3)} TO CURRENT_USER;\n{m.group(1)}",
+            arg,
+        )
+        for arg in args
+    ]
 
 
 def _containers(workload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -500,6 +523,7 @@ def render_cloud_platform(
         if not pod["initContainers"]:
             pod.pop("initContainers")
         for container in _containers(pod):
+            _grant_what_it_owns(container)
             container["image"] = copies(container["image"])
             _read_from_the_platform(container, variables, platform, reader=pod["name"] in READERS)
         if pod["name"] in SCRATCH:
