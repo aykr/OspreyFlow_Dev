@@ -472,6 +472,8 @@ export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
   "open-a-view-of-another-case-from-the-cases-list-by-keyboard",
   "save-a-view-from-its-form-by-keyboard",
   "go-back-to-the-case-from-an-open-view-by-keyboard",
+  // ADR-143 Amendment 2 decision 7 (L3.9).
+  "open-a-merged-drawings-notes-by-keyboard",
 ] as const);
 
 /** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made
@@ -518,6 +520,17 @@ export const PROMOTION_ACTIONS = defineActionRegistry("PROMOTION_ACTIONS", [
   "merge-a-removed-cases-layer-by-keyboard",
   "cancel-a-layer-merge-by-keyboard",
   "delete-a-removed-cases-layer-after-asking-once-by-keyboard",
+] as const);
+
+/** The Ingest Studio's *Merge into a dataset…* (ADR-143 Amendment 2 decision 6; Amendment 3; L3.9):
+ * a drawn dataset mapped and matched, its dry run, the merge, and the merge closed.
+ * `keyboard/drawn-merge.spec.ts`. */
+export const DRAWN_MERGE_ACTIONS = defineActionRegistry("DRAWN_MERGE_ACTIONS", [
+  "choose-a-dataset-and-map-and-match-a-drawing-by-keyboard",
+  "tick-a-match-and-run-the-merges-dry-run-by-keyboard",
+  "merge-a-drawn-dataset-after-its-dry-run-by-keyboard",
+  "close-a-drawn-merge-by-escape",
+  "map-a-drawn-type-onto-another-of-the-targets-types-by-keyboard",
 ] as const);
 
 /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's

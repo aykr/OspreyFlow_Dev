@@ -42,7 +42,7 @@ import asyncpg
 logger = logging.getLogger(__name__)
 
 Status = Literal["awaiting_review", "committed", "rejected", "reverted"]
-Trigger = Literal["analyst_promotion", "layer_merge"]
+Trigger = Literal["analyst_promotion", "layer_merge", "drawn_merge"]
 
 
 @dataclass(frozen=True)
@@ -73,6 +73,42 @@ class PromotionRecord:
 
 
 @dataclass(frozen=True)
+class MergeMatchRow:
+    """A drawn dataset's merge (L3.9): one chosen match, written with the load as a scored,
+    `inferred` `SAME_AS` (rule 5). `handling` is the stricter of its two ends' as read when it was
+    chosen (JSON), checked again at an approval. `edge_id` is the link the load wrote."""
+
+    drawn: str
+    loaded: str
+    score: float
+    handling: str
+    edge_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CopyRow:
+    """A drawn merge's retyped item (ADR-143 Amendment 7): a drawn element written by the load as
+    a new element of the mapped `type` in the target, as chosen. `properties`, `handling` and
+    `provenance` are the copy's, as JSON: its handling is its original's, never lower. A link's
+    `source` and `target` are its ends as drawn; an end itself copied is written as that copy.
+    `original_properties` is the original's as read when chosen (JSON), checked again at an
+    approval. `written_id` is the element the load wrote; `same_as_id` a node's `SAME_AS` back to
+    its original."""
+
+    kind: str
+    original: str
+    type: str
+    properties: str
+    handling: str
+    provenance: str
+    original_properties: str
+    source: str | None = None
+    target: str | None = None
+    written_id: str | None = None
+    same_as_id: str | None = None
+
+
+@dataclass(frozen=True)
 class LayerGrant:
     id: str
     layer_id: str
@@ -84,7 +120,14 @@ class LayerGrant:
 
 
 class PromotionStore(Protocol):
-    async def add(self, record: PromotionRecord) -> None: ...
+    #: The record, and a drawn merge's matches with it, written together (L3.9).
+    async def add(
+        self,
+        record: PromotionRecord,
+        *,
+        matches: Sequence[MergeMatchRow] = (),
+        copies: Sequence[CopyRow] = (),
+    ) -> None: ...
     async def get(self, promotion_id: str) -> PromotionRecord | None: ...
     async def by_load(self, load_id: str) -> PromotionRecord | None: ...
     #: Rule 3: `markings`, when given, the markings the reader reaches, applied in the query.
@@ -130,6 +173,18 @@ class PromotionStore(Protocol):
     #: Closes an open grant; True only for the call that closed it, so a merge claims its grant
     #: once (of two at once, one wins), as `decide` does a decision.
     async def close_grant(self, grant_id: str, at: datetime) -> bool: ...
+    #: A drawn dataset's merge (L3.9): its chosen matches, and the links its load wrote for them.
+    async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None: ...
+    async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]: ...
+    async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None: ...
+    #: Its retyped items (Amendment 7), and the elements its load wrote for them.
+    async def copies_of(self, promotion_id: str) -> list[CopyRow]: ...
+    #: Every committed drawn merge's written copies, as (kind, element id): the grading change's
+    #: drawn items beside the board registry's (ADR-143 decision 11).
+    async def committed_copies(self) -> list[tuple[str, str]]: ...
+    async def set_copy_ids(
+        self, promotion_id: str, written: Sequence[tuple[str, str | None]]
+    ) -> None: ...
 
 
 class InMemoryPromotionStore:
@@ -137,6 +192,8 @@ class InMemoryPromotionStore:
         self.records: dict[str, PromotionRecord] = {}
         self.grants: dict[str, LayerGrant] = {}
         self.deleted_layers: dict[str, datetime] = {}
+        self.matches: dict[str, list[MergeMatchRow]] = {}
+        self.copies: dict[str, list[CopyRow]] = {}
 
     async def mark_layer_deleted(self, layer_id: str, at: datetime) -> None:
         self.deleted_layers.setdefault(layer_id, at)
@@ -144,8 +201,18 @@ class InMemoryPromotionStore:
     async def layer_deleted(self, layer_id: str) -> bool:
         return layer_id in self.deleted_layers
 
-    async def add(self, record: PromotionRecord) -> None:
+    async def add(
+        self,
+        record: PromotionRecord,
+        *,
+        matches: Sequence[MergeMatchRow] = (),
+        copies: Sequence[CopyRow] = (),
+    ) -> None:
         self.records[record.id] = record
+        if matches:
+            self.matches[record.id] = list(matches)
+        if copies:
+            self.copies[record.id] = list(copies)
 
     async def get(self, promotion_id: str) -> PromotionRecord | None:
         return self.records.get(promotion_id)
@@ -265,6 +332,42 @@ class InMemoryPromotionStore:
         self.grants[grant_id] = replace(held, closed_at=at)
         return True
 
+    async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
+        self.matches[promotion_id] = list(rows)
+
+    async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]:
+        return list(self.matches.get(promotion_id, []))
+
+    async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None:
+        held = self.matches.get(promotion_id, [])
+        if len(held) != len(edge_ids):
+            raise ValueError("one link for each match")
+        self.matches[promotion_id] = [replace(r, edge_id=e) for r, e in zip(held, edge_ids)]
+
+    async def copies_of(self, promotion_id: str) -> list[CopyRow]:
+        return list(self.copies.get(promotion_id, []))
+
+    async def committed_copies(self) -> list[tuple[str, str]]:
+        return sorted(
+            {
+                (c.kind, c.written_id)
+                for pid, rows in self.copies.items()
+                if pid in self.records and self.records[pid].status == "committed"
+                for c in rows
+                if c.written_id
+            }
+        )
+
+    async def set_copy_ids(
+        self, promotion_id: str, written: Sequence[tuple[str, str | None]]
+    ) -> None:
+        held = self.copies.get(promotion_id, [])
+        if len(held) != len(written):
+            raise ValueError("one element for each copy")
+        self.copies[promotion_id] = [
+            replace(r, written_id=w, same_as_id=same) for r, (w, same) in zip(held, written)
+        ]
+
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS promotions (
@@ -307,6 +410,48 @@ CREATE TABLE IF NOT EXISTS promotion_deleted_layers (
     layer_id TEXT PRIMARY KEY,
     deleted_at TIMESTAMPTZ NOT NULL
 );
+-- ADR-143 Amendment 2 decision 6 (L3.9): the trigger `drawn_merge`, allowed once. The catalogue is
+-- read first, so a start with it in place takes no lock on the table (CARRIES row 22's lesson).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+        WHERE t.relname = 'promotions' AND t.relnamespace = current_schema()::regnamespace
+        AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%drawn_merge%'
+    ) THEN
+        ALTER TABLE promotions DROP CONSTRAINT IF EXISTS promotions_trigger_check;
+        ALTER TABLE promotions ADD CONSTRAINT promotions_trigger_check
+            CHECK (trigger IN ('analyst_promotion', 'layer_merge', 'drawn_merge'));
+    END IF;
+END $$;
+-- A drawn dataset's merge: its chosen matches, in the order chosen, and the link each became.
+CREATE TABLE IF NOT EXISTS promotion_matches (
+    promotion_id TEXT NOT NULL REFERENCES promotions (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    drawn TEXT NOT NULL,
+    loaded TEXT NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    handling JSONB NOT NULL,
+    edge_id TEXT,
+    PRIMARY KEY (promotion_id, position)
+);
+-- A drawn dataset's merge: its retyped items (ADR-143 Amendment 7), each written as a new element.
+CREATE TABLE IF NOT EXISTS promotion_copies (
+    promotion_id TEXT NOT NULL REFERENCES promotions (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('node', 'link')),
+    original TEXT NOT NULL,
+    type TEXT NOT NULL,
+    properties JSONB NOT NULL,
+    handling JSONB NOT NULL,
+    provenance JSONB NOT NULL,
+    original_properties JSONB NOT NULL,
+    source TEXT,
+    target TEXT,
+    written_id TEXT,
+    same_as_id TEXT,
+    PRIMARY KEY (promotion_id, position)
+);
 """
 
 _COLUMNS = (
@@ -330,6 +475,36 @@ def _record(row: Any) -> PromotionRecord:
     )
 
 
+async def _insert_matches(conn: Any, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
+    await conn.executemany(
+        "INSERT INTO promotion_matches (promotion_id, position, drawn, loaded, score, handling) "
+        "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+        [(promotion_id, n, r.drawn, r.loaded, r.score, r.handling) for n, r in enumerate(rows)],
+    )
+
+
+#: Every committed drawn merge's written copies (the grading change reads it too, from its own
+#: process: `scripts.grading_change`).
+COMMITTED_COPIES_SQL = (
+    "SELECT DISTINCT c.kind, c.written_id FROM promotion_copies c "
+    "JOIN promotions p ON p.id = c.promotion_id "
+    "WHERE p.status = 'committed' AND c.written_id IS NOT NULL ORDER BY c.kind, c.written_id"
+)
+
+
+async def _insert_copies(conn: Any, promotion_id: str, rows: Sequence[CopyRow]) -> None:
+    await conn.executemany(
+        "INSERT INTO promotion_copies (promotion_id, position, kind, original, type, properties, "
+        "handling, provenance, original_properties, source, target) "
+        "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11)",
+        [
+            (promotion_id, n, r.kind, r.original, r.type, r.properties, r.handling,
+             r.provenance, r.original_properties, r.source, r.target)
+            for n, r in enumerate(rows)
+        ],
+    )  # fmt: skip
+
+
 class PostgresPromotionStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -344,8 +519,14 @@ class PostgresPromotionStore:
     async def close(self) -> None:
         await self._pool.close()
 
-    async def add(self, record: PromotionRecord) -> None:
-        async with self._pool.acquire() as conn:
+    async def add(
+        self,
+        record: PromotionRecord,
+        *,
+        matches: Sequence[MergeMatchRow] = (),
+        copies: Sequence[CopyRow] = (),
+    ) -> None:
+        async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 f"INSERT INTO promotions ({_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, "
                 "$10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20)",
@@ -356,6 +537,10 @@ class PostgresPromotionStore:
                 json.dumps([list(x) for x in record.left_out]), record.reviewed_by,
                 record.reviewed_at, record.reason, record.grant_id,
             )  # fmt: skip
+            if matches:
+                await _insert_matches(conn, record.id, matches)
+            if copies:
+                await _insert_copies(conn, record.id, copies)
 
     async def get(self, promotion_id: str) -> PromotionRecord | None:
         async with self._pool.acquire() as conn:
@@ -536,6 +721,63 @@ class PostgresPromotionStore:
                 at,
             )
         return bool(done == "UPDATE 1")
+
+    async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
+        async with self._pool.acquire() as conn:
+            await _insert_matches(conn, promotion_id, rows)
+
+    async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT drawn, loaded, score, handling::text AS handling, edge_id "
+                "FROM promotion_matches WHERE promotion_id = $1 ORDER BY position",
+                promotion_id,
+            )
+        return [MergeMatchRow(**dict(r)) for r in rows]
+
+    async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None:
+        async with self._pool.acquire() as conn, conn.transaction():
+            held = await conn.fetchval(
+                "SELECT count(*) FROM promotion_matches WHERE promotion_id = $1", promotion_id
+            )
+            if held != len(edge_ids):
+                raise ValueError("one link for each match")
+            await conn.executemany(
+                "UPDATE promotion_matches SET edge_id = $3 WHERE promotion_id = $1 "
+                "AND position = $2",
+                [(promotion_id, n, e) for n, e in enumerate(edge_ids)],
+            )
+
+    async def copies_of(self, promotion_id: str) -> list[CopyRow]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT kind, original, type, properties::text AS properties, "
+                "handling::text AS handling, provenance::text AS provenance, "
+                "original_properties::text AS original_properties, source, target, written_id, "
+                "same_as_id FROM promotion_copies WHERE promotion_id = $1 ORDER BY position",
+                promotion_id,
+            )
+        return [CopyRow(**dict(r)) for r in rows]
+
+    async def committed_copies(self) -> list[tuple[str, str]]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(COMMITTED_COPIES_SQL)
+        return [(r["kind"], r["written_id"]) for r in rows]
+
+    async def set_copy_ids(
+        self, promotion_id: str, written: Sequence[tuple[str, str | None]]
+    ) -> None:
+        async with self._pool.acquire() as conn, conn.transaction():
+            held = await conn.fetchval(
+                "SELECT count(*) FROM promotion_copies WHERE promotion_id = $1", promotion_id
+            )
+            if held != len(written):
+                raise ValueError("one element for each copy")
+            await conn.executemany(
+                "UPDATE promotion_copies SET written_id = $3, same_as_id = $4 "
+                "WHERE promotion_id = $1 AND position = $2",
+                [(promotion_id, n, w, same) for n, (w, same) in enumerate(written)],
+            )
 
 
 # --- admin's ageing seam (ADR-145 Amendment 6) ---------------------------------------------------

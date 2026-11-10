@@ -579,6 +579,14 @@ NOT_BY_THE_ROUTE = {
     "/v1/datasets/{dataset_id}/removed-cases/{case_id}/delete/dry-run",
     # Deleting a removed case's layer loads nothing, and is what a composite case's layer may have.
     "/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer",
+    # A drawn dataset's merge (L3.9): the path's dataset is the drawing, never a composite
+    # (`DrawnMerges.drawn`, 409 `not_drawn`), and a composite is never its target, refused 404
+    # `not_a_target` like any dataset not offered and again at the approval (`MergeCommit.recheck`):
+    # `test_drawn_merge.py`'s `test_a_composite_a_gazetteer_and_another_units_dataset_are_answered_
+    # as_for_none` and `test_a_waiting_merge_whose_target_is_no_longer_one_it_may_go_into_is_
+    # rejected[its-kind]`. The dry run writes nothing.
+    "/v1/datasets/{dataset_id}/merges",
+    "/v1/datasets/{dataset_id}/merges/dry-run",
 }
 _WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 

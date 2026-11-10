@@ -39,7 +39,7 @@ online revert: the owner settled ADR-143 open question 2 as (a), the operator co
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -109,6 +109,23 @@ class _Investigations(Protocol):
     ) -> dict[str, tuple[str, bool]]: ...
 
 
+class _MergeCommit(Protocol):
+    async def writes(self, record: PromotionRecord, tx: Any) -> None: ...
+    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> str | None: ...
+    async def before_commit(self, record: PromotionRecord) -> None: ...
+    def is_already_merged(self, error: Exception) -> bool: ...
+    async def undo_before_commit(self, record: PromotionRecord) -> None: ...
+    async def after(self, record: PromotionRecord) -> None: ...
+    async def shown(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[Any], bool]: ...
+    async def as_types(self, record: PromotionRecord) -> dict[str, str | None]: ...
+    def discard(self, record: PromotionRecord) -> None: ...
+    async def copies_shown(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[DetailItem], bool]: ...
+
+
 @dataclass(frozen=True)
 class _Read:
     """A board item as the sheet reads it: its registry row and its element (`None` when the
@@ -150,6 +167,10 @@ class Promotions:
     #: (the approval's re-check, a refused or failed load, a restored case, a deleted layer),
     #: which the route audits itself: no state change without its entry.
     on_rejected: Callable[[PromotionRecord, str, str | None], Awaitable[None]] | None = None
+    #: A drawn dataset's merge (L3.9, `drawn_merge.MergeCommit`): what its load writes beside the
+    #: promoted elements (the chosen matches) and what follows its commit (decision 7). Without it
+    #: a `drawn_merge` promotion is never committed (fails closed).
+    merges: _MergeCommit | None = None
     #: A picture's Document as the last `_read` found it.
     _docs: dict[str, Node] = field(default_factory=dict)
 
@@ -207,27 +228,48 @@ class Promotions:
         return display_name(element) if isinstance(element, Node) else element.type
 
     async def _problems(
-        self, reads: Sequence[_Read], dataset: Dataset, case_id: str, reader: Principal
+        self,
+        reads: Sequence[_Read],
+        dataset: Dataset,
+        case_id: str,
+        reader: Principal,
+        *,
+        into_its_own_dataset: bool = True,
+        as_types: Mapping[str, str | None] | None = None,
     ) -> dict[str, list[tuple[str, str]]]:
-        """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`)."""
+        """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`).
+        `into_its_own_dataset` is false for a drawn dataset merged into another (L3.9): the case's
+        own proposals answer for the drawing's model, not the target's, so every link is checked
+        against the target's model whatever they say (the lane review, item 4). `as_types` is a
+        drawn merge's mapping (Amendment 7): each element's type checked as the type it goes in
+        as; `None`, left out by the mapping, so not checked here (the mapping says why)."""
+        mapped = as_types or {}
         highest = self.highest(dataset)
-        node_types = set(await self.boards.node_types(case_id))
+        # C14 against the dataset the items go into: the case's own for a promotion and a layer
+        # merge (which reads it), the target's for a drawn dataset merged into another (L3.9).
+        node_types = set(await self.boards.dataset_node_types(dataset.id))
         # A link of the case's own proposed type is stored under its storage label
         # (`<NAME>__<proposal>`, decision 9) and asked of `promotion_refusals` by the name it reads
         # as, which is what that service answers by (found through the real service, L3.4).
         reads_as = await self._link_names(case_id, reader)
+
+        def type_of(element: Node | Edge) -> str | None:
+            return mapped.get(element.id, element.type)
+
         link_names = sorted(
             {
-                reads_as.get(r.element.type, r.element.type)
+                reads_as.get(name, name)
                 for r in reads
-                if r.item.kind == "link" and r.element is not None
+                if r.item.kind == "link"
+                and r.element is not None
+                and (name := type_of(r.element)) is not None
             }
         )
         refusals: dict[str, str | None] = {}
         if link_names and self.link_types is not None:
             refusals = await self.link_types.promotion_refusals(case_id, reader, link_names)
         # C14 for links as for nodes: the dataset's model, its live packs (not the deployment's).
-        model_links = set(await self.boards.model_link_types(case_id))
+        model_links = set(await self.boards.dataset_link_types(dataset.id))
         out: dict[str, list[tuple[str, str]]] = {}
         for read in reads:
             problems: list[tuple[str, str]] = []
@@ -249,16 +291,17 @@ class Promotions:
                         f"The picture is marked {doc_marking}, above {dataset.name}'s highest "
                         f"allowed marking, {highest}.",
                     ))  # fmt: skip
-            if read.item.kind == "node" and element.type not in node_types:
-                problems.append(
-                    ("types", f"{element.type} is not a type of {dataset.name}'s model.")
-                )
-            if read.item.kind == "link":
-                name = reads_as.get(element.type, element.type)
+            as_type = type_of(element)
+            if read.item.kind == "node" and as_type is not None and as_type not in node_types:
+                problems.append(("types", f"{as_type} is not a type of {dataset.name}'s model."))
+            if read.item.kind == "link" and as_type is not None:
+                name = reads_as.get(as_type, as_type)
                 why = refusals.get(name)
                 if why is not None:
                     problems.append(("types", why))
-                elif self.model_check_applies(name, refusals) and name not in model_links:
+                elif (
+                    not into_its_own_dataset or self.model_check_applies(name, refusals)
+                ) and name not in model_links:
                     problems.append(
                         ("types", f"{name} is not a link type of {dataset.name}'s model.")
                     )
@@ -295,9 +338,16 @@ class Promotions:
         # An item an open promotion already carries is not offered again: one item, one open
         # promotion, so no two loads stamp one element.
         open_ = await self.store.pending_item_ids(case_id)
+        # A merged drawing's items are kept read-only for its audit (L3.9): promoted by no one,
+        # even from a board the merge left a board (the second review, item 8).
+        sealed = {
+            d for d in {i.dataset_id for i in held}
+            if await self.boards.datasets.drawn_merged_of(d) is not None
+        }  # fmt: skip
         return [
             i for i in held
             if i.withdrawn_at is None and i.promoted_at is None and i.item_id not in open_
+            and i.dataset_id not in sealed
         ]  # fmt: skip
 
     def _checks(
@@ -471,14 +521,25 @@ class Promotions:
         goes: Sequence[_Read],
         left: Sequence[LeftOut],
         grant_id: str | None = None,
+        extra_markings: Sequence[str] = (),
+        matches: Sequence[Any] = (),
+        copies: Sequence[Any] = (),
     ) -> PromotionRecord:
         if not goes:
             raise PromotionRefused(
                 "nothing_goes", "Nothing ticked can be promoted: see what was left out and why.",
                 status=422,
             )  # fmt: skip
-        node_ids = [r.item.element_id for r in goes if r.item.kind == "node"]
-        edge_ids = [r.item.element_id for r in goes if r.item.kind != "node"]
+        # A drawn merge's retyped items are written as copies, never promoted (Amendment 7).
+        copied = {c.original for c in copies}
+        node_ids = [
+            r.item.element_id for r in goes
+            if r.item.kind == "node" and r.item.element_id not in copied
+        ]  # fmt: skip
+        edge_ids = [
+            r.item.element_id for r in goes
+            if r.item.kind != "node" and r.item.element_id not in copied
+        ]  # fmt: skip
         # A picture's Document goes with its DEPICTS link.
         node_ids += [r.item.source for r in goes if r.item.kind == "picture" and r.item.source]
         markings = [r.element.handling.classification for r in goes if r.element is not None]
@@ -487,6 +548,8 @@ class Promotions:
             for r in goes
             if r.item.kind == "picture" and r.item.source in self._docs
         ]
+        # A drawn dataset's chosen matches are marked too (L3.9): every reader filter reads them.
+        markings += list(extra_markings)
         ranked = self.boards.scheme.classification
         marking = max(markings, key=ranked.index) if markings else ranked[0]
         record = PromotionRecord(
@@ -497,7 +560,7 @@ class Promotions:
             edge_ids=tuple(edge_ids), item_ids=tuple(r.item.item_id for r in goes),
             left_out=tuple((x.item_id, x.label, x.why) for x in left), grant_id=grant_id,
         )  # fmt: skip
-        await self.store.add(record)
+        await self.store.add(record, matches=matches, copies=copies)
         return record
 
     async def promote(
@@ -616,18 +679,32 @@ class Promotions:
         states = await self.investigations.admin_states([case_id])
         return case_id in states and states[case_id][1]
 
+    async def _roll_back(self, tx: Any, record: PromotionRecord) -> None:
+        """The load's transaction rolled back, and what a drawn merge kept of its writes for the
+        commit forgotten with it (the review, minor 20)."""
+        await self.boards.graph.rollback_transaction(tx)
+        if record.trigger == "drawn_merge" and self.merges is not None:
+            self.merges.discard(record)
+
     async def _commit(self, record: PromotionRecord, *, by: str | None) -> PromotionRecord:
         """The load itself: one graph transaction, all or nothing; then the registry's
         `promoted_at` (the withdrawal reads it, never the element). A load that fails leaves the
         promotion rejected, saying so, with nothing written."""
         graph = self.boards.graph
+        drawn_merge = record.trigger == "drawn_merge"
+        if drawn_merge and self.merges is None:
+            raise PromotionRefused("no_merge", "A drawn dataset's merge cannot be committed here.")
         tx = await graph.begin_transaction()
         try:
             await graph.promote_elements(
                 list(record.node_ids), list(record.edge_ids), record.dataset_id, record.load_id, tx
             )
+            if drawn_merge:
+                assert self.merges is not None
+                # The chosen matches, in the same transaction: one load, all or nothing.
+                await self.merges.writes(record, tx)
         except NotPromotable as gone:
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             await self.reject(
                 record, was="awaiting_review", by=by,
                 reason=_CHANGED,
@@ -639,7 +716,7 @@ class Promotions:
             ) from gone
         except AmbiguousElementId as unclear:
             # An id two stored elements hold (`_holders`): refused whole, said in words.
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             await self.reject(
                 record, was="awaiting_review", by=by,
                 reason="The load was refused, and nothing was written.",
@@ -652,7 +729,7 @@ class Promotions:
         except Exception:
             # Whatever else refused the load (a composite, an unconverted case), the promotion is
             # not left waiting as if it could still be approved.
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             await self.reject(
                 record, was="awaiting_review", by=by,
                 reason="The load was refused, and nothing was written.",
@@ -662,18 +739,48 @@ class Promotions:
         if not await self.store.decide(
             record.id, was="awaiting_review", now="committed", by=by, at=now
         ):
-            await graph.rollback_transaction(tx)
+            await self._roll_back(tx, record)
             raise PromotionRefused("already_decided", "This promotion has already been decided.")
+        if drawn_merge:
+            assert self.merges is not None
+            # Decision 7's Postgres half before the graph commits (L3.9; the lane review, items 7
+            # and 8): the matches' link ids kept for the revert, and the drawing's one merge
+            # claimed, so of two merges at once only one commits, and a failure here writes no
+            # graph at all.
+            try:
+                await self.merges.before_commit(record)
+            except Exception as refused:
+                await self._roll_back(tx, record)
+                await self.reject(
+                    record, was="committed", by=by,
+                    reason="The load was refused, and nothing was written.",
+                )  # fmt: skip
+                if self.merges.is_already_merged(refused):
+                    raise PromotionRefused(
+                        "already_merged", "This drawing has been merged already."
+                    ) from refused
+                raise
         try:
             await graph.commit_transaction(tx)
         except Exception:
-            await self.reject(
-                record, was="committed", by=by, reason="The load failed, and nothing was written."
-            )
+            # The claim undone first, so a failing rejection cannot leave the drawing claimed
+            # with nothing loaded (the second review, item 7).
+            try:
+                if drawn_merge:
+                    assert self.merges is not None
+                    await self.merges.undo_before_commit(record)
+            finally:
+                await self.reject(
+                    record, was="committed", by=by,
+                    reason="The load failed, and nothing was written.",
+                )  # fmt: skip
             raise
         await self.boards.items.mark_promoted(record.case_id, list(record.item_ids), now)
         if record.grant_id is not None:
             await self.store.close_grant(record.grant_id, now)
+        if drawn_merge:
+            assert self.merges is not None
+            await self.merges.after(record)
         held = await self.store.get(record.id)
         assert held is not None
         return held
@@ -726,14 +833,16 @@ class Promotions:
     ) -> dict[str, tuple[int, int]]:
         """Each promotion's counts as `reader` would be shown its items in *Details*, never as
         recorded (Amendment 5 decision 6a: the counts of what is shown, never the difference).
-        One read per layer, not per promotion. A promotion whose elements are read for no one
-        (rejected, reverted) keeps its recorded counts: none of its items is shown to anyone."""
+        One read per layer, not per promotion, and one more per drawn merge for its retyped copies
+        (Amendment 7). A promotion whose elements are read for no one (rejected, reverted) keeps
+        its recorded counts, its copies among them, as `view` gives them: none of its items is
+        shown to anyone."""
         out: dict[str, tuple[int, int]] = {}
         groups: dict[tuple[str, ...], list[PromotionRecord]] = {}
         for record in records:
             read = self._reviewer_read(record, reader)
             if read is None:
-                out[record.id] = (len(record.node_ids), len(record.edge_ids))
+                out[record.id] = await self.recorded_counts(record)
                 continue
             groups.setdefault(tuple(read.datasets or ()), []).append(record)
         for datasets, held in groups.items():
@@ -747,7 +856,25 @@ class Promotions:
                     sum(1 for n in set(r.node_ids) if n in nodes),
                     sum(1 for e in r.edge_ids if e in edges),
                 )
+                if r.trigger == "drawn_merge" and self.merges is not None:
+                    # Its retyped items, as *Details* shows them to this reader (Amendment 7).
+                    copies, _ = await self.merges.copies_shown(r, reader)
+                    n, e = out[r.id]
+                    out[r.id] = (
+                        n + sum(1 for c in copies if c.kind == "node"),
+                        e + sum(1 for c in copies if c.kind != "node"),
+                    )
         return out
+
+    async def recorded_counts(self, record: PromotionRecord) -> tuple[int, int]:
+        """As recorded: a drawn merge's retyped copies counted with what it promotes."""
+        copies = await self.store.copies_of(record.id) if record.trigger == "drawn_merge" else []
+        # Each written element once (two copies the adapter merged into one link are one).
+        written = {(c.kind, c.written_id or f"unwritten:{c.original}") for c in copies}
+        return (
+            len(record.node_ids) + sum(1 for kind, _ in written if kind == "node"),
+            len(record.edge_ids) + sum(1 for kind, _ in written if kind != "node"),
+        )
 
     async def details(self, record: PromotionRecord, reviewer: Principal) -> PromotionDetails:
         nodes, edges = await self._elements(record, reviewer)
@@ -761,7 +888,21 @@ class Promotions:
             # Rule 7: the counts of what is shown, never beside a difference; the same counts
             # the list gives this reader (`shown_counts`).
             promotion = promotion.model_copy(update={"nodes": len(nodes), "links": len(edges)})
-        return PromotionDetails(promotion=promotion, items=items, withheld=withheld)
+        matches: list[Any] = []
+        if read and record.trigger == "drawn_merge" and self.merges is not None:
+            # A drawn merge's matches are approved with it, so the reviewer reads them too.
+            matches, unseen = await self.merges.shown(record, reviewer)
+            # Its retyped items too, each read through the reviewer (Amendment 7).
+            copies, copies_unseen = await self.merges.copies_shown(record, reviewer)
+            items += copies
+            withheld = withheld or unseen or copies_unseen
+            promotion = promotion.model_copy(update={
+                "nodes": promotion.nodes + sum(1 for c in copies if c.kind == "node"),
+                "links": promotion.links + sum(1 for c in copies if c.kind != "node"),
+            })  # fmt: skip
+        return PromotionDetails(
+            promotion=promotion, items=items, withheld=withheld, matches=matches
+        )
 
     async def decide(
         self, record: PromotionRecord, reviewer: Principal, *, approve: bool, reason: str | None
@@ -822,18 +963,65 @@ class Promotions:
                 status=403,
             )
         reads = [r for r in reads if r.element is not None]
-        problems = await self._problems(reads, held, record.case_id, reader)
+        as_types = (
+            await self.merges.as_types(record)
+            if record.trigger == "drawn_merge" and self.merges is not None
+            else None
+        )
+        problems = await self._problems(
+            reads, held, record.case_id, reader,
+            into_its_own_dataset=record.trigger != "drawn_merge", as_types=as_types,
+        )  # fmt: skip
         failing = [(r, problems[r.item.item_id][0][1]) for r in reads if problems[r.item.item_id]]
-        if len(live) != len(record.item_ids) or failing:
+        # A drawn dataset's merge: each chosen match too, as the reviewer reads it now, once every
+        # item has passed (L3.9; the second review, item 1): one they may not receive as chosen,
+        # 403 and it waits for another reviewer; one changed since, rejected, never left waiting.
+        matched = None
+        if (
+            record.trigger == "drawn_merge"
+            and len(live) == len(record.item_ids)
+            and not failing
+            and self.merges is not None
+        ):
+            matched = await self.merges.recheck(record, reviewer)
+        if matched == "unseen":
+            raise PromotionRefused(
+                "not_all_seen",
+                "You may not see every match in this merge, so you may not approve it: ask "
+                "another of the dataset's Authors who may review promotions.",
+                status=403,
+            )
+        # A drawn merge's own reasons (L3.9): its words, and its code for the audit trail.
+        merge_changed = {
+            "changed": ("One of its matches has changed since it was sent.", "matches"),
+            "item_changed": (
+                "One of its items going in as another type has changed since it was sent.",
+                "copies",
+            ),
+            "target_changed": (
+                "The dataset it goes into is no longer one this drawing may be merged into.",
+                "target",
+            ),
+        }.get(matched or "")
+        matched_changed = merge_changed is not None
+        if len(live) != len(record.item_ids) or failing or matched_changed:
             why = (
                 f"{self._label(failing[0][0])} has changed since it was sent: {failing[0][1]}"
                 if failing
+                else merge_changed[0]
+                if merge_changed is not None
                 else "One of its items was withdrawn since it was sent."
             )
             # Rule 3: the record keeps fixed words (it is listed to readers who may not read the
             # layer); the reviewer, who has read every item, is told which one and why.
             # The failing check's code goes to the audit trail, for the dataset's other Authors.
-            code = problems[failing[0][0].item.item_id][0][0] if failing else "withdrawn"
+            code = (
+                problems[failing[0][0].item.item_id][0][0]
+                if failing
+                else merge_changed[1]
+                if merge_changed is not None
+                else "withdrawn"
+            )
             await self.reject(
                 record, was="awaiting_review", by=reviewer.id, reason=_CHANGED, check=code
             )
@@ -866,6 +1054,8 @@ class Promotions:
         case_name = (
             await self._case_name(record.case_id) if show_case else "a case reading this dataset"
         )
+        if counts is None:
+            counts = await self.recorded_counts(record)
         return Promotion(
             id=record.id, load_id=record.load_id, trigger=record.trigger,
             dataset_id=record.dataset_id,
@@ -880,8 +1070,7 @@ class Promotions:
             reviewed_by_name=names.get(record.reviewed_by, record.reviewed_by)
             if record.reviewed_by else None,
             reviewed_at=record.reviewed_at, reason=record.reason if show_case else None,
-            nodes=counts[0] if counts else len(record.node_ids),
-            links=counts[1] if counts else len(record.edge_ids),
+            nodes=counts[0], links=counts[1],
             left_out=[LeftOut(item_id=i, label=lab, why=why) for i, lab, why in record.left_out]
             if reader.id == record.proposed_by else [],
             revert_command=REVERT_COMMAND.format(load_id=record.load_id)

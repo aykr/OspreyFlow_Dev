@@ -1,0 +1,66 @@
+
+Running 61 tests using 4 workers
+
+[1/61] keyboard/views.spec.ts:25:1 › a view is opened from Views in this case by keyboard
+[2/61] keyboard/drawn-merge.spec.ts:35:1 › a dataset is chosen and the drawing mapped and matched by keyboard
+[3/61] keyboard/promotions.spec.ts:23:1 › a promotion is reviewed and approved by keyboard
+[4/61] keyboard/boards.spec.ts:39:1 › a board is opened from the boards list by keyboard
+[5/61] keyboard/views.spec.ts:32:1 › a private view is shared with the case by keyboard, by its creator
+[6/61] keyboard/drawn-merge.spec.ts:43:1 › a match is ticked and the dry run made by keyboard, and the merge waits for it
+[7/61] keyboard/promotions.spec.ts:36:1 › a promotion is rejected with a reason by keyboard
+[8/61] keyboard/boards.spec.ts:48:1 › a blank board is made by keyboard
+[9/61] keyboard/views.spec.ts:41:1 › a view is deleted by keyboard after asking once, and nothing else is
+[10/61] keyboard/drawn-merge.spec.ts:57:1 › the drawing is merged as its dry run showed, by keyboard
+[11/61] keyboard/boards.spec.ts:58:1 › a board is made from the selection by keyboard
+[12/61] keyboard/promotions.spec.ts:52:1 › a promotion's details close on Escape
+[13/61] keyboard/views.spec.ts:53:1 › a view of another case is opened from the cases list by keyboard
+[14/61] keyboard/drawn-merge.spec.ts:80:1 › a drawn type is mapped onto another of the target's types, its properties placed, by keyboard
+[15/61] keyboard/views.spec.ts:60:1 › a view is named and saved from its form by keyboard
+[16/61] keyboard/promotions.spec.ts:62:1 › one who may not decide is told why, and offered no decision
+[17/61] keyboard/boards.spec.ts:73:1 › a board is made from a view of the case by keyboard
+[18/61] keyboard/views.spec.ts:71:1 › Back to the case is reached from the banner over an opened view by keyboard
+[19/61] keyboard/promotions.spec.ts:69:1 › a removed case's layer is merged through its sheet by keyboard
+[20/61] keyboard/drawn-merge.spec.ts:116:1 › the merge closes on Escape, nothing sent
+[21/61] keyboard/boards.spec.ts:88:1 › a private board is shared with the case by keyboard
+[22/61] keyboard/views.spec.ts:79:1 › a merged drawing's notes are opened and closed from its view's banner by keyboard
+[23/61] keyboard/drawn-merge.spec.ts:125:1 › every registered drawn merge action has its own proving test case above
+[24/61] keyboard/promotions.spec.ts:91:1 › a merge sheet is cancelled by keyboard, its grant closed
+[25/61] keyboard/boards.spec.ts:96:1 › an item is declared by keyboard: marked, graded and sourced, its type's name filled from its label
+[26/61] keyboard/views.spec.ts:92:1 › another member of the case is shown nothing of a private view, and no share or delete
+[27/61] keyboard/promotions.spec.ts:101:1 › a removed case's layer is deleted after asking once, by keyboard
+[28/61] keyboard/views.spec.ts:105:1 › every registered case view action has its own proving test case above
+[29/61] keyboard/boards.spec.ts:130:1 › an item is declared by keyboard with a document of the case as its source and an icon of its own
+[30/61] keyboard/promotions.spec.ts:116:1 › someone who is not one of the dataset's Authors is offered no layer
+[31/61] keyboard/promotions.spec.ts:122:1 › every registered promotion action has its own proving test case above
+[32/61] keyboard/boards.spec.ts:148:1 › an item with neither a source note nor a document is refused before it is sent
+[33/61] keyboard/boards.spec.ts:158:1 › a refusal is said in the Conduit's own words, naming the ceiling
+[34/61] keyboard/boards.spec.ts:168:1 › an item is inspected by keyboard
+[35/61] keyboard/boards.spec.ts:179:1 › an item is moved by the arrow keys, and the board keeps where it is
+[36/61] keyboard/boards.spec.ts:199:1 › a link is drawn from the selected item by keyboard
+[37/61] keyboard/boards.spec.ts:212:1 › a link is drawn from an item's menu, opened by Shift+F10
+[38/61] keyboard/boards.spec.ts:226:1 › an item is edited by keyboard
+[39/61] keyboard/boards.spec.ts:243:1 › an item is withdrawn by keyboard after asking once, with the links drawn to it named
+[40/61] keyboard/boards.spec.ts:283:1 › an item is inspected from its menu by keyboard
+[41/61] keyboard/boards.spec.ts:290:1 › an item is edited from its menu by keyboard
+[42/61] keyboard/boards.spec.ts:302:1 › an item is withdrawn from its menu by keyboard after asking once
+[43/61] keyboard/boards.spec.ts:312:1 › the menu key opens an item's menu too
+[44/61] keyboard/boards.spec.ts:321:1 › another member's drawn item on one's own board offers no Edit, Withdraw or picture
+[45/61] keyboard/boards.spec.ts:333:1 › a loaded item's menu offers no Edit or Withdraw
+[46/61] keyboard/boards.spec.ts:341:1 › a picture is added to a drawn item by keyboard
+[47/61] keyboard/boards.spec.ts:360:1 › a picture on the board is chosen for a drawn item by keyboard
+[48/61] keyboard/boards.spec.ts:373:1 › Same is decided on a suggested match by keyboard, writing one decision and merging nothing
+[49/61] keyboard/boards.spec.ts:384:1 › Not the same is decided on a suggested match by keyboard
+[50/61] keyboard/boards.spec.ts:392:1 › a drawing is started with no case by keyboard: its dataset, its case and its board
+[51/61] keyboard/boards.spec.ts:403:1 › an open board shows the case's Alerts panel, its rows words with nothing to open
+[52/61] keyboard/boards.spec.ts:412:1 › Back to the boards is reached from a board by keyboard
+[53/61] keyboard/boards.spec.ts:419:1 › another member sees a shared board read-only: nothing to declare, edit or withdraw
+[54/61] keyboard/boards.spec.ts:435:1 › drawn items are promoted from the sheet by keyboard
+[55/61] keyboard/boards.spec.ts:461:1 › a drawer the promotion routes do not admit is offered no Promote…
+[56/61] keyboard/boards.spec.ts:469:1 › the promotion sheet closes on Escape, back to Promote…
+[57/61] keyboard/boards.spec.ts:481:1 › every registered board action has its own proving test case above
+[58/61] keyboard/boards.spec.ts:493:1 › pointer: dragging an item moves it
+[59/61] keyboard/boards.spec.ts:505:1 › pointer: dragging the link handle onto another item opens the link form between them
+[60/61] keyboard/boards.spec.ts:518:1 › pointer: Alt-dragging an item draws a link instead of moving it
+[61/61] keyboard/boards.spec.ts:532:1 › pointer: right-click offers Draw a link from here
+  61 passed (8.9s)
+exit 0

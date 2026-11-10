@@ -80,6 +80,10 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # right); no screen calls them yet (platform's P6 adds the Glass's panel, and the Glass here).
     (r"^/v1/datasets/\{dataset_id\}/gazetteers/", frozenset({"ingest"}),
      "a dataset's gazetteers (ADR-147 Amendment 2)"),
+    # L3.9: a drawn dataset merged into another, from the Studio's Runs (ADR-143 Amendment 2
+    # decision 6; ingest/runs/drawnMergeApi.ts).
+    (r"^/v1/datasets/\{dataset_id\}/(merge-targets|merge-sheet|merges)",
+     frozenset({"ingest"}), "the Studio's Merge into a dataset… (ingest/runs/drawnMerge.tsx)"),
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 

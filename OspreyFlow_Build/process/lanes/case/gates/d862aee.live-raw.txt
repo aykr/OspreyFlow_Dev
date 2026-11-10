@@ -1,0 +1,547 @@
+Running on ospreyflow-test (stack e, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261110T073545Z/log: sh -c T=../OspreyFlow_Build/tests; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rA -p no:cacheprovider $T/services/api/test_route_rights.py $T/conformance/graph_port/test_promotion.py $T/services/api/test_promotion_store.py $T/services/api/test_case_views_store.py $T/services/api/test_datasets_store.py $T/services/api/test_board_store.py $T/services/api/test_promotion_sweep_live.py $T/services/api/test_grading_change_live.py $T/services/api/test_grading_registry.py $T/services/api/test_analyst_layer_store.py; echo "PYTEST_EXIT=$?"; cd .. && OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/process/lanes/case/gates/L3.9-live-plants.py /tmp/case-live-plants.txt; echo "=== LIVE PLANTS ==="; cat /tmp/case-live-plants.txt
+.F..............FFFFF................................................... [ 94%]
+....                                                                     [100%]
+=================================== FAILURES ===================================
+__________________ test_every_right_guards_at_least_one_route __________________
+
+    def test_every_right_guards_at_least_one_route() -> None:
+        """A right no route checks is a right stated and exercised by nothing (rule 12) — except the
+        two the Conduit has no route for yet: people, dashboards and data feeds arrive with the Admin
+        area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
+        lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
+        promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
+        dataset's approvers in Admin › Datasets and guards the promotion's review (L3.4).
+        `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1).
+        `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
+        not_yet = {"revert_loads",
+                   "export_override",
+                   # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (the
+                   # drawn-dataset merge, Rules and Monitoring).
+                   "merge_datasets", "author_rules",
+                   # Superseded at L3.5 by `propose_types` (ADR-112 Amendment 4); its removal from
+                   # the rights and the role screens is the orchestrator's (case-b's report).
+                   "propose_link_type"}  # fmt: skip
+        guarded = {r for r in ROUTE_RIGHTS.values() if r}
+>       assert {r.value for r in Right} - guarded == not_yet
+E       AssertionError: assert {'author_rule...revert_loads'} == {'author_rule...revert_loads'}
+E         
+E         Extra items in the right set:
+E         'merge_datasets'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:542: AssertionError
+_ test_a_retyped_copy_and_a_link_onto_it_land_with_the_promotion_in_one_transaction[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x73e9c3656e80>)
+
+    async def test_a_retyped_copy_and_a_link_onto_it_land_with_the_promotion_in_one_transaction(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        async with factory.context() as adapter:
+>           ids = await _retyped(adapter)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:421: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:383: in _retyped
+    (incident, person), _ = await _write(
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:197: in _write
+    node_ids = await adapter.upsert_nodes(nodes, tx)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x73e93cbd2e10>
+nodes = [NodeWrite(id='01M726G37HFATAST4QQ49SR9XD', type='Incident', properties={'name': 'Night fight'}, provenance=Provenance...25546, tzinfo=datetime.timezone.utc), load_id=None, recipe_id=None, recipe_version=None, datasets=['drawn-dataset-1'])]
+tx = 'AS-ca8a613a-2669-43e4-af50-10d1972616c3'
+
+    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        """A real upsert, keyed on `write.id` — select-then-branch (`UPDATE ... WHERE id = :id`
+        vs `INSERT INTO`), the same shape `upsert_edges` below already uses, not ArcadeDB's own
+        `UPDATE ... UPSERT`: merging provenance and bumping `audit.revision` both need the
+        existing row's own values *before* the write, so a preceding lookup is unavoidable either
+        way, and branching on it explicitly reads the same as `upsert_edges`'s own `existing is
+        not None` shape rather than a second, differently-shaped mechanism.
+    
+        **What merges, what does not — the same split `_merge_provenance`'s own docstring already
+        states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
+        reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
+        increments rather than resetting. The write's own `properties`/`handling`/`resolution`
+        are the latest write's values (except that a write never lowers an asserted node:
+        `schemas.merge`), not deep-merged field by field — the same "latest write
+        wins" `upsert_edges` already applies to everything it does not name as cumulative, since
+        there is no way to resolve two *conflicting* values for one ontology property without
+        inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
+        by this: the one thing `01_DOMAIN_MODEL.md` requires never to shrink — the provenance
+        list — never does.
+        """
+        schema = self._require_schema()
+        ids: list[NodeId] = []
+        for write in nodes:
+            entity_type = schema.entity_type(write.type)
+            if entity_type is None:
+>               raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+E               ontology.errors.OntologyError: 'Incident' is not a type in the active ontology
+
+packages/adapters/graph_arcadedb/adapter.py:327: OntologyError
+_ test_a_retyped_copy_rolled_back_writes_neither_it_nor_its_links[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x73e9c3656e80>)
+
+    async def test_a_retyped_copy_rolled_back_writes_neither_it_nor_its_links(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        async with factory.context() as adapter:
+>           ids = await _retyped(adapter, commit=False)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:437: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:383: in _retyped
+    (incident, person), _ = await _write(
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:197: in _write
+    node_ids = await adapter.upsert_nodes(nodes, tx)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x73e9c3580d10>
+nodes = [NodeWrite(id='01M726H2AK50XFMBF3WWS9P4DV', type='Incident', properties={'name': 'Night fight'}, provenance=Provenance...67795, tzinfo=datetime.timezone.utc), load_id=None, recipe_id=None, recipe_version=None, datasets=['drawn-dataset-1'])]
+tx = 'AS-b83b93e5-a908-4a13-8244-7591f07760ec'
+
+    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        """A real upsert, keyed on `write.id` — select-then-branch (`UPDATE ... WHERE id = :id`
+        vs `INSERT INTO`), the same shape `upsert_edges` below already uses, not ArcadeDB's own
+        `UPDATE ... UPSERT`: merging provenance and bumping `audit.revision` both need the
+        existing row's own values *before* the write, so a preceding lookup is unavoidable either
+        way, and branching on it explicitly reads the same as `upsert_edges`'s own `existing is
+        not None` shape rather than a second, differently-shaped mechanism.
+    
+        **What merges, what does not — the same split `_merge_provenance`'s own docstring already
+        states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
+        reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
+        increments rather than resetting. The write's own `properties`/`handling`/`resolution`
+        are the latest write's values (except that a write never lowers an asserted node:
+        `schemas.merge`), not deep-merged field by field — the same "latest write
+        wins" `upsert_edges` already applies to everything it does not name as cumulative, since
+        there is no way to resolve two *conflicting* values for one ontology property without
+        inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
+        by this: the one thing `01_DOMAIN_MODEL.md` requires never to shrink — the provenance
+        list — never does.
+        """
+        schema = self._require_schema()
+        ids: list[NodeId] = []
+        for write in nodes:
+            entity_type = schema.entity_type(write.type)
+            if entity_type is None:
+>               raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+E               ontology.errors.OntologyError: 'Incident' is not a type in the active ontology
+
+packages/adapters/graph_arcadedb/adapter.py:327: OntologyError
+_ test_a_copys_same_as_back_names_no_dataset_and_no_reader_of_either_reads_it[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x73e9c3656e80>)
+
+    async def test_a_copys_same_as_back_names_no_dataset_and_no_reader_of_either_reads_it(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """Read by id, among the two nodes and by expanding from either, as a reader of the target
+        and as the drawing's home case: never there."""
+        from schemas.domain import ExpandRequest
+    
+        async with factory.context() as adapter:
+>           ids = await _retyped(adapter)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:450: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:383: in _retyped
+    (incident, person), _ = await _write(
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:197: in _write
+    node_ids = await adapter.upsert_nodes(nodes, tx)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x73e93f7baa50>
+nodes = [NodeWrite(id='01M726J5WZ236TPMX16PR2S6YB', type='Incident', properties={'name': 'Night fight'}, provenance=Provenance...95624, tzinfo=datetime.timezone.utc), load_id=None, recipe_id=None, recipe_version=None, datasets=['drawn-dataset-1'])]
+tx = 'AS-25dbf917-c357-4677-8823-b1da03e7ea7d'
+
+    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        """A real upsert, keyed on `write.id` — select-then-branch (`UPDATE ... WHERE id = :id`
+        vs `INSERT INTO`), the same shape `upsert_edges` below already uses, not ArcadeDB's own
+        `UPDATE ... UPSERT`: merging provenance and bumping `audit.revision` both need the
+        existing row's own values *before* the write, so a preceding lookup is unavoidable either
+        way, and branching on it explicitly reads the same as `upsert_edges`'s own `existing is
+        not None` shape rather than a second, differently-shaped mechanism.
+    
+        **What merges, what does not — the same split `_merge_provenance`'s own docstring already
+        states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
+        reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
+        increments rather than resetting. The write's own `properties`/`handling`/`resolution`
+        are the latest write's values (except that a write never lowers an asserted node:
+        `schemas.merge`), not deep-merged field by field — the same "latest write
+        wins" `upsert_edges` already applies to everything it does not name as cumulative, since
+        there is no way to resolve two *conflicting* values for one ontology property without
+        inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
+        by this: the one thing `01_DOMAIN_MODEL.md` requires never to shrink — the provenance
+        list — never does.
+        """
+        schema = self._require_schema()
+        ids: list[NodeId] = []
+        for write in nodes:
+            entity_type = schema.entity_type(write.type)
+            if entity_type is None:
+>               raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+E               ontology.errors.OntologyError: 'Incident' is not a type in the active ontology
+
+packages/adapters/graph_arcadedb/adapter.py:327: OntologyError
+_ test_reverting_the_copies_as_a_loads_own_writes_hides_them_from_every_reader[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x73e9c3656e80>)
+
+    async def test_reverting_the_copies_as_a_loads_own_writes_hides_them_from_every_reader(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        async with factory.context() as adapter:
+>           ids = await _retyped(adapter)
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:466: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:383: in _retyped
+    (incident, person), _ = await _write(
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:197: in _write
+    node_ids = await adapter.upsert_nodes(nodes, tx)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x73e93c0bd1f0>
+nodes = [NodeWrite(id='01M726KGTC8VAAPYGPSKVRNX8F', type='Incident', properties={'name': 'Night fight'}, provenance=Provenance...44189, tzinfo=datetime.timezone.utc), load_id=None, recipe_id=None, recipe_version=None, datasets=['drawn-dataset-1'])]
+tx = 'AS-c5df3817-5f4f-439a-8bb4-56bf358d652d'
+
+    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        """A real upsert, keyed on `write.id` — select-then-branch (`UPDATE ... WHERE id = :id`
+        vs `INSERT INTO`), the same shape `upsert_edges` below already uses, not ArcadeDB's own
+        `UPDATE ... UPSERT`: merging provenance and bumping `audit.revision` both need the
+        existing row's own values *before* the write, so a preceding lookup is unavoidable either
+        way, and branching on it explicitly reads the same as `upsert_edges`'s own `existing is
+        not None` shape rather than a second, differently-shaped mechanism.
+    
+        **What merges, what does not — the same split `_merge_provenance`'s own docstring already
+        states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
+        reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
+        increments rather than resetting. The write's own `properties`/`handling`/`resolution`
+        are the latest write's values (except that a write never lowers an asserted node:
+        `schemas.merge`), not deep-merged field by field — the same "latest write
+        wins" `upsert_edges` already applies to everything it does not name as cumulative, since
+        there is no way to resolve two *conflicting* values for one ontology property without
+        inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
+        by this: the one thing `01_DOMAIN_MODEL.md` requires never to shrink — the provenance
+        list — never does.
+        """
+        schema = self._require_schema()
+        ids: list[NodeId] = []
+        for write in nodes:
+            entity_type = schema.entity_type(write.type)
+            if entity_type is None:
+>               raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+E               ontology.errors.OntologyError: 'Incident' is not a type in the active ontology
+
+packages/adapters/graph_arcadedb/adapter.py:327: OntologyError
+_ test_the_no_dataset_check_fails_with_the_back_link_put_in_the_drawing[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x73e9c3656e80>)
+
+    async def test_the_no_dataset_check_fails_with_the_back_link_put_in_the_drawing(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """The plant: the `SAME_AS` back written into the drawing, as the merge first wrote it. The
+        home case's reads above then find it among the two nodes and by expanding."""
+        from schemas.domain import ExpandRequest
+    
+        async with factory.context() as adapter:
+>           (incident,), _ = await _write(
+                adapter, [_node("Incident", classification="OFFICIAL", datasets=[DRAWING])], []
+            )
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:487: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:197: in _write
+    node_ids = await adapter.upsert_nodes(nodes, tx)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x73e9284ba7b0>
+nodes = [NodeWrite(id='01M726MZ7GYFA3SK9FFXM98ZMC', type='Incident', properties={}, provenance=Provenance(state=<ProvenanceSta...68277, tzinfo=datetime.timezone.utc), load_id=None, recipe_id=None, recipe_version=None, datasets=['drawn-dataset-1'])]
+tx = 'AS-641c14ec-85ea-4fd8-a077-341f6a548d24'
+
+    async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: TxId) -> list[NodeId]:
+        """A real upsert, keyed on `write.id` — select-then-branch (`UPDATE ... WHERE id = :id`
+        vs `INSERT INTO`), the same shape `upsert_edges` below already uses, not ArcadeDB's own
+        `UPDATE ... UPSERT`: merging provenance and bumping `audit.revision` both need the
+        existing row's own values *before* the write, so a preceding lookup is unavoidable either
+        way, and branching on it explicitly reads the same as `upsert_edges`'s own `existing is
+        not None` shape rather than a second, differently-shaped mechanism.
+    
+        **What merges, what does not — the same split `_merge_provenance`'s own docstring already
+        states for edges.** `provenance` merges (`01_DOMAIN_MODEL.md` §7: every source row
+        reference is retained; de-duplicated by `(document_id, locator)`), and `audit.revision`
+        increments rather than resetting. The write's own `properties`/`handling`/`resolution`
+        are the latest write's values (except that a write never lowers an asserted node:
+        `schemas.merge`), not deep-merged field by field — the same "latest write
+        wins" `upsert_edges` already applies to everything it does not name as cumulative, since
+        there is no way to resolve two *conflicting* values for one ontology property without
+        inventing a merge rule the ontology itself does not declare. Nothing is silently dropped
+        by this: the one thing `01_DOMAIN_MODEL.md` requires never to shrink — the provenance
+        list — never does.
+        """
+        schema = self._require_schema()
+        ids: list[NodeId] = []
+        for write in nodes:
+            entity_type = schema.entity_type(write.type)
+            if entity_type is None:
+>               raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+E               ontology.errors.OntologyError: 'Incident' is not a type in the active ontology
+
+packages/adapters/graph_arcadedb/adapter.py:327: OntologyError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:36:03] "GET /jwks.json HTTP/1.1" 200 -
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 07:36:12] "GET /jwks.json HTTP/1.1" 200 -
+________ test_the_command_changes_every_drawn_grade_in_the_real_stores _________
+----------------------------- Captured stdout call -----------------------------
+3x5x2 to 5x5x5: 4 item(s) to change.
+source A → A: 4 item(s)
+intelligence 2 → 2: 4 item(s)
+handling P → 1: 4 item(s)
+Withdrawn items keep the grade they were drawn with and are not counted.
+Changed 4 item(s) to 5x5x5, each keeping its original grade.
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_promotion_adds_the_dataset_to_the_drawn_elements_themselves[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_one_element_check_fails_with_the_promotion_written_as_a_copy[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_promotion_with_a_withdrawn_element_writes_nothing[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_promotion_with_a_superseded_element_writes_nothing[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_an_element_promoted_by_another_load_is_not_promoted_again[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_all_or_nothing_check_fails_with_the_all_live_check_removed[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_reverting_a_promotion_leaves_the_elements_in_the_layer_only[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_withdrawing_a_layer_leaves_what_was_promoted_from_it[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_merges_match_lands_with_its_promotion_and_its_revert_withdraws_it[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_merge_rolled_back_writes_neither_its_promotion_nor_its_match[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_together_check_fails_with_the_match_written_in_a_transaction_of_its_own[graph_arcadedb[gremlin]]
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_promotion_reads_back_whole
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_the_filter_check_fails_with_the_filter_not_passed
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_decision_is_written_only_from_the_status_it_was_read_with
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_grant_closes_once_and_is_never_reopened
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_the_studio_list_is_filtered_by_clearance_in_the_query
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_an_open_promotions_items_are_held_and_released_when_it_is_decided
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_deleted_layer_is_recorded_and_its_grants_closed
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_boards_list_is_filtered_by_clearance_in_the_query
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_an_open_promotions_marking_rises_with_its_item_and_never_falls
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_what_waits_from_a_layer_is_found_by_the_layer
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merge_and_its_matches_read_back_whole
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_only_a_committed_merges_written_copies_are_read_for_the_grading_change
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_record_whose_copies_are_refused_is_not_written_either
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_an_old_trigger_check_is_widened_once_to_take_drawn_merge
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_a_view_round_trips_with_its_lens
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_a_private_view_is_invisible_to_another_member_on_postgres
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_the_postgres_privacy_check_fails_with_the_reader_planted_out
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_the_postgres_question_store_never_mixes_a_views_conversation
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_a_views_proposal_is_read_on_postgres_only_through_its_view
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_the_postgres_view_clause_check_fails_with_it_planted_out
+PASSED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_postgres_turns_a_drawings_boards_into_views_and_back
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_a_case_reads_one_dataset_and_a_case_opened_from_it_takes_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_another_units_dataset_is_refused_and_nothing_changes
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_names_no_dataset_to_a_reader_with_no_role
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_answers_which_ids_are_composites
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_the_composite_check_fails_with_the_kind_left_out_of_the_query
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_answers_the_cases_and_composites_reading_a_dataset
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_holds_one_home_case_per_dataset_and_the_owner_setting
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_holds_a_drawn_dataset_for_its_home_case_alone
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_never_copies_a_drawn_dataset[held]
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_never_copies_a_drawn_dataset[the-kind-check-removed]
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_widens_an_old_kind_check_to_take_drawn
+PASSED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_merges_a_drawn_dataset_once_and_its_revert_undoes_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_an_item_and_its_watch_round_trip_by_case
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_withdrawing_ends_the_watch_and_only_in_its_case
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_match_and_a_promotion_are_kept
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_links_ends_are_kept
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_the_postgres_case_check_fails_with_the_case_planted_out
+PASSED ../OspreyFlow_Build/tests/services/api/test_board_store.py::test_a_board_is_kept_apart_from_views_and_changed_only_by_its_creator
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py::test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days
+PASSED ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py::test_the_lifespans_own_seam_over_the_real_promotion_record_raises_the_alert
+PASSED ../OspreyFlow_Build/tests/services/api/test_grading_change_live.py::test_the_command_changes_every_drawn_grade_in_the_real_stores
+PASSED ../OspreyFlow_Build/tests/services/api/test_grading_registry.py::test_the_registry_read_is_every_cases_live_drawn_nodes_and_links
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_case_reads_its_source_and_its_own_layer_and_lists_never_show_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_the_list_check_fails_with_the_condition_planted_out
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_layer_is_refused_as_a_missing_dataset_and_its_name_is_free
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_case_reads_one_dataset_and_a_composite_reads_its_own_id_first
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_case_made_from_another_holds_no_layer_and_reads_its_originals
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_case_opened_from_an_alert_keeps_a_layer_of_its_own
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_layers_egress_is_the_strictest_of_its_cases
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_composite_cases_layer_takes_the_strictest_of_members_that_differ
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_the_one_dataset_index_is_refused_while_a_case_names_two
+PASSED ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py::test_a_name_index_made_before_layers_is_rebuilt_to_leave_them_out
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_retyped_copy_and_a_link_onto_it_land_with_the_promotion_in_one_transaction[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_retyped_copy_rolled_back_writes_neither_it_nor_its_links[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_a_copys_same_as_back_names_no_dataset_and_no_reader_of_either_reads_it[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_reverting_the_copies_as_a_loads_own_writes_hides_them_from_every_reader[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_no_dataset_check_fails_with_the_back_link_put_in_the_drawing[graph_arcadedb[gremlin]]
+6 failed, 70 passed, 1 warning in 642.93s (0:10:42)
+PYTEST_EXIT=1
+## the merged drawing left out of its case's read set
+plant in services/api/datasets.py; ../OspreyFlow_Build/tests/services/api/test_datasets_store.py -k merges_a_drawn_dataset; exit 1 (RED)
+E           AssertionError: assert ['01M726RJ4K4...Y3MQEP5NC9EZ'] == ['01M726RJ4K4...QFHB4K74AHXB']
+E             
+E             Right contains one more item: '01M726RJ3WPRBZQFHB4K74AHXB'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_merges_a_drawn_dataset_once_and_its_revert_undoes_it
+1 failed, 11 deselected in 1.40s
+
+## the case not moved onto the target
+plant in services/api/datasets.py; ../OspreyFlow_Build/tests/services/api/test_datasets_store.py -k merges_a_drawn_dataset; exit 0 (NOT CAUGHT)
+1 passed, 11 deselected in 1.48s
+
+## the trigger check never widened
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k old_trigger_check; exit 1 (RED)
+E   asyncpg.exceptions.CheckViolationError: new row for relation "promotions" violates check constraint "promotions_trigger_check"
+E   DETAIL:  Failing row contains (01M726RNZZS0AK5Z3TY0FQH8DV, promotion-01M726RNZZS0AK5Z3TY0FQH8DW, drawn_merge, case-k, board-1, src, layer-k, alice, 2026-11-09 09:00:00+00, awaiting_review, OFFICIAL, unit-1, {n1,n2}, {e1}, {i1,i2,i3}, [["i4", "Spare", "Not ticked."]], null, null, null, null).
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_an_old_trigger_check_is_widened_once_to_take_drawn_merge
+1 failed, 15 deselected in 1.30s
+
+## the matches' edges never written back
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k drawn_merge_and_its_matches; exit 1 (RED)
+E       AssertionError: assert [None, None] == ['e1', 'e2']
+E         
+E         At index 0 diff: None != 'e1'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merge_and_its_matches_read_back_whole
+1 failed, 15 deselected in 1.01s
+
+## a drawn merge's copies not written with its record (Amendment 7)
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_written_with_it; exit 1 (RED)
+E       AssertionError: assert [] == [('node', 'd1..., 'd1', None)]
+E         
+E         Right contains 2 more items, first extra item: ('node', 'd1', 'Organisation', None, None, None)
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+1 failed, 15 deselected in 1.02s
+
+## the record and its copies written outside one transaction
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_refused_is_not_written; exit 1 (RED)
+E       AssertionError: assert PromotionRecord(id='01M726RTC79PX56DDQVHTK14QX', load_id='promotion-01M726RTC79PX56DDQVHTK14QY', trigger='drawn_merge'...i2', 'i3'), left_out=(('i4', 'Spare', 'Not ticked.'),), reviewed_by=None, reviewed_at=None, reason=None, grant_id=None) is None
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_record_whose_copies_are_refused_is_not_written_either
+1 failed, 15 deselected in 0.97s
+
+## the copies' ids never written back
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_written_with_it; exit 1 (RED)
+E       AssertionError: assert [(None, None), (None, None)] == [('w1', 's1'), ('w2', None)]
+E         
+E         At index 0 diff: (None, None) != ('w1', 's1')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+1 failed, 15 deselected in 0.93s
+
+## a waiting merge's copies read for the grading change
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k committed_merges_written_copies; exit 1 (RED)
+E       AssertionError: assert [('node', 'w1...'node', 'w3')] == []
+E         
+E         Left contains 2 more items, first extra item: ('node', 'w1')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_only_a_committed_merges_written_copies_are_read_for_the_grading_change
+1 failed, 15 deselected in 1.02s
+
+## a board's lens not rewritten
+plant in services/api/case_views.py; ../OspreyFlow_Build/tests/services/api/test_case_views_store.py -k boards_into_views; exit 1 (RED)
+E       AssertionError: assert (True, None, ['p1'], []) == (False, 'prom... ['d1', 'd2'])
+E         
+E         At index 0 diff: True != False
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_postgres_turns_a_drawings_boards_into_views_and_back
+1 failed, 6 deselected in 0.82s
+
+=== LIVE PLANTS ===
+## the merged drawing left out of its case's read set
+plant in services/api/datasets.py; ../OspreyFlow_Build/tests/services/api/test_datasets_store.py -k merges_a_drawn_dataset; exit 1 (RED)
+E           AssertionError: assert ['01M726RJ4K4...Y3MQEP5NC9EZ'] == ['01M726RJ4K4...QFHB4K74AHXB']
+E             
+E             Right contains one more item: '01M726RJ3WPRBZQFHB4K74AHXB'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_datasets_store.py::test_postgres_merges_a_drawn_dataset_once_and_its_revert_undoes_it
+1 failed, 11 deselected in 1.40s
+
+## the case not moved onto the target
+plant in services/api/datasets.py; ../OspreyFlow_Build/tests/services/api/test_datasets_store.py -k merges_a_drawn_dataset; exit 0 (NOT CAUGHT)
+1 passed, 11 deselected in 1.48s
+
+## the trigger check never widened
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k old_trigger_check; exit 1 (RED)
+E   asyncpg.exceptions.CheckViolationError: new row for relation "promotions" violates check constraint "promotions_trigger_check"
+E   DETAIL:  Failing row contains (01M726RNZZS0AK5Z3TY0FQH8DV, promotion-01M726RNZZS0AK5Z3TY0FQH8DW, drawn_merge, case-k, board-1, src, layer-k, alice, 2026-11-09 09:00:00+00, awaiting_review, OFFICIAL, unit-1, {n1,n2}, {e1}, {i1,i2,i3}, [["i4", "Spare", "Not ticked."]], null, null, null, null).
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_an_old_trigger_check_is_widened_once_to_take_drawn_merge
+1 failed, 15 deselected in 1.30s
+
+## the matches' edges never written back
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k drawn_merge_and_its_matches; exit 1 (RED)
+E       AssertionError: assert [None, None] == ['e1', 'e2']
+E         
+E         At index 0 diff: None != 'e1'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merge_and_its_matches_read_back_whole
+1 failed, 15 deselected in 1.01s
+
+## a drawn merge's copies not written with its record (Amendment 7)
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_written_with_it; exit 1 (RED)
+E       AssertionError: assert [] == [('node', 'd1..., 'd1', None)]
+E         
+E         Right contains 2 more items, first extra item: ('node', 'd1', 'Organisation', None, None, None)
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+1 failed, 15 deselected in 1.02s
+
+## the record and its copies written outside one transaction
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_refused_is_not_written; exit 1 (RED)
+E       AssertionError: assert PromotionRecord(id='01M726RTC79PX56DDQVHTK14QX', load_id='promotion-01M726RTC79PX56DDQVHTK14QY', trigger='drawn_merge'...i2', 'i3'), left_out=(('i4', 'Spare', 'Not ticked.'),), reviewed_by=None, reviewed_at=None, reason=None, grant_id=None) is None
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_record_whose_copies_are_refused_is_not_written_either
+1 failed, 15 deselected in 0.97s
+
+## the copies' ids never written back
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k copies_are_written_with_it; exit 1 (RED)
+E       AssertionError: assert [(None, None), (None, None)] == [('w1', 's1'), ('w2', None)]
+E         
+E         At index 0 diff: (None, None) != ('w1', 's1')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole
+1 failed, 15 deselected in 0.93s
+
+## a waiting merge's copies read for the grading change
+plant in services/api/promotion_store.py; ../OspreyFlow_Build/tests/services/api/test_promotion_store.py -k committed_merges_written_copies; exit 1 (RED)
+E       AssertionError: assert [('node', 'w1...'node', 'w3')] == []
+E         
+E         Left contains 2 more items, first extra item: ('node', 'w1')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_only_a_committed_merges_written_copies_are_read_for_the_grading_change
+1 failed, 15 deselected in 1.02s
+
+## a board's lens not rewritten
+plant in services/api/case_views.py; ../OspreyFlow_Build/tests/services/api/test_case_views_store.py -k boards_into_views; exit 1 (RED)
+E       AssertionError: assert (True, None, ['p1'], []) == (False, 'prom... ['d1', 'd2'])
+E         
+E         At index 0 diff: True != False
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_case_views_store.py::test_postgres_turns_a_drawings_boards_into_views_and_back
+1 failed, 6 deselected in 0.82s
+exit 0

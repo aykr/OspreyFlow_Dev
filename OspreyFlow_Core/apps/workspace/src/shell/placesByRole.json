@@ -398,7 +398,12 @@
     "merge_datasets"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "drawn_merge_dry_run",
+    "drawn_merge_sheet",
+    "drawn_merge_targets",
+    "merge_drawn_dataset"
+   ]
   },
   "right:operate_schedules": {
    "rights": [

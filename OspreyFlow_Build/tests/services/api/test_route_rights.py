@@ -98,6 +98,12 @@ ROUTE_RIGHTS = {
     "delete_removed_case_layer": "investigate",
     "dry_run_delete_removed_case_layer": "investigate",
     "admin_delete_removed_case_layer": "administer_system",
+    # ADR-143 Amendment 3 decision 2 (L3.9): a drawn dataset merged into another by an Author of the
+    # target holding merge_datasets, every step of it; the target's Author level asked by the route.
+    "drawn_merge_targets": "merge_datasets",
+    "drawn_merge_sheet": "merge_datasets",
+    "drawn_merge_dry_run": "merge_datasets",
+    "merge_drawn_dataset": "merge_datasets",
     "start_a_drawing": "create_case",
     "seed": "investigate",
     "expand": "investigate",
@@ -526,9 +532,9 @@ def test_every_right_guards_at_least_one_route() -> None:
     `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
     not_yet = {"revert_loads",
                "export_override",
-               # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (the
-               # drawn-dataset merge, Rules and Monitoring).
-               "merge_datasets", "author_rules",
+               # ADR-112 Amendment 5: arrives with its own step's routes (Rules and Monitoring).
+               # `merge_datasets` guards the drawn-dataset merge's four routes since L3.9.
+               "author_rules",
                # Superseded at L3.5 by `propose_types` (ADR-112 Amendment 4); its removal from
                # the rights and the role screens is the orchestrator's (case-b's report).
                "propose_link_type"}  # fmt: skip

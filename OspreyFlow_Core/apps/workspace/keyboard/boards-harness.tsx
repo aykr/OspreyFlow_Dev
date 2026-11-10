@@ -126,6 +126,8 @@ const opened = (b: HeldBoard) => ({
   // the Glass keeps no list of its own, so without them no grade is offered.
   grading_grades: { scheme: "5x5x5", source: ["A", "B", "C", "D", "E"], intelligence: ["1", "2", "3", "4", "5"], handling: ["1", "2", "3", "4", "5"] },
   may_draw: b.created_by === reader,
+  // As the Conduit: an Author holding promote_to_dataset; `?promote=no` for a drawer who is neither.
+  may_promote: b.created_by === reader && params.get("promote") !== "no",
 });
 
 window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {

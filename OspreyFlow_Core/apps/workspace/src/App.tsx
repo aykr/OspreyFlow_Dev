@@ -1898,6 +1898,7 @@ export function App() {
                 name={lens.opened.view.name}
                 shared={lens.opened.view.shared ?? false}
                 missing={lens.opened.missing}
+                annotations={lens.opened.annotations ?? []}
                 onBack={closeLens}
                 from={
                   lensFromAlert

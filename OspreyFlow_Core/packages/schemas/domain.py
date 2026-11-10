@@ -497,7 +497,8 @@ class AuditStub(BaseModel):
     #: A universal axis, not principal-dependent: a reverted element is
     #: invisible to every read, any clearance, the same way a `SECRET`
     #: record is invisible to an unauthorised one — `services/ingest/load_revert.py`
-    #: is the only writer, via `GraphPort.revert_elements`
+    #: writes it via `GraphPort.revert_elements`, as does a drawn merge's
+    #: operator revert for its own copies and links (ADR-143 Amendment 7)
     #: (Phase 2; `01_DOMAIN_MODEL.md` §2.4).
     reverted: bool = False
     #: ADR-110 Amendment 6 point 3: the full-snapshot refresh (its `load_id`) that withdrew this

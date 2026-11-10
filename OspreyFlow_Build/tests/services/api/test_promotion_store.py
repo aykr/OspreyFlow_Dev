@@ -235,3 +235,140 @@ async def test_what_waits_from_a_layer_is_found_by_the_layer(store: PostgresProm
     for r in (waiting, decided, elsewhere):
         await store.add(r)
     assert [r.id for r in await store.waiting_from_layer("layer-k")] == [waiting.id]
+
+
+# --- a drawn dataset's merge (L3.9) -----------------------------------------------------------
+
+
+async def test_a_drawn_merge_and_its_matches_read_back_whole(
+    store: PostgresPromotionStore,
+) -> None:
+    from services.api.promotion_store import MergeMatchRow
+
+    record = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-1")
+    other = _record()
+    await store.add(record)
+    await store.add(other)
+    rows = [
+        MergeMatchRow(drawn="d1", loaded="p1", score=1.0, handling='{"classification": "x"}'),
+        MergeMatchRow(drawn="d2", loaded="p2", score=0.8, handling='{"classification": "y"}'),
+    ]
+    await store.add_matches(record.id, rows)
+    assert await store.get(record.id) == record
+    held = await store.matches_of(record.id)
+    assert [(r.drawn, r.loaded, r.score, r.edge_id) for r in held] == [
+        ("d1", "p1", 1.0, None), ("d2", "p2", 0.8, None),
+    ]  # fmt: skip
+    assert await store.matches_of(other.id) == []
+    with pytest.raises(ValueError):
+        await store.set_match_edges(record.id, ["e1"])
+    await store.set_match_edges(record.id, ["e1", "e2"])
+    assert [r.edge_id for r in await store.matches_of(record.id)] == ["e1", "e2"]
+    assert await store.waiting_from_layer("drawn-1") == [record]
+
+
+async def test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole(
+    store: PostgresPromotionStore,
+) -> None:
+    """ADR-143 Amendment 7: a retyped item's copy, in the record's own transaction, read back as
+    written (its JSON compared as JSON: JSONB keeps no key order), its ids set once, alike."""
+    import json
+
+    from services.api.promotion_store import CopyRow
+
+    record = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-2")
+    copies = [
+        CopyRow(kind="node", original="d1", type="Organisation", properties='{"name": "X"}',
+                handling='{"classification": "SECRET"}', provenance='{"state": "asserted"}',
+                original_properties='{"name": "X", "category": "assault"}'),
+        CopyRow(kind="link", original="l1", type="MEMBER_OF", properties="{}",
+                handling='{"classification": "OFFICIAL"}', provenance='{"state": "asserted"}',
+                original_properties="{}", source="p1", target="d1"),
+    ]  # fmt: skip
+    await store.add(record, copies=copies)
+    held = await store.copies_of(record.id)
+    assert [(c.kind, c.original, c.type, c.source, c.target, c.written_id) for c in held] == [
+        ("node", "d1", "Organisation", None, None, None),
+        ("link", "l1", "MEMBER_OF", "p1", "d1", None),
+    ]  # fmt: skip
+    for wrote, read in zip(copies, held):
+        for name in ("properties", "handling", "provenance", "original_properties"):
+            assert json.loads(getattr(read, name)) == json.loads(getattr(wrote, name))
+    assert await store.copies_of(_record().id) == []
+    with pytest.raises(ValueError):
+        await store.set_copy_ids(record.id, [("w1", "s1")])
+    await store.set_copy_ids(record.id, [("w1", "s1"), ("w2", None)])
+    assert [(c.written_id, c.same_as_id) for c in await store.copies_of(record.id)] == [
+        ("w1", "s1"), ("w2", None),
+    ]  # fmt: skip
+
+
+async def test_only_a_committed_merges_written_copies_are_read_for_the_grading_change(
+    store: PostgresPromotionStore,
+) -> None:
+    """ADR-143 decision 11 for a drawn merge's copies (Amendment 7): what the grading change reads
+    beside the board registry, each written element once, none of a merge waiting or rejected."""
+    from datetime import UTC, datetime
+
+    from services.api.promotion_store import CopyRow
+
+    def row(original: str) -> CopyRow:
+        return CopyRow(kind="node", original=original, type="Organisation", properties="{}",
+                       handling="{}", provenance="{}", original_properties="{}")  # fmt: skip
+
+    committed = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-4")
+    waiting = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-5")
+    await store.add(committed, copies=[row("d1"), row("d2")])
+    await store.add(waiting, copies=[row("d3")])
+    await store.set_copy_ids(committed.id, [("w1", "s1"), ("w1", "s2")])
+    await store.set_copy_ids(waiting.id, [("w3", "s3")])
+    assert await store.committed_copies() == []
+    assert await store.decide(
+        committed.id, was="awaiting_review", now="committed", by=None, at=datetime.now(UTC)
+    )
+    assert await store.committed_copies() == [("node", "w1")]
+
+
+async def test_a_record_whose_copies_are_refused_is_not_written_either(
+    store: PostgresPromotionStore,
+) -> None:
+    """One transaction: a copy the table refuses (a kind it does not take) leaves no record."""
+    from services.api.promotion_store import CopyRow
+
+    record = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-3")
+    bad = CopyRow(kind="picture", original="d1", type="X", properties="{}", handling="{}",
+                  provenance="{}", original_properties="{}")  # fmt: skip
+    with pytest.raises(asyncpg.CheckViolationError):
+        await store.add(record, copies=[bad])
+    assert await store.get(record.id) is None
+
+
+async def test_an_old_trigger_check_is_widened_once_to_take_drawn_merge(
+    store: PostgresPromotionStore,
+) -> None:
+    """A table made before L3.9 (the check without `drawn_merge`): `connect` widens it once, and
+    a second `connect` changes nothing (the catalogue read first)."""
+    async with store._pool.acquire() as conn:
+        await conn.execute("ALTER TABLE promotions DROP CONSTRAINT promotions_trigger_check")
+        await conn.execute(
+            "ALTER TABLE promotions ADD CONSTRAINT promotions_trigger_check "
+            "CHECK (trigger IN ('analyst_promotion', 'layer_merge'))"
+        )
+        with pytest.raises(asyncpg.CheckViolationError):
+            await store.add(_record(trigger="drawn_merge"))
+        dsn = PostgresConfig.from_env().dsn
+        path = await conn.fetchval("SELECT current_schema()")
+    for _ in range(2):
+        again = await PostgresPromotionStore.connect(
+            f"{dsn}{'&' if '?' in dsn else '?'}search_path={path}"
+        )
+        await again.close()
+    await store.add(_record(trigger="drawn_merge"))
+    async with store._pool.acquire() as conn:
+        checks = await conn.fetch(
+            "SELECT pg_get_constraintdef(c.oid) AS d FROM pg_constraint c JOIN pg_class t "
+            "ON t.oid = c.conrelid WHERE t.relname = 'promotions' AND c.contype = 'c' "
+            "AND t.relnamespace = current_schema()::regnamespace "
+            "AND pg_get_constraintdef(c.oid) LIKE '%trigger%'"
+        )
+    assert len(checks) == 1 and "drawn_merge" in checks[0]["d"]

@@ -125,6 +125,9 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
   const byId = useMemo(() => new Map((opened?.nodes ?? []).map((n) => [n.id, n])), [opened]);
   const drawnIds = useMemo(() => new Set(opened?.drawn ?? []), [opened]);
   const mayDraw = opened?.may_draw ?? false;
+  // Offered only to one the promotion routes admit (CARRIES, docs D2a): the Conduit says so, and still
+  // refuses anyone else.
+  const mayPromote = opened?.may_promote ?? false;
   const scheme = opened?.grading_scheme ?? "5x5x5";
   // Before the forms below read it: a scheme file's grades are known only from the opened board.
   useMemo(() => offerGrades(opened?.grading_grades), [opened]);
@@ -296,7 +299,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
             Share with the case
           </button>
         )}
-        {mayDraw && (
+        {mayPromote && (
           <button
             ref={promoteButton}
             type="button"

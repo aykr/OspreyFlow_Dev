@@ -15,6 +15,7 @@ export type ValidTo1 = string | null;
 export type Threshold = number | null;
 export type Drawing = boolean;
 export type ConvertedFromCase = string | null;
+export type MergedLoad = string | null;
 export type NodeId = string;
 export type Type = string;
 export type ProvenanceState = "asserted" | "inferred" | "unresolved";
@@ -80,6 +81,15 @@ export type Edges = Edge[];
 export type X = number;
 export type Y = number;
 export type Missing = number;
+export type ElementId = string;
+export type Kind = "node" | "link";
+export type Label = string;
+export type Marking = string;
+export type Grading1 = string | null;
+export type SourceNote = string | null;
+export type Words = string;
+export type Merged = boolean;
+export type Annotations = ViewAnnotation[];
 
 /**
  * A view opened now (decision 2): what the reader may see of it, live, and the saved positions
@@ -92,6 +102,7 @@ export interface CaseViewOpened {
   edges: Edges;
   layout?: Layout;
   missing: Missing;
+  annotations?: Annotations;
 }
 /**
  * A view as listed and answered (ADR-144 decisions 1 and 3). Private to `created_by` until
@@ -116,6 +127,7 @@ export interface CaseView {
   threshold?: Threshold;
   drawing?: Drawing;
   converted_from_case?: ConvertedFromCase;
+  merged_load?: MergedLoad;
 }
 /**
  * What a filtered view keeps (ADR-124 decision 2's filter, ADR-144 decision 1): entity types,
@@ -276,4 +288,19 @@ export interface Layout {
 export interface NodePosition {
   x: X;
   y: Y;
+}
+/**
+ * What a merged drawing keeps of a drawn item on its view (Amendment 2 decision 7): what did
+ * not become data, read through the reader's own handling, so an item they may not see has none
+ * (rule 3).
+ */
+export interface ViewAnnotation {
+  element_id: ElementId;
+  kind: Kind;
+  label: Label;
+  marking: Marking;
+  grading?: Grading1;
+  source_note?: SourceNote;
+  words: Words;
+  merged: Merged;
 }

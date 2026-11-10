@@ -7,6 +7,7 @@ export type Label = string;
 export type Marking = string;
 export type SourceNote = string | null;
 export type Grading = string | null;
+export type GoesInAs = string | null;
 
 export interface DetailItem {
   element_id: ElementId;
@@ -16,4 +17,5 @@ export interface DetailItem {
   marking: Marking;
   source_note?: SourceNote;
   grading?: Grading;
+  goes_in_as?: GoesInAs;
 }
