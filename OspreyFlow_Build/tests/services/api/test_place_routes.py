@@ -77,7 +77,10 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"^/v1/datasets/\{dataset_id\}/(promotions|removed-cases|layer-merges)",
      frozenset({"ingest"}), "the Studio's Analyst promotions (ingest/runs/promotions.tsx)"),
     # ADR-147 Amendment 2: a dataset's gazetteers, a load into it (`run_pipelines`, the Studio's
-    # right); no screen calls them yet (platform's P6 adds the Glass's panel, and the Glass here).
+    # right). The Glass's map changes them too, beside its place search (platform-b's P6,
+    # `map/gazetteers.ts`), bound in `App.tsx`, which this scan places nowhere, so it does not see
+    # that call. The Glass is not added here: any Glass route is its entry, so `run_pipelines`
+    # alone would then be offered the Glass (a question put to the orchestrator, P6).
     (r"^/v1/datasets/\{dataset_id\}/gazetteers/", frozenset({"ingest"}),
      "a dataset's gazetteers (ADR-147 Amendment 2)"),
     # L3.9: a drawn dataset merged into another, from the Studio's Runs (ADR-143 Amendment 2
