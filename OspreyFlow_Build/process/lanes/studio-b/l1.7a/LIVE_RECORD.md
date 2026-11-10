@@ -30,7 +30,8 @@ seeded the whole dataset, committing each recipe through `commit_recipe_file`.
   - `test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job`: `TypeError: publish_reports_fallback()
     missing 1 required keyword-only argument: 'source_location'`, a call outside this branch. In Core, this branch
     changes only `studio_publish.py`, `pyproject.toml` and `uv.lock`.
-  - Not run on main for want of a 44-minute baseline: offered as a carry.
+  - Not run on main for want of a 44-minute baseline. It is carried, and deferred by the orchestrator on
+    10 November until admin's schema-batching fix makes graph-backed live runs cheaper.
 - `GitCommitError` appears in none of these runs.
 
 **At the final head, as `-rA` names them:**
