@@ -1,14 +1,13 @@
-# as of 2026-11-10T09:13Z
+# as of 2026-11-10T09:18Z
 rules	L2.10	rebased, make test done; live on c, then ci and keyboard	~11:30	A
 studio-b	L1.7a	back: rebase, git out of the image with the licence gate's tests	~13:00	A
 platform-b	preflight ports	a named install refused where 2480 is held; after P5b	~12:00	A
-case	L3.9	review: fake, live copies, grading, target recheck; then gates	~12:30	A
 studio-b	tips	Studio's tips patches, after L1.7a	~14:00–15:00	A
 studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
 studio	L1.7	operations, releases, carries	~17:00–19:00	A
 rules	L2.11	rule editor (form, draft/test/live, migration), after L2.10	~17:00–18:30	A
 rules-b	L2.11a	BPMN/DMN codec, export, import refusal, Show as BPMN	~15:00	A
-case	L3.6	drawn-watch alerts, after L3.9	~17:00–18:00	A
+case	L3.6	drawn-watch alerts, starting now	~15:00–16:00	A
 platform	P7	kind proved stores, UIDs, egress; 18 review points, a fresh session from HANDOFF	~11 Nov, midday	B
 platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
 studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning	B
