@@ -218,13 +218,18 @@ def test_the_same_key_in_every_store(side):
 '''
 
 
+#: An outer `-n` run's worker names, never passed on: the red run must open the stack's shared names, and the plugin's
+#: run its own (the merger's review: kept, the red run reported a db "not flushed" that was the outer worker's).
+_OUTER = ("VALKEY_DB", "POSTGRES_DB", "MINIO_BUCKET_PREFIX", "ANALYTICS_DB_PATH", "OSPREY_ARCADEDB_DATABASE")
+
+
 def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], dict[str, dict[str, Any]]]:
     (tmp_path / "test_planted.py").write_text(_PLANTED)
     out = tmp_path / "out"
     out.mkdir()
     env = {
         **{k: v for k, v in os.environ.items()
-           if k not in ("PYTEST_ADDOPTS", "OSPREY_STORE_MARK") and not k.startswith("PYTEST_XDIST_")},
+           if k not in ("PYTEST_ADDOPTS", "OSPREY_STORE_MARK", *_OUTER) and not k.startswith("PYTEST_XDIST_")},
         "T1_OUT": str(out),
         "OSPREY_WORKER_STORES": "1",
         "PYTHONPATH": os.pathsep.join(

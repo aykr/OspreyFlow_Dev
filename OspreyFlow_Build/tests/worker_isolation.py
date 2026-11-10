@@ -2,16 +2,18 @@
 
     pytest -p tests.worker_isolation -n 4 --dist loadgroup …
 
-Loaded on the command line, so a run without `-n` is untouched. In a worker (xdist's `config.workerinput`, which a
-child process never inherits, unlike `PYTEST_XDIST_WORKER`), at `pytest_configure`, before any test module is imported:
+Loaded on the command line (or from `tests/conftest.py`, `conftest-T1p4.diff`); without `-n` it does nothing. In a
+worker (xdist's `config.workerinput`, which a child process never inherits, unlike `PYTEST_XDIST_WORKER`), the names
+are set at `pytest_configure`, before any test module is imported, and on a live run the stores are made at the
+worker's first test and cleared at its last (`_worker_stores`), so a failure either way fails the run:
 
-- ArcadeDB: `ArcadeDBConfig.from_env("ospreyflow")` gives `ospreyflow_x<run>_t<started>_gwN`, made here with the deployment's
+- ArcadeDB: `ArcadeDBConfig.from_env("ospreyflow")` gives `ospreyflow_x<run>_t<started>_gwN`, made with the deployment's
   schema, as the Conduit makes its own. The name is hard-coded where the
   Conduit, the worker and 21 test call sites open it (`services/api/run_resources.py`, `worker_main.py`), so the
   classmethod is the one place every caller passes through; a per-test `conformance_*` name is left as it is.
-- Postgres: `POSTGRES_DB` is `ospreyflow_x<run>_t<started>_gwN`, created here (every store makes its own tables on
+- Postgres: `POSTGRES_DB` is `ospreyflow_x<run>_t<started>_gwN`, created (every store makes its own tables on
   connect).
-- Valkey: `VALKEY_DB` is the next free database, flushed here and at the end: N + 1 for a top-level run, after the
+- Valkey: `VALKEY_DB` is the next free database, claimed for the run (`SET NX`, a database another run holds refused) and flushed, at the start and at the end: N + 1 for a top-level run, after the
   outer run's for a nested one (`OSPREY_WORKER_VALKEY_TAKEN`, which the controller exports to its workers and so to
   their children). At most 15 in all, refused before any worker starts; `-n auto` is given what is left.
 - DuckDB, the default analytics engine: `ANALYTICS_DB_PATH` is a file in the worker's own folder.
@@ -29,11 +31,15 @@ never dropped.
 ones whose Valkey client ignores `VALKEY_DB` (`db=0`, or no `db` at all). During a serial test the in-process
 redirect is off too, so the test and its children open the one shared graph; the serial tests run one at a time on
 that worker and no other test opens the shared name. The other stores stay the worker's own for a serial test, in
-the test and in its children alike, since a child inherits the worker's environment. Valkey's pub/sub channels are
-not per database, so they stay shared (investigation ids keep them apart).
+the test and in its children alike, since a child inherits the worker's environment: a serial file's own db-0 client
+and code reading `ValkeyConfig.from_env()` open different Valkey databases (each serial file read passes its client
+explicitly, so none is affected today). Valkey's pub/sub channels are server-wide, not per database, and tests reuse
+fixed case ids, so a publish from one worker can reach another's subscriber on the same channel. It only starts a sync
+against the receiving worker's own stores, so no rows cross, but a test asserting that no frame arrives could see one.
 
-**A file that starts real containers runs on one worker too** (`CONTAINERS`, as `xdist_group("containers")`, a group
-of its own beside the serial one): one at a time, as in a serial run, so its module's fixtures start once. Its proof is `tests/test_worker_isolation.py` (offline) and
+**A file that starts real containers joins the same group** (`CONTAINERS`): one at a time, as in a serial run, so its
+module's fixtures start once and it never runs beside a serial file tearing down a fixed compose project. Only the
+`SERIAL` files get the shared names. Its proof is `tests/test_worker_isolation.py` (offline) and
 `tests/test_worker_isolation_live.py` (two workers, the same names, on a leased stack).
 """
 
@@ -43,11 +49,12 @@ import asyncio
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -81,11 +88,12 @@ SERIAL = {
 }
 
 #: A file that starts real containers (`docker run -d`, `compose up -d`/`--wait`, a wait for health, or the TLS
-#: fixtures' Docker helper). Such files go to one worker of their own, one at a time (`xdist_group("containers")`):
+#: fixtures' Docker helper). Such files join the serial group, one at a time on one worker:
 #: under load distribution each worker taking a test from `test_organisation_sign_in.py` started its own module-scoped
 #: Keycloak, and on the 16-core server at 8 workers every one "never became ready" (10 November 2026, offline).
 CONTAINERS = re.compile(
-    r'"run",\s*"-d"|"up",\s*"-d"|"up",\s*"--wait"|\bwait_until_healthy\b|from tests\.harness\.tls_fixtures import'
+    r'"run"(?:,\s*"--?[a-z-]+")*,\s*"-d"|"up"(?:,\s*"--?[a-z-]+")*,\s*"(?:-d|--wait)"|\bwait_until_healthy\b'
+    r"|from (?:tests\.harness)?\.?tls_fixtures import"
 )
 _SOURCES: dict[Path, bool] = {}
 
@@ -114,9 +122,16 @@ def worker_index(worker: str) -> int:
     return int(match.group(1))
 
 
-def worker_names(worker: str, run: str, started: int, first: int = 1) -> dict[str, str]:
-    """The environment one worker runs under: every store's name its own. `first` is the Valkey database of gw0."""
+def worker_names(worker: str, run: str, started: int, first: int = 1, count: int | None = None) -> dict[str, str]:
+    """The environment one worker runs under: every store's name its own. `first` is the Valkey database of gw0;
+    `count` the run's workers, past which a worker (xdist's replacement for a crashed one) would take a database
+    outside the run's own and is refused."""
     n = worker_index(worker)
+    if count is not None and n >= count:
+        raise pytest.UsageError(
+            f"{worker} is past the run's {count} workers (a replacement for a crashed one): its Valkey database would "
+            "be outside the run's own, so it is refused; run again"
+        )
     if first + n > MOST_WORKERS:
         raise pytest.UsageError(f"at most {MOST_WORKERS} workers in all: Valkey has 16 databases, db 0 the serial files'")
     run = run.replace("-", "")[:8].lower()
@@ -236,35 +251,86 @@ def _buckets(prefix: str | None) -> list[str]:
 
 
 def _live() -> bool:
-    """Stores are there to make and clear only on a live run: under a lease (`OSPREY_LANE`), or where a live job says
-    so (`OSPREY_WORKER_STORES=1`, the live proof's own inner run, in CI too). An offline run connects to nothing."""
-    return bool(os.environ.get("OSPREY_LANE")) or os.environ.get("OSPREY_WORKER_STORES") == "1"
+    """Stores are there to make and clear only on a live run: where the lane named by `OSPREY_LANE` holds a stack's
+    lease (as the port guard reads it; every lane session exports `OSPREY_LANE`, so its being set says nothing), or
+    where a live job says so (`OSPREY_WORKER_STORES=1`, the live proof's own inner run, in CI too). An offline run
+    connects to nothing."""
+    if os.environ.get("OSPREY_WORKER_STORES") == "1":
+        return True
+    lane = os.environ.get("OSPREY_LANE")
+    if not lane:
+        return False
+    from tests.port_guard import _leased_ports, lease_holder
+
+    return any(lease_holder(os.environ, stack) == lane for stack in {s for s, _ in _leased_ports().values()})
+
+
+#: The key a worker sets in its Valkey database, holding its run's id: a database another run holds is refused.
+CLAIM = "osprey:worker-isolation:claim"
+
+
+def claim_valkey(client: Any, run: str) -> None:
+    """Hold this database for `run` (`SET NX`, expiring after `STALE_AFTER`, so a killed run's claim lapses), or refuse
+    it: two runs on one Valkey would otherwise take and flush the same databases, the one name not stamped per run."""
+    if client.set(CLAIM, run, nx=True, ex=STALE_AFTER):
+        return
+    held = client.get(CLAIM)
+    held = held.decode() if isinstance(held, bytes) else held
+    if held != run:
+        raise RuntimeError(f"Valkey db {client.connection_pool.connection_kwargs.get('db')} is held by run {held}")
+
+
+def _valkey_take(db: int, run: str) -> None:
+    import valkey
+    from services.api.config import ValkeyConfig
+
+    client = valkey.Valkey(**{**ValkeyConfig.from_env().client_kwargs(), "db": db}, socket_connect_timeout=5)
+    try:
+        claim_valkey(client, run)
+        client.flushdb()
+        client.set(CLAIM, run, ex=STALE_AFTER)  # the flush took the claim with it
+    finally:
+        client.close()  # type: ignore[no-untyped-call]
 
 
 # --- the hooks ----------------------------------------------------------------------------------------------------
 
 
 class _Worker:
-    def __init__(self, worker: str, run: str, first: int) -> None:
+    def __init__(self, worker: str, run: str, first: int, count: int | None = None) -> None:
         self.admin = os.environ.get("POSTGRES_DB", SHARED)
-        self.names = worker_names(worker, run, int(time.time()), first)
+        self.run = run
+        self.names = worker_names(worker, run, int(time.time()), first, count)
         self.folder = Path(tempfile.mkdtemp(prefix=f"osprey-{worker}-"))
-        self.made: list[str] = []  # what start() has made, so finish() removes exactly that, even after a failed start
+        self.made: list[str] = []  # what make() has made, so finish() removes exactly that, even after a failed make
+        self.finished = False
 
     def start(self) -> None:
+        """The names, at configure, before any test module is imported: nothing is made here."""
         names = self.names
         os.environ.update({k: v for k, v in names.items() if k != "OSPREY_ARCADEDB_DATABASE"})
         os.environ["ANALYTICS_DB_PATH"] = str(self.folder / "analytics.duckdb")
         os.environ["OSPREY_ARCADEDB_DATABASE"] = names["OSPREY_ARCADEDB_DATABASE"]  # for the report, and the tests
         redirect_arcadedb(names["OSPREY_ARCADEDB_DATABASE"])
+
+    def make(self) -> None:
+        """The stores, at the first test's setup (`_worker_stores`), so a failure is that test's error: reported
+        to xdist's controller, which fails the run. A failure in `pytest_configure` or `pytest_unconfigure` is not."""
+        names = self.names
         if _live():
             self.made.append("valkey")
-            _valkey_flush(int(names["VALKEY_DB"]))
+            _valkey_take(int(names["VALKEY_DB"]), self.run)
             self.made.append("postgres")
             asyncio.run(_postgres(self.admin, names["POSTGRES_DB"]))
             self.made.append("arcadedb")
             asyncio.run(_arcadedb_create(names["OSPREY_ARCADEDB_DATABASE"]))
             self.made.append("buckets")  # made on first use, by the code under test
+
+    def finish_quietly(self) -> None:
+        try:
+            self.finish()
+        except Exception as error:  # noqa: BLE001  (the make's own failure is the one raised; this one is said)
+            sys.stderr.write(f"tests.worker_isolation: clearing after a failed make also failed: {error!r}\n")
 
     def finish(self) -> None:
         """Each store on its own: one that fails to clear does not leave the others behind. The first failure is
@@ -273,7 +339,7 @@ class _Worker:
         steps: dict[str, Callable[[], object]] = {
             "arcadedb": lambda: asyncio.run(_arcadedb(names["OSPREY_ARCADEDB_DATABASE"])),
             "postgres": lambda: asyncio.run(_postgres(self.admin, None, drop=[names["POSTGRES_DB"]])),
-            "valkey": lambda: _valkey_flush(int(names["VALKEY_DB"])),
+            "valkey": lambda: _valkey_flush(int(names["VALKEY_DB"])),  # the claim goes with it
             "buckets": lambda: _buckets(names["MINIO_BUCKET_PREFIX"]),
         }
         failures: list[BaseException] = []
@@ -283,11 +349,31 @@ class _Worker:
             except Exception as error:  # noqa: BLE001  (each store tried; the first failure raised below)
                 failures.append(error)
         shutil.rmtree(self.folder, ignore_errors=True)
+        self.finished = True
         if failures:
             raise failures[0]
 
 
 _STATE: dict[str, _Worker] = {}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _worker_stores() -> Iterator[None]:
+    """A worker's stores, made at its first test's setup and cleared at its last test's teardown: both inside the
+    run, so a store that cannot be made or cleared is an error xdist reports, and the run fails (closed). Cleared in
+    `pytest_unconfigure` instead, xdist's controller had already taken the worker's `workerfinished` and ignored
+    what followed, and the run exited 0 (the merger's review, 10 November 2026)."""
+    state = _STATE.get("worker")
+    if state is None:
+        yield
+        return
+    try:
+        state.make()
+    except BaseException:
+        state.finish_quietly()
+        raise
+    yield
+    state.finish()
 
 
 def _sweep() -> None:
@@ -326,18 +412,32 @@ def pytest_configure(config: pytest.Config) -> None:
                 + (f", and the enclosing run took {taken}" if taken else "")
             )
         os.environ[TAKEN] = str(taken + workers)  # the workers inherit it, and so does any run nested in them
-        if _live():
+        live = _live()
+        _HEADER[:] = [
+            f"worker_isolation: {workers} workers, Valkey databases {taken + 1} to {taken + workers}, "
+            + ("stores made and cleared per worker" if live else "no stores made (offline)")
+        ]
+        if live and not taken:  # a top-level run only: a nested one's sweep would be its own outer run's business
             _sweep()
         return
-    first = _taken() - int(workerinput["workercount"]) + 1
-    state = _Worker(workerinput["workerid"], workerinput.get("testrunuid") or "00000000", first)
-    _STATE["worker"] = state  # before start(), so a start that fails part-way is still cleared
+    count = int(workerinput["workercount"])
+    first = _taken() - count + 1
+    state = _Worker(workerinput["workerid"], workerinput.get("testrunuid") or "00000000", first, count)
+    _STATE["worker"] = state
     state.start()
 
 
+_HEADER: list[str] = []
+
+
+def pytest_report_header(config: pytest.Config) -> list[str]:
+    return list(_HEADER) if getattr(config, "workerinput", None) is None else []
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
+    """A backstop only, for a worker whose last teardown never ran (interrupted): a failure here reaches no report."""
     state = _STATE.pop("worker", None)
-    if state is not None:
+    if state is not None and state.made and not state.finished:
         state.finish()
 
 
@@ -350,24 +450,26 @@ def _serial(item: pytest.Item) -> bool:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Before xdist reads the groups (its own hook, in each worker)."""
     for item in items:
-        if _serial(item):
+        if _serial(item) or starts_containers(Path(str(item.path))):
             item.add_marker(pytest.mark.xdist_group("serial"))
-        elif starts_containers(Path(str(item.path))):
-            item.add_marker(pytest.mark.xdist_group("containers"))
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None):  # type: ignore[no-untyped-def]
-    """A serial test opens the shared `ospreyflow` in-process too, as its child processes do: one graph, not two. The
-    serial tests all run on one worker, one at a time, and no other test opens the shared name."""
-    serial = _STATE.get("worker") is not None and _serial(item)
+    """A serial test opens the shared `ospreyflow` and Valkey's db 0 in-process too, as its child processes and its
+    db-0 clients do: one graph and one Valkey database, not two. The serial tests all run on one worker, one at a
+    time, and no other test opens the shared names."""
+    state = _STATE.get("worker")
+    serial = state is not None and _serial(item)
     if serial:
         _TARGET["database"] = SHARED
+        os.environ["VALKEY_DB"] = "0"  # as its db-0 clients and its children open: one Valkey database, not two
     try:
         yield
     finally:
-        if serial:
-            _TARGET["database"] = _STATE["worker"].names["OSPREY_ARCADEDB_DATABASE"]
+        if serial and state is not None:
+            _TARGET["database"] = state.names["OSPREY_ARCADEDB_DATABASE"]
+            os.environ["VALKEY_DB"] = state.names["VALKEY_DB"]
 
 
 def _relative(item: pytest.Item) -> str:

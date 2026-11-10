@@ -11,7 +11,6 @@ writing the same keys on a leased stack, is `tests/test_worker_isolation_live.py
 from __future__ import annotations
 
 import ast
-import asyncio
 import json
 import os
 import re
@@ -166,7 +165,7 @@ def test_each_serial_file_exists_and_is_grouped() -> None:
 #: multiprocessing child (spawned, it never sees the in-process redirect).
 _CHILD = re.compile(
     r"services\.api\.app:app|\"-m\",\s*\"(?:pytest|uvicorn|services\.|scripts\.|cli\b)"
-    r"|\bscripts\.seed_pid\b|\"compose\",\s*\"-p\"|\bmultiprocessing\b|ProcessPoolExecutor"
+    r"|\bscripts\.seed_pid\b|\"compose\",[^\]]*?\"(?:-p|--project-name)\"|\bmultiprocessing\b|ProcessPoolExecutor"
 )
 
 
@@ -235,12 +234,16 @@ def test_the_serial_check_names_a_file_that_should_be_serial(tmp_path: Path, mon
         "tests/test_o.py": 'subprocess.run([sys.executable, "-m", "scripts.make_home_cases"])\n',
         "tests/test_p.py": 'subprocess.run([sys.executable, "-m", "cli", "status"])\n',
         "tests/test_q.py": 'client = valkey.Valkey(**{**ValkeyConfig.from_env().client_kwargs(), "db": cfg.db})\n',
+        "tests/test_r.py": 'subprocess.run(["docker", "compose", "--project-name", PROJECT, "ps"])\n',
+        "tests/test_s.py": 'cmd = ["docker", "compose", "-f",\n       str(folder / "compose.yaml"), "-p", NAME, "ps"]\n',
+        "tests/test_t.py": 'subprocess.run(["docker", "compose", "version"])\n',
     }
     for rel, text in shapes.items():
         (tmp_path / rel).write_text(text)
     assert unserialised(list(shapes)) == [
         "tests/test_a.py", "tests/test_b.py", "tests/test_c.py", "tests/test_f.py", "tests/test_g.py", "tests/test_j.py",
         "tests/test_k.py", "tests/test_l.py", "tests/test_m.py", "tests/test_n.py", "tests/test_o.py", "tests/test_p.py",
+        "tests/test_r.py", "tests/test_s.py",
     ]  # fmt: skip
 
 
@@ -253,16 +256,18 @@ import pytest
 @pytest.mark.parametrize("i", range(6))
 def test_one(i):
     from adapters.graph_arcadedb.client import ArcadeDBConfig
+    from services.api.config import ValkeyConfig
     time.sleep(0.2)
     out = Path(os.environ["T1_OUT"]) / f"{os.path.basename(__file__)}-{i}.json"
-    out.write_text(json.dumps([os.environ["PYTEST_XDIST_WORKER"], ArcadeDBConfig.from_env(database="ospreyflow").database]))
+    out.write_text(json.dumps([os.environ["PYTEST_XDIST_WORKER"], ArcadeDBConfig.from_env(database="ospreyflow").database,
+                               ValkeyConfig.from_env().db]))
 """
 
 
 def test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread(tmp_path: Path) -> None:
     """Through xdist itself (`-n 2 --dist loadgroup`), not the hook alone: every serial test on one worker, opening the
-    shared `ospreyflow` in-process as its children would; the other file's tests each on their worker's own (where
-    xdist sends them is its own choice)."""
+    shared `ospreyflow` and Valkey's db 0 in-process as its children and its db-0 clients would; the other file's tests
+    each on their worker's own (where xdist sends them is its own choice)."""
     for name in ("test_serial_a.py", "test_serial_b.py", "test_spread.py"):
         (tmp_path / name).write_text(_SERIAL_PLANTED)
     serial = os.pathsep.join(str((tmp_path / n).resolve()) for n in ("test_serial_a.py", "test_serial_b.py"))
@@ -273,10 +278,12 @@ def test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread(
     serial_seen = [v for k, v in seen.items() if k.startswith("test_serial_")]
     spread_seen = [v for k, v in seen.items() if k.startswith("test_spread")]
     assert len(serial_seen) == 12 and len(spread_seen) == 6, seen
-    assert len({w for w, _ in serial_seen}) == 1, serial_seen
-    assert {db for _, db in serial_seen} == {"ospreyflow"}, serial_seen
-    for worker, db in spread_seen:
+    assert len({w for w, _, _ in serial_seen}) == 1, serial_seen
+    assert {db for _, db, _ in serial_seen} == {"ospreyflow"}, serial_seen
+    assert {v for _, _, v in serial_seen} == {0}, "a serial test's Valkey database is its db-0 clients' own"
+    for worker, db, valkey_db in spread_seen:
         assert db.endswith(f"_{worker}"), spread_seen
+        assert valkey_db == int(worker[2:]) + 1, spread_seen
 
 
 def test_a_child_that_inherits_a_worker_s_environment_is_not_taken_for_a_worker(tmp_path: Path) -> None:
@@ -346,67 +353,174 @@ def test_the_sweep_takes_only_this_plugin_s_names_from_a_killed_run() -> None:
     assert stale(names, now) == [f"ospreyflow_x1a2b3c4d_t{old}_gw0", f"ospreyflow-x1a2b3c4d-t{old}-gw3-staging"]
 
 
-def _fake_stores(monkeypatch: pytest.MonkeyPatch, fail: set[str]) -> list[str]:
-    """Each store's make and clear recorded; a store in `fail` raises, as an unreachable one would."""
+_STORES_CONFTEST = """
+import os
+from pathlib import Path
+
+import tests.worker_isolation as w
+
+FAIL = os.environ.get("T1_FAIL", "")
+
+
+def _note(name):
+    who = os.environ.get("PYTEST_XDIST_WORKER", "controller")
+    with (Path(os.environ["T1_OUT"]) / f"calls-{who}.txt").open("a") as log:
+        log.write(name + "\\n")
+    if name == FAIL:
+        raise ConnectionError(f"{name} refused (planted)")
+
+
+def _valkey_take(db, run):
+    _note("valkey-made")
+
+
+def _valkey_flush(db):
+    _note("valkey")
+
+
+def _buckets(prefix):
+    _note("buckets" if prefix else "sweep-buckets")
+    return []
+
+
+async def _postgres(admin, create, drop=None, left=False):
+    _note("sweep-postgres" if left else "postgres-made" if create else "postgres")
+    return []
+
+
+async def _arcadedb_create(database):
+    _note("arcadedb-made")
+
+
+async def _arcadedb(drop, left=False):
+    _note("sweep-arcadedb" if left else "arcadedb")
+    return []
+
+
+def pytest_sessionfinish(session):
+    _note("sessionfinish")  # inside xdist's own sessionfinish, before its workerfinished: what follows, no report sees
+
+
+w._valkey_take, w._valkey_flush, w._buckets = _valkey_take, _valkey_flush, _buckets
+w._postgres, w._arcadedb_create, w._arcadedb = _postgres, _arcadedb_create, _arcadedb
+"""
+
+
+def _stores_run(tmp_path: Path, fail: str = "", **extra: Any) -> tuple[subprocess.CompletedProcess[str], dict[str, list[str]]]:
+    """The planted file under `-n 2` through xdist itself, its stores stood in for by a conftest that records each
+    make and clear, and refuses the one named in `fail` as an unreachable store would (by raising)."""
+    (tmp_path / "conftest.py").write_text(_STORES_CONFTEST)
+    ran, _ = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "2", "--dist", "loadgroup",
+                  T1_FAIL=fail, OSPREY_WORKER_STORES="1", **extra)  # fmt: skip
+    calls = {p.stem.removeprefix("calls-"): p.read_text().split() for p in (tmp_path / "out").glob("calls-*.txt")}
+    return ran, calls
+
+
+_MADE = ["valkey-made", "postgres-made", "arcadedb-made"]
+_CLEARED = ["arcadedb", "postgres", "valkey", "buckets"]
+_END = ["sessionfinish"]  # every clear before it: inside the run, where a failure is reported
+
+
+def test_each_worker_makes_its_stores_at_its_first_test_and_clears_them_at_its_last(tmp_path: Path) -> None:
+    ran, calls = _stores_run(tmp_path)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert calls.pop("controller") == ["sweep-arcadedb", "sweep-postgres", "sweep-buckets", *_END], calls
+    assert sorted(calls) == ["gw0", "gw1"], calls
+    assert all(c == _MADE + _CLEARED + _END for c in calls.values()), calls
+
+
+def test_a_store_that_fails_to_clear_fails_the_run_and_the_others_are_still_cleared(tmp_path: Path) -> None:
+    """The merger's review: cleared in `pytest_unconfigure`, after xdist's `workerfinished`, a failure was ignored
+    and the run exited 0. Now it is the last test's teardown error, which the controller counts."""
+    ran, calls = _stores_run(tmp_path, fail="arcadedb")
+    assert ran.returncode != 0, ran.stdout + ran.stderr
+    assert "arcadedb refused (planted)" in ran.stdout + ran.stderr
+    assert all(c == _MADE + _CLEARED + _END for w, c in calls.items() if w != "controller"), calls
+
+
+def test_a_make_that_fails_part_way_fails_the_run_and_what_was_made_is_cleared(tmp_path: Path) -> None:
+    ran, calls = _stores_run(tmp_path, fail="arcadedb-made")
+    assert ran.returncode != 0, ran.stdout + ran.stderr
+    assert "arcadedb-made refused (planted)" in ran.stdout + ran.stderr
+    workers = {w: c for w, c in calls.items() if w != "controller"}
+    assert workers and all(
+        c[:3] == _MADE and set(c[3:-1]) == {"arcadedb", "postgres", "valkey"} and c[-1:] == _END for c in workers.values()
+    ), calls
+
+
+def test_a_nested_run_does_not_sweep(tmp_path: Path) -> None:
+    """Its outer run's sweep is the outer run's; a nested one (the live proof's) must not drop what it may not own."""
+    ran, calls = _stores_run(tmp_path, OSPREY_WORKER_VALKEY_TAKEN="4")
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert calls.get("controller") == _END, calls
+
+
+def test_a_replacement_worker_past_the_run_s_count_is_refused() -> None:
+    """xdist replaces a crashed worker with gw<count + k>: its Valkey database would be outside the run's own (on a
+    nested run's, or past db 15)."""
+    from tests.worker_isolation import worker_names
+
+    assert worker_names("gw1", "abcdef12", 1_700_000_000, first=1, count=2)["VALKEY_DB"] == "2"
+    with pytest.raises(pytest.UsageError, match="past the run's 2 workers"):
+        worker_names("gw2", "abcdef12", 1_700_000_000, first=1, count=2)
+
+
+class _Valkey:
+    """Answers as Valkey does: `SET … NX` returns None when the key is there, and leaves it as it was."""
+
+    def __init__(self, held: str | None = None) -> None:
+        self.keys: dict[str, bytes] = {} if held is None else {"osprey:worker-isolation:claim": held.encode()}
+        self.connection_pool = type("Pool", (), {"connection_kwargs": {"db": 3}})()
+
+    def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:
+        if nx and key in self.keys:
+            return None
+        self.keys[key] = value.encode()
+        return True
+
+    def get(self, key: str) -> bytes | None:
+        return self.keys.get(key)
+
+
+def test_a_valkey_database_another_run_holds_is_refused() -> None:
+    from tests.worker_isolation import claim_valkey
+
+    free = _Valkey()
+    claim_valkey(free, "run-a")
+    assert free.keys == {"osprey:worker-isolation:claim": b"run-a"}
+    claim_valkey(free, "run-a")  # its own claim again: a worker's second make
+    with pytest.raises(RuntimeError, match="db 3 is held by run run-a"):
+        claim_valkey(free, "run-b")
+    assert free.keys == {"osprey:worker-isolation:claim": b"run-a"}
+
+
+def test_stores_are_made_only_where_the_lane_holds_a_lease(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every lane session exports OSPREY_LANE; only a lease (as the port guard reads it) makes a run live."""
     from tests import worker_isolation
 
-    calls: list[str] = []
-
-    def step(name: str, result: object = None):  # type: ignore[no-untyped-def]
-        def run(*_args: object, **_kwargs: object) -> object:
-            calls.append(name)
-            if name in fail:
-                raise ConnectionError(name)
-            return result
-
-        return run
-
-    monkeypatch.setattr(worker_isolation, "_valkey_flush", step("valkey"))
-    monkeypatch.setattr(worker_isolation, "_buckets", step("buckets", []))
-    monkeypatch.setattr(worker_isolation, "redirect_arcadedb", lambda _target: None)
-    monkeypatch.setattr(asyncio, "run", lambda value: value)
-    monkeypatch.setattr(
-        worker_isolation, "_postgres", lambda _admin, create, drop=None, left=False: step("postgres-made" if create else "postgres")()
-    )  # fmt: skip
-    monkeypatch.setattr(worker_isolation, "_arcadedb_create", step("arcadedb-made"))
-    monkeypatch.setattr(worker_isolation, "_arcadedb", lambda _drop, left=False: step("arcadedb")())
-    monkeypatch.setattr(os, "environ", {**os.environ, "OSPREY_WORKER_STORES": "1"})
-    return calls
+    monkeypatch.delenv("OSPREY_WORKER_STORES", raising=False)
+    monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.setenv("OSPREY_LANE", "admin")
+    assert worker_isolation._live() is False
+    (tmp_path / "stack-b.lease").mkdir()
+    (tmp_path / "stack-b.lease" / "info").write_text("holder=studio\nstack=b\n")
+    assert worker_isolation._live() is False
+    (tmp_path / "stack-b.lease" / "info").write_text("holder=admin\nstack=b\n")
+    assert worker_isolation._live() is True
 
 
-def test_a_store_that_fails_to_clear_does_not_leave_the_others_behind(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tests.worker_isolation import _Worker
-
-    calls = _fake_stores(monkeypatch, fail={"arcadedb"})
-    worker = _Worker("gw0", "abcdef12", 1)
-    worker.start()
-    with pytest.raises(ConnectionError, match="arcadedb"):
-        worker.finish()
-    assert calls == ["valkey", "postgres-made", "arcadedb-made", "arcadedb", "postgres", "valkey", "buckets"], calls
-    assert not worker.folder.exists()
-
-
-def test_a_start_that_fails_part_way_is_still_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ArcadeDB refused at start: the Valkey db and Postgres database already made are still cleared, and the
-    graph whose making was begun is dropped too (it may exist), at `pytest_unconfigure`."""
-    from tests import worker_isolation
-
-    calls = _fake_stores(monkeypatch, fail={"arcadedb-made"})
-
-    from types import SimpleNamespace
-
-    _config = SimpleNamespace(workerinput={"workerid": "gw0", "testrunuid": "abcdef12" * 4, "workercount": 1})
-    monkeypatch.setitem(os.environ, "OSPREY_WORKER_VALKEY_TAKEN", "1")
-    with pytest.raises(ConnectionError):
-        worker_isolation.pytest_configure(_config)  # type: ignore[arg-type]
-    worker_isolation.pytest_unconfigure(_config)  # type: ignore[arg-type]
-    assert calls == ["valkey", "postgres-made", "arcadedb-made", "arcadedb", "postgres", "valkey"], calls
+def test_the_run_s_header_names_its_workers_and_databases(tmp_path: Path) -> None:
+    ran, _ = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "2", "--dist", "loadgroup", "-v")
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert "worker_isolation: 2 workers, Valkey databases 1 to 2, no stores made (offline)" in ran.stdout, ran.stdout
 
 
 def test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not(tmp_path: Path) -> None:
     """The shapes the real files take (10 November 2026: at 8 workers each worker's own module-scoped Keycloak in
-    `test_organisation_sign_in.py` "never became ready"); a file that only fakes `docker`, or names it in a string, is
-    not grouped. A serial file stays serial."""
+    `test_organisation_sign_in.py` "never became ready"): `run -d` with options between (`test_workspace_bundle.py`'s
+    `run --rm -d`), the TLS fixtures imported relatively as all four of their users do. A file that only fakes
+    `docker`, or names it in a string, is not grouped. Container files join the serial group, so none runs beside a
+    serial file tearing down a fixed compose project."""
     from tests.worker_isolation import pytest_collection_modifyitems, starts_containers
 
     shapes = {
@@ -414,14 +528,16 @@ def test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_n
         "test_b.py": 'subprocess.run(["docker", "compose", "-f", str(f), "up", "-d"])\n',
         "test_c.py": 'subprocess.run([*compose, "up", "--wait"])\n',
         "test_d.py": "assert wait_until_healthy(running)\n",
-        "test_e.py": "from tests.harness.tls_fixtures import docker, render\n",
+        "test_e.py": "from .tls_fixtures import docker, render\n",
+        "test_h.py": 'started = _docker("run", "--rm", "-d", "--name", name, image)\n',
         "test_f.py": 'def _docker(containers: str = "", volumes: str = ""):\n    return f"docker ps {containers}"\n',
         "test_g.py": 'assert calls[0] == "docker run"\n',
+        "test_i.py": "from tests.harness.tls_fixtures import docker\n",
     }
     for name, text in shapes.items():
         (tmp_path / name).write_text(text)
     assert [n for n in shapes if starts_containers(tmp_path / n)] == [
-        "test_a.py", "test_b.py", "test_c.py", "test_d.py", "test_e.py"
+        "test_a.py", "test_b.py", "test_c.py", "test_d.py", "test_e.py", "test_h.py", "test_i.py"
     ]  # fmt: skip
 
     class _Item:
@@ -432,12 +548,14 @@ def test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_n
         def add_marker(self, mark: pytest.MarkDecorator) -> None:
             self.marks.append(mark)
 
-    real = ["organisation_sign_in", "proxy_tls_caddy", "render_memory", "apply_env", "deployment_guard"]
+    real = ["organisation_sign_in", "proxy_tls_caddy", "render_memory", "apply_env", "deployment_guard",
+            "workspace_bundle", "tls_check"]  # fmt: skip
     items = [_Item(BUILD / f"tests/harness/test_{n}.py") for n in real]
     pytest_collection_modifyitems(None, items)  # type: ignore[arg-type]
     assert {i.path.stem: [m.mark.args for m in i.marks] for i in items} == {
-        "test_organisation_sign_in": [("containers",)], "test_proxy_tls_caddy": [("containers",)],
-        "test_render_memory": [("containers",)], "test_apply_env": [("serial",)], "test_deployment_guard": [],
+        "test_organisation_sign_in": [("serial",)], "test_proxy_tls_caddy": [("serial",)],
+        "test_render_memory": [("serial",)], "test_apply_env": [("serial",)], "test_deployment_guard": [],
+        "test_workspace_bundle": [("serial",)], "test_tls_check": [("serial",)],
     }  # fmt: skip
 
 
@@ -457,11 +575,12 @@ def test_one(i):
 """
 
 
-def test_the_container_files_run_on_one_worker_through_xdist(tmp_path: Path) -> None:
-    for name in ("test_box_a.py", "test_box_b.py"):
+def test_the_container_files_run_on_one_worker_with_the_serial_ones_through_xdist(tmp_path: Path) -> None:
+    for name in ("test_box_a.py", "test_box_b.py", "test_serial_c.py"):
         (tmp_path / name).write_text(_CONTAINER_PLANTED)
+    serial = str((tmp_path / "test_serial_c.py").resolve())
     ran, _ = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "3", "--dist", "loadgroup",
-                  files=("test_box_a.py", "test_box_b.py"))  # fmt: skip
+                  files=("test_box_a.py", "test_box_b.py", "test_serial_c.py"), OSPREY_WORKER_SERIAL_EXTRA=serial)  # fmt: skip
     assert ran.returncode == 0, ran.stdout + ran.stderr
-    seen = [json.loads(p.read_text()) for p in (tmp_path / "out").glob("test_box_*.json")]
-    assert len(seen) == 8 and len(set(seen)) == 1, seen
+    seen = [json.loads(p.read_text()) for p in (tmp_path / "out").glob("test_*.json")]
+    assert len(seen) == 12 and len(set(seen)) == 1, seen
