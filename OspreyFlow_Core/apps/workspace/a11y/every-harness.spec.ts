@@ -130,6 +130,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     // Amendment 7: a drawn type mapped onto another of the target's types, its property places drawn.
     "choose=src&press=Map%20and%20match&map=Organisation",
   ],
+  // ADR-143 Amendment 2 decision 8 (L3.6): a drawn watch's alert opened, with *Open the board*.
+  "drawn-watch-alert-harness.html": ["open=w1"],
   // ADR-143 decision 9 (L3.5): the Model tab's proposals block with its decision form, the form's
   // error summary, and as the proposer.
   "model-proposals-harness.html": ["open=accept", "open=decline-error", "as=alice", "as=low"],

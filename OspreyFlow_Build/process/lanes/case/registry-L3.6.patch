@@ -1,0 +1,17 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 4f7b891..d5b69b1 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -538,6 +538,12 @@ export const DRAWN_MERGE_ACTIONS = defineActionRegistry("DRAWN_MERGE_ACTIONS", [
+   "map-a-drawn-type-onto-another-of-the-targets-types-by-keyboard",
+ ] as const);
+ 
++/** A drawn watch's alert in the one queue (ADR-143 Amendment 2 decision 8; L3.6): *Open the board*
++ * its drawn item is on. `keyboard/drawn-watch-alert.spec.ts`. */
++export const DRAWN_WATCH_ALERT_ACTIONS = defineActionRegistry("DRAWN_WATCH_ALERT_ACTIONS", [
++  "open-the-board-from-a-drawn-watch-alert-by-keyboard",
++] as const);
++
+ /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
+  * most connected, put on the canvas; a ranking paged. `keyboard/explore.spec.ts`. */
+ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [
