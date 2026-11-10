@@ -1,0 +1,116 @@
+ Container osprey-upg-objectstore-1 Stopping 
+ Container osprey-upg-opensearch-1 Stopping 
+ Container osprey-upg-ner-1 Stopping 
+ Container osprey-upg-report-sync-1 Stopping 
+ Container osprey-upg-ollama-models-1 Stopping 
+ Container osprey-upg-workspace-1 Stopping 
+ Container osprey-upg-proxy-1 Stopping 
+ Container osprey-upg-superset-1 Stopping 
+ Container osprey-upg-whisper-1 Stopping 
+ Container osprey-upg-workspace-1 Stopped 
+ Container osprey-upg-workspace-1 Removing 
+ Container osprey-upg-workspace-1 Removed 
+ Container osprey-upg-proxy-1 Stopped 
+ Container osprey-upg-proxy-1 Removing 
+ Container osprey-upg-opensearch-1 Stopped 
+ Container osprey-upg-opensearch-1 Removing 
+ Container osprey-upg-proxy-1 Removed 
+ Container osprey-upg-opensearch-1 Removed 
+ Container osprey-upg-whisper-1 Stopped 
+ Container osprey-upg-whisper-1 Removing 
+ Container osprey-upg-whisper-1 Removed 
+ Container osprey-upg-whisper-models-1 Stopping 
+ Container osprey-upg-whisper-models-1 Stopped 
+ Container osprey-upg-whisper-models-1 Removing 
+ Container osprey-upg-whisper-models-1 Removed 
+ Container osprey-upg-ner-1 Stopped 
+ Container osprey-upg-ner-1 Removing 
+ Container osprey-upg-ner-1 Removed 
+ Container osprey-upg-superset-1 Stopped 
+ Container osprey-upg-superset-1 Removing 
+ Container osprey-upg-superset-1 Removed 
+ Container osprey-upg-report-sync-1 Stopped 
+ Container osprey-upg-report-sync-1 Removing 
+ Container osprey-upg-objectstore-1 Stopped 
+ Container osprey-upg-objectstore-1 Removing 
+ Container osprey-upg-ollama-models-1 Stopped 
+ Container osprey-upg-ollama-models-1 Removing 
+ Container osprey-upg-report-sync-1 Removed 
+ Container osprey-upg-api-1 Stopping 
+ Container osprey-upg-ollama-models-1 Removed 
+ Container osprey-upg-objectstore-1 Removed 
+ Container osprey-upg-api-1 Stopped 
+ Container osprey-upg-api-1 Removing 
+ Container osprey-upg-api-1 Removed 
+ Container osprey-upg-litellm-1 Stopping 
+ Container osprey-upg-arcadedb-1 Stopping 
+ Container osprey-upg-valkey-1 Stopping 
+ Container osprey-upg-keycloak-1 Stopping 
+ Container osprey-upg-valkey-1 Stopped 
+ Container osprey-upg-valkey-1 Removing 
+ Container osprey-upg-keycloak-1 Stopped 
+ Container osprey-upg-keycloak-1 Removing 
+ Container osprey-upg-valkey-1 Removed 
+ Container osprey-upg-keycloak-1 Removed 
+ Container osprey-upg-keycloak-db-1 Stopping 
+ Container osprey-upg-keycloak-db-1 Stopped 
+ Container osprey-upg-keycloak-db-1 Removing 
+ Container osprey-upg-keycloak-db-1 Removed 
+ Container osprey-upg-arcadedb-1 Stopped 
+ Container osprey-upg-arcadedb-1 Removing 
+ Container osprey-upg-arcadedb-1 Removed 
+ Container osprey-upg-litellm-1 Stopped 
+ Container osprey-upg-litellm-1 Removing 
+ Container osprey-upg-litellm-1 Removed 
+ Container osprey-upg-ollama-1 Stopping 
+ Container osprey-upg-litellm-db-1 Stopping 
+ Container osprey-upg-litellm-db-1 Stopped 
+ Container osprey-upg-litellm-db-1 Removing 
+ Container osprey-upg-litellm-db-1 Removed 
+ Container osprey-upg-postgres-1 Stopping 
+ Container osprey-upg-ollama-1 Stopped 
+ Container osprey-upg-ollama-1 Removing 
+ Container osprey-upg-ollama-1 Removed 
+ Container osprey-upg-postgres-1 Stopped 
+ Container osprey-upg-postgres-1 Removing 
+ Container osprey-upg-postgres-1 Removed 
+ Volume osprey-upg_whisper-models Removing 
+ Volume osprey-upg_model-settings Removing 
+ Volume osprey-upg_valkey-data Removing 
+ Volume osprey-upg_postgres-data Removing 
+ Volume osprey-upg_objectstore-data Removing 
+ Volume osprey-upg_osprey-data Removing 
+ Volume osprey-upg_opensearch-data Removing 
+ Volume osprey-upg_arcadedb-databases Removing 
+ Volume osprey-upg_map-settings Removing 
+ Volume osprey-upg_ollama-models Removing 
+ Volume osprey-upg_arcadedb-config Removing 
+ Network osprey-upg_egress Removing 
+ Network osprey-upg_osprey Removing 
+ Volume osprey-upg_whisper-models Removed 
+ Volume osprey-upg_model-settings Removed 
+ Volume osprey-upg_objectstore-data Removed 
+ Network osprey-upg_egress Removed 
+ Volume osprey-upg_postgres-data Removed 
+ Volume osprey-upg_opensearch-data Removed 
+ Network osprey-upg_osprey Removed 
+ Volume osprey-upg_arcadedb-databases Removed 
+ Volume osprey-upg_valkey-data Removed 
+ Volume osprey-upg_map-settings Removed 
+ Volume osprey-upg_ollama-models Removed 
+ Volume osprey-upg_osprey-data Removed 
+ Volume osprey-upg_arcadedb-config Removed 
+Untagged: osprey/workspace:local
+Deleted: sha256:f697804a49cc8b5a5b2dba5f7dc0d7a3d97cbc15dd6023d17a6859564abaaa78
+Untagged: osprey/api:local
+Deleted: sha256:c0652eef3d066054d2bbb2b7d27058466c07b1939312ab4bee1a40a122a3d912
+Untagged: osprey/ner:local
+Deleted: sha256:2281e4a248e487fa0cc29f05d379ae4f1de710b3b801576f7ae29c107df1a194
+Untagged: osprey-p5b-hold/osprey-superset-local:upg-rehearsal
+upg-images: image osprey/workspace:local: the run's own, removed
+upg-images: image osprey/api:local: the run's own, removed
+upg-images: image osprey/ner:local: the run's own, removed
+upg-images: image osprey/superset:local: put back to sha256:effe141c6495c997daf4991beb87b8d676d5fcd282efb01026fa69e42d30e89c
+upg-images: another's tags changed meanwhile: none
+upg-images: the run's tags not put back or left: nothing
+upg-run: nothing of osprey-upg is left: containers 0, volumes 0

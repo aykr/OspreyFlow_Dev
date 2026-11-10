@@ -1,0 +1,8 @@
+Engines:
+  local: this deployment's own models (no key)
+  gemini (Gemini): key present: yes; privacy contract: no — extraction gemini/gemini-2.5-flash
+Defaults:
+  extraction: local
+  vision: local
+  transcription: local
+  embedding: local

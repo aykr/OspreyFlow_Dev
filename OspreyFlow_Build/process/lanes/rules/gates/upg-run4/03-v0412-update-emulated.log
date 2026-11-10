@@ -1,0 +1,14 @@
+
+  audit data: postgres/dump.sql, table audit_log — NOT separately replicated (§6).
+upg-run: backup exit 0
+upg-run: v0.4.12's own rollback point: rollback/v0.4.12-20261110T203516Z
+34ef9bd OspreyFlow — from 11e92f4
+upg-run: $ python -m scripts.refresh --files-only   (as v0.4.12's update runs it: no OSPREYFLOW_DEPLOYMENT_DIR)
+refresh: This deployment was rendered before the model gateway kept its own database (ADR-135 Amendment 2), which a refresh cannot bring it to, so nothing was changed. With the checkout at the version you are moving to (git checkout <its tag>), run `ospreyflow backup --name osprey-upg`, then `ospreyflow apply --name osprey-upg` (it keeps every secret and an install from a release on its own images), then `ospreyflow update --name osprey-upg` and `ospreyflow apply --name osprey-upg` once more for an install from a release (the second apply moves the providers' keys into the gateway), or `ospreyflow start --build --name osprey-upg` for one built from a checkout.
+upg-run: files step exit 1
+upg-run: --- the folder around the refused files step (must be unchanged)
+upg-folderhash: 43 files before, 43 after
+upg-folderhash: added none
+upg-folderhash: removed none
+upg-folderhash: changed (content or mode) none
+upg-run: folder diff exit 0

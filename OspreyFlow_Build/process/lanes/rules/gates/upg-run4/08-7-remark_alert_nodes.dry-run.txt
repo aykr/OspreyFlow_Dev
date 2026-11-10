@@ -1,0 +1,4 @@
+$ docker exec osprey-upg-api-1 python -m scripts.remark_alert_nodes --dry-run
+0 alert node(s) checked; 0 would be re-marked.
+Nothing needed changing.
+exit 0

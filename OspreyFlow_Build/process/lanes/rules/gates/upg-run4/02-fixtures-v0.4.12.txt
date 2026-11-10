@@ -1,0 +1,24 @@
+upg-check: signed in as osprey-demo-analyst through osprey-glass's form (PKCE)
+upg-check: POST /v1/investigations/01M73JMT91KX6S0NPTY072JW5X/branch -> 201: id=01M73JQWSC3F97DMB6X8Z7E5RJ, name=Branch of Fixture Corp (synthetic demo), created_at=2026-11-10T20:35:08.716662Z, created_by=6888e7e7-ca76-4846-bbe5-34536f077b90, owning_unit=verify, branched_from=01M73JMT91KX6S0NPTY072JW5X, domains=[0]
+upg-check: signed in as osprey-demo-admin through osprey-glass's form (PKCE)
+upg-check: POST /v1/investigations/01M73JMT91KX6S0NPTY072JW5X/rules/sentence -> 201: name=UPG whole-deployment: Okafor, params={...}, trigger=post_commit, budget_ms=5000, id=01M73JQX2RBRKVPH5PMQBDFPK9, investigation_id=01M73JMT91KX6S0NPTY072JW5X, owner_id=12c75abb-19e5-4ee1-9067-9329e940b99d, status=pending, created_at=2026-11-10T20:35:09.016232Z, retired_at=None, dataset_id=None, version=1
+upg-check: POST /v1/admin/screening-lists/UK%20Sanctions%20List%20(synthetic)/refresh -> 200: id=01M73JQXC0813G98P8CT65R6ZS, list_name=UK Sanctions List (synthetic), at=2026-11-10T20:35:09.027325Z, outcome=updated, version=28/09/2026, previous_version=None, added=5, changed=0, delisted=0, rescreened=15, alerts=0, words=Version 28/09/2026: 5 added, 0 changed, 0 removed. 1 entry n
+investigations: 3
+investigation_datasets: 3
+datasets: 2
+alerts: 0
+typology_rules: 2
+typology_rule_versions: 2
+studio_recipes: 0
+recipe_runs: 0
+hotlists: 0
+monitors: 0
+saved_patterns: 1
+-- cases
+01M73JMT91KX6S0NPTY072JW5X | Fixture Corp (synthetic demo) | - | fixture-corp-seed-worker
+01M73JNNNSWS5X3WEEN8W2CXK7 | Operation Ledger (synthetic demo) | - | ledger-seed-worker
+01M73JQWSC3F97DMB6X8Z7E5RJ | Branch of Fixture Corp (synthetic demo) | 01M73JMT91KX6S0NPTY072JW5X | 6888e7e7-ca76-4846-bbe5-34536f077b90
+-- rules
+01M73JNTF05A769DBKSDYEEKPH | Screen customers against the lists | active | 01M73JNNNSWS5X3WEEN8W2CXK7 | 12c75abb-19e5-4ee1-9067-9329e940b99d | ledger |  | kyc_screening
+01M73JQX2RBRKVPH5PMQBDFPK9 | UPG whole-deployment: Okafor | pending | 01M73JMT91KX6S0NPTY072JW5X | 12c75abb-19e5-4ee1-9067-9329e940b99d | - | deployment | sentence
+-- alerts by state

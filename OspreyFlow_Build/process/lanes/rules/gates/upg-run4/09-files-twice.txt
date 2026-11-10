@@ -1,0 +1,16 @@
+upg-run: $ OSPREYFLOW_DEPLOYMENT_DIR=<osprey-upg> python -m scripts.refresh --files-only   (pass 1)
+{"proxy_changed": false, "routing_changed": false, "theme_changed": false}
+upg-run: files step exit 0
+upg-folderhash: 43 files before, 43 after
+upg-folderhash: added none
+upg-folderhash: removed none
+upg-folderhash: changed (content or mode) none
+upg-run: pass 1 folder diff exit 0
+upg-run: $ OSPREYFLOW_DEPLOYMENT_DIR=<osprey-upg> python -m scripts.refresh --files-only   (pass 2)
+{"proxy_changed": false, "routing_changed": false, "theme_changed": false}
+upg-run: files step exit 0
+upg-folderhash: 43 files before, 43 after
+upg-folderhash: added none
+upg-folderhash: removed none
+upg-folderhash: changed (content or mode) none
+upg-run: pass 2 folder diff exit 0

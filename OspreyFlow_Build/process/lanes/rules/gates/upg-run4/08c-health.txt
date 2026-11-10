@@ -1,0 +1,20 @@
+api running healthy
+arcadedb running healthy
+keycloak running healthy
+litellm running healthy
+ner running healthy
+objectstore running healthy
+ollama-models running 
+ollama running 
+opensearch running 
+postgres running healthy
+proxy running healthy
+report-sync running healthy
+superset running healthy
+valkey running healthy
+whisper running 
+workspace running healthy
+upg-run: running: 16; healthy: 12
+upg-run: owned images: osprey/api:local osprey/superset:local osprey/api:local osprey/ner:local osprey/workspace:local 
+upg-run: the gateway's master key equals the Conduit's LITELLM_API_KEY (fb4f2612fe05)
+upg-run: the gateway answered the Conduit key: 200

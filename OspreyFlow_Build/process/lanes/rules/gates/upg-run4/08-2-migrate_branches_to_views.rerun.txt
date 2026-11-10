@@ -1,0 +1,5 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_branches_to_views 
+Turning cases into views.
+0 became views, in 0 cases; 0 kept as cases; 0 not placed; 0 writes made.
+Done.
+exit 0

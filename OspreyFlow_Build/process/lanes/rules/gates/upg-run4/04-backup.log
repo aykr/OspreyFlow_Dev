@@ -1,0 +1,22 @@
+backup: This deployment's osprey.yaml names no backups folder of its own (none, or the placeholder /var/lib/osprey/backups), so the set goes to /root/osprey-runs/rules-upg/home/OspreyFlow/backups. Name one as components.storage.backups (folders.backups in the install answers).
+backup: /root/osprey-runs/rules-upg/home/OspreyFlow/backups/osprey-upg/20261110T203601Z-osprey-upg-0e4f6f071ef69555d988050afda99f3c0e0fa001
+  analytics     analytics/analytics.duckdb            1,323,008 bytes
+  configuration config/compose.yaml                      13,361 bytes
+  configuration config/handling-uk-le.yaml                  821 bytes
+  configuration config/ontology.yaml                     16,337 bytes
+  configuration config/osprey.yaml                          907 bytes
+  configuration config/realm.json                        10,326 bytes
+  configuration config/weights.yaml                       6,748 bytes
+  graph         graph/arcadedb-backup.zip               765,047 bytes
+  identity      identity/realm.json                       3,500 bytes
+  objects       objects/data.tar.gz                      12,688 bytes
+  postgres      postgres/dump.sql                        78,306 bytes
+  postgres-roles postgres/roles.sql                          642 bytes
+  postgres      postgres/superset.sql                   175,348 bytes
+  total         13 file(s)                             2,407,039 bytes
+  recipes       empty: this deployment has none yet, so the set holds none
+
+  Taken with the Conduit running. The graph store and the analytics database were captured at different instants; use --require-quiesced for a consistent set.
+
+  audit data: postgres/dump.sql, table audit_log — NOT separately replicated (§6).
+upg-run: backup exit 0

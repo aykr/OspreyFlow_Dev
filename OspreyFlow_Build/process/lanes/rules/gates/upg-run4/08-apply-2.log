@@ -1,0 +1,4 @@
+no model key to move
+apply: the settings are applied; started again: keycloak.
+The settings in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml are applied.
+upg-run: apply exit 0
