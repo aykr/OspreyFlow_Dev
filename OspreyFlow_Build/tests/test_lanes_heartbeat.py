@@ -154,7 +154,7 @@ def test_a_needs_line_reads_the_same_ten_minutes_later(hb) -> None:
     _all_beat(hb)
     hb.age("glass", 46)
     hb("beat", "case", "ready-to-merge", "L3.1 done")
-    hb("beat", "studio", "waiting-for-owner", "question on open question 1")
+    hb("beat", "studio", "waiting-for-owner", "the owner's answer on open question 1")
     hb.age("studio", 46)
     now = int(datetime.now(UTC).timestamp())
     first = _needs(hb("show", OSPREY_NOW=str(now)))
@@ -171,7 +171,7 @@ def test_watch_notifies_once_per_new_line_not_on_every_pass(hb) -> None:
     hb("watch", "1", OSPREY_WATCH_PASSES="3")
     notes = hb.notified.read_text().splitlines()
     assert len(notes) == 1, notes
-    hb("beat", "studio", "waiting-for-owner", "another question")
+    hb("beat", "studio", "waiting-for-owner", "another question for the owner")
     hb("watch", "1", OSPREY_WATCH_PASSES="2")
     notes = hb.notified.read_text().splitlines()
     # A new watch starts with nothing seen, so both owner lines are new to it, once each.
@@ -295,9 +295,9 @@ def test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_bea
     which the orchestrator passes; the owner was shown it under Needs you."""
     _all_beat(hb)
     assert hb("beat", "glass", "waiting-for-owner", "round 1 fixes in; waiting for the glass lease for the live reds").returncode == 0
-    assert hb("beat", "case", "waiting-for-owner", "Q1: which of a, b or c?").returncode == 0
+    assert hb("beat", "case", "waiting-for-owner", "Q1 for the owner: which of a, b or c?").returncode == 0
     show = hb("show")
-    assert _needs(show) == ["case is waiting for you: Q1: which of a, b or c?"]
+    assert _needs(show) == ["case is waiting for you: Q1 for the owner: which of a, b or c?"]
     assert "glass is waiting for the lease: round 1 fixes in" in show.stdout.split("FOR THE ORCHESTRATOR")[1]
 
 
@@ -308,11 +308,11 @@ def test_shows_run_at_once_do_not_mix_their_lines(hb) -> None:
 
     _all_beat(hb)
     assert hb("beat", "glass", "ready-to-merge", "L2.8 done").returncode == 0
-    assert hb("beat", "case", "waiting-for-owner", "Q1: which of a, b or c?").returncode == 0
+    assert hb("beat", "case", "waiting-for-owner", "Q1 for the owner: which of a, b or c?").returncode == 0
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
         outs = list(pool.map(lambda _: hb("show").stdout, range(16)))
     for out in outs:
-        assert _needs(type("S", (), {"stdout": out})()) == ["case is waiting for you: Q1: which of a, b or c?"], out
+        assert _needs(type("S", (), {"stdout": out})()) == ["case is waiting for you: Q1 for the owner: which of a, b or c?"], out
         assert out.count("glass is ready to merge") == 1, out
 
 
