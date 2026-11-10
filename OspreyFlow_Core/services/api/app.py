@@ -13180,12 +13180,7 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
         async def as_author(owner_id: str) -> Principal | None:
             return author if owner_id == author.id else None
 
-        # Within the rule's declared dataset alone, as a load and Test read it (the lane-reviewer's
-        # item 7): never the whole case, its layer with it.
-        reach = await _rule_reach_from(state)(rule)
-        if reach is None:
-            raise RuntimeError("the rule's case no longer reads its dataset")
-        author = author.model_copy(update={"datasets": reach})
+        # The author comes narrowed to the rule's declared dataset (`RuleScheduleExecutor.reach`).
         gate = RuleGate(
             rules=[rule], investigation_id=rule.investigation_id, graph=state.graph,
             analytics=state.analytics, scheme=state.handling_scheme, alert_store=state.alerts_store,
@@ -13214,6 +13209,10 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
         judge=judge,
         judge_on_refresh=judge_on_refresh,
         reads_list=reads_list,
+        # Amendment 6 point 11: every slot and refresh within the rule's declared dataset alone,
+        # as a load and Test read it, never the author's whole case scope, its layer with it;
+        # refused in words once the case no longer reads the dataset.
+        reach=lambda rule: _rule_reach_from(state)(rule),
     )
 
 
@@ -14660,12 +14659,18 @@ async def deploy_typology_rule(
     audit: AuditDep,
     body: TypologyRuleInput,
 ) -> TypologyRule:
-    """A case Author deploys, with no second approver (ADR-109 ruling 4); audited. A drawn
-    pattern (phase D) must be one the Author saved: it is read as theirs at every evaluation. A
-    sentence (ADR-133) is deployed through `…/rules/sentence`, which checks it against the ontology
-    and its scope against the author's level and rights; it is refused here."""
+    """A case Author deploys a rule just for them, with no second approver (ADR-109 ruling 4;
+    ADR-146 Amendment 6 decision 12: a rule for the case is the rule editor's, refused here as
+    `use_the_rule_editor`); audited. A drawn pattern (phase D) must be one the Author saved: it is
+    read as theirs at every evaluation. A sentence (ADR-133) is deployed through `…/rules/sentence`,
+    which checks it against the ontology and its scope against the author's level and rights; it is
+    refused here."""
     if body.params.typology == "sentence":
         raise ReleaseRefused("a rule written as a sentence is deployed from the sentence builder")
+    if not body.just_me:
+        # ADR-146 Amendment 6 decision 12: a case-wide rule goes live only drafted, tested and past
+        # its second person, in the rule editor; this form keeps a rule just for its author.
+        raise UseTheRuleEditor()
     if body.params.typology == "pattern":
         try:
             await patterns_store.get_authorized(body.params.pattern_id, principal)

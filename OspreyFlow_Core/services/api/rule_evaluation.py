@@ -840,15 +840,23 @@ class RuleGate:
         return await self.expiries.record(self.investigation_id, pairs)
 
     async def _deployer(self, rule: TypologyRule) -> Principal | None:
+        from .rule_schedule import holds_a_writing_right
+        from .sentence_rules import is_deployment_wide
+
         deployer = await self.principal_for_owner(rule.owner_id)
+        if deployer is not None and not is_deployment_wide(rule) and not holds_a_writing_right(
+            deployer
+        ):
+            # ADR-146 Amendment 6 decision 13: a rule runs as its author only while they hold a
+            # right to have written it, at a load as on a schedule (a whole-deployment rule is the
+            # administrator's, approved by a second person: its own rights, ADR-133 decision 7).
+            return None
         if deployer is not None and rule.dataset_id is not None:
             reach: list[str] | None = [rule.dataset_id]
             if self.rule_reach is not None:
                 reach = await self.rule_reach(rule)
             # A case that no longer reads the rule's dataset reads nothing through it (rule 3).
             deployer = deployer.model_copy(update={"datasets": reach or []})
-        from .sentence_rules import is_deployment_wide
-
         if deployer is not None and is_deployment_wide(rule):
             # ADR-133 decision 1: a deployment-wide sentence judges each case's loads within that
             # case's datasets (the loader's), as its administrator author may read them.

@@ -454,7 +454,7 @@ export function RulesPanel(props: RulesPanelProps) {
           preset={preset?.template ?? null}
           patterns={patterns}
           onDeployed={(rule) => {
-            setSaid(`Deployed “${rule.name}”.`);
+            setSaid(`Deployed “${rule.name}”, raising alerts for you alone.`);
             reload();
           }}
         />
@@ -537,9 +537,8 @@ function DeployForm(
       onSubmit={(e) => {
         e.preventDefault();
         setProblem(null);
-        deployRule(
-          props,
-          ruleInput(
+        deployRule(props, {
+          ...ruleInput(
             name,
             typology,
             values,
@@ -550,7 +549,10 @@ function DeployForm(
             patternId,
             { jurisdictions: jurisdictionCodes(codes), cashTypes, measure },
           ),
-        )
+          // ADR-146 Amendment 6 decision 12: this form keeps a rule just for its author; a rule
+          // for the case is written in the rule editor, drafted, tested and made live.
+          just_me: true,
+        })
           .then((rule) => {
             setName("");
             props.onDeployed(rule);
@@ -568,6 +570,9 @@ function DeployForm(
       <h3 className="value" style={{ margin: 0 }}>
         Deploy a rule
       </h3>
+      <p className="label" style={{ margin: 0 }}>
+        This rule raises alerts for you; to share it with the case, write it in the rule editor.
+      </p>
       <label className="label" style={FIELD}>
         Name
         <Input

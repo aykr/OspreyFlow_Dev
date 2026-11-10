@@ -439,12 +439,14 @@ test("a template fills the rule form, which is then deployed, by keyboard (ADR-1
   await expect(page.getByLabel("Rule name")).toBeFocused();
   await expect(page.getByLabel("Rule name")).toHaveValue("Circular flow");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Circular flow”.")).toBeVisible();
+  // ADR-146 Amendment 6 decision 12: the form keeps a rule just for its author.
+  await expect(page.getByText("Deployed “Circular flow”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Circular flow",
     params: { typology: "circular_flow", max_hops: 4, window_days: 30 },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "use-a-template-by-keyboard");
 });
@@ -453,16 +455,21 @@ test("a rule is deployed and another retired, by keyboard", async ({ page }) => 
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
   await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await expect(page.getByRole("form", { name: "Deploy a rule" })).toContainText(
+    "This rule raises alerts for you; to share it with the case, write it in the rule editor.",
+  );
   await page.getByLabel("Rule name").fill("Pass-through");
   await page.getByRole("combobox", { name: "Typology" }).selectOption("rapid_movement");
   await page.getByRole("combobox", { name: "When the rule runs" }).selectOption("pre_commit");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Pass-through”.")).toBeVisible();
+  // ADR-146 Amendment 6 decision 12: the form keeps a rule just for its author.
+  await expect(page.getByText("Deployed “Pass-through”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Pass-through",
     params: { typology: "rapid_movement", within_hours: 48, keep_fraction: 0.8 },
     trigger: "pre_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-a-rule-by-keyboard");
   await press(page, page.getByRole("button", { name: "Retire Deposits" }));
@@ -479,12 +486,13 @@ test("a KYC screening rule is deployed with its switch, by keyboard", async ({ p
   await page.getByRole("checkbox", { name: "Screen beneficial owners too" }).focus();
   await page.keyboard.press("Space");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Onboarding screen”.")).toBeVisible();
+  await expect(page.getByText("Deployed “Onboarding screen”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Onboarding screen",
     params: { typology: "kyc_screening", min_score: 0.9, owner_threshold: 25, screen_owners: false },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-a-kyc-rule-by-keyboard");
 });
@@ -499,12 +507,13 @@ test("a pattern drawn in the Query builder is deployed as a rule, by keyboard", 
   const form = page.getByRole("form", { name: "Deploy a rule" });
   await form.getByRole("combobox", { name: "Saved pattern", exact: true }).selectOption("pat-1");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “Drawn: company with a phone”.")).toBeVisible();
+  await expect(page.getByText("Deployed “Drawn: company with a phone”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "Drawn: company with a phone",
     params: { typology: "pattern", pattern_id: "pat-1", max_matches: 200 },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-a-drawn-pattern-rule-by-keyboard");
 });
@@ -757,12 +766,14 @@ test("an AML template is deployed with its jurisdiction list, by keyboard (ADR-1
   await page.getByRole("textbox", { name: "High-risk jurisdictions" }).focus();
   await page.keyboard.type("xa, xb");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
-  await expect(page.getByText("Deployed “High-risk jurisdiction”.")).toBeVisible();
+  // ADR-146 Amendment 6 decision 12: the form keeps a rule just for its author.
+  await expect(page.getByText("Deployed “High-risk jurisdiction”, raising alerts for you alone.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
     name: "High-risk jurisdiction",
     params: { typology: "high_risk_jurisdiction", jurisdictions: ["XA", "XB"] },
     trigger: "post_commit",
     budget_ms: 5000,
+    just_me: true,
   });
   registerCovered(REGISTRY, "deploy-an-aml-template-by-keyboard");
 });

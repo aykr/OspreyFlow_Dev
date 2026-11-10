@@ -303,6 +303,7 @@ export type MinRecent = number;
 export type Measure = "count" | "amount";
 export type Trigger = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type BudgetMs = number;
+export type JustMe = boolean;
 export type Id = string;
 export type InvestigationId = string;
 export type OwnerId = string;
@@ -332,6 +333,7 @@ export interface TypologyRule {
   params: Params;
   trigger?: Trigger;
   budget_ms?: BudgetMs;
+  just_me?: JustMe;
   id: Id;
   investigation_id: InvestigationId;
   owner_id: OwnerId;

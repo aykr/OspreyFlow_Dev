@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS typology_rules (
 CREATE INDEX IF NOT EXISTS typology_rules_investigation_idx ON typology_rules (investigation_id);
 -- ADR-133 stage (d): a rule's current version.
 ALTER TABLE typology_rules ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+-- ADR-146 Amendment 6 decision 12: a pattern or template rule just for its author.
+ALTER TABLE typology_rules ADD COLUMN IF NOT EXISTS just_me BOOLEAN NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS typology_rule_versions (
     rule_id TEXT NOT NULL,
     version INTEGER NOT NULL,
@@ -137,7 +139,7 @@ _COLUMNS = (
 #: What a read returns: the stored columns, the current version, and the change waiting, if any.
 _READ = (
     "id, investigation_id, owner_id, name, params, trigger, budget_ms, status, created_at, "
-    "retired_at, dataset_id, version, "
+    "retired_at, dataset_id, version, just_me, "
     "(SELECT row_to_json(p) FROM (SELECT action, proposed_by, version, asked_by, "
     "tested_at IS NOT NULL AS make_live "
     "FROM typology_rule_versions v "
@@ -221,6 +223,7 @@ def _row_to_rule(row: asyncpg.Record) -> TypologyRule:
         retired_at=row["retired_at"],
         dataset_id=row["dataset_id"],
         version=row["version"] if "version" in keys else 1,
+        just_me=bool(row["just_me"]) if "just_me" in keys else False,
         pending_action=pending["action"] if pending else None,
         pending_by=pending["proposed_by"] if pending else None,
         pending_version=pending["version"] if pending else None,
@@ -299,6 +302,10 @@ class TypologyRuleStore:
                 rule.retired_at,
                 rule.dataset_id,
             )
+            if rule.just_me:
+                await conn.execute(
+                    "UPDATE typology_rules SET just_me = true WHERE id = $1", rule.id
+                )
             await self._keep_version(
                 conn, rule.id, 1, "deploy", spec, principal.id, rule.created_at,
                 status="pending" if wide else "applied",

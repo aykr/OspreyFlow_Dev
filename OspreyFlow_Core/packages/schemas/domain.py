@@ -1258,6 +1258,10 @@ class TypologyRuleInput(BaseModel):
     params: TypologyParams
     trigger: RuleTrigger = "post_commit"
     budget_ms: int = Field(default=5000, ge=100, le=60000)
+    #: ADR-146 Amendment 6 decision 12: a pattern or template rule (`POST …/rules`) raises alerts
+    #: for its author alone, never the case's queue or a team; a case-wide rule is written in the
+    #: rule editor, drafted, tested and made live. A sentence's own scope says this for a sentence.
+    just_me: bool = False
 
     @model_validator(mode="after")
     def _a_drawn_pattern_runs_after_commit(self) -> TypologyRuleInput:

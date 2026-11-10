@@ -56,6 +56,10 @@ def sentence_of_rule(rule: TypologyRule) -> SentenceRuleParams | None:
 
 
 def is_just_me(rule: TypologyRule) -> bool:
+    """A rule whose alerts are its author's alone: a sentence just for them, or a pattern or
+    template rule made through `POST …/rules` (ADR-146 Amendment 6 decision 12)."""
+    if rule.just_me:
+        return True
     params = sentence_of_rule(rule)
     return params is not None and params.sentence.scope == "just_me"
 
@@ -91,6 +95,10 @@ def sentence_alert_fields(finding: Finding) -> dict[str, Any]:
     author — then a monitor-kind alert for the author alone (`monitor:sentence:<rule>`)."""
     rule = finding.rule
     params = sentence_of_rule(rule)
+    if params is None and rule.just_me:
+        # ADR-146 Amendment 6 decision 12: a template rule just for its author, as a sentence's.
+        return {"rule_id": f"monitor:sentence:{rule.id}", "typology": None, "team": None,
+                "dataset_id": rule.dataset_id}  # fmt: skip
     if params is None:
         return {"rule_id": f"typology:{rule.id}", "typology": finding.typology,
                 "dataset_id": rule.dataset_id}  # fmt: skip

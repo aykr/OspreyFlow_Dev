@@ -8,8 +8,9 @@ clock changes (`scheduler.due_slots`, ADR-110 Amendment 2).
 - **one replica per slot**: the latest due slot is claimed with Valkey `SET NX`; the slots before
   it, after downtime, are recorded *missed*, not run;
 - **as its author, resolved afresh**: the author must still be able to sign in, still hold
-  `deploy_rules`, and still be an Author of the rule's case (an Editor, for a rule just for them);
-  otherwise the slot is *refused*, in words;
+  `author_rules` or `deploy_rules` (ADR-146 Amendment 6 decision 13), and still be an Author of
+  the rule's case (an Editor, for a rule just for them); the slot reads the rule's declared dataset
+  alone, as its case still reads it; otherwise the slot is *refused*, in words;
 - **three refusals in a row stop the schedule**, said in words on the rule (`schedule_view`) until
   the rule is changed (a new version starts the count again); an identity provider that cannot be
   reached is a *failure*, which says nothing about the author and never stops it;
@@ -67,7 +68,9 @@ def _schedule_of(rule: TypologyRule) -> RuleSchedule | None:
 
 
 def _just_me(rule: TypologyRule) -> bool:
-    return isinstance(rule.params, SentenceRuleParams) and rule.params.sentence.scope == "just_me"
+    return rule.just_me or (
+        isinstance(rule.params, SentenceRuleParams) and rule.params.sentence.scope == "just_me"
+    )
 
 
 def _refused_in_a_row(rule: TypologyRule, runs: Sequence[RuleRun]) -> list[RuleRun]:
@@ -172,6 +175,14 @@ class _Refused(Exception):
         self.outcome = outcome
 
 
+def holds_a_writing_right(author: Principal) -> bool:
+    """ADR-146 Amendment 6 decision 13: a rule runs as its author only while they hold a right to
+    have written it — `author_rules` (the rule editor's) or `deploy_rules` (the sentence builder's,
+    before the editor) — on every path it runs by: a load, a slot, a list's refresh."""
+    rights = rights_for(author.roles)
+    return Right.AUTHOR_RULES in rights or Right.DEPLOY_RULES in rights
+
+
 @dataclass
 class RuleScheduleExecutor:
     """Each tick, every running scheduled rule with a slot due is judged once, as its author."""
@@ -190,6 +201,11 @@ class RuleScheduleExecutor:
     #: deployment): list ids repeat across datasets, so the id alone never decides
     #: (`rule_editor.reads_the_list`).
     reads_list: Callable[[TypologyRule, str, str], Awaitable[bool]] | None = None
+    #: ADR-146 decision 3 and Amendment 6 point 11: what the rule reads, its declared dataset
+    #: (a composite's members) as its case still reads it (`rule_editor.rule_reach_of`); `None`
+    #: from it is a case that no longer reads the dataset. Every slot and refresh is judged within
+    #: it alone, never the author's whole case scope (its layer with it).
+    reach: Callable[[TypologyRule], Awaitable[list[str] | None]] | None = None
 
     async def on_list_refreshed(self, list_id: str, owner: str, now: datetime) -> int:
         """ADR-146 decision 3, *When* a screening list refreshes: each running rule that names the
@@ -307,19 +323,27 @@ class RuleScheduleExecutor:
             ) from error
         except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
             raise _Refused(f"OspreyFlow could not act as the rule's author, {owner}") from error
-        if Right.DEPLOY_RULES not in rights_for(author.roles):
-            raise _Refused(f"the rule's author, {owner}, no longer holds deploy_rules")
+        if not holds_a_writing_right(author):
+            raise _Refused(
+                f"the rule's author, {owner}, no longer holds author_rules or deploy_rules"
+            )
         level, said = (
             (AccessLevel.EDITOR, "an Editor")
             if _just_me(rule)
             else (AccessLevel.AUTHOR, "an Author")
         )
         try:
-            return await self.check_case(author, rule.investigation_id, level)
+            scoped = await self.check_case(author, rule.investigation_id, level)
         except (InsufficientAccessError, InvestigationNotFoundError) as error:
             raise _Refused(
                 f"the rule's author, {owner}, is no longer {said} of its case"
             ) from error
+        if self.reach is None:
+            return scoped
+        reach = await self.reach(rule)
+        if reach is None:
+            raise _Refused("the rule's case no longer reads its dataset")
+        return scoped.model_copy(update={"datasets": reach})
 
     async def _record(
         self,

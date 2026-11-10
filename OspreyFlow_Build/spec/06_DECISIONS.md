@@ -32882,7 +32882,10 @@ unchanged except where this says so.
       asked for it to go live. A make-live sent back keeps its draft's test.
     - **What a rule reads.** A load, a schedule, a refresh and *Test* read the rule's declared dataset alone, a
       composite with its members (`datasets.read_set`), never the case's layer. Its drawn pattern is saved in that
-      dataset. A case that no longer reads the dataset reads nothing through the rule.
+      dataset. A case that no longer reads the dataset reads nothing through the rule. A slot or a refresh is then
+      *refused* in words ("the rule's case no longer reads its dataset"), so three in a row stop it. The schedule
+      executor narrows its author to the dataset before judging (`RuleScheduleExecutor.reach`; the orchestrator's
+      review, item 1: a slot had read the author's whole case scope).
     - **List ids are per dataset.** A refresh starts only the rules whose dataset reads that owner's list (a
       dataset's own, or a deployment-wide one it subscribes to). Three refusals in a row stop a refresh rule, as they
       stop a schedule.
@@ -32892,6 +32895,24 @@ unchanged except where this says so.
     - **The migration.** Each copy gets its own drawn pattern, saved in its dataset. It is owned by the original's
       administrator, who need not be an Author of the copy's home case; its runs then say so, as any rule whose
       author cannot act. A rule changed while the migration runs is left for its next run.
+12. **The template and pattern form keeps rules just for their author** (*decided*, the orchestrator's review, item 2).
+    `POST …/rules`, the pattern rules and the AML and KYC templates, had made a rule live for the whole case at
+    once: untested, past its dataset's second person, on the case's first dataset. It now makes one only *just for
+    me* (`TypologyRuleInput.just_me`): its alerts are its author's alone, a monitor-kind row with no typology, so
+    neither the case's queue nor a team holds them, and it writes no `Alert` node. Anything else is refused
+    (409 `use_the_rule_editor`). The form says so: "This rule raises alerts for you; to share it with the case,
+    write it in the rule editor." Rules made before keep running as they were. *Open:* the editor's draft, *Test*
+    and *Make live* for a pattern or template rule. *Test* previews sentences alone, so a template cannot yet be
+    drafted for the case (carried to the next step).
+13. **A rule runs as an author who may have written it** (*decided*, the orchestrator's review, item 3). *Make live*
+    sets the owner to whoever saved the draft, who may hold *Rule author* alone: `author_rules`, not
+    `deploy_rules`. The schedule had asked `deploy_rules`, so such a rule never ran on its schedule or a refresh.
+    Every path a rule runs by now asks the same thing of its author: `author_rules` (the editor's) or
+    `deploy_rules` (the sentence builder's, before the editor). That covers a load (`RuleGate._deployer`), a slot
+    and a refresh (`RuleScheduleExecutor._author`), and *Test*, whose route asks `author_rules`. The author still
+    reads the rule's dataset alone (point 11). Someone who holds neither raises nothing, and the run says why. A
+    whole-deployment rule is the administrator's, approved by a second person, and keeps its own rights
+    (decision 7).
 
 ### Tests that would fail (rule 12)
 

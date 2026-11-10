@@ -159,6 +159,22 @@ async def test_a_case_sentence_raises_its_alert_with_its_severity_and_team() -> 
     assert len(recorder.alerts) == 1
 
 
+async def test_a_rule_runs_at_a_load_only_as_an_author_who_may_have_written_it() -> None:
+    """ADR-146 Amendment 6 decision 13 (the orchestrator's review of L2.11, item 3): a rule runs as
+    its author only while they hold `author_rules` or `deploy_rules`, at a load as on a schedule.
+    A Rule author's runs; one who has lost both rights raises nothing, and says why. Red with
+    `RuleGate._deployer`'s check removed: the rule raised as someone who may no longer write one."""
+    sentence = RuleSentence.model_validate({"subject": "Person", **LISTED})
+    for roles, raised in ((["rule_author"], 1), (["reports_viewer"], 0)):
+        graph, recorder = _WritingGraph([_node("p1", "Person", family_name="Okafor", listing="pep")]), _Recorder()
+        author = AUTHOR.model_copy(update={"roles": roles})
+        notes = await _gate(_rule(sentence), graph, recorder, author=author).post_commit(
+            [], load_id="load-1", written=[_write("p1", listing="pep")])  # fmt: skip
+        assert len(recorder.alerts) == raised, roles
+        if not raised:
+            assert notes == ["Rule “Listed people” could not run after the load: the rule's deployer could not be resolved."]
+
+
 async def test_a_just_me_sentence_alerts_its_author_alone_and_writes_nothing_to_the_graph() -> None:
     sentence = RuleSentence.model_validate({"subject": "Person", **LISTED, "scope": "just_me"})
     graph, recorder = _Graph([_node("p1", "Person", family_name="Okafor", listing="pep")]), _Recorder()
@@ -244,3 +260,25 @@ def test_a_rule_says_the_sentence_runs_when_it_says(scope: str) -> None:
     with pytest.raises(ValueError, match="the rule runs then"):
         TypologyRule(id="r", investigation_id=CASE, owner_id="a", name="n", created_at=NOW, trigger="pre_commit",
                      params=SentenceRuleParams(pattern_id="p", sentence=sentence))  # fmt: skip
+
+
+def test_a_template_rule_just_for_its_author_raises_their_alert_alone_and_no_node() -> None:
+    """ADR-146 Amendment 6 decision 12 (the orchestrator's ruling on item 2): a pattern or template
+    rule made through `POST …/rules` is just for its author, as a just-me sentence is: its alert a
+    monitor-kind row for them (no typology, so the case's queue and teams never hold it) and no
+    `Alert` node in the case's graph. Red with `is_just_me` reading sentences alone: the template's
+    alert was the case's typology alert, with a node every member could read."""
+    from services.api.rule_evaluation import Finding, alert_row
+    from services.api.sentence_rules import writes_no_alert_node
+
+    rule = TypologyRule.model_validate({
+        "id": "rule-t", "investigation_id": CASE, "owner_id": AUTHOR.id, "name": "Large cash",
+        "params": {"typology": "large_cash", "threshold": 10000}, "trigger": "post_commit",
+        "created_at": "2026-11-10T00:00:00Z", "dataset_id": "ds-1", "just_me": True,
+    })  # fmt: skip
+    finding = Finding(rule=rule, deployer=AUTHOR, typology="large_cash", subject="a1", refs=("a1",),
+                      words="Large cash on a1", node_ids=["a1"])  # fmt: skip
+    alert = alert_row(finding, None, CASE)
+    assert (alert.rule_id, alert.typology, alert.team, alert.owner_id) == (
+        "monitor:sentence:rule-t", None, None, AUTHOR.id)  # fmt: skip
+    assert writes_no_alert_node(rule)

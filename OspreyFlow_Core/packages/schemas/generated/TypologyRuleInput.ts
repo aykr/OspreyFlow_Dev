@@ -303,6 +303,7 @@ export type MinRecent = number;
 export type Measure = "count" | "amount";
 export type Trigger = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type BudgetMs = number;
+export type JustMe = boolean;
 
 /**
  * What a case Author deploys (ADR-109 ruling 4): a typology with its parameters and the
@@ -314,6 +315,7 @@ export interface TypologyRuleInput {
   params: Params;
   trigger?: Trigger;
   budget_ms?: BudgetMs;
+  just_me?: JustMe;
   [k: string]: unknown;
 }
 export interface StructuringParams {

@@ -14,7 +14,8 @@ What a mistake would do, and the case that catches it:
 - a rule live untested, a test counting what the tester may not see, or its count told to anyone
   else (rule 7): `test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone`;
 - a second-person policy ignored, or the author approving their own:
-  `test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval`.
+  `test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval`;
+- whoever asked for a make-live approving it: `test_whoever_asked_for_a_make_live_cannot_approve_it`.
 """
 
 from __future__ import annotations
@@ -349,6 +350,20 @@ def test_neither_the_author_nor_the_asker_sends_a_make_live_back(strict: tuple[_
         refused = client.post(f"{_base(w)}/{rule_id}/reject", json={"reason": "mine"})
         assert (refused.status_code, refused.json()["detail"]["error"]) == (403, "own_change"), who.id
     assert client.get(f"{_base(w)}/{rule_id}/draft").json() is None  # still waiting, not sent back
+
+
+def test_whoever_asked_for_a_make_live_cannot_approve_it(strict: tuple[_World, TestClient]) -> None:
+    """ADR-146 Amendment 6 point 4, rule 12 (the orchestrator's review, item 4): the second person
+    is neither the author nor whoever asked. Red with approve's `asked_by` clause removed: the
+    checker who asked made the rule live on their own say."""
+    w, client = strict
+    rule_id = _made(w, client)
+    assert client.post(f"{_base(w)}/{rule_id}/test").status_code == 200
+    w.as_ = w.checker  # the checker asks; the author wrote it
+    assert client.post(f"{_base(w)}/{rule_id}/make-live").status_code == 200
+    refused = client.post(f"{_base(w)}/{rule_id}/approve")
+    assert (refused.status_code, refused.json()["detail"]["error"]) == (403, "own_change")
+    assert client.get(f"{_base(w)}/{rule_id}/versions").json()[-1]["status"] == "pending"
 
 
 def test_another_cases_author_reaches_none_of_this_cases_rule(world: tuple[_World, TestClient]) -> None:
