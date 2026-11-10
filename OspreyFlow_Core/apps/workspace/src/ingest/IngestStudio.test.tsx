@@ -74,11 +74,11 @@ function open(onOpenCase = vi.fn()) {
 }
 
 describe("IngestStudio: four places", () => {
-  it("offers 1 Model, 2 Sources, 3 Pipelines and 4 Runs, Pipelines first", () => {
+  it("offers 1 Model, 2 Sources, 3 Pipelines, 4 Runs and 5 Releases, Pipelines first", () => {
     serve();
     open();
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["1 Model", "2 Sources", "3 Pipelines", "4 Runs"]);
+    expect(tabs).toEqual(["1 Model", "2 Sources", "3 Pipelines", "4 Runs", "5 Releases"]);
     expect(screen.getByRole("tab", { name: "3 Pipelines" }).getAttribute("aria-selected")).toBe("true");
   });
 
