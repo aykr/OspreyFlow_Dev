@@ -1,6 +1,7 @@
 // The top bar's *Needs you · n* (ADR-145 decision 11, A2; Amendment 4 decision 11, R7; ADR-090
 // Amendment 4; L2.7): the proposed link types the reader may decide and the promotions overdue to
-// them, each with a tip saying what it is and what follows. Everything it lists is what the Conduit
+// them, and their own scheduled loads' notices (ADR-110 Amendment 19), each with a tip saying what it is
+// and what follows. Everything it lists is what the Conduit
 // served this reader (`GET /v1/me/needs-you`), so it lists nothing the reader cannot see: a dataset
 // whose proposals they may not read is not listed at all. The control is
 // drawn only when something waits, or when the read failed (said, never shown as nothing, rule 2).
@@ -140,6 +141,16 @@ export function NeedsYou({
               close,
             ),
           )}
+          {needs?.schedule_notices?.map((n) =>
+            entry(`notice-${n.notice_id}`, n.words, WORDS.noticeTip),
+          )}
+          {needs &&
+            (needs.schedule_notices_total ?? 0) > (needs.schedule_notices?.length ?? 0) &&
+            entry(
+              "notices-more",
+              WORDS.moreNotices((needs.schedule_notices_total ?? 0) - (needs.schedule_notices?.length ?? 0)),
+              WORDS.moreNoticesTip,
+            )}
           {needs?.proposals
             .filter((p) => p.to_decide > 0)
             .map((p) =>

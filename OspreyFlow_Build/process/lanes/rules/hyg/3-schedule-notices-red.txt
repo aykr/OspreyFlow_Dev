@@ -7,3 +7,14 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_schedule
 FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_schedule_notice_is_served_to_its_owner_alone
 1 failed, 10 passed, 1 warning in 1.71s
 11 passed, 1 warning in 1.53s
+# --- plant 3 (NeedsYou.tsx): the notices not drawn (schedule_notices?.map dropped)
+     × lists the reader's own scheduled loads' notices with their tip, and counts every one (ADR-110 Amendment 19) 6ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 15 passed (16)
+# --- plant 4 (needsYouApi.ts needsYouCount): the notices left out of the count
+     × lists the reader's own scheduled loads' notices with their tip, and counts every one (ADR-110 Amendment 19) 1005ms
+     × says how many notices are not listed, never cutting them silently (rule 2) 2ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 14 passed (16)
+# --- green after both reverted
+      Tests  16 passed (16)

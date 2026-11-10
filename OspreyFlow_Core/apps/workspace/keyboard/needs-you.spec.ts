@@ -37,6 +37,27 @@ test("Needs you opens, each entry's tip is read with it, and Escape gives focus 
   registerCovered(REGISTRY, "read-a-needs-you-entrys-tip-by-keyboard");
 });
 
+test("the reader's scheduled loads' notices are reached by Tab, each read with its tip, and how many more is said (ADR-110 Amendment 19)", async ({ page }) => {
+  await page.goto(`${HARNESS}?notices=1`);
+  const button = page.getByRole("button", { name: /^Needs you · 26/ });
+  await button.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("group", { name: "Needs you" })).toBeVisible();
+  await page.keyboard.press("Tab"); // the overdue promotion
+  await page.keyboard.press("Tab");
+  const refused = page.getByText(/was refused: the file was not there/);
+  await expect(refused).toBeFocused();
+  await expect(refused).toHaveAccessibleDescription(/Its pipeline's Runs, in the Ingest Studio, say what happened/);
+  await page.keyboard.press("Tab");
+  await expect(page.getByText(/failed: the database did not answer/)).toBeFocused();
+  await page.keyboard.press("Tab");
+  const more = page.getByText(/21 more notices of your scheduled loads/);
+  await expect(more).toBeFocused();
+  await expect(more).toHaveAccessibleDescription(/list every run of its schedule/);
+  await page.keyboard.press("Escape");
+  await expect(button).toBeFocused();
+});
+
 test("an overdue promotion opens Operations, and a dataset's proposals its Model tab, by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await openPanel(page);
