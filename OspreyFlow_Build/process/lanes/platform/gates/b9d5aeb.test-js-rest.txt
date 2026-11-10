@@ -1,0 +1,35 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T213605Z/log: sh -c cd ../OspreyFlow_Core && npm test --workspace apps/harness; echo "harness exit $?"; npx vitest run --root apps/workspace src/matrix/MatrixView.budget.test.tsx; echo "matrix alone exit $?"
+
+> @ospreyflow/harness@0.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/platform/OspreyFlow_Core/apps/harness[39m
+
+ [32m✓[39m keyboard/registryCoverage.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/SummaryRail.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 186[2mms[22m[39m
+ [32m✓[39m src/screens/ProfileScreen.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 281[2mms[22m[39m
+ [32m✓[39m src/screens/GeospatialScreen.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 237[2mms[22m[39m
+ [32m✓[39m src/screens/ModelsScreen.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 361[2mms[22m[39m
+ [32m✓[39m src/InstallApp.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 351[2mms[22m[39m
+ [32m✓[39m src/screens/InstallScreens.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 476[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m47 passed[39m[22m[90m (47)[39m
+[2m   Start at [22m 21:36:06
+[2m   Duration [22m 1.58s[2m (environment 58%, tests 22%, import 11%, transform 8%)[22m
+
+harness exit 0
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 3923[2mms[22m[39m
+   [32m✓[39m MatrixView at 50,000 nodes and 250,000 links [2m(1)[22m
+     [33m[2m✓[22m[39m opens inside §5's first-frame budget, drawing one page of each table and saying so[33m 3921[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 21:36:08
+[2m   Duration [22m 4.88s[2m (tests 82%, environment 11%, transform 4%, import 3%)[22m
+
+matrix alone exit 0

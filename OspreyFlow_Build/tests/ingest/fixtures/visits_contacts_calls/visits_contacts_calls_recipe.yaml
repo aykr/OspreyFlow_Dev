@@ -1,0 +1,152 @@
+# The redesign's phase 8 exit (ADR-140 decisions 12 and 13): the prototype's full "Visits and
+# contacts" pipeline, its two expert steps included. Synthetic (rule 9): Ofcom drama numbers, invented
+# names, prisoner numbers and establishments.
+#   visit_bookings -> Lookup establishment (list 'establishments' on estab_id)
+#                  -> Join owner of contact (number_owners on E.164 of contact_number, left)
+#                  -> Derive the booking's title (concat of establishment and visit time)
+#                  -> SQL: calls per booking (pin_calls on the prisoner's number; the title says how many)
+#                  -> Fuzzy match: visitor ≈ owner (the visitor's family name against the owners')
+#                  -> Map: one booking -> Document, Endpoint, the owner Person, the visitor Person,
+#                     the matched owner Person; MENTIONED_IN, USES; and the match's inferred SAME_AS
+id: visits-contacts-calls
+version: 1
+label: "Visits and contacts, with calls. One booking: its establishment, its contact number and owner, the prisoner's PIN calls, and whether the visitor is the number's owner."
+connector:
+  profile: generic-csv
+ontology_version: 17
+pack_versions: {}
+
+defaults:
+  legal_basis: Synthetic demonstration data
+  provenance: {state: asserted}
+  handling:
+    classification: OFFICIAL
+    handling_code: P
+    originator: unit-1
+    owning_unit: unit-1
+
+staging:
+  - id: with_establishment
+    kind: lookup
+    label: "Lookup: establishment"
+    input: visit_bookings
+    list: establishments
+    "on": estab_id
+    add:
+      - {column: name, as: establishment}
+  - id: with_owner
+    kind: join
+    label: "Join: owner of contact"
+    left: with_establishment
+    right: number_owners
+    left_key: contact_number
+    right_key: number
+    normalise: msisdn
+    how: left
+    add:
+      - {column: owner_family_name}
+  - id: titled
+    kind: derive
+    label: "Derive: the booking's title"
+    input: with_owner
+    column: title
+    operation: concat
+    columns: [establishment, visit_at]
+    settings: {separator: " · "}
+  - id: calls
+    kind: sql
+    label: "SQL: calls per booking"
+    inputs: [titled, pin_calls]
+    summary: "Counts the PIN calls the booking's prisoner made, and adds the count to the booking's title."
+    select: >-
+      SELECT t.* EXCLUDE (title),
+             t.title || ' · ' || coalesce(n.calls, 0) || ' PIN calls' AS title,
+             n._ref_calls
+      FROM titled t
+      LEFT JOIN (SELECT prisoner_no, count(*) AS calls, list(_ref) AS _ref_calls
+                 FROM pin_calls GROUP BY prisoner_no) n
+        ON n.prisoner_no = t.prisoner_no
+      ORDER BY t.booking_id
+  - id: visitor_owner
+    kind: fuzzy_match
+    label: "Fuzzy match: visitor ≈ owner"
+    left: calls
+    right: number_owners
+    compare:
+      - {left: visitor_family_name, right: owner_family_name, method: jaro_winkler}
+    threshold: 0.6
+    add:
+      - {column: owner_family_name, as: matched_owner}
+    same_as: {left: visitor, right: matched}
+
+row_template:
+  entities:
+    - ref: booking
+      pole_class: object
+      type: Document
+      match_on: message_id
+      on_match: reference
+      properties:
+        message_id: {field: booking_id}
+        title: {field: title}
+        sent_at: {field: booked_at}
+        document_kind: {literal: other}
+    - ref: contact
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: contact_number}
+        value_normalised: {field: contact_number, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+    - ref: owner
+      pole_class: person
+      type: Person
+      match_on: family_name
+      on_match: reference
+      when: {field: owner_family_name, is: not_null}
+      properties:
+        family_name: {field: owner_family_name}
+    - ref: visitor
+      pole_class: person
+      type: Person
+      on_match: create
+      properties:
+        family_name: {field: visitor_family_name}
+        given_names: {field: visitor_given_names}
+    - ref: matched
+      pole_class: person
+      type: Person
+      match_on: family_name
+      on_match: reference
+      when: {field: matched_owner, is: not_null}
+      properties:
+        family_name: {field: matched_owner}
+  edges:
+    - type: MENTIONED_IN
+      from: contact
+      to: booking
+    - type: USES
+      from: owner
+      to: contact
+    - type: MENTIONED_IN
+      from: visitor
+      to: booking
+
+unmapped_fields:
+  - field: estab_id
+    action: ignore
+    note: "Read by the Lookup; its name is in the title."
+  - field: establishment
+    action: ignore
+    note: "Added by the Lookup; carried in the title."
+  - field: visit_at
+    action: ignore
+    note: "The booked visit's day and time, carried in the title. Not a link time: the visit has not happened."
+  - field: prisoner_no
+    action: ignore
+    note: "Read by the SQL step to count the prisoner's calls; the prisoner is not mapped here."
+  - field: match_score
+    action: ignore
+    note: "The fuzzy match's score: written on its SAME_AS, and on every element bound from a matched column."

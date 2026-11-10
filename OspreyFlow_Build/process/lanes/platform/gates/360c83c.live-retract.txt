@@ -1,0 +1,41 @@
+######## retract_green
+Running on ospreyflow-test (stack d, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T204115Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py::test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld
+.                                                                        [100%]
+1 passed in 16.16s
+exit 0
+######## retract_plant
+ OspreyFlow_Core/services/extract/writer.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+Running on ospreyflow-test (stack d, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T204144Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py::test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld ___
+
+stores = (<adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7140ea9602f0>, <adapters.analytics_duckdb.adapter.A...object at 0x7141415a4200>, PosixPath('/tmp/pytest-of-root/pytest-182/test_a_retracted_copy_is_still0/rutland.osm.pbf'))
+
+    async def test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld(
+        stores: Stores,
+    ) -> None:
+        """The orchestrator's review of round 3 (a minor): a retract writes a new revision of the copy
+        (`writer.retract_node`, as `POST …/nodes/{id}/retract` does), and that revision is still the
+        gazetteer's copy. It keeps its provenance's `gazetteer`, so its identifiers stay withheld and
+        are never matched, and it keeps them in the store, so nothing is lost."""
+        graph, _analytics, _ = stores
+        await _plant(stores)
+        await _copy(graph)
+        copy = copy_id("01JP5ASHWELL00000000000000", "case-a")
+        tx = await graph.begin_transaction()
+        revision = await retract_node(graph, copy, CASE, tx=tx)
+        await graph.commit_transaction(tx)
+        read = await graph.get_node(revision, CASE)
+        assert read is not None and read.provenance.state is ProvenanceState.INFERRED
+>       assert read.provenance.gazetteer == GAZETTEER and read.datasets == ["case-a"]
+E       AssertionError: assert (None == 'gazetteer-osm-rutland')
+E        +  where None = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='gazetteer:gazetteer-osm-rutla...(2026, 11, 9, 20, 42, 1, 341739, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None, gazetteer=None).gazetteer
+E        +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='gazetteer:gazetteer-osm-rutla...(2026, 11, 9, 20, 42, 1, 341739, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None, gazetteer=None) = Node(id='01M710QRW76900TY2HYXMR7CMT', type='Location', properties={'name': 'Ashwell', 'osm_id': 'osm-p5-7731', 'uprn':...=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['case-a']).provenance
+
+../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py:222: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py::test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld
+1 failed in 16.86s
+exit 1

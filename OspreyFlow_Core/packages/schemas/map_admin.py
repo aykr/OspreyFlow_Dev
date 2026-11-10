@@ -187,6 +187,9 @@ class BuildBasemapInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     region: str = Field(min_length=1)
+    #: ADR-147 Amendment 2 (the owner's ruling 8): the unit the gazetteer's places and dataset are
+    #: held by. One that holds a case or a dataset here, or the administrator's own (the default).
+    unit: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class MapAdminEntry(BaseModel):

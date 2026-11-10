@@ -26,6 +26,7 @@ import pytest
 from services.api import studio_map, studio_profile, studio_verify
 from services.api.studio_map import get_sample_row
 from services.api.studio_verify import run_verify
+from services.ingest.recipe_rules import RecipeRuleError
 
 from schemas.domain import Principal
 from tests.ingest.recipe_test_support import ValidatingGraph
@@ -65,13 +66,18 @@ async def _source_preview(principal: Principal) -> list[str]:
 
 
 async def _map_preview(principal: Principal) -> str:
-    report = await run_verify(
-        _draft(binds=True),
-        principal,
-        SCHEME,
-        ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
-        ONTOLOGY,
-    )
+    """The Map or Load Preview's answer: the dry run's report, or the words it withholds it in
+    (rule 3; carried from L1.4's review: a reader not cleared for every row is given nothing)."""
+    try:
+        report = await run_verify(
+            _draft(binds=True),
+            principal,
+            SCHEME,
+            ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
+            ONTOLOGY,
+        )
+    except RecipeRuleError as refused:
+        return " ".join(refused.problems)
     return report.model_dump_json()
 
 

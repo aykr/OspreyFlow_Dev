@@ -57,7 +57,10 @@ def merge_provenance(existing: Provenance | None, incoming: Provenance) -> Prove
             merged_sources.append(source)
             seen.add((source.document_id, source.locator))
     base = existing if keeps_asserted(existing, incoming) else incoming
-    return base.model_copy(update={"sources": merged_sources})
+    # ADR-147 Amendment 2: a gazetteer copy stays one through any later write (a case's own load
+    # matching it), or its identifiers would be sent and matched again.
+    gazetteer = existing.gazetteer or incoming.gazetteer
+    return base.model_copy(update={"sources": merged_sources, "gazetteer": gazetteer})
 
 
 def merge_properties(

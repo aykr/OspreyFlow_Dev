@@ -40,7 +40,7 @@ from services.api.studio_publish import load_with_rules
 
 from adapters.media_objectstore.testing import InMemoryMediaStore
 from demo_fixtures import pid_files, pid_plan
-from demo_fixtures.pid_plan import _end_of, _start_of
+from demo_fixtures.pid_plan import _end_of, span_start
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
 from schemas.domain import NodeWrite, Principal
@@ -288,7 +288,9 @@ async def test_every_held_at_link_has_the_plans_interval(
         interval = stored[pair].interval
         assert stored[pair].occurrences == link.occurrences == 1, pair
         assert interval is not None, pair
-        assert interval.valid_from == _start_of(link.first_seen), pair
+        # ADR-120 Amendment 18: a date-only start takes a time of the establishment's day, the
+        # one the file is written with (`span_start`), not the day's midnight.
+        assert interval.valid_from == span_start(link), pair
         want_end = None if link.last_seen is None else _end_of(link.last_seen)
         assert interval.valid_to == want_end, pair
 

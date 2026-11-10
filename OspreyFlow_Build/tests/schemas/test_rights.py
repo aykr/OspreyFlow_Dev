@@ -41,6 +41,8 @@ TABLE: dict[str, set[str]] = {
     "edit_target_model": {D},
     # ADR-112 Amendment 4 (D9): a promotion's second person, the developer.
     "review_promotions": {D},
+    # ADR-112 Amendment 8 (D12): the expert steps, granted singly by an administrator; no role.
+    "write_sql_transforms": set(),
     "read_reports": {A, D, R}, "read_report_feed": {R}, "read_data_feeds": {A, D, R},
     "administer_system": {M}, "manage_people": {M}, "manage_dashboards": {M},
     "operate_schedules": {D, M}, "manage_ontology": {M}, "manage_geospatial": {M},
@@ -50,9 +52,10 @@ TABLE: dict[str, set[str]] = {
 }  # fmt: skip
 
 
-def test_there_are_fifty_one_rights_and_the_table_names_each_once() -> None:
-    """Fifty-two until L3.2 removed `branch_case` with its routes (ADR-144 Amendment 1)."""
-    assert len(Right) == 51
+def test_there_are_fifty_two_rights_and_the_table_names_each_once() -> None:
+    """Fifty-two until L3.2 removed `branch_case` with its routes (ADR-144 Amendment 1); fifty-two
+    again with `write_sql_transforms` (ADR-112 Amendment 8, phase 8)."""
+    assert len(Right) == 52
     assert set(TABLE) == {r.value for r in Right}
 
 

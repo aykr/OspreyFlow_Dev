@@ -80,7 +80,20 @@ export type RepeatsFolded = number;
 export type Rejected = number;
 export type RightRowsIn = number;
 export type RightUnmatched = number;
+export type Threshold = number | null;
+export type Matched = number;
+export type RowsWithheld = number;
 export type StagingSteps = StagingStepCount[];
+export type Step1 = string;
+export type Kind2 = "sql" | "fuzzy_match";
+export type Label = string | null;
+export type Summary = string | null;
+export type Select = string | null;
+export type Reads = string[];
+export type Compares = string[];
+export type Threshold1 = number | null;
+export type SameAs = string[];
+export type ExpertSteps = ExpertStepDisclosure[];
 export type Branches = BranchRunReport[];
 export type NodeId1 = string;
 export type Library = string;
@@ -191,6 +204,7 @@ export interface LoadReport {
   markings?: Markings;
   metering?: RunMetering | null;
   staging_steps?: StagingSteps;
+  expert_steps?: ExpertSteps;
   [k: string]: unknown;
 }
 /**
@@ -295,6 +309,27 @@ export interface StagingStepCount {
   rejected?: Rejected;
   right_rows_in?: RightRowsIn;
   right_unmatched?: RightUnmatched;
+  threshold?: Threshold;
+  matched?: Matched;
+  rows_withheld?: RowsWithheld;
+}
+/**
+ * ADR-140 decision 16 and the redesign brief §5.3–5.4: every run report, and Test, says which
+ * expert steps ran and what they were, in words, whether or not its counts are withheld. It is
+ * the pipeline's own configuration, never a value of a row: the SQL step's summary and its
+ * SELECT; the fuzzy match's tables, comparisons and threshold, and that it writes an inferred
+ * `SAME_AS`, never a merge. Its counts are in `staging_steps`, withheld with the others.
+ */
+export interface ExpertStepDisclosure {
+  step: Step1;
+  kind: Kind2;
+  label?: Label;
+  summary?: Summary;
+  select?: Select;
+  reads?: Reads;
+  compares?: Compares;
+  threshold?: Threshold1;
+  same_as?: SameAs;
 }
 /**
  * One extract node's run, loud about everything it did and refused (rules 2 and 5): how many

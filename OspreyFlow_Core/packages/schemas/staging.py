@@ -11,8 +11,13 @@ The catalogue is closed (rule 8): Lookup, Join, Filter, Derive, Union, Dedupe. E
 record, and every value-changing part of it is a Knowledge Adapter with a golden file: a Join's
 normalised key names an adapter from `knowledge_adapters.REGISTRY`, a Derive names an operation from
 `knowledge_adapters.derive.DERIVE_OPERATIONS`. No field anywhere holds an expression, and an
-unknown key is refused (`extra="forbid"`), so a step cannot smuggle one in under a new name. The
-expert steps (SQL transform, fuzzy match) are phase 8's and are not in this union.
+unknown key is refused (`extra="forbid"`), so a step cannot smuggle one in under a new name.
+
+**The expert steps** (ADR-140 decisions 12 and 13; the redesign's phase 8) are in the union too, as
+declared records: `sql` (one SELECT over the step's upstream tables, run in the Vault's DuckDB
+sandbox, `services/ingest/sql_transform.py`) and `fuzzy_match` (two tables compared by the
+Splink-backed comparisons, `services/ingest/fuzzy_match.py`). Rule 8 as ADR-140 rewords it: guided
+mode offers neither and shows them read-only; writing one needs the right `write_sql_transforms`.
 
 Provenance: every staged row carries its `source_refs`, one per input row it came from (a Join two,
 a Union one, a Dedupe's survivor those of every row it stood for), and the element Map writes from
@@ -273,17 +278,115 @@ class DedupeStep(_Step):
     on: list[ColumnName] = Field(min_length=1)
 
 
+class SqlStep(_Step):
+    """Expert mode (ADR-140 decision 12; R4, R15): **one SELECT** over the tables named in
+    `inputs`, each read under its own name, run by the Vault's DuckDB in a sandbox: read-only, no
+    file or network function, no table but its inputs, a time and a memory limit, and only the
+    rows the person running it may read. Every input table carries a `_ref` column; the SELECT
+    must carry it through, as a column named `_ref` or starting `_ref_` (an aggregate as a list,
+    `list(_ref)`), so each output row names every input row it came from. `summary` is the plain
+    words guided mode and every run report show beside the SQL: mandatory."""
+
+    kind: Literal["sql"]
+    inputs: list[TableName] = Field(min_length=1)
+    select: str = Field(min_length=1, max_length=20_000)
+    summary: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def _summary_in_words(self) -> SqlStep:
+        if not self.summary.strip():
+            raise ValueError("a SQL step needs a summary in plain words of what it does")
+        if not self.select.strip():
+            raise ValueError("a SQL step needs its SELECT")
+        if len(set(self.inputs)) != len(self.inputs):
+            raise ValueError("a SQL step names each table it reads once")
+        return self
+
+
+#: The Splink-backed comparisons already in the product (`ontology.resolution_functions.
+#: COMPARISON_FUNCTIONS`; `tests/ingest/test_fuzzy_match.py` holds the two lists equal).
+FuzzyMethod = Literal["exact", "jaro_winkler", "levenshtein"]
+#: The blocking keys a fuzzy match may narrow its pairs by (`BLOCKING_FUNCTIONS`, likewise).
+FuzzyBlock = Literal["exact", "soundex", "year"]
+
+
+class FuzzyComparison(BaseModel):
+    """One comparison: a column of the left table against a column of the right, by a method."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    left: ColumnName
+    right: ColumnName
+    method: FuzzyMethod
+
+
+class FuzzyBlocking(BaseModel):
+    """Only pairs agreeing on this key are compared (as the ontology's `resolution.blocking`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    left: ColumnName
+    right: ColumnName
+    method: FuzzyBlock = "exact"
+
+
+class FuzzySameAs(BaseModel):
+    """The two elements of Map's row template the match says may be one: `left`, written from the
+    left table's columns, and `right`, from the matched columns. The engine writes a scored
+    `SAME_AS` between them marked `inferred`, never a merge (ADR-006 Amendment 1; rules 5 and 6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    left: str = Field(min_length=1)
+    right: str = Field(min_length=1)
+
+
+class FuzzyMatchStep(_Step):
+    """Expert mode (ADR-140 decision 13; ADR-006 Amendment 1; R5, R13): each row of `left` kept,
+    with the columns `add` names from its best-scoring row of `right` and that row's score as
+    `match_score`, when the score is at least `threshold`; a row below it is kept with those cells
+    empty, and counted. The threshold is part of the pipeline's version. What Map writes from a
+    matched column is `inferred` with the score, and the match itself is the `SAME_AS` that
+    `same_as` names, inferred until a person confirms it. It is the last step: Map reads it."""
+
+    kind: Literal["fuzzy_match"]
+    left: TableName
+    right: TableName
+    compare: list[FuzzyComparison] = Field(min_length=1)
+    block_on: list[FuzzyBlocking] = Field(default_factory=list)
+    threshold: float = Field(gt=0, lt=1)
+    add: list[AddedColumn] = Field(min_length=1)
+    same_as: FuzzySameAs
+
+    @model_validator(mode="after")
+    def _two_tables(self) -> FuzzyMatchStep:
+        if self.left == self.right:
+            raise ValueError("a fuzzy match compares two tables, not one with itself")
+        if self.same_as.left == self.same_as.right:
+            raise ValueError("a fuzzy match's same_as names two different elements")
+        return self
+
+
+#: The column a fuzzy match gives each kept row: the score of its match, empty below threshold.
+MATCH_SCORE = "match_score"
+
+#: The expert steps' kinds (ADR-140 decision 3): guided mode shows them read-only, and saving one
+#: needs the right `write_sql_transforms`.
+EXPERT_KINDS: frozenset[str] = frozenset({"sql", "fuzzy_match"})
+
+
 StagingStep = Annotated[
-    LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep,
+    LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep | SqlStep
+    | FuzzyMatchStep,
     Field(discriminator="kind"),
 ]
 
 
 def step_inputs(step: StagingStep) -> list[str]:
     """The tables a step reads, in order."""
-    if isinstance(step, JoinStep):
+    if isinstance(step, (JoinStep, FuzzyMatchStep)):
         return [step.left, step.right]
-    if isinstance(step, UnionStep):
+    if isinstance(step, (UnionStep, SqlStep)):
         return list(step.inputs)
     return [step.input]
 
@@ -305,4 +408,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     DeriveStep,
     UnionStep,
     DedupeStep,
+    SqlStep,
+    FuzzyComparison,
+    FuzzyBlocking,
+    FuzzySameAs,
+    FuzzyMatchStep,
 )

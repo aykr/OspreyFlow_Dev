@@ -936,6 +936,53 @@ LGPL dependency fails the check and is admitted only by a recorded exception nam
 the linkage mode and who assessed it. Do not write an unenforceable qualifier into the
 allowlist and assume the tooling honours it.
 
+**Recorded Classpath exception, a runtime in an image (ADR-147 Amendment 2; the owner's ruling 1 of
+9 November 2026, option A):** the Conduit's image (`services/api/Dockerfile`) carries a Java 21 runtime,
+Eclipse Temurin, licensed `GPL-2.0-only WITH Classpath-exception-2.0`, so *Admin › Maps*' Build runs
+planetiler (Apache-2.0, the owner's jar, never shipped) in the Conduit. The runtime is made by
+`jlink` from the official `eclipse-temurin:21-jdk` image pinned by digest: a derived runtime (a subset
+of its modules, compressed, debug symbols stripped), its code unchanged. No OspreyFlow code links
+against it, and the Classpath exception keeps a program run on it outside the GPL, as for every
+program on a JVM. **Distributing the image distributes the runtime under GPL-2.0**, so a release
+that ships the Conduit's image carries, with it, the offer of its corresponding source (Temurin's
+published source at the image's tag, `jdk-21.0.13+9`, and the `jlink` line that derived it,
+`services/api/Dockerfile`), and its NOTICE names the runtime and its licence; a release step, not
+this register's to perform. **Only that exception, only for a runtime recorded here, and only for
+GPL-2.0:** a plain GPL (any version), a GPL-3.0 with the exception, a GPL with any other exception,
+and AGPL still never pass. A runtime in an image is declared by a `LABEL
+org.ospreyflow.runtime.<name>.licence` in its Dockerfile, which `make licence-check` reads
+(`tools/licence_check.py`'s image leg, `find_runtime_offenders`); a Java stage with no such label
+fails too, as does a distribution's Java package; the labels are read however they are written
+(`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **Not yet passed:**
+`git` (GPL-2.0-only), already in the Conduit's image because the Conduit runs it to publish
+recipes (`09_INGEST_STUDIO.md` §6). **The owner's ruling of 9 November 2026:** the `git` command is
+replaced by dulwich, used under its Apache-2.0 licence (studio-b's carry in L1.7a), and `git` then leaves the
+image, so the gate again refuses every GPL package but the recorded Classpath exception. Until that carry
+lands it is declared by the same label, and `make licence-check` names it on every run with that ruling
+and carry, never passing it silently; an undeclared `git` fails.
+
+**The runtime's bundled native libraries, for the release's NOTICE:** Temurin's `java.desktop`
+module, which the jlinked runtime carries (planetiler draws with it), bundles native libraries under
+their own licences, each reproduced in the image at `/opt/java/legal/java.desktop/*.md` (as read
+from the built image at `jdk-21.0.13+9`). All are permissive; a NOTICE shipping the image names each:
+
+| Library (as bundled) | Licence, in its own notice's words |
+| --- | --- |
+| FreeType 2.14.3 | the FreeType License (FTL), chosen of its FTL-or-GPL-2.0 pair; FTL's credit clause applies |
+| GIFLIB 6.1.3 | MIT |
+| HarfBuzz 14.2.0 | the "Old MIT" licence |
+| Independent JPEG Group's JPEG release 6b | the IJG licence |
+| Little CMS 2.19.1 | MIT |
+| libpng 1.6.58 | the PNG Reference Library License version 2 (libpng-2.0) |
+| Mesa 3-D 21.0.3 (headers) | MIT |
+| PipeWire 1.3.81 (headers) | MIT |
+| xwd 1.0.7 (`libawt_xawt`'s list, multiVis and wsutils files) | the Open Group's permission notice (X11-style) |
+| Eastman Kodak's colour management and imaging portions | a copyright notice (Eastman Kodak 1991–2003) |
+
+The NOTICE carries the whole `/opt/java/legal` tree (every module's notices, `java.desktop`'s above
+among them) beside the runtime's GPL-2.0 text and Classpath exception (`ASSEMBLY_EXCEPTION`); a
+release step, as the source offer is.
+
 **Fetched at deployment, not shipped in the repository:** the basemap's label glyphs, Noto Sans
 Regular from the OpenMapTiles fonts release v2.0 (SIL-OFL-1.1), installed into the tiles folder by
 `scripts.fetch_basemap_glyphs`, pinned by SHA-256 and served by the deployment itself, never from a

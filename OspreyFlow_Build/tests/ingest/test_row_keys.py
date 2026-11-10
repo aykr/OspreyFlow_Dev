@@ -505,7 +505,19 @@ def _published_draft(tmp_path: Any) -> tuple[Any, Any]:
     repo = tmp_path / "repo"
     (repo / "recipes").mkdir(parents=True)
     (repo / "recipes" / "private-cash.yaml").write_text(serialise_recipe(_recipe()))
-    source = tmp_path / "cash.csv"
+    # In the ingest folder itself, which every dataset's listing offers (`studio_profile.
+    # _dataset_folders`), never a folder of the test's own below it: `_confined` reads a recipe's
+    # file only from the folders the dataset's own listing offers, and a world's subfolder is none
+    # of them (main's live red of 8 November: L1.4's confinement refused this file at every run).
+    # Named by the world, so two worlds of one test keep two files.
+    from pathlib import Path
+
+    from services.api.ingest_sources import ingest_root
+
+    root = ingest_root().resolve()
+    here = Path(tmp_path).resolve()
+    world = "-".join(here.relative_to(root).parts) if here.is_relative_to(root) else here.name
+    source = root / (f"{world}-cash.csv" if world else "cash.csv")
     with source.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(ROWS[0]))
         writer.writeheader()

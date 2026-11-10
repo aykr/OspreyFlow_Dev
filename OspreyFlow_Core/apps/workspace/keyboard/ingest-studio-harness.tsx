@@ -10,9 +10,10 @@ import { useState } from "react";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
+import { disclosuresOf } from "../src/ingest/dag/ExpertStepDrawer";
 import { IngestStudio } from "../src/ingest/IngestStudio";
 import REPORTS_MAP from "./fixtures/pid_intel_reports_map.json";
-import { CONTACTS_BUILT, CONTACTS_DRAFT, CONTACTS_PROFILE, CONTACTS_SAMPLE_ROWS, stagingPreview, stagingRefusals } from "./stagingHarness";
+import { CONTACTS_BUILT, CONTACTS_DRAFT, CONTACTS_PROFILE, CONTACTS_SAMPLE_ROWS, EXPERT, sqlGateProblems, stagingPreview, stagingRefusals } from "./stagingHarness";
 
 await applyHarnessBrand();
 
@@ -59,8 +60,8 @@ let deployed: Record<string, unknown> = {
 // Phase 6 (ADR-140 decision 3): `?expert=1` gives the draft an expert step, which guided mode reads
 // read-only. The step's kind is phase 8's; the harness only needs guided mode to meet one.
 const WITH_EXPERT_STEP = {
-  nodes: [...CHAIN.nodes, { id: "sql", kind: "sql_transform", label: "Visits per week",
-    config: { sql: "SELECT visitor, count(*) AS visits FROM source GROUP BY visitor", summary: "Visits per visitor" } }],
+  nodes: [...CHAIN.nodes, { id: "sql", kind: "sql", label: "Visits per week",
+    config: { inputs: ["profile"], select: "SELECT visitor, count(*) AS visits FROM source GROUP BY visitor", summary: "Visits per visitor" } }],
   edges: [...CHAIN.edges, { source: "profile", target: "sql" }],
 };  // prettier-ignore
 // The draft's map, for the keyboard bind: a Person whose name the caller column fills.
@@ -193,7 +194,18 @@ if (startParams.get("rights") === "no-test") RIGHTS.delete("verify_pipelines");
 const STUDIO_ROLES = new Set(["source_author", "source_approver", "loader"]);
 if (startParams.get("rights") === "no-approve") STUDIO_ROLES.delete("source_approver");
 const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extract", "enrich", "load",
-  "lookup", "join", "filter", "derive", "union", "dedupe"]);  // prettier-ignore
+  "lookup", "join", "filter", "derive", "union", "dedupe", "sql", "fuzzy_match"]);  // prettier-ignore
+// Phase 8 (ADR-140 decision 3): `?rights=expert` grants `write_sql_transforms`, which the expert
+// steps' save, YAML save and Check SQL need; without it the save refuses an expert step changed (403,
+// in words) and Check SQL refuses outright, as the Conduit does.
+if (startParams.get("rights") === "expert") RIGHTS.add("write_sql_transforms");
+const EXPERT_WORDS =
+  "This change adds, edits or removes an expert step (a SQL transform or a fuzzy match), which needs the right to write SQL transforms (write_sql_transforms), granted by an administrator. The pipeline's other steps can be edited without it.";
+const expertParts = (graph: { nodes: { id: string; kind: string; label: string; config?: unknown }[]; edges: { source: string; target: string }[] }) => {
+  const ids = new Set(graph.nodes.filter((n) => EXPERT.has(n.kind)).map((n) => n.id));
+  return JSON.stringify([graph.nodes.filter((n) => ids.has(n.id)).map((n) => [n.id, n.kind, n.label, n.config]).sort(),
+    graph.edges.filter((e) => ids.has(e.target)).map((e) => [e.source, e.target]).sort()]);  // prettier-ignore
+};
 /** The save gate's refusals, in its own words (`services/ingest/pipeline.py`), its staging steps'
  * included (`studio_staging.staging_gate`, modelled in `stagingHarness.ts`). */
 const pipelineProblems = (graph: { nodes: { id: string; kind: string; label: string }[]; edges: { source: string; target: string }[] }): string[] => {
@@ -271,11 +283,34 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   // Phase 7 (ADR-140 Amendment 12): the staged draft's own routes, refusing as the Conduit does.
   if (contacts && path.includes("/ingest/recipes/r-contacts")) {
     if (path.endsWith("/r-contacts") && method === "GET") return reply(contacts);
-    if (path.endsWith("/r-contacts/pipeline") && method === "PUT") {
-      const refused = pipelineRefusal(init?.body as string | undefined);
+    // `PUT …/pipeline` and its YAML twin: one gate, the expert right first (ADR-140 decision 3).
+    const savePipeline = (body: string): Response => {
+      const next = JSON.parse(body) as Parameters<typeof expertParts>[0];
+      if (expertParts(next) !== expertParts(contacts!.pipeline as never) && !RIGHTS.has("write_sql_transforms"))
+        return reply({ error: "right_required", right: "write_sql_transforms", problems: [EXPERT_WORDS] }, 403);
+      const refused = pipelineRefusal(body);
       if (refused) return refused;
-      contacts = { ...contacts, pipeline: JSON.parse(String(init?.body)), verified_at: null };
+      contacts = { ...contacts, pipeline: next, verified_at: null };
       return reply(contacts);
+    };
+    if (path.endsWith("/r-contacts/pipeline") && method === "PUT") return savePipeline(String(init?.body));
+    // Show YAML: the harness writes the pipeline as JSON, which YAML reads; the save reads it back.
+    if (path.endsWith("/r-contacts/pipeline/yaml") && method === "GET") return reply({ text: JSON.stringify(contacts.pipeline, null, 2) });
+    if (path.endsWith("/r-contacts/pipeline/yaml") && method === "PUT") {
+      const text = (JSON.parse(String(init?.body)) as { text: string }).text;
+      try {
+        JSON.parse(text);
+      } catch {
+        return reply({ error: "pipeline_invalid", problems: ["the YAML cannot be read: it is not a pipeline"] }, 422);
+      }
+      return savePipeline(text);
+    }
+    if (path.endsWith("/r-contacts/sql-check") && method === "POST") {
+      if (!RIGHTS.has("write_sql_transforms")) return reply({ detail: { error: "right_required", right: "write_sql_transforms" } }, 403);
+      const body = JSON.parse(String(init?.body)) as { pipeline: { nodes: { id: string; config?: Record<string, unknown> }[] }; step: string };
+      const node = body.pipeline.nodes.find((n) => n.id === body.step);
+      const c = (node?.config ?? {}) as { select?: string; inputs?: string[] };
+      return reply({ step: body.step, problems: sqlGateProblems(body.step, c.select ?? "", c.inputs ?? []) });
     }
     if (path.endsWith("/staging-preview") && method === "POST") {
       const refused = refusal(path, "edit_pipelines", "viewer");
@@ -294,7 +329,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const refused = refusal(path, "verify_pipelines", "editor");
       if (refused) return refused;
       if (path.endsWith("/verify")) contacts = { ...contacts, verified_at: day(0, 10) };
-      return reply({ ...VERIFY, rows_read: 10, entities_by_type: { Document: { created: 5, referenced: 0 }, Endpoint: { created: 4, referenced: 0 },
+      // ADR-140 decision 16: Test discloses the pipeline's expert steps, as the route does.
+      return reply({ ...VERIFY, expert_steps: disclosuresOf(contacts.pipeline as never), rows_read: 10, entities_by_type: { Document: { created: 5, referenced: 0 }, Endpoint: { created: 4, referenced: 0 },
         Person: { created: 2, referenced: 0 } }, edges_by_type: { MENTIONED_IN: { created: 5 }, USES: { created: 2 } },
         // The real report's shape (`schemas.ingest.RejectionGroup`): its samples are records, never bare row
         // indices. The earlier `sample_row_indices` crashed Test's report once it rendered (found in L1.8).
@@ -439,7 +475,7 @@ function Host() {
         bearerToken="unused"
         investigationId={caseId}
         onOpenCase={setCaseId}
-        rights={new Set(["revert_loads"])}
+        rights={new Set(["revert_loads", ...(RIGHTS.has("write_sql_transforms") ? ["write_sql_transforms"] : [])])}
         username="engineer-1"
       />
       <p role="status" aria-label="Case the Studio works through">{caseId}</p>
@@ -593,5 +629,26 @@ if (contacts && staged) {
     await pressNamed("Map: Map");
     await pressNamed("Open map editor");
   }
+  // Phase 8 (ADR-140 decisions 3, 12, 13 and 16), with `mode=expert&rights=expert`: a SQL step's
+  // drawer with Check SQL's refusal, a fuzzy match's drawer with a comparison and a blocking key, the
+  // pipeline's YAML, and Test disclosing its expert step.
+  if (staged === "sql" || staged === "fuzzy" || staged === "expert-test") {
+    await pressNamed("Derive: Derive: the booking's title");
+    await chooseNamed("Staging step to add", "sql");
+    await pressNamed("+ Step");
+    if (staged === "sql") await pressNamed("Check SQL");
+    if (staged === "fuzzy") {
+      await chooseNamed("Staging step to add", "fuzzy_match");
+      await pressNamed("+ Step");
+      await pressNamed("+ Comparison");
+      await pressNamed("+ Blocking key");
+      await pressNamed("+ Column to bring across");
+    }
+    if (staged === "expert-test") {
+      await pressNamed("Test");
+      await pressNamed("Run the test");
+    }
+  }
+  if (staged === "yaml") await pressNamed("Show YAML");
   for (let i = 0; i < 20; i++) await settle();
 }

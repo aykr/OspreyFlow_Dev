@@ -558,6 +558,8 @@ NOT_BY_THE_ROUTE = {
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/preview-graph",
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview",
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/staging-preview",
+    # A SQL step's Check SQL (ADR-140 decision 12): the sandbox's gate on its text, over no row.
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/sql-check",
     # Refused by `review.accept_candidate` and `reject_candidate` after their own read, so a
     # finding the reader cannot see answers 404 (`test_composite_read_only.py`).
     "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept",

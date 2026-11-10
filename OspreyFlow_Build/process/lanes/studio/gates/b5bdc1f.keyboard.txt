@@ -1,0 +1,57 @@
+keyboard/ingest-studio.spec.ts at b5bdc1f's code, this Mac, the orchestrator's go, 19:34:56Z
+
+Running 51 tests using 1 worker
+
+[1/51] keyboard/ingest-studio.spec.ts:37:1 › each of the four places opens by keyboard
+[2/51] keyboard/ingest-studio.spec.ts:50:1 › the dataset is switched by keyboard, through the case that loads into it
+[3/51] keyboard/ingest-studio.spec.ts:61:1 › a day's run report opens from its cell by keyboard, and its held rows from it
+[4/51] keyboard/ingest-studio.spec.ts:78:1 › a deployed pipeline is run from Runs by keyboard
+[5/51] keyboard/ingest-studio.spec.ts:94:1 › a paused watch is resumed from Runs, and the runs read again, by keyboard
+[6/51] keyboard/ingest-studio.spec.ts:109:1 › Add files opens on Sources by keyboard
+[7/51] keyboard/ingest-studio.spec.ts:117:1 › a source is registered by keyboard, through every step
+[8/51] keyboard/ingest-studio.spec.ts:141:1 › a source's governance is edited by keyboard, and says which pipelines need attention
+[9/51] keyboard/ingest-studio.spec.ts:154:1 › a source's refresh is set to read only rows past a watermark, by keyboard
+[10/51] keyboard/ingest-studio.spec.ts:174:1 › a source's refresh is paused with why and resumed, by keyboard
+[11/51] keyboard/ingest-studio.spec.ts:190:1 › a source is re-profiled and opened in a pipeline by keyboard
+[12/51] keyboard/ingest-studio.spec.ts:203:1 › a pipeline's source is chosen from the registered sources by keyboard
+[13/51] keyboard/ingest-studio.spec.ts:218:1 › a file is registered as a source and used in a new pipeline by keyboard, asking no marking there
+[14/51] keyboard/ingest-studio.spec.ts:264:1 › a draft is deployed as its version by keyboard, without running
+[15/51] keyboard/ingest-studio.spec.ts:276:1 › a draft is deployed and run at once by keyboard
+[16/51] keyboard/ingest-studio.spec.ts:295:1 › a step's drawer opens beside the canvas by keyboard, and the canvas stays
+[17/51] keyboard/ingest-studio.spec.ts:306:1 › a source step is previewed as its rows by keyboard
+[18/51] keyboard/ingest-studio.spec.ts:318:1 › Map is previewed as the graph it would make by keyboard
+[19/51] keyboard/ingest-studio.spec.ts:330:1 › the whole pipeline is tested in the drawer by keyboard, beside the pipeline
+[20/51] keyboard/ingest-studio.spec.ts:340:1 › guided and expert mode are switched by keyboard, and the person's choice is kept
+[21/51] keyboard/ingest-studio.spec.ts:356:1 › a step opens its drawer from guided mode's numbered list by keyboard
+[22/51] keyboard/ingest-studio.spec.ts:366:1 › an expert step reads whole and read-only in guided mode, by keyboard
+[23/51] keyboard/ingest-studio.spec.ts:383:1 › a step on the Map editor's strip goes back to the pipeline with it chosen, by keyboard
+[24/51] keyboard/ingest-studio.spec.ts:394:1 › a column is bound in the Map editor by choosing it and the binding, then Enter
+[25/51] keyboard/ingest-studio.spec.ts:463:1 › the reports pipeline is built from scratch in guided mode by keyboard, into the committed map
+[26/51] keyboard/ingest-studio.spec.ts:490:1 › the reports pipeline is edited in expert mode by keyboard, and the save carries it
+[27/51] keyboard/ingest-studio.spec.ts:535:1 › a reports map leaving a declared part of the marking unbound is refused at save, by keyboard
+[28/51] keyboard/ingest-studio.spec.ts:557:1 › an expert step cannot be removed in guided mode: Remove is refused once it is chosen
+[29/51] keyboard/ingest-studio.spec.ts:570:1 › the step feeding an expert step cannot be removed in guided mode, so its input edge stays
+[30/51] keyboard/ingest-studio.spec.ts:585:1 › a step is edited in expert mode from the canvas by keyboard, and the save carries it
+[31/51] keyboard/ingest-studio.spec.ts:607:1 › the load rules open from the Load step's drawer by keyboard
+[32/51] keyboard/ingest-studio.spec.ts:617:1 › a chosen column is let go in the Map editor by keyboard, and no binding then offers it
+[33/51] keyboard/ingest-studio.spec.ts:629:1 › a step's drawer goes back from Preview to its Settings by keyboard
+[34/51] keyboard/ingest-studio.spec.ts:643:1 › a Map Preview does not count as Test: Deploy is refused until Test runs
+[35/51] keyboard/ingest-studio.spec.ts:663:1 › a graph Preview is refused in words to a person without the right to test
+[36/51] keyboard/ingest-studio.spec.ts:673:1 › removing the Load step is refused by the save gate in its own words
+[37/51] keyboard/ingest-studio.spec.ts:680:1 › Deploy is refused in words to a person without the source approver's role
+[38/51] keyboard/ingest-studio.spec.ts:783:1 › a staging step is added beside the pipeline and opens its drawer, by keyboard
+[39/51] keyboard/ingest-studio.spec.ts:795:1 › the Visits and contacts steps are set in their drawers by keyboard, each with its sample
+[40/51] keyboard/ingest-studio.spec.ts:803:1 › a filter is set in its drawer by keyboard, a condition added and removed
+[41/51] keyboard/ingest-studio.spec.ts:822:1 › a union and a dedupe are set in their drawers by keyboard
+[42/51] keyboard/ingest-studio.spec.ts:841:1 › a step's sample is read again, and its Preview shows the sample alone, by keyboard
+[43/51] keyboard/ingest-studio.spec.ts:855:1 › a drawer refuses what the save gate refuses, in the same words, by keyboard
+[44/51] keyboard/ingest-studio.spec.ts:867:1 › a staging step is removed by keyboard, and Map reads the step before it
+[45/51] keyboard/ingest-studio.spec.ts:882:1 › phase 7's exit: Visits and contacts is built by keys, mapped over its staged table, tested and deployed
+[46/51] keyboard/ingest-studio.spec.ts:955:1 › a SQL step is added in expert mode, its SQL checked and set in its drawer, by keyboard
+[47/51] keyboard/ingest-studio.spec.ts:962:1 › a fuzzy match is set in its drawer by keyboard, its threshold and SAME_AS saved with it
+[48/51] keyboard/ingest-studio.spec.ts:987:1 › without the right, expert mode offers no expert step and reads one whole and read-only
+[49/51] keyboard/ingest-studio.spec.ts:1001:1 › the pipeline's YAML is shown and saved in expert mode by keyboard, through the save's gates
+[50/51] keyboard/ingest-studio.spec.ts:1020:1 › Test discloses the pipeline's expert steps, read by keyboard
+[51/51] keyboard/ingest-studio.spec.ts:1031:1 › every registered Ingest Studio action has its own proving test case above
+  51 passed (34.2s)
+exit 0

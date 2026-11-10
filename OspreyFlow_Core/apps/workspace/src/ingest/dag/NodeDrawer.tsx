@@ -25,14 +25,16 @@ import { NodePreview } from "./NodePreview";
 import { KIND_NAMES } from "./PipelineCanvas";
 import { withNodeConfig } from "./pipelineGraphEdit";
 import { DomainPanel, EnrichPanel, ExtractPanel, SourcePanel, StagePanel } from "./stagePanels";
+import { ExpertSettings, ExpertStepReadOnly } from "./ExpertStepDrawer";
+import { PipelineYaml } from "./PipelineYaml";
 import { StagingSample, StagingSettings } from "./StagingDrawer";
-import { isStagingStep, withStepRecord } from "./stagingSteps";
+import { EXPERT_RIGHT, isStagingStep, withStepRecord } from "./stagingSteps";
 import type { StudioMode } from "./studioMode";
 
 /** What the drawer holds: a node (its settings or preview), or one of the pipeline's own screens. */
 export type DrawerPane =
   | { at: "node"; view: "settings" | "preview" }
-  | { at: "connect" | "profile" | "checks" | "test" | "deploy" };
+  | { at: "connect" | "profile" | "checks" | "test" | "deploy" | "yaml" };
 
 const PANE_TITLES: Record<Exclude<DrawerPane["at"], "node">, string> = {
   connect: "The draft's own settings",
@@ -40,6 +42,7 @@ const PANE_TITLES: Record<Exclude<DrawerPane["at"], "node">, string> = {
   checks: "Load rules",
   test: "Test",
   deploy: "Deploy",
+  yaml: "Pipeline as YAML",
 };
 
 export interface NodeDrawerProps {
@@ -61,6 +64,16 @@ export interface NodeDrawerProps {
   onOpenMapEditor: () => void;
   /** Deployed, reopened or run: the readiness strip and the Runs tab read again. */
   onChanged?: () => void;
+  /** The person's rights (`GET /v1/me/rights`); `null` while unknown. */
+  rights?: ReadonlySet<string> | null;
+  /** The YAML was saved: the pipeline is the draft's. */
+  onPipelineSaved?: (draft: StudioRecipeDraft) => void;
+}
+
+/** Whether the drawer offers an expert step's editor: expert mode, and the right to write one
+ * (unknown rights offer it, as the rest of the Glass does; the server refuses it without). */
+export function mayEditExpertSteps(mode: StudioMode, rights: ReadonlySet<string> | null | undefined): boolean {
+  return mode === "expert" && (rights == null || rights.has(EXPERT_RIGHT));
 }
 
 export function NodeDrawer(props: NodeDrawerProps) {
@@ -107,7 +120,7 @@ export function NodeDrawer(props: NodeDrawerProps) {
               Preview
             </Button>
           </div>
-          {isStagingStep(node) && !isExpertStep(node) ? (
+          {isStagingStep(node) ? (
             <StagingStepPane {...props} node={node} />
           ) : pane.view === "preview" ? (
             <NodePreview
@@ -130,6 +143,17 @@ export function NodeDrawer(props: NodeDrawerProps) {
           investigationId={props.investigationId}
           recipeId={props.recipeId}
           onDraftChange={(d) => d && props.onDraft(d)}
+        />
+      )}
+      {pane.at === "yaml" && (
+        <PipelineYaml
+          apiBaseUrl={props.apiBaseUrl}
+          bearerToken={props.bearerToken}
+          investigationId={props.investigationId}
+          recipeId={props.recipeId}
+          mode={props.mode}
+          version={JSON.stringify(props.pipeline)}
+          onSaved={(d) => (props.onPipelineSaved ?? props.onDraft)(d)}
         />
       )}
       {pane.at === "profile" && (
@@ -176,6 +200,41 @@ function StagingStepPane(props: NodeDrawerProps & { node: PipelineNode }) {
     />
   );
   if (pane.at === "node" && pane.view === "preview") return sample;
+  if (isExpertStep(node)) {
+    // ADR-140 decision 3: an expert step's editor in expert mode, for a holder of the right; read
+    // whole, never hidden, for everyone else, with its sample beneath.
+    if (!mayEditExpertSteps(props.mode, props.rights))
+      return (
+        <>
+          <ExpertStepReadOnly
+            node={node}
+            why={
+              props.mode === "guided"
+                ? "An expert step: guided mode shows it read-only. Switch to expert mode to work with it."
+                : "An expert step: changing it needs the right to write SQL transforms, which an administrator grants."
+            }
+          />
+          {sample}
+        </>
+      );
+    return (
+      <>
+        <ExpertSettings
+          key={node.id}
+          apiBaseUrl={props.apiBaseUrl}
+          bearerToken={props.bearerToken}
+          investigationId={props.investigationId}
+          recipeId={props.recipeId}
+          node={node}
+          pipeline={pipeline}
+          busy={busy}
+          columns={columns}
+          onApply={(config, label) => onChange(withStepRecord(pipeline, node.id, config, label))}
+        />
+        {sample}
+      </>
+    );
+  }
   return (
     <>
       <StagingSettings
@@ -198,7 +257,6 @@ function NodeSettings({
   draft,
   pipeline,
   node,
-  mode,
   busy,
   onPane,
   onChange,
@@ -206,29 +264,6 @@ function NodeSettings({
   onOpenMapEditor,
 }: NodeDrawerProps & { node: PipelineNode }) {
   const apply = (config: Record<string, unknown>) => onChange(withNodeConfig(pipeline, node.id, config));
-  if (isExpertStep(node)) {
-    // ADR-140 decision 3: an expert step reads whole in guided mode, read-only and labelled. Phase 8
-    // builds its editor (and `write_sql_transforms`); until then it is read-only in both modes.
-    return (
-      <section aria-label="Expert step" style={{ display: "grid", gap: "var(--sp-8)" }}>
-        <p className="label" style={{ margin: 0 }}>
-          {mode === "guided"
-            ? "An expert step: guided mode shows it read-only. Switch to expert mode to work with it."
-            : "An expert step: it cannot be edited here yet."}
-        </p>
-        <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "var(--sp-2) var(--sp-12)" }}>
-          {Object.entries(node.config ?? {}).map(([key, value]) => (
-            <div key={key} style={{ display: "contents" }}>
-              <dt style={{ color: "var(--text-secondary)" }}>{key}</dt>
-              <dd className="value" style={{ margin: 0, overflowWrap: "anywhere" }}>
-                {value === null || value === undefined ? "—" : typeof value === "string" ? value : JSON.stringify(value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-    );
-  }
   const firstSource = (pipeline.nodes ?? []).find((n) => n.kind === "source");
   switch (node.kind) {
     case "domain_model":

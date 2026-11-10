@@ -219,6 +219,11 @@ ROUTE_RIGHTS = {
     "get_map_local_source_route": None,
     # ADR-147 Amendment 1 (P4): the map's place search over the case's gazetteer, as its other searches.
     "map_place_search_route": "investigate",
+    # ADR-147 Amendment 2 (the owner's ruling 6): a case's gazetteers, read as the place search is;
+    # added to or removed from a dataset by the right that loads into it (the review of P5, item 6).
+    "case_gazetteers_route": "investigate",
+    "add_dataset_gazetteer_route": "run_pipelines",
+    "remove_dataset_gazetteer_route": "run_pipelines",
     "build_basemap_route": "manage_geospatial",
     "verify_map_route": "manage_geospatial",
     "histogram_route": "investigate",
@@ -270,6 +275,10 @@ ROUTE_RIGHTS = {
     "create_studio_recipe_draft": "edit_pipelines",
     "update_studio_recipe_draft": "edit_pipelines",
     "update_studio_recipe_pipeline": "edit_pipelines",
+    # ADR-140 decision 3 (phase 8): Show YAML and its save; Check SQL behind the expert right.
+    "get_studio_recipe_pipeline_yaml": "edit_pipelines",
+    "update_studio_recipe_pipeline_yaml": "edit_pipelines",
+    "check_studio_recipe_sql": "write_sql_transforms",
     "get_studio_recipe_draft": "edit_pipelines",
     "list_studio_recipe_drafts": "edit_pipelines",
     "get_studio_recipe_profile": "edit_pipelines",

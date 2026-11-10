@@ -1,0 +1,20 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+index bb60706..8ef28eb 100644
+--- a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
++++ b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+@@ -595,6 +595,15 @@
+     "verify_studio_recipe"
+    ]
+   },
++  "right:write_sql_transforms": {
++   "rights": [
++    "write_sql_transforms"
++   ],
++   "places": [],
++   "answered_hidden": [
++    "check_studio_recipe_sql"
++   ]
++  },
+   "rule_author": {
+    "rights": [
+     "author_rules",

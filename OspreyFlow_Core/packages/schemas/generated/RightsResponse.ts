@@ -40,6 +40,7 @@ export type Right =
   | "review_promotions"
   | "accept_types"
   | "merge_datasets"
+  | "write_sql_transforms"
   | "read_reports"
   | "read_report_feed"
   | "read_data_feeds"

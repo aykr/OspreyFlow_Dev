@@ -214,7 +214,7 @@ async def test_what_is_offered_is_what_the_gate_reads(root: Path) -> None:
         step = LookupStep(id="look", kind="lookup", input="src", list=name, on="k",
                           add=[{"column": "x"}])  # type: ignore[arg-type,call-arg]  # fmt: skip
         gate = staging_rule_violations([step], sources=["src"], lists=every, dataset_id="ds-a",
-                                       subscribed=await store.subscribed("ds-a"))  # fmt: skip
+                                       subscribed=await store.subscribed("ds-a"), marked=())  # fmt: skip
         assert (name in offered) == (not gate), name
 
 

@@ -1,0 +1,2 @@
+lease studio, stack b (ospreyflow-test, tunnelled), commit b5bdc1f, main 3be89a7, started 12:38:30Z, after the ospreyflow database was created on b; test_statelessness_clickhouse.py not run (needs stack a, the orchestrator's word)
+...F.......F.................WITHDRAWN, UNMEASURED: stopped 14:38:08Z on the owner's ruling (through the orchestrator): over the ssh tunnel each database call took about 0.7 s, so the set would have run many hours. The lease on b kept and the stack left up for the rerun on the server (stack_lease.sh remote).

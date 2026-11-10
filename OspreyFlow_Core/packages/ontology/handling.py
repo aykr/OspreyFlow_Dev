@@ -342,11 +342,21 @@ def withhold_sources[Element: (Node, Edge)](element: Element, principal: Princip
     return element.model_copy(update={"provenance": provenance})
 
 
+def is_gazetteer_held(node: Node) -> bool:
+    """A gazetteer's place: a case's own copy of one (`provenance.gazetteer`, ADR-147 Amendment 2,
+    the owner's ruling 6), keyed on the copy's provenance, or the place itself in a gazetteer
+    dataset (`gazetteer-*`, Amendment 1)."""
+    return node.provenance.gazetteer is not None or any(
+        d.startswith(GAZETTEER_DATASET_PREFIX) for d in node.datasets
+    )
+
+
 def _gazetteer_identifiers_withheld[Element: (Node, Edge)](
     element: Element, principal: Principal
 ) -> Element:
     """ADR-147 Amendment 1 (rule 7, the orchestrator's ruling of 9 November 2026): a gazetteer's
-    place (a node in a `gazetteer-*` dataset) comes to a request reader without its gazetteer's own
+    place (a node in a `gazetteer-*` dataset, or a case's copy of one: `is_gazetteer_held`) comes to
+    a request reader without its gazetteer's own
     identifiers (`osm_id`, `uprn`, …), which are source-system identifiers. A case that adds the
     gazetteer reads its places through search, expansion and every other node read, all of which
     pass here. The Conduit's own work (`datasets is None`: resolution) keeps them, and so does a
@@ -354,7 +364,7 @@ def _gazetteer_identifiers_withheld[Element: (Node, Edge)](
     whole (`load_gazetteer`). A rebuild matches a place by its `osm_id` inside the store anyway."""
     if principal.datasets is None or not isinstance(element, Node):
         return element
-    if not any(d.startswith(GAZETTEER_DATASET_PREFIX) for d in element.datasets):
+    if not is_gazetteer_held(element):
         return element
     if not any(name in element.properties for name in GAZETTEER_SOURCE_IDENTIFIERS):
         return element

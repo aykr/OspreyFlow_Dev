@@ -29,6 +29,7 @@ export type GradeHandling = string;
 export type DrawnOriginalGrading = Grading | null;
 export type DrawnSourceNote = string | null;
 export type DrawnIcon = string | null;
+export type Gazetteer = string | null;
 export type Classification = string;
 export type HandlingCode = string;
 export type ActionCode = string | null;
@@ -108,6 +109,7 @@ export interface Provenance {
   last_confirmed?: LastConfirmed;
   confirmed_by?: PrincipalId | null;
   drawn?: DrawnAssertion | null;
+  gazetteer?: Gazetteer;
   [k: string]: unknown;
 }
 export interface SourceRef {

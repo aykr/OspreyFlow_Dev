@@ -1,0 +1,70 @@
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace
+
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 12519ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 12518ms
+ ❯ src/design/undefinedTokens.test.ts (1 test | 1 failed) 84ms
+   ❯ font tokens (1)
+     × every var(--font-…) or var(--mono) the source reads is defined in tokens.css 82ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/design/undefinedTokens.test.ts > font tokens > every var(--font-…) or var(--mono) the source reads is defined in tokens.css
+AssertionError: expected [ …(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "ingest/dag/ExpertStepDrawer.tsx: --font-mono",
++   "ingest/dag/ExpertStepDrawer.tsx: --font-mono",
++   "ingest/dag/PipelineYaml.tsx: --font-mono",
++ ]
+
+ ❯ src/design/undefinedTokens.test.ts:31:21
+     29|       }
+     30|     }
+     31|     expect(missing).toEqual([]);
+       |                     ^
+     32|   });
+     33| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 6878 ms: expected 6877.862457999999 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 325 passed (327)
+      Tests  2 failed | 2740 passed (2742)
+   Start at  02:28:34
+   Duration  50.86s (environment 50%, tests 37%, import 10%, transform 2%, setup 1%)
+
+    Isolate  327 workers spawned · ~888ms startup each (spawn + environment, per file)
+             at least ~25.51s faster with isolate: false — reuses workers across files instead of one per file
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make: *** [test-js] Error 1
+make test-js exit 2

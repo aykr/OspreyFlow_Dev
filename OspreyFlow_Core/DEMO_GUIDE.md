@@ -272,7 +272,8 @@ curl -L -o planetiler.jar \
 
 PYTHONPATH=.:packages .venv/bin/python3 -m scripts.build_local_basemap \
   --region berkshire --output-dir <a directory outside this checkout> \
-  --planetiler-jar ./planetiler.jar --osprey-config <your osprey.yaml>
+  --planetiler-jar ./planetiler.jar --osprey-config <your osprey.yaml> \
+  --unit unit-1   # the unit that holds the demo case (required; refused if it holds nothing)
 PYTHONPATH=.:packages .venv/bin/python3 -m scripts.verify_map <your osprey.yaml>
 ```
 

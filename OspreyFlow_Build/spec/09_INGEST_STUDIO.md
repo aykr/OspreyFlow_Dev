@@ -181,13 +181,20 @@ pipeline" (the drawer's **Close** goes back to the step, or lets it go).
 - **Guided and expert mode** (ADR-140 decision 3; Amendment 1.3). **Guided**, every person's default,
   shows the steps as a **numbered list** in the order they run, each opening the same drawer, beside a
   picture of the pipeline with nothing to press. **Expert** shows the canvas as the editor. A step
-  guided mode does not offer (an expert step, once SQL transform and Fuzzy match are built, ADR-140 decisions 12 and 13) is listed, labelled "Expert step, read-only here"
+  guided mode does not offer (an expert step: a SQL transform or a fuzzy match, ADR-140 decisions 12 and 13; Amendment 14) is listed, labelled "Expert step, read-only here"
   and opened read-only, never hidden, and guided mode's *Remove selected* refuses it. The mode is a per-person preference **kept in the person's browser**,
   keyed by their user name (`ingest/dag/studioMode.ts`; the owner's ruling Q1 a, 7 November 2026): with
   no preference store on the server, a second browser starts in guided mode again, and a browser that
-  refuses storage stays guided. Everyone may switch to expert mode until `write_sql_transforms` exists
-  (the owner's ruling Q3 a): the right gates the SQL and fuzzy steps once they are built (ADR-140 decisions 12 and 13).
-  *Show YAML* is not yet built.
+  refuses storage stays guided. Everyone may switch to expert mode (the owner's ruling Q3 a); the right
+  `write_sql_transforms` (ADR-112 Amendment 8, held by no built-in role and granted singly by an
+  administrator) gates the expert steps: *+ Step* offers SQL transform and Fuzzy match only in expert
+  mode and only to its holder, whose drawer edits them; everyone else reads an expert step whole,
+  read-only, with its summary and SQL or its comparisons and threshold. The Conduit refuses, 403 in
+  words, any save (canvas or YAML) that adds, edits or removes an expert step, or a line into one, for
+  a person without the right; the pipeline's other steps stay editable by anyone who may edit it.
+  **Show YAML** (header button) shows the pipeline as YAML (`GET …/pipeline/yaml`): its nodes with their
+  settings and its lines. In expert mode it is editable and saved (`PUT …/pipeline/yaml`) through the
+  canvas save's own gates, read with `yaml.safe_load` and never run; in guided mode it reads only.
 - **Map** opens the **Map editor** (`ingest/map/MapEditor.tsx`, §4): the pipeline collapses to a
   **strip** across the top, each other step a button, Map said as where the person is (not a button);
   a step on the strip goes back to the pipeline with that step chosen in its drawer.
@@ -532,7 +539,10 @@ so the template looks like the thing it will produce.
 - **Map saves; it does not verify.** The editor's one action is *Save draft*; Test is the pipeline
   header's (§1.0), reached from the strip across the top (ADR-108 Amendment 6.1; ADR-140 Amendment 8).
 - **A SAME_AS link's score** (brief §6.5) is not in the inspector: only a fuzzy match makes one, and
-  the score column comes with it once Fuzzy match is built (ADR-140 decision 13; the owner's ruling Q2 a, 7 November 2026).
+  Map does not draw it. The fuzzy step itself names the two elements of the row template its SAME_AS
+  joins (`same_as: {left, right}`), and the engine writes it on each matched row with the row's
+  `match_score`, inferred (ADR-140 decision 13; the owner's ruling Q2 a, 7 November 2026; ADR-140
+  Amendment 14).
 - **A link's time is chosen, never assumed.** *When it occurred* is **Not recorded** or **From a
   column**, and only a column chosen there is saved; the editor once displayed a default binding it
   never saved (found live, 11 October 2026; `ElementInspector.content.test.tsx`).
@@ -1205,9 +1215,37 @@ nothing in this section is wired to anything yet.
 ## 9. What the studio deliberately does not do
 
 Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). **The guided staging steps'
-engine is built** (ADR-140 Amendment 11), **and so are their drawers** (Amendment 12); the SQL
-transform and the fuzzy match are not. Until a pipeline declares staging steps, its sources are
-separate branches mapped row by row, as §1 describes.
+engine is built** (ADR-140 Amendment 11), **and so are their drawers** (Amendment 12), **and so are
+the SQL transform and the fuzzy match** (Amendment 14). Until a pipeline declares staging
+steps, its sources are separate branches mapped row by row, as §1 describes.
+
+**The expert steps as built** (Amendment 14). `kind: sql` takes `inputs` (the tables it reads),
+`select` and a mandatory `summary` in plain words. It runs in a private DuckDB connection, locked:
+external access off (no file, URL, extension, `COPY` or `ATTACH`), no Python variable scanned, no
+spill to disk, one thread, a memory limit and a time limit. The gate (`sql_transform.sql_gate_problems`,
+asked at save, a drawer's sample, *Check SQL* (`POST …/sql-check`, `write_sql_transforms`), Test,
+publish and the run) refuses anything but one SELECT; any table function (`read_csv`, `query`,
+`range`…); a qualified name or a table the step does not read; and a SELECT that drops `_ref`, or
+carries one row's `_ref` for many (`any_value(_ref)`, a constant). Every input table is given a
+`_ref` column (an opaque token per row), and every output column named `_ref` or `_ref_…`, a token or
+a list of them, is read back as the output row's refs, so the element Map writes names every input
+row behind it; a SELECT that gives a row no input row's `_ref`, or drops a whole input's, is refused at
+the run. An input row no output row names is counted as `filtered_out`. At the run the step's tables
+hold only the rows the runner may read (`studio_staging.row_reader`); absent rows are counted
+`rows_withheld`, withheld with every count. `kind: fuzzy_match` takes `left`, `right`, `compare` (each
+a left and a right column and a method: `exact`, `jaro_winkler` or `levenshtein`, the ontology's
+registry through Splink's untrained comparison library), optional `block_on` (`exact`, `soundex`,
+`year`), a `threshold` strictly between 0 and 1, `add` (the right columns brought across) and `same_as`
+(the row template's two elements). It is the last step. Every left row is kept; a row whose best right
+row scores at least the threshold takes the added columns and `match_score` and names both rows; one
+below keeps them empty and is counted `unmatched` (with `matched` and `threshold` on its counts). The
+prior that a pair matches is one in the right table's rows. Without a blocking key more than a million
+pairs are refused in words, never cut short. Map's elements written from a matched column (or
+conditional on one), and the links joining them, are written `inferred` with the score as their
+confidence; the SAME_AS between `same_as`'s two elements is written on each matched row, inferred,
+scored, between two nodes, never one. Both steps are **disclosed** on every run report and its view
+(`expert_steps`, the pipeline's settings, given even when the counts are withheld), on Test, and on
+the Runs tab.
 
 **In the Studio** (Amendment 12). A step is a node of the pipeline: its id the step's, its config the
 step's record. The recipe's `staging:` is built from the step nodes in run order when the pipeline is
@@ -1294,7 +1332,7 @@ It also counts the rows its steps staged and the bytes their Parquet took, for t
 (`RunMetering.rows_staged`, `parquet_bytes`), and reports each step's counts (`staging_steps`, withheld
 with the other counts) and each rejection's rows by table, row, load and side (`refs`), never by key.
 
-- **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT).
+- **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT; built as above).
   Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
   Dedupe), each declared in the recipe's YAML, and every operation in it is a Knowledge Adapter with
   golden tests (§4). Expert mode, for a person holding `write_sql_transforms`, may declare an SQL
@@ -1302,6 +1340,12 @@ with the other counts) and each rejection's rows by table, row, load and side (`
   a sandbox (read-only, no file or network functions, no other dataset's rows, a time and memory limit,
   the person's own principal), refused at publish if it is anything but one SELECT or if it drops the
   `_ref` columns, and listed in the run report with its rows in and out (ADR-140 decision 12).
+  As built (Amendment 14, decision 11): no window function, subquery in an expression, `COLUMNS(…)`,
+  grouping by more than one set, or table read twice, and `_ref` read only as itself, so no row
+  holds another row's values or `_ref`; and where the pipeline binds
+  a marking to a column, the step runs row by row and passes each marked column through as its own
+  row has it, so no marking is lowered. Its output is bounded (rows and bytes), refused past the
+  bound and never cut short, and a refusal names its kind and line, never a value.
 - **Joins on declared keys in guided mode; SQL and fuzzy match in expert mode, with provenance,
   disclosure and safeguards.** A Join takes two upstream tables on an exact or normalised key, declared
   and never guessed. Every staged row carries `source_refs` — which input rows it came from, and

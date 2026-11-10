@@ -92,7 +92,9 @@
    ],
    "places": [],
    "answered_hidden": [
+    "add_dataset_gazetteer_route",
     "recipe_runs_route",
+    "remove_dataset_gazetteer_route",
     "run_studio_recipe"
    ]
   },
@@ -565,7 +567,9 @@
    ],
    "places": [],
    "answered_hidden": [
+    "add_dataset_gazetteer_route",
     "recipe_runs_route",
+    "remove_dataset_gazetteer_route",
     "run_studio_recipe"
    ]
   },
@@ -609,6 +613,15 @@
    "answered_hidden": [
     "preview_studio_recipe_graph",
     "verify_studio_recipe"
+   ]
+  },
+  "right:write_sql_transforms": {
+   "rights": [
+    "write_sql_transforms"
+   ],
+   "places": [],
+   "answered_hidden": [
+    "check_studio_recipe_sql"
    ]
   },
   "rule_author": {

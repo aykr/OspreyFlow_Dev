@@ -1,0 +1,448 @@
+lease studio, stack c, commit 5422fc4, started 01:17:47Z
+Test stack c up for studio: osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore
+--- at the lane's head 5422fc4
+............F............F..........F....F....F......................... [ 55%]
+.........................................................                [100%]
+=================================== FAILURES ===================================
+_ test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x30500c050>, cases=<services.api.investigations.InvestigationStore object at 0x309b45ee0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x303df5a60>)
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5901/test_run_now_tells_and_shows_i0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x3050c8650>
+routed = None
+
+    async def test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace,  # noqa: F811
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        routed: None,
+    ) -> None:
+>       alone = await _told(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:188: in _told
+    said = await _run_now(world, client, accounts, loader, ours)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:127: in _run_now
+    response = await client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:511: in app
+    solved_result = await solve_dependencies(
+.venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:640: in solve_dependencies
+    solved_result = await solve_dependencies(
+.venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:674: in solve_dependencies
+    solved = await call(**solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:2099: in dependency
+    return await with_derived_packs(case, datasets, models)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:2071: in with_derived_packs
+    derived = await packs_of_case(case.id, datasets, models)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+investigation_id = '01M6YY5YA3PBR4BJ1ZKEBAAX37'
+datasets = <services.api.datasets.PostgresDatasetStore object at 0x303df5a60>
+models = <tests.services.api.test_studio_run_now_stamps_its_case_dataset_live._Nothing object at 0x1227def90>
+
+    async def packs_of_case(
+        investigation_id: str, datasets: _ChosenOf, models: TargetModelStore
+    ) -> list[str] | None:
+        """A case's packs, derived (ADR-126 Amendment 2): its chosen dataset's live model's (a
+        composite's own). `None` while that dataset has no model yet (one `scripts.seed_target_models`
+        has not reached, ADR-126 Amendment 3), when the case's stored packs still stand."""
+        chosen = await datasets.chosen_of_case(investigation_id)
+        if not chosen:
+            return None
+        live = await models.live(chosen[0].id)
+>       return sorted(live.packs) if live is not None else None
+                      ^^^^^^^^^^
+E       AttributeError: 'list' object has no attribute 'packs'
+
+services/api/target_models.py:79: AttributeError
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x304bf47a0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x304f0c230>, 'audit': <services.api.audit.AuditWriter object at 0x30a205d30>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...datetime.datetime(2026, 11, 9, 1, 21, 9, 191971, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...datetime.datetime(2026, 11, 9, 1, 21, 9, 191971, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M6YYA52EQH41SPEG491DGW31', type='SAME_AS', source='01M6YYA1SRH3R8295623075ND3', target='01M6YYA52791P08G689...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+________________ test_every_held_at_link_has_the_plans_interval ________________
+
+loaded = (LoadReport(load_id='load-1', recipe_id='pid-nomis-prisoners', recipe_version=1, rows_read=1060, rows_deduplicated=0, ...one, legal_basis=None), load_id='load-1'), ...], <tests.ingest.recipe_test_support.MergingGraph object at 0x3087b3890>)
+
+    async def test_every_held_at_link_has_the_plans_interval(
+        loaded: tuple[Any, list[Any], MergingGraph],
+    ) -> None:
+        """Not only how many are open and how many closed: each link's start and end are the plan's."""
+        _report, _events, graph = loaded
+        people, places = _person_ids(graph), _place_ids(graph)
+        planned = {
+            (_plan_person_key(lk.source), _plan_place_key(lk.target)): lk for lk in _held_at()
+        }
+        stored = {
+            (people[e.source], places[e.target]): e
+            for e in graph.committed_edges
+            if e.type == "HELD_AT"
+        }
+        assert stored.keys() == planned.keys()
+        for pair, link in planned.items():
+            interval = stored[pair].interval
+            assert stored[pair].occurrences == link.occurrences == 1, pair
+            assert interval is not None, pair
+>           assert interval.valid_from == _start_of(link.first_seen), pair
+E           AssertionError: ('Z2486ZZ', 'pid:est:fenwick-moor')
+E           assert datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc), valid_to=None).valid_from
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000918', link_type='HELD_AT', source='principal', target='est:fenwick-moor', occurrences=1, first_seen=...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py:291: AssertionError
+____________________ test_every_stay_has_the_plans_interval ____________________
+
+stays = (<tests.ingest.recipe_test_support.MergingGraph object at 0x3088f4770>, <tests.ingest.test_row_keys.KeyStore object at...wick-moor-security', review_date=None, legal_basis=None), load_id='load-pid_nomis_cell_stays.csv'), ...], (1587, 1671))
+
+    async def test_every_stay_has_the_plans_interval(
+        stays: tuple[MergingGraph, KeyStore, Any, Any, tuple[int, int]],
+    ) -> None:
+        graph, _store, _report, _events, _before = stays
+        stored = _stored(graph)
+        running = 0
+        for lk in _planned():
+            edge = stored[(_ref(PLAN.entity(lk.source)), _ref(PLAN.entity(lk.target)))]
+            assert edge.occurrences == lk.occurrences == 1, lk.key
+            assert edge.interval is not None
+>           assert edge.interval.valid_from == _start_of(lk.first_seen), lk.key
+E           AssertionError: l000957
+E           assert datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)).valid_from
+E            +    where Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)) = EdgeWrite(id='01M6YYCQNXVCQF6EAV73N672BS', type='PRESENT_AT', source='01M6YYCQ4HC05MX02SJKGF6WQ6', target='01M6YYCPXZE...imezone.utc), load_id='load-pid_nomis_cell_stays.csv', recipe_id='pid-nomis-cell-stays', recipe_version=1, datasets=[]).interval
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000957', link_type='PRESENT_AT', source='principal', target='cell:F1-03', occurrences=1, first_seen=dat...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py:90: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x30479c970>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x30479e830>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 10 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   10 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 01:22:57] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 15 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py::test_every_held_at_link_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py::test_every_stay_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+5 failed, 124 passed, 1 warning in 409.34s (0:06:49)
+--- at main a8ed030
+............F..........F....F....F.............F                         [100%]
+=================================== FAILURES ===================================
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x12df30bc0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1384652b0>, 'audit': <services.api.audit.AuditWriter object at 0x12df30440>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...atetime.datetime(2026, 11, 9, 1, 26, 54, 308883, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...atetime.datetime(2026, 11, 9, 1, 26, 54, 308883, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M6YYMP3DVVWM6B2GVF09BVNP', type='SAME_AS', source='01M6YYMJJEAK1G523GXV8GCWTV', target='01M6YYMP347P6K8XVJ0...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+________________ test_every_held_at_link_has_the_plans_interval ________________
+
+loaded = (LoadReport(load_id='load-1', recipe_id='pid-nomis-prisoners', recipe_version=1, rows_read=1060, rows_deduplicated=0, ...one, legal_basis=None), load_id='load-1'), ...], <tests.ingest.recipe_test_support.MergingGraph object at 0x13925aea0>)
+
+    async def test_every_held_at_link_has_the_plans_interval(
+        loaded: tuple[Any, list[Any], MergingGraph],
+    ) -> None:
+        """Not only how many are open and how many closed: each link's start and end are the plan's."""
+        _report, _events, graph = loaded
+        people, places = _person_ids(graph), _place_ids(graph)
+        planned = {
+            (_plan_person_key(lk.source), _plan_place_key(lk.target)): lk for lk in _held_at()
+        }
+        stored = {
+            (people[e.source], places[e.target]): e
+            for e in graph.committed_edges
+            if e.type == "HELD_AT"
+        }
+        assert stored.keys() == planned.keys()
+        for pair, link in planned.items():
+            interval = stored[pair].interval
+            assert stored[pair].occurrences == link.occurrences == 1, pair
+            assert interval is not None, pair
+>           assert interval.valid_from == _start_of(link.first_seen), pair
+E           AssertionError: ('Z2486ZZ', 'pid:est:fenwick-moor')
+E           assert datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc), valid_to=None).valid_from
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000918', link_type='HELD_AT', source='principal', target='est:fenwick-moor', occurrences=1, first_seen=...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py:291: AssertionError
+____________________ test_every_stay_has_the_plans_interval ____________________
+
+stays = (<tests.ingest.recipe_test_support.MergingGraph object at 0x13cd4ce30>, <tests.ingest.test_row_keys.KeyStore object at...wick-moor-security', review_date=None, legal_basis=None), load_id='load-pid_nomis_cell_stays.csv'), ...], (1587, 1671))
+
+    async def test_every_stay_has_the_plans_interval(
+        stays: tuple[MergingGraph, KeyStore, Any, Any, tuple[int, int]],
+    ) -> None:
+        graph, _store, _report, _events, _before = stays
+        stored = _stored(graph)
+        running = 0
+        for lk in _planned():
+            edge = stored[(_ref(PLAN.entity(lk.source)), _ref(PLAN.entity(lk.target)))]
+            assert edge.occurrences == lk.occurrences == 1, lk.key
+            assert edge.interval is not None
+>           assert edge.interval.valid_from == _start_of(lk.first_seen), lk.key
+E           AssertionError: l000957
+E           assert datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)).valid_from
+E            +    where Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)) = EdgeWrite(id='01M6YYQGCXA09THBRTS9QG98BG', type='PRESENT_AT', source='01M6YYQDZHA64KNSQ1Q8FRV3PA', target='01M6YYQDBCX...imezone.utc), load_id='load-pid_nomis_cell_stays.csv', recipe_id='pid-nomis-cell-stays', recipe_version=1, datasets=[]).interval
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000957', link_type='PRESENT_AT', source='principal', target='cell:F1-03', occurrences=1, first_seen=dat...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py:90: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x13b783ab0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x13b783a50>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 10 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   10 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 01:30:02] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 15 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live _
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5984/test_a_returning_rows_revert_i0')
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x13b616090>
+
+    async def test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live(
+        tmp_path: Path, runs: RecipeRunStore
+    ) -> None:
+        """ADR-110 Amendment 16, rule 3, live: another case's refresh of the same pair merges into the
+        link after B came back (the raw adapter stamps no dataset, so the two share it). The returning
+        load's revert is refused, nothing changes, and the words name no other case or load."""
+        async with (
+            arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+            duckdb_adapter([], SCHEME) as analytics,
+        ):
+            ours = Refresh(tmp_path / "ours", runs, graph, analytics)
+            theirs = Refresh(tmp_path / "theirs", runs, graph, analytics)
+>           await ours.snapshot([A, B, C])
+
+../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py:112: in snapshot
+    report = await run_published_recipe(
+services/api/studio_publish.py:443: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/ayankar/miniconda3/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/ayankar/miniconda3/lib/python3.12/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:443: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5984/test_a_returning_rows_revert_i0/ours/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-studio/2b03adfe-bf24-4d04-ae80-fe15c270b19c/scratchpad/main-wt/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py::test_every_held_at_link_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py::test_every_stay_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live
+5 failed, 43 passed, 1 warning in 460.40s (0:07:40)
+finished 01:32:20Z
+Test stack c down for studio: osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore
+Lease on stack c released by studio.

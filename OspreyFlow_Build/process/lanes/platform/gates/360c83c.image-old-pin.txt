@@ -1,0 +1,126 @@
+Running on ospreyflow-test (stack d, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T202647Z/log: sh process/lanes/platform/gates/p5_image_check.sh
+
+===== 1. build (amd64), as make trivy-image-api: docker build --pull -f services/api/Dockerfile
+sha256:e26319c30fa7a96156e4a2358366dac96ea62e70d597b525d5000c0df6e7cc80
+image size: 1858576509 bytes (amd64)
+62M	/opt/java
+JAVA_VERSION="21.0.12.1"
+MODULES="java.base java.compiler java.datatransfer java.xml java.prefs java.desktop java.instrument java.logging java.management java.security.sasl java.naming java.net.http java.scripting java.security.jgss java.transaction.xa java.sql jdk.crypto.ec jdk.jfr jdk.management jdk.unsupported jdk.zipfs"
+openjdk version "21.0.12.1" 2026-08-18 LTS
+OpenJDK Runtime Environment Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS, mixed mode)
+legal/java.desktop:
+ADDITIONAL_LICENSE_INFO
+ASSEMBLY_EXCEPTION
+LICENSE
+colorimaging.md
+freetype.md
+giflib.md
+harfbuzz.md
+jpeg.md
+lcms.md
+libpng.md
+mesa3d.md
+pipewire.md
+xwd.md
+## Eastman Kodak Company: Portions of color management and imaging software  ### Eastman Kodak Notice 
+## The FreeType Project: Freetype v2.14.3   
+## GIFLIB v6.1.3  ### GIFLIB License 
+## Harfbuzz v14.2.0  ### Harfbuzz License 
+## Independent JPEG Group: JPEG release 6b  ### JPEG License 
+## Little Color Management System (LCMS) v2.19.1  ### LCMS License 
+## libpng v1.6.58  ### libpng License 
+## Mesa 3-D Graphics Library v21.0.3  ### Mesa License 
+## PipeWire 1.3.81  ### PipeWire license: 
+## xwd v1.0.7  ### xwd utility 
+44:FROM eclipse-temurin:21-jdk@sha256:f9bf7e9fe2f9bc4657537c1a7e20c768f0c3bafca41598263be4714783dd62eb AS java
+
+===== 2. planetiler --help, run by the image's java
+f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d  /tmp/tmp.Twv9tWOb3I/planetiler.jar
+planetiler --help exit: 1
+Error: Unable to access jarfile /j/planetiler.jar
+
+===== 3. trivy over the image, as make trivy-image-api (HIGH,CRITICAL, --ignore-unfixed)
+trivy (current) exit: 0
+│ app/.venv/lib/python3.12/site-packages/rpds_py-2026.9.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rustworkx-0.18.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink-3.9.9.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/sqlglot-18.17.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+
+===== 3b. what trivy sees of the Java runtime (every package, any severity)
+debian osprey-p5-api:current (debian 13.7) 118
+jar Java 12
+python-pkg Python 58
+packages naming java/jdk: []
+
+===== 4. the same image from an old Temurin (eclipse-temurin:21.0.1_12-jdk), scanned the same way
+44:FROM eclipse-temurin:21.0.1_12-jdk AS java
+sha256:1b230d5ada6c4701a4db11d22d9f54f8eb6155619748be6fe0b7cf7b31ced110
+JAVA_VERSION="21.0.1"
+MODULES="java.base java.compiler java.datatransfer java.xml java.prefs java.desktop java.instrument java.logging java.management java.security.sasl java.naming java.net.http java.scripting java.security.jgss java.transaction.xa java.sql jdk.crypto.ec jdk.jfr jdk.management jdk.unsupported jdk.zipfs"
+trivy (old Temurin) exit: 0
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+vulnerabilities in a Java package: []
+
+===== done
+exit 0

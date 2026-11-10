@@ -1,0 +1,18 @@
+reruns at 2dd1877 (code 2dd1877), this Mac, offline, closed ports 59991-59994, no OSPREY_LANE
+
+## 1. test_place_routes.py and test_audit_kinds.py WITHOUT the carried diffs (as the server test found them)
+FAILED ../OspreyFlow_Build/tests/services/api/test_place_routes.py::test_the_record_of_places_by_role_is_the_routes
+FAILED ../OspreyFlow_Build/tests/services/api/test_place_routes.py::test_every_route_of_a_hidden_place_refuses_the_role[right:write_sql_transforms]
+FAILED ../OspreyFlow_Build/tests/services/api/test_audit_kinds.py::test_every_action_the_conduit_writes_is_classified
+3 failed, 108 passed, 1 warning in 30.97s
+
+## 2. the same, WITH L1.5_places_by_role.diff and L1.5_audit_section.diff applied (git apply), then reverted (git apply -R)
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+111 passed, 1 warning in 32.10s
+
+## 3. test_sql_transform.py whole, after the 100M-rows case admits the time limit's words
+........................................................................ [ 64%]
+........................................                                 [100%]
+112 passed in 9.57s

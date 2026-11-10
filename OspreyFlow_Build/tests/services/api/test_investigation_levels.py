@@ -152,6 +152,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/suggest"): V,
     # ADR-147 Amendment 1 (P4): the map's place search, as the case's other searches.
     ("POST", P + "/map/places"): V,
+    # ADR-147 Amendment 2 (the owner's ruling 6): the gazetteers the case's dataset holds, read.
+    ("GET", P + "/map/gazetteers"): V,
     # The Explore panel (ADR-100): reads.
     ("GET", P + "/explore/counts"): V,
     ("GET", P + "/explore/most-connected"): V,
@@ -187,6 +189,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/ingest/recipes/{recipe_id}/profile"): V,
     ("PUT", P + "/ingest/recipes/{recipe_id}/row-template"): E,
     ("PUT", P + "/ingest/recipes/{recipe_id}/pipeline"): E,
+    # ADR-140 decision 3 (phase 8): Show YAML (Viewer, as the draft is), its save and Check SQL
+    # (Editor, as the pipeline's save is).
+    ("GET", P + "/ingest/recipes/{recipe_id}/pipeline/yaml"): V,
+    ("PUT", P + "/ingest/recipes/{recipe_id}/pipeline/yaml"): E,
+    ("POST", P + "/ingest/recipes/{recipe_id}/sql-check"): E,
     # ADR-109 phase A: an Author deploys and retires a typology rule (ruling 4); the rule list is
     # the case team's; the rule audit is an Author's (or the admin's safety net, ruling 1); held rows
     # are listed at Editor and decided at Author (Amendment 1).
