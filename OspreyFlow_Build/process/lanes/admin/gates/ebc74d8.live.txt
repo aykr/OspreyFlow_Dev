@@ -1,0 +1,105 @@
+Running on ospreyflow-test (stack c, osprey-runs/orchestrator/OspreyFlow_Build/), logged at osprey-runs/orchestrator.meta/runs/20261110T110322Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -s -vv --durations=15 ../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/orchestrator/OspreyFlow_Core/.venv/bin/python
+cachedir: .pytest_cache
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/orchestrator/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 8 items
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster FAILED
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index PASSED
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_a_bad_statement_fails_a_fresh_apply_typed_and_leaves_no_schema PASSED
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_a_bad_statement_leaves_an_older_schema_whole PASSED
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it PASSED
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route PASSED
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too 127.0.0.1 - - [10/Nov/2026 11:04:08] "GET /jwks.json HTTP/1.1" 200 -
+PASSED
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route 127.0.0.1 - - [10/Nov/2026 11:04:12] "GET /jwks.json HTTP/1.1" 200 -
+PASSED
+
+=================================== FAILURES ===================================
+_____ test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster ______
+
+databases = <function databases.<locals>.fresh at 0x758b00bc56c0>
+
+    async def test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster(
+        databases: Any,
+    ) -> None:
+        one, batch = await databases(), await databases()
+        fresh_one = await _one_at_a_time(one)
+        fresh_batch = await _batched(batch)
+        diff = _differences(await _dump(batch), await _dump(one))
+>       assert not diff, "\n".join(diff[:40])
+E       AssertionError: indexes "mx_ALERTED_ON[['datasets by item']]#1" name: 'mx_ALERTED_ON_0_1280514864747709' != 'mx_ALERTED_ON_0_1280508947873872'
+E         indexes "mx_ALERTED_ON[['handling_classification']]#1" name: 'mx_ALERTED_ON_0_1280514856870165' != 'mx_ALERTED_ON_0_1280508509181501'
+E         indexes "mx_ALERTED_ON[['handling_code']]#1" name: 'mx_ALERTED_ON_0_1280514857523568' != 'mx_ALERTED_ON_0_1280508559945243'
+E         indexes "mx_ALERTED_ON[['id']]#1" name: 'mx_ALERTED_ON_0_1280514856246682' != 'mx_ALERTED_ON_0_1280508458223250'
+E         indexes "mx_ALERTED_ON[['originator']]#1" name: 'mx_ALERTED_ON_0_1280514858823894' != 'mx_ALERTED_ON_0_1280508665466174'
+E         indexes "mx_ALERTED_ON[['owning_unit']]#1" name: 'mx_ALERTED_ON_0_1280514858180381' != 'mx_ALERTED_ON_0_1280508609166742'
+E         indexes "mx_ALERTED_ON[['promoted_by_load']]#1" name: 'mx_ALERTED_ON_0_1280514861483345' != 'mx_ALERTED_ON_0_1280508896324338'
+E         indexes "mx_ALERTED_ON[['reverted']]#1" name: 'mx_ALERTED_ON_0_1280514859491057' != 'mx_ALERTED_ON_0_1280508721827825'
+E         indexes "mx_ALERTED_ON[['superseded_by']]#1" name: 'mx_ALERTED_ON_0_1280514860125150' != 'mx_ALERTED_ON_0_1280508781415800'
+E         indexes "mx_ALERTED_ON[['withdrawn_by_load']]#1" name: 'mx_ALERTED_ON_0_1280514860808152' != 'mx_ALERTED_ON_0_1280508832723777'
+E         indexes "mx_ASSOCIATE_OF[['datasets by item']]#1" name: 'mx_ASSOCIATE_OF_0_1280514885688369' != 'mx_ASSOCIATE_OF_0_1280510770240424'
+E         indexes "mx_ASSOCIATE_OF[['handling_classification']]#1" name: 'mx_ASSOCIATE_OF_0_1280514880437716' != 'mx_ASSOCIATE_OF_0_1280510344610749'
+E         indexes "mx_ASSOCIATE_OF[['handling_code']]#1" name: 'mx_ASSOCIATE_OF_0_1280514881150199' != 'mx_ASSOCIATE_OF_0_1280510398228220'
+E         indexes "mx_ASSOCIATE_OF[['id']]#1" name: 'mx_ASSOCIATE_OF_0_1280514879779604' != 'mx_ASSOCIATE_OF_0_1280510293398842'
+E         indexes "mx_ASSOCIATE_OF[['originator']]#1" name: 'mx_ASSOCIATE_OF_0_1280514882438384' != 'mx_ASSOCIATE_OF_0_1280510503716432'
+E         indexes "mx_ASSOCIATE_OF[['owning_unit']]#1" name: 'mx_ASSOCIATE_OF_0_1280514881793772' != 'mx_ASSOCIATE_OF_0_1280510451430506'
+E         indexes "mx_ASSOCIATE_OF[['promoted_by_load']]#1" name: 'mx_ASSOCIATE_OF_0_1280514884988686' != 'mx_ASSOCIATE_OF_0_1280510719148815'
+E         indexes "mx_ASSOCIATE_OF[['reverted']]#1" name: 'mx_ASSOCIATE_OF_0_1280514883087177' != 'mx_ASSOCIATE_OF_0_1280510555156467'
+E         indexes "mx_ASSOCIATE_OF[['superseded_by']]#1" name: 'mx_ASSOCIATE_OF_0_1280514883738960' != 'mx_ASSOCIATE_OF_0_1280510611596447'
+E         indexes "mx_ASSOCIATE_OF[['withdrawn_by_load']]#1" name: 'mx_ASSOCIATE_OF_0_1280514884345004' != 'mx_ASSOCIATE_OF_0_1280510662449578'
+E         indexes "mx_Alert[['datasets by item']]#1" name: 'mx_Alert_0_1280514817159452' != 'mx_Alert_0_1280505223547022'
+E         indexes "mx_Alert[['handling_classification']]#1" name: 'mx_Alert_0_1280514811544393' != 'mx_Alert_0_1280504721779084'
+E         indexes "mx_Alert[['handling_code']]#1" name: 'mx_Alert_0_1280514812186256' != 'mx_Alert_0_1280504772935662'
+E         indexes "mx_Alert[['id']]#1" name: 'mx_Alert_0_1280514810878461' != 'mx_Alert_0_1280504647603119'
+E         indexes "mx_Alert[['originator']]#1" name: 'mx_Alert_0_1280514813509062' != 'mx_Alert_0_1280504897660212'
+E         indexes "mx_Alert[['owning_unit']]#1" name: 'mx_Alert_0_1280514812838209' != 'mx_Alert_0_1280504838726919'
+E         indexes "mx_Alert[['promoted_by_load']]#1" name: 'mx_Alert_0_1280514816462529' != 'mx_Alert_0_1280505170842321'
+E         indexes "mx_Alert[['reverted']]#1" name: 'mx_Alert_0_1280514814252983' != 'mx_Alert_0_1280504964734455'
+E         indexes "mx_Alert[['rule_id']]#1" name: 'mx_Alert_0_1280514817919703' != 'mx_Alert_0_1280505286019796'
+E         indexes "mx_Alert[['superseded_by']]#1" name: 'mx_Alert_0_1280514814921506' != 'mx_Alert_0_1280505047726233'
+E         indexes "mx_Alert[['withdrawn_by_load']]#1" name: 'mx_Alert_0_1280514815611748' != 'mx_Alert_0_1280505106567747'
+E         indexes "mx_Asset[['datasets by item']]#1" name: 'mx_Asset_0_1280514809726443' != 'mx_Asset_0_1280504557498138'
+E         indexes "mx_Asset[['handling_classification']]#1" name: 'mx_Asset_0_1280514804053015' != 'mx_Asset_0_1280504062535706'
+E         indexes "mx_Asset[['handling_code']]#1" name: 'mx_Asset_0_1280514804773198' != 'mx_Asset_0_1280504150150333'
+E         indexes "mx_Asset[['id']]#1" name: 'mx_Asset_0_1280514801035809' != 'mx_Asset_0_1280503958085543'
+E         indexes "mx_Asset[['originator']]#1" name: 'mx_Asset_0_1280514806246291' != 'mx_Asset_0_1280504260517841'
+E         indexes "mx_Asset[['owning_unit']]#1" name: 'mx_Asset_0_1280514805421850' != 'mx_Asset_0_1280504202606177'
+E         indexes "mx_Asset[['promoted_by_load']]#1" name: 'mx_Asset_0_1280514809015781' != 'mx_Asset_0_1280504487799774'
+E         indexes "mx_Asset[['reverted']]#1" name: 'mx_Asset_0_1280514807038623' != 'mx_Asset_0_1280504322281562'
+E         indexes "mx_Asset[['superseded_by']]#1" name: 'mx_Asset_0_1280514807733475' != 'mx_Asset_0_1280504380489813'
+E       assert not ['indexes "mx_ALERTED_ON[[\'datasets by item\']]#1" name: \'mx_ALERTED_ON_0_1280514864747709\' != \'mx_ALERTED_ON_0_1280508947873872\'', 'indexes "mx_ALERTED_ON[[\'handling_classification\']]#1" name: \'mx_ALERTED_ON_0_1280514856870165\' != \'mx_ALERTED_ON_0_1280508509181501\'', 'indexes "mx_ALERTED_ON[[\'handling_code\']]#1" name: \'mx_ALERTED_ON_0_1280514857523568\' != \'mx_ALERTED_ON_0_1280508559945243\'', 'indexes "mx_ALERTED_ON[[\'id\']]#1" name: \'mx_ALERTED_ON_0_1280514856246682\' != \'mx_ALERTED_ON_0_1280508458223250\'', 'indexes "mx_ALERTED_ON[[\'originator\']]#1" name: \'mx_ALERTED_ON_0_1280514858823894\' != \'mx_ALERTED_ON_0_1280508665466174\'', 'indexes "mx_ALERTED_ON[[\'owning_unit\']]#1" name: \'mx_ALERTED_ON_0_1280514858180381\' != \'mx_ALERTED_ON_0_1280508609166742\'', ...]
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py:122: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/orchestrator/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 15 durations =============================
+18.90s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster
+18.73s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index
+4.87s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+3.69s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+2.70s call     tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+0.55s call     tests/conformance/graph_port/test_schema_batch_live.py::test_a_bad_statement_leaves_an_older_schema_whole
+0.22s teardown tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index
+0.20s call     tests/conformance/graph_port/test_schema_batch_live.py::test_a_bad_statement_fails_a_fresh_apply_typed_and_leaves_no_schema
+0.20s teardown tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster
+0.17s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.11s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.08s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.07s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.07s teardown tests/conformance/graph_port/test_schema_batch_live.py::test_a_bad_statement_leaves_an_older_schema_whole
+0.02s setup    tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time_and_is_faster
+=================== 1 failed, 7 passed, 1 warning in 51.43s ====================
+Wall time: 53 s, exit 1 (stack c, the lease orchestrator took at 2026-11-10T11:03:07Z; set-up before it 11 s)
+exit 1

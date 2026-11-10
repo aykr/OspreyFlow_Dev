@@ -1,0 +1,2 @@
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: 901 test file(s), 0 allowlisted, no new drift.
