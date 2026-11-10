@@ -271,7 +271,12 @@ def main() -> int:
         "PYTHONPATH": ".:packages:cli",
     }
     directory = home / ".ospreyflow" / "deployments" / NAME
-    compose = ["docker", "compose", "-p", NAME, "-f", str(directory / "compose.yaml")]
+    # Every compose call reads the deployment's env file, as the harness's own does; without it
+    # the interpolation of the secrets fails before any verb runs (run 3 on stack b).
+    compose = [
+        "docker", "compose", "-p", NAME, "-f", str(directory / "compose.yaml"),
+        "--env-file", str(directory / "deployment.env"),
+    ]  # fmt: skip
     python = str(CORE / ".venv" / "bin" / "python")
     own_images = OwnImages(tags_before)
     ok = False
@@ -357,10 +362,7 @@ def main() -> int:
         def down() -> None:
             if not (directory / "compose.yaml").is_file():
                 return
-            envfile = ["--env-file", str(directory / "deployment.env")]
-            sent = guarded(
-                [*compose, *envfile, "down", "-v", "--remove-orphans"], home, teardown=True
-            )
+            sent = guarded([*compose, "down", "-v", "--remove-orphans"], home, teardown=True)
             if sent is not None:
                 say("$ " + " ".join(sent))
                 subprocess.run(sent, env=env, cwd=CORE, check=False)

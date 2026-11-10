@@ -175,9 +175,12 @@ def test_the_guard_refuses_another_s_volume_container_project_or_image(home: Pat
     driver = _driver()
     mine = str(home / "d" / "compose.yaml")
     theirs = str(home.parent / "other" / "compose.yaml")
+    envfile = str(home / "d" / "deployment.env")
     allowed = [
         ["docker", "compose", "-f", mine, "down", "-v"],
         ["docker", "compose", "--project-name", "osprey-p5b-test", "-f", mine, "down", "-v"],
+        # The rollback's own shape (`harness.update._compose_argv`): the env file first, no -p.
+        ["docker", "compose", "--env-file", envfile, "-f", mine, "down", "-v"],
         ["docker", "volume", "rm", "osprey-p5b-test_osprey-data"],
         ["docker", "rm", "-v", "osprey-p5b-test-api-1"],
         ["docker", "compose", "-f", mine, "up", "-d"],  # nothing removed: passed as it is
