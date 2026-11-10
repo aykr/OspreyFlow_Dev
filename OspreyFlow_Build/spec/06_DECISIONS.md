@@ -33363,3 +33363,54 @@ written by whichever session prepares the merge, still inside one commit on `mai
 **The test that would fail.** A merge commit on `main` whose first parent is not the `main` it was built on, or that
 was not a fast-forward, shows the rule broken. `git log --first-parent main` shows only the orchestrator's landings,
 and each one is checked against the merger's "land" message in `process/lanes/merger/LANDED.md`.
+
+### ADR-148, Amendment 3 (10 November 2026) — the ceiling's carries as built (L1.10b)
+
+Status: accepted. Written in the studio-b lane at step L1.10b, with the orchestrator's acceptance of 10 November
+of points 1 and 3. It closes three of Amendment 2's carries: the other demo packs' declarations, a refused staged
+run's working tables, and Test not judging the ceiling.
+
+1. **Every demo pack declares its highest marking, each proved against what it writes** (`scripts/seed_internal.py`,
+   `tests/test_seed_internal_ceiling.py`):
+   - **SECRET:** hmp and fixture-corp. Each writes one SECRET link by design: HMP's network holds a SECRET
+     `IN_CONFLICT_WITH` (`demo_fixtures.hmp_network`), and Fixture Corp's path spokes a SECRET shortcut (the
+     access-control suite's). The proof shows SECRET is reached, so the declaration is not higher than the pack
+     writes. Both stay refused under any ceiling below SECRET, as they were when undeclared, now in words that
+     give their declared marking.
+   - **OFFICIAL:** ledger, prison-intelligence, prison-intelligence-scale, public and enron, joining cyber-intrusion
+     and PaySim.
+     - A pack that loads through recipes is proved by the ceiling's own judgement (`refuse_rows_above_the_ceiling`)
+       of each recipe it loads and the rows it loads through it. For the Prison Intelligence Dataset that is every
+       file the seed writes, its recipes binding a classification column, and the monitoring batches.
+     - What a pack writes directly is proved over its real builders, recorded by a graph that writes nothing.
+     - Enron is real data and never in a test (rule 9): its builders are proved over a synthetic pair and message
+       to stamp the handling the seed gives them.
+   - A test holds every pack to a declaration and a proof, so a new pack is added with both. A pack added without
+     one is still judged as the scheme's highest (Amendment 2 decision 5).
+2. **A staged run refused at the ceiling leaves no step table.** A marking a column sets is judged by `run_recipe`,
+   after the step tables (`<bucket>/loads/<load_id>/staged/`) are written. On `AboveTheDeploymentCeiling` the run
+   removes the tables it wrote, by their own paths and no other run's, then refuses as before
+   (`staged_run.remove_step_tables`). That holds in the pipeline's staged branch (`pipeline_run`) and in the staged
+   engine's own load (`run_staged_recipe`). A run the ceiling passes keeps them, since a re-map reads them.
+3. **Test (Verify) judges the ceiling**, so a file above it is told before Load, in the load's own words and as
+   the same 422 `above_the_deployments_highest_marking`.
+   - `engine.dry_run_recipe` judges the rows it runs as `run_recipe` judges every row. So Test and the Map and Load
+     Previews that run it refuse what the load would.
+   - **On a pipeline without steps**, Verify judges every row of the file, not only its sample of 10,000.
+   - **On a staged pipeline**, Test judges the rows it runs: the first rows of each source, after the steps. The run
+     still judges every row.
+   - Verify's withheld-sample guards (rules 3 and 4) stay first and unchanged. The words name the deployment's limit,
+     never a row's content, so judging the whole file tells an author only what the load would tell its loader.
+
+**Tests** (each red first, `process/lanes/studio-b/l1.10b/red_plants.py`):
+- **Point 1:** `tests/test_seed_internal_ceiling.py`:
+  - `test_every_pack_declares_its_highest_marking` and
+    `test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest`, which plants an undeclared pack;
+  - one proof per pack, `test_<pack>s_declaration_...`.
+- **Point 2:** `tests/services/api/test_deployment_ceiling_staged.py`, which covers the branch, the engine's own
+  load, no other run's tables touched, and a passed run keeping its tables.
+- **Point 3:** `tests/services/api/test_deployment_ceiling_verify.py`, which covers the load's words, the whole
+  file past the sample, a staged pipeline, at the ceiling, and none set.
+
+**Still carried** from Amendment 2: the drawn item (case-b), the promotion and drawn-merge writes (case, Amendment
+4), cloud-platform's OFFICIAL-SENSITIVE default (P7), and System showing the ceiling, applied with L1.10's merge.
