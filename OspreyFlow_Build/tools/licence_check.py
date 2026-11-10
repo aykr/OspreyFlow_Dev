@@ -170,6 +170,142 @@ def is_allowed(license_text: str, package: str | None = None) -> bool:
     return result and position == len(tokens)
 
 
+#: `00_ARCHITECTURE.md` §7's recorded Classpath exceptions: a runtime carried in an image, by the
+#: name its Dockerfile's label gives it -> where it was assessed. An exception admits exactly
+#: `GPL-2.0(-only) WITH Classpath-exception-2.0` for that runtime, and nothing else.
+RECORDED_CLASSPATH_EXCEPTIONS: dict[str, str] = {
+    "java": "ADR-147 Amendment 2, the owner's ruling 1 of 9 November 2026: Temurin 21, jlinked, "
+    "in the Conduit's image",
+}
+
+_CLASSPATH = re.compile(r"^gpl-2\.0(-only)?\s+with\s+classpath-exception-2\.0$")
+#: A runtime an image declares: `org.ospreyflow.runtime.<name>.licence` on any `LABEL`, however it
+#: is quoted or laid out (several labels on one line, continued lines, the legacy `LABEL key value`).
+_RUNTIME_KEY = re.compile(r"^org\.ospreyflow\.runtime\.([a-z0-9-]+)\.licence$")
+#: A Java runtime in an image, however it got there: a JDK or JRE stage, a jlinked runtime, a
+#: runtime copied to `/opt/java`, or a distribution's package (`apt-get install openjdk-21-jre`,
+#: `default-jre`, `apk add openjdk21`).
+_JAVA_IN_IMAGE = re.compile(
+    r"^FROM\s+\S*(temurin|openjdk|jdk|jre|corretto|zulu)\S*"
+    r"|\bjlink\b|/opt/java"
+    r"|\b(openjdk-?\d+(-jre|-jdk)?(-headless)?|default-(jre|jdk)(-headless)?)\b",
+    re.M | re.I,
+)
+#: `git` in an image: a distribution's package (`git`, `git-core`, `git-lfs`, which brings `git`), or
+#: its binary copied in from another stage. GPL-2.0, so it is declared like a runtime. A base image
+#: that already carries it is beyond what a Dockerfile's text can show.
+_GIT_IN_IMAGE = re.compile(
+    r"\b(apt-get|apt|dnf|yum|microdnf)\b[^\n]*\binstall\b[^\n]*\bgit(-lfs|-core)?(?![\w-])"
+    r"|\bapk\s+add\b[^\n]*\bgit(-lfs|-core)?(?![\w-])"
+    r"|^COPY\b[^\n]*\s/usr/(local/)?bin/git(\s|$)",
+    re.I | re.M,
+)
+#: Runtimes an image carries under a licence the register does not pass, put to the owner, and
+#: either awaiting a ruling or, once ruled, awaiting the carry that removes them: named on every run
+#: with the ruling and its carry (never passed silently), not failed. The register is the owner's.
+#: Each entry is pinned: this runtime, in this Dockerfile, under exactly this licence; anything else
+#: (another image, another licence) is an offender as usual.
+AWAITING_OWNER: dict[tuple[str, str, str], str] = {
+    ("services/api/Dockerfile", "git", "GPL-2.0-only"): "the Conduit runs it to publish recipes "
+    "(09_INGEST_STUDIO.md §6, services/api/studio_publish.py); the owner's ruling of 9 November "
+    "2026: replaced by dulwich under its Apache-2.0 licence, studio-b's carry in L1.7a, and then "
+    "removed from the image",
+}
+
+
+def _instructions(text: str) -> list[str]:
+    """A Dockerfile's instructions, each whole: continued lines joined, comments left out."""
+    joined = re.sub(r"\\\r?\n", " ", text)
+    return [
+        line.strip()
+        for line in joined.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+
+def label_pairs(text: str) -> list[tuple[str, str]]:
+    """Every `key`/`value` a Dockerfile's `LABEL`s set, however each is written (quoted or not,
+    several to a line, continued lines, or the legacy `LABEL key value`), in order."""
+    import shlex
+
+    found: list[tuple[str, str]] = []
+    for instruction in _instructions(text):
+        word, _, rest = instruction.partition(" ")
+        if word.upper() != "LABEL":
+            continue
+        try:
+            tokens = shlex.split(rest)
+        except ValueError:
+            tokens = rest.split()
+        pairs = [t.split("=", 1) for t in tokens if "=" in t]
+        if not pairs and len(tokens) >= 2:  # the legacy form, `LABEL key value`
+            pairs = [[tokens[0], " ".join(tokens[1:])]]
+        found.extend((key.strip(), value.strip()) for key, value in pairs)
+    return found
+
+
+def declared_runtimes(text: str) -> dict[str, str]:
+    """Every `org.ospreyflow.runtime.<name>.licence` a Dockerfile's `LABEL`s declare."""
+    found: dict[str, str] = {}
+    for key, value in label_pairs(text):
+        named = _RUNTIME_KEY.match(key)
+        if named:
+            found[named.group(1)] = value
+    return found
+
+
+def find_runtimes_awaiting_owner(
+    dockerfiles: dict[str, str] | None = None,
+) -> list[tuple[str, str, str]]:
+    """`(dockerfile, runtime, licence)` for each declared runtime the register does not pass that
+    is put to the owner (`AWAITING_OWNER`): said on every run, so never passed silently."""
+    return [
+        (name, runtime, licence)
+        for name, text in (_dockerfiles() if dockerfiles is None else dockerfiles).items()
+        for runtime, licence in declared_runtimes(text).items()
+        if (name, runtime, licence) in AWAITING_OWNER and not runtime_allowed(licence, runtime)
+    ]
+
+
+def runtime_allowed(licence: str, runtime: str) -> bool:
+    """A runtime's licence: the allowlist's, or the Classpath exception for a recorded runtime."""
+    if _CLASSPATH.match(" ".join(licence.lower().split())):
+        return runtime in RECORDED_CLASSPATH_EXCEPTIONS
+    return is_allowed(licence)
+
+
+def _dockerfiles(root: Path = CORE) -> dict[str, str]:
+    return {
+        str(path.relative_to(root)): path.read_text(encoding="utf-8")
+        for path in sorted(root.rglob("Dockerfile*"))
+        if not {"node_modules", ".venv"} & set(path.parts)
+    }
+
+
+def find_runtime_offenders(
+    dockerfiles: dict[str, str] | None = None,
+) -> list[tuple[str, str, str]]:
+    """The image leg (ADR-147 Amendment 2): `(dockerfile, runtime, licence)` for every runtime an
+    image declares whose licence is not allowed, and for a Java runtime an image carries without
+    declaring it (`undeclared`). Neither pip-licenses nor license-checker sees a runtime copied
+    into an image, so the image says what it carries, and this reads it."""
+    offenders: list[tuple[str, str, str]] = []
+    for name, text in (_dockerfiles() if dockerfiles is None else dockerfiles).items():
+        declared = declared_runtimes(text)
+        instructions = "\n".join(_instructions(text))
+        offenders += [
+            (name, runtime, licence)
+            for runtime, licence in declared.items()
+            if not runtime_allowed(licence, runtime)
+            and (name, runtime, licence) not in AWAITING_OWNER
+        ]
+        if _JAVA_IN_IMAGE.search(instructions) and "java" not in declared:
+            offenders.append((name, "java", "undeclared"))
+        if _GIT_IN_IMAGE.search(instructions) and "git" not in declared:
+            offenders.append((name, "git", "undeclared"))
+    return offenders
+
+
 def run_pip_licenses(extra_pythonpath: str | None) -> list[dict[str, str]]:
     env = os.environ.copy()
     if extra_pythonpath:
@@ -274,10 +410,27 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if offenders or data_offenders or own_violations:
+    runtime_offenders = find_runtime_offenders()
+    for dockerfile, runtime, licence in runtime_offenders:
+        print(
+            f"licence-check: {dockerfile} carries the runtime {runtime!r} under {licence!r}, which "
+            "is not on the spec/00_ARCHITECTURE.md §7 allowlist nor a recorded exception",
+            file=sys.stderr,
+        )
+
+    awaiting = find_runtimes_awaiting_owner()
+    for dockerfile, runtime, licence in awaiting:
+        print(
+            f"licence-check: NOT YET PASSED: {dockerfile} carries {runtime!r} under {licence!r}, "
+            f"not on the allowlist ({AWAITING_OWNER[(dockerfile, runtime, licence)]})",
+            file=sys.stderr,
+        )
+
+    if offenders or data_offenders or own_violations or runtime_offenders:
         return 1
     print(
         f"licence-check: {len(packages)} packages, all allowed "
+        f"({len(awaiting)} image runtime(s) not yet passed, named above) "
         f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared); "
         "this project's own LICENSE/NOTICE present and correct."
     )

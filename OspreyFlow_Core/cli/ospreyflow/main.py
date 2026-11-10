@@ -364,6 +364,11 @@ def _parser() -> argparse.ArgumentParser:
     build = map_actions.add_parser("build", help="build the tier-1 basemap in the Conduit")
     build.add_argument("region", help="a named region (rutland, great-britain, …)")
     build.add_argument(
+        "--unit",
+        required=True,
+        help="the unit the gazetteer's places are held by: one that holds a case or a dataset",
+    )
+    build.add_argument(
         "--planetiler-jar", type=Path, help="planetiler's release jar, copied into the tiles folder"
     )
 
@@ -1266,7 +1271,8 @@ def _map(args: argparse.Namespace, ctx: _Context) -> int:
             "the region's extract, runs planetiler and loads the place names."
         )
         ctx.step(
-            f"build the {args.region} basemap", [*in_conduit, "build", args.region, "--by", who]
+            f"build the {args.region} basemap",
+            [*in_conduit, "build", args.region, "--by", who, "--unit", args.unit],
         )
         return 0
     ctx.step(f"{args.action} the maps", [*in_conduit, args.action, "--by", who])

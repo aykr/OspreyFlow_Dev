@@ -1,0 +1,16 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 92642fb..bc07e38 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -277,6 +277,11 @@ jobs:
+     steps:
+       - uses: actions/checkout@v4
+       - run: docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
++      # ADR-147 Amendment 2: trivy does not see the image's jlinked Java, so the image just built
++      # must run the Java its Dockerfile declares (`/opt/java/release`, `java -version`), shown red
++      # over a Temurin 21.0.1 image on the test server (process/lanes/platform/gates/).
++      - uses: astral-sh/setup-uv@v3
++      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.java_runtime_check --image ospreyflow/api:ci
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1

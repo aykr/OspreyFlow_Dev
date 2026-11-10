@@ -348,6 +348,7 @@ export function Maps({ api }: { api: MapsApi }) {
   const [history, setHistory] = useState<MapAdminEntry[]>([]);
   const [open, setOpen] = useState<Open>(null);
   const [region, setRegion] = useState("rutland");
+  const [gazetteerUnit, setGazetteerUnit] = useState("");
   const [said, setSaid] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -584,7 +585,14 @@ export function Maps({ api }: { api: MapsApi }) {
                   ))}
                 </Select>
               </div>
-              <Button disabled={busy || !view.basemap.builder_ready} onClick={() => run(() => buildBasemap(api, region))}>
+              <div className="admin-maps-row">
+                <label htmlFor="maps-unit">Unit the place names are held by (empty: your own)</label>
+                <Input id="maps-unit" value={gazetteerUnit} onChange={(e) => setGazetteerUnit(e.target.value)} />
+              </div>
+              <Button
+                disabled={busy || !view.basemap.builder_ready}
+                onClick={() => run(() => buildBasemap(api, region, gazetteerUnit))}
+              >
                 Build the basemap
               </Button>
               <Button

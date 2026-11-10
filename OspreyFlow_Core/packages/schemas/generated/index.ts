@@ -236,6 +236,8 @@ export type { PublicMapConfig } from "./PublicMapConfig";
 export type { PlaceSearchRequest } from "./PlaceSearchRequest";
 export type { MapPlace } from "./MapPlace";
 export type { PlaceSearchResponse } from "./PlaceSearchResponse";
+export type { CaseGazetteer } from "./CaseGazetteer";
+export type { CaseGazetteers } from "./CaseGazetteers";
 export type { ProfileAuth } from "./ProfileAuth";
 export type { ProfileVariable } from "./ProfileVariable";
 export type { ProfileZoom } from "./ProfileZoom";

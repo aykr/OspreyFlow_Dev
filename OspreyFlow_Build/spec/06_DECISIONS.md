@@ -31809,3 +31809,207 @@ steps (`test_phase8_exit.py`; the live walk under the lease named in the lane's 
 columns are not offered in the Map editor from the static gate: they come from its live sample, as
 every step's do. A fuzzy match's comparison vector carries its settings, not Splink's per-comparison
 levels.
+
+### ADR-147, Amendment 2 (9 November 2026) — the owner's map rulings: Java in the Conduit, gazetteer places copied into a case, the gazetteer's unit a build setting
+
+Status: accepted 9 November 2026; the owner's rulings 1, 6 and 8 of that day (`process/lanes/MORNING.md`,
+"Your rulings, 9 November"); every other choice the platform lane's, under Prompt L's rule
+(`process/lanes/platform/REPORT.md`, "Decisions taken"). Written by the platform lane in P5. ADR-099,
+ADR-014–017, ADR-147 and its Amendment 1 are otherwise unchanged.
+
+**Context.** Three questions P3 and P4 left with the owner: Java 21, which planetiler needs, was kept out
+of the Conduit's image because its only runtime here, Eclipse Temurin, is GPL-2.0 with the Classpath
+exception and the licence register passed no GPL; adding the gazetteer to a working case made the case
+read a composite, which is read-only for loads (ADR-099 Amendment 15); and the gazetteer's dataset was
+held by the recipe's `unit-1`, so a case of any other unit could not add it.
+
+**Decision.**
+
+1. **Java in the Conduit's image (ruling 1, option A).** `services/api/Dockerfile` jlinks a Java 21
+   runtime from `eclipse-temurin:21-jdk`, pinned by its digest (the multi-architecture index), into
+   `/opt/java` (eighteen modules, no tools, debug symbols, headers or man pages), on the Conduit's
+   `PATH`, so *Admin › Maps*' Build finds `java` and runs planetiler in the Conduit; the jar stays the
+   owner's, placed by `ospreyflow map build --planetiler-jar`. **The licence register records the one
+   exception** (`spec/00_ARCHITECTURE.md` §7): `GPL-2.0-only WITH Classpath-exception-2.0`, for a runtime
+   recorded there, `java` alone. A plain GPL of any version, GPL-3.0 with the exception, a GPL with any
+   other exception, and AGPL still never pass. **`make licence-check` reads it**: an image declares a
+   runtime it carries by `LABEL org.ospreyflow.runtime.<name>.licence`, which a new leg
+   (`tools/licence_check.find_runtime_offenders`) checks over every Dockerfile, and a Java stage, a
+   `jlink`, an `/opt/java` or a distribution's Java package with no such label fails too. The labels are
+   read however they are written (quoted or not, several on a line, continued, the legacy form).
+   **`git`** (GPL-2.0-only, already in the image: the Conduit runs it to publish recipes,
+   `09_INGEST_STUDIO.md` §6) is declared the same way, and the register does not pass it. **The owner
+   ruled on 9 November 2026:** the `git` command is replaced by dulwich, under its Apache-2.0 licence
+   (studio-b's carry in L1.7a), and `git` then leaves the image. Until that carry lands the leg names it on
+   every run as **not yet passed** (`AWAITING_OWNER`), with that ruling and carry, never silently, and
+   an undeclared `git` fails.
+   **trivy does not see the runtime.** A runtime unpacked from Temurin's tarball and derived by `jlink`
+   is no distribution package and no jar, so `trivy image` names nothing of it: the same image built
+   from Temurin 21.0.1 (October 2023, with known CVEs) scans clean, as the current one does (measured on
+   the test server). So **the runtime's version is a gate of its own**
+   (`tools/java_runtime_check.py`): the Dockerfile declares it in `LABEL
+   org.ospreyflow.runtime.java.version`, beside the licence label. The built image's
+   `/opt/java/release` (`JAVA_VERSION`) and `java -version` (its build) must be that version (CI's
+   `trivy-image-api` job, after its build). **The Java stage's pinned digest must be the one its tag,
+   `eclipse-temurin:21-jdk`, resolves to on Docker Hub now** (Build's `make ci`, after
+   `core-check`); a pin older than the tag's current digest is red. Whatever cannot be read (the
+   image, the Dockerfile's pinned tag, or Docker Hub's answer) is a refusal, never a pass. **The
+   policy, the orchestrator's call on review:** the tag's digest, not Adoptium's release list,
+   because the tag moves only once an image exists to repin to. So CI is never red for days with
+   nothing to take, and an old commit re-run is red only when its pin is no longer the tag's, never
+   merely because a release was announced. Repin the digest and the label together. It needs Docker
+   and the network, as the image scans do, and never runs in Core's Makefile, which stands alone
+   (ADR-114 Amendment 2). Pinned at **21.0.13+9**, October 2026's update.
+   Its bundled native libraries' licences, for the NOTICE, are in `spec/00` §7.
+2. **Gazetteer places copied into a case's own dataset (ruling 6, option C).** Adding a gazetteer
+   copies its places into a case's own dataset (`services/api/case_gazetteers.py`), so **the case stays
+   one dataset and keeps its loads**. **It is a dataset-level action** (the orchestrator's review):
+   `PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/{gazetteer}`, behind the dataset route's own gate (a
+   person one of whose cases loads into the dataset) and **`run_pipelines`**, the right that runs a load
+   into a dataset, the narrowest that may write into it; a composite or a drawn dataset is refused, as for
+   any load. **The gazetteer must be of the dataset's own unit**; another unit's is refused with the same
+   404 and words as no gazetteer at all, so the answer tells nothing of which regions another unit has
+   built. The
+   case's `GET /v1/investigations/{id}/map/gazetteers` (Viewer, `investigate`) lists the gazetteers of its
+   own dataset's unit and which it holds, by name only, never a count of places.
+   - **A copy** is a `Location` of its own (rule 6), its id made from the place's and the dataset's, with
+     the place's properties and **the gazetteer's handling**; its one source is the gazetteer
+     (`gazetteer:<dataset>`, locator `place`: no node id, path or row, rule 7); and **its provenance names
+     the gazetteer** (`Provenance.gazetteer`), kept through every later write by `merge_provenance`:
+     the dataset id of the gazetteer it was copied from, always of the copy's own dataset's unit (a
+     gazetteer of another unit is never added). **Only a place the gazetteer's dataset holds alone
+     is copied** (a node it shares with another dataset is not the gazetteer's place).
+     **Decision 3b holds for a copy, keyed on that provenance**, not on a `gazetteer-*` dataset name:
+     `ontology.handling.is_gazetteer_held` withholds its source identifiers from every request reader, and
+     `builders.match_any_field` matches it on its name alone (`__.values("provenance").select("gazetteer")`
+     in the guard). The place search keeps a copy as a gazetteer place.
+   - **Recorded for the dataset** (`dataset_gazetteers`), so every case reading it sees the gazetteer
+     added; a case deleted or moved leaves the record with the copies.
+   - **Copied in pages of 500, each its own transaction**, never one unbounded write; a copy that fails
+     part way is finished by copying again (the same nodes). A failed re-add leaves the earlier record.
+   - **A copy the case has made its own** (another writer's source, as when a case's own upsert-mode load
+     matched and wrote onto it; or a person's confirmation) **is the case's data now: a re-build never
+     writes over it**, though the store's merge keeps the newest write. A reference-mode lookup
+     (`on_match: reference`, through `find_node`, which 3b leaves unguarded since the identifier is the
+     loader's own row's) finds the copy and links to it, writing nothing onto it.
+   - **A re-build refreshes the rest**: the Admin route and both command-line builds copy the places again
+     into every recorded dataset once the places commit, drop the record of a dataset no longer there
+     (never writing into one).
+   - **A removal deletes nothing** (the orchestrator's ruling (d) of 9 November 2026, which replaces
+     the removal clause of the brief; the owner's ruling 6 named only the copying). Every copy stays,
+     whatever rests on it, as the dataset's own, with its gazetteer mark (3b holds); the record is
+     kept as removed, so a re-build no longer refreshes it and the place search no longer offers its
+     copies (keyed on the mark and the removal record, the same for every copy). The answer says so
+     in fixed words and gives no count, so a link a reader may not see (above their clearance, in a
+     case's analyst layer) changes nothing they are told or then read (rule 3): there is nothing to
+     compare. Adding the gazetteer again takes the record back and re-links the same copies, never a
+     second set. **A re-build reverts nothing either**: the copy of a place the gazetteer no longer
+     holds stays, as the dataset's own, still offered, since reverting it would carry the same
+     signal. No link read at the highest clearance decides anything.
+   - **Audited before the copy**: the addition's audit entry is written once the record is, before
+     the first page, so a copy that fails part way, its pages committed, is never unaudited.
+   - **Failures.** A copy that fails part way leaves its pages committed and the record in place, so
+     the dataset is said to hold the gazetteer and adding it again finishes the copy, or removing it
+     stops it. Any refresh failure (one dataset's copy, or the records' own read) is said in the
+     build's words, naming no dataset, and neither fails the committed build nor skips the datasets
+     after it. A removal needs only its record, never the gazetteer's state now; a re-add is
+     recorded as the re-adder's. Another unit's gazetteer is refused with the
+     same 404 and words as no gazetteer at all, so the answer tells nothing of which regions another
+     unit has built. The copier reads as the dataset's own unit, so a restricted code is seen.
+   - **Which loads make a copy the case's**: a reference-mode load (the gazetteer recipe's, proven
+     live) links to a copy without writing onto it, so it does not; an upsert-mode write onto the
+     copy's id, or a confirmation, does (both proven live).
+   - **The place search reads the removal records as its dependency**: a Conduit without them
+     answers 503, never offering a removed gazetteer's copies again. A removed gazetteer's copies are
+     left out after the store's scan, so they count toward its limit, and `more` says so (rule 2).
+
+3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
+   uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
+   and `python -m scripts.build_local_basemap` take `--unit` (required), as does the set-up
+   console's Build (a field on its Geospatial screen, refused in words before anything runs
+   without one; `harness/geospatial.build_basemap_step`). A unit that holds no case and no
+   dataset here, and is not the administrator's own, is refused in words before anything is fetched or
+   written (`map_places.check_unit`, `UNKNOWN_UNIT`, which names no other unit); otherwise the places,
+   their points and their dataset are that unit's. **A re-build is for the unit the region was first
+   built for** (its dataset keeps its first unit, `register`): another is refused in words
+   (`OTHER_UNIT`), so a dataset never holds the places of two units. **A unit holding only a
+   gazetteer's dataset holds nothing** (`units_held` leaves `gazetteer-*` datasets out).
+
+**Left, and why:**
+- **The Glass has no control for a gazetteer yet**: platform's P6 (the orchestrator, 9 November 2026),
+  a panel beside the map's place search; until then the case's dataset picker still offers a gazetteer
+  dataset as a composite (a carry to the case lane).
+- **A case of another unit than the gazetteer's** cannot add it (ADR-099 decision 3); ruling 8 lets an
+  administrator build a gazetteer for each unit.
+- **The port's own contract and the graph-port conformance suite** (`ports/graph.py`'s `search_nodes`
+  and `suggest_nodes`; `tests/conformance/graph_port`) do not yet say that a copy matches on its name
+  alone: neither is this lane's file, so the wording and a conformance case
+  (`test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone`) are a request to the orchestrator
+  (`process/lanes/platform/PORT_CONTRACT.diff`), proved live with the diff applied, the case red with
+  the search guard's copy clause or the suggestion's withholding removed.
+- **The version gate's wiring** is in shared files: CI's step in `.github/workflows/ci.yml`, the
+  owner's (`process/lanes/platform/P5_ci.diff`), and Build's `make ci` target, the orchestrator's
+  (`process/lanes/platform/JAVA_RUNTIME_CI.diff`). Each was shown red over a Temurin 21.0.1 image on
+  the test server.
+- **A fresh install builds its first basemap from *Admin › Maps*.** With no case or dataset yet,
+  the command-line builds and the set-up console's (which runs the command line) refuse every
+  unit, since none holds anything and they have no administrator's own unit to admit. *Admin ›
+  Maps* admits the administrator's own (`test_a_fresh_install_builds_from_admin_maps_alone`).
+  Recorded, not changed: a tiles-only build, without a gazetteer, is the likely next step if the
+  console must build first.
+- **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
+- **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
+  inside its stream. Measured under the platform lane's lease on stack a, 9 November 2026 (the
+  machine shared with other lanes' runs, load average 13 to 21; the lease covers the stack, not the
+  machine): 2,000 planted places in 42.7 s at 08:20 UTC and in 29.7 s at 08:28 UTC, about 15 to 21 s
+  per 1,000 (`test_a_region_is_copied_in_bounded_pages_and_timed`). A region of 100,000 places would
+  take over twenty minutes per dataset: a background job is the likely next step.
+- **planetiler runs under the image's Java** (v0.10.2's `--help`, exit 0, in the built image on amd64,
+  the test server), but no real tile build is run in tests (tier 1 only, no real tiles fetched).
+
+**Tests that would fail if it were broken** (each shown red by a plant at its real call site,
+`process/lanes/platform/P5_RED_RECORD.md`):
+- **Java**: `tests/licence_check/test_runtime_licences.py` (a plain GPL-2.0 Java, GPL-3.0 with the
+  exception, another exception, the exception for an unrecorded runtime, an undeclared Java: each
+  refused; the real Dockerfiles pass); `tests/test_conduit_image_java_licence.py` (the stage pinned by
+  digest, jlinked, declared, on the `PATH`); `tests/licence_check/test_java_runtime_check.py` (the
+  version gate: a pin its tag has moved on from, a label drifted from the image by version or by
+  build, a release file or `java -version` naming none, a Java stage not pinned by tag and digest,
+  every way Docker Hub's answer can fail, the label however written, through `main` and the
+  fetch's own code).
+- **Copies**: live, `tests/ingest/test_case_gazetteer_copies_live.py` (found by name at its point and a
+  SECRET place not; no identifier on a node read, an expansion or a search; never matched by its `osm_id`
+  or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and keeps a place
+  gone; a restricted case load on a copy stays the case's at a re-build; a real case load references
+  the copies and a refresh after it writes no second set; every page of 2,000 places written; a case load
+  writing onto a copy through the real merge keeps it one, withheld; node detail in bulk and the
+  type-ahead by name send none; a retracted copy stays one, withheld),
+  `tests/adapters/graph_arcadedb/test_every_read_withholds_by_its_principal.py` (every read in the
+  adapter's package deserialised with its own caller's principal, through the module or not, and no
+  deserialiser imported under another name or handed on as a value, so no read path sends a copy's
+  identifier), `test_audit_section_routes.py` (*Audit* shows the dataset alone) and
+  `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset
+  and the Studio's upload, a load a composite case refuses, is made, and refused once the case reads a
+  composite; search, seed, expansion and the type-ahead carry and match no
+  identifier; a removal in a case whose copy has a SECRET link and in one whose copies have none,
+  answered and then read alike, and a re-add re-linking the same copies); offline, `tests/services/api/test_case_gazetteers_routes.py` (which gazetteers,
+  the refusals and their words, what a copy is written as, a removal answering alike whatever rests on a copy (red against the
+  build that reverted), another unit's gazetteer answered as none, the dataset's record seen by every
+  case reading it, a failed copy keeping its record, one dataset's failed refresh said alone, a
+  rebuild skipping a dataset gone), the place search leaving a removed gazetteer's copies out,
+  `tests/ontology/test_gazetteer_identifiers_withheld.py` (a copy, and `merge_provenance` keeping it one),
+  `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`, `test_map_places_route.py`; the
+  routes' rights and levels, `test_route_rights.py` and `test_investigation_levels.py`.
+- **The unit**: `test_geospatial_admin_routes.py` (refused in words, nothing built; a named unit's
+  places and dataset), `test_gazetteer_build_registration_order.py` (both command-line builds check it
+  before anything, and refresh the cases after the registration), `test_gazetteer_dataset_registration.py`,
+  `tests/cli/test_map_verb.py`, `Maps.test.tsx`; the set-up console,
+  `tests/harness/test_webapp_geospatial.py` (none, an option or a control character refused, nothing
+  run; any unit the Conduit can name sent, and its refusal of an unknown one shown in its words; the fake
+  runner refusing with the Conduit's own parser) and `GeospatialScreen.test.tsx`.
+
+**Cost.** The Conduit's image grows by the jlinked runtime: 62 MB (`/opt/java`); the image is
+1.86 GB on amd64 (1.33 GB measured on arm64). A new `21-jdk` image turns `make ci` red until it is taken. Each
+dataset that takes a gazetteer holds a copy of every place, written a page at a time (15 to 21 s per
+1,000 places, measured as above), and keeps them after a removal; a re-build rewrites every recorded
+dataset's copies but those the case made its own. A removal is one record's update.

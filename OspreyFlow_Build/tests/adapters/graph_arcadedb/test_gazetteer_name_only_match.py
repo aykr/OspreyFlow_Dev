@@ -15,7 +15,11 @@ from schemas.domain import Principal
 
 READER = Principal(id="a", clearance="OFFICIAL", org_unit="unit-1", datasets=["gazetteer-osm-x"])
 CONDUIT = READER.model_copy(update={"datasets": None})
-GUARD = """__.not(__.values("datasets").unfold().is(TextP.startingWith('gazetteer-')))"""
+#: ADR-147 Amendment 2: a place in a gazetteer dataset, or a case's copy of one by its provenance.
+GUARD = (
+    """__.not(__.or(__.values("datasets").unfold().is(TextP.startingWith('gazetteer-')),"""
+    """__.values("provenance").select("gazetteer")))"""
+)
 
 
 def _queries(principal: Principal) -> list[str]:

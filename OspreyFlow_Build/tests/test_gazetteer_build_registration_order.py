@@ -60,8 +60,8 @@ def _graph_class(events: _Events) -> type:
 
 
 def _recording_registration(events: _Events) -> Callable[..., Any]:
-    async def register(region: str, *, by: str) -> object:
-        events.seen.append(f"register {region}")
+    async def register(region: str, *, by: str, unit: str) -> object:
+        events.seen.append(f"register {region} for {unit}")
         return object()
 
     return register
@@ -73,6 +73,18 @@ def events(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) 
     monkeypatch.setattr(
         map_places, "register_gazetteer_dataset_from_env", _recording_registration(events)
     )
+    async def check(unit: str, *, region: str) -> None:
+        events.seen.append(f"check {unit}")
+        if unit == "unit-nowhere":
+            raise map_places.UnknownUnit(f"No case or dataset ... {unit!r}")
+
+    monkeypatch.setattr(map_places, "check_unit_from_env", check)
+
+    async def refresh(_graph: object, _scheme: object, gazetteer: str) -> int:
+        events.seen.append(f"refresh {gazetteer}")
+        return 0
+
+    monkeypatch.setattr(map_places, "refresh_case_copies_from_env", refresh)
     monkeypatch.setattr(script, "ArcadeDBClient", _Client)
     monkeypatch.setattr(script, "GraphArcadeDBAdapter", _graph_class(events))
     monkeypatch.setattr(graph_client_module, "ArcadeDBClient", _Client)
@@ -88,9 +100,10 @@ def events(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) 
     return events
 
 
-def _script_args() -> argparse.Namespace:
+def _script_args(*unit: str) -> argparse.Namespace:
     return script._parse_args(
         [
+            *(unit or ("--unit", "unit-7")),
             "--region",
             "rutland",
             "--output-dir",
@@ -120,7 +133,8 @@ async def test_the_script_registers_after_the_places_commit(
     monkeypatch.setattr(script, "build_local_basemap", build)
     assert await script._run(_script_args()) == 0
     assert events.seen == [
-        "begin", "load into gazetteer-osm-rutland", "commit", "points words", "register rutland",
+        "check unit-7", "begin", "load into gazetteer-osm-rutland", "commit", "points words",
+        "register rutland for unit-7", "refresh gazetteer-osm-rutland",
     ]  # fmt: skip
 
 
@@ -134,7 +148,7 @@ async def test_the_script_registers_nothing_when_the_build_fails(
     monkeypatch.setattr(script, "build_local_basemap", build)
     with pytest.raises(RuntimeError):
         await script._run(_script_args())
-    assert events.seen == ["begin", "load", "rollback"]
+    assert events.seen == ["check unit-7", "begin", "load", "rollback"]
 
 
 @pytest.mark.parametrize("fails", [False, True], ids=["finished", "failed-after-load"])
@@ -156,13 +170,39 @@ async def test_the_cli_build_registers_after_the_places_commit(
 
     monkeypatch.setattr(script, "load_gazetteer", load_gazetteer)
     monkeypatch.setattr(map_admin, "build_basemap", build_basemap)
-    code = await map_admin._build_here(object(), "cli:owner", "rutland")  # type: ignore[arg-type]
+    code = await map_admin._build_here(object(), "cli:owner", "rutland", "unit-7")  # type: ignore[arg-type]
     if fails:
         assert code == 1
-        assert events.seen == ["begin", "load into gazetteer-osm-rutland", "rollback"]
+        assert events.seen == ["check unit-7", "begin", "load into gazetteer-osm-rutland", "rollback"]
     else:
         assert code == 0
         assert events.seen == [
-            "begin", "load into gazetteer-osm-rutland", "commit", "points words",
-            "register rutland",
+            "check unit-7", "begin", "load into gazetteer-osm-rutland", "commit", "points words",
+            "register rutland for unit-7", "refresh gazetteer-osm-rutland",
         ]  # fmt: skip
+
+
+async def test_the_script_needs_a_unit_and_refuses_an_unknown_one_before_anything_is_built(
+    events: _Events, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-147 Amendment 2 (the owner's ruling 8): the unit is the build's setting, refused in words
+    before the graph is opened."""
+
+    async def build(**_kwargs: Any) -> _Result:
+        events.seen.append("load")
+        return _Result()
+
+    monkeypatch.setattr(script, "build_local_basemap", build)
+    assert await script._run(script._parse_args([
+        "--region", "rutland", "--output-dir", "/tmp/unused", "--planetiler-jar", "/tmp/u.jar",
+    ])) == 2  # fmt: skip
+    assert "--unit" in capsys.readouterr().err
+    assert await script._run(_script_args("--unit", "unit-nowhere")) == 1
+    assert events.seen == ["check unit-nowhere"]
+
+
+async def test_the_cli_build_refuses_an_unknown_unit_before_anything_is_built(
+    events: _Events,
+) -> None:
+    code = await map_admin._build_here(object(), "cli:owner", "rutland", "unit-nowhere")  # type: ignore[arg-type]
+    assert (code, events.seen) == (1, ["check unit-nowhere"])

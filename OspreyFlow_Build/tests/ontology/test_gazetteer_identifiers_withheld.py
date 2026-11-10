@@ -21,7 +21,7 @@ READER = Principal(
 )
 
 
-def _place(dataset: str) -> Node:
+def _place(dataset: str, *, copied_from: str | None = None) -> Node:
     return Node(
         id="p1",
         type="Location",
@@ -30,6 +30,7 @@ def _place(dataset: str) -> Node:
             state=ProvenanceState.ASSERTED,
             sources=[SourceRef(document_id="osm", locator="1", excerpt_hash="a" * 64)],
             first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+            gazetteer=copied_from,
         ),
         handling={  # type: ignore[arg-type]
             "classification": "OFFICIAL",
@@ -62,3 +63,27 @@ def test_a_case_s_own_location_keeps_its_identifiers() -> None:
     """A `uprn` an analyst loaded into the case is the case's data, not a gazetteer's."""
     sent = withhold_sources(_place("case-a"), READER)
     assert sent.properties["uprn"] == IDS["uprn"]
+
+
+def test_a_case_s_copy_of_a_gazetteer_place_is_sent_without_its_identifiers() -> None:
+    """ADR-147 Amendment 2 (the owner's ruling 6): a copy is in the case's own dataset, not a
+    `gazetteer-*` one, so it is known by its provenance, which names the gazetteer."""
+    sent = withhold_sources(_place("case-a", copied_from="gazetteer-osm-rutland"), READER)
+    assert sent.properties == {"name": "Cranford", "geometry_ref": "g1", "postcode": "TW5 9QQ"}
+    # Its provenance still says it is a copy, so the Glass and a later write know it.
+    assert sent.provenance.gazetteer == "gazetteer-osm-rutland"
+
+
+def test_a_copy_stays_one_through_a_case_s_own_later_write() -> None:
+    """A case's own load that matches a copy and writes it again (its provenance has no gazetteer)
+    must not make it a case location: the identifiers would be sent and matched again."""
+    from schemas.merge import merge_provenance
+
+    copy = _place("case-a", copied_from="gazetteer-osm-rutland").provenance
+    later = Provenance(
+        state=ProvenanceState.ASSERTED,
+        sources=[SourceRef(document_id="case-load", locator="row 3", excerpt_hash="")],
+        first_seen=datetime(2026, 2, 1, tzinfo=UTC),
+    )
+    assert merge_provenance(copy, later).gazetteer == "gazetteer-osm-rutland"
+    assert merge_provenance(None, later).gazetteer is None

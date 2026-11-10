@@ -152,6 +152,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/suggest"): V,
     # ADR-147 Amendment 1 (P4): the map's place search, as the case's other searches.
     ("POST", P + "/map/places"): V,
+    # ADR-147 Amendment 2 (the owner's ruling 6): the gazetteers the case's dataset holds, read.
+    ("GET", P + "/map/gazetteers"): V,
     # The Explore panel (ADR-100): reads.
     ("GET", P + "/explore/counts"): V,
     ("GET", P + "/explore/most-connected"): V,

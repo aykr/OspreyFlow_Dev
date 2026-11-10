@@ -6,7 +6,8 @@ are one code, with one audit.
     ospreyflow map list                                   # each provider, its tier and state
     ospreyflow map verify                                 # attribution, and a tier-4 CRS check
     ospreyflow map prefetch                               # every prefetch area, now
-    ospreyflow map build <region> [--planetiler-jar PATH] # the tier-1 basemap, built in the Conduit
+    ospreyflow map build <region> --unit UNIT [--planetiler-jar PATH]
+                                                          # the tier-1 basemap, built in the Conduit
 
 `build --planetiler-jar` first copies the planetiler release jar the owner has into the tiles folder
 (`<tiles>/planetiler/planetiler.jar`), where the Conduit's build reads it; the build runs in the

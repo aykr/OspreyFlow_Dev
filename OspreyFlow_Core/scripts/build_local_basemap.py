@@ -54,7 +54,7 @@ from services.ingest.recipe_loader import load_recipe
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from ontology.handling import load_uk_le_scheme, sources_in_full
+from ontology.handling import HandlingScheme, load_uk_le_scheme, sources_in_full
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
@@ -266,6 +266,7 @@ async def load_gazetteer(
     load_id: str,
     dataset: str,
     analytics: AnalyticsPort | None = None,
+    unit: str | None = None,
 ) -> LoadReport:
     """The connector + recipe-engine path — `services/ingest/connectors/
     geo/osm.py`, needing no network or external process, so this is what
@@ -286,6 +287,13 @@ async def load_gazetteer(
     from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 
     recipe = load_recipe(_OSM_GAZETTEER_RECIPE_PATH)
+    if unit is not None:
+        # ADR-147 Amendment 2 (the owner's ruling 8): the places, and their points, are the
+        # build's unit's, as their dataset is; the recipe's own `unit-1` is a default no build uses.
+        handling = {**recipe.defaults.handling, "owning_unit": unit, "originator": unit}
+        recipe = recipe.model_copy(
+            update={"defaults": recipe.defaults.model_copy(update={"handling": handling})}
+        )
     # A load reads its places whole (`sources_in_full`): its lookups are the Conduit's, never the
     # Glass's, and a gazetteer's identifiers are withheld only from what is sent to a reader.
     with sources_in_full():
@@ -412,6 +420,7 @@ async def build_local_basemap(
     planetiler_runner: Callable[..., Path] = run_planetiler,
     existing_extract: Path | None = None,
     gazetteer_dataset: str,
+    gazetteer_unit: str | None = None,
 ) -> BasemapBuildResult:
     """The full tier-1 pipeline in one call — `00_ARCHITECTURE.md` §1.2's
     "one button." Each stage's own function is independently callable and
@@ -437,6 +446,7 @@ async def build_local_basemap(
         principal=principal,
         load_id=f"load-osm-gazetteer-{region}",
         dataset=gazetteer_dataset,
+        unit=gazetteer_unit,
     )
     progress(
         f"Gazetteer load: {report.nodes_created} places created, "
@@ -486,6 +496,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--clearance", default=os.environ.get("OSPREY_CLEARANCE", "OFFICIAL"))
     parser.add_argument("--org-unit", default=os.environ.get("OSPREY_ORG_UNIT", "unit-1"))
+    parser.add_argument(
+        "--unit",
+        help="The unit the gazetteer's places and dataset are held by (ADR-147 Amendment 2): one "
+        "that holds a case or a dataset here. Needed unless --tiles-only.",
+    )
     return parser.parse_args(argv)
 
 
@@ -508,6 +523,27 @@ async def _run(args: argparse.Namespace) -> int:
         )
         print(f"Tiles written to {pmtiles}. Restart the deployment to mount them.")
         return 0
+    from services.api.map_places import (
+        DatasetsUnreachable,
+        UnknownUnit,
+        check_unit_from_env,
+        gazetteer_dataset_id,
+    )
+
+    # ADR-147 Amendment 2 (the owner's ruling 8): the unit is the build's setting, checked before
+    # anything is built.
+    if not args.unit:
+        print(
+            "Name the unit the gazetteer is held by with --unit (one that holds a case or a "
+            "dataset here), or add --tiles-only to build the map alone.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        await check_unit_from_env(args.unit, region=args.region)
+    except (UnknownUnit, DatasetsUnreachable) as refused:
+        print(str(refused), file=sys.stderr)
+        return 1
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
 
@@ -524,12 +560,6 @@ async def _run(args: argparse.Namespace) -> int:
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
-    from services.api.map_places import (
-        NO_POINTS_HERE,
-        DatasetsUnreachable,
-        gazetteer_dataset_id,
-        register_gazetteer_dataset_from_env,
-    )
 
     tx = await graph.begin_transaction()
     try:
@@ -544,13 +574,36 @@ async def _run(args: argparse.Namespace) -> int:
             tx=tx,
             principal=principal,
             gazetteer_dataset=gazetteer_dataset_id(args.region),
+            gazetteer_unit=args.unit,
         )
         await graph.commit_transaction(tx)
     except Exception:
         await graph.rollback_transaction(tx)
+        await client.aclose()
         raise
+    try:
+        return await _after_the_commit(args, result, graph=graph, scheme=scheme, by=principal.id)
     finally:
         await client.aclose()
+
+
+async def _after_the_commit(
+    args: argparse.Namespace,
+    result: BasemapBuildResult,
+    *,
+    graph: GraphArcadeDBAdapter,
+    scheme: HandlingScheme,
+    by: str,
+) -> int:
+    """What follows the places' commit: the dataset registered, then every case that added the
+    gazetteer given its places again (ADR-147 Amendments 1 and 2)."""
+    from services.api.map_places import (
+        NO_POINTS_HERE,
+        DatasetsUnreachable,
+        gazetteer_dataset_id,
+        refresh_case_copies_from_env,
+        register_gazetteer_dataset_from_env,
+    )
 
     print(f"PMTiles written to {result.pmtiles_path}")
     print(
@@ -562,10 +615,12 @@ async def _run(args: argparse.Namespace) -> int:
     # ADR-147 Amendment 1, decision 2: the dataset registered once the places are committed, so a
     # failed build leaves none. Its places are stamped already; registering again later is harmless.
     try:
-        await register_gazetteer_dataset_from_env(args.region, by=principal.id)
+        await register_gazetteer_dataset_from_env(args.region, by=by, unit=args.unit)
+        cases = await refresh_case_copies_from_env(graph, scheme, gazetteer_dataset_id(args.region))
     except DatasetsUnreachable as unreachable:
         print(str(unreachable), file=sys.stderr)
         return 1
+    print(f"Datasets given the places again: {cases}.")
     return 1 if result.gazetteer_report.rejections else 0
 
 

@@ -92,7 +92,9 @@
    ],
    "places": [],
    "answered_hidden": [
+    "add_dataset_gazetteer_route",
     "recipe_runs_route",
+    "remove_dataset_gazetteer_route",
     "run_studio_recipe"
    ]
   },
@@ -565,7 +567,9 @@
    ],
    "places": [],
    "answered_hidden": [
+    "add_dataset_gazetteer_route",
     "recipe_runs_route",
+    "remove_dataset_gazetteer_route",
     "run_studio_recipe"
    ]
   },

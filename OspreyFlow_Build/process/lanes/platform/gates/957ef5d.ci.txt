@@ -1,0 +1,286 @@
+/Applications/Xcode.app/Contents/Developer/usr/bin/make -C ../OspreyFlow_Core check
+.venv/bin/ruff check .
+All checks passed!
+npm run lint
+
+> ospreyflow@0.0.0 lint
+> eslint .
+
+.venv/bin/mypy packages services harness
+Success: no issues found in 408 source files
+npm run typecheck
+
+> ospreyflow@0.0.0 typecheck
+> tsc --noEmit
+
+trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
+2026-11-09T12:31:04Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T12:31:04Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T12:31:04Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T12:31:04Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T12:31:09Z	INFO	[npm] Run "npm install" to collect the license information of packages	dir="node_modules"
+2026-11-09T12:31:09Z	INFO	Number of language-specific files	num=3
+2026-11-09T12:31:09Z	INFO	[npm] Detecting vulnerabilities...
+2026-11-09T12:31:09Z	INFO	[pip] Detecting vulnerabilities...
+2026-11-09T12:31:09Z	INFO	[uv] Detecting vulnerabilities...
+2026-11-09T12:31:09Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌───────────────────────────────┬──────┬─────────────────┬─────────┐
+│            Target             │ Type │ Vulnerabilities │ Secrets │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ package-lock.json             │ npm  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ services/ner/requirements.txt │ pip  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ uv.lock                       │  uv  │        0        │    -    │
+└───────────────────────────────┴──────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-ingest] Error 1
+docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-api] Error 1
+docker build --pull -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-workspace] Error 1
+docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-harness] Error 1
+docker build --pull -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-ner] Error 1
+docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-worker] Error 1
+docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-report-sync] Error 1
+docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+ERROR: failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-superset] Error 1
+npm run test:a11y --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+[WebServer] INFO:     Started server process [52544]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7219 (Press CTRL+C to quit)
+
+Running 34 tests using 2 workers
+
+  ✓   1 a11y/a11y.spec.ts:36:5 › dark theme Profile screen has no automated wcag2aa violations (793ms)
+  ✓   2 a11y/install-page.spec.ts:55:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (880ms)
+  ✓   3 a11y/a11y.spec.ts:36:5 › dark theme Components screen has no automated wcag2aa violations (568ms)
+  ✓   4 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (612ms)
+  ✓   5 a11y/a11y.spec.ts:36:5 › dark theme Models screen has no automated wcag2aa violations (610ms)
+  ✓   6 a11y/install-page.spec.ts:55:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (609ms)
+  ✓   7 a11y/a11y.spec.ts:36:5 › dark theme Governance screen has no automated wcag2aa violations (535ms)
+  ✓   8 a11y/install-page.spec.ts:55:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (634ms)
+  ✓   9 a11y/a11y.spec.ts:36:5 › dark theme Geospatial screen has no automated wcag2aa violations (478ms)
+  ✓  10 a11y/install-page.spec.ts:55:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (566ms)
+  ✓  11 a11y/a11y.spec.ts:36:5 › dark theme Preflight screen has no automated wcag2aa violations (546ms)
+  ✓  12 a11y/install-page.spec.ts:55:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (606ms)
+  ✓  13 a11y/a11y.spec.ts:36:5 › light theme Profile screen has no automated wcag2aa violations (558ms)
+  ✓  14 a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (620ms)
+  ✓  15 a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations (523ms)
+  ✓  17 a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations (461ms)
+  ✓  16 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (557ms)
+  ✓  18 a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations (532ms)
+  ✓  19 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (578ms)
+  ✓  20 a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations (489ms)
+  ✓  21 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (536ms)
+  ✓  22 a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations (520ms)
+  ✓  23 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (520ms)
+  ✓  24 a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (518ms)
+  ✓  25 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (544ms)
+  ✓  26 a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (528ms)
+  ✓  27 a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (529ms)
+  ✓  28 a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (549ms)
+  ✓  29 a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (523ms)
+  ✓  30 a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (544ms)
+  ✓  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (581ms)
+  ✓  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (549ms)
+  ✓  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (491ms)
+  ✓  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (506ms)
+
+  34 passed (17.4s)
+make[1]: Target `check' not remade because of errors.
+make: *** [core-check] Error 2
+../OspreyFlow_Core/node_modules/.bin/eslint -c ../OspreyFlow_Core/eslint.config.js tools
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.licence_check
+licence-check: AWAITING THE OWNER: services/api/Dockerfile carries 'git' under 'GPL-2.0-only', not on the allowlist (the Conduit runs it to publish recipes (09_INGEST_STUDIO.md §6, services/api/studio_publish.py); put to the owner, 9 November 2026)
+licence-check: 74 packages, all allowed (1 image runtime(s) awaiting the owner, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+cd ../OspreyFlow_Core && node /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/tools/licence_check.mjs
+licence-check: 354 packages, all allowed.
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/tests/licence_check/*.test.mjs
+✔ a GPL-3.0 licence is rejected (1.215458ms)
+✔ a GNU General Public License, spelled out, is rejected (0.175333ms)
+✔ an MIT licence is allowed (0.067666ms)
+✔ an Apache-2.0 licence is allowed (0.072375ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.055958ms)
+✔ an LGPL term never carries an AGPL one through (0.055ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.114333ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.412792ms)
+✔ the four licences added on 19 October 2026 pass (0.076041ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.093875ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.050625ms)
+✔ OFL-1.1 beside GPL is still rejected (0.047541ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 59.8725
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.design_check
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/tests/keycloak_theme/*.test.mjs
+✔ under GOV.UK the page is light whatever was chosen, with no theme button (92.252209ms)
+✔ without a brand the saved choice and the button are as before (19.969833ms)
+✔ the GOV.UK header, skip link and footer are added in reading order (38.049875ms)
+✔ no service-name band is drawn, and the page title names the service (31.03975ms)
+✔ without a service name the title falls back as the Glass's does (13.212875ms)
+✔ the skip link's target is the page's main content, focusable (8.165958ms)
+✔ a service name is text, never markup (14.903875ms)
+✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (28.216333ms)
+✔ the sign-in page is marked English (ospreyflow brand) (9.585916ms)
+✔ the sign-in page is marked English (govuk brand) (7.063292ms)
+✔ a lang Keycloak wrote is kept (3.815833ms)
+﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.340833ms) # needs throwaway Keycloaks (see the file's header)
+﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.056583ms) # needs throwaway Keycloaks (see the file's header)
+✔ an empty form says what each field needs, and is not sent (132.502459ms)
+✔ an address that is not one, and a username with a space, are named as such (21.540708ms)
+✔ a well-formed address or username and a password are sent, and earlier errors cleared (7.268583ms)
+✔ nothing is said while typing, only on submit (9.04475ms)
+✔ with no mail server, the way back is the administrator, said where the link would be (28.999917ms)
+✔ the card ends with how accounts are made (7.462834ms)
+✔ the reset page checks the address or username, and its button says what it sends (10.029833ms)
+✔ after a reset is sent, the card says to check your email, with a way back to sign in (7.38225ms)
+✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (16.492625ms)
+✔ a field's error sits directly under the field, before any help beneath it (9.896ms)
+✔ the reset page's instruction leads the card, under its title, as the handoff has it (18.957125ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 1002.777792
+docker run --rm -v "/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/deploy/opentofu:/w" ghcr.io/opentofu/opentofu:1.10.6 -chdir=/w fmt -check -recursive
+failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make: *** [opentofu-check] Error 1
+docker run --rm -v "/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/deploy/helm/ospreyflow:/chart:ro" alpine/helm:3.16.3 lint /chart
+failed to connect to the docker API at unix:///Users/ayankar/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /Users/ayankar/.docker/run/docker.sock: connect: no such file or directory
+make: *** [chart-check] Error 1
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
+schemas-check: 506 generated types match committed output.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.authorized_query_check
+authorized-query-check: 140 files under services/api, no offenders.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.demo_guide_check
+demo-guide-check: 12 registered demo(s), all documented.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.domain_model_coverage_check
+domain-model-coverage-check: 91 class(es), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
+route-coverage-check: 367 route(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: 864 test file(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 2101 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 697 items / 683 deselected / 14 selected
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_guard.py ..    [ 14%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [ 28%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_guard.py ...       [ 50%]
+../OspreyFlow_Build/tests/conformance/media_store/test_guard.py ..       [ 64%]
+../OspreyFlow_Build/tests/conformance/model_port/test_guard.py ..        [ 78%]
+../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [100%]
+
+====================== 14 passed, 683 deselected in 2.41s ======================
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 89 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py .......................    [ 25%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 50%]
+                                                                         [ 50%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 78%]
+...                                                                      [ 82%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 88%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 96%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+============================= 89 passed in 47.20s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 75%]
+..                                                                       [100%]
+
+============================== 8 passed in 8.20s ===============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1434 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================== 12 passed in 0.70s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=packages:/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/dist
+osprey bundle: 79 file(s) -> /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+make: Target `ci' not remade because of errors.
+ci exit 2

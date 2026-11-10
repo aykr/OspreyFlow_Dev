@@ -35,10 +35,22 @@ COPY scripts ./scripts
 COPY connectors ./connectors
 COPY recipes ./recipes
 
-# ADR-147 decision 3: the tier-1 basemap build (planetiler) needs Java 21, which is **not** in this
-# image while the owner rules on its licence: the Temurin runtime is GPL-2.0 with the Classpath
-# exception, and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL. Until then *Build*
-# says in words that Java is not installed in the Conduit (`map_admin.MapAdmin.basemap`).
+# ADR-147 Amendment 2 (the owner's ruling 1 of 9 November 2026, option A): the tier-1 basemap build
+# (planetiler) runs in the Conduit, so the image carries a Java 21 runtime: Eclipse Temurin, under
+# GPL-2.0 with the Classpath exception, the licence register's one recorded runtime exception
+# (`00_ARCHITECTURE.md` §7; `make licence-check` reads the label below). jlinked to the modules a JVM
+# program such as planetiler uses, without its tools, debug symbols or headers; the official image
+# pinned by its digest (the multi-architecture index, so arm64 and amd64 build alike): Temurin
+# 21.0.13+9, October 2026's update. trivy does not see a jlinked runtime, so the version label below
+# is held to the built image's /opt/java/release and `java -version` (CI's `trivy-image-api` job),
+# and the digest to the one `eclipse-temurin:21-jdk` resolves to on Docker Hub now (Build's
+# `make ci`), by the build folder's `java_runtime_check`; repin the digest and the label together.
+FROM eclipse-temurin:21-jdk@sha256:ebfbb18d11ff163ee83b21258acf12248af48d22a0fdfdc68fa1a1516c05976a AS java
+RUN jlink \
+      --add-modules java.base,java.compiler,java.desktop,java.instrument,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.jfr,jdk.management,jdk.unsupported,jdk.zipfs \
+      --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
+      --output /opt/jre
+
 FROM python:3.12-slim
 
 # Base-image OS packages lag the upstream image's own last-published point
@@ -60,6 +72,14 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 # is dropped again.
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
+# `git` is GPL-2.0-only, which the licence register does not pass: declared, so `make licence-check`
+# names it on every run. The owner's ruling of 9 November 2026: replaced by dulwich (Apache-2.0),
+# studio-b's carry in L1.7a, and then removed from this image.
+LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"
+
+COPY --from=java /opt/jre /opt/java
+LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
+LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
 
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
@@ -70,7 +90,8 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/connectors ./connectors
 COPY --from=builder /app/recipes ./recipes
 
-ENV PATH="/app/.venv/bin:${PATH}" \
+ENV PATH="/app/.venv/bin:/opt/java/bin:${PATH}" \
+    JAVA_HOME="/opt/java" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1 \
     HOME="/app"

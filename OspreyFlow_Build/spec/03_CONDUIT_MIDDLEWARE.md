@@ -590,6 +590,8 @@ GET    /v1/datasets/{dataset_id}/sources/{source_id}/lineage   the dataset's pip
 PATCH  /v1/datasets/{dataset_id}/sources/{source_id}/governance   a new version of its governance, audited; deployed pipelines reading it need attention
 POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause   pauses its refresh, with why; not an edit; audited (schedule_pipelines; ADR-110 Amendment 13)
 POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume  resumes it; audited (schedule_pipelines)
+PUT    /v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}   copies a gazetteer of the dataset's own unit into it (another unit's answered as none, 404), identifiers withheld and never matched; audited (run_pipelines, the dataset's gate; ADR-147 Amendment 2)
+DELETE /v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}   removes it: no copy deleted, its copies no longer refreshed or offered as places, said in fixed words with no count; audited (run_pipelines; ADR-147 Amendment 2)
 GET    /v1/datasets/{dataset_id}/model                     its domain model: the live version and the open draft (edit_target_model, ADR-112 Amendment 6)
 POST   /v1/datasets/{dataset_id}/model/draft               opens the draft, N+1, as a copy of live (v1 bare POLE if none); 409 model_refused for a second
 PUT    /v1/datasets/{dataset_id}/model/draft               saves it; an extension removed not retired, or a POLE core type, 409 model_refused
@@ -1164,6 +1166,7 @@ GET    /v1/map/providers                        the deployment's declared map pr
 GET    /v1/map/tiles/{provider_id}/{z}/{x}/{y}   the tile proxy for a tier-3/4 provider
 GET    /v1/map/local-source/{provider_id}        a tier-1/2 provider's local PMTiles file, over HTTP
 POST   /v1/investigations/{id}/map/places       place search over the gazetteer datasets the case reads (`{"query", "limit"?}`), each place with its point and never its gazetteer's identifier; Viewer, `investigate` (ADR-147 Amendment 1)
+GET    /v1/investigations/{id}/map/gazetteers   the gazetteers of the case's own dataset's unit, each said added or not (names only, no count); Viewer, `investigate` (ADR-147 Amendment 2)
 ```
 
 **`GET /v1/ontology`** is what the Glass's channel/shape mapping (`02_GLASS_FRONTEND.md` §4: "Hue

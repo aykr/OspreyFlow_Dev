@@ -16,7 +16,7 @@ file beside the maps file), each change reading the file afresh under it, as *Mo
     python -m services.api.map_admin list                 # each provider, its tier and state
     python -m services.api.map_admin verify --by <who>
     python -m services.api.map_admin prefetch --by <who>
-    python -m services.api.map_admin build <region> --by <who>
+    python -m services.api.map_admin build <region> --unit <unit> --by <who>
 
 These are what `ospreyflow map list|verify|prefetch|build` run inside the Conduit's container, so
 the command line, the set-up console and *Admin › Maps* are one code. Every answer is in fixed
@@ -721,7 +721,7 @@ class MapAdmin:
         else:
             builder = (
                 "The map builder (planetiler) is not in the tiles folder. Run `ospreyflow map "
-                "build <region> --planetiler-jar <path>` once to place it."
+                "build <region> --unit <unit> --planetiler-jar <path>` once to place it."
             )
         return BasemapState(
             basemaps=basemaps, glyphs_installed=len(fonts) == len(GLYPH_FONTS),
@@ -1159,8 +1159,8 @@ async def build_basemap(
         )
     builder = admin.basemap()
     if not builder.builder_ready:
-        # Said before anything is fetched: the Conduit's image carries no Java while the owner rules
-        # on its licence (ADR-147 decision 3), and the jar is placed by the command line.
+        # Said before anything is fetched: Java is in the Conduit image (ADR-147 Amendment 2), but a
+        # deployment built without it, or with no jar placed by the command line, says so here.
         raise MapAdminRefused(builder.builder_state, status=409)
     jar = tiles_root / PLANETILER_JAR
     built = tiles_root / BUILT_FOLDER
@@ -1229,7 +1229,10 @@ def list_lines(view: MapsAdminView) -> list[str]:
     return lines
 
 
-async def _main(argv: Sequence[str]) -> int:
+def command_parser() -> argparse.ArgumentParser:
+    """The command line every caller's argv meets (`ospreyflow map`, the set-up console): a build
+    without `--unit` is refused here (ruling 8), so a test standing in for the container parses
+    with this parser and refuses what it refuses (rule 15)."""
     parser = argparse.ArgumentParser(prog="python -m services.api.map_admin")
     sub = parser.add_subparsers(dest="verb", required=True)
     sub.add_parser("list")
@@ -1238,7 +1241,12 @@ async def _main(argv: Sequence[str]) -> int:
     build = sub.add_parser("build")
     build.add_argument("region")
     build.add_argument("--by", required=True)
-    args = parser.parse_args(argv)
+    build.add_argument("--unit", required=True)
+    return parser
+
+
+async def _main(argv: Sequence[str]) -> int:
+    args = command_parser().parse_args(argv)
     admin, close = await open_admin()
     try:
         if args.verb == "list":
@@ -1260,7 +1268,7 @@ async def _main(argv: Sequence[str]) -> int:
             print("Verify passed." if report.passed else "Verify found issues.")
             return 0 if report.passed else 1
         if args.verb == "build":
-            return await _build_here(admin, args.by, args.region)
+            return await _build_here(admin, args.by, args.region, args.unit)
     except MapAdminRefused as refused:
         print(refused.words, file=sys.stderr)
         return 1
@@ -1269,8 +1277,16 @@ async def _main(argv: Sequence[str]) -> int:
     return 1
 
 
-async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
-    """`build` from the command line: the gazetteer loaded through the Conduit's own graph."""
+async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
+    """`build` from the command line: the gazetteer loaded through the Conduit's own graph, held by
+    `unit` (ADR-147 Amendment 2, the owner's ruling 8), which is checked before anything runs."""
+    from services.api.map_places import DatasetsUnreachable, UnknownUnit, check_unit_from_env
+
+    try:
+        await check_unit_from_env(unit, region=region)
+    except (UnknownUnit, DatasetsUnreachable) as refused:
+        print(str(refused), file=sys.stderr)
+        return 1
     from scripts.build_local_basemap import load_gazetteer
     from services.resolve.trigger import service_principal
 
@@ -1301,6 +1317,7 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
         report = await load_gazetteer(
             extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
             load_id=f"load-osm-gazetteer-{region}", dataset=gazetteer_dataset_id(region),
+            unit=unit,
         )  # fmt: skip
         return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
@@ -1310,13 +1327,18 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
         from services.api.map_places import (
             NO_POINTS_HERE,
             DatasetsUnreachable,
+            gazetteer_dataset_id,
+            refresh_case_copies_from_env,
             register_gazetteer_dataset_from_env,
         )
 
         await graph.commit_transaction(held.pop("tx"))
         print(NO_POINTS_HERE)
         try:
-            await register_gazetteer_dataset_from_env(region, by=by)
+            await register_gazetteer_dataset_from_env(region, by=by, unit=unit)
+            # ADR-147 Amendment 2: every case that added the gazetteer given its places again.
+            cases = await refresh_case_copies_from_env(graph, scheme, gazetteer_dataset_id(region))
+            print(f"Datasets given the places again: {cases}.")
         except DatasetsUnreachable as unreachable:
             # The places are committed; the build goes on, and says how to register them.
             print(str(unreachable), file=sys.stderr)

@@ -78,7 +78,8 @@ def match_any_field(
     clause: Callable[[str], str], fields: Sequence[str], principal: Principal
 ) -> str:
     """`or(...)` over `fields`, each `clause(field)` a `__.has(...)` step. For a request reader
-    (`principal.datasets` set, ADR-099), a node in a gazetteer dataset (`gazetteer-*`) matches
+    (`principal.datasets` set, ADR-099), a node in a gazetteer dataset (`gazetteer-*`), or a case's
+    own copy of a gazetteer's place (its `provenance.gazetteer`, ADR-147 Amendment 2), matches
     on its name alone, never an identifier (`osm_id`, `uprn`, …: source-system identifiers, rule
     7; the orchestrator's ruling of 9 November 2026). Inside the traversal, so the rows, the
     `limit + 1` row that says `more`, and any count follow it: a run of prefix searches cannot
@@ -93,7 +94,11 @@ def match_any_field(
     if not others:
         return f"or({','.join(every)})"
     prefix = groovy_string_literal(GAZETTEER_DATASET_PREFIX)
-    off_gazetteer = f'__.not(__.values("datasets").unfold().is(TextP.startingWith({prefix})))'
+    # A gazetteer's place (`ontology.handling.is_gazetteer_held`): in a gazetteer dataset, or a
+    # case's own copy of one, named by its provenance (ADR-147 Amendment 2, the owner's ruling 6).
+    in_dataset = f'__.values("datasets").unfold().is(TextP.startingWith({prefix}))'
+    copied = '__.values("provenance").select("gazetteer")'
+    off_gazetteer = f"__.not(__.or({in_dataset},{copied}))"
     guarded = f"__.and({off_gazetteer},__.or({','.join(others)}))"
     return f"or({','.join([*names, guarded])})"
 

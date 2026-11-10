@@ -468,10 +468,15 @@ def test_an_unreachable_database_is_explained_not_dumped_as_a_traceback(
         raise httpx.ConnectError("All connection attempts failed")
 
     monkeypatch.setattr(module.ArcadeDBClient, "create_database_if_absent", refuse)
+
+    async def unit_held(_unit: str, *, region: str) -> None:
+        """The unit check (ADR-147 Amendment 2) passes: the graph is what is out here."""
+
+    monkeypatch.setattr("services.api.map_places.check_unit_from_env", unit_held)
     args = argparse.Namespace(
         region="rutland", output_dir=str(tmp_path), planetiler_jar="x.jar", extract=None,
         osprey_config=str(tmp_path / "osprey.yaml"), tiles_only=False,
-        principal_id="p", clearance="OFFICIAL", org_unit="u",
+        principal_id="p", clearance="OFFICIAL", org_unit="u", unit="unit-1",
     )
 
     code = asyncio.run(module._run(args))

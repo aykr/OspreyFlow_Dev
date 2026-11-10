@@ -1,0 +1,50 @@
+--- plant: copy_places reads the case's copies as unit "system"
+Running on ospreyflow-test (stack d, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform/.runs/20261109T173623Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE "../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py::test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild"
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild ____
+
+stores = (<adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x7390afff7c50>, <adapters.analytics_duckdb.adapter.A... object at 0x7390afff5160>, PosixPath('/tmp/pytest-of-root/pytest-29/test_a_restricted_case_load_on0/rutland.osm.pbf'))
+
+    async def test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild(
+        stores: Stores,
+    ) -> None:
+        """The lane's review, item 5: a case load at a restricted code (uk-le's `R`, shown only to its
+        unit) raises the copy's code; the copier reads as the dataset's own unit, so it still sees the
+        copy as the case's and a re-build does not write over it."""
+        graph, _analytics, _ = stores
+        await _plant(stores)
+        await _copy(graph)
+        copy = copy_id("01JP5ASHWELL00000000000000", "case-a")
+        loaded = _place(copy, "Ashwell (restricted)", osm_id=PREFIX).model_copy(
+            update={
+                "datasets": ["case-a"],
+                "handling": Handling(classification="OFFICIAL", handling_code="R",
+                                     originator="unit-1", owning_unit="unit-1"),
+                "provenance": Provenance(
+                    state=ProvenanceState.ASSERTED,
+                    sources=[SourceRef(document_id="case-load", locator="row 4", excerpt_hash="")],
+                    first_seen=datetime(2026, 2, 1, tzinfo=UTC),
+                ),
+            }
+        )  # fmt: skip
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([loaded], tx)
+        await graph.commit_transaction(tx)
+        await _copy(graph)
+        unit_reader = CASE.model_copy(update={"receivable_handling_codes": ["R"], "datasets": None})
+        read = await graph.get_node(copy, unit_reader)
+>       assert read is not None and read.properties["name"] == "Ashwell (restricted)"
+E       AssertionError: assert (Node(id='0CHQRCPZA9RYNJKG3PQTJE3JS7', type='Location', properties={'name': 'Ashwell', 'osm_id': 'osm-p5-7731', 'uprn':...etteer-osm-rutland', recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['case-a']) is not None and 'Ashwell' == 'Ashwell (restricted)'
+E         
+E         - Ashwell (restricted)
+E         + Ashwell)
+
+../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py:300: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py::test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild
+1 failed in 18.32s
+--- restored
+Running on ospreyflow-test (stack d, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform/.runs/20261109T173655Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py
+.........                                                                [100%]
+9 passed in 167.95s (0:02:47)

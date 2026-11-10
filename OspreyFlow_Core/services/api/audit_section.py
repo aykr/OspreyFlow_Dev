@@ -180,6 +180,11 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "make_home_case",
         "make_drawn_dataset",
         "set_case_datasets",
+        # Platform's P5 (ADR-147 Amendment 2, ruling 6): a gazetteer added to a dataset (its places
+        # copied in) and removed. `dataset_id` is shown; the gazetteer's id is no plain word, so
+        # it is left out by default.
+        "add_dataset_gazetteer",
+        "remove_dataset_gazetteer",
     ),
 }
 _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for a in actions)

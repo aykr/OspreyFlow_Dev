@@ -1,0 +1,263 @@
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Core/apps/workspace
+
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 12659ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 12657ms
+stderr | src/ingest/IngestStudio.test.tsx > IngestStudio: four places > reads the registered sources again for the strip when the Sources tab edits one
+An error occurred in the <ScreeningLists> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/ingest/IngestStudio.test.tsx > IngestStudio: four places > shows the target model on Model, and the registered sources with their marking on Sources
+An error occurred in the <ScreeningLists> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ src/ingest/IngestStudio.test.tsx (8 tests | 3 failed) 2903ms
+   ❯ IngestStudio: four places (8)
+     × reads the registered sources again for the strip when the Sources tab edits one 1188ms
+     × shows the target model on Model, and the registered sources with their marking on Sources 1029ms
+     × keeps the files added straight to the dataset on Sources, behind Add files 79ms
+ ❯ keyboard/registryCoverage.test.ts (52 tests | 1 failed) 10ms
+   ❯ every declared keyboard action registry has a proving assertAllCovered call (52)
+     × SOURCES_CONNECTORS_ACTIONS is asserted by some *.spec.ts in this directory 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  keyboard/registryCoverage.test.ts > every declared keyboard action registry has a proving assertAllCovered call > SOURCES_CONNECTORS_ACTIONS is asserted by some *.spec.ts in this directory
+AssertionError: SOURCES_CONNECTORS_ACTIONS is declared in actionRegistry.ts but no *.spec.ts file under keyboard/ calls assertAllCovered("SOURCES_CONNECTORS_ACTIONS", ...) — its own coverage gate never runs, so it is silently proving nothing (the exact gap this test exists to catch).: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ keyboard/registryCoverage.test.ts:45:9
+     43|           `assertAllCovered("${name}", ...) — its own coverage gate ne…
+     44|           `silently proving nothing (the exact gap this test exists to…
+     45|       ).toBe(true);
+       |         ^
+     46|     },
+     47|   );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/ingest/IngestStudio.test.tsx > IngestStudio: four places > reads the registered sources again for the strip when the Sources tab edits one
+TestingLibraryElementError: Unable to find role="button" and name "Open source PIN calls file"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div />[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div />[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/ingest/IngestStudio.test.tsx:100:34
+     98|     await within(strip).findByText("1 source · 1 file not registered");
+     99|     fireEvent.click(screen.getByRole("tab", { name: "2 Sources" }));
+    100|     fireEvent.click(await screen.findByRole("button", { name: "Open so…
+       |                                  ^
+    101|     const reads = () =>
+    102|       vi.mocked(fetch).mock.calls.filter(([u, i]) => String(u).endsWit…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/ingest/IngestStudio.test.tsx > IngestStudio: four places > shows the target model on Model, and the registered sources with their marking on Sources
+TestingLibraryElementError: Unable to find role="button" and name "Open source PIN calls file"
+
+Ignored nodes: comments, script, style
+[36m<section[39m
+  [33maria-label[39m=[32m"Sources"[39m
+  [33mstyle[39m=[32m"display: grid; gap: var(--sp-8);"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mstyle[39m=[32m"display: flex; gap: var(--sp-8); align-items: center;"[39m
+  [36m>[39m
+    [36m<h2[39m
+      [33mstyle[39m=[32m"margin: 0px; font-size: var(--fs-16); flex: 1 1 0%;"[39m
+    [36m>[39m
+      [0mSource tables[0m
+    [36m</h2>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"btn btn--primary"[39m
+    [36m>[39m
+      [0mRegister a source[0m
+    [36m</button>[39m
+  [36m</div>[39m
+  [36m<p[39m
+    [33mclass[39m=[32m"label"[39m
+    [33mstyle[39m=[32m"margin: 0px;"[39m
+  [36m>[39m
+    [0mEach source is registered once, with its marking, legal basis and refresh; every pipeline that reads it inherits them.[0m
+  [36m</p>[39m
+  [36m<p[39m
+    [33mclass[39m=[32m"label"[39m
+  [36m>[39m
+    [0mReading the sources…[0m
+  [36m</p>[39m
+[36m</section>[39m
+
+Ignored nodes: comments, script, style
+[36m<section[39m
+  [33maria-label[39m=[32m"Sources"[39m
+  [33mstyle[39m=[32m"display: grid; gap: var(--sp-8);"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mstyle[39m=[32m"display: flex; gap: var(--sp-8); align-items: center;"[39m
+  [36m>[39m
+    [36m<h2[39m
+      [33mstyle[39m=[32m"margin: 0px; font-size: var(--fs-16); flex: 1 1 0%;"[39m
+    [36m>[39m
+      [0mSource tables[0m
+    [36m</h2>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"btn btn--primary"[39m
+    [36m>[39m
+      [0mRegister a source[0m
+    [36m</button>[39m
+  [36m</div>[39m
+  [36m<p[39m
+    [33mclass[39m=[32m"label"[39m
+    [33mstyle[39m=[32m"margin: 0px;"[39m
+  [36m>[39m
+    [0mEach source is registered once, with its marking, legal basis and refresh; every pipeline that reads it inherits them.[0m
+  [36m</p>[39m
+  [36m<p[39m
+    [33mclass[39m=[32m"label"[39m
+  [36m>[39m
+    [0mReading the sources…[0m
+  [36m</p>[39m
+[36m</section>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/ingest/IngestStudio.test.tsx:134:34
+    132|     fireEvent.click(screen.getByRole("tab", { name: "2 Sources" }));
+    133|     const sources = await screen.findByRole("region", { name: "Sources…
+    134|     expect(await within(sources).findByRole("button", { name: "Open so…
+       |                                  ^
+    135|     expect(within(sources).getByText("pin.csv")).toBeTruthy();
+    136|     expect(within(sources).getByText("OFFICIAL")).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/ingest/IngestStudio.test.tsx > IngestStudio: four places > keeps the files added straight to the dataset on Sources, behind Add files
+TypeError: Cannot read properties of undefined (reading 'length')
+ ❯ ScreeningLists src/ingest/sources/ScreeningLists.tsx:144:14
+    142|       )}
+    143|       {subs === null && !problem && <p className="label">Reading the l…
+    144|       {subs?.lists.length === 0 && <p className="label">No screening l…
+       |              ^
+    145|       {subs && subs.lists.length > 0 && (
+    146|         <table className="table">
+ ❯ Object.react_stack_bottom_frame ../../node_modules/react-dom/cjs/react-dom-client.development.js:28571:20
+ ❯ renderWithHooks ../../node_modules/react-dom/cjs/react-dom-client.development.js:8030:22
+ ❯ updateFunctionComponent ../../node_modules/react-dom/cjs/react-dom-client.development.js:10569:19
+ ❯ beginWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:12205:18
+ ❯ runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1048:13
+ ❯ performUnitOfWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:19176:22
+ ❯ workLoopSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:19004:41
+ ❯ renderRootSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:18985:11
+ ❯ performWorkOnRoot ../../node_modules/react-dom/cjs/react-dom-client.development.js:18094:35
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 6259 ms: expected 6259.165666 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 2 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot read properties of undefined (reading 'length')
+ ❯ ScreeningLists src/ingest/sources/ScreeningLists.tsx:144:14
+    142|       )}
+    143|       {subs === null && !problem && <p className="label">Reading the l…
+    144|       {subs?.lists.length === 0 && <p className="label">No screening l…
+       |              ^
+    145|       {subs && subs.lists.length > 0 && (
+    146|         <table className="table">
+ ❯ Object.react_stack_bottom_frame ../../node_modules/react-dom/cjs/react-dom-client.development.js:28571:20
+ ❯ renderWithHooks ../../node_modules/react-dom/cjs/react-dom-client.development.js:8030:22
+ ❯ updateFunctionComponent ../../node_modules/react-dom/cjs/react-dom-client.development.js:10569:19
+ ❯ beginWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:12205:18
+ ❯ runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1048:13
+ ❯ performUnitOfWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:19176:22
+ ❯ workLoopSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:19004:41
+ ❯ renderRootSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:18985:11
+ ❯ performWorkOnRoot ../../node_modules/react-dom/cjs/react-dom-client.development.js:18094:35
+
+This error originated in "src/ingest/IngestStudio.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "reads the registered sources again for the strip when the Sources tab edits one". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot read properties of undefined (reading 'length')
+ ❯ ScreeningLists src/ingest/sources/ScreeningLists.tsx:144:14
+    142|       )}
+    143|       {subs === null && !problem && <p className="label">Reading the l…
+    144|       {subs?.lists.length === 0 && <p className="label">No screening l…
+       |              ^
+    145|       {subs && subs.lists.length > 0 && (
+    146|         <table className="table">
+ ❯ Object.react_stack_bottom_frame ../../node_modules/react-dom/cjs/react-dom-client.development.js:28571:20
+ ❯ renderWithHooks ../../node_modules/react-dom/cjs/react-dom-client.development.js:8030:22
+ ❯ updateFunctionComponent ../../node_modules/react-dom/cjs/react-dom-client.development.js:10569:19
+ ❯ beginWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:12205:18
+ ❯ runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1048:13
+ ❯ performUnitOfWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:19176:22
+ ❯ workLoopSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:19004:41
+ ❯ renderRootSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:18985:11
+ ❯ performWorkOnRoot ../../node_modules/react-dom/cjs/react-dom-client.development.js:18094:35
+
+This error originated in "src/ingest/IngestStudio.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "shows the target model on Model, and the registered sources with their marking on Sources". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  3 failed | 329 passed (332)
+      Tests  5 failed | 2760 passed (2765)
+     Errors  2 errors
+   Start at  10:14:58
+   Duration  57.91s (environment 50%, tests 38%, import 9%, transform 2%, setup 1%, worker 1%)
+
+    Isolate  332 workers spawned · ~1.02s startup each (spawn + environment, per file)
+             at least ~29.67s faster with isolate: false — reuses workers across files instead of one per file
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make: *** [test-js] Error 1
+test-js exit 2

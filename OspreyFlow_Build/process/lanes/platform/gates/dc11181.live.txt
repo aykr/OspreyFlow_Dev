@@ -1,0 +1,130 @@
+######## part 1 (the image build met Docker Hub's 429 on --pull; the live set)
+Running on ospreyflow-test (stack e, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T215750Z/log: sh -c sh process/lanes/platform/gates/p5_image_check.sh; echo '===== item 4: the live set'; cd ../OspreyFlow_Core && PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_routes_live.py
+
+===== 1. build (amd64), as CI and make trivy-image-api: docker build --pull -f services/api/Dockerfile
+Dockerfile:11
+--------------------
+   9 |     # sequence holds session state; every request re-derives what it needs
+  10 |     # from ArcadeDB, Valkey and Postgres.
+  11 | >>> FROM python:3.12-slim AS builder
+  12 |     
+  13 |     RUN pip install --no-cache-dir uv==0.5.14
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+===== item 4: the live set
+...............                                                          [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/platform/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+15 passed, 1 warning in 244.76s (0:04:04)
+exit 0
+######## the port contract's case, the diff applied
+Running on ospreyflow-test (stack e, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T220227Z/log: sh -c cd ../OspreyFlow_Core && PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone
+.                                                                        [100%]
+1 passed in 14.98s
+exit 0
+######## the same, the guard's copy clause dropped
+ OspreyFlow_Core/packages/adapters/graph_arcadedb/builders.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+Running on ospreyflow-test (stack e, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T220321Z/log: sh -c cd ../OspreyFlow_Core && PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x7675d6f91e40>)
+
+    async def test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """ADR-147 Amendment 1 decision 3b, for a case's copy of a gazetteer's place (Amendment 2): keyed
+        on the copy's provenance (`provenance.gazetteer`), never on a `gazetteer-*` dataset name. A
+        request reader (one whose `datasets` are set) never matches the copy by a source identifier, by
+        `search_nodes` or by `suggest_nodes` in any mode, and a node read or suggested by its name
+        carries none. More copies than a page share one identifier's prefix, so a guard applied after
+        the page is cut would say `more`: none is suggested and `more` is false. Positive controls: the
+        case's own place, with no gazetteer mark, is found by the same field; and the copy by its name."""
+        reader = Principal(id="analyst-case", clearance="SECRET", org_unit="unit-1",
+                           datasets=["case-a"])  # fmt: skip
+        copy = _node("Location", classification="OFFICIAL", datasets=["case-a"],
+                     name="Conformance Ashwell", osm_id="osm-conf-4411", uprn="900000004411")
+        copy = copy.model_copy(update={"provenance": copy.provenance.model_copy(
+            update={"gazetteer": "gazetteer-osm-conformance"})})  # fmt: skip
+        own = _node("Location", classification="OFFICIAL", datasets=["case-a"],
+                    name="Conformance Yard", uprn="900000004412")  # fmt: skip
+        alike = [
+            _node("Location", classification="OFFICIAL", datasets=["case-a"],
+                  name=f"Conformance Elsewhere {i}", osm_id=f"osm-conf-77{i:02d}")
+            for i in range(8)
+        ]  # fmt: skip
+        alike = [n.model_copy(update={"provenance": copy.provenance}) for n in alike]
+        async with factory.context() as adapter:
+            (copy_id, own_id, *_alike), _ = await _write(adapter, [copy, own, *alike], [])
+            assert [n.id for n in await adapter.search_nodes("900000004412", reader)] == [own_id]
+            for identifier in ("osm-conf-4411", "900000004411"):
+>               assert await adapter.search_nodes(identifier, reader) == [], identifier
+E               AssertionError: osm-conf-4411
+E               assert [Node(id='01M...s=['case-a'])] == []
+E                 
+E                 Left contains one more item: Node(id='01M715CW452FS6D1RC16PCSW3N', type='Location', properties={'name': 'Conformance Ashwell'}, provenance=Provenan...=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['case-a'])
+E                 Use -v to get more diff
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:1989: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone[graph_arcadedb[gremlin]]
+1 failed in 17.11s
+exit 1
+######## the same, the case's identifier checks removed too: the page's more
+ .../tests/conformance/graph_port/test_suite.py     | 36 ++++++++++++++++++++++
+ .../packages/adapters/graph_arcadedb/builders.py   |  2 +-
+ 2 files changed, 37 insertions(+), 1 deletion(-)
+Running on ospreyflow-test (stack e, osprey-runs/platform/OspreyFlow_Build/), logged at osprey-runs/platform.meta/runs/20261109T221120Z/log: sh -c cd ../OspreyFlow_Core && PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x7dae6a5ede40>)
+
+    async def test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """ADR-147 Amendment 1 decision 3b, for a case's copy of a gazetteer's place (Amendment 2): keyed
+        on the copy's provenance (`provenance.gazetteer`), never on a `gazetteer-*` dataset name. A
+        request reader (one whose `datasets` are set) never matches the copy by a source identifier, by
+        `search_nodes` or by `suggest_nodes` in any mode, and a node read or suggested by its name
+        carries none. More copies than a page share one identifier's prefix, so a guard applied after
+        the page is cut would say `more`: none is suggested and `more` is false. Positive controls: the
+        case's own place, with no gazetteer mark, is found by the same field; and the copy by its name."""
+        reader = Principal(id="analyst-case", clearance="SECRET", org_unit="unit-1",
+                           datasets=["case-a"])  # fmt: skip
+        copy = _node("Location", classification="OFFICIAL", datasets=["case-a"],
+                     name="Conformance Ashwell", osm_id="osm-conf-4411", uprn="900000004411")
+        copy = copy.model_copy(update={"provenance": copy.provenance.model_copy(
+            update={"gazetteer": "gazetteer-osm-conformance"})})  # fmt: skip
+        own = _node("Location", classification="OFFICIAL", datasets=["case-a"],
+                    name="Conformance Yard", uprn="900000004412")  # fmt: skip
+        alike = [
+            _node("Location", classification="OFFICIAL", datasets=["case-a"],
+                  name=f"Conformance Elsewhere {i}", osm_id=f"osm-conf-77{i:02d}")
+            for i in range(8)
+        ]  # fmt: skip
+        alike = [n.model_copy(update={"provenance": copy.provenance}) for n in alike]
+        async with factory.context() as adapter:
+            (copy_id, own_id, *_alike), _ = await _write(adapter, [copy, own, *alike], [])
+            for options in (None, SuggestOptions(mode="contains", ignore_case=True)):
+                page = await adapter.suggest_nodes("osm-conf-77", reader, limit=3, options=options)
+>               assert (page.nodes, page.more) == ([], False), options
+E               AssertionError: None
+E               assert ([Node(id='01...e-a'])], True) == ([], False)
+E                 
+E                 At index 0 diff: [Node(id='01M715VCRTMS98CKBK4KREHZTS', type='Location', properties={'name': 'Conformance Elsewhere 0'}, provenance=Provenance(state=<ProvenanceState.ASSERTED: 'asserted'>, sources=[SourceRef(document_id='doc-1', locator='p.1', excerpt_hash='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', load_id=None)], sources_withheld=False, extracted_by=None, extraction_confidence=None, first_seen=datetime.datetime(2026, 11, 9, 22, 11, 23, 34051, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None, gazetteer='gazetteer-osm-conformance'), handling=Ha...
+E                 
+E                 ...Full output truncated (2 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:1989: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone[graph_arcadedb[gremlin]]
+1 failed in 15.07s
+exit 1

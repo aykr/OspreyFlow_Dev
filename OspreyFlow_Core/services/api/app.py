@@ -338,7 +338,15 @@ from schemas.map_admin import (
     PrefetchRun,
     PrefetchScheduleInput,
 )
-from schemas.mapconfig import MapConfig, PlaceSearchRequest, PlaceSearchResponse, PublicMapConfig
+from schemas.mapconfig import (
+    GAZETTEER_DATASET_PREFIX,
+    CaseGazetteer,
+    CaseGazetteers,
+    MapConfig,
+    PlaceSearchRequest,
+    PlaceSearchResponse,
+    PublicMapConfig,
+)
 from schemas.model import OfferedEngines
 from schemas.model_admin import (
     ConnectionTestResult,
@@ -447,7 +455,7 @@ from schemas.trends import (
     TrendOptions,
 )
 
-from . import alert_queue, map_places
+from . import alert_queue, case_gazetteers, map_places
 from . import audit_section as audit_section_module
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
@@ -582,6 +590,7 @@ from .datasets import (
     ReadOnlyLayerError,
     UnknownDatasetEgressError,
 )
+from .datasets import SOURCE as SOURCE_DATASET
 from .document_content import (
     UPLOAD_CONTENT_EXTENSIONS,
     DocumentAcceptResult,
@@ -1394,6 +1403,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-147: *Admin › Maps*; its maps file replaces `osprey.yaml`'s `map:` once changed there,
     # and its prefetch areas run on their schedule in the Conduit.
     map_admin_audit = await map_admin_module.PostgresMapAdminAudit.connect(config.postgres.dsn)
+    # ADR-147 Amendment 2 (the owner's ruling 6): the gazetteers each case added, copied into it.
+    app.state.case_gazetteers = await case_gazetteers.CaseGazetteerStore.connect(
+        config.postgres.dsn
+    )
     app.state.map_admin = map_admin_module.MapAdmin(
         installed=app.state.map_config,
         settings_file=map_admin_module.MapSettingsFile.from_env(),
@@ -1510,6 +1523,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await prefetch_schedule.close()
         app.state.map_admin = None
         await map_admin_audit.close()
+        await app.state.case_gazetteers.close()
+        app.state.case_gazetteers = None
         await gateway_http.aclose()
         await resources.close()
 
@@ -1704,6 +1719,17 @@ def get_map_config(request: Request) -> MapConfig:
     if admin is not None:
         return admin.config()  # type: ignore[no-any-return]
     return request.app.state.map_config  # type: ignore[no-any-return]
+
+
+def get_case_gazetteers(request: Request) -> Any:
+    """ADR-147 Amendment 2: the store of each case's added gazetteers."""
+    store = getattr(request.app.state, "case_gazetteers", None)
+    if store is None:
+        raise HTTPException(status_code=503, detail="the case gazetteers are not running")
+    return store
+
+
+CaseGazetteersDep = Annotated[Any, Depends(get_case_gazetteers)]
 
 
 def get_map_admin(request: Request) -> map_admin_module.MapAdmin:
@@ -8091,12 +8117,17 @@ async def map_place_search_route(
     graph: GraphDep,
     analytics: AnalyticsDep,
     audit: AuditDep,
+    store: CaseGazetteersDep,
 ) -> PlaceSearchResponse:
     """The map's place search (`02_GLASS_FRONTEND.md` §3.5, ADR-147 Amendment 1): the loaded
     gazetteer's places in the case's datasets (ADR-099, read with the case's principal in the
     store, rule 3), each with its point; never a hosted geocoder (`map_places`). Viewer and
     `investigate`, as the case's other searches are; audited as they are."""
-    result = await map_places.search_places(graph, analytics, body, principal)
+    # ADR-147 Amendment 2, the orchestrator's ruling (d): a removed gazetteer's copies are no longer
+    # offered as places (keyed on their mark and the removal record, the same for every copy). The
+    # store is a dependency: without it the search answers 503, never offering them again.
+    removed = await store.removed_among(list(principal.datasets or []))
+    result = await map_places.search_places(graph, analytics, body, principal, removed=removed)
     await audit.record(
         principal=principal,
         action="map_place_search",
@@ -8105,6 +8136,89 @@ async def map_place_search_route(
         result_cardinality=len(result.places),
     )
     return result
+
+
+async def _own_dataset(investigation_id: str, datasets: DatasetStore) -> Dataset | None:
+    """The one source dataset the case reads of its own, where a gazetteer's copies are; `None`
+    for a case reading a composite or nothing (ADR-147 Amendment 2)."""
+    chosen = await datasets.chosen_of_case(investigation_id)
+    if len(chosen) != 1 or chosen[0].kind != SOURCE_DATASET:
+        return None
+    return chosen[0]
+
+
+#: ADR-147 Amendment 2, the orchestrator's ruling (d): what a removal says, the same for every
+#: removal, whatever rests on any copy (rule 3), and with no count.
+REMOVED_WORDS = (
+    "The gazetteer is removed: its places stay in this dataset as its own, and the map's place "
+    "search no longer offers them. A re-build no longer refreshes them; adding it again does."
+)
+
+
+async def _gazetteers_view(
+    dataset: Dataset | None, datasets: DatasetStore, store: Any, *, said: str | None = None
+) -> CaseGazetteers:
+    """The gazetteers of `dataset`'s unit, and those it holds (ADR-147 Amendment 2: recorded for
+    the dataset, so every case reading it sees them added)."""
+    if dataset is None:
+        return CaseGazetteers(gazetteers=[])
+    added = {a.gazetteer for a in await store.of_dataset(dataset.id)}
+    offered = {
+        d.id: d.name
+        for d in await datasets.list_all()
+        if d.id.startswith(GAZETTEER_DATASET_PREFIX) and d.owning_unit == dataset.owning_unit
+    }
+    return CaseGazetteers(
+        gazetteers=[
+            CaseGazetteer(dataset_id=i, name=offered.get(i, i), added=i in added)
+            for i in sorted(set(offered) | added)
+        ],
+        said=said,
+    )
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/map/gazetteers",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def case_gazetteers_route(
+    investigation: InvestigationViewerDep,
+    datasets: DatasetsDep,
+    store: CaseGazetteersDep,
+) -> CaseGazetteers:
+    """The gazetteers the case's own dataset may take, and which it holds (ADR-147 Amendment 2, the
+    owner's ruling 6): names only, never a count of places (a count would take in places above the
+    reader's clearance). Viewer and `investigate`, as the place search is. A case reading a
+    composite or nothing is answered with none."""
+    return await _gazetteers_view(
+        await _own_dataset(investigation.id, datasets), datasets, store
+    )
+
+
+#: ADR-147 Amendment 2: the words a refused addition is said in.
+_NO_SUCH_GAZETTEER = (
+    "There is no gazetteer of that name for this dataset's unit: a dataset takes a gazetteer built "
+    "for its own unit, in Admin › Maps."
+)
+
+
+async def _dataset_and_gazetteer(
+    dataset_id: str, gazetteer_id: str, datasets: DatasetStore
+) -> Dataset:
+    """The dataset (a source, its gate passed) and the gazetteer it may take: one of the dataset's
+    own unit (the orchestrator's review of P5, item 3), refused in words otherwise."""
+    held = await datasets.egress_of([dataset_id, gazetteer_id])
+    dataset = held.get(dataset_id)
+    if dataset is None or dataset.kind != SOURCE_DATASET:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    gazetteer = held.get(gazetteer_id)
+    if gazetteer is None or not gazetteer_id.startswith(GAZETTEER_DATASET_PREFIX):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
+    if gazetteer.owning_unit != dataset.owning_unit:
+        # The same answer as for no gazetteer at all, so it says nothing of which regions another
+        # unit has built (the lane's review, item 3).
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
+    return dataset
 
 
 @app.get("/v1/map/tiles/{provider_id}/{z}/{x}/{y}")
@@ -8250,6 +8364,8 @@ async def build_basemap_route(
     admin: MapAdminDep,
     datasets: DatasetsDep,
     analytics: AnalyticsDep,
+    handling_scheme: HandlingSchemeDep,
+    copies: CaseGazetteersDep,
 ) -> StreamingResponse:
     """ADR-147: a named region only; the tiles folder and the planetiler jar are the deployment's
     own (`map_admin.build_basemap`), never a path typed in the Glass, and the provider is registered
@@ -8263,6 +8379,18 @@ async def build_basemap_route(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{body.region!r} is not a known Geofabrik region: {sorted(GEOFABRIK_REGIONS)}",
         )
+    # ADR-147 Amendment 2 (the owner's ruling 8): the gazetteer's unit is the build's setting, the
+    # administrator's own unless named, and refused in words before anything runs.
+    gazetteer_unit = body.unit or principal.org_unit
+    try:
+        map_places.check_unit(
+            gazetteer_unit, await map_places.units_held(datasets), own=principal.org_unit,
+            built_for=await map_places.built_for(datasets, body.region),
+        )  # fmt: skip
+    except map_places.UnknownUnit as unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(unknown)
+        ) from None
 
     async def _events() -> AsyncIterator[bytes]:
         loop = asyncio.get_running_loop()
@@ -8284,13 +8412,28 @@ async def build_basemap_route(
                 extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
                 load_id=f"load-osm-gazetteer-{body.region}",
                 dataset=map_places.gazetteer_dataset_id(body.region), analytics=analytics,
+                unit=gazetteer_unit,
             )  # fmt: skip
             return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
         async def _settle() -> None:
             # Committed before the provider is registered (`map_admin.build_basemap`).
             await graph.commit_transaction(transaction.pop("tx"))
-            await map_places.register_gazetteer_dataset(datasets, body.region, by=principal.id)
+            await map_places.register_gazetteer_dataset(
+                datasets, body.region, by=principal.id, unit=gazetteer_unit
+            )
+            # ADR-147 Amendment 2: a re-build gives every dataset holding the gazetteer its places
+            # again. Never failing the build, whose places are committed: each failure is said.
+            try:
+                refreshed = await case_gazetteers.refresh_cases(
+                    graph, handling_scheme, copies, datasets,
+                    map_places.gazetteer_dataset_id(body.region),
+                )  # fmt: skip
+            except Exception as error:  # noqa: BLE001 - said in words; the build stands
+                _progress(case_gazetteers.UNREFRESHED.format(error=type(error).__name__))
+            else:
+                for words in refreshed.failed:
+                    _progress(words)
 
         async def _run_build() -> tuple[tuple[str, int, int, int] | None, BaseException | None]:
             try:
@@ -9241,6 +9384,87 @@ async def refuse_copying_a_drawn_dataset(
 
 
 NoLoadingAComposite = Depends(refuse_loading_a_composite)
+
+
+@app.put(
+    "/v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES)), NoLoadingAComposite],
+)
+async def add_dataset_gazetteer_route(
+    dataset_id: StudioDatasetDep,
+    gazetteer_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    datasets: DatasetsDep,
+    store: CaseGazetteersDep,
+    audit: AuditDep,
+) -> CaseGazetteers:
+    """Adds a gazetteer to a dataset (ADR-147 Amendment 2, the owner's ruling 6): its places copied
+    into it (`case_gazetteers.copy_places`), so every case reading it reads them and stays one
+    dataset that keeps its loads. **A dataset-level action** (the orchestrator's review of P5, item
+    6): behind the dataset route's own gate (a person one of whose cases loads into it,
+    `require_studio_dataset`) and `run_pipelines`, the right that runs a load into a dataset,
+    never one case's level; a composite or a drawn dataset is refused, as for any load. A gazetteer
+    of the dataset's own unit only. Again for a gazetteer already added copies its places again."""
+    dataset = await _dataset_and_gazetteer(dataset_id, gazetteer_id, datasets)
+    added = case_gazetteers.AddedGazetteer(
+        case_dataset=dataset_id, gazetteer=gazetteer_id, added_in=dataset_id,
+        added_by=principal.id, added_at=datetime.now(UTC),
+    )  # fmt: skip
+    # The record first and kept, whatever happens next: pages a failed copy wrote are committed, so
+    # the dataset is said to hold the gazetteer, and adding it again finishes the copy, or removing
+    # it stops it (the lane's review, item 4).
+    await store.add(added)
+    # Audited before the copy (the orchestrator's review of round 3, item 6): a copy that fails part
+    # way leaves its pages committed, so it is never unaudited.
+    await audit.record(
+        principal=principal,
+        action="add_dataset_gazetteer",
+        resolved_query={"dataset_id": dataset_id, "gazetteer": gazetteer_id},
+        result_cardinality=1,
+    )
+    await case_gazetteers.copy_places(
+        graph, scheme, gazetteer=gazetteer_id, case_dataset=dataset_id, by=principal.id,
+        unit=dataset.owning_unit,
+    )  # fmt: skip
+    return await _gazetteers_view(dataset, datasets, store)
+
+
+@app.delete(
+    "/v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES)), NoLoadingAComposite],
+)
+async def remove_dataset_gazetteer_route(
+    dataset_id: StudioDatasetDep,
+    gazetteer_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    store: CaseGazetteersDep,
+    audit: AuditDep,
+) -> CaseGazetteers:
+    """Removes a gazetteer from a dataset, so from every case reading it (ADR-147 Amendment 2, the
+    orchestrator's ruling (d)): **no copy is deleted**, whatever rests on it, so no link is left to
+    nothing and nothing a reader may not see changes what the asker is told (rule 3). Every copy
+    keeps its gazetteer mark (3b holds); the record is kept as removed, so a re-build no longer
+    refreshes them and the place search no longer offers them; adding the gazetteer again
+    re-links the same copies. The answer says so in words, the same for every removal, with no
+    count. Gated as adding is; audited."""
+    # A record is all a removal needs: never the gazetteer's own state now (gone, or its unit
+    # changed), so a removal is never made impossible (the lane's review).
+    dataset = (await datasets.egress_of([dataset_id])).get(dataset_id)
+    if dataset is None or gazetteer_id not in {
+        a.gazetteer for a in await store.of_dataset(dataset_id)
+    }:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
+    await store.remove(dataset_id, gazetteer_id)
+    await audit.record(
+        principal=principal,
+        action="remove_dataset_gazetteer",
+        resolved_query={"dataset_id": dataset_id, "gazetteer": gazetteer_id},
+        result_cardinality=1,
+    )
+    return await _gazetteers_view(dataset, datasets, store, said=REMOVED_WORDS)
 
 
 def _source_not_found() -> HTTPException:

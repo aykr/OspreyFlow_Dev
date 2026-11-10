@@ -83,7 +83,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-143 Amendment 5 | Promotion and a removed case's layer as built (L3.4) | case | 2026-11-09 | written |
 | ADR-146 Amendment 4 | L2.10 as built: team routing (a routed alert read by the team's members and the home case's Authors, in the queue's query, trends and packs), one queue, filters, the lead's hand-off and Suppress until…, Raise an alert…, What raises alerts, watched patterns on a schedule | rules | 2026-11-09 | reserved |
 | ADR-147 Amendment 1 | The analyst's map: the basemap switch, place search over the case's gazetteer, the three themes' contrast (P4) | platform | 2026-11-09 | written |
-| ADR-147 Amendment 2 | The owner's rulings of 9 November: a Java runtime under the Classpath exception in the Conduit image, gazetteer places copied into a case's dataset at load, the gazetteer's unit a build setting (P5) | platform | 2026-11-09 | reserved |
+| ADR-147 Amendment 2 | The owner's rulings of 9 November: a Java runtime under the Classpath exception in the Conduit image, gazetteer places copied into a case's dataset at load, the gazetteer's unit a build setting (P5) | platform | 2026-11-09 | written |
 | ADR-114 Amendment 37 | Backups in a folder the administrator names at setup, for every install, never inside the checkout (P5b) | platform | 2026-11-09 | written |
 | ADR-114 Amendment 38 | Backups folder, as built (P5b): the decisions beyond Amendment 37, and a deployment name equal to a profile name refused so two deployments' sets never share a subfolder | platform-b | 2026-11-09 | reserved |
 | ADR-140 Amendment 16 | A subscribed list read at the sample, at Test and at the run, correcting Amendment 13 point 10 (L1.8) | studio-b | 2026-11-09 | written |

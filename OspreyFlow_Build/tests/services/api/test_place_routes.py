@@ -76,6 +76,10 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # promotions stay the Glass's (the rule below).
     (r"^/v1/datasets/\{dataset_id\}/(promotions|removed-cases|layer-merges)",
      frozenset({"ingest"}), "the Studio's Analyst promotions (ingest/runs/promotions.tsx)"),
+    # ADR-147 Amendment 2: a dataset's gazetteers, a load into it (`run_pipelines`, the Studio's
+    # right); no screen calls them yet (platform's P6 adds the Glass's panel, and the Glass here).
+    (r"^/v1/datasets/\{dataset_id\}/gazetteers/", frozenset({"ingest"}),
+     "a dataset's gazetteers (ADR-147 Amendment 2)"),
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 

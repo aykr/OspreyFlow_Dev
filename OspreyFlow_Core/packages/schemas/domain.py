@@ -427,12 +427,20 @@ class Provenance(BaseModel):
     #: `analyst_drawn`), and kept for good, promoted or not. `None` for everything else, and then
     #: left out of what is stored, so an element not drawn is stored exactly as before.
     drawn: DrawnAssertion | None = None
+    #: ADR-147 Amendment 2 (the owner's ruling 6): set on a case's own copy of a gazetteer's place,
+    #: naming the gazetteer dataset it was copied from (`gazetteer-osm-<region>`). Kept for good,
+    #: through every later write (`merge.merge_provenance`), since it is what withholds the place's
+    #: source identifiers from every request reader and keeps them from being matched (decision
+    #: 3b). `None` for everything else, and then left out of what is stored.
+    gazetteer: str | None = None
 
     @model_serializer(mode="wrap")
     def _leave_out_undrawn(self, handler: Any) -> dict[str, Any]:
         data: dict[str, Any] = handler(self)
         if data.get("drawn") is None:
             data.pop("drawn", None)
+        if data.get("gazetteer") is None:
+            data.pop("gazetteer", None)
         return data
 
     @model_validator(mode="after")
