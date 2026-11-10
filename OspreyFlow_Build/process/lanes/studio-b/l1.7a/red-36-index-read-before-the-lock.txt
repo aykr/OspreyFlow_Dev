@@ -1,6 +1,6 @@
-# head f5e1727; plant: a crashed first use's aside directory never swept
+# head 9d7e46f; plant: the index read before either lock is taken
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
-# must fail: test_an_aside_directory_a_crashed_first_use_left_is_swept; for the reason 'is still there'; all failed: yes
+# must fail: test_the_index_is_read_and_written_under_a_lock_another_process_honours; for the reason "outside the lock: ['index read']"; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_second_publish_keeps_the_first_in_the_history
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
@@ -23,7 +23,6 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipes_directory_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipe_file_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused
-PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says
@@ -35,6 +34,10 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept - AssertionError: the crashed first use's aside directory is still there
-1 failed, 35 passed in 11.70s
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: outside the lock: ['index read']
+1 failed, 38 passed in 8.20s

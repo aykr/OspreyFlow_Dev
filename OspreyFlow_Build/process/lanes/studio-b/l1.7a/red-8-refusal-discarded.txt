@@ -1,4 +1,4 @@
-# head f5e1727; plant: the compare-and-swap called and its answer discarded (the independent review, item 3): `if not repo.refs.set_if_equals(...)` -> `if repo.refs.set_if_equals(...) and False`
+# head 9d7e46f; plant: the compare-and-swap called and its answer discarded (the independent review, item 3): `if not repo.refs.set_if_equals(...)` -> `if repo.refs.set_if_equals(...) and False`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_a_failed_commit_is_an_error_not_a_quiet_success, test_a_real_writer_moving_head_mid_commit_is_refused; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -34,8 +34,11 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_in_the_repository_is_the_bytes_given
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error
@@ -43,4 +46,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_write_and_commit_recipe_goes_through_the_same_commit
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success - Failed: DID NOT RAISE GitCommitError
-2 failed, 40 passed in 12.23s
+2 failed, 43 passed in 8.25s

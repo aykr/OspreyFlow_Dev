@@ -1,4 +1,4 @@
-# head f5e1727; plant: the publish flock taken around the compare-and-swap alone (the independent re-review, item 3): not over the write, the index or the commit
+# head 9d7e46f; plant: the publish flock taken around the compare-and-swap alone (the independent re-review, item 3): not over the write, the index or the commit
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_the_index_is_read_and_written_under_a_lock_another_process_honours; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -33,8 +33,11 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert {'write': Fal...': False, ...} == {'write': Tru...t': True, ...}
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: outside the lock: ['write', 'index read', 'index', 'commit']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - AssertionError: assert b'version: 2\n' == b'version: 1\n'
-2 failed, 34 passed in 11.71s
+2 failed, 37 passed in 8.20s
