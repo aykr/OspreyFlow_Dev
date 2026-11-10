@@ -1,4 +1,4 @@
-# as of 2026-11-10T09:24Z
+# as of 2026-11-10T09:43Z
 rules	L2.10	rebased, make test done; live on c, then ci and keyboard	~11:30	A
 studio-b	L1.7a	back: rebase, git out of the image with the licence gate's tests	~13:00	A
 studio-b	tips	Studio's tips patches, after L1.7a	~14:00–15:00	A
@@ -12,7 +12,6 @@ platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
 studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning	B
 platform-b	P6	gazetteer panel, starting now	~12:30	A
 platform-b	ADR-147 Am 3	gazetteer identifiers withheld everywhere, after P6	~16:30	A
-docs	P5b's guide rows	ready on a branch; after P5b	~11:30	A
 docs	D2b	decks, after L2.11	~11 Nov, morning	A
 docs	D2c	Cloud Platform guide, after P10	~12 Nov	B
 platform	P11	held until the client asks for AI	—	B
