@@ -32829,15 +32829,21 @@ records where that is enforced, what it does not touch, and what is left to othe
      is empty, the stricter deciding. Each distinct combination of the columns that reading depends on is
      resolved once.
    - **A classification that cannot be read** (a missing column, or a value the scheme does not define) refuses
-     the load too, in words that say it cannot be read. It fails closed, since the engine holds such a row's
-     sample at the scheme's highest.
+     the load too, in words that say it cannot be read. It fails closed because the row's content could be marked
+     anything.
    - A bad originator or code beside a readable classification is the engine's to reject, with its own cause. A
      conflict between units does not stop a row being judged.
+   - **Over-marking is not loading.** A row the engine rejects has its sample held at the scheme's highest when
+     its whole marking cannot be resolved, as the engine does today (`_one_row_marking`), even where its
+     classification read within the ceiling. So a load the ceiling passes can hold a rejected row's sample, and
+     name it in its run record, at the scheme's highest. The content is no higher than it read: the marking is
+     over-set for safety, no one may read the sample, and it is not data above the ceiling.
    - `run_recipe` reads the ceiling from the environment when a caller does not pass one, so none can leave it
      out. That covers Studio runs, Run now, the scheduler, connectors and refreshes, held-row releases, the seeds
      that load through the engine, the site grid and the batch CLI.
    - A staged pipeline writes its source files and step tables before `run_recipe`. So its markings that no column
-     sets are judged first, in `pipeline_run`. A marking a column sets is judged only by `run_recipe`, after those
+     sets are judged first, in `pipeline_run`, and so is the floor a bound element falls back to on an empty cell,
+     which no cell can lower. A marking a column sets is judged only by `run_recipe`, after those
      working tables are written. They are the load's own (`load_id`'s) and hold no graph data, but they are not
      removed on a refusal: that is open (below).
 3. **Imports that carry their own marking**: a document added to a case and an entity's picture are refused before
@@ -32881,6 +32887,10 @@ that would put an element above the new ceiling is refused. Data held above it i
   - `test_a_row_whose_units_conflict_is_still_judged`, `test_a_row_whose_classification_reads_is_judged_by_it_alone`,
     `test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so` and
     `test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused`;
+  - `test_an_empty_cell_takes_the_element_s_default_and_is_judged_by_it`,
+    `test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination`,
+    `test_a_bound_element_s_default_above_the_ceiling_is_refused_before_any_staging` and
+    `test_a_missing_column_is_not_read_as_an_empty_one`;
   - `test_a_load_at_the_ceiling_passes` and `test_with_no_ceiling_set_a_secret_row_loads_as_before`;
   - the staged pipeline's order, `test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables`, which
     is structural, since a staged branch needs its stores to run.

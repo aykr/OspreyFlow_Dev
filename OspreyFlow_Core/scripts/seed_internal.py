@@ -215,6 +215,8 @@ def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) 
     rendered `OSPREY_HIGHEST_MARKING`) is refused before its seed starts, so a pack written in
     several transactions is never partly written. Its declared highest, or the scheme's highest
     where it declares none. The engine and the stamping graph refuse each write too."""
+    from services.ingest.ceiling import CeilingUnknown, DeploymentCeiling
+
     from ontology.handling import load_uk_le_scheme
 
     scheme = load_uk_le_scheme()
@@ -224,22 +226,20 @@ def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) 
         for line in env.read_text(encoding="utf-8").splitlines():
             if line.startswith("OSPREY_HIGHEST_MARKING="):
                 rendered = line.partition("=")[2].strip()
-    ceiling = rendered or scheme.classification[-1]
-    if ceiling not in scheme.classification:
-        raise SeedRefused(
-            f"the deployment's highest marking, {ceiling!r}, is not a classification of the "
-            f"{scheme.name} handling scheme, so no pack is loaded"
-        )
+    try:
+        ceiling = DeploymentCeiling.of(rendered, scheme)
+    except CeilingUnknown as error:
+        raise SeedRefused(f"{error}, so no pack is loaded") from error
     held = spec.highest_marking or scheme.classification[-1]
-    if scheme.classification.index(held) > scheme.classification.index(ceiling):
+    if ceiling.above(held):
         holds = (
             f"holds data marked up to {held}"
             if spec.highest_marking is not None
             else f"declares no highest marking, so it is judged as the scheme's highest, {held}"
         )
         raise SeedRefused(
-            f"the {name} demo pack {holds}, above this deployment's highest marking, {ceiling}, "
-            "so nothing was loaded"
+            f"the {name} demo pack {holds}, above this deployment's highest marking, "
+            f"{ceiling.marking}, so nothing was loaded"
         )
 
 

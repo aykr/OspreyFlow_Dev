@@ -117,16 +117,16 @@ class DeploymentCeiling:
 
 def refuse_fixed_markings_above_the_ceiling(recipe: Recipe, ceiling: DeploymentCeiling) -> None:
     """What can be judged without a row: a marking no column sets (the recipe's defaults where an
-    element binds nothing, or an element's own literal marking). Asked before a staged pipeline
-    writes its step tables, and again by `run_recipe`."""
+    element binds nothing, or an element's own literal marking), and the floor a bound element
+    falls back to on an empty cell, which no cell can lower. Asked before a staged pipeline writes
+    its step tables, and again by `run_recipe`."""
     if ceiling.is_the_scheme_s_highest:
         return
     defaults = recipe.defaults.handling
     elements = template_elements(recipe.row_template)
     fixed: list[str] = []
     for element in elements:
-        if "classification" in handling_bindings(element.handling):
-            continue
+        # A bound element's literal holds no classification, so its floor is the defaults'.
         literal = literal_handling(element.handling) or {}
         fixed.append(str(literal.get("classification") or defaults.get("classification") or ""))
     if not elements:
@@ -193,10 +193,11 @@ def refuse_rows_above_the_ceiling(
         if element.when is not None:
             columns.add(element.when.field)
     ordered = sorted(columns)
-    seen: set[tuple[str | None, ...]] = set()
+    seen: set[tuple[tuple[bool, str | None], ...]] = set()
     unreadable = False
     for row in rows:
-        key = tuple(row.get(c) for c in ordered)
+        # A column the row lacks is not the same as one it has empty (the first is unreadable).
+        key = tuple((c in row, row.get(c)) for c in ordered)
         if key in seen:
             continue
         seen.add(key)
