@@ -565,8 +565,27 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
     assert "OSPREY_LANE" not in export
     # The lane's own Playwright ports on the server too, where lanes' copies run side by side (T2).
     assert "OSPREY_PORTS_LANE=case" in export, export
+    assert "OSPREY_PORTS_SLOT=2" in export, export  # case's row in scripts/lane_ports.tsv
     assert "mkdir -p osprey-runs/case.meta/lease" in text and "/info" not in text  # an empty lease directory
     assert "stdin make -k test SKIP_JS=1 " in text
+
+
+@pytest.mark.parametrize("lane", ["admin-ddl", "admin-b"])
+def test_a_lane_with_no_row_of_its_own_gets_no_slot_but_a_refusal(lease, tmp_path: Path, lane: str) -> None:
+    """A sub-lane or a sister lane never takes its parent's Playwright ports by its name's prefix: two
+    `who`s run on the server side by side (`admin` and `admin-ddl` did on 10 November). It is exported as
+    unlisted, which `apps/lanePorts.ts` refuses in words, and nothing but a Playwright run reads it."""
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    log.write_text("")
+    off = subprocess.run(["bash", str(SCRIPT), "offline", lane, "--", "make", "test"],
+                         cwd=wt / "OspreyFlow_Build", env=env, capture_output=True, text=True)
+    assert off.returncode == 0, off.stderr
+    export = next(l for l in log.read_text().splitlines() if l.startswith("stdin export "))
+    assert f"OSPREY_PORTS_SLOT=unlisted-{lane}" in export, export
+    assert "OSPREY_PORTS_SLOT=1" not in export, export  # admin's
 
 
 def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path: Path) -> None:
@@ -649,6 +668,7 @@ def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its
     export = next(l for l in text.splitlines() if l.startswith("stdin export "))
     assert "PYTEST_ADDOPTS=--durations=30" in export, export
     assert "OSPREY_PORTS_LANE=case" in export, export
+    assert "OSPREY_PORTS_SLOT=2" in export, export
     start = _started(text)
     assert "Wall time:" in start and "stack b, the lease case took at 20" in start, start
     assert "/wall" in start and "set-up before it" in start, start  # the seconds kept beside the log, for a table
