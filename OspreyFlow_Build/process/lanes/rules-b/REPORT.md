@@ -25,7 +25,10 @@
    - Mine and the orchestrator's of 9dab1ef: 10 must-fixes, all fixed in 7ce19d0.
    - merger-c2's of bd9b4ef: 2 must-fixes, fixed in 46e53d3.
    - merger-c2's of e94b18c: 3 more silent passes, fixed in 9e8d51a. Its always-closed suggestion was tried and departed from, as decision 3 records.
-6. **Gates:** GATES.
+6. **Gates at c66b1e0** (rebased onto main ba14a00; tree f6cc21b):
+   - `gates/c66b1e0.ci.txt`: `make -k ci` green, exit 0.
+   - `gates/c66b1e0.test.txt`: pytest 10680 passed, 3 failed, 13 skipped; vitest 3030 passed, 1 failed. Each failure is an environment one, explained there.
+   - `gates/c66b1e0.browser.txt`: workspace 967 passed and harness 34 passed, no failures.
 7. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-gate.md`. **Still running:** nothing.
 
 ## Decisions taken (each the recommended option; the owner may overrule)
