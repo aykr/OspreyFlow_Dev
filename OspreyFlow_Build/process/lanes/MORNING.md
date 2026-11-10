@@ -85,6 +85,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    stamp its places (a new field); (c) leave it. **Chosen: (a), the strict reading**, as ADR-147 Amendment 3 (reserved,
    platform-b, after P6; it touches shared and case files, so it goes as one reviewed step). Cost: an analyst's own
    data loses those six identifiers in reads. **To overrule:** say "(b)" or "(c)".
+12. **BPMN and DMN: stored, or produced on demand? (rules-b's L2.11a.)** ADR-146 says each rule "is saved as" BPMN
+   2.0 and DMN; the codec as built produces them on demand from the rule's sentence. Options: (a) the editor's save
+   writes both files beside the rule at every version, and Export returns the stored files; (b) an amendment saying a
+   lossless serialisation meets the decision. **Chosen: (a)**, the decision as accepted (no ADR is amended away);
+   rules builds the save in L2.11, rules-b records the shapes as ADR-146 Amendment 5. **To overrule:** say "(b)".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
