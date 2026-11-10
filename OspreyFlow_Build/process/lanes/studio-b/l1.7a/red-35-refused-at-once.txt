@@ -1,4 +1,4 @@
-# head 9d7e46f; plant: a contended publish refused without waiting: the deadline already past
+# head 2abd24b; plant: a contended publish refused without waiting: the deadline already past
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_publish_waits_for_a_lock_held_briefly_then_commits, test_publishes_queued_behind_a_held_lock_share_one_wait; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: refused after 0.00 s, without waiting
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits - services.api.studio_publish.GitCommitError: another publish has held the recipe repository for over 5 s; publish again
-2 failed, 37 passed in 6.35s
+2 failed, 37 passed in 6.33s

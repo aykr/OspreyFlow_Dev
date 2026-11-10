@@ -1,4 +1,4 @@
-# head 9d7e46f; plant: the id's pattern not asked, dulwich's path check kept: the ids that check alone lets through (`a/b`, `..` as `recipes/...yaml`, `.hidden`, ``); the `..`, `.git` and `../..` elements it refuses itself stay refused
+# head 2abd24b; plant: the id's pattern not asked, dulwich's path check kept: the ids that check alone lets through (`a/b`, `..` as `recipes/...yaml`, `.hidden`, ``); the `..`, `.git` and `../..` elements it refuses itself stay refused
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_recipe_id_that_is_not_one_file_name_is_refused[a/b], test_a_recipe_id_that_is_not_one_file_name_is_refused[..], test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden], test_a_recipe_id_that_is_not_one_file_name_is_refused[]; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[..] - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden] - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[] - Failed: DID NOT RAISE GitCommitError
-4 failed, 35 passed in 8.07s
+4 failed, 35 passed in 8.12s

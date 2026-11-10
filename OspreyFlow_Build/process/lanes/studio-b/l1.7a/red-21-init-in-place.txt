@@ -1,4 +1,4 @@
-# head 9d7e46f; plant: first use initialises the repository in place, as before the round-2 fix: a rival's repository and this one's collide
+# head 2abd24b; plant: first use initialises the repository in place, as before the round-2 fix: a rival's repository and this one's collide
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_rival_making_the_repository_first_is_joined_not_refused; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused - AssertionError: assert ['ingest: publish alpha v1'] == ['ingest: pub...v1', 'theirs']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says - AssertionError: the publish read the user's or the system's git config
-2 failed, 37 passed in 8.33s
+2 failed, 37 passed in 8.24s

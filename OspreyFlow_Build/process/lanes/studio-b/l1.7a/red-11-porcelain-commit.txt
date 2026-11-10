@@ -1,4 +1,4 @@
-# head 9d7e46f; plant: the commit made by dulwich's worktree commit, which reads the config and runs the hooks in .git/hooks (the independent review, item 2)
+# head 2abd24b; plant: the commit made by dulwich's worktree commit, which reads the config and runs the hooks in .git/hooks (the independent review, item 2)
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_publish_never_execs_a_binary; for the reason "'.git/hooks/pre-commit'"; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert ['index', 'in...wap', 'write'] == ['commit', 'i...wap', 'write']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says - AssertionError: the publish read the user's or the system's git config
-6 failed, 33 passed in 8.80s
+6 failed, 33 passed in 8.87s

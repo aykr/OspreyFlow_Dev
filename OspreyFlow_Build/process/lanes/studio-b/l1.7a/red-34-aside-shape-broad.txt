@@ -1,4 +1,4 @@
-# head 9d7e46f; plant: every `.git-init-*` swept, not only mkdtemp's shape
+# head 2abd24b; plant: every `.git-init-*` swept, not only mkdtemp's shape
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_an_aside_directory_a_crashed_first_use_left_is_swept; for the reason 'not of the aside shape'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -40,4 +40,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_pu
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept - AssertionError: a directory not of the aside shape was swept
-1 failed, 38 passed in 8.59s
+1 failed, 38 passed in 8.56s

@@ -1,4 +1,4 @@
-# head 9d7e46f; plant: the aside sweep at first use only, not under the lock
+# head 2abd24b; plant: the aside sweep at first use only, not under the lock
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_an_aside_directory_left_after_the_repository_exists_is_swept; for the reason 'is still there'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
