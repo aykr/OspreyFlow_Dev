@@ -1086,8 +1086,9 @@ CLOSING_REASONS: dict[str, str] = {
 #: of these and is never queued.
 AlertSeverity = Literal["low", "medium", "high"]
 #: ADR-146 decision 1 adds `analyst`: raised by hand (*Raise an alert…*, R4), `rule_id`
-#: `analyst:case:<id>` or `analyst:dataset:<id>`. (`drawn_watch` is L3.3's, ADR-143 Amendment 2.)
-AlertKind = Literal["typology", "hotlist", "monitor", "analyst"]
+#: `analyst:case:<id>` or `analyst:dataset:<id>`. `drawn_watch` (L3.6, ADR-143 Amendment 2
+#: decision 8): a watch set by drawing, `rule_id` `drawn_watch:<watch id>`, its owner's in its case.
+AlertKind = Literal["typology", "hotlist", "monitor", "analyst", "drawn_watch"]
 #: ADR-133 ruling 3: whom a hotlist's alerts reach — its owner alone, or its owner's team too.
 HotlistAudience = Literal["only_me", "team"]
 #: Who may see a queued alert, in words the Glass shows: the case's members (a typology alert), the

@@ -2,7 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type AlertId = string;
 export type InvestigationScope = string | null;
-export type Kind = "typology" | "hotlist" | "monitor" | "analyst";
+export type Kind = "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";
 export type Rule = string;
 export type Typology = string | null;
 export type Severity = "high" | "medium" | "low";
