@@ -1,0 +1,13 @@
+Unplanted: 17 passed in 4.05s
+| refuse_if_withheld never asked after the transfers | `services/api/app.py` | test_disable_is_refused_while_an_item_is_withheld_and_the_visible_transfers_stand | 1 failed in 4.00s |
+| withheld asked before the transfers (a refused transfer answered withheld_items) | `services/api/app.py` | test_withheld_is_asked_only_once_the_transfers_are_accepted | 1 failed in 3.96s |
+| a view's recipient need not hold investigate | `services/api/admin_people.py` | test_each_l38_item_needs_the_right_its_own_route_asks | 1 failed, 3 passed in 4.09s |
+| a board's recipient need not hold draw_on_boards | `services/api/admin_people.py` | test_each_l38_item_needs_the_right_its_own_route_asks | 1 failed, 3 passed in 3.99s |
+| a proposal's recipient need not hold propose_types | `services/api/admin_people.py` | test_each_l38_item_needs_the_right_its_own_route_asks | 1 failed, 3 passed in 4.32s |
+| L3.8's items given to a person of another unit | `services/api/admin_people.py` | test_an_l38_item_never_goes_to_a_person_of_another_unit | 4 failed in 3.83s |
+| Admin's dry run of another unit's dataset answered | `services/api/app.py` | test_a_dry_run_is_for_an_administrator_of_the_datasets_own_unit | 4 failed in 3.83s |
+| a cover ended before withheld is asked (so ended for a refused disable) | `services/api/app.py` | test_disable_is_refused_while_an_item_is_withheld_and_the_visible_transfers_stand | 1 failed in 3.78s |
+| a cover ended before the identity provider answers (so ended on the 502) | `services/api/app.py` | test_a_disable_the_identity_provider_refuses_after_the_transfers_says_they_stand | 1 failed in 3.93s |
+| System's unread count answered as nothing to draw | `services/api/app.py` | test_the_system_screen_counts_the_cases_made_views_in_the_administrators_unit | 1 failed in 3.90s |
+| a case's highest read as its lowest | `services/api/admin_people.py` | test_a_cases_highest_is_the_highest_it_reads_or_the_schemes_for_none_or_unknown | 1 failed in 3.98s |
+| System's count asked for another unit than the administrator's | `services/api/app.py` | test_the_system_screen_counts_the_cases_made_views_in_the_administrators_unit | 1 failed in 3.99s |

@@ -134,6 +134,7 @@ from schemas.admin import (
     BuiltInRole,
     ChangeScheduleInput,
     ComponentHealth,
+    ConvertedViews,
     CustomRole,
     CustomRoleInput,
     CustomRoleVersion,
@@ -15115,13 +15116,18 @@ async def disable_plan_route(
     principal: PrincipalDep,
     admin_people: AdminPeopleDep,
     identity_admin: IdentityAdminDep,
+    scheme: HandlingSchemeDep,
     audit: AuditDep,
 ) -> DisablePlan:
-    """*Disable…*: everything the person owns today, each needing *Transfer to…*, and the kinds not
-    yet listed (L2.5b's seam, `admin_people.L38_OWNED_KINDS`)."""
+    """*Disable…*: everything the person owns today that the administrator may see, each needing
+    *Transfer to…*, L3.8's views, boards, proposed types and drawn watches among them (L2.5b), and
+    the kinds not yet listed (`admin_people.L38_OWNED_KINDS`)."""
     try:
         plan = await admin_people.plan(
-            user_id, admin_unit=principal.org_unit, people=await identity_admin.list_people()
+            user_id,
+            admin=principal,
+            scheme=scheme,
+            people=await identity_admin.list_people(),
         )
     except DisableRefused as refused:
         raise HTTPException(
@@ -15150,7 +15156,8 @@ async def person_ownership_route(
     """*Disable…*'s second list (ADR-145 decision 6 and A4; L3.8): the views, boards, link-type
     proposals and drawn-item watches the person owns, read in the administrator's own unit and
     within their own clearance (`person_ownership.py`, rule 3), by kind and case name only (rule 7);
-    the kinds not built yet in `not_yet_listed`. Admin's L2.5b reads it with the plan."""
+    the kinds not built yet in `not_yet_listed`. People's *Disable…* reads its `withheld`; the plan
+    lists the same items by L3.8's own SQL (L2.5b)."""
     owned = await ownership.owned_by(user_id, admin=principal, scheme=scheme)
     await audit.record(
         principal=principal,
@@ -15275,6 +15282,7 @@ async def disable_person_route(
     identity_admin: IdentityAdminDep,
     custom_roles: CustomRolesDep,
     admin_people: AdminPeopleDep,
+    scheme: HandlingSchemeDep,
     audit: AuditDep,
     body: DisableInput | None = None,
 ) -> PersonAccount:
@@ -15315,6 +15323,7 @@ async def disable_person_route(
                 by=principal,
                 audit=audit,
                 admin_unit=principal.org_unit,
+                scheme=scheme,
             )
         except DisableRefused as refused:
             raise HTTPException(
@@ -15337,6 +15346,19 @@ async def disable_person_route(
                 },
             )
         try:
+            # ADR-145 Amendment 8 decision 3: asked once the visible transfers have committed,
+            # which stand; refused while the person owns anything this administrator may not see.
+            await admin_people.refuse_if_withheld(user_id, admin=principal, scheme=scheme)
+        except DisableRefused as refused:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": refused.error,
+                    "message": f"{len(moved)} transferred, and those stand; not disabled yet: "
+                    + refused.words,
+                },
+            ) from None
+        try:
             person = await identity_admin.set_enabled(user_id, False)
         except IdentityAdminRefused as error:
             # Amendment 5 point 8: the transfers are committed and stand; the account is still
@@ -15352,6 +15374,9 @@ async def disable_person_route(
                 "message": f"every item was transferred ({len(moved)}), and those stand, but "
                 f"the identity provider did not disable the account: {error}. Disable them again; "
                 "there is nothing left to transfer."}) from None  # fmt: skip
+    # Only now, the account disabled with nothing left elsewhere or withheld, do the person's covers
+    # end; on the 502 above they stay, with the account still enabled.
+    await admin_people.end_covers(user_id, by=principal, audit=audit)
     await audit.record(
         principal=principal,
         action="disable_person",
@@ -16051,6 +16076,7 @@ CREDENTIAL_NOTICES = {
 
 @app.get("/v1/admin/system", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def system_status_route(
+    request: Request,
     principal: PrincipalDep,
     graph: GraphDep,
     investigations: InvestigationsDep,
@@ -16096,7 +16122,19 @@ async def system_status_route(
     # ADR-114 decision 11, ADR-135: each role's model and where it runs, each engine and whether
     # its key is present, from names only — never a key.
     statuses, engines, notice = model_status(model_routes)
+    # ADR-144 decision 6: the migration's count, in the administrator's own unit; none when the
+    # store is not reachable (the System screen still answers for every component).
+    people_store = getattr(request.app.state, "admin_people", None)
+    try:
+        if people_store is None:
+            raise RuntimeError("the people store is not connected")
+        converted = await people_store.converted_views(principal.org_unit)
+    except Exception as e:  # noqa: BLE001 - the count's failure is said, in words
+        converted = ConvertedViews(
+            problem=f"Not known: the count could not be read ({type(e).__name__})"
+        )
     return SystemStatus(
+        converted_views=converted,
         # ADR-114 Amendment 8: the version the deployment was rendered with, and the last check.
         version=deployment_version(),
         components=components,
@@ -18055,8 +18093,10 @@ async def layer_action_dry_run_route(
     """A removed case's *Merge into the dataset* or *Delete*, run dry (ADR-143 Amendment 2
     decision 1): what it would touch, in counts, and nothing written but the audit entry. Refused
     for a case that is open, not linked to this dataset directly, or (to merge) when the dataset is
-    a composite or the person is not one of its Authors; deleting is also an administrator's. The
-    actions themselves are the promotion's (L3.4).
+    a composite or the person is not one of its Authors; deleting is also an administrator's.
+    Another unit's administrator is answered as for no dataset, before anything is read (the
+    owner's ruling (a) of 9 November 2026). The merge and the delete themselves are done by the
+    dataset's Authors in the Studio's *4 Runs* (L3.4), and Admin's own Delete is its route below.
 
     `action` is read as text and checked here, after the route's right: typed as `LayerAction`,
     FastAPI refused an unknown one (422) before `require_right` ran, so a caller without the right
@@ -18065,6 +18105,11 @@ async def layer_action_dry_run_route(
         raise HTTPException(status_code=404, detail={"error": "no_such_action"})
     action = cast(LayerAction, action)
     dataset = await _admin_dataset_of(datasets, dataset_id)
+    # The owner's ruling (a) of 9 November 2026 (ADR-143 Amendment 5), as Admin's Delete: another
+    # unit's administrator, or one with none, is answered as for no dataset before anything is
+    # read.
+    if principal.org_unit is None or dataset.owning_unit != principal.org_unit:
+        raise UnknownDatasetEgressError(dataset_id)
     row = next(
         (c for c in await _linked_cases(dataset, datasets, investigations, graph, principal,
                                         only=investigation_id)

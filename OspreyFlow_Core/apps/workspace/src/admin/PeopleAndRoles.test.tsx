@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace } from "./AdminPlace";
 import { groupsFor, RIGHT_GROUPS } from "./sections/Roles";
-import { levelWords } from "./sections/People";
+import { clearsMarking, levelWords } from "./sections/People";
 
 afterEach(() => {
   cleanup();
@@ -130,6 +130,97 @@ describe("Admin › People's Disable… (A4)", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Transfer and disable ana" }));
     expect(await screen.findByText("Disabled")).toBeTruthy();
     expect((sent.find((s) => s.path === "POST people/u1/disable")?.body as { transfers: unknown[] }).transfers).toHaveLength(2);
+  });
+});
+
+describe("Admin › People's Disable… with L3.8's items (L2.5b, ADR-145 Amendment 8)", () => {
+  const PLAN = { person: "u1", not_yet_listed: ["promotions waiting for review", "reviews waiting on them"],
+                 items: [{ kind: "view", id: "v1", investigation_id: "c1", label: "A private view of the case Kestrel" },
+                         { kind: "drawn_watch", id: "w1", investigation_id: "c1",
+                           label: "A watch on an item they drew in the case Kestrel" }] };  // prettier-ignore
+  const OWNED = (withheld: boolean) => ({ person: "u1", items: [], counts: {}, withheld, not_yet_listed: [] });
+  const WORDS = "2 transferred, and those stand; not disabled yet: they still own items you may not see: an administrator who may see them, or an Author of their case, transfers them, and then you can disable them";
+
+  it("offers a transfer for each of L3.8's items (a view and a watch here), and sends each by its kind", async () => {
+    const sent = serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, PLAN);
+      if (path === "people/u1/ownership") return json(200, OWNED(false));
+      if (path === "people/u1/disable") return json(200, { ...ANA, enabled: false });
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Disable ana" }));
+    const panel = await screen.findByRole("group", { name: "Disable ana" });
+    for (const item of PLAN.items)
+      fireEvent.change(await within(panel).findByRole("combobox", { name: `Transfer to, for ${item.label}` }), { target: { value: "u2" } });
+    expect(within(panel).queryByRole("note", { name: "Items of ana you may not see" })).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "Transfer and disable ana" }));
+    expect(await screen.findByText("Disabled")).toBeTruthy();
+    expect(sent.some((s) => s.path === "GET people/u1/ownership")).toBe(true);
+    expect(sent.find((s) => s.path === "POST people/u1/disable")?.body).toEqual({
+      transfers: [{ kind: "view", id: "v1", to: "u2" }, { kind: "drawn_watch", id: "w1", to: "u2" }],
+    });
+  });
+
+  it("says, naming nothing, that items are withheld, and shows the Conduit's refusal after the transfers", async () => {
+    let posted = false;
+    serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, posted ? { ...PLAN, items: [] } : PLAN);
+      if (path === "people/u1/ownership") return json(200, OWNED(true));
+      if (path === "people/u1/disable") {
+        posted = true;
+        return json(409, { detail: { error: "withheld_items", message: WORDS } });
+      }
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Disable ana" }));
+    const panel = await screen.findByRole("group", { name: "Disable ana" });
+    const note = await within(panel).findByRole("note", { name: "Items of ana you may not see" });
+    expect(note.textContent).toContain("ana stays enabled until an administrator who may see those items");
+    for (const item of PLAN.items)
+      fireEvent.change(within(panel).getByRole("combobox", { name: `Transfer to, for ${item.label}` }), { target: { value: "u2" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Transfer and disable ana" }));
+    expect((await within(panel).findByRole("alert")).textContent).toContain("2 transferred, and those stand");
+    // The plan is read again (review finding 5): the transferred items are no longer offered.
+    await waitFor(() => expect(within(panel).queryByRole("combobox", { name: `Transfer to, for ${PLAN.items[0]?.label}` })).toBeNull());
+  });
+
+  it("says it could not check when the ownership read fails, never that nothing blocks", async () => {
+    serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, PLAN);
+      if (path === "people/u1/ownership") return json(500, {});
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Disable ana" }));
+    const panel = await screen.findByRole("group", { name: "Disable ana" });
+    const note = await within(panel).findByRole("note", { name: "Items of ana you may not see" });
+    expect(note.textContent).toContain("Could not check whether ana owns items you may not see.");
+  });
+});
+
+describe("Admin › People's Disable… offers only cleared recipients (ADR-145 Amendment 9)", () => {
+  it("leaves out of a view's Transfer to… anyone not cleared to its case's highest marking", async () => {
+    const plan = { person: "u1", not_yet_listed: [], items: [
+      { kind: "view", id: "v1", investigation_id: "c1", needs_clearance: "SECRET", label: "A private view of the case Kestrel" }] };  // prettier-ignore
+    const CAL = { ...ANA, id: "u3", username: "cal", name: "Cal Cleared", clearance: "SECRET" };
+    serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, plan);
+      if (path === "people") return json(200, [ANA, BEA, CAL]);
+      if (path === "/v1/handling-scheme") return json(200, { classification: ["OFFICIAL", "SECRET"], handling_codes: {} });
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Disable ana" }));
+    const panel = await screen.findByRole("group", { name: "Disable ana" });
+    const choice = await within(panel).findByRole("combobox", { name: "Transfer to, for A private view of the case Kestrel" });
+    await waitFor(() => expect(within(choice).queryByRole("option", { name: "Cal Cleared (cal)" })).toBeTruthy());
+    expect(within(choice).queryByRole("option", { name: "Bea Engineer (bea)" })).toBeNull();
+    expect(clearsMarking(["OFFICIAL", "SECRET"], "SECRET", "SECRET")).toBe(true);
+    expect(clearsMarking(["OFFICIAL", "SECRET"], "OFFICIAL", "SECRET")).toBe(false);
+    expect(clearsMarking(["OFFICIAL", "SECRET"], null, "OFFICIAL")).toBe(false);
+    expect(clearsMarking([], "SECRET", "SECRET")).toBe(false);
   });
 });
 

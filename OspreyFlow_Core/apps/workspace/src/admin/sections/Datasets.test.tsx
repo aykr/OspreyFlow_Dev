@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Datasets, sizeWords } from "./Datasets";
+import { Datasets, doneWhere, sizeWords } from "./Datasets";
 
 afterEach(() => {
   cleanup();
@@ -49,6 +49,14 @@ function serve(posts: string[], dataset: object = DATASET) {
   );
 }
 
+describe("where a removed case's merge or delete is done", () => {
+  it("names the Studio's 4 Runs for each action", () => {
+    expect(doneWhere("delete")).toBe(
+      "One of the dataset's Authors deletes it in the Ingest Studio, under 4 Runs, after their own dry run.",
+    );
+  });
+});
+
 describe("Datasets", () => {
   it("says a size in bytes, kB or MB", () => {
     expect([sizeWords(700), sizeWords(50_000), sizeWords(3 * 1024 * 1024)]).toEqual(["700 bytes", "48.8 kB", "3.0 MB"]);
@@ -68,7 +76,11 @@ describe("Datasets", () => {
     expect(screen.getByRole("note").textContent).toContain("Fewer than two people can approve");
     fireEvent.click(screen.getByRole("button", { name: "Merge Op Heron into the dataset (dry run)" }));
     await waitFor(() => expect(posts).toEqual(["datasets/ds-a/cases/gone-1/merge/dry-run"]));
-    expect((await screen.findByRole("status")).textContent).toContain("Nothing has been written.");
+    const said = (await screen.findByRole("status")).textContent ?? "";
+    expect(said).toContain("Nothing has been written.");
+    // Docs' review (L2.5b): promotion is built, so the words say where the merge itself is done.
+    expect(said).toContain("One of the dataset's Authors merges it in the Ingest Studio, under 4 Runs");
+    expect(said).not.toContain("arrive with promotion");
     expect(document.body.textContent).not.toMatch(/20\d\d/);
   });
 

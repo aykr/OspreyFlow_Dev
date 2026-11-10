@@ -53,7 +53,8 @@ if (serving === "datasets") {
     "/v1/admin/datasets/ds-a/cases/gone-1/merge/dry-run": { investigation_id: "gone-1", action: "merge", items: 5, links: 4,
       size_bytes: 50000, would: "Would merge 5 items and 4 links (48.8 kB) from Op Heron's layer into Prison records. Nothing has been written." },
     "/v1/admin/settings/dataset-owners": { owners_may_be: "people_and_teams" },
-    "/v1/admin/system": { components: [{ name: "Graph store", ok: true, millis: 12 }] },
+    "/v1/admin/system": { components: [{ name: "Graph store", ok: true, millis: 12 }],
+      converted_views: { views: 3, cases: 2 } },
   };  // prettier-ignore
   window.fetch = async (input: RequestInfo | URL) => {
     const path = new URL(String(input)).pathname;
@@ -90,11 +91,18 @@ if (serving === "people") {
       custom: [{ id: "r1", name: "Intel desk", version: 2, rights: ["investigate", "read_reports"], changed_by: "adm-1",
                  changed_at: "2026-11-08T09:00:00Z", holders: 2, team: TEAM }],
     },
-    "/v1/admin/people/u1/disable-plan": { person: "u1", not_yet_listed: ["private views", "boards", "proposed types"],
+    "/v1/admin/people/u1/disable-plan": { person: "u1",
+      not_yet_listed: ["promotions waiting for review", "reviews waiting on them"],
       items: [{ kind: "case_author", id: "c1", label: "Only Author of the case Op Kestrel" },
+              { kind: "view", id: "v1", investigation_id: "c1", label: "A private view of the case Op Kestrel" },
+              { kind: "drawn_watch", id: "w1", investigation_id: "c1",
+                label: "A watch on an item they drew in the case Op Kestrel" },
               { kind: "team_lead", id: "r1", label: "Lead of the team Intel" },
               { kind: "typology_rule", id: "t1", label: "The rule Structuring, whose runs act as them" }] },
     "/v1/handling-scheme": { classification: ["OFFICIAL", "SECRET"], handling_codes: { P: {} } },
+    // L2.5b: `show=withheld`, the person also owns items this administrator may not see.
+    "/v1/admin/people/u1/ownership": { person: "u1", items: [], counts: {}, withheld: show === "withheld",
+      not_yet_listed: [] },
     "/v1/admin/roles/r1/versions": [
       { version: 1, name: "Intel desk", rights: ["investigate"], changed_by: "adm-1", changed_at: "2026-11-07T09:00:00Z" },
       { version: 2, name: "Intel desk", rights: ["investigate", "read_reports"], changed_by: "adm-1", changed_at: "2026-11-08T09:00:00Z" },
@@ -194,7 +202,7 @@ if (serving === "datasets" && show) {
   if (show === "dry-run") await pressWhenDrawn("Merge Op Heron into the dataset (dry run)");
 }
 if (serving === "people" && show) {
-  if (show === "disable" || show === "refused") await pressWhenDrawn("Disable ana");
+  if (show === "disable" || show === "refused" || show === "withheld") await pressWhenDrawn("Disable ana");
   if (show === "versions") await pressWhenDrawn("Versions of Intel desk");
   if (show === "role-form") await pressWhenDrawn("Copy Analyst into a new role");
   if (show === "team") await pressWhenDrawn("Team for Intel desk");

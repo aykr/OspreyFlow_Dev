@@ -10,9 +10,15 @@ export type Kind =
   | "saved_pattern"
   | "typology_rule"
   | "pipeline_schedule"
-  | "list_schedule";
+  | "list_schedule"
+  | "view"
+  | "board"
+  | "link_type_proposal"
+  | "drawn_watch";
 export type Id = string;
 export type Label = string;
+export type InvestigationId = string | null;
+export type NeedsClearance = string | null;
 export type Items = OwnedItem[];
 export type NotYetListed = string[];
 
@@ -34,5 +40,7 @@ export interface OwnedItem {
   kind: Kind;
   id: Id;
   label: Label;
+  investigation_id?: InvestigationId;
+  needs_clearance?: NeedsClearance;
   [k: string]: unknown;
 }

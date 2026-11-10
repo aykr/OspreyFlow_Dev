@@ -27,6 +27,9 @@ export type UpdateAvailable = boolean;
 export type Notes = string | null;
 export type Url = string | null;
 export type Problem = string | null;
+export type Views = number;
+export type Cases = number;
+export type Problem1 = string | null;
 
 /**
  * The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
@@ -39,6 +42,7 @@ export interface SystemStatus {
   engines?: Engines;
   model_notice?: ModelNotice;
   update?: UpdateNotice | null;
+  converted_views?: ConvertedViews | null;
   [k: string]: unknown;
 }
 /**
@@ -90,5 +94,16 @@ export interface UpdateNotice {
   notes: Notes;
   url: Url;
   problem: Problem;
+  [k: string]: unknown;
+}
+/**
+ * ADR-144 decision 6 on *Admin › System*: how many cases made from another became views, in how
+ * many cases; the migration's dry-run report names any it did not place. Counted in the
+ * administrator's own unit only (rule 7).
+ */
+export interface ConvertedViews {
+  views?: Views;
+  cases?: Cases;
+  problem?: Problem1;
   [k: string]: unknown;
 }

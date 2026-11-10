@@ -418,9 +418,17 @@ function LinkedCases({ api, dataset, cases }: { api: AdminApi; dataset: AdminDat
       {problem && <p role="alert">{problem}</p>}
       {result && (
         <p role="status" style={{ margin: 0 }}>
-          {result.would} Merging and deleting themselves arrive with promotion.
+          {`${result.would} ${doneWhere(result.action)}`}
         </p>
       )}
     </div>
   );
+}
+
+/** Where the merge or delete itself is done (ADR-143 Amendment 2 decision 1, L3.4): by one of the
+ * dataset's Authors, in the Ingest Studio's *4 Runs*, after their own dry run. */
+export function doneWhere(action: LayerDryRun["action"]): string {
+  return action === "merge"
+    ? "One of the dataset's Authors merges it in the Ingest Studio, under 4 Runs, after their own dry run."
+    : "One of the dataset's Authors deletes it in the Ingest Studio, under 4 Runs, after their own dry run.";
 }

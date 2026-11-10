@@ -217,6 +217,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=manage_people&serve=people&open=Roles&show=team",
     "rights=manage_people&serve=people&open=Roles&show=versions",
     "rights=manage_people&serve=people&show=refused",
+    // L2.5b: Disable… with L3.8's items and the note that some are withheld.
+    "rights=manage_people&serve=people&show=withheld",
     // L2.6: Audit's stream (withheld and shown words, paging) and its rule audit asked without a
     // case; Operations' What ages with an overdue promotion waiting, above the schedules.
     "rights=read_audit,read_rule_audit&serve=audit",
