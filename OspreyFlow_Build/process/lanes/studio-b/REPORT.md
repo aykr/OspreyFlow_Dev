@@ -12,11 +12,5 @@
    - Live at 51600c6, standing (`l1.7a/LIVE_RECORD.md`): 74 passed, 7 failed (main's); seed 2 passed, 2 failed, neither the publish's.
 4. **Reviews:** five lane-review rounds and the orchestrator's two, every must-fix fixed; one minor accepted (no test asserts `_initialise`'s cause).
 5. **Commits:** `git log ec28c67..22ff1e3`, then records only. The register entry and git's removal are commits, not diffs.
-6. **Carries into the next step:**
-   - restore or read at HEAD after a refused publish;
-   - the aside sweep only when an aside holds just `.git`;
-   - Am 17's "under the lock" at first use;
-   - the seed recorded as "skipped";
-   - a wider window for the queued-wait test;
-   - the seed baseline on main.
+6. **Carries into the next step:** restore or read at HEAD after a refused publish; sweep an aside only when it holds just `.git`; Am 17's "under the lock" at first use; the seed recorded as "skipped"; a wider queued-wait window; the seed baseline on main.
 7. **Left:** part 2 (L1.8 tips) after L2.7, then L1.10, then L1.9. **Running:** nothing; no lease held.
