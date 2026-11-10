@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -62,7 +63,7 @@ def _env(out: Path) -> dict[str, str]:
     }  # fmt: skip
 
 
-def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], dict[str, dict]]:
+def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], dict[str, dict[str, Any]]]:
     (tmp_path / "test_planted.py").write_text(_PLANTED)
     out = tmp_path / "out"
     out.mkdir(exist_ok=True)
@@ -126,7 +127,8 @@ def test_each_serial_file_exists_and_is_grouped() -> None:
 
     class _Item:
         def __init__(self, path: Path) -> None:
-            self.path, self.marks = path, []
+            self.path = path
+            self.marks: list[pytest.MarkDecorator] = []
 
         def add_marker(self, mark: pytest.MarkDecorator) -> None:
             self.marks.append(mark)

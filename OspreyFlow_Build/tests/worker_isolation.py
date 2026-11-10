@@ -33,6 +33,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -86,7 +87,7 @@ def redirect_arcadedb(target: str) -> None:
     original = ArcadeDBConfig.__dict__["from_env"].__func__
 
     def from_env(cls: type[ArcadeDBConfig], database: str) -> ArcadeDBConfig:
-        return original(cls, target if database == SHARED else database)
+        return cast(ArcadeDBConfig, original(cls, target if database == SHARED else database))
 
     from_env.__wrapped__ = original  # type: ignore[attr-defined]
     ArcadeDBConfig.from_env = classmethod(from_env)  # type: ignore[method-assign,assignment]
@@ -160,7 +161,7 @@ def _valkey_flush(db: int) -> None:
     try:
         client.flushdb()
     finally:
-        client.close()
+        client.close()  # type: ignore[no-untyped-call]
 
 
 def _buckets(prefix_pattern: re.Pattern[str] | str) -> list[str]:
