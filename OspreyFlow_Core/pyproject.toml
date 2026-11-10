@@ -53,7 +53,7 @@ dependencies = [
     # (`09_INGEST_STUDIO.md` §6: the repository is the record). A library in-process (its wheels
     # carry optional compiled speed-ups, cp312 among them), so the Conduit never execs the `git`
     # binary, which is GPL-2.0-only and leaves the image (the owner's ruling of 9 November 2026,
-    # MORNING item 89; ADR-140 Amendment 16 point 6). Dual-licensed `Apache-2.0 OR
+    # MORNING item 89; ADR-140 Amendment 17). Dual-licensed `Apache-2.0 OR
     # GPL-2.0-or-later`; taken under Apache-2.0, which the licence gate admits as the OR's allowed
     # alternative.
     "dulwich>=1.2.21",

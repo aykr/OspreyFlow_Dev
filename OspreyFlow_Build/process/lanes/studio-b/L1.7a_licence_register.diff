@@ -6,7 +6,7 @@ index 1392332..7394e3b 100644
  `python-dateutil`, is already in the set) reads a scheduled recipe's cron expression; time zones
  come from the standard library's `zoneinfo`.
  
-+**The owner's ruling of 9 November 2026 (MORNING item 89; ADR-140 Amendment 16 point 6) addition:**
++**The owner's ruling of 9 November 2026 (MORNING item 89; ADR-140 Amendment 17) addition:**
 +`dulwich` 1.2.21, dual-licensed `Apache-2.0 OR GPL-2.0-or-later` and taken under Apache-2.0 (its one
 +dependency, `urllib3`, MIT), commits a published recipe to the repository on the recipe volume
 +(`09_INGEST_STUDIO.md` §6) as a library inside the Conduit's process. It is not pure Python: its wheels
