@@ -19,6 +19,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { undecidedContrastOffenders } from "./undecidedContrast";
+
 const KEYBOARD = new URL("../keyboard/", import.meta.url);
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -276,6 +278,19 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
 };
 
+// The undecided-contrast findings on main when the measure above was added (rules-b's T3, 10 November
+// 2026), each carried by its owner rather than excused: by the test's title, the node's selector and
+// what it measured. Fixed ones come off; a new one is never added here to make a run green.
+const CONTRAST_FINDINGS: Record<string, Record<string, string>> = Object.fromEntries(
+  // Platform's (P-steps, the map): the basemap's attribution chip in `MapView.tsx` sets
+  // `--text-secondary` on a raw `rgba(0,0,0,0.4)`, not a token pair: 2.85:1 on its own surfaces in
+  // the light theme, in every state of the map. CARRIES row to platform.
+  ["", ...EXTRA_STATES["map-view-harness.html"]].map((state) => [
+    `map-view-harness.html${state ? ` ${state}` : ""} (light)`,
+    { "main > div > div > div:nth-child(2)": "2.85:1, the attribution chip (platform)" },
+  ]),
+);
+
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();
 
 function appliesBrand(page: string): boolean {
@@ -345,6 +360,23 @@ for (const name of pages) {
         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
         const results = await builder.analyze();
         expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+        // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+        // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+        // gone fails too, so the list never outlives what it excuses.
+        const offenders = await undecidedContrastOffenders(page, results);
+        const known = CONTRAST_FINDINGS[title] ?? {};
+        const unlisted = offenders.filter(([selector]) => !(selector in known));
+        expect(
+          unlisted,
+          "colour contrast axe left undecided, measured too low or unmeasurable",
+        ).toEqual([]);
+        const gone = Object.keys(known).filter(
+          (selector) => !offenders.some(([s]) => s === selector),
+        );
+        expect(
+          gone,
+          "listed contrast findings no longer found: take them off CONTRAST_FINDINGS",
+        ).toEqual([]);
       });
     }
     // The words do not change with the theme or the brand, so one look per state.
