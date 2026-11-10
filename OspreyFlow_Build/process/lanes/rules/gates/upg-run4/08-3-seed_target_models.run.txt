@@ -1,0 +1,6 @@
+$ docker exec osprey-upg-api-1 python -m scripts.seed_target_models 
+Giving each dataset its first model.
+  Fixture Corp (fixture-corp): version 1, live, the POLE core alone
+  Operation Ledger (ledger): version 1, live, fibo
+2 given a first model, 0 already had one; 6 writes made.
+exit 0

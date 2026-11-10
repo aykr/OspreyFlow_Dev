@@ -1,0 +1,4 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_sources 
+0 to register, 0 already registered, 0 left for a person, 0 recipe(s) naming no dataset or no file
+0 watch(es) to move, 0 left for a person
+exit 0

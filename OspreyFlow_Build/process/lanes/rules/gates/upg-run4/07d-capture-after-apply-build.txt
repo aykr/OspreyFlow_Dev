@@ -1,0 +1,49 @@
+upg-run: --- containers (after-apply-build)
+osprey-upg-api-1 5e648287da6a 2026-11-10 20:39:57 +0000 UTC
+osprey-upg-arcadedb-1 035513a2f3b5 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-keycloak-1 5545e505ec2a 2026-11-10 20:39:57 +0000 UTC
+osprey-upg-keycloak-db-1 a84f917a1dba 2026-11-10 20:39:57 +0000 UTC
+osprey-upg-litellm-1 07f7fccf7144 2026-11-10 20:37:06 +0000 UTC
+osprey-upg-litellm-db-1 a146b0a75967 2026-11-10 20:39:57 +0000 UTC
+osprey-upg-ner-1 0581882fc018 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-objectstore-1 065e27837b5a 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-ollama-1 a7a3f77a9d1b 2026-11-10 20:31:24 +0000 UTC
+osprey-upg-ollama-models-1 317014c2309c 2026-11-10 20:31:24 +0000 UTC
+osprey-upg-opensearch-1 1ab78ce7d8f7 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-postgres-1 8e492e5a421e 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-proxy-1 5680f4846513 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-report-sync-1 f2c3f721df35 2026-11-10 20:39:57 +0000 UTC
+osprey-upg-superset-1 def1c7efdf38 2026-11-10 20:39:57 +0000 UTC
+osprey-upg-valkey-1 33b1f684d553 2026-11-10 20:39:56 +0000 UTC
+osprey-upg-whisper-1 56846016ea5e 2026-11-10 20:31:24 +0000 UTC
+osprey-upg-whisper-models-1 5146444f879c 2026-11-10 20:31:24 +0000 UTC
+osprey-upg-workspace-1 b418149862a0 2026-11-10 20:39:56 +0000 UTC
+upg-run: --- stores' mounts (after-apply-build)
+osprey-upg-postgres-1 osprey-upg_postgres-data:/var/lib/postgresql/data 
+osprey-upg-arcadedb-1 1fa42def0288d751459b581ccd9fe3d90daeb7b09397a42f52287c635fc9b341:/home/arcadedb/backups osprey-upg_arcadedb-config:/home/arcadedb/config osprey-upg_arcadedb-databases:/home/arcadedb/databases 70598f2ec025e9e44aaff697a9698cc687cecfba5d47b80385bd4fa9d82da26b:/home/arcadedb/log b194ecff293bea3021fe3ef87c3c303e7b2913d9b8eca784c661aee2b0d41451:/home/arcadedb/replication 
+
+osprey-upg-opensearch-1 osprey-upg_opensearch-data:/usr/share/opensearch/data 
+osprey-upg-valkey-1 osprey-upg_valkey-data:/data 
+upg-run: --- data (after-apply-build)
+investigations: 3
+investigation_datasets: 3
+datasets: 2
+alerts: 0
+typology_rules: 2
+typology_rule_versions: 2
+studio_recipes: 0
+recipe_runs: 0
+hotlists: 0
+monitors: 0
+saved_patterns: 1
+osprey-upg_arcadedb-config 48KiB
+osprey-upg_arcadedb-databases 180352KiB
+osprey-upg_map-settings 4KiB
+osprey-upg_model-settings 8KiB
+osprey-upg_objectstore-data 352KiB
+osprey-upg_ollama-models 6792064KiB
+osprey-upg_opensearch-data 852KiB
+osprey-upg_osprey-data 1300KiB
+osprey-upg_postgres-data 119476KiB
+osprey-upg_valkey-data 8KiB
+osprey-upg_whisper-models 150136KiB

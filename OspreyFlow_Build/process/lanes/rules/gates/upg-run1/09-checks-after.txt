@@ -1,0 +1,36 @@
+upg-check: signed in as osprey-demo-analyst through osprey-glass's form (PKCE)
+upg-check: GET /v1/me/rights -> 200: rights=[29]
+upg-check: GET /v1/me/needs-you -> 200: promotions_overdue=[0], proposals=[0]
+upg-check: GET /v1/investigations -> 200: list of 3
+upg-check: GET /v1/investigations/01M73BQVP206H9HK0E7A7S2PYD -> 200: id=01M73BQVP206H9HK0E7A7S2PYD, name=Fixture Corp (synthetic demo), created_at=2026-11-10T18:32:47.554528Z, created_by=fixture-corp-seed-worker, owning_unit=verify, domains=[0]
+upg-check: GET /v1/investigations/01M73BQVP206H9HK0E7A7S2PYD/views -> 200: list of 1
+upg-check: GET /v1/investigations/01M73BQVP206H9HK0E7A7S2PYD/boards -> 200: list of 0
+upg-check: GET /v1/investigations/01M73BS1AH14HAHKJG53CT42DF/alert-queue -> 200: list of 1
+upg-check: GET /v1/investigations/01M73BS1AH14HAHKJG53CT42DF/alert-queue/counts -> 200: open=1, claimed=0, closing=0
+upg-check: signed in as osprey-demo-engineer through osprey-glass's form (PKCE)
+upg-check: GET /v1/investigations/01M73BSY9PQFTW7B3VQY8Y75Q2/ingest/recipes -> 200: list of 1
+upg-check: GET /v1/investigations/01M73BSY9PQFTW7B3VQY8Y75Q2/ingest/recipes//runs -> 404: detail=Not Found
+upg-check: signed in as osprey-demo-admin through osprey-glass's form (PKCE)
+upg-check: GET /v1/me/rights -> 200: rights=[49]
+upg-check: GET /v1/admin/system -> 200: version=dev-11b13bc, components=[6], models=[4], engines=[1], model_notice=None, update=None, converted_views={...}, highest_marking=SECRET
+upg-check: GET /v1/investigations/01M73BS1AH14HAHKJG53CT42DF/alert-queue -> 200: list of 1
+upg-check: GET /v1/investigations/01M73BS1AH14HAHKJG53CT42DF/rules -> 200: list of 2
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+NameError: name 'author_rules' is not defined
+upg-check: admin: {'author_rules': False, 'deploy_rules': True, 'triage_alerts': True}
+upg-check: analyst: {'author_rules': False, 'deploy_rules': True, 'triage_alerts': True}
+upg-check: engineer: {'author_rules': False, 'deploy_rules': True, 'triage_alerts': False}
+Traceback (most recent call last):
+  File "/root/osprey-runs/rules-upg/tools/rights.py", line 15, in <module>
+    rid = recs[0]["id"]
+          ~~~~~~~^^^^^^
+KeyError: 'id'
+upg-check: signed in as osprey-demo-engineer through osprey-glass's form (PKCE)
+upg-check: GET /v1/investigations/01M73BSY9PQFTW7B3VQY8Y75Q2/ingest/recipes/pid-codefendants/runs -> 200: list of 1
+upg-check: GET /v1/investigations/01M73BSY9PQFTW7B3VQY8Y75Q2/ingest/recipes/pid-codefendants/pipeline -> 405: detail=Method Not Allowed
+upg-check: GET /v1/investigations/01M73BSY9PQFTW7B3VQY8Y75Q2/ingest/recipe-registry -> 200: list of 19
+upg-check: signed in as osprey-demo-admin through osprey-glass's form (PKCE)
+upg-check: POST /v1/admin/screening-lists/UK%20Sanctions%20List%20(synthetic)/refresh -> 200: id=01M73F9FCJ2NW6922KC9K320JN, list_name=UK Sanctions List (synthetic), at=2026-11-10T19:34:50.507567Z, outcome=unchanged, version=06/10/2026, previous_version=06/10/2026, added=0, changed=0, delisted=0, rescreened=0, alerts=0, words=Version 06/10/2026: no entry changed, so no one was re-scree
+upg-check: POST /v1/investigations/01M73F5X88FRE9E2QKEH6ZDM6D/rules/01M73F66JF1XJDHCY338RWVFM1/test -> 403: detail={"error": "right_required", "right": "author_rules"}
+upg-check: GET /v1/investigations/01M73BS1AH14HAHKJG53CT42DF/rules/01M73BS7RXWG920ZSAS8236BPF/runs -> 422: error=release_refused, detail=this rule runs as data loads, not on a schedule

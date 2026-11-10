@@ -1,0 +1,170 @@
+✔ Docker is installed.
+✔ Docker is running.
+✔ Docker Compose version 5 is available (version 2 or later is needed).
+✔ Docker has 67.3 GB of memory; OspreyFlow needs at least 16 GB (32 GB is comfortable).
+✔ 758 GB of disk is free here; OspreyFlow needs at least 60 GB plus the demo packs you choose.
+✔ Git is installed.
+✔ uv is installed.
+✔ Port 8090 is free.
+✔ Port 2500 is free.
+Wrote /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml.
+v0.4.12: the lock and every owned image are signed by the release workflow.
+apply: downloading the extraction model, qwen2.5:7b-instruct (4.7 GB), with the smaller models beside it; a large model takes minutes. OspreyFlow is not ready until it is in.
+apply: local-lite ready in 106s
+  render     [  0s]  7 artefact(s) → /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg
+  preflight  [  1s]  all checks pass or skip
+  build      [  0s]  skipped (--no-build): using the images already in the daemon
+  uploads    [  0s]  /root/osprey-runs/rules-upg/ingest/uploaded: the Conduit can already write it
+  up         [ 99s]  12 service(s) healthy
+  models     [  4s]  qwen2.5:7b-instruct downloaded and verified
+  grants     [  1s]  impersonation + view-users on the Conduit's service account
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  verify     [  1s]  3/3 assertions green
+
+  the Glass:   http://osprey-upg.localhost:8090/
+  the Conduit: http://osprey-upg.localhost:8090/healthz (through the workspace proxy)
+
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  the Admin console account is osprey-demo-admin, same file
+Sign-in registered on the running identity provider:
+  - sign-in rules: already set
+  - the Conduit's client credential already matches the deployment's settings
+  - the Conduit's account already holds its roles
+  - sign-in client osprey-glass: already registered
+  - sign-in client osprey-superset: registered
+  - retired sign-in client osprey-launcher: not present
+  - sign-in page: OspreyFlow look applied
+  - sign-in client osprey-harness: already registered
+  - account osprey-demo-admin: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-analyst: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-engineer: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-report-viewer: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-analyst: nothing to withdraw
+
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env. It is not printed here.
+   Container osprey-upg-api-1 Stopping
+   Container osprey-upg-api-1 Stopped
+   Container osprey-upg-api-run-6659e012b057 Creating
+   Container osprey-upg-api-run-6659e012b057 Created
+  Case 'Fixture Corp (synthetic demo)' is 01M73FG1Y9SQB1FKRQ37MP7P0V.
+  
+   -- WARNING --
+  You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+  Comparison: 'family_name':
+      m values not fully trained
+  Comparison: 'family_name':
+      u values not fully trained
+  Comparison: 'given_names':
+      m values not fully trained
+  Comparison: 'given_names':
+      u values not fully trained
+  Comparison: 'date_of_birth':
+      m values not fully trained
+  Comparison: 'date_of_birth':
+      u values not fully trained
+  The 'probability_two_random_records_match' setting has been set to the default value (0.0001).
+  If this is not the desired behaviour, either:
+   - assign a value for `probability_two_random_records_match` in your settings dictionary, or
+   - estimate with the `linker.estimate_probability_two_random_records_match` function.
+    check: no id stored more than once (whole shared graph)
+  Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+  Seeded 21 community-ring nodes and 63 edges across 3 rings.
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+   Container osprey-upg-valkey-1 Running
+   Container osprey-upg-keycloak-1 Running
+   Container osprey-upg-ollama-1 Running
+   Container osprey-upg-arcadedb-1 Running
+   Container osprey-upg-litellm-1 Running
+   Container osprey-upg-postgres-1 Running
+   Container osprey-upg-api-1 Recreate
+   Container osprey-upg-api-1 Recreated
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-keycloak-db-1 Starting
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-keycloak-db-1 Started
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Starting
+   Container osprey-upg-api-1 Started
+   Container osprey-upg-ollama-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-api-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-ollama-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Healthy
+seed: fixture-corp is loaded. Sign in and choose it from the case picker.
+   Container osprey-upg-api-1 Stopping
+   Container osprey-upg-api-1 Stopped
+   Container osprey-upg-api-run-e549a17eba29 Creating
+   Container osprey-upg-api-run-e549a17eba29 Created
+  Case 'Operation Ledger (synthetic demo)' is 01M73FH3VJJFZJ9YGAZNXSJDED.
+    check: no id stored more than once (whole shared graph)
+  Seeded Operation Ledger: 44 transactions (44 timeline events), the SAR (content:3ee22c652beafd3ffbaf4632aa9eff7a), and 10 map points under investigation_scope='01M73FH3VJJFZJ9YGAZNXSJDED'; the screening list 'Synthetic consolidated list (OspreyFlow demo)' (10 synthetic entries).
+  The monitoring week (ADR-108 Amendment 5): wrote incoming/ledger_transactions_week2.csv (13 rows) under /var/lib/osprey/ingest/uploaded/ledger; wrote the UK Sanctions List's version 1 at /var/lib/osprey/ingest/uploaded/ledger/lists/uk_sanctions_list.xml; wrote its version 2 at /var/lib/osprey/ingest/uploaded/ledger/incoming/uk_sanctions_list_v2.xml; subscribed 'UK Sanctions List (synthetic)' to uploaded/ledger/lists/uk_sanctions_list.xml (not yet refreshed: refresh it in Monitoring → Lists); deployed 'Screen customers against the lists' from the KYC screening template, as the case's Author.
+   Container osprey-upg-ollama-1 Running
+   Container osprey-upg-keycloak-1 Running
+   Container osprey-upg-litellm-1 Running
+   Container osprey-upg-arcadedb-1 Running
+   Container osprey-upg-valkey-1 Running
+   Container osprey-upg-postgres-1 Running
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-keycloak-db-1 Starting
+   Container osprey-upg-keycloak-db-1 Started
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Starting
+   Container osprey-upg-api-1 Started
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-api-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-ollama-1 Waiting
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-ollama-1 Healthy
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Healthy
+seed: ledger is loaded. Sign in and choose it from the case picker.
+
+OspreyFlow is installed. Open it at http://osprey-upg.localhost:8090
+Sign in with the accounts in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env
+Look after it with: ospreyflow status --name osprey-upg, ospreyflow open --name osprey-upg

@@ -1,0 +1,28 @@
+# Copied from the rules session's terminal (10 November 2026, ~19:50 UTC): the server's own copy was in
+# /root/osprey-runs/rules-upg/run1-logs, removed with the folder before it was fetched. Command as run:
+#   . upg_guard.sh; dc down -v --remove-orphans; rm_volumes <osprey-upg* left>; upg_images.py restore; check
+$ dc down -v --remove-orphans
+ Network osprey-upg_osprey Removed 
+ Volume osprey-upg_postgres-data Removed 
+ Volume osprey-upg_model-settings Removed 
+ Volume osprey-upg_ollama-models Removed 
+volumes left: 
+Untagged: osprey/workspace:local
+Deleted: sha256:ad455d3628c38d19a1aa37a4fd28b58d3b9af24737ad5409b2cceccc6c56e633
+Untagged: osprey/api:local
+Deleted: sha256:ff3915757c21110af3029b44378b5aae5cf927727a1c2dd33d35e860ddfa9439
+Untagged: osprey/ner:local
+Deleted: sha256:b30c5dc229289ade48d9efa7f732c7cb0705a31af0c90d33172313bb217a3332
+Untagged: osprey-p5b-hold/osprey-superset-local:upg-rehearsal
+upg-images: image osprey/workspace:local: the run's own, removed
+upg-images: image osprey/api:local: the run's own, removed
+upg-images: image osprey/ner:local: the run's own, removed
+upg-images: image osprey/superset:local: put back to sha256:effe141c6495c997daf4991beb87b8d676d5fcd282efb01026fa69e42d30e89c
+upg-images: another's tags changed meanwhile: ['osprey-test-workspace:proxy', 'ospreyflow/api:ci', 'ospreyflow/harness:ci', 'ospreyflow/ingest:ci', 'ospreyflow/ner:ci', 'ospreyflow/report-sync:ci', 'ospreyflow/superset:ci', 'ospreyflow/worker:ci', 'ospreyflow/workspace:ci']
+upg-images: the run's tags not put back or left: nothing
+check rc=0
+0
+0
+# NOTE (added after the lane-reviewer): the two 0s count osprey-upg-named containers and volumes only.
+# The four anonymous volumes of run 1's first ArcadeDB container (created 18:30:29, orphaned when
+# harness.apply --build recreated it) were left: see upg-run4/leaked-volumes.txt.

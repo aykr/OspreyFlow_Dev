@@ -1,0 +1,269 @@
+✔ Docker is installed.
+✔ Docker is running.
+✔ Docker Compose version 5 is available (version 2 or later is needed).
+✔ Docker has 67.3 GB of memory; OspreyFlow needs at least 16 GB (32 GB is comfortable).
+✔ 765 GB of disk is free here; OspreyFlow needs at least 60 GB plus the demo packs you choose.
+✔ Git is installed.
+✔ uv is installed.
+✔ Port 8090 is free.
+✔ Port 2500 is free.
+Wrote /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml.
+Post-ingest resolution is off (components.post_ingest_resolution: false), because prison-intelligence needs it off: its live loads must not add automatic "same as" links. An analyst's own Resolve now still works (section 11 of the administration guide).
+v0.4.12: the lock and every owned image are signed by the release workflow.
+apply: downloading the extraction model, qwen2.5:7b-instruct (4.7 GB), with the smaller models beside it; a large model takes minutes. OspreyFlow is not ready until it is in.
+apply: local-lite ready in 135s
+  render     [  0s]  7 artefact(s) → /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg
+  preflight  [  1s]  all checks pass or skip
+  build      [  0s]  skipped (--no-build): using the images already in the daemon
+  uploads    [  1s]  /root/osprey-runs/rules-upg/ingest/uploaded: given to the Conduit (uid 10001)
+  up         [130s]  12 service(s) healthy
+  models     [  0s]  qwen2.5:7b-instruct downloaded and verified
+  grants     [  1s]  impersonation + view-users on the Conduit's service account
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  verify     [  1s]  3/3 assertions green
+
+  the Glass:   http://osprey-upg.localhost:8090/
+  the Conduit: http://osprey-upg.localhost:8090/healthz (through the workspace proxy)
+
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  the Admin console account is osprey-demo-admin, same file
+Sign-in registered on the running identity provider:
+  - sign-in rules: already set
+  - the Conduit's client credential already matches the deployment's settings
+  - the Conduit's account already holds its roles
+  - sign-in client osprey-glass: already registered
+  - sign-in client osprey-superset: registered
+  - retired sign-in client osprey-launcher: not present
+  - sign-in page: OspreyFlow look applied
+  - sign-in client osprey-harness: already registered
+  - account osprey-demo-admin: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-analyst: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-engineer: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-report-viewer: already there
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  - account osprey-demo-analyst: nothing to withdraw
+
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env. It is not printed here.
+   Container osprey-upg-api-1 Stopping
+   Container osprey-upg-api-1 Stopped
+   Container osprey-upg-api-run-0ef3a79d1aed Creating
+   Container osprey-upg-api-run-0ef3a79d1aed Created
+  Case 'Fixture Corp (synthetic demo)' is 01M73BQVP206H9HK0E7A7S2PYD.
+  
+   -- WARNING --
+  You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+  Comparison: 'family_name':
+      m values not fully trained
+  Comparison: 'family_name':
+      u values not fully trained
+  Comparison: 'given_names':
+      m values not fully trained
+  Comparison: 'given_names':
+      u values not fully trained
+  Comparison: 'date_of_birth':
+      m values not fully trained
+  Comparison: 'date_of_birth':
+      u values not fully trained
+  The 'probability_two_random_records_match' setting has been set to the default value (0.0001).
+  If this is not the desired behaviour, either:
+   - assign a value for `probability_two_random_records_match` in your settings dictionary, or
+   - estimate with the `linker.estimate_probability_two_random_records_match` function.
+    check: no id stored more than once (whole shared graph)
+  Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+  Seeded 21 community-ring nodes and 63 edges across 3 rings.
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+   Container osprey-upg-valkey-1 Running
+   Container osprey-upg-arcadedb-1 Running
+   Container osprey-upg-ollama-1 Running
+   Container osprey-upg-litellm-1 Running
+   Container osprey-upg-postgres-1 Running
+   Container osprey-upg-keycloak-1 Running
+   Container osprey-upg-api-1 Recreate
+   Container osprey-upg-api-1 Recreated
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-keycloak-db-1 Starting
+   Container osprey-upg-keycloak-db-1 Started
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Starting
+   Container osprey-upg-api-1 Started
+   Container osprey-upg-ollama-1 Waiting
+   Container osprey-upg-api-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-ollama-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Healthy
+seed: fixture-corp is loaded. Sign in and choose it from the case picker.
+   Container osprey-upg-api-1 Stopping
+   Container osprey-upg-api-1 Stopped
+   Container osprey-upg-api-run-398ee04276ca Creating
+   Container osprey-upg-api-run-398ee04276ca Created
+  Case 'Operation Ledger (synthetic demo)' is 01M73BS1AH14HAHKJG53CT42DF.
+    check: no id stored more than once (whole shared graph)
+  Seeded Operation Ledger: 44 transactions (44 timeline events), the SAR (content:3ee22c652beafd3ffbaf4632aa9eff7a), and 10 map points under investigation_scope='01M73BS1AH14HAHKJG53CT42DF'; the screening list 'Synthetic consolidated list (OspreyFlow demo)' (10 synthetic entries).
+  The monitoring week (ADR-108 Amendment 5): wrote incoming/ledger_transactions_week2.csv (13 rows) under /var/lib/osprey/ingest/uploaded/ledger; wrote the UK Sanctions List's version 1 at /var/lib/osprey/ingest/uploaded/ledger/lists/uk_sanctions_list.xml; wrote its version 2 at /var/lib/osprey/ingest/uploaded/ledger/incoming/uk_sanctions_list_v2.xml; subscribed 'UK Sanctions List (synthetic)' to uploaded/ledger/lists/uk_sanctions_list.xml (not yet refreshed: refresh it in Monitoring → Lists); deployed 'Screen customers against the lists' from the KYC screening template, as the case's Author.
+   Container osprey-upg-arcadedb-1 Running
+   Container osprey-upg-keycloak-1 Running
+   Container osprey-upg-postgres-1 Running
+   Container osprey-upg-valkey-1 Running
+   Container osprey-upg-litellm-1 Running
+   Container osprey-upg-ollama-1 Running
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-keycloak-db-1 Starting
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-keycloak-db-1 Started
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Starting
+   Container osprey-upg-api-1 Started
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-api-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-ollama-1 Waiting
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-ollama-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-api-1 Healthy
+seed: ledger is loaded. Sign in and choose it from the case picker.
+   Container osprey-upg-api-1 Stopping
+   Container osprey-upg-api-1 Stopped
+   Container osprey-upg-api-run-fa874418bcaf Creating
+   Container osprey-upg-api-run-fa874418bcaf Created
+  Loading as c34d2e13-6425-4cd2-b520-7ba905d895f9 (--run-as).
+  Case 'Prison Intelligence Dataset (synthetic demo)' is 01M73BSY9PQFTW7B3VQY8Y75Q2.
+  Writing the files into /var/lib/osprey/ingest/uploaded/prison-intelligence ...
+    20 file(s) written; chapter 9's files are under incoming/, out of the listing.
+    19 recipe(s) in the registry: the reports recipe is the draft.
+  pid-establishment-plan: pid_establishment_plan.csv: 587 rows read, 587 node(s) and 611 link(s) made, 611 found, 0 rejected, 0 held, in 35.9 s
+  pid-nomis-prisoners: pid_nomis_prisoners.csv: 1,060 rows read, 1,000 node(s) and 1,060 link(s) made, 1,120 found, 0 rejected, 0 held, in 67.7 s
+  pid-nomis-cell-stays: pid_nomis_cell_stays.csv: 1,008 rows read, 0 node(s) and 1,008 link(s) made, 2,016 found, 0 rejected, 0 held, in 48.2 s
+  pid-nomis-cell-shares: pid_nomis_cell_shares.csv: 15,088 rows read, 0 node(s) and 468 link(s) made, 30,176 found, 0 rejected, 0 held, in 104.9 s
+  pid-nomis-visits: pid_nomis_visits.csv: 6,421 rows read, 602 node(s) and 989 link(s) made, 12,240 found, 0 rejected, 0 held, in 96.2 s
+  pid-nomis-incidents: pid_nomis_incidents.csv: 128 rows read, 57 node(s) and 185 link(s) made, 327 found, 0 rejected, 0 held, in 12.1 s
+  pid-number-owners: pid_number_owners.csv: 591 rows read, 591 node(s) and 591 link(s) made, 591 found, 0 rejected, 0 held, in 42.8 s
+  pid-soc-nominals: pid_soc_nominals.csv: 14 rows read, 2 node(s) and 14 link(s) made, 26 found, 0 rejected, 0 held, in 0.9 s
+  pid-family-and-associates: pid_family_and_associates.csv: 379 rows read, 0 node(s) and 379 link(s) made, 758 found, 0 rejected, 0 held, in 20.5 s
+  pid-codefendants: pid_codefendants.csv: 81 rows read, 0 node(s) and 81 link(s) made, 162 found, 0 rejected, 0 held, in 4.9 s
+  pid-nomis-conflicts: pid_conflicts.csv: 200 rows read, 0 node(s) and 96 link(s) made, 400 found, 0 rejected, 0 held, in 6.9 s
+  pid-pin-calls: pid_pin_calls.csv: 100,080 rows read, 1,909 node(s) and 3,547 link(s) made, 298,091 found, 0 rejected, 0 held, in 1410.5 s
+  pid-prisoner-money: pid_prisoner_money.csv: 1,252 rows read, 341 node(s) and 614 link(s) made, 4,667 found, 0 rejected, 0 held, in 83.3 s
+  pid-seized-comms: pid_seized_comms_batch1.csv: 143 rows read, 16 node(s) and 40 link(s) made, 526 found, 0 rejected, 0 held, in 4.3 s
+  pid-throwover-log: pid_throwover_log.csv: 262 rows read, 262 node(s) and 262 link(s) made, 262 found, 0 rejected, 0 held, in 22.9 s
+  pid-pin-calls (pid_pin_calls.csv): 1410.5 s for 100,080 rows.
+  Peak resident memory of this process: 744 MB before it, 3015 MB after (a process-wide peak: it includes the work before the run, so it is an upper bound for the run).
+  pictures: 1,633 subjects, 1,633 attached, 0 already had a picture history and were left alone
+  check ok: every picture subject was found
+  5 inferred link(s) written, 0 already present (the plan's graph port links, stored inferred)
+  check ok: every inferred link's ends were found
+  case brief: the priority requirement and 4 information requirements written, as e77afb1d-6bcd-4620-8ec7-296f5e0062a9, all open
+  check ok: the case holds a brief with a priority requirement and information requirements
+  check ok: pid_establishment_plan.csv was read whole (587 of 587 rows, 0 held)
+  check ok: pid_nomis_prisoners.csv was read whole (1,060 of 1060 rows, 0 held)
+  check ok: pid_nomis_cell_stays.csv was read whole (1,008 of 1008 rows, 0 held)
+  check ok: pid_nomis_cell_shares.csv was read whole (15,088 of 15088 rows, 0 held)
+  check ok: pid_nomis_visits.csv was read whole (6,421 of 6421 rows, 0 held)
+  check ok: pid_nomis_incidents.csv was read whole (128 of 128 rows, 0 held)
+  check ok: pid_number_owners.csv was read whole (591 of 591 rows, 0 held)
+  check ok: pid_soc_nominals.csv was read whole (14 of 14 rows, 0 held)
+  check ok: pid_family_and_associates.csv was read whole (379 of 379 rows, 0 held)
+  check ok: pid_codefendants.csv was read whole (81 of 81 rows, 0 held)
+  check ok: pid_conflicts.csv was read whole (200 of 200 rows, 0 held)
+  check ok: pid_pin_calls.csv was read whole (100,080 of 100080 rows, 0 held)
+  check ok: pid_prisoner_money.csv was read whole (1,252 of 1252 rows, 0 held)
+  check ok: pid_seized_comms_batch1.csv was read whole (143 of 143 rows, 0 held)
+  check ok: pid_throwover_log.csv was read whole (262 of 262 rows, 0 held)
+  The demo numbers, at the seed moment, as c34d2e13-6425-4cd2-b520-7ba905d895f9:
+  check ok: J1: the principal has 45 links at the seed moment (the plan says 45)
+  check ok: J2: one Endpoint for +447700900640; 4 PIN accounts link to it, each used by a prisoner
+  check ok: Ch2: four hotspot yards hold 136 of 262 throw-overs (262 in the plan), 51.9%, all adjoining Wing F
+  check ok: Ch3: 173 of 262 throw-overs in the 7 peak hours, weekends 90 (34.4%), Sundays 50
+  check not run: Ch5: not run at the seed moment: the reports load in chapter 4
+  check ok: Ch6: the coordinator visits 2 prisoners and one payer funds 3 through 3 accounts
+  check ok: Ch11 gaps: no third member in a text report, an unidentified number with no holder, an account with no holder, no person linked to throwing
+  check not run: Handling S2: not run at the seed moment: the reports load in chapter 4
+  The reports recipe is draft at version 1, its map prepared; Verify and Publish are chapter 4's.
+  Take a backup now, before anything is rehearsed: ospreyflow backup
+  If a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes
+   Container osprey-upg-keycloak-1 Running
+   Container osprey-upg-valkey-1 Running
+   Container osprey-upg-arcadedb-1 Running
+   Container osprey-upg-litellm-1 Running
+   Container osprey-upg-ollama-1 Running
+   Container osprey-upg-postgres-1 Running
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-keycloak-db-1 Starting
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-keycloak-db-1 Started
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Starting
+   Container osprey-upg-api-1 Started
+   Container osprey-upg-api-1 Waiting
+   Container osprey-upg-litellm-1 Waiting
+   Container osprey-upg-ollama-1 Waiting
+   Container osprey-upg-keycloak-db-1 Waiting
+   Container osprey-upg-postgres-1 Waiting
+   Container osprey-upg-keycloak-1 Waiting
+   Container osprey-upg-valkey-1 Waiting
+   Container osprey-upg-arcadedb-1 Waiting
+   Container osprey-upg-keycloak-db-1 Exited
+   Container osprey-upg-ollama-1 Healthy
+   Container osprey-upg-valkey-1 Healthy
+   Container osprey-upg-postgres-1 Healthy
+   Container osprey-upg-arcadedb-1 Healthy
+   Container osprey-upg-litellm-1 Healthy
+   Container osprey-upg-keycloak-1 Healthy
+   Container osprey-upg-api-1 Healthy
+seed: prison-intelligence is loaded. Sign in and choose it from the case picker.
+
+OspreyFlow is installed. Open it at http://osprey-upg.localhost:8090
+Sign in with the accounts in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env
+Look after it with: ospreyflow status --name osprey-upg, ospreyflow open --name osprey-upg

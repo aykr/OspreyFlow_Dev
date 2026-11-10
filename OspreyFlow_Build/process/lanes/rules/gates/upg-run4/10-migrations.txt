@@ -1,0 +1,131 @@
+== migrate_cases_to_one_dataset dry-run: exit 0, 9 lines
+  Operation Ledger (synthetic demo) (01M73JNNNSWS5X3WEEN8W2CXK7): reads Operation Ledger, kept
+  Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ): reads Fixture Corp, kept
+  1 existing case made from another case keeps an empty layer of its own, because a branch can't be told from an alert jump; L3.2 retires it: Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ)
+3 kept, 0 on a composite (0 made), 3 layers to make, 0 not placed; 3 writes that would be made.
+Dry run finished: nothing was written.
+exit 0
+== migrate_cases_to_one_dataset run: exit 0, 10 lines
+  Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ): reads Fixture Corp, kept
+  1 existing case made from another case keeps an empty layer of its own, because a branch can't be told from an alert jump; L3.2 retires it: Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ)
+One dataset per case is now a rule of the store.
+3 kept, 0 on a composite (0 made), 3 layers made, 0 not placed; 3 writes made.
+Done.
+exit 0
+== migrate_cases_to_one_dataset rerun: exit 0, 9 lines
+  Operation Ledger (synthetic demo) (01M73JNNNSWS5X3WEEN8W2CXK7): reads Operation Ledger, kept
+  Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ): reads Fixture Corp, kept
+One dataset per case is now a rule of the store.
+3 kept, 0 on a composite (0 made), 0 layers made, 0 not placed; 0 writes made.
+Done.
+exit 0
+== migrate_branches_to_views dry-run: exit 0, 7 lines
+Dry run: nothing will be written.
+  view: Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ) becomes a private view of Fixture Corp (synthetic demo) (01M73JMT91KX6S0NPTY072JW5X), 0 items moved into its layer
+  Each view holds the case's nodes, window and Match strictness; none holds a layout, which the Conduit never stored (spec 01 §2.2c).
+1 would become views, in 1 cases; 0 kept as cases; 0 not placed; 2 writes that would be made.
+Dry run finished: nothing was written.
+exit 0
+== migrate_branches_to_views run: exit 0, 7 lines
+Turning cases into views.
+  view: Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ) becomes a private view of Fixture Corp (synthetic demo) (01M73JMT91KX6S0NPTY072JW5X), 0 items moved into its layer
+  Each view holds the case's nodes, window and Match strictness; none holds a layout, which the Conduit never stored (spec 01 §2.2c).
+1 became views, in 1 cases; 0 kept as cases; 0 not placed; 2 writes made.
+Done.
+exit 0
+== migrate_branches_to_views rerun: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_branches_to_views 
+Turning cases into views.
+0 became views, in 0 cases; 0 kept as cases; 0 not placed; 0 writes made.
+Done.
+exit 0
+== seed_target_models dry-run: exit 0, 6 lines
+$ docker exec osprey-upg-api-1 python -m scripts.seed_target_models --dry-run
+Dry run: nothing will be written.
+  Fixture Corp (fixture-corp): version 1, live, the POLE core alone
+  Operation Ledger (ledger): version 1, live, fibo
+2 to give a first model, 0 already had one; 6 writes planned.
+exit 0
+== seed_target_models run: exit 0, 6 lines
+$ docker exec osprey-upg-api-1 python -m scripts.seed_target_models 
+Giving each dataset its first model.
+  Fixture Corp (fixture-corp): version 1, live, the POLE core alone
+  Operation Ledger (ledger): version 1, live, fibo
+2 given a first model, 0 already had one; 6 writes made.
+exit 0
+== seed_target_models rerun: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.seed_target_models 
+Giving each dataset its first model.
+  2 already had a domain model, left as it is: Fixture Corp (fixture-corp), Operation Ledger (ledger)
+0 given a first model, 2 already had one; 0 writes made.
+exit 0
+== make_home_cases dry-run: exit 0, 7 lines
+Dry run: nothing will be written.
+  Fixture Corp (fixture-corp): home case made, needs an owner (made by fixture-corp-seed-worker)
+  Operation Ledger (ledger): home case made, needs an owner (made by ledger-seed-worker)
+  2 home cases need an owner, for Admin › Datasets' Change owner…: Fixture Corp (fixture-corp), Operation Ledger (ledger)
+2 home cases to make, 2 needing an owner, 0 already had one; 8 writes planned.
+exit 0
+== make_home_cases run: exit 0, 7 lines
+Giving each dataset its home case.
+  Fixture Corp (fixture-corp): home case made, needs an owner (made by fixture-corp-seed-worker)
+  Operation Ledger (ledger): home case made, needs an owner (made by ledger-seed-worker)
+  2 home cases need an owner, for Admin › Datasets' Change owner…: Fixture Corp (fixture-corp), Operation Ledger (ledger)
+2 home cases made, 2 needing an owner, 0 already had one; 8 writes made.
+exit 0
+== make_home_cases rerun: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.make_home_cases 
+Giving each dataset its home case.
+  2 already had a home case: Fixture Corp (fixture-corp), Operation Ledger (ledger)
+0 home cases made, 0 needing an owner, 2 already had one; 0 writes made.
+exit 0
+== migrate_rules_to_datasets dry-run: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_rules_to_datasets --dry-run
+Dry run: nothing will be written.
+1 whole-deployment rules; 2 copies to make, 1 retired; 0 not converted; 9 writes that would be made.
+Dry run finished: nothing was written.
+exit 0
+== migrate_rules_to_datasets run: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_rules_to_datasets 
+Converting rules per dataset.
+1 whole-deployment rules; 2 copies made, 1 retired; 0 not converted; 9 writes made.
+Done.
+exit 0
+== migrate_rules_to_datasets rerun: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_rules_to_datasets 
+Converting rules per dataset.
+0 whole-deployment rules; 0 copies made, 0 retired; 0 not converted; 0 writes made.
+Done.
+exit 0
+== migrate_sources dry-run: exit 0, 4 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_sources --dry-run
+0 to register, 0 already registered, 0 left for a person, 0 recipe(s) naming no dataset or no file
+0 watch(es) to move, 0 left for a person
+exit 0
+== migrate_sources run: exit 0, 4 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_sources 
+0 to register, 0 already registered, 0 left for a person, 0 recipe(s) naming no dataset or no file
+0 watch(es) to move, 0 left for a person
+exit 0
+== migrate_sources rerun: exit 0, 4 lines
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_sources 
+0 to register, 0 already registered, 0 left for a person, 0 recipe(s) naming no dataset or no file
+0 watch(es) to move, 0 left for a person
+exit 0
+== remark_alert_nodes dry-run: exit 0, 4 lines
+$ docker exec osprey-upg-api-1 python -m scripts.remark_alert_nodes --dry-run
+0 alert node(s) checked; 0 would be re-marked.
+Nothing needed changing.
+exit 0
+== remark_alert_nodes run: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.remark_alert_nodes 
+0 alert node(s) checked; 0 re-marked.
+0 superseded node(s) removed from the working sets.
+Nothing needed changing.
+exit 0
+== remark_alert_nodes rerun: exit 0, 5 lines
+$ docker exec osprey-upg-api-1 python -m scripts.remark_alert_nodes 
+0 alert node(s) checked; 0 re-marked.
+0 superseded node(s) removed from the working sets.
+Nothing needed changing.
+exit 0

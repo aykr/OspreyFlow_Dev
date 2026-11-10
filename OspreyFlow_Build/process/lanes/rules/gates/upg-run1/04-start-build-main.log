@@ -1,0 +1,4 @@
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+  [a line naming a secret was hidden — the sign-in details are in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env]
+refresh: `docker compose --env-file /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env -f /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/compose.yaml build --pull` exited 1
+ospreyflow: The step 'rebuild from the checkout' failed (exit 1); nothing after it was run.

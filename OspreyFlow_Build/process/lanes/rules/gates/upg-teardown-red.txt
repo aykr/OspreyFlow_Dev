@@ -1,0 +1,35 @@
+# upg_teardown_red.sh's output (10 November 2026, this Mac, a stand-in docker). History, rule 15: the first
+# run's three reds all refused at the containers check, for the wrong reason (BSD wc -l pads its count, so
+# [ "$left" = 0 ] never held; GNU wc on the server does not pad), and its greens failed; fixed with
+# tr -d ' '. The second's mounted-volume green failed on the stand-in's own bug (${*##...} strips each
+# argument), fixed in the stand-in. This run: each red refuses for its own stated reason.
+--- red: down -v failed (the run-2 shape) (want exit 2)
+    stand-in: compose down
+    upg-run: REFUSED to go on: down -v exit 1, 0 containers left (take them down by project label first)
+    exit 2: as wanted
+--- red: a container of the project left (want exit 2)
+    stand-in: compose down
+    upg-run: REFUSED to go on: down -v exit 0, 1 containers left (take them down by project label first)
+    exit 2: as wanted
+--- red: an anonymous volume no container mounts, new since the run began (want exit 2)
+    stand-in: compose down
+    upg-run: REFUSED: anonymous volumes no container mounts, new since the run began: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    exit 2: as wanted
+--- green: another lane's new named volume, listed (want exit 0)
+    stand-in: compose down
+    upg-run: a volume new since the run began, not an orphan (listed, not failed): osprey-test-c_pg
+    upg-run: no image was held or built in this run: no tag to put back
+    upg-run: nothing of osprey-upg is left: containers 0, volumes        0
+    exit 0: as wanted
+--- green: a new anonymous volume a live container mounts, listed (want exit 0)
+    stand-in: compose down
+    upg-run: a volume new since the run began, not an orphan (listed, not failed): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    upg-run: no image was held or built in this run: no tag to put back
+    upg-run: nothing of osprey-upg is left: containers 0, volumes        0
+    exit 0: as wanted
+--- green: nothing new (want exit 0)
+    stand-in: compose down
+    upg-run: no image was held or built in this run: no tag to put back
+    upg-run: nothing of osprey-upg is left: containers 0, volumes        0
+    exit 0: as wanted
+--- every case as wanted

@@ -1,0 +1,17 @@
+upg-images: held {'osprey/superset:local': 'osprey-p5b-hold/osprey-superset-local:upg-rehearsal'}
+apply: downloading the extraction model, qwen2.5:7b-instruct (4.7 GB), with the smaller models beside it; a large model takes minutes. OspreyFlow is not ready until it is in.
+apply: local-lite ready in 137s
+  render     [  0s]  7 artefact(s) → /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg
+  preflight  [  1s]  all checks pass or skip
+  build      [ 58s]  owned images built from this checkout
+  uploads    [  0s]  /root/osprey-runs/rules-upg/ingest/uploaded: the Conduit can already write it; /root/osprey-runs/rules-upg/tiles/built: the Conduit can already write it
+  up         [ 76s]  12 service(s) healthy
+  model keys [  2s]  moved into the gateway: gemini
+  models     [  0s]  qwen2.5:7b-instruct downloaded and verified
+  grants     [  1s]  impersonation + view-users on the Conduit's service account
+  verify     [  0s]  3/3 assertions green
+
+  the Glass:   http://osprey-upg.localhost:8090/
+  the Conduit: http://osprey-upg.localhost:8090/healthz (through the workspace proxy)
+upg-images: the run's images {'osprey/workspace:local': 'sha256:f697804a49cc8b5a5b2dba5f7dc0d7a3d97cbc15dd6023d17a6859564abaaa78', 'osprey/api:local': 'sha256:c0652eef3d066054d2bbb2b7d27058466c07b1939312ab4bee1a40a122a3d912', 'osprey/ner:local': 'sha256:2281e4a248e487fa0cc29f05d379ae4f1de710b3b801576f7ae29c107df1a194', 'osprey/superset:local': 'sha256:b1211fdca5e5893ef04bfe7968684c1653a8aac717ab8fbe27d3abeed7330e34'}
+upg-run: apply --build exit 0

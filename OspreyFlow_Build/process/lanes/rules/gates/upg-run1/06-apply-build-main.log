@@ -1,0 +1,14 @@
+apply: downloading the extraction model, qwen2.5:7b-instruct (4.7 GB), with the smaller models beside it; a large model takes minutes. OspreyFlow is not ready until it is in.
+apply: local-lite ready in 146s
+  render     [  0s]  7 artefact(s) → /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg
+  preflight  [  1s]  all checks pass or skip
+  build      [ 66s]  owned images built from this checkout
+  uploads    [  1s]  /root/osprey-runs/rules-upg/ingest/uploaded: the Conduit can already write it; /root/osprey-runs/rules-upg/tiles/built: given to the Conduit (uid 10001)
+  up         [ 77s]  12 service(s) healthy
+  model keys [  0s]  no model key to move
+  models     [  0s]  qwen2.5:7b-instruct downloaded and verified
+  grants     [  1s]  impersonation + view-users on the Conduit's service account
+  verify     [  0s]  3/3 assertions green
+
+  the Glass:   http://osprey-upg.localhost:8090/
+  the Conduit: http://osprey-upg.localhost:8090/healthz (through the workspace proxy)

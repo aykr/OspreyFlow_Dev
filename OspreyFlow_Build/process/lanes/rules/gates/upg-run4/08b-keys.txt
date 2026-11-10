@@ -1,0 +1,8 @@
+upg-run: OSPREY_MODEL_KEY_* lines left: 0
+upg-run: OSPREY_MODEL_KEYS_IN_GATEWAY: yes
+upg-run: --- every secret held at v0.4.12, after
+upg-envdiff: mode 0o600 -> 0o600; file changed
+upg-envdiff: added ['OSPREY_GRADING_SCHEME', 'OSPREY_HIGHEST_MARKING', 'OSPREY_LITELLM_DB_PASSWORD', 'OSPREY_LITELLM_MASTER_SECRET', 'OSPREY_LITELLM_SALT_SECRET', 'OSPREY_MODEL_KEYS_IN_GATEWAY']
+upg-envdiff: removed ['OSPREY_MODEL_KEY_GEMINI']
+upg-envdiff: changed ['OSPREY_MODEL_ENGINES', 'OSPREY_RELEASE_VERSION']
+upg-envdiff: 77 keys held before are byte for byte the same

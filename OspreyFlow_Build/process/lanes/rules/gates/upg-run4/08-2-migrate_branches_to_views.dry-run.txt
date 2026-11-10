@@ -1,0 +1,7 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_branches_to_views --dry-run
+Dry run: nothing will be written.
+  view: Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ) becomes a private view of Fixture Corp (synthetic demo) (01M73JMT91KX6S0NPTY072JW5X), 0 items moved into its layer
+  Each view holds the case's nodes, window and Match strictness; none holds a layout, which the Conduit never stored (spec 01 §2.2c).
+1 would become views, in 1 cases; 0 kept as cases; 0 not placed; 2 writes that would be made.
+Dry run finished: nothing was written.
+exit 0

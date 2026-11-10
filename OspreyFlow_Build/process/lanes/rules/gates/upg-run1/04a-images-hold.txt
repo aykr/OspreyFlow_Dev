@@ -1,0 +1,1 @@
+upg-images: held {'osprey/superset:local': 'osprey-p5b-hold/osprey-superset-local:upg-rehearsal'}

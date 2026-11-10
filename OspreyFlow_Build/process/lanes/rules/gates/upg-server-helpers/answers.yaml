@@ -1,0 +1,6 @@
+mode: lite
+folders:
+  ingest: /root/osprey-runs/rules-upg/ingest
+  tiles: /root/osprey-runs/rules-upg/tiles
+demo_packs: [fixture-corp, operation-ledger]   # run 1 also prison-intelligence
+demo_accounts: true

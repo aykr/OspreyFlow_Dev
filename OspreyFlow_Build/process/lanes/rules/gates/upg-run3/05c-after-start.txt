@@ -1,0 +1,20 @@
+api running healthy
+arcadedb running healthy
+keycloak running healthy
+litellm running healthy
+ner running healthy
+objectstore running healthy
+ollama-models running 
+ollama running 
+opensearch running 
+postgres running healthy
+proxy running healthy
+report-sync running healthy
+superset running healthy
+valkey running healthy
+whisper running 
+workspace running healthy
+upg-run: running: 16; healthy: 12
+upg-run: owned images: ghcr.io/aykr/superset@sha256:c8b30150543b6548d67a4df658f78a2e67e4ea75f4c410362bd262061ff56068 ghcr.io/aykr/workspace@sha256:ffd31c1ddfcaffb5a53ada41a527420e5562418054d7462a46c1a32848957d2e ghcr.io/aykr/ner@sha256:3f052120ff23a980bbb7eed56aa3dd8a551212a779b7113d7f1220425c9d6263 ghcr.io/aykr/api@sha256:4f8abc8ff16d7e3a664b0e18c62d4505db14f457738328276120a9b3f899b1ba ghcr.io/aykr/api@sha256:4f8abc8ff16d7e3a664b0e18c62d4505db14f457738328276120a9b3f899b1ba 
+upg-run: the gateway's master key equals the Conduit's LITELLM_API_KEY (6ba9e1fee824)
+upg-run: the gateway answered the Conduit key: 200

@@ -1,3 +1,18 @@
+# rules lane · report · UPG, the v0.4.12 → v0.5.0 upgrade rehearsed on ospreyflow-test (10 November 2026, 18:20–21:10 UTC)
+
+- **Exit — rehearsed end to end, every step recorded: MET, with what stood in named.** Four runs (`gates/upg-rehearsal.txt`, `gates/upg-run1..4/`). Run 1 (main 5df2a3e): v0.4.12 → main, seven migrations; found update's files step breaks every pre-Amendment-2 deployment. Runs 2–3: platform-b's fixes failed (two-pass minting, undeclared volumes, gateway key; then reapply skipping `litellm-db`); a named update refreshing the wrong deployment found in code. Run 4 (platform-b d85f514, fresh v0.4.12): the refusal changes nothing (43/43 files), backup + apply bring it over (12 healthy, stores untouched, gateway key = Conduit key), files step a no-op, seven migrations, a v0.4.12 rule raises an alert after, 77 of 80 env keys byte-identical (every secret among them).
+- **Exit — CHANGELOG's steps confirmed or corrected: MET for the migrations** (order; `migrate_rules_to_datasets` after `make_home_cases`; Rule author to assign; owners needing one) **and the refusal and first apply. NOT PROVEN** (owed to the orchestrator's post-tag check): `ospreyflow update` itself (no release; stood in by `harness.apply --build`, which moved the keys, so the second apply's move is unshown), today's update.py running its own files step, v0.4.12's rollback after the refusal, the lock's digests, `start` as recovery on d85f514, the `start --build` route, the default deployment (2480 held on that box).
+- **Reviews:** the lane-reviewer found 13 anonymous volumes my teardowns left (runs 1, 2, 4) and the record calling them 0; overclaimed update steps; tail's exit statuses recorded as commands'; uncommitted helpers; unrecorded check failures. The orchestrator's review found the same claims plus REPORT replacing main's. All fixed; the 13 volumes removed by the owner (my session was refused). The teardown now fails on an orphaned anonymous volume, shown red (its first reds refused for the wrong reason, recorded).
+- **Commits:** e08cb51, 45382f6, b1e65db, 407088d, 49f92d5, c773f12, c49e5d1, and the review fixes on top.
+
+## Decisions taken
+- Orchestrator's socket gone: took the one live slot, said so by heartbeat (confirmed right).
+- Update cannot reach an unreleased head: v0.4.12 from its signed tag, the clone moved to each head's user-repo export, update's steps by hand; (a) emulated with v0.4.12's own rollback point (approved).
+- Whole-deployment rule left pending (no second admin); provider key synthetic (`upg-synthetic-not-a-real-key-0000`); runs 2–4 without the prison pack.
+
+## Requests / questions
+- None open; carries are platform-b's (start --build on a release install; apply/stop on an unreadable compose file; the 2480 preflight). Nothing of mine is running; osprey-upg is gone from the server.
+
 # rules lane · report · L2.11, the rule editor: declared dataset, draft, Test and Make live, the rule files, the migration (10 November 2026; resumed once; the review's must-fixes, gated at 0f319d4)
 
 **What is done, half-done and untouched**

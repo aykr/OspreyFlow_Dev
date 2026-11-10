@@ -1,0 +1,17 @@
+✔ Docker is installed.
+✔ Docker is running.
+✔ Docker Compose version 5 is available (version 2 or later is needed).
+✔ Docker has 67.3 GB of memory; OspreyFlow needs at least 16 GB (32 GB is comfortable).
+✔ 766 GB of disk is free here; OspreyFlow needs at least 60 GB plus the demo packs you choose.
+✔ Git is installed.
+✔ uv is installed.
+✔ Port 8090 is free.
+✔ Port 2500 is free.
+Wrote /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml.
+Post-ingest resolution is off (components.post_ingest_resolution: false), because prison-intelligence needs it off: its live loads must not add automatic "same as" links. An analyst's own Resolve now still works (section 11 of the administration guide).
+v0.4.12: the lock and every owned image are signed by the release workflow.
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg
+ospreyflow: The step 'build and start the deployment' failed (exit 1); nothing after it was run.

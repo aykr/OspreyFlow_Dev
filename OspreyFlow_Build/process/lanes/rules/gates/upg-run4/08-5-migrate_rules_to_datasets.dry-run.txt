@@ -1,0 +1,5 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_rules_to_datasets --dry-run
+Dry run: nothing will be written.
+1 whole-deployment rules; 2 copies to make, 1 retired; 0 not converted; 9 writes that would be made.
+Dry run finished: nothing was written.
+exit 0

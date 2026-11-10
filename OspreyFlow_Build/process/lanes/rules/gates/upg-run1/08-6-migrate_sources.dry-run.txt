@@ -1,0 +1,23 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_sources --dry-run
+would register pid_codefendants.csv for prison-intelligence, read by Co-defendants (court case extract). Partial: a missing link here does not mean no link.
+would register pid_conflicts.csv for prison-intelligence, read by Conflicts (NOMIS). One row per sighting of a conflict between two prisoners.
+would register pid_establishment_plan.csv for prison-intelligence, read by Establishment plan (estates). One row per place: the establishments, wings, landings, cells, yards, halls and zones of the prison estate, and how they fit together.
+would register pid_family_and_associates.csv for prison-intelligence, read by Family and associates (NOMIS). One row per pair, either family or associates.
+would register pid_intel_reports.csv for prison-intelligence, read by Intelligence reports. One row per report: its text, the areas it is set in, the people it names and any number it gives.
+would register pid_number_owners.csv for prison-intelligence, read by Number owners. One row per visitor and the outside number they own.
+would register pid_pin_calls.csv for prison-intelligence, read by PIN phone contacts (BT PIN). One row per call a prisoner made on their PIN account.
+would register pid_pin_new_contacts.csv for prison-intelligence, read by PIN phone first contacts (weekly). One row per call an account made to a number it had not called before.
+would register pid_prisoner_money.csv for prison-intelligence, read by Prisoner money. One row per transfer to a prisoner's private-cash account.
+would register pid_nomis_cell_stays.csv for prison-intelligence, read by Prisoners and movements (NOMIS). One row per cell stay: a prisoner in a cell from a start to an end, and no end while the stay runs.
+would register pid_nomis_prisoners.csv for prison-intelligence, read by Prisoners and movements (NOMIS). One row per custody record: a transfer is two rows, and an open custody has no end date.
+would register pid_nomis_cell_shares.csv for prison-intelligence, read by Prisoners and movements (NOMIS). One row per pair of prisoners per week they shared a cell.
+would register pid_report_incidents.csv for prison-intelligence, read by Report incidents. One row per intelligence report and the incident it mentions.
+would register pid_seized_comms_batch1.csv for prison-intelligence, read by Seized media. One row per communication found on a seized handset.
+would register pid_soc_nominals.csv for prison-intelligence, read by Serious and organised crime nominals. One row per prisoner per group they belong to.
+would register pid_throwover_log.csv for prison-intelligence, read by Throw-over incidents (incident log). One row per reported throw-over.
+would register pid_visit_bookings.csv for prison-intelligence, read by Visit bookings. One row per booking: the visitor, the prisoner, when, and the contact number given.
+would register pid_nomis_incidents.csv for prison-intelligence, read by Visits and incidents (NOMIS). One row per participant per incident: assaults, disorder and finds, with the person's role.
+would register pid_nomis_visits.csv for prison-intelligence, read by Visits and incidents (NOMIS). One row per visit: a visitor, the prisoner visited, the date and whether it was in person or by video.
+19 to register, 0 already registered, 0 left for a person, 0 recipe(s) naming no dataset or no file
+0 watch(es) to move, 0 left for a person
+exit 0

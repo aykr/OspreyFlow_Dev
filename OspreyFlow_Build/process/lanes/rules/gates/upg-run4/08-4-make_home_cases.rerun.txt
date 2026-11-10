@@ -1,0 +1,5 @@
+$ docker exec osprey-upg-api-1 python -m scripts.make_home_cases 
+Giving each dataset its home case.
+  2 already had a home case: Fixture Corp (fixture-corp), Operation Ledger (ledger)
+0 home cases made, 0 needing an owner, 2 already had one; 0 writes made.
+exit 0

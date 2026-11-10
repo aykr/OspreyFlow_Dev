@@ -1,0 +1,6 @@
+$ python -m scripts.refresh --files-only   (pass 1, update.py files())
+{"proxy_changed": true, "routing_changed": false, "theme_changed": false}
+exit 0
+$ python -m scripts.refresh --files-only   (pass 2, update.py files())
+{"proxy_changed": false, "routing_changed": false, "theme_changed": false}
+exit 0

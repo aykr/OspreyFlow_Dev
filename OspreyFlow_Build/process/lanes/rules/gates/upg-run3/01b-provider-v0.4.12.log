@@ -1,0 +1,5 @@
+upg-run: osprey.yaml: models.local_only false, provider gemini (extraction); defaults left local
+apply: the settings are applied; started again: api, litellm, ner, report-sync, superset, workspace.
+The settings in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml are applied.
+upg-run: apply exit 0
+upg-run: provider key lines in deployment.env: 1

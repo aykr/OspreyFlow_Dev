@@ -1,0 +1,11 @@
+# Which code run 4 ran. The server's clone (the user repository at v0.4.12, 422833c) took each export of
+# `make publish-user-repo COMMIT=<sha>` as one commit "OspreyFlow — from <sha>". Copied from the session:
+$ git log --oneline -3     (after the move to d85f514, before (b))
+0e4f6f0 OspreyFlow — from d85f514
+34ef9bd OspreyFlow — from 11e92f4
+422833c OspreyFlow — from 964a2a9
+# So: (a) ran on 34ef9bd (11e92f4's tree), (b)-(d) on 0e4f6f0 (d85f514's); the deployment reports
+# dev-0e4f6f0. lane/platform-b-upgfix d85f514 = tree e800e2b. Between 11e92f4 and d85f514 (developer
+# repository): `git diff --name-only 11e92f4 d85f514` = harness/apply.py, its test, spec/06_DECISIONS.md,
+# platform-b's REPORT.md and plants.md; `git diff 11e92f4 d85f514 -- OspreyFlow_Core/scripts/refresh.py`
+# is empty, so (a)'s refusal on 11e92f4 is the refusal d85f514 gives.

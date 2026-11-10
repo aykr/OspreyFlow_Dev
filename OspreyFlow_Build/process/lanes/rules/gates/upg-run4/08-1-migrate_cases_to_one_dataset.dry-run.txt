@@ -1,0 +1,9 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_cases_to_one_dataset --dry-run
+Dry run: nothing will be written.
+  Fixture Corp (synthetic demo) (01M73JMT91KX6S0NPTY072JW5X): reads Fixture Corp, kept
+  Operation Ledger (synthetic demo) (01M73JNNNSWS5X3WEEN8W2CXK7): reads Operation Ledger, kept
+  Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ): reads Fixture Corp, kept
+  1 existing case made from another case keeps an empty layer of its own, because a branch can't be told from an alert jump; L3.2 retires it: Branch of Fixture Corp (synthetic demo) (01M73JQWSC3F97DMB6X8Z7E5RJ)
+3 kept, 0 on a composite (0 made), 3 layers to make, 0 not placed; 3 writes that would be made.
+Dry run finished: nothing was written.
+exit 0

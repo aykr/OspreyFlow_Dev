@@ -1,0 +1,39 @@
+
+apply: FAILED at stage 'up'
+  docker compose --env-file /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/deployment.env -f /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/compose.yaml up -d --no-deps --force-recreate --wait api litellm ner report-sync superset workspace exited 1
+ Container osprey-upg-litellm-1 Recreate 
+ Volume osprey-upg_map-settings Creating 
+ Volume osprey-upg_map-settings Creating 
+ Container osprey-upg-ner-1 Recreate 
+ Volume osprey-upg_model-settings Creating 
+ Volume osprey-upg_model-settings Creating 
+ Container osprey-upg-superset-1 Recreate 
+ Container osprey-upg-workspace-1 Recreate 
+ Volume osprey-upg_map-settings Created 
+ Volume osprey-upg_map-settings Created 
+ Volume osprey-upg_model-settings Created 
+ Volume osprey-upg_model-settings Created 
+ Container osprey-upg-workspace-1 Recreated 
+ Container osprey-upg-ner-1 Recreated 
+ Container osprey-upg-superset-1 Recreated 
+ Container osprey-upg-litellm-1 Recreated 
+ Container osprey-upg-api-1 Recreate 
+ Container osprey-upg-api-1 Recreated 
+ Container osprey-upg-report-sync-1 Recreate 
+ Container osprey-upg-report-sync-1 Recreated 
+ Container osprey-upg-litellm-1 Starting 
+ Container osprey-upg-superset-1 Starting 
+ Container osprey-upg-ner-1 Starting 
+ Container osprey-upg-workspace-1 Starting 
+ Container osprey-upg-superset-1 Started 
+ Container osprey-upg-litellm-1 Started 
+ Container osprey-upg-litellm-1 Waiting 
+ Container osprey-upg-ner-1 Started 
+ Container osprey-upg-workspace-1 Started 
+ Container osprey-upg-litellm-1 Error dependency litellm failed to start
+ Container osprey-upg-report-sync-1 not started: condition "service_healthy" of service "litellm" not met 
+ Container osprey-upg-api-1 not started: condition "service_healthy" of service "litellm" not met 
+dependency failed to start: container osprey-upg-litellm-1 is unhealthy
+
+ospreyflow: The step 'apply the changed settings' failed (exit 1); nothing after it was run.
+upg-run: apply exit 1

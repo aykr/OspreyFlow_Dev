@@ -1,0 +1,21 @@
+--- red: a held secret changed
+upg-envdiff: mode 0o600 -> 0o600; file changed
+upg-envdiff: added none
+upg-envdiff: removed none
+upg-envdiff: changed ['OSPREY_POSTGRES_PASSWORD']
+upg-envdiff: 1 keys held before are byte for byte the same
+rc=1
+--- green: only a key added
+upg-envdiff: mode 0o600 -> 0o600; file changed
+upg-envdiff: added ['OSPREY_LITELLM_DB_PASSWORD']
+upg-envdiff: removed none
+upg-envdiff: changed none
+upg-envdiff: 2 keys held before are byte for byte the same
+rc=0
+--- red: only the mode changed (600 -> 644)
+upg-envdiff: mode 0o600 -> 0o644; file unchanged
+upg-envdiff: added none
+upg-envdiff: removed none
+upg-envdiff: changed none
+upg-envdiff: 1 keys held before are byte for byte the same
+rc=1

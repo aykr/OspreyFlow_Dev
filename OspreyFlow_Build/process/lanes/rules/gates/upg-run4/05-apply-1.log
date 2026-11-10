@@ -1,0 +1,4 @@
+the model keys were not moved into the gateway; they stay in deployment.env and the next apply tries again: /app/.venv/bin/python: No module named services.api.model_keys
+apply: the settings are applied; started again: api, litellm, ner, report-sync, superset, workspace.
+The settings in /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml are applied.
+upg-run: apply exit 0

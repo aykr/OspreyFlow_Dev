@@ -1,0 +1,10 @@
+ospreyflow: /root/osprey-runs/rules-upg/home/.ospreyflow/deployments/osprey-upg/osprey.yaml already exists and differs from what these answers make. Nothing was changed; run again with --force to replace it.
+✔ Docker is installed.
+✔ Docker is running.
+✔ Docker Compose version 5 is available (version 2 or later is needed).
+✔ Docker has 67.3 GB of memory; OspreyFlow needs at least 16 GB (32 GB is comfortable).
+✔ 766 GB of disk is free here; OspreyFlow needs at least 60 GB plus the demo packs you choose.
+✔ Git is installed.
+✔ uv is installed.
+✔ Port 8091 is free.
+✔ Port 2501 is free.

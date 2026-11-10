@@ -1,0 +1,21 @@
+investigations: 4
+investigation_datasets: 4
+datasets: 3
+alerts: 1
+typology_rules: 2
+typology_rule_versions: 2
+studio_recipes: 19
+recipe_runs: 15
+hotlists: 0
+monitors: 0
+saved_patterns: 1
+-- cases
+01M73BQVP206H9HK0E7A7S2PYD | Fixture Corp (synthetic demo) | - | fixture-corp-seed-worker
+01M73BS1AH14HAHKJG53CT42DF | Operation Ledger (synthetic demo) | - | ledger-seed-worker
+01M73BSY9PQFTW7B3VQY8Y75Q2 | Prison Intelligence Dataset (synthetic demo) | - | c34d2e13-6425-4cd2-b520-7ba905d895f9
+01M73E7BVVPRB8E6Y1MKKSRADZ | Branch of Fixture Corp (synthetic demo) | 01M73BQVP206H9HK0E7A7S2PYD | d8dcab5a-c86c-4f25-a26f-1cf642fc44bb
+-- rules
+01M73BS7RXWG920ZSAS8236BPF | Screen customers against the lists | active | 01M73BS1AH14HAHKJG53CT42DF | e77afb1d-6bcd-4620-8ec7-296f5e0062a9 | ledger |  | kyc_screening
+01M73E7HTK9PSM6FHQZYHVCH2Y | UPG whole-deployment: Okafor | pending | 01M73BQVP206H9HK0E7A7S2PYD | e77afb1d-6bcd-4620-8ec7-296f5e0062a9 | - | deployment | sentence
+-- alerts by state
+open | 1
