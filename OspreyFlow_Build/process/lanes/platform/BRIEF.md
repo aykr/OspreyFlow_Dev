@@ -1,35 +1,37 @@
-# Platform lane · brief P5 · the owner's map rulings
+# Platform lane · brief P7 · the `cloud-platform` profile (ADR-148)
 
-Written by the orchestrator, 9 November 2026, after P4's merge (`7a5b2bf`), for a **fresh platform session** on
-the orchestrator's account. Read `process/lanes/platform/REPORT.md` (P4), ADR-147 and its Amendment 1, and
-`process/lanes/MORNING.md`'s "Your rulings, 9 November" first. Rebase onto `main`. Opus, medium. Size M.
-Write ADR-147 Amendment 2 (reserved for you).
+Written by the orchestrator, 9 November 2026, from the owner's client decision (ADR-148, ACCEPTED (design)), for
+a **fresh platform session on the default account** (`ayan`), **started from lane/platform at 78bb4ae (P5, cleared, merging now)**: build on it, and rebase onto main once P5
+is merged there (the orchestrator tells you). Read `spec/06_DECISIONS.md` ADR-148 first (decisions 1–5, 7, 8, 12 and 14 are this step), then
+`process/BUILD_PLAN_PARALLEL_LANES.md`'s P7 row and merge-order items 19–21. Opus, medium. Size L.
 
-**The lane, the stacks, the merge rule.** As P4: platform's map files; a test stack by
-`stack_lease.sh acquire platform "<purpose>" && …` only; Prompt L's rules (never stop on a question; schemas ride
-with the step; every live test removes what it writes; your own lane-reviewer, then make -k ci and make test at
-a commit rebased onto main, saved under gates/, with a leased live run including `test_route_rights.py`, alone on
-the machine's load). Map data in the demo and CI is tier 1 only (rule 9); no real tiles fetched in tests.
+**No client access is needed or wanted.** P7 proves itself on a local **kind or k3d cluster on the owner's test
+server** (`ospreyflow-test`, which has Docker), set up to the platform's rules: the Calico deny-egress policy and no
+ReadWriteMany storage class. Never create anything on the client's GitHub or AWS: every client-side change is a pull
+request the owner's team raises once access is granted. The *live on the platform* exit is recorded later, when the
+client's namespaces exist. No real data, ever (rule 9).
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 7, 9, 12 and 15 above all); ADR-014–017, ADR-099 Amendments 12
-and 15, ADR-147 and Amendment 1; `spec/00_ARCHITECTURE.md` §7 (the licence register).
+**The lane, the stacks, the merge rule.** Platform's row, plus ADR-148's ownership lines: the harness's
+`cloud-platform` profile files, `deploy/generated/cloud-platform/`, `deploy/helm/ospreyflow/templates/ingress.yaml`
+(remove its citation-allowlist line when you write it), the policy check and `ospreyflow images push`. **Shared,
+first and alone:** the numeric UID `10001` in every `Dockerfile`'s `USER` line, as its own small commit, which the
+orchestrator merges ahead of the rest (merge order 20). **The owner's files:** `make cp-policy-check`'s Makefile
+target and `ci.yml` job go in `process/lanes/platform/P7_ci_makefile.diff` (merge order 21). The kind or k3d cluster
+runs on the server: ask the orchestrator for the server's Docker, as for P5's image work. Name your images and
+cluster `osprey-p7-*`, never touch `osprey-small` or the `osprey-test-*` stacks, and tear it all down after. `make
+test` runs on the server through `stack_lease.sh offline platform -- …`. Ask before make -k ci or Playwright here.
+Report by message.
 
-**Build** (the owner's rulings, 9 November):
-1. **Java in the Conduit image (ruling 1, option A).** A licence register entry in `spec/00` §7 for a Java runtime
-   under GPL-2.0 with the Classpath exception (only that exception; GPL and AGPL otherwise still never pass), and
-   `licence-check` taught it with a red-then-green test (a plain GPL-2.0 Java still refused). The runtime jlinked
-   and pinned by digest in the Conduit image, so *Admin › Maps*' Build runs planetiler in the Conduit. Image size
-   recorded in the report.
-2. **Gazetteer places copied into a case's dataset (ruling 6, option C, not the orchestrator's recommendation).**
-   When a case's Author adds a gazetteer, its places are copied into the case's own dataset at load, so the case
-   stays one dataset and keeps its loads (no composite). The copies keep decision 3b: their source identifiers
-   withheld from every request reader and never matched by search or suggest, keyed on the copy's provenance, not
-   on a `gazetteer-*` dataset name. Copies carry the gazetteer's handling; a re-build refreshes them; removing
-   the gazetteer from a case removes its copies (never another load's nodes, rule 6). Place search reads the
-   case's dataset. Tests: a live copy, its identifiers absent from search/suggest/expand/node detail, each red
-   without the fix; a working case still loads after adding the gazetteer.
-3. **The gazetteer's unit a build setting (ruling 8).** `recipes/osm_gazetteer.yaml:24`'s `unit-1` becomes a
-   parameter of both builds and *Admin › Maps*, refused in words when no such unit exists.
+**Build:** P7's row: the profile rendering Helm values into an existing namespace and the namespace's Terraform for
+RDS, ElastiCache, OpenSearch, S3, ECR and IRSA in the environments repository's shape; the chart's optional Ingress;
+UID 10001, `runAsNonRoot`, no privilege escalation, capabilities dropped on every rendered pod; the managed stores in
+place of ours, their connection details from the platform's secrets; ArcadeDB ×3, ClickHouse ×2 and Keeper ×3 as
+StatefulSets on `gp2-expand` with PodDisruptionBudgets (one each in development); the Calico deny and allow policies
+from the settings ADR-135 Am 2 and ADR-147 gate; `ospreyflow images push --registry`; the Conduit built without Java
+on this profile (a build argument), with *Admin › Maps*' Build saying so (pending the owner's ruling on ADR-148
+question 3; build to the recommended answer); `make cp-policy-check`.
 
-**Exit.** make ci and make test green offline; the leased live set green, alone; a friction fragment. Report in
-Prompt L's format, then stop.
+**Exit** (P7's row): `make cp-policy-check` green on the render and red on each planted fault (a root pod, a named
+UID, an RWX claim, a hostPath, a port below 1024, a foreign registry, no deny-egress); ArcadeDB, ClickHouse and Keeper
+each shown to start as UID 10001 (or a thin image of ours, in the licence register); the acceptance scenarios green on
+the kind/k3d cluster; `local-lite`, `small` and `cluster` renders unchanged except the UIDs; a friction row.
