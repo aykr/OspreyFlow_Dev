@@ -32862,7 +32862,13 @@ records where that is enforced, what it does not touch, and what is left to othe
    the scheme's highest in an access check (`promotions.highest()`'s fallback, and the same top in `admin_people`,
    `person_ownership`, `boards` and `app.py`), that reading is kept. Capping it at the ceiling would loosen access.
    On the write side, a promotion or a drawn merge that would write data marked above the ceiling must be refused
-   as a load is: carried to the case lane (`promotions.py`, `drawn_merge.py`).
+   as a load is: carried to the case lane (`promotions.py`, `drawn_merge.py`). **Built in L3.H2:** each item's
+   marking check names the deployment's limit too (the sheet, *Promote*, a layer merge, a drawn merge's items
+   and its chosen matches, and the approval's re-check); the promotion's record, holding every marking it
+   would write, is refused before it is stored (422 `above_the_deployments_highest_marking`, the limit's
+   words); and the load refuses its own record's marking before its transaction begins, the promotion
+   rejected, never left waiting (`tests/services/api/test_promotion_ceiling.py`, each red by its plant).
+   `Promotions.highest()` is unchanged.
 
 **Not loads:** a restore (whole stores into an empty deployment) and reference lists (which carry no marking).
 
@@ -32871,7 +32877,7 @@ that would put an element above the new ceiling is refused. Data held above it i
 
 **Carried:**
 - The drawn item (case-b, `boards.py`, and the board's picture route).
-- The promotion and drawn-merge writes (case).
+- The promotion and drawn-merge writes (case): built in L3.H2 (decision 6).
 - cloud-platform's OFFICIAL-SENSITIVE default (P7, `lane/platform`).
 - System showing the ceiling (admin: `process/lanes/studio-b/L1.10_system_ceiling.diff`).
 - Declarations for the other demo packs, each with its proof.

@@ -871,7 +871,8 @@ The invariants, each with the test that fails if it is broken (rule 12):
   - `test_drawing_sets_a_watch_and_withdrawing_ends_it`;
     `test_a_watch_on_an_item_the_reader_may_not_see_is_withheld_whole`, red with every watch listed.
 - **A load meeting a drawn item** (Amendment 2 decision 8; ADR-146 decisions 1 and 4; L3.6). Every
-  load (the Studio's *Run now*, a scheduled or watched run, a command-line load) runs the live drawn
+  load (the Studio's *Run now*, a scheduled or watched run, a command-line load, a release of held
+  rows, L3.H2) runs the live drawn
   watches on the dataset it wrote into, and on each composite of it. A watch is run only for an owner
   who resolves now and holds a level on the watch's case, reading what that case reads for them
   (`drawn_watches.case_read_set`, as `scope_to_case`), through the adapter. A loaded node matches by
@@ -892,7 +893,8 @@ The invariants, each with the test that fails if it is broken (rule 12):
   none where its counts are withheld. The run ledger keeps no such count, so no other reader is told it.
   A home case keeps reading its dataset: choosing another for it is refused (`home_case_kept`), as removing it is.
   - `test_drawn_watch_alerts.py` (one per match per case, the owner's reach, composites, the claim
-    given back), `test_drawn_watch_queue.py` (withheld whole, red with the drawn item left out),
+    given back), `test_drawn_watch_release.py` (a release runs them, its count the releaser's
+    alone, a failure audited), `test_drawn_watch_queue.py` (withheld whole, red with the drawn item left out),
     `test_drawn_watch_queue_live.py` (the owner's in its case alone; never in a trend), each red by
     its plant (the lane's gate record).
 - **Link types a drawing cannot satisfy** (L3.6; CARRIES): a link type whose model requires a
