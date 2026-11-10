@@ -863,8 +863,8 @@ The invariants, each with the test that fails if it is broken (rule 12):
   its type for good, and nothing is collapsed: rule 6); a chosen match is written as an `inferred`, scored `SAME_AS`, never collapsed; afterwards its case
   reads the target and the drawing read-only, and its boards are views with annotations. Spec 03,
   *Merging a drawn dataset*, has the routes.
-  - `tests/services/api/test_drawn_merge.py`, each check red by its plant
-    (`process/lanes/case/gates/L3.9-plants.txt`).
+  - `tests/services/api/test_drawn_merge.py`, each check red by its plant (ADR-143 Amendment 7 names
+    the record).
 - **Watched** (Amendment 2 decision 8): drawing an item sets one watch (`DrawnWatch`, kind
   `drawn_watch`) on the case's dataset, owned by its author; withdrawing it ends the watch; a watch on
   an item the reader may not see is withheld whole. Its alerts' queue is L3.6's with L2.10.
