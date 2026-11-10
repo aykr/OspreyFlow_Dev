@@ -15,6 +15,7 @@ not the route must make its own (the scheduler's `check_case` does; the seed del
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -67,6 +68,8 @@ from .studio_publish import LoadSink, run_published_recipe
 from .target_models import TargetModelStore
 from .typology_rules import TypologyRuleStore
 from .watch_reach import owner_reaches_dataset_in
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -453,6 +456,11 @@ def always_judges(rule: TypologyRule) -> bool:
     return is_deployment_wide(rule) or is_just_me(rule)
 
 
+#: What a loader's own audit entry says when a drawn watch could not run: fixed words, since the
+#: failing watch may be another owner's (rule 7; L3.H2).
+DRAWN_WATCH_FAILED = "a drawn watch could not run"
+
+
 async def _run_drawn_watches_best_effort(
     deps: RecipeRunDeps,
     entry: ChangeStreamEntry,
@@ -508,22 +516,43 @@ async def run_drawn_watches_best_effort(
         holds_a_level=holds_a_level_in(investigations),
         raise_alert=raise_into(alerts_store),
     )
-    counted = 0
     try:
         return await run.after_load(
             dataset_id, list(node_ids), load_id=load_id, counted_for=principal.id
         )
     except Exception as exc:  # noqa: BLE001 - as `_evaluate_watches_best_effort`'s: audited
-        # Another owner's watch failing never changes what the loader is told (rule 7).
-        counted = exc.counted if isinstance(exc, DrawnWatchesFailed) else 0
+        # Another owner's watch failing never changes what the loader is told (rule 7), nor is its
+        # error, which may name that owner or their identity provider, written under the loader:
+        # fixed words under the loader, the detail under each failing watch's own owner.
         await audit.record(
             principal=principal,
             action="watch_evaluation_failed",
             investigation_id=investigation_id,
-            resolved_query={"load_id": load_id, "drawn_watches": True, "error": str(exc)},
+            resolved_query={"load_id": load_id, "drawn_watches": True, "error": DRAWN_WATCH_FAILED},
             result_cardinality=0,
         )
-        return counted
+        if not isinstance(exc, DrawnWatchesFailed):
+            # Not one owner's (the board store, the dataset registry): the operator's log alone.
+            _log.warning("the drawn watches could not run for load %s", load_id, exc_info=exc)
+            return 0
+        for failure in exc.failures:
+            if failure.owner is None:
+                # Resolving the owner is what failed: there is no one to write it under but the
+                # operator's log.
+                _log.warning(
+                    "drawn watch %s could not run: its owner was not resolved",
+                    failure.watch.id, exc_info=failure.error,
+                )  # fmt: skip
+                continue
+            await audit.record(
+                principal=failure.owner,
+                action="watch_evaluation_failed",
+                investigation_id=failure.watch.case_id,
+                resolved_query={"load_id": load_id, "drawn_watch_id": failure.watch.id,
+                                "error": str(failure.error)},
+                result_cardinality=0,
+            )  # fmt: skip
+        return exc.counted
 
 
 async def _evaluate_watches_best_effort(

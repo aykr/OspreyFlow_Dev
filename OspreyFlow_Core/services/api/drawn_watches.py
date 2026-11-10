@@ -126,15 +126,28 @@ class _Counts:
             self.raised += 1
 
 
+@dataclass(frozen=True)
+class WatchFailure:
+    """One drawn watch that could not run: its watch, its owner as resolved (`None` when resolving
+    them was what failed) and the error, which may name that owner or their identity provider, so
+    it is said only under that owner (rule 7; L3.H2)."""
+
+    watch: DrawnWatch
+    owner: Principal | None
+    error: Exception
+
+
 class DrawnWatchesFailed(Exception):
     """A watch failed (its owner's resolution, its save); every other watch still ran. `counted`
     is what was raised for `counted_for` all the same, so the run's report never depends on whether
-    another owner's watch failed (rule 7)."""
+    another owner's watch failed (rule 7); `failures`, each with its owner, for the caller to audit
+    under that owner alone."""
 
-    def __init__(self, counted: int, cause: Exception) -> None:
-        super().__init__(str(cause))
+    def __init__(self, counted: int, failures: Sequence[WatchFailure]) -> None:
+        super().__init__(str(failures[0].error))
         self.counted = counted
-        self.cause = cause
+        self.failures = list(failures)
+        self.cause = failures[0].error
 
 
 @dataclass
@@ -167,30 +180,32 @@ class DrawnWatchRun:
         if not node_ids:
             return 0
         counts = _Counts(counted_for)
-        failed: Exception | None = None
+        failures: list[WatchFailure] = []
         # A watch on a composite is on each of its members (the case reads them all).
         watched = [dataset_id, *(c.id for c in await self.datasets.composites_of(dataset_id))]
         for on in watched:
             for watch in await self.items.active_watches_on(on):
-                # One watch's failure (its owner's resolution, its save) never skips the rest; the
-                # first is raised once every watch has run, for the caller to audit.
+                # One watch's failure (its owner's resolution, its save) never skips the rest;
+                # every failure is raised once every watch has run, for the caller to audit.
+                owner: Principal | None = None
                 try:
-                    await self._run(watch, dataset_id, node_ids, load_id, counts)
+                    owner = await self.owner_of(watch.owner)
+                    await self._run(watch, owner, dataset_id, node_ids, load_id, counts)
                 except Exception as error:  # noqa: BLE001 - raised again below, with the count
-                    failed = failed or error
-        if failed is not None:
-            raise DrawnWatchesFailed(counts.raised, failed) from failed
+                    failures.append(WatchFailure(watch, owner, error))
+        if failures:
+            raise DrawnWatchesFailed(counts.raised, failures) from failures[0].error
         return counts.raised
 
     async def _run(
         self,
         watch: DrawnWatch,
+        owner: Principal | None,
         dataset_id: str,
         node_ids: Sequence[str],
         load_id: str | None,
         counts: _Counts,
     ) -> int:
-        owner = await self.owner_of(watch.owner)
         if owner is None or not await self.holds_a_level(owner, watch.case_id):
             return 0  # an account gone, or one who may no longer open the case
         read_set = await case_read_set(self.datasets, watch.case_id, owner, self.holds_a_level)
@@ -250,6 +265,7 @@ __all__: Sequence[str] = (
     "DrawnWatchMatch",
     "DrawnWatchesFailed",
     "DrawnWatchRun",
+    "WatchFailure",
     "drawn_watch_alert",
     "case_read_set",
     "drawn_watch_rule",

@@ -15,6 +15,9 @@ What a mistake would do, and the case that catches it:
   `test_a_release_tells_the_releaser_only_of_their_own_drawn_watch_alerts`;
 - a failing drawn watch failing the release, or failing unaudited:
   `test_a_failing_drawn_watch_never_fails_the_release_and_is_audited`;
+- another owner's failing watch, or their identity provider's error, written under the releaser
+  (rule 7): `test_another_owners_failing_watch_is_said_under_them_never_under_the_releaser`,
+  `test_an_owner_who_cannot_be_resolved_is_named_in_no_audit_entry`;
 - a second copy of the level check, which can drift from the app's:
   `test_the_read_sets_level_check_is_the_apps_own`.
 """
@@ -157,6 +160,63 @@ async def test_a_failing_drawn_watch_never_fails_the_release_and_is_audited(
     (failed,) = [r for r in world.audit.records if r["action"] == "watch_evaluation_failed"]
     assert failed["resolved_query"]["load_id"] == "load-r"
     assert failed["resolved_query"]["drawn_watches"] is True
+
+
+class _Refusing(_Alerts):
+    """The alert store refusing Alice's alert, in an error that names her account (as an identity
+    provider's or a store's error may)."""
+
+    async def save(self, alert: Alert, **kwargs: Any) -> None:
+        if alert.owner_id == "alice":
+            raise RuntimeError("alice@unit-1: alert store refused")
+        await super().save(alert, **kwargs)
+
+
+def _entries(world: SimpleNamespace, who: str) -> list[dict[str, Any]]:  # noqa: F811
+    return [
+        r for r in world.audit.records
+        if r["action"] == "watch_evaluation_failed" and r["principal"].id == who
+    ]  # fmt: skip
+
+
+async def test_another_owners_failing_watch_is_said_under_them_never_under_the_releaser(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 7 (the independent review of L3.H2, item 3): Dora releases and Alice's drawn watch
+    fails, its error naming Alice. Dora's entry says, in fixed words, that a drawn watch could not
+    run; the detail is written under Alice, in her watch's case."""
+    _tall("alice")
+    released = _load(world, "p-released", family_name="Tall", pnc_id="PNC-1")
+    view = await _release(world, monkeypatch, "dora", [released], _Refusing())
+    assert view.drawn_watch_alerts == 0
+    (dora,) = _entries(world, "dora")
+    assert dora["resolved_query"] == {
+        "load_id": "load-r", "drawn_watches": True, "error": "a drawn watch could not run"
+    }
+    assert "alice" not in repr(dora)
+    (alice,) = _entries(world, "alice")
+    assert alice["investigation_id"] == K
+    assert "alice@unit-1: alert store refused" in alice["resolved_query"]["error"]
+
+
+async def test_an_owner_who_cannot_be_resolved_is_named_in_no_audit_entry(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resolving Alice is what fails (her identity provider's error naming her): no audit entry
+    carries it, only the releaser's fixed words; the operator's log has the rest."""
+    _tall("alice")
+    released = _load(world, "p-released", family_name="Tall", pnc_id="PNC-1")
+
+    async def unreachable(self: _Owners, owner_id: str) -> Principal | None:
+        raise RuntimeError(f"token exchange refused for {owner_id}@idp")
+
+    monkeypatch.setattr(_Owners, "resolve_for_owner", unreachable)
+    await _release(world, monkeypatch, "dora", [released], _Alerts())
+    failed = [r for r in world.audit.records if r["action"] == "watch_evaluation_failed"]
+    assert [r["principal"].id for r in failed] == ["dora"]
+    assert "idp" not in repr(failed) and "alice" not in repr(failed)
 
 
 def test_the_read_sets_level_check_is_the_apps_own() -> None:
