@@ -192,8 +192,9 @@ PLANTS = [
      ["test_a_missing_column_is_not_read_as_an_empty_one"], "DID NOT RAISE"),
     ("undeclared-said-to-hold", "an undeclared pack told it holds data up to the scheme's highest",
      [(SEEDS, "            if spec.highest_marking is not None\n", "            if True  # PLANT\n")],
+     # The words' assertion names the pack it failed on (`hmp`, the first undeclared one).
      [PACKS], ["test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest"],
-     "declares no highest marking"),
+     "AssertionError: hmp"),
 ]
 
 
