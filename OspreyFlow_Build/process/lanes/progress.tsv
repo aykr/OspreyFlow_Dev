@@ -60,4 +60,4 @@ docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, p
 docs	D2c	M	todo	The Cloud Platform deployment guide (after P7–P10; ADR-148)
 platform-b	P5b	S	building	Backups in a folder the administrator names at setup (ADR-114 Am 37)
 studio-b	L1.7a	S	building	The dulwich swap, then the Studio's tips patches after L2.7
-admin	L2.5c	S	building	Admin's Delete for a removed case's layer; refusals that name roles
+admin	L2.5c	S	done f4eb985	Admin's Delete for a removed case's layer; refusals that name roles
