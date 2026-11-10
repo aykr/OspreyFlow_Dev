@@ -94,6 +94,9 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
   const [sent, setSent] = useState<Promotion | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  // The latest Match read asked for: an older reply arriving after it is dropped (the fourth
+  // review, minor 11), so Match always answers the mapping as now chosen.
+  const asked = useRef(0);
 
   const reload = useCallback(async () => {
     const answer = await mergeTargets(apiBaseUrl, bearerToken, datasetId);
@@ -147,7 +150,9 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
    * type, one left out has none); a chosen pair no longer offered is let go. */
   async function rematch(next: Record<string, Choice>): Promise<void> {
     if (!sheet) return;
+    const mine = ++asked.current;
     const answer = await drawnMergeSheet(apiBaseUrl, bearerToken, datasetId, target, mappingFor(sheet, next));
+    if (mine !== asked.current) return;
     if (!answer.ok) {
       setProblem(answer.message);
       return;

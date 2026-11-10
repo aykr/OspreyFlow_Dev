@@ -215,6 +215,39 @@ describe("Merge into a dataset…", () => {
     expect(dry[0].matches).toEqual([]);
   });
 
+  it("drops a Match reply that arrives after a newer one", async () => {
+    // As a slow network: the first re-read (Vessel onto Organisation) answers after the second
+    // (Vessel left out again), and must not overwrite it.
+    const BOAT = { drawn: "e-i3", drawn_label: "Boat", loaded: "o-boat", loaded_label: "Boat Ltd", loaded_type: "Organisation", score: 0.9, why: "a name alike" };
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((done) => {
+      release = done;
+    });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(url);
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith("/merge-targets")) return new Response(JSON.stringify(TARGETS), { status: 200 });
+      const mapping = JSON.parse(parsed.searchParams.get("mapping") ?? "[]") as { drawn_type: string; target_type: string | null }[];
+      const vessel = mapping.find((m) => m.drawn_type === "Vessel")?.target_type ?? null;
+      if (vessel === "Organisation") {
+        await slow;
+        return new Response(JSON.stringify({ ...SHEET, matches: [...SHEET.matches, BOAT] }), { status: 200 });
+      }
+      return new Response(JSON.stringify(SHEET), { status: 200 });
+    });
+    show();
+    fireEvent.change(await screen.findByLabelText("Merge into"), { target: { value: "src" } });
+    fireEvent.click(screen.getByRole("button", { name: "Map and match" }));
+    const vessel = (await screen.findByLabelText("Vessel goes in as")) as HTMLSelectElement;
+    fireEvent.change(vessel, { target: { value: "Organisation" } });
+    fireEvent.change(vessel, { target: { value: "" } });
+    await waitFor(() => expect(calls.filter((c) => c.includes("/merge-sheet")).length).toBe(3));
+    release();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(screen.queryByLabelText(/Boat looks like Boat Ltd/)).toBeNull();
+  });
+
   it("shows a refusal in the Conduit's words", async () => {
     serve({
       "GET /v1/datasets/d1/merge-targets": () => ({ status: 200, body: TARGETS }),
