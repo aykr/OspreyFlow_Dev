@@ -85,7 +85,7 @@ follow() {
 # committed), make the venv there, and start the command detached in the same relative folder with the given
 # exports, then follow it. Arguments: lane, host, exports, lease lock name (empty for none), stack name, command.
 run_on_host() {
-  local who="$1" h="$2" exports="$3" lockname="$4" s="$5" top rel rroot rmeta run rc
+  local who="$1" h="$2" exports="$3" lockname="$4" s="$5" top rel rroot rmeta run rc where
   shift 5
   rroot="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
   rmeta="$rroot.meta"   # the runs and the lease mirror, beside the copy, never in it
@@ -133,13 +133,16 @@ for d,ds,fs in os.walk(\".\"):
   # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
   # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
   run="$rmeta/runs/$(date -u +%Y%m%dT%H%M%SZ)"
+  # The log ends with its wall time, naming the stack and lease it ran under (rule 14), and keeps the seconds in
+  # <run>/wall; pytest names its 30 slowest tests, whatever the command (admin's T1 part 1, 10 November 2026).
+  if [ -n "$lockname" ]; then where="stack $s, lease $lockname"; else where="no stack, no lease"; fi
   { printf 'cd %q || exit 1\n' "$rroot/$rel"
-    printf 'export %s OSPREY_LEASE_DIR=$HOME/%s/lease PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta"
+    printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta"
     printf '%q ' "$@"; echo; } > "$list.cmd"
   rc=0
   rssh "$h" "if [ -f $rmeta/runs/last/pid ] && kill -0 \$(cat $rmeta/runs/last/pid) 2>/dev/null; then exit 3; fi
     mkdir -p $run && cat > $run/cmd.sh && ln -sfn \$HOME/$run $rmeta/runs/last
-    cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; bash $run/cmd.sh; echo \$? > $run/exit' > $run/log 2>&1 < /dev/null &
+    cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; t0=\$(date +%s); bash $run/cmd.sh; c=\$?; w=\$((\$(date +%s)-t0)); echo \$w > $run/wall; echo \"Wall time: \$w s, exit \$c ($where)\"; echo \$c > $run/exit' > $run/log 2>&1 < /dev/null &
     exit 0" < "$list.cmd" || rc=$?
   case $rc in
     0) ;;

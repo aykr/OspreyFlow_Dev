@@ -625,3 +625,57 @@ def test_a_run_in_the_old_layout_is_seen_and_its_folders_never_pruned(lease, tmp
     assert "osprey-runs/case/.runs/last/pid" in text  # the old place asked
     prune = next(l for l in text.splitlines() if l.startswith("skip=("))
     assert '".runs"' in prune and '".osprey-lease"' in prune
+
+
+
+# --- Every server run names its slowest tests and its wall time (admin's T1 part 1, 10 November 2026) ---------
+# Studio's L1.7 live set ran 2½ hours on stack f with nothing in its log saying where the time went.
+
+
+def _started(text: str) -> str:
+    return next(l for l in text.splitlines() if "nohup setsid" in l)
+
+
+def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its_stack_and_lease(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")  # stack b, on the server
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests").returncode == 0
+    text = log.read_text()
+    export = next(l for l in text.splitlines() if l.startswith("stdin export "))
+    assert "PYTEST_ADDOPTS=--durations=30" in export, export
+    start = _started(text)
+    assert "Wall time:" in start and "stack b" in start and "stack-b.lease" in start, start
+    assert "/wall" in start, start  # the seconds kept beside the log, for a table
+
+
+def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    lease("status")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
+                         cwd=wt / "OspreyFlow_Build", env=env, capture_output=True, text=True)
+    assert off.returncode == 0, off.stderr
+    text = log.read_text()
+    assert "PYTEST_ADDOPTS=--durations=30" in next(l for l in text.splitlines() if l.startswith("stdin export "))
+    start = _started(text)
+    assert "Wall time:" in start and "no stack, no lease" in start, start
+
+
+def test_the_wall_time_line_runs_and_keeps_the_command_s_own_exit_code(tmp_path: Path) -> None:
+    """The start line's own bash, run here as the host would run it (red if it loses the exit code or the line)."""
+    text = SCRIPT.read_text()
+    template = next(l for l in text.splitlines() if "nohup setsid bash -c" in l)
+    body = template.split("bash -c '", 1)[1].rsplit("' > ", 1)[0]
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "cmd.sh").write_text("echo hello; exit 7\n")
+    body = body.replace("\\$", "$").replace('\\"', '"').replace("$run", str(run))
+    body = body.replace("$where", "stack b, lease stack-b.lease")
+    out = subprocess.run(["bash", "-c", body], capture_output=True, text=True)
+    assert "hello" in out.stdout and "Wall time: " in out.stdout and "exit 7" in out.stdout, out
+    assert (run / "exit").read_text().strip() == "7"
+    assert (run / "wall").read_text().strip().isdigit()

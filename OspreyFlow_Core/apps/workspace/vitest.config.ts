@@ -1,6 +1,8 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import SlowestReporter from "./src/testing/slowestReporter";
+
 export default defineConfig({
   // Needed from Phase 7 Stage 6c Part 2 on, for `src/**/*.test.tsx`'s own `@testing-library/react`
   // component-render tests (`watches/*.test.tsx`) — every `*.test.ts` before this stage was pure
@@ -8,6 +10,8 @@ export default defineConfig({
   // itself, not a second, divergent JSX pipeline.
   plugins: [react()],
   test: {
+    // Every run ends with its 30 slowest tests (admin's T1 part 1), as pytest's --durations=30 does.
+    reporters: ["default", new SlowestReporter()],
     environment: "node",
     // ADR-115 E4: a desktop-sized window for jsdom tests (`src/testSetup.ts`).
     setupFiles: ["src/testSetup.ts"],
