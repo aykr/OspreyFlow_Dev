@@ -15,8 +15,13 @@ drawn item they may no longer see raises nothing. A pair already decided on the 
 *Not the same*) raises nothing either. What a reader of the queue is shown is the queue's own read
 (L2.10): the alert cites the drawn item, so it is withheld whole from a reader who may not see it.
 
-The raise itself is the one queue's (`raise_alert`), given each match: wired to L2.10's alert store
-once it lands, so this module decides what matched and nothing about routing.
+**The alert** (`drawn_watch_alert`): an ordinary watch alert, `rule_id` `drawn_watch:<watch id>`,
+the watch owner's, in the watch's case, on the watched dataset (ADR-146 decision 1; the queue's
+`queue_scope` reads it to its owner in that case alone). It cites the drawn item and the loaded
+node, so the queue, reading both as each reader through the adapter, withholds it whole from one
+who may not see either (rule 3, `test_drawn_watch_queue.py`). Its words name the two by id alone,
+each named at every read as the reader reads it. *Open the board* opens the board the drawn item's
+own provenance names, read as the reader with the rest of the evidence.
 """
 
 from __future__ import annotations
@@ -26,9 +31,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from conduit_common.identity import new_id
 from schemas.boards import DrawnWatch
-from schemas.domain import NOT_SAME_AS, SAME_AS, Node, Principal
+from schemas.domain import NOT_SAME_AS, SAME_AS, Alert, AlertMode, Handling, Node, Principal
 
+from .alerts import AlertStore
 from .board_store import BoardItemStore
 from .boards import resembles
 
@@ -46,6 +53,43 @@ class DrawnWatchMatch:
     matched_at: datetime
 
 
+#: ADR-146 decision 1: a watch set by drawing, told apart by its rule's prefix
+#: (`alerts._KIND_SQL`).
+DRAWN_WATCH_PREFIX = "drawn_watch:"
+
+
+def drawn_watch_rule(watch_id: str) -> str:
+    return f"{DRAWN_WATCH_PREFIX}{watch_id}"
+
+
+def drawn_watch_alert(match: DrawnWatchMatch) -> tuple[Alert, list[Handling]]:
+    """The alert one match raises, and the markings of what it cites (kept with it, as every
+    alert's, for `alerts.raiser_read_admits`)."""
+    drawn, loaded = match.drawn, match.loaded
+    alert = Alert(
+        id=new_id(),
+        rule_id=drawn_watch_rule(match.watch.id),
+        owner_id=match.watch.owner,
+        mode=AlertMode.FULL,
+        referent_node_ids=[drawn.id, loaded.id],
+        investigation_id=match.watch.case_id,
+        dataset_id=match.watch.dataset_id,
+        created_at=match.matched_at,
+        words=f"A load met a drawn item: {loaded.id} looks like {drawn.id} ({match.why}).",
+    )
+    return alert, [drawn.handling, loaded.handling]
+
+
+def raise_into(store: AlertStore) -> Callable[[DrawnWatchMatch], Awaitable[None]]:
+    """The one queue's raise for a drawn watch: the alert saved in the alert store."""
+
+    async def raise_alert(match: DrawnWatchMatch) -> None:
+        alert, handlings = drawn_watch_alert(match)
+        await store.save(alert, handlings=handlings)
+
+    return raise_alert
+
+
 @dataclass
 class DrawnWatchRun:
     items: BoardItemStore
@@ -56,7 +100,7 @@ class DrawnWatchRun:
     owner_of: Callable[[str], Awaitable[Principal | None]]
     #: A case's read set (its datasets, its layer, a merged drawing), as the app scopes its readers.
     case_datasets: Callable[[str], Awaitable[list[str]]]
-    #: The one queue's raise, given each match (L2.10's alert store).
+    #: The one queue's raise, given each match (`raise_into`, the alert store's).
     raise_alert: Callable[[DrawnWatchMatch], Awaitable[None]]
 
     async def after_load(
@@ -119,4 +163,11 @@ class DrawnWatchRun:
         return raised
 
 
-__all__: Sequence[str] = ("DrawnWatchMatch", "DrawnWatchRun")
+__all__: Sequence[str] = (
+    "DRAWN_WATCH_PREFIX",
+    "DrawnWatchMatch",
+    "DrawnWatchRun",
+    "drawn_watch_alert",
+    "drawn_watch_rule",
+    "raise_into",
+)

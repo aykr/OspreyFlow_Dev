@@ -6,6 +6,7 @@ import os, pathlib, subprocess, sys
 CORE = pathlib.Path("OspreyFlow_Core")
 W = "../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py"
 B = "../OspreyFlow_Build/tests/services/api/test_boards.py"
+Q = "../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue.py"
 PLANTS = [
   ("a link type requiring a property offered and drawn",
    "services/api/boards.py",
@@ -44,6 +45,16 @@ PLANTS = [
    "    if loaded.type != drawn.type or drawn.provenance.drawn is None:\n        return None",
    "    if drawn.provenance.drawn is None:\n        return None",
    W, "unalike_of_another_type_or_drawn"),
+  ("the drawn item left out of the alert's evidence (shown to a reader who may not see it)",
+   "services/api/drawn_watches.py",
+   "        referent_node_ids=[drawn.id, loaded.id],",
+   "        referent_node_ids=[loaded.id],",
+   Q, "drawn_item_the_reader_may_not_see"),
+  ("the loaded node left out of the alert's evidence",
+   "services/api/drawn_watches.py",
+   "        referent_node_ids=[drawn.id, loaded.id],",
+   "        referent_node_ids=[drawn.id],",
+   Q, "loaded_node_the_reader_may_not_see"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 out = []
@@ -61,6 +72,6 @@ for words, f, old, new, test, k in PLANTS:
     tail += [l for l in lines if l.startswith("E  ")][:3]
     out.append(f"## {words}\nplant in {f}; -k {k}; exit {r.returncode}\n" + "\n".join(tail) + "\n")
     print(words, "->", "RED" if r.returncode else "GREEN (plant not caught!)")
-r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", W, B, "-q", "-p", "no:cacheprovider"], cwd=CORE, env=env, capture_output=True, text=True)
+r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", W, B, Q, "-q", "-p", "no:cacheprovider"], cwd=CORE, env=env, capture_output=True, text=True)
 out.append("## restored\n" + r.stdout.strip().splitlines()[-1] + "\n")
 pathlib.Path(sys.argv[1]).write_text("\n".join(out))
