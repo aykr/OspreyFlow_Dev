@@ -6,8 +6,11 @@ p5b_live_update.py), kept across the rehearsal's separate steps in a JSON file o
     python upg_images.py restore <state.json>   # teardown: put back, or remove the run's own
     python upg_images.py check   <state.json>   # exit 1 if a tag the run moved is not back
 
-Run with `p5b_live_update.py` beside it (copied from main, unchanged). Never a before-and-after
-difference of the machine's tags; another lane's changes are listed, not touched.
+Run with `p5b_live_update.py` beside it (copied from main, unchanged): `OwnImages` is P5b's, tested in
+`tests/test_live_driver_own_tags.py`; this file's own `_load`/`_save` round trip and claim filter are
+untested, and it holds under P5b's own prefix `osprey-p5b-hold/`, so a P5b run on the same server at the
+same time would see this run's hold as its own (and the reverse): never run the two together. Never a
+before-and-after difference of the machine's tags; another lane's changes are listed, not touched.
 """
 
 from __future__ import annotations
@@ -45,8 +48,8 @@ def main(argv: list[str]) -> int:
     elif verb == "claim":
         own = _load(state)
         rendered = yaml.safe_load(Path(argv[2]).read_text())
-        # A checkout's build (`build:`), or a release's reference built here in place of its pull
-        # (`upg_run.sh release-images`): both are the run's to put back.
+        # A checkout's build (`build:`), or an owned image named by the user repository's registry
+        # (a release-shaped reference, were one built here): both are the run's to put back.
         own.claim(
             s["image"]
             for s in rendered["services"].values()

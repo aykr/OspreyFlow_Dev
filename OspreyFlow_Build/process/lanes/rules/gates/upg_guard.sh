@@ -1,8 +1,9 @@
 # UPG's guards on the shared test server (P5b's `guarded`, in shell). Source it: `. upg_guard.sh`.
-# Every compose call names project osprey-upg and the deployment's own compose file, which must be
-# under the throwaway home and say `name: osprey-upg`; volume removal names osprey-upg_* alone; no
+# Every compose call names project osprey-upg (the real protection: it is hard-coded) and the deployment's
+# own compose file, which must say `name: osprey-upg` (its path check cannot fail as called, since D is
+# built from R; kept as a second line); volume removal names osprey-upg_* alone; no
 # prune and no image removal (images go through upg_images.py).
-R=/root/osprey-runs/rules-upg
+R=${UPG_ROOT:-/root/osprey-runs/rules-upg}   # UPG_ROOT: the red tests' stand-in only
 D=$R/home/.ospreyflow/deployments/osprey-upg
 UPG=osprey-upg
 

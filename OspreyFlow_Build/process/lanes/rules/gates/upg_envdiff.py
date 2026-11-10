@@ -1,9 +1,12 @@
-"""UPG: deployment.env compared key by key, never printing a value. Each key's value is hashed
+"""UPG: deployment.env compared key by key, never printing a value. For throwaway deployments only:
+a 12-hex prefix of a value's hash is safe to record for a random secret of a deployment that is gone,
+not for a lasting one's (a short or guessable value can be found from it). Each key's value is hashed
 (SHA-256, first 12 hex) so the record shows which keys were added, removed or changed, and that
 every other one is byte for byte as before, without carrying a secret.
 
     python upg_envdiff.py snap <deployment.env> <out.json>
-    python upg_envdiff.py diff <before.json> <after.json>   # exit 1 if a key held before changed
+    python upg_envdiff.py diff <before.json> <after.json>   # exit 1 if a key held before changed or
+                                                             # went, or the file's mode changed
 """
 
 from __future__ import annotations
@@ -51,7 +54,7 @@ def main(argv: list[str]) -> int:
     print(
         f"upg-envdiff: {len(set(a) & set(b)) - len(changed)} keys held before are byte for byte the same"
     )
-    return 1 if changed or removed else 0
+    return 1 if changed or removed or before["mode"] != after["mode"] else 0
 
 
 if __name__ == "__main__":

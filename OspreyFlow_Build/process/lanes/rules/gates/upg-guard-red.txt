@@ -1,9 +1,14 @@
---- red: volume of another project
-rc=2
---- red: compose file of another project
-REFUSED: volume osprey-small_postgres-data is not this run's
-rc=2
---- red: compose file outside the home
-rc=2
-REFUSED: /root/osprey-runs/rules-upg/home/tmp.NFym5UFsEN/compose.yaml is another project
-REFUSED: compose file outside the throwaway home
+--- red: another project's volume, as docker volume ls names it
+$ rm_volumes osprey-small_postgres-data osprey-upg_postgres-data
+    REFUSED: volume osprey-small_postgres-data is not this run's
+--- green: the run's own volumes
+$ rm_volumes osprey-upg_postgres-data osprey-upg_valkey-data
+    stand-in docker reached: volume rm osprey-upg_postgres-data osprey-upg_valkey-data
+--- green: the run's own compose file
+$ dc down -v
+    stand-in docker reached: compose -p osprey-upg -f /var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.BRmgTPcICG/home/.ospreyflow/deployments/osprey-upg/compose.yaml --env-file /var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.BRmgTPcICG/home/.ospreyflow/deployments/osprey-upg/deployment.env down -v
+--- red: the deployment's compose file names another project
+$ dc down -v
+    REFUSED: /var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/tmp.BRmgTPcICG/home/.ospreyflow/deployments/osprey-upg/compose.yaml is another project
+--- note: dc's path check (compose file outside the throwaway home) cannot fail as called, since D is
+    built from R; the real protection is the hard-coded -p osprey-upg on every compose call.

@@ -16,3 +16,9 @@ upg-folderhash: added none
 upg-folderhash: removed none
 upg-folderhash: changed (content or mode) none
 rc=0
+--- red: a file removed
+upg-folderhash: 2 files before, 1 after
+upg-folderhash: added none
+upg-folderhash: removed ['y']
+upg-folderhash: changed (content or mode) none
+rc=1

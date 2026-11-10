@@ -11,10 +11,13 @@
 #   stop | apply-build           the stand-in for update's pull of a release's images (none exists)
 #   files-twice                  today's files step twice, OSPREYFLOW_DEPLOYMENT_DIR set; hashes equal
 #   keys | gateway | health      the end-state asserts
-#   teardown                     down -v; refuses to remove a folder while anything of the run is left
+#   teardown                     down -v, the run's osprey-upg_* volumes and images; it removes no folder.
+#                                Exit 2 (REFUSED) on a failed down -v, a container of the project left, or
+#                                any volume (anonymous ones too) not in volumes.before: the caller removes
+#                                the run's folder only on exit 0. Shown red in upg-teardown-red.txt.
 # Every compose call goes through upg_guard.sh's dc; nothing here prunes or removes an image.
 set -u
-R=/root/osprey-runs/rules-upg
+R=${UPG_ROOT:-/root/osprey-runs/rules-upg}   # UPG_ROOT: the red tests' stand-in only
 . $R/tools/upg_guard.sh
 PY=$R/repo/.venv/bin/python
 CLI="env PATH=/root/.local/bin:$PATH HOME=$R/home DOCKER_CONFIG=/root/.docker OSPREYFLOW_HOME=$R/repo PYTHONPATH=.:packages:cli"
@@ -62,7 +65,8 @@ v0412-update)
   cd $R/repo
   [ "$(git describe --tags --exact-match 2>/dev/null)" = v0.4.12 ] || { say "REFUSED: the checkout is not at v0.4.12"; exit 2; }
   commit=$(git rev-parse HEAD)
-  $CLI .venv/bin/python -m ospreyflow backup --name osprey-upg < /dev/null | tail -2; say "backup exit $?"
+  $CLI .venv/bin/python -m ospreyflow backup --name osprey-upg < /dev/null > $R/logs/backup.out 2>&1
+  rc=$?; tail -2 $R/logs/backup.out; say "backup exit $rc"   # the command's status, not tail's
   point=$($CLI .venv/bin/python -c "
 from pathlib import Path; from harness.update import _keep_rollback_point
 print(_keep_rollback_point(Path('$D'), 'v0.4.12', '$commit'))")
@@ -70,6 +74,7 @@ print(_keep_rollback_point(Path('$D'), 'v0.4.12', '$commit'))")
   $PY $R/tools/upg_envdiff.py snap $D/deployment.env $R/logs/env.0-v0.4.12.json
   hash $R/logs/folder.0-before-files.json
   # As `git checkout <tag>` would: tracked files replaced, ignored ones (.install, .venv) kept.
+  [ -d "${2:-}" ] && [ -n "${3:-}" ] || { say "REFUSED: move needs an export folder and its sha"; exit 2; }
   rsync -a --delete --exclude .git --exclude .venv --exclude .install --exclude node_modules "$2/" $R/repo/ &&
     chown -R root:root $R/repo && git checkout -q -b upg-$3 && git add -A &&
     git -c user.name="UPG rehearsal" -c user.email=upg@ospreyflow.invalid commit -q -m "OspreyFlow — from $3" &&
@@ -102,7 +107,8 @@ files-twice)
     hash $R/logs/folder.f$n-before.json
     say "\$ OSPREYFLOW_DEPLOYMENT_DIR=<osprey-upg> python -m scripts.refresh --files-only   (pass $n)"
     env HOME=$R/home OSPREYFLOW_DEPLOYMENT_DIR=$D OSPREYFLOW_HOME=$R/repo PYTHONPATH=.:packages:cli \
-      .venv/bin/python -m scripts.refresh --files-only 2>&1 | tail -2; say "files step exit $?"
+      .venv/bin/python -m scripts.refresh --files-only > $R/logs/files.out 2>&1
+    rc=$?; tail -2 $R/logs/files.out; say "files step exit $rc"   # the command's status, not tail's
     hash $R/logs/folder.f$n-after.json
     $PY $R/tools/upg_folderhash.py diff $R/logs/folder.f$n-before.json $R/logs/folder.f$n-after.json
     say "pass $n folder diff exit $?"
@@ -133,9 +139,22 @@ health)
   say "owned images: $(dc config --images 2>/dev/null | grep -E 'osprey/|ghcr.io/aykr' | tr '\n' ' ')" ;;
 teardown)
   dc down -v --remove-orphans; rc=$?
-  left=$(docker ps -a -q --filter label=com.docker.compose.project=$UPG | wc -l)
+  left=$(docker ps -a -q --filter label=com.docker.compose.project=$UPG | wc -l | tr -d " ")
   [ $rc = 0 ] && [ "$left" = 0 ] || { say "REFUSED to go on: down -v exit $rc, $left containers left (take them down by project label first)"; exit 2; }
   rm_volumes $(docker volume ls -q --filter label=com.docker.compose.project=$UPG) || exit 2
+  # Every volume not there before the run, anonymous ones included (an image's anonymous volumes are
+  # orphaned when a container is recreated or removed without -v, and carry no project label). Listed
+  # and failed, never removed here: which of them is the run's is a person's call (upg-run4/leaked-volumes.txt).
+  # Another lane's new volumes on the shared server are listed, not failed.
+  orphans=""
+  for v in $(docker volume ls -q | sort | comm -13 $R/logs/volumes.before -); do
+    if echo "$v" | grep -qE '^[0-9a-f]{64}$' && [ -z "$(docker ps -a -q --filter volume=$v)" ]; then
+      orphans="$orphans $v"
+    else
+      say "a volume new since the run began, not an orphan (listed, not failed): $v"
+    fi
+  done
+  if [ -n "$orphans" ]; then say "REFUSED: anonymous volumes no container mounts, new since the run began:$orphans"; exit 2; fi
   if [ -f $R/logs/images-state.json ]; then
     (cd $R/tools && $PY upg_images.py restore $R/logs/images-state.json && $PY upg_images.py check $R/logs/images-state.json) || exit 2
   else
