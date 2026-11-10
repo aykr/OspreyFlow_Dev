@@ -103,6 +103,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    change naming another is refused. (5) *When* gains "a screening list refreshes"; a new rule cannot take the
    whole-deployment scope. (6) The migration puts each rule in its dataset's home case, reports any dataset without
    one, dry run first. **To overrule:** name the number.
+14. **Faster test runs (your word, T1): one product change I allowed.** T1's brief said "no product code", but the
+   biggest cost was the graph adapter applying the schema one statement per round trip (about 30 s per live test). I
+   ratified changing `graph_arcadedb/schema.py` and `client.py` so the schema goes as one script, for the Conduit's
+   start-up as well as the tests (one code path, rule 15). No restore on a refusal: main's own partial-apply
+   semantics, completed by the next idempotent apply (a restore could drop another replica's type). Measured: a fresh
+   schema 15.8 s to 0.2 s; the whole graph conformance suite passes. **To overrule:** say "tests only".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
