@@ -1,6 +1,9 @@
 # Stand-ins for the platform's managed stores on P7's kind cluster (`p7_kind.sh deploy`), in their own
 # namespace, as RDS, ElastiCache and S3 are outside the deployment's: Postgres 16 over TLS, Valkey over
 # TLS with a password, and SeaweedFS's S3 with keys. Throwaway credentials; never a deployment's.
+# **The Postgres stand-in refuses what RDS refuses** (CLAUDE.md rule 15, reviewer point 9): its master user
+# (`osprey`) is not a superuser, only CREATEDB and CREATEROLE as RDS's `rds_superuser` grants, and a
+# connection without TLS is refused (RDS for PostgreSQL 15 and later: `rds.force_ssl=1` by default).
 apiVersion: v1
 kind: Service
 metadata: {name: postgres, namespace: platform-managed}
@@ -21,21 +24,32 @@ spec:
       initContainers:
         - name: key
           image: localhost:5001/postgres:16.4
-          command: ["sh", "-c", "cp /tls/tls.crt /tls/tls.key /pgtls/ && chown 999:999 /pgtls/* && chmod 600 /pgtls/tls.key"]
+          command: ["sh", "-c", "cp /tls/tls.crt /tls/tls.key /pgtls/ && printf 'local all all trust\\nhostssl all all all scram-sha-256\\nhost all all all reject\\n' > /pgtls/pg_hba.conf && chown 999:999 /pgtls/* && chmod 600 /pgtls/tls.key"]
           volumeMounts: [{name: tls, mountPath: /tls}, {name: pgtls, mountPath: /pgtls}]
       containers:
         - name: postgres
           image: localhost:5001/postgres:16.4
-          args: ["-c", "ssl=on", "-c", "ssl_cert_file=/pgtls/tls.crt", "-c", "ssl_key_file=/pgtls/tls.key"]
+          args: ["-c", "ssl=on", "-c", "ssl_cert_file=/pgtls/tls.crt", "-c", "ssl_key_file=/pgtls/tls.key",
+                 "-c", "hba_file=/pgtls/pg_hba.conf"]
           env:
-            - {name: POSTGRES_USER, value: osprey}
-            - {name: POSTGRES_PASSWORD, value: throwaway-p7}
-            - {name: POSTGRES_DB, value: ospreyflow}
-          readinessProbe: {exec: {command: ["pg_isready", "-U", "osprey"]}, periodSeconds: 5}
-          volumeMounts: [{name: pgtls, mountPath: /pgtls}]
+            # The image's superuser is the platform's, never handed out; `osprey` is the master user.
+            - {name: POSTGRES_USER, value: postgres}
+            - {name: POSTGRES_PASSWORD, value: throwaway-p7-root}
+          readinessProbe: {exec: {command: ["pg_isready", "-U", "postgres"]}, periodSeconds: 5}
+          volumeMounts: [{name: pgtls, mountPath: /pgtls}, {name: rds, mountPath: /docker-entrypoint-initdb.d}]
       volumes:
         - {name: tls, secret: {secretName: standin-tls}}
         - {name: pgtls, emptyDir: {}}
+        - name: rds
+          configMap: {name: rds-master}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: rds-master, namespace: platform-managed}
+data:
+  master.sql: |
+    CREATE ROLE osprey LOGIN CREATEDB CREATEROLE NOSUPERUSER PASSWORD 'throwaway-p7';
+    CREATE DATABASE ospreyflow OWNER osprey;
 ---
 apiVersion: v1
 kind: Service

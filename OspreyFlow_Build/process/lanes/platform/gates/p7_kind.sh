@@ -240,7 +240,10 @@ deploy() {
     --from-literal=MINIO_ENDPOINT=s3.platform-managed.svc.cluster.local:8333 --from-literal=MINIO_USE_SSL=false \
     --from-literal=MINIO_CREDENTIALS=keys --from-literal=MINIO_ACCESS_KEY=p7admin \
     --from-literal=MINIO_SECRET_KEY=throwaway-p7 --from-literal=SSL_CERT_FILE=/etc/p7-ca/ca.crt | kubectl apply -f -
-  for d in api worker; do
+  # Every pod the render runs as the bucket's service account (IRSA), as the render names them.
+  local irsa
+  irsa=$(PYTHONPATH=. .venv/bin/python -c "import yaml; v=yaml.safe_load(open('$OUT/values.yaml')); print(' '.join(w['name'] for w in v['workloads'] if w.get('serviceAccountName')))")
+  for d in $irsa; do
     kubectl -n "$NS" set env "deployment/$d" --from=configmap/p7-kind-overrides >/dev/null
     kubectl -n "$NS" patch "deployment/$d" --type=strategic -p "{\"spec\":{\"template\":{\"spec\":{
       \"volumes\":[{\"name\":\"p7-ca\",\"secret\":{\"secretName\":\"standin-ca\"}}],
@@ -271,6 +274,12 @@ check() {
   for pod in $(kubectl -n "$NS" get pods --field-selector=status.phase=Running -o name); do
     printf '%s: %s\n' "$pod" "$(kubectl -n "$NS" exec "$pod" -- id 2>&1 | head -1)"
   done
+  echo "== the Conduit built without Java (ADR-148 decision 12): /opt/java empty, no java, and its label"
+  kubectl -n "$NS" exec deployment/api -- sh -c \
+    'if [ -z "$(ls -A /opt/java)" ] && ! command -v java >/dev/null; then echo "PASS no Java in the Conduit"; else echo "FAIL Java in the Conduit"; fi'
+  docker image inspect --format '{{index .Config.Labels "org.ospreyflow.runtime.java.included"}}' \
+    "$(PYTHONPATH=. .venv/bin/python -c "import yaml; print(next(i['target'] for i in yaml.safe_load(open('$OUT/images.yaml'))['images'] if i['target'].split('/')[-1].startswith('api:')))")" \
+    | sed 's/^/label org.ospreyflow.runtime.java.included=/'
   echo "== claims and budgets"; kubectl -n "$NS" get pvc; kubectl -n "$NS" get pdb
   echo "== Calico policies"; kubectl -n "$NS" get networkpolicies.projectcalico.org
   echo "== egress: the internet refused; the managed stand-ins and the namespace's own pods reached"
