@@ -198,6 +198,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    (ADR-110 Amendment 19, reserved for rules). The other homes were the Studio's Runs or *Admin › Schedules*. It lands
    after the v0.5.0 tag, and the release notes list it as a known issue. Overrule here.
 
+28. **Case did not move to Sol tonight.** It paused cleanly at 21:32, but the switch needs its session on your
+   account to end, and this session is not permitted to end another process. So case carries on, on your account,
+   and Sol holds 2 of the 10 sessions (rules and the merger), not 3. To move it in the morning, close case's
+   Terminal window, then run `bash OspreyFlow_Build/scripts/lanes_launch.sh resume case --account sol` from the
+   repository root. It resumes from its HANDOFF.md.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
