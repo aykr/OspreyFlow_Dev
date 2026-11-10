@@ -256,14 +256,18 @@ def remove_step_tables(prepared: PreparedStaging, storage: ObjectStorageConfig) 
     """Remove the step tables a staged load wrote (ADR-148 Amendment 3 point 2): a load the
     deployment's ceiling refuses is judged after them, since its rows are the last step's table,
     and a refused load leaves nothing behind. Only this load's own tables, by the paths it wrote.
-    A table the store will not remove is logged and the rest still removed: the caller's refusal,
-    not a store error, is what the person is told."""
-    fs = _staging.filesystem(storage)
+    A table the store will not remove, or a store not reached, is logged and the rest still
+    removed: the caller's refusal, never an error of the removal's, is what the person is told."""
+    try:
+        fs = _staging.filesystem(storage)
+    except Exception:  # the store not reached: logged, the refusal still told
+        _log.warning("a refused load's step tables were not removed", exc_info=True)
+        return
     for path in prepared.paths.values():
         try:
             fs.delete_file(path)
-        except OSError as error:
-            _log.warning("a refused load's step table %s was not removed: %s", path, error)
+        except Exception:  # any error here is logged, never told in place of the refusal
+            _log.warning("a refused load's step table %s was not removed", path, exc_info=True)
 
 
 async def remove_step_tables_on(

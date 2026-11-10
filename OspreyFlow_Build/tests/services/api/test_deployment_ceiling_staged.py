@@ -241,7 +241,7 @@ async def test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was(
     def stubborn(self: LocalStore, path: str) -> None:
         if not refused_once:
             refused_once.append(path)
-            raise OSError("the store would not remove it")
+            raise RuntimeError("the store would not remove it")
         removed(self, path)
 
     monkeypatch.setattr(LocalStore, "delete_file", stubborn)

@@ -283,12 +283,13 @@ def _refuse_staged_rows_above_the_ceiling(
     (`refuse_rows_above_the_ceiling`), before the seed makes its case or writes anything."""
     if ceiling.is_the_scheme_s_highest:
         return
-    from scripts.seed_public import PublicSeedRefused, read_staged
     from services.ingest.ceiling import AboveTheDeploymentCeiling, refuse_rows_above_the_ceiling
 
     try:
+        from scripts.seed_public import read_staged
+
         _manifest, recipe, rows = read_staged(folder)
-    except (PublicSeedRefused, OSError, ValueError) as error:
+    except Exception as error:  # any cause: refused in words, never a traceback (fails closed)
         raise SeedRefused(
             f"the {name} demo pack could not be read to judge its markings, so nothing was "
             f"loaded: {error}"
