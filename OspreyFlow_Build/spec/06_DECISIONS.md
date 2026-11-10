@@ -31411,34 +31411,40 @@ committed `recipes/<id>.yaml` at runtime with the `git` binary (GPL-2.0-only), w
    stays a git repository that `git log` reads, and one the old code made is opened as it is.
 2. **No config-driven program runs.** The commit object is built directly, with one path changed in the parent's
    tree. So no hook, signer, file-system monitor, filter or credential helper runs, as dulwich's own worktree
-   commit and stage would run them. What config is read is stated exactly:
-   - the repository's own config, for its format, `core.bare` and `core.worktree`, when it is opened. A
-     repository whose config names another working tree is refused, so the index describes only the tree the
-     file is written to;
-   - no user or system config, either at first use (such as the first ref a user's config names) or for the index, which
-     is opened with an empty config.
+   commit and stage would run them. Config is still read, and none of it runs a program:
+   - **The repository's own config**, as dulwich reads it to open any repository. That covers its format and
+     `extensions.*`, `core.bare`, `core.worktree` and `core.sharedRepository`, the object store's settings and
+     `objects/info/alternates`, and any file it includes by `include.path` or `includeIf`. A repository whose
+     config names another working tree is refused, and so is a `.git` that is not the root's own directory (a
+     `.git` file naming another repository's directory, or a link). So the index, objects, lock and `HEAD`
+     written are only this repository's.
+   - **Not dulwich's default stack of the user's and the system's config**, at first use or for the index,
+     which is opened with an empty config. A file the repository's own config includes by name is still read.
 3. **A recipe id is one plain file name**: a letter or digit, then letters, digits, `.`, `_` or `-`, checked again
    by dulwich's `validate_path`. No `..` or `.git` tree entry can be written.
-4. **No link is followed below the recipe root.**
-   - Each directory is opened with `O_NOFOLLOW`, and a link where the file goes is refused.
-   - The lock file is opened with `O_NOFOLLOW` too.
-   - The bytes go to a new file, fsynced, which `os.replace` puts in place. A temporary file a crash left
-     behind is swept by the next publish.
+4. **No link is followed on the recipe's own path, and `.git` and the lock file are not links.**
+   - Each directory below the root is opened with `O_NOFOLLOW`, and a link where the file goes is refused.
+   - `.git` must be a real directory, and the lock file is opened with `O_NOFOLLOW`.
+   - Inside the git directory, dulwich's own reads and writes follow links as git does.
+   - The bytes go to a new file, fsynced, which `os.replace` puts in place. A temporary file a crash left behind
+     is swept by the next publish.
 5. **`HEAD` moves by compare-and-swap.** A publish whose parent moved under it is refused (`GitCommitError`, "publish
    again"), and the other writer's commit stands.
 6. **One lock over write, index and commit.**
    - Within the process, a lock. Across processes (the Prison Intelligence seed beside a running Conduit), an
      exclusive `flock` on `osprey-publish.lock` in the git directory.
-   - The `flock` is waited for for at most 30 s, then the publish is refused, so a process stopped while holding
-     it hangs nothing.
+   - Both are waited for under one 30 s deadline, then the publish is refused. So publishes queued behind a
+     process stopped while holding the `flock` are refused within one wait, none holding a worker thread for a
+     wait of its own.
    - First use makes the git directory aside, with `HEAD` already on `refs/heads/main`, and renames it into
-     place. A rival's made at the same moment is joined, not refused.
+     place. A rival's made at the same moment is joined, not refused, and an aside directory a crashed first
+     use left is swept once it is ten minutes old.
    - A writer that takes neither lock, such as an operator's own `git commit`, can still race the index. It
      cannot lose its commit (point 5).
 
 **Tests** (`OspreyFlow_Build/tests/services/api/test_recipe_repository.py` and `test_studio_publish_commit_file.py`).
 Each is red by a plant at its call site, naming the reason it must fail with (`process/lanes/studio-b/l1.7a/red_plants.py`,
-27 plants).
+31 plants).
 - **Point 1:** `test_publish_writes_a_commit_real_git_reads`, `test_a_second_publish_keeps_the_first_in_the_history`,
   `test_publish_commits_on_top_of_a_repository_real_git_made`, all under `fsck --strict`.
 - **Point 2:** `test_publish_never_execs_a_binary`, with every config-driven program planted.
@@ -31446,20 +31452,25 @@ Each is red by a plant at its call site, naming the reason it must fail with (`p
     hooks skipped) and the clean filter (its worktree stage).
   - `core.hooksPath`, the `reference-transaction` and `post-index-change` hooks, `core.fsmonitor` and the
     credential helper are inert in dulwich 1.2.21. They stay planted because git honours them.
-  - Also `test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says` and
-    `test_a_repository_whose_config_names_another_tree_is_refused`.
+  - Also `test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says`,
+    `test_a_repository_whose_config_names_another_tree_is_refused` and
+    `test_a_git_directory_that_is_not_the_root_s_own_is_refused` (a `.git` file and a link).
 - **Point 3:** `test_a_recipe_id_that_is_not_one_file_name_is_refused`, with
   `test_an_id_of_the_shapes_the_studio_mints_is_accepted` (a ULID).
 - **Point 4:** `test_a_symlinked_recipes_directory_is_refused`, `test_a_symlinked_recipe_file_is_refused`,
-  `test_a_linked_publish_lock_is_refused` and `test_a_temporary_file_a_crash_left_is_swept`.
+  `test_a_linked_publish_lock_is_refused`, `test_a_git_directory_that_is_not_the_root_s_own_is_refused` and
+  `test_a_temporary_file_a_crash_left_is_swept`.
 - **Point 5:** `test_a_real_writer_moving_head_mid_commit_is_refused` (a real `git commit` in the window) and
   `test_a_failed_commit_is_an_error_not_a_quiet_success`.
 - **Point 6:**
   - `test_the_index_is_read_and_written_under_a_lock_another_process_honours`, probed from a second open at the
-    file's write, the index's write and the commit. It is red with the lock narrowed to the swap.
+    file's write, the index's read and write, the commit and the swap. It is red with the lock narrowed to the
+    swap, and with it taken after the write.
   - `test_concurrent_publishes_each_commit_their_own_bytes`.
-  - `test_a_publish_held_off_too_long_is_refused_not_hung`.
-  - `test_a_rival_making_the_repository_first_is_joined_not_refused`.
+  - `test_a_publish_held_off_too_long_is_refused_not_hung` and
+    `test_publishes_queued_behind_a_held_lock_share_one_wait`.
+  - `test_a_rival_making_the_repository_first_is_joined_not_refused` (the rival is the real `git`, run once in
+    the window; not a second dulwich publish) and `test_an_aside_directory_a_crashed_first_use_left_is_swept`.
 
 **Cost and what is open.** A horizontally scaled deployment still has one checkout per instance (the stated gap in
 `write_and_commit_recipe`). An operator's own git on the volume is not serialised with a publish (point 6).
