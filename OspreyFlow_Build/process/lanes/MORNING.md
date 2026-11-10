@@ -153,6 +153,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    [10] is checked tonight or dropped. Also: four lines in the guides still call built features "coming" (team
    routing, the drawn-item alert, adding a gazetteer); docs fixes those four before the publish. **To overrule:**
    name the number.
+   *Updated:* tonight's publish is **v0.5.0** (the last release, v0.4.12, was 5 November; today adds major features,
+   so a minor bump): docs writes its CHANGELOG section (release notes and upgrade steps) and moves every guide to "For
+   OspreyFlow v0.5.0" before the publish, and the user repository gets the tag `v0.5.0` with the release. **To
+   overrule:** name another version.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
