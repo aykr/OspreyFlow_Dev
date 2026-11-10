@@ -1,40 +1,64 @@
 ## the release runs no drawn watch (its dataset never given)
 plant in services/api/app.py; -k raises_its_owners_alert; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_a_release_meeting_a_drawn_item_raises_its_owners_alert_and_says_so
-1 failed, 3 deselected, 1 warning in 2.89s
+1 failed, 5 deselected, 1 warning in 2.04s
 E       ValueError: not enough values to unpack (expected 1, got 0)
 
 ## the release's count never put on its answer
 plant in services/api/app.py; -k raises_its_owners_alert; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_a_release_meeting_a_drawn_item_raises_its_owners_alert_and_says_so
-1 failed, 3 deselected, 1 warning in 2.12s
+1 failed, 5 deselected, 1 warning in 1.82s
 E       AssertionError: assert 0 == 1
 E        +  where 0 = LoadReportView(load_id='load-r', recipe_id='r', recipe_version=2, rows_read=1, rows_deduplicated=0, rows_already_loade...[], expert_steps=[], refresh_notes=[], rows_below_watermark=0, rows_without_watermark=0, metering=None, withheld=False).drawn_watch_alerts
 
 ## every owner's drawn-watch alerts counted for the releaser
 plant in services/api/recipe_run.py; -k only_of_their_own; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_a_release_tells_the_releaser_only_of_their_own_drawn_watch_alerts
-1 failed, 3 deselected, 1 warning in 1.99s
+1 failed, 5 deselected, 1 warning in 1.92s
 E       AssertionError: assert 1 == 0
 E        +  where 1 = LoadReportView(load_id='load-r', recipe_id='r', recipe_version=2, rows_read=1, rows_deduplicated=0, rows_already_loade...[], expert_steps=[], refresh_notes=[], rows_below_watermark=0, rows_without_watermark=0, metering=None, withheld=False).drawn_watch_alerts
 
 ## a failing drawn watch failing the release
 plant in services/api/recipe_run.py; -k failing_drawn_watch; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_a_failing_drawn_watch_never_fails_the_release_and_is_audited
-1 failed, 3 deselected, 1 warning in 2.18s
+1 failed, 5 deselected, 1 warning in 1.92s
 E       RuntimeError: the board store is down
+
+## the failing watch's error written under the releaser
+plant in services/api/recipe_run.py; -k said_under_them; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_another_owners_failing_watch_is_said_under_them_never_under_the_releaser
+1 failed, 5 deselected, 1 warning in 1.83s
+E       AssertionError: assert {'load_id': '...tore refused'} == {'load_id': '...ould not run'}
+E         
+E         Omitting 2 identical items, use -vv to show
+
+## the failing watch's detail written under the releaser, not its owner
+plant in services/api/recipe_run.py; -k said_under_them; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_another_owners_failing_watch_is_said_under_them_never_under_the_releaser
+1 failed, 5 deselected, 1 warning in 2.08s
+E       ValueError: too many values to unpack (expected 1)
+
+## an unresolved owner's identity provider error written under the releaser
+plant in services/api/recipe_run.py; -k cannot_be_resolved; exit 1
+        failed = [r for r in world.audit.records if r["action"] == "watch_evaluation_failed"]
+>       assert [r["principal"].id for r in failed] == ["dora"]
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_an_owner_who_cannot_be_resolved_is_named_in_no_audit_entry
+1 failed, 5 deselected, 1 warning in 1.63s
+E       AssertionError: assert ['dora', 'dora'] == ['dora']
+E         
+E         Left contains one more item: 'dora'
 
 ## a copy of the level check in the drawn watches
 plant in services/api/drawn_watches.py; -k level_check_is_the_apps_own; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_release.py::test_the_read_sets_level_check_is_the_apps_own
-1 failed, 3 deselected, 1 warning in 1.80s
-E       assert <function holds_a_level_in at 0x11faf5d00> is <function holds_a_level_in at 0x10e226b60>
-E        +  where <function holds_a_level_in at 0x11faf5d00> = drawn_watches.holds_a_level_in
+1 failed, 5 deselected, 1 warning in 1.64s
+E       assert <function holds_a_level_in at 0x117ab9ee0> is <function holds_a_level_in at 0x10e07eb60>
+E        +  where <function holds_a_level_in at 0x117ab9ee0> = drawn_watches.holds_a_level_in
 
 ## the safety net open to anyone holding remove_case, not the administrator alone
 plant in services/api/app.py; -k non_member_holding_remove_case; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_home_cases.py::test_a_non_member_holding_remove_case_finds_no_case_home_or_not
-1 failed, 17 deselected, 1 warning in 1.97s
+1 failed, 17 deselected, 1 warning in 1.76s
 E       AssertionError: ['{"detail":{"error":"home_case_kept","message":"this is its dataset\'s home case, which holds the dataset\'s reports, alerts and promotion reviews, so it is kept while the dataset exists"}}', '', '{"error":"investigation_not_found"}']
 E       assert [409, 204, 404] == [404, 404, 404]
 E         
@@ -42,7 +66,7 @@ E
 ## no safety net on the remove route
 plant in services/api/app.py; -k safety_net_removes; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_home_cases.py::test_the_administrators_safety_net_removes_a_working_case_but_keeps_a_home_case
-1 failed, 17 deselected, 1 warning in 1.91s
+1 failed, 17 deselected, 1 warning in 1.69s
 E       AssertionError: {"error":"investigation_not_found"}
 E       assert 404 == 409
 E        +  where 404 = <Response [404 Not Found]>.status_code
@@ -50,16 +74,19 @@ E        +  where 404 = <Response [404 Not Found]>.status_code
 ## a home case removed by the administrator
 plant in services/api/app.py; -k safety_net_removes; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_home_cases.py::test_the_administrators_safety_net_removes_a_working_case_but_keeps_a_home_case
-1 failed, 17 deselected, 1 warning in 2.26s
+1 failed, 17 deselected, 1 warning in 1.91s
 E       AssertionError: 
 E       assert 204 == 409
 E        +  where 204 = <Response [204 No Content]>.status_code
 
 ## an item above the ceiling unnamed at the sheet and the route
-plant in services/api/promotions.py; -k at_the_sheet_and_at_the_route or approval_after_the_ceiling; exit 1
+plant in services/api/promotions.py; -k at_the_sheet_and_at_the_route or approval_after_the_ceiling or layer_merge or drawn_merges_item or retyped; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_an_item_above_the_deployments_ceiling_is_refused_at_the_sheet_and_at_the_route
 FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_an_approval_after_the_ceiling_was_lowered_promotes_nothing
-2 failed, 5 deselected, 1 warning in 1.94s
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_layer_merge_of_an_item_above_the_ceiling_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_drawn_merges_item_above_the_ceiling_refuses_the_merge
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_drawn_merges_retyped_item_above_the_ceiling_writes_no_copy
+5 failed, 7 deselected, 1 warning in 1.87s
 E       assert [] == ['Marked OFFI...g, OFFICIAL.']
 E         
 E         Right contains one more item: "Marked OFFICIAL-SENSITIVE, above this deployment's highest marking, OFFICIAL."
@@ -67,32 +94,48 @@ E         Right contains one more item: "Marked OFFICIAL-SENSITIVE, above this d
 ## a picture above the ceiling unnamed
 plant in services/api/promotions.py; -k picture_above_the_ceiling; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_picture_above_the_ceiling_is_named_and_left_behind
-1 failed, 6 deselected, 1 warning in 1.74s
+1 failed, 11 deselected, 1 warning in 1.77s
 E       assert "The picture is marked OFFICIAL-SENSITIVE, above this deployment's highest marking, OFFICIAL." in ["Marked OFFICIAL-SENSITIVE, above this deployment's highest marking, OFFICIAL."]
 
 ## the record stored whatever it would write
 plant in services/api/promotions.py; -k own_record_is_refused; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_the_promotions_own_record_is_refused_above_the_ceiling
-1 failed, 6 deselected, 1 warning in 1.78s
-E       AssertionError: assert not {'01M73989DR38MXKV7ECXY9X2AS': PromotionRecord(id='01M73989DR38MXKV7ECXY9X2AS', load_id='promotion-01M73989DR38MXKV7EC...49, 20, 184506, tzinfo=datetime.timezone.utc), reason='The load was refused, and nothing was written.', grant_id=None)}
-E        +  where {'01M73989DR38MXKV7ECXY9X2AS': PromotionRecord(id='01M73989DR38MXKV7ECXY9X2AS', load_id='promotion-01M73989DR38MXKV7EC...49, 20, 184506, tzinfo=datetime.timezone.utc), reason='The load was refused, and nothing was written.', grant_id=None)} = <services.api.promotion_store.InMemoryPromotionStore object at 0x1274b7c50>.records
-E        +    where <services.api.promotion_store.InMemoryPromotionStore object at 0x1274b7c50> = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x1274b6fc0>, cases=<tests.services.api.test_...ject at 0x1274dd4f0>, store=<services.api.promotion_store.InMemoryPromotionStore object at 0x1274b7c50>, removed=set()).store
+1 failed, 11 deselected, 1 warning in 1.95s
+E       AssertionError: assert not {'01M73A6SVAQ8VX67NBRFJNG1MQ': PromotionRecord(id='01M73A6SVAQ8VX67NBRFJNG1MQ', load_id='promotion-01M73A6SVAQ8VX67NBR...8, 6, 0, 42251, tzinfo=datetime.timezone.utc), reason='The load was refused, and nothing was written.', grant_id=None)}
+E        +  where {'01M73A6SVAQ8VX67NBRFJNG1MQ': PromotionRecord(id='01M73A6SVAQ8VX67NBRFJNG1MQ', load_id='promotion-01M73A6SVAQ8VX67NBR...8, 6, 0, 42251, tzinfo=datetime.timezone.utc), reason='The load was refused, and nothing was written.', grant_id=None)} = <services.api.promotion_store.InMemoryPromotionStore object at 0x130fb4740>.records
+E        +    where <services.api.promotion_store.InMemoryPromotionStore object at 0x130fb4740> = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x131049a90>, cases=<tests.services.api.test_...ject at 0x1310157f0>, store=<services.api.promotion_store.InMemoryPromotionStore object at 0x130fb4740>, removed=set()).store
 
 ## the load committed after the ceiling was lowered
 plant in services/api/promotions.py; -k load_itself_is_refused; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_the_load_itself_is_refused_above_the_ceiling_and_the_promotion_rejected
-1 failed, 6 deselected, 1 warning in 1.70s
-E       AssertionError: {"id":"01M7398BS7DA5S8H1CY70YBCM6","load_id":"promotion-01M7398BS7DA5S8H1CY70YBCM7","trigger":"analyst_promotion","dataset_id":"src","dataset_name":"Prison intel","case_id":"case-k","case_name":"case-k","board_id":null,"proposed_by":"alice","proposed_by_name":"alice","proposed_at":"2026-11-10T17:49:22.599108Z","status":"committed","reviewed_by":"dana","reviewed_by_name":"dana","reviewed_at":"2026-11-10T17:49:22.602259Z","reason":null,"nodes":1,"links":0,"left_out":[],"revert_command":null,"may_review":false,"why_not":null}
+1 failed, 11 deselected, 1 warning in 1.69s
+E       AssertionError: {"id":"01M73A6W7JNTH665237W4F7KZV","load_id":"promotion-01M73A6W7JNTH665237W4F7KZW","trigger":"analyst_promotion","dataset_id":"src","dataset_name":"Prison intel","case_id":"case-k","case_name":"case-k","board_id":null,"proposed_by":"alice","proposed_by_name":"alice","proposed_at":"2026-11-10T18:06:02.482319Z","status":"committed","reviewed_by":"dana","reviewed_by_name":"dana","reviewed_at":"2026-11-10T18:06:02.485326Z","reason":null,"nodes":1,"links":0,"left_out":[],"revert_command":null,"may_review":false,"why_not":null}
 E       assert (200, None) == (422, 'above_...hest_marking')
 E         
+
+## a waiting drawn merge's match unjudged against a lowered ceiling at its re-check
+plant in services/api/drawn_merge.py; -k waiting_drawn_merge; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_waiting_drawn_merge_whose_match_is_above_a_lowered_ceiling_is_rejected
+1 failed, 11 deselected, 1 warning in 1.72s
+E       AssertionError: assert (422, 'above_...hest_marking') == (409, 'items_changed')
+E         
+E         At index 0 diff: 422 != 409
+
+## a copy's own marking left out of what the record judges
+plant in services/api/drawn_merge.py; -k copy_raised_after; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_copy_raised_after_its_item_was_judged_is_refused_before_anything_is_written
+1 failed, 11 deselected, 1 warning in 1.73s
+E       AssertionError: assert not {'01M73A70Y3GTAVNEAFMEA6J349': [CopyRow(kind='node', original='01M73A70XT1ESSSA77QZJMYNB3', type='Organisation', prope...ies='{}', source='01M73A70XT1ESSSA77QZJMYNB3', target='01M73A70XW4AS2S26NCJHS82M8', written_id=None, same_as_id=None)]}
+E        +  where {'01M73A70Y3GTAVNEAFMEA6J349': [CopyRow(kind='node', original='01M73A70XT1ESSSA77QZJMYNB3', type='Organisation', prope...ies='{}', source='01M73A70XT1ESSSA77QZJMYNB3', target='01M73A70XW4AS2S26NCJHS82M8', written_id=None, same_as_id=None)]} = <services.api.promotion_store.InMemoryPromotionStore object at 0x14227f350>.copies
+E        +    where <services.api.promotion_store.InMemoryPromotionStore object at 0x14227f350> = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x1422ba750>, cases=<tests.services.api.test_... at 0x14227f350>, removed=set(), drawn='01M73A70XM4PJN33C7DBB71AJT', home='home-5', board='01M73A70XM4PJN33C7DBB71AJW').store
 
 ## a drawn merge's match above the ceiling unjudged
 plant in services/api/drawn_merge.py; -k drawn_merges_match; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_ceiling.py::test_a_drawn_merges_match_above_the_ceiling_refuses_the_merge_and_writes_nothing
-1 failed, 6 deselected, 1 warning in 1.70s
+1 failed, 11 deselected, 1 warning in 1.62s
 E       AssertionError: {"error":"above_the_deployments_highest_marking","detail":"This would write something marked above this deployment's highest marking, OFFICIAL, so nothing was written.","problems":["This would write something marked above this deployment's highest marking, OFFICIAL, so nothing was written."]}
 E       assert (422, 'above_...hest_marking') == (422, 'check_failed')
 E         
 
 ## restored
-29 passed, 1 warning in 2.61s
+36 passed, 1 warning in 2.60s
