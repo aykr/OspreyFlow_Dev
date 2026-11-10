@@ -27,7 +27,7 @@ from typing import Any, Protocol
 
 import yaml
 
-from . import demo, starters
+from . import conduit_client, demo, starters
 from . import deployments as named
 from . import grading as grading_verb
 from . import maps as map_verbs
@@ -79,7 +79,7 @@ from .run import (
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
     "update", "uninstall", "repair-sign-in", "switch", "models", "apply", "deployments",
-    "starters", "map", "grading",
+    "starters", "map", "grading", "release", "run",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -388,6 +388,29 @@ def _parser() -> argparse.ArgumentParser:
     regrade.add_argument(
         "--stop-api", action="store_true", help="stop the Conduit for the change, start it after"
     )
+
+    # ADR-140 Amendment 9 decision 4: a dataset's release, as the Studio's Export and Import do.
+    release = verbs.add_parser("release", help="export or import a dataset's release (YAML)")
+    release_actions = release.add_subparsers(dest="action", metavar="ACTION", required=True)
+    export = release_actions.add_parser("export", help="the dataset's release, into a new folder")
+    export.add_argument("dataset", help="the dataset's id")
+    export.add_argument("--name", required=True, help="the release's name (lower case, '-', '.')")
+    export.add_argument("--release-version", required=True, help="the release's own version")
+    export.add_argument("--out", required=True, type=Path, help="a new, empty folder")
+    imported = release_actions.add_parser("import", help="a release's folder, as drafts")
+    imported.add_argument("folder", type=Path, help="the folder an export made")
+    imported.add_argument("--dataset", required=True, help="the receiving dataset's id")
+    imported.add_argument("--dry-run", action="store_true", help="what it would write; no writes")
+    # ADR-141 decision 9: a run triggered by the deployment's service identity, as its owner.
+    run_verb = verbs.add_parser("run", help="run a deployed pipeline, as its owner")
+    run_verb.add_argument("dataset", help="the dataset's id")
+    run_verb.add_argument("pipeline", help="the pipeline's id")
+    run_verb.add_argument("--version", default="latest", help="a deployed version, or latest")
+    run_verb.add_argument(
+        "--external-run-id", required=True, help="the orchestrator's run id: a retry loads once"
+    )
+    run_verb.add_argument("--wait", action="store_true", help="wait for the run to finish")
+    run_verb.add_argument("--fail-on", help="held, or rejections>N%%: exit 2 when met")
 
     uninstall = verbs.add_parser("uninstall", help="remove the deployment")
     uninstall.add_argument("--keep-data", action="store_true")
@@ -1337,6 +1360,30 @@ def _conduit_running(ctx: _Context, directory: Path) -> bool:
     return any(str(row.get("State", "")) not in stopped for row in _services(output))
 
 
+def _conduit_verb(args: argparse.Namespace, ctx: _Context) -> int:
+    """`release` and `run`: thin clients of the Conduit's routes (`conduit_client.py`), at the
+    deployment's own address unless `OSPREY_API_URL` names another."""
+    with conduit_client.client(
+        conduit_client.api_url(ctx.env, named.address_of(ctx.config_path))
+    ) as http:
+        if args.verb == "run":
+            return conduit_client.run(
+                http, token=conduit_client.service_token(ctx.env, http), dataset=args.dataset,
+                pipeline=args.pipeline, version=args.version,
+                external_run_id=args.external_run_id, wait=args.wait,
+                fail_on=conduit_client.parse_fail_on(args.fail_on),
+            )  # fmt: skip
+        token = conduit_client.person_token(ctx.env)
+        if args.action == "export":
+            return conduit_client.release_export(
+                http, token=token, dataset=args.dataset, name=args.name,
+                version=args.release_version, out=args.out,
+            )  # fmt: skip
+        return conduit_client.release_import(
+            http, token=token, dataset=args.dataset, folder=args.folder, dry_run=args.dry_run
+        )
+
+
 def _grading(args: argparse.Namespace, ctx: _Context) -> int:
     """ADR-143 Amendment 6: `scripts.grading_change` in a one-shot from the Conduit's image, then,
     after a change, the setting, the render and the start (`cli/ospreyflow/grading.py`)."""
@@ -1505,6 +1552,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _map(args, ctx)
     if verb == "grading":
         return _grading(args, ctx)
+    if verb in ("release", "run"):
+        return _conduit_verb(args, ctx)
     if verb == "apply":
         return _apply_settings(ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb
