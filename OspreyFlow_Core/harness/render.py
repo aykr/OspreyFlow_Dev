@@ -1710,13 +1710,14 @@ def _render_runbook(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     # ADR-114 Amendment 38 decision 9: where `harness.backup` writes this deployment's sets, not
     # the setting verbatim (the schema's placeholder is no folder named off a server). Imported
     # here, as `harness.backup` imports this module.
-    from harness.backup import backups_folder
+    from harness.backup import FALLBACK_SPELLING, named_backups_folder
 
-    folder, unnamed = backups_folder(config)
+    named = named_backups_folder(config)
+    sets = generated_folder(config)
     backups = (
-        f"`~/OspreyFlow/backups/{generated_folder(config)}/` (`osprey.yaml` names no folder)"
-        if unnamed
-        else f"`{folder / generated_folder(config)}/`"
+        f"`{named.rstrip('/')}/{sets}/`"
+        if named is not None
+        else f"`{FALLBACK_SPELLING}/{sets}/` (`osprey.yaml` names no folder)"
     )
     hosts = (
         "\n".join(f"- `{h.name}` — `{h.address}`" for h in config.cluster.hosts)

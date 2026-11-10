@@ -626,19 +626,26 @@ def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
-def _backup_root(directory: Path) -> Path:
-    """Where the update's backup is written: `harness.backup.default_out_root` for the deployment's
-    own `osprey.yaml` copy and its folder's name (ADR-114 Amendment 37), so never inside the
-    checkout, which `harness.backup` refuses."""
-    from harness.backup import default_out_root, fallback_backups_folder
+def _settings(directory: Path, repo: Path) -> tuple[Path, list[str]]:
+    """The `osprey.yaml` `harness.backup` and `harness.restore` read for this deployment, and the
+    arguments that name it to them (ADR-114 Amendment 38 decision 9), as `ospreyflow backup` and
+    `restore` do: none for the checkout's own (rendered under `deploy/generated/`, read from the
+    checkout's `osprey.yaml`); a deployment kept by name (ADR-138), its own `osprey.yaml` and the
+    folder it is rendered under."""
+    if directory.parent.resolve() == (repo / "deploy" / "generated").resolve():
+        return repo / "osprey.yaml", []
+    config = directory / "osprey.yaml"
+    return config, ["--config", str(config), "--generated-root", str(directory.parent)]
 
-    copy = directory / "osprey.yaml"
-    if copy.is_file():
-        from schemas.deployment import OspreyConfig
 
-        config = OspreyConfig.model_validate(yaml.safe_load(copy.read_text(encoding="utf-8")) or {})
-        return default_out_root(config, directory.name)
-    return fallback_backups_folder() / directory.name
+def _backup_root(directory: Path, config_path: Path) -> Path:
+    """Where the update's backup is written: `harness.backup.default_out_root` for the settings
+    the backup reads and the deployment's folder's name (ADR-114 Amendment 37), so never inside
+    the checkout, which `harness.backup` refuses."""
+    from harness.backup import default_out_root
+    from harness.render import load_config
+
+    return default_out_root(load_config(config_path), directory.name)
 
 
 def real_host(
@@ -649,16 +656,10 @@ def real_host(
     def run(argv: Sequence[str]) -> tuple[int, str]:
         return _subprocess(argv, cwd=repo)
 
-    # ADR-114 Amendment 38 decision 9: the deployment named to the harness by its own
-    # `osprey.yaml` and the folder it is rendered under, as `ospreyflow backup` does for one kept
-    # by name (ADR-138); for the checkout's own, the copy rendered beside its compose file.
-    copy = directory / "osprey.yaml"
-    pointed = ["--config", str(copy), "--generated-root", str(directory.parent)]
-    if not copy.is_file():
-        pointed = []
+    config_path, pointed = _settings(directory, repo)
 
     def backup() -> Path:
-        root = _backup_root(directory)
+        root = _backup_root(directory, config_path)
         before = set(root.iterdir()) if root.is_dir() else set()
         _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name, *pointed,
                        "--out-root", str(root)], "back up every store")  # fmt: skip

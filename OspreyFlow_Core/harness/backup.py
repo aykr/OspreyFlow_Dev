@@ -108,21 +108,32 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 LEGACY_PLACEHOLDER: str = StorageRoots.model_fields["backups"].default
 
 
+#: The fallback folder as the operator writes it: what setup offers and the runbook prints.
+FALLBACK_SPELLING = "~/OspreyFlow/backups"
+
+
 def fallback_backups_folder() -> Path:
     """`~/OspreyFlow/backups`: what setup offers (Amendment 37 decision 1), and where a set goes
     when the deployment's `osprey.yaml` names no folder (decision 2)."""
-    return Path.home() / "OspreyFlow" / "backups"
+    return Path(FALLBACK_SPELLING).expanduser()
+
+
+def named_backups_folder(config: OspreyConfig) -> str | None:
+    """`components.storage.backups` as written, when it names a folder (ADR-114 Amendment 38
+    decision 1: the placeholder, or a blank, names none off a server of your own); else `None`."""
+    storage = config.components.storage
+    value = storage.backups.strip() if "backups" in storage.model_fields_set else ""
+    placeholder = value and Path(value) == Path(LEGACY_PLACEHOLDER)
+    return value if value and (not placeholder or self_contained_small(config)) else None
 
 
 def backups_folder(config: OspreyConfig) -> tuple[Path, str | None]:
     """The deployment's backups folder (`components.storage.backups`, ADR-114 Amendment 37
     decision 1, read for every profile), and what to tell the operator when there was none: an
     `osprey.yaml` from before the amendment names none, or names the placeholder."""
-    storage = config.components.storage
-    value = storage.backups.strip() if "backups" in storage.model_fields_set else ""
-    placeholder = value and Path(value) == Path(LEGACY_PLACEHOLDER)
-    if value and (not placeholder or self_contained_small(config)):
-        return Path(value).expanduser(), None
+    named = named_backups_folder(config)
+    if named is not None:
+        return Path(named).expanduser(), None
     folder = fallback_backups_folder()
     return folder, (
         f"This deployment's osprey.yaml names no backups folder of its own (none, or the "

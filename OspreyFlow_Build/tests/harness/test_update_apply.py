@@ -785,7 +785,7 @@ def test_update_moves_a_self_contained_small(
     directory = tmp_path / "deploy" / "generated" / "small"
     directory.mkdir(parents=True)
     backups = tmp_path / "srv-backups"
-    (directory / "osprey.yaml").write_text(yaml.safe_dump({
+    (tmp_path / "osprey.yaml").write_text(yaml.safe_dump({
         "profile": "small",
         "network": {"public_origin": "https://osprey.example.internal",
                     "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
@@ -839,14 +839,21 @@ def test_an_updates_backup_is_never_written_inside_the_checkout(
     monkeypatch.setattr(update, "_subprocess", subprocess_)
     fallback = tmp_path / "home" / "OspreyFlow" / "backups" / "local-lite"
     for raw in ({}, {"components": {"storage": {"backups": "/var/lib/osprey/backups"}}}):
-        (directory / "osprey.yaml").write_text(yaml.safe_dump(raw))
+        (repo / "osprey.yaml").write_text(yaml.safe_dump(raw))
         made = update.real_host(directory, repo).backup()
         assert made.parent == fallback
         assert not made.resolve().is_relative_to(repo.resolve())
-    (directory / "osprey.yaml").write_text(
+    (repo / "osprey.yaml").write_text(
         yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "mine")}}})
     )
+    # The checkout's own deployment is read from the checkout's `osprey.yaml`, as `ospreyflow
+    # backup` reads it, not from a rendered copy that a save without a re-render left stale
+    # (ADR-114 Amendment 38 decision 9); and the harness is given no --config of its own.
+    (directory / "osprey.yaml").write_text(
+        yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "stale")}}})
+    )
     assert update.real_host(directory, repo).backup().parent == tmp_path / "mine" / "local-lite"
+    assert all("--config" not in argv and "--generated-root" not in argv for argv in ran)
 
 
 def test_an_updates_backup_and_restore_name_a_named_deployment_to_the_harness(
@@ -881,7 +888,8 @@ def test_an_updates_backup_and_restore_name_a_named_deployment_to_the_harness(
         root = given(argv, "--generated-root", defaults.DEFAULT_OUT_ROOT)
         profile = argv[argv.index("--profile") + 1]
         if not (root / profile / "compose.yaml").is_file():
-            return 1, f"backup: no rendered deployment at {root / profile / 'compose.yaml'}."
+            said = module.removeprefix("harness.")
+            return 1, f"{said}: no rendered deployment at {root / profile / 'compose.yaml'}."
         if module == "harness.backup":
             (given(argv, "--out-root", folder) / "20261110T000000Z-beta-abc").mkdir(parents=True)
         return 0, ""
@@ -892,6 +900,7 @@ def test_an_updates_backup_and_restore_name_a_named_deployment_to_the_harness(
     assert made.parent == folder / "beta"
     host.restore(made)
     for argv in ran:
+        assert "--config" in argv, argv
         assert argv[argv.index("--config") + 1] == str(directory / "osprey.yaml"), argv
         assert argv[argv.index("--generated-root") + 1] == str(directory.parent), argv
 

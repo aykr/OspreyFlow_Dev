@@ -308,6 +308,18 @@ def test_the_runbook_names_the_folder_backups_are_written_to_not_the_placeholder
     storage = {"storage": {"backups": "/srv/osprey/backups"}}
     named = backups_row({"deployment": {"name": "alpha"}, "components": storage})
     assert "`/srv/osprey/backups/alpha/`" in named, named
+    # A folder written from `~` is printed as written, so no renderer's home goes into the file.
+    home = backups_row({"components": {"storage": {"backups": "~/sets/"}}})
+    assert "`~/sets/local-lite/`" in home, home
+    # On Small on a server of your own the placeholder is the folder (decision 1).
+    server = backups_row({
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.internal",
+                    "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
+                            "key": "/etc/ospreyflow/tls/osprey.key"}},
+        "components": {"storage": {"backups": "/var/lib/osprey/backups"}},
+    })  # fmt: skip
+    assert "`/var/lib/osprey/backups/small/`" in server, server
 
 
 def test_the_runbook_does_not_send_the_operator_to_a_workspace_admin_page(
