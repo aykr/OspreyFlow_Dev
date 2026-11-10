@@ -115,6 +115,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    server, and do not remove those containers, or the next `up` must pull from ghcr.io; (b) its ingest image
    (`ghcr.io/aykr/ingest@sha256:52f8c292…`, the batch profile) is not on the server at all, so an ingest job there
    would pull it from ghcr.io and needs registry access. Nothing to decide unless you plan an ingest on it.
+16. **No new demo-track steps before tonight's release (your word, 10 November afternoon).** What a review or
+   test finds goes to CARRIES for tomorrow, unless it is a real access-control (rule 3) problem or blocks the demo.
+   T1's merged parts are folded into its one step on the dashboard.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

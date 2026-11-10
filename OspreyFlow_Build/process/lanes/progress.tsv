@@ -62,13 +62,10 @@ platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
 rules-b	L2.11a	S	done	The rule editor's standards: BPMN 2.0 and DMN, export, import refusal, Show as BPMN (split from L2.11) (merged 1d01f49)
-admin	T1	M	building	Faster live test runs: measure, store-only live sets, selection by change, parallel workers, the slow few
+admin	T1	M	building	Faster live runs (merged so far: part 1 afe3354, the batched schema 2456d2c, part 3 94a74c5, part 2a 0d6d924; left: marks, parallel, sleeps)
 platform-b	preflight	S	done	A named install's preflight checks its own published ports (merged dc93d13)
 platform-b	ADR-147 Am 3	S	done	The six gazetteer-only identifiers withheld from every reader (merged 6db8ce8)
 docs	P5b rows	S	done	P5b's guide rows, and L2.5b's and L2.5c's lines (merged c4c294c)
 studio-b	tips	S	done	The Studio's tips (L1.8's patches over L2.7) and L1.7a's carries (merged 5d5c0f8)
-admin	T1 p1	S	done	Every server run measured (merged afe3354)
-admin	T1 DDL	S	done	The graph schema applied as one script (merged 2456d2c)
-admin	T1 p3	S	done	The live check by selection (merged 94a74c5)
 case	L3.H1	S	building	A hygiene step: one read-set rule, a home case kept, the run report's drawn-watch count
 platform-b	P5b proof	S	building	ADR-114 Am 38 decision 9's owed live proof of the update path
