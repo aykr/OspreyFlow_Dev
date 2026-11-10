@@ -9,21 +9,25 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { currentBrand } from "../brand/brand";
+import { whyNotByRole } from "../help/roles";
 import type { AdminApi } from "./api";
+import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
 import { Audit } from "./sections/Audit";
 import { Connections } from "./sections/Connections";
 import { Dashboards } from "./sections/Dashboards";
 import { Datasets } from "./sections/Datasets";
 import { DemoPacks } from "./sections/DemoPacks";
+import { GradingScheme } from "./sections/GradingScheme";
 import { Maps } from "./sections/Maps";
 import { Models } from "./sections/Models";
 import { Operations } from "./sections/Operations";
 import { People } from "./sections/People";
-import { ProposedTypesSection } from "./sections/ProposedTypes";
 import { Roles } from "./sections/Roles";
 import { System } from "./sections/System";
 import "./admin.css";
+import { HELP_TITLE } from "../help/roles";
+import { RolesHelpPage } from "../help/RolesHelpPage";
 
 export { feedFreshness } from "./sections/Dashboards";
 export { joinWords, removalWords, ROLES } from "./sections/People";
@@ -53,10 +57,10 @@ export const ADMIN_GROUPS: AdminGroup[] = SECTIONS.groups;
 export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   people: (api) => <People api={api} />,
   roles: (api) => <Roles api={api} />,
+  "grading-scheme": (api) => <GradingScheme api={api} />,
   dashboards: (api) => <Dashboards api={api} />,
   datasets: (api) => <Datasets api={api} />,
   connections: (api) => <Connections api={api} />,
-  "proposed-types": (api) => <ProposedTypesSection api={api} />,
   // ADR-145 decision 9 (L2.6): what ages and when, then the schedules.
   operations: (api) => <Operations api={api} />,
   system: (api) => <System api={api} />,
@@ -133,15 +137,39 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const section = shown.find((s) => s.id === chosen) ?? shown.find((s) => s.screen) ?? shown[0];
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
+  // L2.7: *Needs you* asks for a section (Operations, for an overdue promotion); taken once.
+  useEffect(() => {
+    const take = () => {
+      const opening = takeOpening("admin");
+      if (opening) {
+        moved.current = true;
+        setChosen(opening.section);
+      }
+    };
+    take();
+    return onOpening(take);
+  }, []);
   useEffect(() => {
     // Choosing a section moves focus to its heading, as a page change would; the first draw does not.
     if (moved.current) heading.current?.focus();
   }, [chosen]);
   const govuk = currentBrand() === "govuk";
+  // ADR-145 Amendment 4 decision 12: *Roles, teams and Authors*, the one help page, opened from here.
+  const [help, setHelp] = useState(false);
+  if (help) {
+    return (
+      <section aria-label="Admin" className="admin-place">
+        <RolesHelpPage backTo="Admin" onBack={() => setHelp(false)} />
+      </section>
+    );
+  }
   return (
     <section aria-label="Admin" className="admin-place">
       <h2 className={govuk ? "govuk-heading-l admin-place__title" : "value admin-place__title"}>Admin</h2>
-      {!section && <p className="label">Your account holds no administration right.</p>}
+      <div>
+        <button type="button" className={govuk ? "govuk-link" : "btn"} onClick={() => setHelp(true)}>{HELP_TITLE}</button>
+      </div>
+      {!section && <p className="label">{`Your account holds no administration right. ${whyNotByRole("administer_system")}`}</p>}
       {section && (
         <div className="admin-place__body">
           <SideNavigation

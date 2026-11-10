@@ -1,5 +1,5 @@
 {
-  "about": "The Admin place's sections (ADR-145 decision 5, ADR-110 Amendment 14). Each is shown only to a holder of its right, and each built section's routes refuse a principal without it, read from the routes' own checks. A section with no screen yet is a coming placeholder, shown only to holders of its right. The rights of Roles, Grading scheme, Approval rights, Uploads and Audit, and Proposed types under Data, were settled by the orchestrator on 7 November 2026. Audit and Operations' ageing were built in L2.6.",
+  "about": "The Admin place's sections (ADR-145 decision 5, ADR-110 Amendment 14). Each is shown only to a holder of its right, and each built section's routes refuse a principal without it, read from the routes' own checks. A section with no screen yet is a coming placeholder, shown only to holders of its right. The rights of Roles, Grading scheme, Approval rights, Uploads and Audit were settled by the orchestrator on 7 November 2026. Audit and Operations' ageing were built in L2.6; L2.7 removed Proposed types (decided on the Studio's Model tab) and built Grading scheme.",
   "groups": [
     {
       "label": "People",
@@ -13,8 +13,7 @@
       "label": "Data",
       "sections": [
         { "id": "datasets", "label": "Datasets", "right": "administer_system", "screen": "admin/sections/Datasets.tsx" },
-        { "id": "connections", "label": "Connections", "right": "administer_system", "screen": "admin/sections/Connections.tsx" },
-        { "id": "proposed-types", "label": "Proposed types", "right": "manage_ontology", "screen": "admin/sections/ProposedTypes.tsx" }
+        { "id": "connections", "label": "Connections", "right": "administer_system", "screen": "admin/sections/Connections.tsx" }
       ]
     },
     {
@@ -29,8 +28,7 @@
     {
       "label": "Policies",
       "sections": [
-        { "id": "grading-scheme", "label": "Grading scheme", "right": "administer_system",
-          "coming": "The deployment's grading scheme, read-only, with the command that changes it." },
+        { "id": "grading-scheme", "label": "Grading scheme", "right": "administer_system", "screen": "admin/sections/GradingScheme.tsx" },
         { "id": "approval-rights", "label": "Approval rights", "right": "administer_system",
           "coming": "Who may approve each kind of decision, how many people can, and a warning where fewer than two can." },
         { "id": "uploads", "label": "Uploads", "right": "administer_system",

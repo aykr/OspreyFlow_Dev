@@ -6,7 +6,7 @@ import { placesFor, type PlaceId } from "../shell/places";
 
 export type Rights = ReadonlySet<string> | null;
 // ADR-145 decision 1: the Ingest Studio, Admin and Proposed types left the rail for the place
-// switcher (`shell/places.ts`); Proposed types is an Admin tab until the Studio's Model tab holds it.
+// switcher (`shell/places.ts`); proposed types are decided on the Studio's Model tab since L2.7.
 // ADR-146 decision 2: Monitoring left the Glass for Rules and Monitoring, a place of its own; its
 // Connection strength (ADR-139), which is not alerts, stayed in the Glass under the rail's More.
 export type RailEntry = "cases" | "ownership" | "history" | "explore" | "questions" | "dashboards" | "strength";

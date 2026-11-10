@@ -17,6 +17,8 @@ export interface ModelProposalsProps {
   bearerToken: string;
   datasetId: string;
   datasetName: string;
+  /** Told after each decision, so the tab's count and *Needs you* are read again (L2.7). */
+  onDecided?: () => void;
 }
 
 type Decision = "accept" | "decline";
@@ -66,7 +68,7 @@ function sentence(error: unknown): string {
   return "Nothing was decided; try again.";
 }
 
-export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName }: ModelProposalsProps) {
+export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName, onDecided }: ModelProposalsProps) {
   const govuk = currentBrand() === "govuk";
   const [proposals, setProposals] = useState<ModelProposal[] | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -151,6 +153,7 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
           : `${title(proposal)} declined: its links stay in their case and are never promoted.`,
       );
       setDeciding(null);
+      onDecided?.();
       await load();
     } catch (error) {
       setProblem(sentence(error));

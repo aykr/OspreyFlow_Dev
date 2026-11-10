@@ -5,6 +5,9 @@
 // role and access check is the case's, exactly as before.
 import { useEffect, useState } from "react";
 
+import { NEEDS_YOU_WORDS, proposedIn, readNeedsYou, type NeedsYou } from "../admin/needsYou/needsYouApi";
+import { onOpening, peekOpening, takeOpening } from "../admin/needsYou/openings";
+
 import { Select } from "../design/primitives/Select";
 import { Tabs } from "../design/primitives/Tabs";
 import { type CaseListing, listCases } from "../investigation/cases";
@@ -93,6 +96,42 @@ function Studio({
   const datasetName = dataset?.name ?? "this dataset";
   const servingCase = (cases ?? []).find((c) => c.id === investigationId);
   const sources = useRegisteredSources(apiBaseUrl, bearerToken, datasetId, cases !== null, sourcesGeneration);
+  // ADR-145 decision 11 (A2), ADR-090 Amendment 4 (L2.7): the proposed link types this person may
+  // decide in this dataset, as the Conduit counted them for them (never one above their clearance).
+  const [needs, setNeeds] = useState<NeedsYou | null>(null);
+  const [needsUnread, setNeedsUnread] = useState(false);
+  const [decisions, setDecisions] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    readNeedsYou(apiBaseUrl, bearerToken)
+      .then((found) => {
+        if (cancelled) return;
+        setNeeds(found);
+        setNeedsUnread(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setNeeds(null);
+        setNeedsUnread(true); // said, never shown as none to decide (rule 2)
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, decisions]);
+  const proposed = proposedIn(needs, datasetId);
+  const tabs = STUDIO_PLACES.map((t) => (t.id === "model" && proposed > 0 ? { ...t, label: `1 Model · ${proposed} proposed` } : t));
+  // *Needs you*'s proposals open this dataset's Model tab (`admin/needsYou/openings.ts`).
+  useEffect(() => {
+    if (datasetId === null) return;
+    const take = () => {
+      // Taken only when it is this dataset's: one for another is left for the reload into it.
+      if (peekOpening("studio")?.datasetId !== datasetId) return;
+      takeOpening("studio");
+      setPlace("model");
+    };
+    take();
+    return onOpening(take);
+  }, [datasetId]);
 
   function choose(id: string) {
     const caseId = caseForDataset(cases ?? [], id, investigationId);
@@ -133,11 +172,24 @@ function Studio({
         {problem && <span role="alert">{problem}</span>}
       </div>
       <ReadinessStrip packs={servingCase?.domains} pipelines={data.pipelines} sources={sources} runs={data.runs} />
-      <Tabs tabs={STUDIO_PLACES} activeId={place} onChange={(id) => setPlace(id as StudioPlace)} />
+      {proposed > 0 && place !== "model" && (
+        <p className="caption studio-proposals-reminder" style={{ margin: 0, padding: "var(--sp-4) var(--sp-16)" }}>
+          <button type="button" className="btn" aria-describedby="studio-proposals-tip" onClick={() => setPlace("model")}>
+            {NEEDS_YOU_WORDS.reminder(proposed)}
+          </button>{" "}
+          <span id="studio-proposals-tip" role="note">{NEEDS_YOU_WORDS.reminderTip}</span>
+        </p>
+      )}
+      {needsUnread && (
+        <p className="caption" role="status" style={{ margin: 0, padding: "var(--sp-4) var(--sp-16)" }}>
+          {NEEDS_YOU_WORDS.unreadProposals}
+        </p>
+      )}
+      <Tabs tabs={tabs} activeId={place} onChange={(id) => setPlace(id as StudioPlace)} />
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
         {place === "model" && <ModelTab datasetName={datasetName} packs={servingCase?.domains} />}
-        {place === "model" && datasetId && <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}><ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} /></div>}
+        {place === "model" && datasetId && <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}><ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} onDecided={() => setDecisions((n) => n + 1)} /></div>}
         {place === "sources" && (
           <SourcesTab
             apiBaseUrl={apiBaseUrl}

@@ -258,13 +258,16 @@ def test_the_reached_half_sees_the_case_s_refusal(journey: Any) -> None:
 #: 9 November: the deployment's grading scheme, reference settings as the yardstick is, no record's
 #: content, so the Reports Viewer reading it is within decision 10. Pinned, so a route added with no
 #: right, or a right taken off one, fails here until it is weighed against decision 10 (rule 12: the
-#: sweep below cannot see a route that names nothing).
+#: sweep below cannot see a route that names nothing). `my_needs_you_route` (L2.7, ADR-145 decision
+#: 11) weighed at L2.7: the reader's own *Needs you*, whose overdue promotions go only to a current
+#: recipient and whose proposals only to a holder of `accept_types`, neither of which a Reports
+#: Viewer is, so it answers them empty (`test_needs_you.py`).
 OPEN_TO_ANY_SIGNED_IN = {
     "list_datasets_route", "case_datasets_route", "list_investigations", "set_tab_state",
     "get_investigation", "list_case_views", "open_case_view", "readiness_route", "liveness_route",
     "openapi_document_route", "get_ontology_route", "get_map_providers_route", "get_map_tile_route",
     "get_map_local_source_route", "list_connectors", "list_domain_packs", "get_handling_scheme_route",
-    "get_yardstick_route", "get_grading_scheme_route", "list_transforms", "my_rights_route",
+    "get_yardstick_route", "get_grading_scheme_route", "list_transforms", "my_rights_route", "my_needs_you_route",
     "model_engines_route", "case_model_engines_route", "issue_ws_ticket",
 } | {
     # L3.4 (ADR-143 Amendment 2 decision 1), weighed at its independent review on 9 November: a

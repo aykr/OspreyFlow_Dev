@@ -47,9 +47,9 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     place(ALL);
     expect(listed()).toEqual([
       "# People", "People and roles", "Roles", "Dashboard identities",
-      "# Data", "Datasets", "Connections", "Proposed types",
+      "# Data", "Datasets", "Connections",
       "# Running", "Operations", "System", "Models", "Maps",
-      "# Policies", "Grading scheme (coming)", "Approval rights (coming)", "Uploads (coming)",
+      "# Policies", "Grading scheme", "Approval rights (coming)", "Uploads (coming)",
       "Audit",
       "Demo packs",
     ]); // prettier-ignore
@@ -67,7 +67,7 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     serve();
     render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["investigate", "edit_pipelines"])} />);
     expect(screen.queryByRole("navigation", { name: "Admin sections" })).toBeNull();
-    expect(screen.getByText("Your account holds no administration right.")).toBeTruthy();
+    expect(screen.getByText(/^Your account holds no administration right\. You need Administer system/)).toBeTruthy();
   });
 
   it("draws each built section from its screen, and a placeholder from none", () => {

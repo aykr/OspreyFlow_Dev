@@ -454,8 +454,9 @@ class LinkTypeService:
         return await self._store.get(proposal_id)
 
     async def proposals(self, principal: Principal) -> list[LinkTypeProposal]:
-        """The administrator's list: their own unit's proposals, newest first."""
-        return await self._store.list_authorized(principal)
+        """The administrator's list: their own unit's proposals that name no dataset, newest first,
+        chosen in the store's query (L2.7)."""
+        return await self._store.list_authorized(principal, without_dataset=True)
 
     async def _pending_for_decision(
         self, proposal_id: str, principal: Principal
@@ -602,6 +603,17 @@ class LinkTypeService:
             view = ModelProposalView.of(proposal, in_model=where)
             views.append(view if may_read_words else view.without_words())
         return views
+
+    async def open_proposal_count(self, dataset_id: str) -> int:
+        """How many of this dataset's proposals are still to decide (pending, or accepted and lost
+        from both the live model and the draft), as a number alone: *Needs you* asks it only for a
+        reader `may_read_proposal_words` clears (L2.7), so no proposal leaves the service."""
+        live, drafted, _ = await self._model_link_types(dataset_id)
+        return sum(
+            1 for p in await self._store.for_dataset(dataset_id)
+            if p.status is ProposalStatus.PENDING
+            or (p.status is ProposalStatus.ACCEPTED and p.name not in live | drafted)
+        )  # fmt: skip
 
     async def _decidable(self, dataset_id: str, proposal_id: str) -> LinkTypeProposal:
         """A proposal of this dataset still to decide: pending, or accepted and then lost from

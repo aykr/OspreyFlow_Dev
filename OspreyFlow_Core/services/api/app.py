@@ -150,6 +150,8 @@ from schemas.admin import (
     InviteInput,
     LayerAction,
     LayerDryRun,
+    NeedsYou,
+    NeedsYouProposals,
     OperationsAgeing,
     OrganisationArrival,
     OrganisationLinkInput,
@@ -450,6 +452,7 @@ from . import kyc as kyc_module
 from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
 from . import model_usage as model_usage_module
+from . import needs_you as needs_you_module
 from . import ownership as ownership_module
 from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
@@ -9338,15 +9341,43 @@ async def test_admin_connection(
     return result
 
 
+async def _connection_body(request: Request) -> ConnectionInput:
+    """Admin › Connections' body, read here rather than by FastAPI, whose 422 carries each refused
+    input back: a secret's value pasted into the field for its name, or into any other, would be
+    answered to the screen (L2.7; ADR-140 Amendment 13: a secret is never answered). The refusal
+    names each field and why, never what was sent, as `_model_admin_body` does for Models."""
+    raw = await request.body()
+    try:
+        return ConnectionInput.model_validate_json(raw)
+    except ValidationError as invalid:
+        try:
+            sent = model_admin_module.sent_values(json.loads(raw))
+        except ValueError:
+            sent = {raw.decode("utf-8", "replace")}
+        words = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc'])}: "
+            + str(e.get("msg", "")).removeprefix("Value error, ")
+            for e in invalid.errors(include_input=False, include_context=False, include_url=False)
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "connection_refused",
+                    "detail": model_admin_module.redacted(words, sent)},
+        ) from None  # fmt: skip
+
+
 @app.post(
     "/v1/admin/connections",
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
 )
 async def add_admin_connection(
-    body: ConnectionInput, principal: PrincipalDep, sources: SourcesDep, audit: AuditDep
+    request: Request, principal: PrincipalDep, sources: SourcesDep, audit: AuditDep
 ) -> Connection:
-    """An administrator names a connection (ADR-140 Amendment 4). Files only until phase 9."""
+    """An administrator names a connection (ADR-140 Amendments 4 and 13): files, SQL, API or JSON,
+    each naming its secret, never carrying it. The body is read here (`_connection_body`), so a
+    value pasted into a field the schema refuses is never answered back (L2.7)."""
+    body = await _connection_body(request)
     # ADR-140 Amendment 13 (the orchestrator's review of L1.6): a host that is, or resolves to, an
     # address inside the deployment is refused before it is kept; the schema refuses written forms.
     try:
@@ -16746,6 +16777,63 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     return RightsResponse(rights=sorted(rights_for(principal.roles)))
 
 
+@app.get("/v1/me/needs-you")
+async def my_needs_you_route(
+    request: Request,
+    principal: PrincipalDep,
+    ageing: PromotionAgeingDep,
+    investigations: InvestigationsDep,
+    datasets: DatasetsDep,
+    link_types: LinkTypesDep,
+    scheme: HandlingSchemeDep,
+) -> NeedsYou:
+    """The reader's *Needs you* (ADR-145 decision 11, A2; L2.7; `needs_you.py` says what each
+    half reads). It names no right because each half is gated by what it lists, as the reader. The
+    overdue promotions are served only while the reader is still a recipient (`alerts_for` asks
+    `_promotion_recipients` again now). The proposed link types are counted only for a holder of
+    `accept_types`, only in the datasets their own cases load into, and without any proposal they
+    may not read."""
+    app_ = request.app
+    # Only a promotion still waiting is served (one approved, rejected or withdrawn since its alert
+    # is not), with its words as they stand now; the people are read once for every alert.
+    now = datetime.now(UTC)
+    source = app_.state.waiting_promotions
+    current = (
+        {w.promotion_id: w for w in await source.all_waiting()}
+        if getattr(source, "recorded", False) else {}
+    )  # fmt: skip
+    people: list[PersonAccount] = []
+    if current:
+        people = await app_.state.identity_admin.list_people()
+
+    async def still(p: promotion_ageing_module.PendingPromotion) -> list[str]:
+        if p.promotion_id not in current:
+            return []
+        # The promotion as the seam holds it now, with its items' marking (the contract's field).
+        return await _promotion_recipients(app_, current[p.promotion_id], people)
+
+    words_now = promotion_ageing_module.overdue_words
+    overdue = [
+        n.model_copy(update={"words": words_now(current[n.promotion_id], now)})
+        for n in await ageing.alerts_for(principal.id, still)
+    ]
+    proposals: list[NeedsYouProposals] = []
+    if Right.ACCEPT_TYPES in rights_for(principal.roles):
+        reached = await needs_you_module.reached_datasets(
+            principal, investigations.list_for, datasets.ids_of_case
+        )
+        held = await datasets.egress_of(reached) if reached else {}
+        names = {d: held[d].name for d in reached if d in held}
+
+        async def words(dataset_id: str) -> bool:
+            return await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+
+        proposals = await needs_you_module.proposals_to_decide(
+            [d for d in reached if d in held], names, link_types.open_proposal_count, words
+        )
+    return NeedsYou(promotions_overdue=overdue, proposals=proposals)
+
+
 # --- Admin › Models (ADR-135 Amendment 2, ADR-112 Amendment 7) ----------------------------------
 # Every route needs `manage_models` (rule 4). None returns, logs or audits a key: the key route
 # reads its own body, so no validation error can echo it; the gateway's words are never passed on.
@@ -17325,13 +17413,17 @@ async def _admin_dataset_of(datasets: DatasetStore, dataset_id: str) -> Dataset:
 
 
 async def _promotion_recipients(
-    app: FastAPI, p: promotion_ageing_module.PendingPromotion
+    app: FastAPI,
+    p: promotion_ageing_module.PendingPromotion,
+    people: Sequence[PersonAccount] | None = None,
 ) -> list[str]:
     """Decision 11's recipients of one overdue promotion, read now (at the sweep, and again at
     each read of `alerts_for`): the dataset's home case's Authors holding `review_promotions` and
     its unit's administrators, cleared to its marking (`promotion_ageing.recipients_of`). The
     dataset's unit and marking are read as they stand now, not as the promotion recorded them, and
-    a dataset no longer held has no recipients. A team's grant is not expanded to its members."""
+    a dataset no longer held has no recipients. The items' own marking is the promotion's, as the
+    seam holds it now, so a dataset lowered while it waits widens nothing (CARRIES row 46). A
+    team's grant is not expanded to its members."""
     current = (await app.state.datasets.egress_of([p.dataset_id])).get(p.dataset_id)
     if current is None:
         return []
@@ -17340,7 +17432,8 @@ async def _promotion_recipients(
     )
     home = await app.state.datasets.home_case_of(p.dataset_id)
     authors = await _authors_of(app.state.investigations, home.investigation_id) if home else []
-    people = await app.state.identity_admin.list_people()
+    if people is None:  # a read of several alerts passes the people it read once (L2.7)
+        people = await app.state.identity_admin.list_people()
     store = getattr(app.state, "custom_roles", None)
     custom = await store.current_rights() if store is not None else {}
     return promotion_ageing_module.recipients_of(

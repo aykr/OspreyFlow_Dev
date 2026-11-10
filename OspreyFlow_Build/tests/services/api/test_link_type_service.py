@@ -102,8 +102,16 @@ class MemoryStore:
             raise ProposalNotFoundError(pid)
         return p
 
-    async def list_authorized(self, principal: Principal) -> list[LinkTypeProposal]:
-        return [p for p in await self.all() if p.owning_unit == principal.org_unit]
+    async def list_authorized(
+        self, principal: Principal, *, without_dataset: bool = False
+    ) -> list[LinkTypeProposal]:
+        """As the store's query: the unit's, and with `without_dataset` only those naming none."""
+        return [
+            p for p in await self.all()
+            # As SQL's `dataset_id IS NULL`: an empty id is a dataset id, not none.
+            if p.owning_unit == principal.org_unit
+            and not (without_dataset and p.dataset_id is not None)
+        ]  # fmt: skip
 
     async def decide(self, pid: str, **kw: Any) -> bool:
         p = self.rows[pid]

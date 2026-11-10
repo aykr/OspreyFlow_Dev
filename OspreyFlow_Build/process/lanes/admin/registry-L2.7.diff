@@ -1,0 +1,43 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 86c45ad..7c7379e 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -859,6 +859,9 @@ export const MAP_VIEW_ACTIONS = defineActionRegistry("MAP_VIEW_ACTIONS", [
+ ] as const);
+ 
+ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
++  // L2.12 (ADR-145 Amendment 4 decision 12): a right's tip, and the help page from Admin.
++  "read-a-rights-tip-by-keyboard",
++  "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard",
+   "save-a-persons-roles-by-keyboard",
+   "register-a-dashboard-by-keyboard",
+   "remove-a-dashboard-by-keyboard",
+@@ -913,6 +916,28 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+   "read-a-cases-rule-audit-by-keyboard",
+   "page-through-the-audit-by-keyboard",
+   "set-when-promotions-are-overdue-by-keyboard",
++  // L2.7 (ADR-140 Amendments 13 and 15; ADR-145 decision 12 and Amendment 4 decision 12): an API
++  // connection named with its fields and a connection tested; the grading scheme's command copied;
++  // the tips of a role, a team's lead and a dataset's Authors read with their controls.
++  "name-an-api-connection-by-keyboard",
++  "name-a-sql-connection-by-keyboard",
++  "name-a-json-connection-by-keyboard",
++  "test-a-connection-by-keyboard",
++  "copy-the-grading-change-command-by-keyboard",
++  "read-a-roles-tip-by-keyboard",
++  "read-a-teams-lead-tip-by-keyboard",
++  "read-a-datasets-authors-tip-by-keyboard",
++] as const);
++
++// ADR-145 decision 11 (A2), L2.7: the top bar's Needs you and the Studio's proposals reminder.
++export const NEEDS_YOU_ACTIONS = defineActionRegistry("NEEDS_YOU_ACTIONS", [
++  "read-a-needs-you-entrys-tip-by-keyboard",
++  "open-operations-from-needs-you-by-keyboard",
++  "open-a-datasets-model-tab-from-needs-you-by-keyboard",
++  "open-the-model-tab-from-the-studios-reminder-by-keyboard",
++  // ADR-145 Amendment 4 decision 12: Home's What you can do, and what you answer for.
++  "open-what-you-answer-for-by-keyboard",
++  "read-why-i-can-do-this-by-keyboard",
+ ] as const);
+ 
+ // ADR-110 decision 7 (D5): the Publish screen's structured schedule.

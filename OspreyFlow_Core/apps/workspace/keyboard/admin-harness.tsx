@@ -136,6 +136,26 @@ if (serving === "audit" || serving === "operations") {
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
   };
 }
+// `?serve=policies` (L2.7): Admin › Policies › Grading scheme, read-only, over the scheme the page serves;
+// `?serve=connections`: Connections with an API connection bound to a dataset, and `show=sql` draws the
+// form's SQL fields. Synthetic (rule 9).
+if (serving === "policies" || serving === "connections") {
+  const served: Record<string, unknown> = {
+    "/v1/grading-scheme": { scheme: "admiralty", source: ["A", "B", "C", "D", "E", "F"], intelligence: ["1", "2", "3", "4", "5", "6"],
+                            handling: ["P", "C"] },
+    "/v1/admin/connections": [
+      { id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "2026-11-01T00:00:00Z" },
+      { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "admin-1", created_at: "2026-11-05T00:00:00Z",
+        datasets: ["ds-a"], settings: { kind: "api", base_url: "https://telco.example", auth: "bearer", secret: "TELCO", pagination: "none" } },
+    ],
+    "/v1/admin/datasets": [{ id: "ds-a", name: "Prison records", owning_unit: "u", egress: "none", kind: "source",
+                             promotion_policy: "author_promotes" }],
+  };  // prettier-ignore
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
 createRoot(document.getElementById("root")!).render(
   <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))} />,
 );
@@ -190,4 +210,13 @@ if (serving === "audit" && show === "rules") {
     record.dispatchEvent(new Event("change", { bubbles: true }));
   }
   await pressWhenDrawn("Show entries");
+}
+if (serving === "connections" && show === "sql") {
+  for (let i = 0; i < 60 && !document.querySelector("table[aria-label='Connections of this deployment']"); i++)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  const kind = [...document.querySelectorAll<HTMLSelectElement>("select")].find((el) => [...el.options].some((o) => o.value === "sql"));
+  if (kind) {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(kind, "sql");
+    kind.dispatchEvent(new Event("change", { bubbles: true }));
+  }
 }

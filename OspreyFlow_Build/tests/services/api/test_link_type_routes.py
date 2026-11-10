@@ -49,8 +49,8 @@ class _Cases(_Store):
 
 
 def _made_before_am3(world: _World, pid: str) -> None:
-    """The administrator's decisions are for proposals made before ADR-099 Amendment 3 alone, which
-    name no dataset (ADR-090 Amendment 4): the proposal is stored as one."""
+    """The administrator's decisions are for proposals that name no dataset alone (those made
+    before ADR-099 Amendment 3 among them; ADR-090 Amendment 4): the proposal is stored as one."""
     world.store.rows[pid] = world.store.rows[pid].model_copy(update={"dataset_id": None})
     asyncio.run(world.service.refresh())
 
@@ -143,6 +143,20 @@ def test_only_an_administrator_of_the_unit_lists_and_decides(world: _World) -> N
     assert [p["id"] for p in listed] == [pid]
     done = world.client(ADMIN).post(f"/v1/admin/link-types/{pid}/promote", json=promote)
     assert done.status_code == 200 and done.json()["status"] == "promoted"
+
+
+def test_the_administrators_list_holds_no_proposal_that_names_a_dataset(world: _World) -> None:
+    """L2.7 (ADR-090 Amendment 4; ADR-143 decision 5 and Amendment 4's strict reading): with Admin's
+    Proposed types gone, `/v1/admin/link-types` lists only the proposals that name no dataset. A proposal that names one is decided on its dataset's Model
+    tab, whose words are withheld above the reader's clearance, so the administrator's list never
+    carries its words. Red with the store's `dataset_id IS NULL` removed."""
+    bound = (
+        world.client(ALICE).post("/v1/investigations/inv-1/link-types", json=PROPOSAL).json()["id"]
+    )
+    assert world.store.rows[bound].dataset_id is not None
+    listed = world.client(ADMIN).get("/v1/admin/link-types").json()["proposals"]
+    assert bound not in [p["id"] for p in listed]
+    assert PROPOSAL["reason"] not in str(listed)
 
 
 def test_the_ontology_route_shows_a_promoted_type_and_never_a_proposals_label(
