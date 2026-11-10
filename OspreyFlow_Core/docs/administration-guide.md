@@ -14,10 +14,12 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.63** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.65** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.65 | 2026-11-10 | §13: *Where sets are* names the checkout as the folder holding `OspreyFlow_Core`, since the guide ships in Core and never names the build folder. |
+| 1.64 | 2026-11-10 | The backups folder as built (platform-b's P5b; ADR-114 Amendments 37 and 38). §13: every install's set in `<backups folder>/<deployment>/`, the folder asked at setup (`folders.backups`, the Folders screen's **Backups folder**, the prompt); new *Where sets are, and cleaning them up*, *A synced folder* and *Cleaning up*; Small on your own server's `server.backups` its older name. §1a.1, §5a.3, the files table, §14's update row and appendix A's `components.storage.backups` say where sets now go. §5: the answers file's `folders.backups`. No longer coming; appendix A's row is the schema's own. Admin's L2.5b and L2.5c as built: §9.9, *Disable…* lists and transfers views, boards, link-type proposals and drawn items' watches, the recipient cleared to the item's marking (ADR-145 Amendment 9) and holding its case's level, and refuses to disable someone who owns items you may not see; §9.10, Admin's own *Delete ‹case›'s layer now* after its dry run. |
 | 1.63 | 2026-11-10 | Admin's L2.7 and platform's P5 as built. §9.1: Proposed types removed, Connections' four kinds, Grading scheme built. §9.2: the role tips, *What each role and level lets a person do*, the refusal that names the roles, `write_sql_transforms` given on its own. §8: `map build --unit`. §10a: the unit the place names are held by, and a dataset's gazetteers (on screen, coming). |
 | 1.62 | 2026-11-10 | §9.10: Admin's screen offers the dry runs, though its delete route exists, named. |
 | 1.61 | 2026-11-10 | Promotion as built (case lane's L3.4). §9.10: a removed case's layer merged or deleted by the dataset's Authors in the Ingest Studio, Admin's dry runs. §9.11: promotions waiting for review, listed and overdue. §9.2: its words are copies of `help/roles.ts`, held to it by a test. §9.9: Disable's confirming button. |
@@ -296,7 +298,7 @@ second checkout or worktree is needed.
 
 **Every command takes `--name`**: `ospreyflow start --name crime-demo`, `ospreyflow status --name
 aml-govuk`, `ospreyflow demo add hmp --name crime-demo`, `ospreyflow backup --name aml-govuk` (whose
-backups are kept in the deployment's own folder). Without `--name`, a command acts on the deployment
+whose sets go to `<backups folder>/aml-govuk/`, section 13). Without `--name`, a command acts on the deployment
 last used, or on the only one there is.
 
 ```
@@ -799,7 +801,7 @@ more than three quarters of the server is refused.
 
 ### 5a.3 Backups
 
-`ospreyflow backup` writes each set to `server.backups` (default `~/OspreyFlow/backups`), readable
+`ospreyflow backup` writes each set to `<server.backups>/<deployment>/` (default `~/OspreyFlow/backups`), readable
 by its owner only. A set never holds the certificate's key or `deployment.env`; it does hold the
 case data and the people's identities. Nothing is registered with the operating system, so schedule
 it with the service account's own crontab (`crontab -e`), beside the organisation's snapshots of the
@@ -951,6 +953,7 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `components.dashboards` | Superset and report sync on (`true`, the default) or off |
 | `folders.ingest` | The folder the Ingest Studio lists (absolute, or from `~`); default `~/OspreyFlow/ingest` |
 | `folders.tiles` | Where a built basemap lives; default `~/OspreyFlow/basemap` |
+| `folders.backups` | Where `ospreyflow backup` writes, each deployment's sets in `<this>/<deployment name>/`; never inside the checkout (absolute, or from `~`); default `~/OspreyFlow/backups` (section 13) |
 | `models.local_only` | `true` (default): no case content leaves the deployment |
 | `demo_packs` | A list of pack ids (section 11) |
 | `paysim_file` | The downloaded PaySim file, when `paysim` is chosen |
@@ -1032,9 +1035,9 @@ on this computer only.
 | Where | What |
 | --- | --- |
 | `osprey.yaml` (the checkout) | The deployment's settings; never a secret |
-| `~/.ospreyflow/deployments/<name>/` | A deployment kept by name (section 1a.1): its own `osprey.yaml`, every file rendered from it, its `deployment.env` (`600`) and its `backups/`; `~/.ospreyflow/current` names the one last used |
+| `~/.ospreyflow/deployments/<name>/` | A deployment kept by name (section 1a.1): its own `osprey.yaml`, every file rendered from it, its `deployment.env` (`600`), and any `backups/` an earlier release wrote there (new sets go to the backups folder, section 13); `~/.ospreyflow/current` names the one last used |
 | `deploy/generated/<profile>/` | The deployment: `compose.yaml`, `deployment.env` (every password and key it made), `Caddyfile`, `glass.json`, `realm.json`, `litellm.yaml`, `versions.lock`, `RUNBOOK.md`, `state/` |
-| `backups/` | Backup sets |
+| `backups/` | Backup sets an earlier release wrote here; no longer written, and `ospreyflow doctor` names any left (section 13) |
 | `.install/` | The guided page's draft and answers; a release install's verified lock |
 | `.cloud/` | OpenTofu's state for a Small server or an Enterprise cluster, and the cluster's kubeconfig — keep it private |
 | Your ingest and basemap folders | As the answers named them |
@@ -1389,21 +1392,27 @@ they own nothing (and **Cancel**). It lists:
 - the teams they lead;
 - their hotlists, watches and saved patterns;
 - the typology rules they own;
-- their pipeline and screening-list schedules.
+- their pipeline and screening-list schedules;
+- their views and boards, private or shared;
+- the link types they proposed that still wait for a decision;
+- their watches on items they drew.
 
 A transfer is refused, in words, when its recipient cannot take it: the person being disabled, a
 service account, someone disabled, someone of another unit, someone outside the team, someone without
-the right the item's runs need, or someone who is not an Author of the item's case. Items of another
-unit are left to that unit's administrator ("N transferred, and those stand; not disabled yet…"). You
-cannot disable your own account. **Enable** brings a disabled person back.
+the right the item needs, someone who is not an Author of the case of a rule or pipeline schedule,
+someone without the level a view (Viewer) or a board, proposal or drawn item's watch (Editor) needs on
+its case, or someone not cleared to the item's marking: for a view or a board, the case's highest
+marking; for a proposal or a drawn item's watch, the dataset's highest (ADR-145 Amendment 9). People
+who are not cleared are left out of its **Transfer to…**. Items of another unit are left to that
+unit's administrator ("N transferred, and those stand; not disabled yet…"). You cannot disable your
+own account. **Enable** brings a disabled person back.
 
-The panel ends with what it does not list yet: private views, boards, promotions waiting for review,
-reviews waiting on the person, and proposed types. The Conduit already reads a person's views, boards,
-link-type proposals and drawn-item watches (`GET /v1/admin/people/{user_id}/ownership`, for
-`manage_people`), each in your unit and, for proposals and watches, only at a marking you may see; it
-never names or counts an item you may not see, and says only that some exist. *Coming:* the panel
-reading that list, transferring those items, and refusing to disable someone who still owns items you
-may not see.
+The panel ends with what it does not list yet: "Not listed here yet: promotions waiting for review,
+reviews waiting on them." It never names or counts an item you may not see. When the person owns
+some, it says so: the transfers you choose go through and stand, but the person stays enabled ("…not
+disabled yet: they still own items you may not see…") until an administrator who may see those
+items, or an Author of their case, transfers them. It reads this from
+`GET /v1/admin/people/{user_id}/ownership` (`manage_people`).
 
 ### 9.10 Datasets, their Authors and linked cases
 
@@ -1419,10 +1428,13 @@ marking it may hold** (or the deployment's highest), its **Egress** (section 10)
   *Make live* a dataset says "Not live yet: who answers for it is asked at its first Make live."
 - **Linked cases**: every case reading it, open or removed, with its analyst layer's items, links and
   size (never the layer's contents), the home case tagged. For a removed case's layer, **Merge ‹case›
-  into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. The
-  merge and the delete themselves are done by the dataset's Authors in the Ingest Studio's 4 Runs
-  (developer guide, section 7.8); Admin's screen offers the dry runs only, though its delete route
-  exists (`POST /v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete`, `administer_system`).
+  into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. After
+  the delete's dry run, **Delete ‹case›'s layer now** ("It cannot be undone.") deletes it: its items
+  are withdrawn and kept in the audit, and promoted items are not touched
+  (`POST /v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete`, `administer_system`, a
+  dataset of your own unit only). One of the dataset's Authors may also delete it in the Ingest
+  Studio's 4 Runs (developer guide, section 7.8). The merge is done only there, by one of the
+  dataset's Authors after their own dry run.
 
 **Who may be an owner.** Admin → System's **Dataset owners may be** is *People and teams* (the default),
 *People only* or *Teams only*. It governs every naming of a dataset's owners; a client who wants no
@@ -1689,11 +1701,12 @@ example a stacked bar of `raised_by_rule` by `week_start` and `label`, a bar of 
 
 ## 13. Backup and restore
 
-*Coming* (ADR-114 Amendment 37): every install names its backups folder at setup, never inside the
-checkout. Until then, Lite writes into the checkout's `backups/` and Small on your own server into
-`server.backups`.
-
-**Lite.** `ospreyflow backup` writes a set to `backups/<time>-<profile>-<commit>/`: the graph
+**Every install.** `ospreyflow backup` writes a set to `<backups folder>/<deployment>/<time>-<deployment>-<commit>/`.
+The backups folder is asked for at setup (`folders.backups` in the answers file, the **Backups
+folder** field on the guided page's Folders screen, or the install's prompt), offering
+`~/OspreyFlow/backups`, and is written to `osprey.yaml` as `components.storage.backups`.
+`<deployment>` is the `deployment.name` you gave (`--name`), or the profile (`local-lite`,
+`small`), so two deployments' sets never mix. The set holds the graph
 store, every PostgreSQL database (the identity provider's accounts as their own export), the
 analytics database, the object store (each object with its checksum), the configuration, and a
 manifest of checksums. Taken while the Conduit runs, the stores may be captured at slightly
@@ -1711,8 +1724,9 @@ authenticate to Keycloak: 500" (section 16).
 server's daily backup. `ospreyflow backup` refuses a deployment on a managed database, saying so;
 restore from the cloud's console.
 
-**Small on your own server.** As Lite, every store in the set, written to `server.backups`
-(section 5a.3), each set readable by its owner only; the certificate's key and `deployment.env` are
+**Small on your own server.** As every install: written to the backups folder
+(`folders.backups`, or `server.backups`, its older name, section 5a.3; giving both with different
+folders is refused), each set readable by its owner only; the certificate's key and `deployment.env` are
 never in it. Schedule it with a cron line, for example
 `0 2 * * * cd /opt/ospreyflow && ~/.local/bin/ospreyflow backup`. A person who signs in through the
 organisation's identity provider is restored still linked to it. OpenSearch is not in the set, as
@@ -1740,6 +1754,44 @@ so, so no half-written set is left beside the good ones. If it cannot remove all
 it could not remove, renames the set `<set>.incomplete` with a file `INCOMPLETE` in it, and
 `ospreyflow restore` refuses it; remove it as root (`sudo rm -rf <set>.incomplete`).
 
+**Where sets are, and cleaning them up.** A backup is never written inside the OspreyFlow
+folder (the checkout: the folder holding `OspreyFlow_Core`, and everything in it).
+`--out-root <folder>` writes a set elsewhere, but a folder inside the checkout is refused, and
+`ospreyflow doctor` fails if the backups folder is inside it. `/var/lib/osprey/backups`, the
+settings' placeholder, is refused at setup except on Small on your own server. A deployment
+installed by name cannot be called `local-lite`, `small` or `cluster`, or the checkout's own
+`deployment.name`, since the checkout's own deployment keeps its backups under that name. Give two
+checkouts on one machine different backups folders: both deployments are `local-lite`, so they would
+otherwise share a subfolder. An `osprey.yaml` from v0.4.x or earlier names no backups folder (or the
+placeholder `/var/lib/osprey/backups`), so its sets go to `~/OspreyFlow/backups/<deployment>/`,
+and the backup's first line says so. Name a folder as `components.storage.backups` to stop that
+line.
+
+Sets taken before this release may still be in the checkout's `backups/`, in a named
+deployment's `~/.ospreyflow/deployments/<name>/backups/`, or directly in a server's backups
+folder. `ospreyflow doctor` names each such folder, with the sets' total size and the one command
+that moves them (`mkdir -p <folder>/<deployment> && mv <sets> <folder>/<deployment>/`). It never
+moves or deletes a set itself. Until they are moved, `ospreyflow restore` with no set lists them
+beside the deployment's own sets, each with its move command, and `ospreyflow restore <set name>`
+still restores one, looking in the deployment's folder first. A set the doctor cannot read all of
+(a server's are the owner's only) is given as "at least" its size, and its move needs `sudo`.
+
+**A synced folder.** A set holds the deployment's data and any real-data exception it was given.
+`ospreyflow doctor` warns when the backups folder is under a folder a sync client copies: on
+macOS, `~/Library/CloudStorage` (Google Drive, OneDrive, Dropbox), `~/Library/Mobile Documents`
+(iCloud Drive), `~/Documents` or `~/Desktop` (which iCloud syncs when "Desktop & Documents" is
+on); and a `OneDrive` folder on any system (Windows, or WSL's `/mnt/c/Users/…`). It is a
+warning, not a refusal, because you may mean it. A folder reached through a link is judged by
+where the link points. `ospreyflow doctor --config <answers>` checks the answers' folder before
+the install.
+
+**Cleaning up.** Nothing removes old sets automatically. Each set is a folder named
+`<UTC time>-<deployment>-<commit>`, the commit in full, for example
+`20261109T020000Z-local-lite-3e5a1c2…` (40 characters). To remove one, delete its folder:
+`rm -rf ~/OspreyFlow/backups/local-lite/<set>`
+(on a server, as the account that runs the backup). Keep at least the newest set that
+`ospreyflow restore` accepts.
+
 **Once the object store holds files** (a demo pack or an upload has put some there), it is copied
 as the account that runs `ospreyflow backup`, so that account can remove its working copy. With
 v0.4.8 and earlier on Linux such a backup failed with "Permission denied" (section 16).
@@ -1764,7 +1816,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Lite, installed from a release tag | `ospreyflow update` (below) |
 | Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so |
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
-| Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `server.backups` first |
+| Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |
 
 **Checking for a newer release.** The deployment never calls out to look. Run

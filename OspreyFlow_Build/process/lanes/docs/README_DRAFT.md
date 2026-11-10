@@ -156,8 +156,7 @@ their connectors read synthetic lists until they are.
   meets the Standard.
 - Enterprise's in-cluster graph store and analytics database are not backed up by `ospreyflow backup`
   yet; Small on a managed database is not updated by `ospreyflow update` yet.
-- Coming: the rule editor, releases between environments, merging a drawn dataset into another, and
-  backups to a folder the administrator names at setup.
+- Coming: the rule editor, releases between environments, and merging a drawn dataset into another.
 
 ## Start here
 

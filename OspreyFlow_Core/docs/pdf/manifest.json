@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "19ecb2afcd42423f3182fce8cea9d28dbbf907086768e36a1eb7adc3d5fa3d01",
+    "body": "95a2216de225a548c922fc85fae5da811867a0819de9a2a65147134e5476eaa6",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,9 +12,9 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "5c30548b07205b6fbfca8beeecf011b14502f2d81162441b13db147417cd3e86",
-    "source": "443531aeb9c5adef64087aab6f489dc4e5fbdd92945dd94b8ce2e2fa382ca5d8",
-    "version": "1.63"
+    "pdf": "32ef881f7ffda4033c944c5dd6399292c6040788c58a968a6523237e51f6d806",
+    "source": "f606796faec743fdaf6e3392f578f9e3709a7c0099ff12b78c5d011c63b66acf",
+    "version": "1.65"
   },
   "architecture-guide.md": {
     "body": "386c022d9c723d7e3a6ab2b039d6b431bd5ded673813dd676d7299300d89aebe",
@@ -27,7 +27,7 @@
     "version": "1.1"
   },
   "developer-guide.md": {
-    "body": "2ad794a169d8312c3cd047d0f0942adfaa2be95e384199fe8521a58b0c40c819",
+    "body": "c31d893a2412d887f836a5a55ccbebd0618f935392b2d44d2d817342ae2b9636",
     "images": {
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
@@ -45,9 +45,9 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "7522deda6f8b397723be2ed8ce6c32d9d22bf44a61628b60e69af7a76c519248",
-    "source": "55a852587278ae441f6d3036c497cba7284d0de409f792679caec56f6a54aed3",
-    "version": "1.31"
+    "pdf": "209255248c8d1ede636130ae94392b9be22b048d1aa139068c81136b4bf3a87d",
+    "source": "d6c0ddac7603323d558789a4856d51f933ae04363f8f38fd0b2ca1198a33d3d2",
+    "version": "1.32"
   },
   "user-guide.md": {
     "body": "d6e977856d507e511eb68287622c894a02dfded8e26eebdea8121e04c7e16a88",

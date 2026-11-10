@@ -1,0 +1,5 @@
+# folders-* red: at 2fcc578 on main 769d065, test_admin_guide.py with NOT_YET_IN_THE_GUIDE deleted, both guides put back to main's (no folders.backups)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_answers_file_setting_is_in_the_guide[folders-10_ADMINISTRATION_GUIDE.md]
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_answers_file_setting_is_in_the_guide[folders-administration-guide.md]
+2 failed, 59 deselected in 0.25s
