@@ -222,6 +222,8 @@ DEFAULT_SEVERITY: dict[AlertKind, AlertSeverity] = {
     "hotlist": "high",
     "monitor": "medium",
     "analyst": "medium",
+    # L3.6: a load meeting a drawn item (ADR-143 Amendment 2 decision 8), as a monitor's match.
+    "drawn_watch": "medium",
 }
 TYPOLOGY_SEVERITY: dict[str, AlertSeverity] = {
     "kyc_screening": "high",
@@ -247,7 +249,8 @@ _KIND_SQL = (
     "(CASE WHEN typology IS NOT NULL THEN 'typology' "
     "WHEN rule_id LIKE 'hotlist:%' THEN 'hotlist' "
     "WHEN rule_id LIKE 'monitor:%' THEN 'monitor' "
-    "WHEN rule_id LIKE 'analyst:%' THEN 'analyst' END)"
+    "WHEN rule_id LIKE 'analyst:%' THEN 'analyst' "
+    "WHEN rule_id LIKE 'drawn_watch:%' THEN 'drawn_watch' END)"
 )
 _SEVERITY_SQL = (
     "COALESCE(severity, CASE "
@@ -256,6 +259,7 @@ _SEVERITY_SQL = (
     )
     + f"WHEN typology IS NOT NULL THEN {_quoted(DEFAULT_SEVERITY['typology'])} "
     + f"WHEN rule_id LIKE 'hotlist:%' THEN {_quoted(DEFAULT_SEVERITY['hotlist'])} "
+    + f"WHEN rule_id LIKE 'drawn_watch:%' THEN {_quoted(DEFAULT_SEVERITY['drawn_watch'])} "
     + f"ELSE {_quoted(DEFAULT_SEVERITY['monitor'])} END)"
 )
 _SEVERITY_RANK_SQL = (
@@ -321,16 +325,23 @@ def queue_scope(
     ADR-146 decision 8: a typology alert routed to a team is also the team's alone, and the home
     case's Authors' (`_routed_sql`). Decision 7: an analyst's alert to the case is the case's
     members'; one to the dataset is in the queue of the home case it was raised into and of every
-    case reading the dataset (`$datasets`, the reader's own, never unlimited)."""
+    case reading the dataset (`$datasets`, the reader's own, never unlimited).
+
+    L3.6 (ADR-143 Amendment 2 decision 8): a drawn watch's alert is its owner's in the watch's case
+    alone — never through another case, as a hotlist's or monitor's is — and never shared: the
+    drawn item it cites lives in that case's layer."""
     case, me, unit, teams, authored, datasets = (f"${position + i}" for i in range(6))
     reach, extra = reach_clause(principal, position + 6)
-    watch = "typology IS NULL AND rule_id NOT LIKE 'analyst:%'"
+    watch = (
+        "typology IS NULL AND rule_id NOT LIKE 'analyst:%' AND rule_id NOT LIKE 'drawn_watch:%'"
+    )
     sql = (
         f" AND {_KIND_SQL} IS NOT NULL AND ("
         f"(typology IS NOT NULL AND investigation_id = {case} AND {_routed_sql(teams, authored)}) "
         f"OR (rule_id LIKE 'analyst:case:%' AND investigation_id = {case}) "
         f"OR (rule_id LIKE 'analyst:dataset:%' AND (investigation_id = {case} "
         f"OR dataset_id = ANY({datasets}::text[]))) "
+        f"OR (rule_id LIKE 'drawn_watch:%' AND investigation_id = {case} AND owner_id = {me}) "
         f"OR ({watch} AND owner_id = {me}) "
         f"OR ({watch} AND team = {unit} AND {_SHARED_SQL})){reach}"
     )
@@ -396,7 +407,7 @@ def _row_to_fact(row: asyncpg.Record) -> AlertFact:
     kind = row["kind"]
     rule = (
         row["rule_id"]
-        if kind in ("typology", "analyst")
+        if kind in ("typology", "analyst", "drawn_watch")
         else HOTLISTS_RULE
         if kind == "hotlist"
         else MONITORS_RULE
