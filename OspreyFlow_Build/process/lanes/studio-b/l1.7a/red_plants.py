@@ -92,19 +92,35 @@ PLANTS = [
      [("        fcntl.flock(fd, fcntl.LOCK_EX)\n", "        pass  # PLANT\n")], [REPO_TESTS],
      ["test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
     ("porcelain-commit", "the commit made by dulwich's worktree commit, which reads the config "
-     "(hooks, signer, filters) as git does (the independent review, item 2)",
+     "and runs the hooks in .git/hooks (the independent review, item 2)",
      [("    if not unchanged:\n",
        "    if not unchanged:\n        repo.get_worktree().commit(message=message.encode(), "
        "committer=_COMMIT_IDENTITY, author=_COMMIT_IDENTITY)  # PLANT\n        return\n")],
-     [REPO_TESTS], ["test_publish_never_execs_a_binary"]),
+     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "spawned a process: ['.git/hooks/pre-commit']"),
+    ("porcelain-signed-commit", "the same worktree commit with its hooks skipped, for a commit "
+     "with a parent (the second publish, after the config is planted, since dulwich runs "
+     "post-commit even with no_verify), so it reaches the signer `commit.gpgsign` and "
+     "`gpg.program` name",
+     [("    if not unchanged:\n",
+       "    if not unchanged and parent is not None:  # PLANT\n"
+       "        repo.get_worktree().commit(message=message.encode(), "
+       "committer=_COMMIT_IDENTITY, author=_COMMIT_IDENTITY, no_verify=True)  # PLANT\n"
+       "        return\n    if not unchanged:\n")],
+     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "'trap.sh', '--detach-sign'"),
+    ("staged-through-filters", "the recipe staged by dulwich's worktree stage, which applies "
+     "the `.gitattributes` filter the config names",
+     [("    repo.object_store.add_object(blob)\n",
+       "    repo.get_worktree().stage([path])  # PLANT\n    repo.object_store.add_object(blob)\n")],
+     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "trap.sh"),
     ("id-unchecked", "neither the id's pattern nor dulwich's path check asked",
      [("    if _RECIPE_ID.fullmatch(recipe_id) is None:\n", "    if False:  # PLANT\n"),
       ("    if not validate_path(relative_path.encode(\"utf-8\")):", "    if False:  # PLANT")],
      [REPO_TESTS], ID_CASES),
     ("id-pattern-only-removed", "the id's pattern not asked, dulwich's path check kept: the ids "
-     "it alone lets through (a `..` or `.git` element it refuses itself)",
+     "that check alone lets through (`a/b`, `..` as `recipes/...yaml`, `.hidden`, ``); the "
+     "`..`, `.git` and `../..` elements it refuses itself stay refused",
      [("    if _RECIPE_ID.fullmatch(recipe_id) is None:\n", "    if False:  # PLANT\n")],
-     [REPO_TESTS], [ID_CASES[3], ID_CASES[5], ID_CASES[6]]),
+     [REPO_TESTS], [ID_CASES[3], ID_CASES[4], ID_CASES[5], ID_CASES[6]]),
     ("directory-link-followed", "a symbolic link followed at `recipes/`: `O_NOFOLLOW` dropped from "
      "the directory's open",
      [("os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)",
@@ -129,6 +145,38 @@ PLANTS = [
     ("lock-file-link-followed", "the lock file opened following a link: `O_NOFOLLOW` dropped",
      [("os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC", "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC")],
      [REPO_TESTS], ["test_a_linked_publish_lock_is_refused"]),
+    ("init-in-place", "first use initialises the repository in place, as before the round-2 "
+     "fix: a rival's repository and this one's collide",
+     [("        repo = _initialise(repo_root)\n",
+       "        repo_root.mkdir(parents=True, exist_ok=True)  # PLANT\n"
+       "        repo = Repo.init(str(repo_root))\n"
+       "        repo.refs.set_symbolic_ref(HEADREF, Ref(b\"refs/heads/main\"))\n")],
+     [REPO_TESTS], ["test_a_rival_making_the_repository_first_is_joined_not_refused"]),
+    ("init-reads-user-config", "first use initialised with the user's and the system's config",
+     [("Repo.init(str(making), config=StackedConfig([ConfigFile()]))",
+       "Repo.init(str(making))  # PLANT")],
+     [REPO_TESTS], ["test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says"],
+     "read the user's or the system's git config"),
+    ("index-reads-user-config", "the index opened with the whole config stack: "
+     "`open_index(config=ConfigFile())` -> `open_index()`",
+     [("    index = repo.open_index(config=ConfigFile())", "    index = repo.open_index()  # PLANT")],
+     [REPO_TESTS], ["test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says"],
+     "read the user's or the system's git config"),
+    ("worktree-unchecked", "a config naming another worktree not refused",
+     [("    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():",
+       "    if False:  # PLANT")],
+     [REPO_TESTS], ["test_a_repository_whose_config_names_another_tree_is_refused"]),
+    ("lock-waits-forever", "the publish flock waited for without limit: `LOCK_NB` dropped",
+     [("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", "fcntl.flock(fd, fcntl.LOCK_EX)  # PLANT")],
+     [REPO_TESTS], ["test_a_publish_held_off_too_long_is_refused_not_hung"], "DID NOT RAISE"),
+    ("sweep-removed", "a crash's temporary file never swept",
+     [("            if _TEMPORARY.fullmatch(left):", "            if False:  # PLANT")],
+     [REPO_TESTS], ["test_a_temporary_file_a_crash_left_is_swept"]),
+    ("id-pattern-narrowed", "the id pattern narrowed to lower-case words: a ULID refused",
+     [('_RECIPE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,199}")',
+       '_RECIPE_ID = re.compile(r"[a-z][a-z0-9-]{0,199}")  # PLANT')],
+     [REPO_TESTS], [f"test_an_id_of_the_shapes_the_studio_mints_is_accepted[{case}]"
+                    for case in ("01JC5Q8K3ZP6V2T9XR4W7HMNBD", "a_b.c-1", "9")]),
 ]
 
 def run(files: list[str]) -> str:
@@ -139,7 +187,8 @@ def run(files: list[str]) -> str:
     )  # fmt: skip
     keep = ("PASSED", "FAILED", "ERROR")
     out = done.stdout.replace("\x00", "\\x00")  # one id case holds a NUL
-    lines = [line for line in out.splitlines() if line.startswith(keep)]
+    lines = [line for line in out.splitlines()
+             if line.startswith(keep) and not line.startswith("ERROR  ")]  # fmt: skip
     return "\n".join(lines + [out.strip().splitlines()[-1]])
 
 
@@ -149,7 +198,7 @@ def main() -> int:
     ).stdout.strip()
     original = PUBLISH.read_bytes()
     missed = []
-    for n, (slug, what, edits, files, must_fail) in enumerate(PLANTS, start=1):
+    for n, (slug, what, edits, files, must_fail, *reason) in enumerate(PLANTS, start=1):
         text = original.decode()
         for old, new in edits:
             assert text.count(old) == 1, (slug, old)
@@ -162,10 +211,16 @@ def main() -> int:
         failed = {line.split("::")[-1].split(" ")[0] for line in out.splitlines()
                   if line.startswith("FAILED")}  # fmt: skip
         absent = [t for t in must_fail if t not in failed]
+        # Where a plant names the reason, a failure for any other reason does not count (rule 15).
+        if reason and not any(reason[0] in line for line in out.splitlines()
+                              if line.startswith("FAILED")):  # fmt: skip
+            absent.append(f"the reason {reason[0]!r}")
         missed += [(slug, t) for t in absent]
         (HERE / f"red-{n}-{slug}.txt").write_text(
             f"# head {head}; plant: {what}\n# command: pytest -q -rA {' '.join(files)}\n"
-            f"# must fail: {', '.join(must_fail)}; all failed: {'yes' if not absent else absent}\n"
+            f"# must fail: {', '.join(must_fail)}"
+            f"{'; for the reason ' + repr(reason[0]) if reason else ''}"
+            f"; all failed: {'yes' if not absent else absent}\n"
             f"{out}\n"
         )
     assert PUBLISH.read_bytes() == original
