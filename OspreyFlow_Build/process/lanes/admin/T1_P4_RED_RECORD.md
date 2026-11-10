@@ -69,3 +69,18 @@ Two runs, one lease, logs in `gates/` (`t1p4_live_stack_b.txt` is the second, se
   `06_DECISIONS.md:29434` already names. So two Conduits starting at once nearly fill it and four overflow it. A
   serial run starts one at a time. **Not yet shown equal at any N.** The next leased check is `-n 2` (2 × 47 = 94, under
   100), or `-n 4` once the test stacks raise `max_connections`: a stack file, the orchestrator's.
+
+## The test stacks' Postgres at 400 connections (the orchestrator's decision (a), 10 November 2026)
+
+`stack_lease.sh up` now reads each test stack's `SHOW max_connections`. Where it is under 400, `up` runs `ALTER SYSTEM`
+and restarts that container alone, then reads the value again. It fails if Postgres never answers or still allows
+fewer. The fake docker in `tests/test_stack_lease.py` models the real server's refusals: `ALTER SYSTEM` changes nothing
+until a restart, and `psql` fails while the server starts. The recording fakes answer as a Postgres already at 400.
+
+| Plant | Red |
+| --- | --- |
+| The script before the change | 3 failed (raises to 400; fails when still fewer; fails when it never answers) |
+| `ALTER SYSTEM` without the restart | 1 failed (`…raises…to_400…restarts_it_once`) |
+| One try, no wait for a starting server | 2 failed (`…raises…`, `…still_allows_fewer`) |
+
+Not yet shown on a real stack: the next leased `up` prints `max_connections 400`.
