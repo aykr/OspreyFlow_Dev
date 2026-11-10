@@ -447,7 +447,8 @@ async def test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_
     assert recipe.recipe_id not in recipes.paused
     outcomes = [o for o, _ in await _outcomes(runs, recipe)]
     assert outcomes == ["failed"] * 5 and "refused" not in outcomes
-    assert all("in progress" in words for _, _, words in edges.notices)
+    assert all(words.endswith("did not run: an earlier run into its case was still going.")
+               for _, _, words in edges.notices)  # fmt: skip
     assert await runs.refusals_in_a_row(recipe.recipe_id) == 0
 
 
@@ -458,14 +459,40 @@ async def test_a_refused_run_tells_its_owner_in_words(runs: RecipeRunStore, valk
     ((owner, recipe_id, words),) = edges.notices
     assert (owner, recipe_id) == ("approver-1", recipe.recipe_id)
     assert words.startswith("The scheduled run of Daily export due ")
-    assert "was refused: the schedule's owner, approver-1, can no longer sign in" in words
+    # ADR-110 Amendment 19: the kind's fixed sentence; the refusal's own words (which name the
+    # owner's id) stay in the ledger.
+    assert words.endswith("was refused: its owner may no longer run it.")
+    assert "approver-1" not in words and "sign in" not in words
 
 
 async def test_a_failed_run_tells_its_owner_in_words(runs: RecipeRunStore, valkey: Valkey) -> None:
     recipe, edges = _recipe(), _Edges(fail_run=FileNotFoundError("no such file: a.csv"))
     await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
     ((owner, _, words),) = edges.notices
-    assert owner == "approver-1" and "failed: no such file: a.csv" in words
+    assert owner == "approver-1"
+    assert words.endswith("failed. Its pipeline's Runs, in the Ingest Studio, say why.")
+    assert "no such file" not in words  # the error's own text stays in the ledger and the log (rule 7)
+
+
+async def test_a_graph_store_error_never_reaches_the_owners_words(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19, rule 7: an error raised while a run loads is told by its kind alone.
+    Planted in the shape the graph adapter raises (`ArcadeDBError` carries the server's whole
+    reply, `client.py`), naming a host, a type and a row's key."""
+    from adapters.graph_arcadedb.client import ArcadeDBError
+
+    reply = ('ArcadeDB error 500: {"error":"Internal error","exception":"com.arcadedb.exception.'
+             'DuplicatedKeyException","detail":"Duplicated key [ROW-7731] on Person[source_key] at '
+             'arcadedb.internal:2480"}')  # fmt: skip
+    recipe = _recipe()
+    edges = _Edges(fail_run=ArcadeDBError(reply, status_code=500))
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((_, _, words),) = edges.notices
+    lead = ScheduleExecutor._due(recipe, FIRST_SLOT)  # "The scheduled run of Daily export due …"
+    assert words == f"{lead} failed. Its pipeline's Runs, in the Ingest Studio, say why."
+    for leaked in ("ArcadeDB", "ROW-7731", "source_key", "arcadedb.internal", "Duplicated"):
+        assert leaked not in words
 
 
 async def test_a_run_that_succeeds_or_is_missed_tells_nobody(
@@ -624,8 +651,7 @@ async def test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried(
     assert await _watch_rows(runs, recipe) == [("refused", _file("a.csv").identity)]
     ((owner, _, words),) = edges.notices
     assert owner == OWNER.id
-    assert words.startswith("The run of Daily export on the file a.csv was refused: ")
-    assert "can no longer sign in" in words
+    assert words == "The run of Daily export on the file a.csv was refused: its owner may no longer run it."
 
 
 async def test_a_failed_file_tells_its_owner_and_is_not_retried(
@@ -638,7 +664,9 @@ async def test_a_failed_file_tells_its_owner_and_is_not_retried(
     await executor.tick(FIRST_SLOT + timedelta(minutes=1))
     assert len(edges.files_run) == 1
     ((_, _, words),) = edges.notices
-    assert words == "The run of Daily export on the file a.csv failed: column amount is missing"
+    assert words == ("The run of Daily export on the file a.csv failed. Its pipeline's Runs, in the "
+                     "Ingest Studio, say why.")  # fmt: skip
+    assert "column amount" not in words
 
 
 async def test_three_refused_files_in_a_row_pause_the_watch(
