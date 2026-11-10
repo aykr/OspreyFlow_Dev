@@ -44,8 +44,11 @@ const CATALOGUE = {
 };  // prettier-ignore
 const ROWS = { rows: [{ id: "u1", levels: [{ investigation_id: "c1", name: "Op Kestrel", level: "author", through: null }] }],
                without_author: [{ investigation_id: "c3", name: "Op Wren" }] };  // prettier-ignore
-const PLAN = { person: "u1", not_yet_listed: ["boards"],
-               items: [{ kind: "case_author", id: "c1", label: "Only Author of the case Op Kestrel" }] };  // prettier-ignore
+// L2.5b: L3.8's kinds are in the plan beside the case, each with its own *Transfer to…*.
+const PLAN = { person: "u1", not_yet_listed: ["promotions waiting for review", "reviews waiting on them"],
+               items: [{ kind: "case_author", id: "c1", label: "Only Author of the case Op Kestrel" },
+                       { kind: "drawn_watch", id: "w1", investigation_id: "c1",
+                         label: "A watch on an item they drew in the case Op Kestrel" }] };  // prettier-ignore
 const COLLEAGUE = { ...PERSON, id: "u3", username: "bea", name: "Bea Engineer", roles: ["data_engineer"] };
 
 // L2.6: an audit page of the stream (one entry's words withheld), a rule audit, and Operations' ageing.
@@ -666,13 +669,20 @@ test("a person's case is transferred and they are disabled by keyboard", async (
   page.on("request", (r) => r.url().endsWith("/people/u1/disable") && sent.push(r.postDataJSON()));
   await page.goto("/keyboard/admin-harness.html?rights=manage_people");
   await press(page, "Disable osprey-demo-analyst");
-  const choice = page.getByLabel("Transfer to, for Only Author of the case Op Kestrel");
-  await choice.focus();
-  await page.keyboard.type("Bea");
-  await expect(choice).toHaveValue("u3");
+  for (const label of ["Only Author of the case Op Kestrel", "A watch on an item they drew in the case Op Kestrel"]) {
+    const choice = page.getByLabel(`Transfer to, for ${label}`);
+    await choice.focus();
+    await page.keyboard.type("Bea");
+    await expect(choice).toHaveValue("u3");
+  }
   await press(page, "Transfer and disable osprey-demo-analyst");
   await expect.poll(() => asked).toContain("POST people/u1/disable");
-  expect(sent[0]).toEqual({ transfers: [{ kind: "case_author", id: "c1", to: "u3" }] });
+  expect(sent[0]).toEqual({
+    transfers: [
+      { kind: "case_author", id: "c1", to: "u3" },
+      { kind: "drawn_watch", id: "w1", to: "u3" },
+    ],
+  });
   registerCovered(REGISTRY, "transfer-and-disable-a-person-by-keyboard");
 });
 

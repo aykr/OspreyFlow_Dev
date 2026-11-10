@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 
 import type {
+  ConvertedViews,
   DatasetOwnerSetting,
   EngineStatus,
   SystemStatus,
@@ -71,6 +72,7 @@ export function System({ api }: { api: AdminApi }) {
       )}
       {status?.engines && status.engines.length > 0 && <EnginesTable engines={status.engines} />}
       {status && <VersionSection version={status.version} update={status.update} />}
+      {status?.converted_views && <ConvertedSection converted={status.converted_views} />}
       <Button onClick={ask}>Ask again</Button>
       <OwnersMayBe api={api} />
     </>
@@ -218,6 +220,34 @@ function VersionSection({ version, update }: { version?: string | null; update?:
           <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{update.notes}</pre>
         </details>
       )}
+    </section>
+  );
+}
+
+const many = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
+
+/** ADR-144 decision 6: what the conversion to views made of the cases made from another, counted
+ * by the Conduit in this administrator's own unit only. */
+export function convertedWords(c: ConvertedViews): string[] {
+  const views = c.views ?? 0;
+  const cases = c.cases ?? 0;
+  const waiting = c.waiting ?? 0;
+  return [
+    views
+      ? `${many(views, "case made from another", "cases made from another")} became ${views === 1 ? "a view" : "views"}, in ${many(cases, "case", "cases")} of your unit.`
+      : "No case made from another has become a view in your unit.",
+    waiting
+      ? `${many(waiting, "case is", "cases are")} still made from another: the conversion's dry-run report, which the operator runs, says why each was not placed.`
+      : "None is waiting to be converted.",
+  ];
+}
+
+function ConvertedSection({ converted }: { converted: ConvertedViews }) {
+  const [made, waiting] = convertedWords(converted);
+  return (
+    <section aria-label="Cases converted to views" style={{ display: "grid", gap: "var(--sp-6)" }}>
+      <p className="value" style={{ margin: 0 }}>{made}</p>
+      <p className="label" style={{ margin: 0 }}>{waiting}</p>
     </section>
   );
 }

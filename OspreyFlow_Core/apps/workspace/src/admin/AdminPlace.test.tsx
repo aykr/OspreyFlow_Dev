@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace, feedFreshness } from "./AdminPlace";
+import { convertedWords } from "./sections/System";
 
 afterEach(() => {
   cleanup();
@@ -296,6 +297,35 @@ describe("the Demo packs tab", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy the command for operation-ledger" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("ospreyflow demo add operation-ledger"));
     expect(await screen.findByText("Copied. Run it in a terminal on the machine OspreyFlow runs on.")).toBeTruthy();
+  });
+});
+
+// ADR-144 decision 6 (L2.5b): the System tab says how many cases made from another became views,
+// in how many cases, and how many wait, as the Conduit counted them in the administrator's unit.
+describe("the System tab's cases converted to views", () => {
+  it("says the counts, and that the dry-run report says why each waiting case was not placed", async () => {
+    serve((path) =>
+      path === "system" ? json(200, { components: [], converted_views: { views: 3, cases: 2, waiting: 1 } }) : null,
+    );
+    place(["administer_system"], "System");
+    const section = await screen.findByRole("region", { name: "Cases converted to views" });
+    expect(section.textContent).toContain("3 cases made from another became views, in 2 cases of your unit.");
+    expect(section.textContent).toContain("1 case is still made from another: the conversion's dry-run report");
+    expect(section.textContent?.toLowerCase()).not.toContain("branch");
+  });
+
+  it("says when nothing became a view and nothing waits, and nothing when the count is not known", async () => {
+    expect(convertedWords({ views: 0, cases: 0, waiting: 0 })).toEqual([
+      "No case made from another has become a view in your unit.",
+      "None is waiting to be converted.",
+    ]);
+    expect(convertedWords({ views: 1, cases: 1, waiting: 2 })[0]).toBe(
+      "1 case made from another became a view, in 1 case of your unit.",
+    );
+    serve((path) => (path === "system" ? json(200, { version: "1.2", components: [] }) : null));
+    place(["administer_system"], "System");
+    await screen.findByRole("region", { name: "Version" });
+    expect(screen.queryByRole("region", { name: "Cases converted to views" })).toBeNull();
   });
 });
 
