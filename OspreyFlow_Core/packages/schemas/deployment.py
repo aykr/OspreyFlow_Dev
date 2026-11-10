@@ -944,6 +944,18 @@ class DeploymentConfig(BaseModel):
         ),
     )
 
+    #: ADR-148 decision 10: the highest marking this deployment may hold. Checked against the
+    #: handling scheme the Conduit loads at render (`harness.site.highest_marking`).
+    highest_marking: str | None = Field(
+        default=None,
+        description=(
+            "Default: the handling scheme's highest. The highest marking this deployment may hold: "
+            "a load or an import marked above it is refused before anything is written, in words "
+            "that say this limit and never the item's content. One of the handling scheme's "
+            "classifications."
+        ),
+    )
+
     @field_validator("name")
     @classmethod
     def _a_compose_name(cls, value: str | None) -> str | None:

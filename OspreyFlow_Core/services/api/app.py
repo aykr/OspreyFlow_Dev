@@ -73,6 +73,7 @@ from services.extract.writer import (
     confirm_node,
     retract_node,
 )
+from services.ingest.ceiling import AboveTheDeploymentCeiling, DeploymentCeiling
 from services.ingest.connectors import reads as connector_reads_module
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.connectors.reads import ConnectorRefused
@@ -1090,6 +1091,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-143 decision 11: `grading.scheme`, read first, so an unknown scheme stops the start
     # before anything is opened or written (a guessed scheme would grade every new drawing wrongly).
     grading_settings = GradingSettings.from_env()
+    # ADR-148 decision 10: the deployment's marking ceiling, read at the start for the same reason,
+    # so an unknown value stops the Conduit rather than guess the limit every load is judged by.
+    deployment_ceiling = DeploymentCeiling.from_env()
 
     # ADR-127 Amendment 23: what a recipe run is built from (the stamping graph and its hooks, the
     # stores a run writes, analytics, media, jobs, the principal resolver) is built by the one
@@ -1377,6 +1381,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme
+    app.state.deployment_ceiling = deployment_ceiling
     app.state.yardstick = yardstick
     app.state.site_image_storage = site_image_storage_config()
     app.state.tile_cache_storage = tile_cache_storage_config()
@@ -2830,6 +2835,28 @@ async def _picture_not_found_handler(request: Request, exc: PictureNotFoundError
 @app.exception_handler(UploadRefusedError)
 async def _upload_refused_handler(request: Request, exc: UploadRefusedError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"error": "upload_refused", "detail": str(exc)})
+
+
+@app.exception_handler(AboveTheDeploymentCeiling)
+async def _above_the_ceiling_handler(
+    request: Request, exc: AboveTheDeploymentCeiling
+) -> JSONResponse:
+    """ADR-148 decision 10: a load or an import marked above the deployment's highest marking is
+    refused before anything is written, in words that say the limit, never the content."""
+    return JSONResponse(
+        status_code=422,
+        content={"error": "above_the_deployments_highest_marking", "problems": exc.problems},
+    )
+
+
+def refuse_above_the_deployment_ceiling(request: Request, classification: str) -> None:
+    """An import that carries its own marking (a document, an entity's picture), judged before its
+    body is read: refused when the marking is a classification of the scheme above the deployment's
+    highest. One the scheme does not know is left to the route's own marking check."""
+    held = getattr(request.app.state, "deployment_ceiling", None)
+    ceiling = held if held is not None else DeploymentCeiling.from_env()
+    if classification in ceiling.scheme.classification and ceiling.above(classification):
+        raise AboveTheDeploymentCeiling(ceiling.marking)
 
 
 @app.exception_handler(RecipeRuleError)
@@ -6833,6 +6860,8 @@ async def upload_document_route(
         raise HTTPException(
             status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
         ) from refusal
+    # ADR-148 decision 10: refused before the body is read or anything is stored.
+    refuse_above_the_deployment_ceiling(request, classification)
     data = bytearray()
     async for chunk in request.stream():
         data.extend(chunk)
@@ -6932,6 +6961,8 @@ async def set_entity_picture_route(
         raise HTTPException(
             status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
         ) from refusal
+    # ADR-148 decision 10: refused before the body is read or anything is stored.
+    refuse_above_the_deployment_ceiling(request, classification)
     data = bytearray()
     async for chunk in request.stream():
         data.extend(chunk)

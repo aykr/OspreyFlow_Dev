@@ -88,6 +88,7 @@ from schemas.ingest import (
 )
 from schemas.merge import aggregate_edge_writes, edge_write_key, merge_interval
 
+from .ceiling import DeploymentCeiling, refuse_rows_above_the_ceiling
 from .pipeline import recipe_packs
 from .recipe_rules import (
     RecipeRuleError,
@@ -1082,9 +1083,7 @@ def _resolve_row(
         )
         span = edge.temporal is not None and edge.temporal.valid_to is not None
         valid_to = (
-            _resolve_span_end(
-                edge.temporal.valid_to, row, connector_defaults=connector_defaults
-            )
+            _resolve_span_end(edge.temporal.valid_to, row, connector_defaults=connector_defaults)
             if edge.temporal is not None and edge.temporal.valid_to is not None
             else None
         )
@@ -1099,9 +1098,7 @@ def _resolve_row(
             {"kind": edge.content.kind, "text": text} if edge.content and text.strip() else None
         )
         handling = row_handling_override(recipe, edge.handling, row, scheme=scheme)
-        edges.append(
-            _ResolvedEdge(edge, properties, instant, content, handling, valid_to, span)
-        )
+        edges.append(_ResolvedEdge(edge, properties, instant, content, handling, valid_to, span))
 
     if scheme is not None:
         present: list[Handling] = [
@@ -2505,6 +2502,7 @@ async def run_recipe(
     row_keys: RowKeys | None = None,
     row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
     stage_raw: bool | Callable[[], object] = True,
+    ceiling: DeploymentCeiling | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`row_keys` (ADR-127 decision 5): the store of loaded rows. A recipe with `deduplicate` skips
     a row whose key the case (`investigation_scope`) already kept, whatever the recipe's version,
@@ -2513,7 +2511,9 @@ async def run_recipe(
     `skip_row_indices`: rows resolved but not written — those a failing pre-commit rule holds
     (ADR-109 ruling 1); a held row's duplicates go with it, as they share its survivor.
     `row_numbers` as `resolve_rows` takes it. `written`, when given, receives every node this load
-    created and every link it wrote (ADR-109 phase F)."""
+    created and every link it wrote (ADR-109 phase F). `ceiling` (ADR-148 decision 10): the
+    deployment's highest marking, read from the rendered setting when not given, so no caller can
+    leave it out; a load with a row above it is refused whole before anything is staged."""
     if recipe.ontology_version != ontology.version:
         raise StaleRecipeError(
             f"recipe {recipe.id!r} targets ontology version {recipe.ontology_version}, but the "
@@ -2559,6 +2559,14 @@ async def run_recipe(
     materialized_rows = await asyncio.to_thread(list, rows)
     # Before anything is staged or written: a run under a changed `deduplicate` is refused whole.
     already = await kept_among(recipe, materialized_rows, row_keys, investigation_scope)
+    # ADR-148 decision 10: the deployment's marking ceiling, judged over every row before raw
+    # staging, the first write, so a refused load leaves nothing behind.
+    await asyncio.to_thread(
+        refuse_rows_above_the_ceiling,
+        recipe,
+        materialized_rows,
+        ceiling if ceiling is not None else DeploymentCeiling.from_env(),
+    )
     storage = storage or ObjectStorageConfig.from_env()
     # A staged run (`staged_run.run_staged_recipe`) passes its own raw staging (its sources' rows
     # and the lists it read), run here, after the refusals above, as a plain run's is; the rows

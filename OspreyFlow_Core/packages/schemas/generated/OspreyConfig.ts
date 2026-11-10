@@ -381,6 +381,10 @@ export type Name2 = string | null;
  */
 export type GraphPort = number | null;
 /**
+ * Default: the handling scheme's highest. The highest marking this deployment may hold: a load or an import marked above it is refused before anything is written, in words that say this limit and never the item's content. One of the handling scheme's classifications.
+ */
+export type HighestMarking = string | null;
+/**
  * Default: ospreyflow. The GOV.UK look, for a service on a gov.uk domain only.
  */
 export type Brand = "ospreyflow" | "govuk";
@@ -796,6 +800,7 @@ export interface WelcomeConfig {
 export interface DeploymentConfig {
   name?: Name2;
   graph_port?: GraphPort;
+  highest_marking?: HighestMarking;
 }
 /**
  * How every page of the deployment looks (ADR-132): the deployment's brand, which is not the

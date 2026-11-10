@@ -70,6 +70,7 @@ from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
 from services.geocoder.match import match_place_mention
+from services.ingest.ceiling import DeploymentCeiling, refuse_fixed_markings_above_the_ceiling
 from services.ingest.engine import distinct_markings
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 from services.ingest.metering import StagingMeter
@@ -532,9 +533,10 @@ async def _run_staged_branch(
             [f"Recipe {recipe.id!r} has staging steps on its pipeline but none in its file."]
         )
     # ADR-140 Amendment 13: the dataset's own lists and the deployment-wide ones it subscribes to.
-    references = await dataset_reference_lists(
-        models, draft.dataset_id, storage, lists=list_store
-    )
+    # ADR-148 decision 10: what can be judged without rows (a marking no column sets) is refused
+    # before the step tables are written; `run_recipe` judges every row again before its own writes.
+    refuse_fixed_markings_above_the_ceiling(recipe, DeploymentCeiling.from_env())
+    references = await dataset_reference_lists(models, draft.dataset_id, storage, lists=list_store)
     try:
         read = await asyncio.to_thread(
             source_tables, draft, pipeline, load_id=load_id, location=source_location
