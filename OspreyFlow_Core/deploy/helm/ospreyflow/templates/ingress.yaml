@@ -1,0 +1,68 @@
+{{- /* ADR-148 decision 2: the platform's ingress is the front door, rendered by cloud-platform alone. */}}
+{{- with .Values.ingress }}
+{{- if .enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ospreyflow
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "ingress" "root" $) | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .className }}
+  tls:
+    - hosts:
+        {{- range .rules }}
+        - {{ .host }}
+        {{- end }}
+      {{- with .tlsSecret }}
+      secretName: {{ . }}
+      {{- end }}
+  rules:
+    {{- range .rules }}
+    - host: {{ .host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .service }}
+                port:
+                  number: {{ .port }}
+    {{- end }}
+---
+# What the ingress serves, reached from the platform's controller alone.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ospreyflow-from-ingress
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "from-ingress" "root" $) | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          {{- range .rules }}
+          - {{ .service }}
+          {{- end }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .controllerNamespace }}
+      ports:
+        {{- range .rules }}
+        - { protocol: TCP, port: {{ .port }} }
+        {{- end }}
+{{- end }}
+{{- end }}

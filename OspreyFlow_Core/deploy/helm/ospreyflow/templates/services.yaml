@@ -10,7 +10,8 @@ metadata:
   labels:
     {{- include "ospreyflow.labels" $ctx | nindent 4 }}
 spec:
-  type: {{ if .public }}LoadBalancer{{ else }}ClusterIP{{ end }}
+  {{- /* ADR-148 decision 2: behind the platform's ingress, nothing is a load balancer. */}}
+  type: {{ if and .public (not ($.Values.ingress | default dict).enabled) }}LoadBalancer{{ else }}ClusterIP{{ end }}
   selector:
     {{- include "ospreyflow.selector" $ctx | nindent 4 }}
   ports:

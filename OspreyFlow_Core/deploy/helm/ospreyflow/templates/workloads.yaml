@@ -28,6 +28,9 @@ spec:
         {{- if .public }}
         ospreyflow.io/public: "true"
         {{- end }}
+        {{- if .sharedAffinity }}
+        ospreyflow.io/shared: "true"
+        {{- end }}
       annotations:
         # A changed configuration restarts what reads it.
         checksum/files: {{ toJson $.Values.files | sha256sum | trunc 16 }}
@@ -49,4 +52,19 @@ spec:
             storage: {{ .size }}
     {{- end }}
   {{- end }}
+{{- with .disruptionBudget }}
+---
+# ADR-148 decision 5: one copy down at a time, whatever drains the node.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $ctx.name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  maxUnavailable: {{ .maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "ospreyflow.selector" $ctx | nindent 6 }}
+{{- end }}
 {{- end }}

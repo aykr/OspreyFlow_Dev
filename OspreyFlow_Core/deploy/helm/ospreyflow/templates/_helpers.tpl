@@ -37,6 +37,12 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
         secretKeyRef:
           name: {{ $.root.Values.secrets.name }}
           key: {{ .secret }}
+      {{- else if hasKey . "secretKeyRef" }}
+      # ADR-148 decision 4: a managed store's detail, from the secret the platform's Terraform wrote.
+      valueFrom:
+        secretKeyRef:
+          name: {{ .secretKeyRef.name }}
+          key: {{ .secretKeyRef.key }}
       {{- else if hasKey . "config" }}
       valueFrom:
         configMapKeyRef:
@@ -55,6 +61,15 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
     - name: JAVA_OPTS_APPEND
       value: {{ printf "-Djgroups.dns.query=%s-headless.%s.svc.cluster.local" .w.name .root.Release.Namespace | quote }}
     {{- end }}
+  {{- end }}
+  {{- if .root.Values.podSecurity }}
+  # ADR-148 decision 3: no privilege, and none to gain.
+  securityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    privileged: false
+    capabilities:
+      drop: ["ALL"]
   {{- end }}
   {{- with .w.ports }}
   ports:
@@ -138,10 +153,38 @@ volumes:
 {{- with .root.Values.imagePullSecrets }}
 imagePullSecrets: {{ toJson . }}
 {{- end }}
+{{- with .root.Values.podSecurity }}
+# ADR-148 decision 3: one numeric non-root user, and the claims given to its group.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: {{ .user }}
+  runAsGroup: {{ .group }}
+  fsGroup: {{ .group }}
+  seccompProfile:
+    type: RuntimeDefault
+{{- else }}
 {{- with .w.runAs }}
 securityContext:
   runAsUser: {{ .user }}
   runAsGroup: {{ .group }}
+{{- end }}
+{{- end }}
+{{- with .w.serviceAccountName }}
+serviceAccountName: {{ . }}
+{{- end }}
+{{- with .w.terminationGracePeriodSeconds }}
+terminationGracePeriodSeconds: {{ . }}
+{{- end }}
+{{- if .w.sharedAffinity }}
+# Until P8 (ADR-148 decision 6): the shared folders are one ReadWriteOnce claim, so every pod that
+# mounts it runs on the node that holds it.
+affinity:
+  podAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            ospreyflow.io/shared: "true"
+        topologyKey: kubernetes.io/hostname
 {{- end }}
 {{- with .w.nodeSelector }}
 nodeSelector: {{ toJson . }}

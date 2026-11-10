@@ -31,6 +31,7 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
+{{- if dig "openEgress" true (.Values.networkPolicy | default dict) }}
 ---
 # What a configured feature needs a route out for — the cloud's managed stores, a model provider,
 # mail, the model downloads, certificates — as on Lite's `egress` network.
@@ -47,6 +48,7 @@ spec:
   policyTypes: ["Egress"]
   egress:
     - {}
+{{- end }}
 ---
 # The one door: the proxy, from anywhere.
 apiVersion: networking.k8s.io/v1
@@ -62,4 +64,57 @@ spec:
   policyTypes: ["Ingress"]
   ingress:
     - {}
+{{- end }}
+{{- with .Values.egress }}
+---
+# ADR-148 decision 7: what may leave the namespace, evaluated before the deny below: the cluster's
+# DNS, the namespace's own pods, the platform's managed stores, and each host an enabled feature
+# reaches (Admin's settings, ADR-135 Amendment 2 and ADR-147), by its networks.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: ospreyflow-allow-egress
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "allow-egress" "root" $) | nindent 4 }}
+spec:
+  order: 100
+  selector: all()
+  types: ["Egress"]
+  egress:
+    - action: Allow
+      protocol: UDP
+      destination:
+        namespaceSelector: {{ printf "kubernetes.io/metadata.name == '%s'" .dnsNamespace | quote }}
+        ports: [53]
+    - action: Allow
+      protocol: TCP
+      destination:
+        namespaceSelector: {{ printf "kubernetes.io/metadata.name == '%s'" .dnsNamespace | quote }}
+        ports: [53]
+    - action: Allow
+      destination:
+        selector: all()
+    - action: Allow
+      destination:
+        nets: {{ toJson .managedNets }}
+    {{- range .hosts }}
+    # {{ .host }}
+    - action: Allow
+      destination:
+        nets: {{ toJson .nets }}
+    {{- end }}
+---
+# ADR-148 decision 7: egress is denied by default; nothing above, nothing out.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: ospreyflow-deny-egress
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "deny-egress" "root" $) | nindent 4 }}
+spec:
+  order: 200
+  selector: all()
+  types: ["Egress"]
+  egress:
+    - action: Deny
 {{- end }}

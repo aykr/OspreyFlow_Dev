@@ -17,6 +17,9 @@ spec:
         {{- if .egress }}
         ospreyflow.io/egress: "true"
         {{- end }}
+        {{- if .sharedAffinity }}
+        ospreyflow.io/shared: "true"
+        {{- end }}
     spec:
       restartPolicy: OnFailure
       {{- include "ospreyflow.podSpec" $ctx | nindent 6 }}
