@@ -42,7 +42,7 @@ Every axe scan read only `violations`. That is every-harness, the workspace's `a
 A listed finding no longer found fails. A listed title that is not a scanned look fails.
 
 ## Red in Node (`src/color/textContrast.test.ts`; each fault planted in `textContrast.ts`, then restored)
-- **U1:** the bold threshold as 18.66px. Red: 3.01:1 at 18.67px bold.
+- **U1:** the bold threshold as 18.66px. Red at the assertion that 18.66px bold is held to 4.5:1 (`needFor("18.66px", "700")`), in the 18.67px case's test.
 - **U2:** the gradient's colour list without oklab and its kin. Red: 3 cases.
 - **U3:** the overlap ignored. Red: 2 cases.
 - **U4:** an ancestor's opacity ignored. Red: 1.
