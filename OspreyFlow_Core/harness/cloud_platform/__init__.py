@@ -207,9 +207,7 @@ class _Copies:
         self.unresolved: list[str] = []
 
     def __call__(self, image: str) -> str:
-        # A reference given by its digest is pinned again by the cluster's translation
-        # (`harness.cluster._Pins` appends one; reported to the orchestrator, 10 November 2026):
-        # its own digest, the first, is the image's.
+        # A reference given by its digest keeps it (`harness.cluster._Pins`).
         reference, *digests = image.split("@")
         digest = digests[0] if digests else ""
         source = f"{reference}@{digest}" if digest else reference

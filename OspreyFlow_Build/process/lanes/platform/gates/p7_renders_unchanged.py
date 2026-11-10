@@ -73,7 +73,15 @@ def renders(root: Path) -> dict[str, dict[str, str]]:
     return json.loads(done.stdout)
 
 
+#: The one intended difference (the orchestrator's ruling, 10 November 2026): an image already given
+#: by its digest was pinned a second time (`ref@sha256:…@sha256:…`) by `harness.cluster._Pins`, in the
+#: cluster's values only (the gateway, Ollama, speaches). The base's doubled pin is read as the single
+#: one it now is; nothing else is forgiven.
+DOUBLED = re.compile(r"(@sha256:[0-9a-f]{64})@sha256:[0-9a-f]{64}")
+
+
 def normalised(text: str) -> str:
+    text = DOUBLED.sub(r"\1", text)
     # The commit the image tags and the release version name (a checkout's, or the archive's none).
     # (the archive has no git, so its checkout says `unknown`).
     commit = r"(?:[0-9a-f]{7,40}|unknown|dev-[0-9a-f]{7,40})"

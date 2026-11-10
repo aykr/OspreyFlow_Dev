@@ -277,6 +277,10 @@ class _Pins:
 
     def __call__(self, service: str, image: str) -> str:
         self.ran.setdefault(service, ServiceImage(service, image))
+        if "@sha256:" in image:
+            # Already pinned (the gateway, the local models): its own digest is the pin; another
+            # would make `ref@sha256:…@sha256:…`, which no registry pulls.
+            return image
         digest = self.resolver(image)
         if digest is None:
             self.unresolved.append(image)
