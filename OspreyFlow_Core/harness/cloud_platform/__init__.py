@@ -419,11 +419,8 @@ def render_cloud_platform(
     secrets = values["secrets"]
     secrets["keys"] = [k for k in secrets["keys"] if k not in variables]
     secrets["defaults"] = {k: v for k, v in secrets["defaults"].items() if k not in variables}
-    if not engines:
-        from harness.render import GATEWAY_DB_PASSWORD, GATEWAY_MASTER, GATEWAY_SALT
-
-        gateway = {GATEWAY_DB_PASSWORD, GATEWAY_MASTER, GATEWAY_SALT}
-        secrets["keys"] = [k for k in secrets["keys"] if k not in gateway]
+    # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
+    # master key (found on the kind cluster, where its pod could not start without it).
 
     out = {
         "secrets": secrets,

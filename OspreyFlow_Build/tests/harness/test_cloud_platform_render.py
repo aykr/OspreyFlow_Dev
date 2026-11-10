@@ -164,6 +164,13 @@ def test_every_secret_the_values_read_is_one_the_terraform_writes(fixture: str) 
     assert set(values["secrets"]["keys"]) <= written[values["secrets"]["name"]]
 
 
+def test_every_key_a_pod_names_in_our_secret_is_in_it(values: dict[str, Any]) -> None:
+    """A pod naming a key our Secret lacks never starts (`CreateContainerConfigError`; found on the
+    kind cluster, 10 November 2026: the Conduit's gateway key, dropped when no engine is enabled)."""
+    named = {e["secret"] for c in _containers(values) for e in c.get("env", []) if "secret" in e}
+    assert named <= set(values["secrets"]["keys"]), named - set(values["secrets"]["keys"])
+
+
 def test_no_managed_detail_is_in_a_file_or_our_own_secret(values: dict[str, Any]) -> None:
     variables = managed_variables(_config())
     assert not set(values["environment"]) & set(variables)

@@ -243,7 +243,9 @@ check() {
   echo "== claims and budgets"; kubectl -n "$NS" get pvc; kubectl -n "$NS" get pdb
   echo "== Calico policies"; kubectl -n "$NS" get networkpolicies.projectcalico.org
   echo "== egress: the internet refused; the managed stand-ins and the namespace's own pods reached"
-  kubectl -n "$NS" run p7-egress --image=localhost:5001/busybox:1.36 --restart=Never --rm -i --command -- sh -c \
+  # The probe is one of the deployment's pods (`part-of`), as the chart's own policy admits to its stores.
+  kubectl -n "$NS" run p7-egress --image=localhost:5001/busybox:1.36 --labels=app.kubernetes.io/part-of=ospreyflow \
+    --restart=Never --rm -i --command -- sh -c \
     'wget -T 5 -q -O /dev/null http://1.1.1.1/ && echo "FAIL internet reached" || echo "PASS internet refused";
      nc -z -w 5 postgres.platform-managed.svc.cluster.local 5432 && echo "PASS managed postgres reached" || echo "FAIL managed postgres refused";
      nc -z -w 5 arcadedb.'"$NS"'.svc.cluster.local 2480 && echo "PASS own arcadedb reached" || echo "FAIL own arcadedb refused"'
