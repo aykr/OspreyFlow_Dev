@@ -37,10 +37,17 @@ RACE = "test_a_real_writer_moving_head_mid_commit_is_refused"
 FAKE_REFUSAL = "test_a_failed_commit_is_an_error_not_a_quiet_success"
 LOCK_PROBE = "test_the_index_is_read_and_written_under_a_lock_another_process_honours"
 LOCKED = (
-    "    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo, _publish_lock(repo):\n"
-    "        written = _write_recipe_file(repo_root, relative_path, data)\n"
-    "        _stage_and_commit(repo, path, written, data, message)\n"
+    "        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):\n"
+    "            written = _write_recipe_file(repo_root, relative_path, data)\n"
+    "            _stage_and_commit(repo, path, written, data, message)\n"
 )
+ACQUIRE = (
+    "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n"
+    "    if not _REPOSITORY_LOCK.acquire(timeout=PUBLISH_LOCK_WAIT_SECONDS):\n"
+    "        raise _held_off()\n"
+)
+GIT_DIR_CHECK = "        or Path(repo.controldir()).resolve() != own.resolve()\n"
+LSTAT_CHECK = "        if not stat.S_ISDIR(os.lstat(own).st_mode):\n"
 
 #: (slug, what the plant does, [(old, new)], test files, the tests that must go red)
 PLANTS = [
@@ -73,8 +80,9 @@ PLANTS = [
      [(INDEX_BLOCK, ""), (AFTER_REF, AFTER_REF + "\n" + INDEX_BLOCK)], [REPO_TESTS],
      ["test_a_failure_after_staging_leaves_nothing_committed"]),
     ("locks-removed", "no serialisation: neither the thread lock nor the publish flock taken",
-     [("    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo, _publish_lock(repo):\n",
-       "    with _open_repository(repo_root) as repo:  # PLANT\n")], [REPO_TESTS],
+     [(ACQUIRE, "    deadline = 0.0  # PLANT\n"),
+      ("        _REPOSITORY_LOCK.release()\n", "        pass  # PLANT\n"),
+      (LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT"))], [REPO_TESTS],
      ["test_concurrent_publishes_each_commit_their_own_bytes",
       "test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
     ("refusal-discarded", "the compare-and-swap called and its answer discarded (the independent "
@@ -133,15 +141,17 @@ PLANTS = [
      [REPO_TESTS], ["test_a_symlinked_recipe_file_is_refused"]),
     ("lock-narrowed-to-the-swap", "the publish flock taken around the compare-and-swap alone "
      "(the independent re-review, item 3): not over the write, the index or the commit",
-     [(LOCKED, LOCKED.replace(", _publish_lock(repo):", ":  # PLANT")),
+     [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT")),
       ("        if not repo.refs.set_if_equals(\n",
-       "        with _publish_lock(repo):  # PLANT\n            moved = not repo.refs.set_if_equals(\n"),
+       "        with _publish_lock(repo, time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS):  # PLANT\n"
+       "            moved = not repo.refs.set_if_equals(\n"),
       (CAS_CLOSE, CAS_CLOSE.replace("        ):  # fmt: skip", "            )\n        if moved:  # PLANT"))],
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-after-the-write", "the publish flock taken after the recipe file is written: over the "
      "index and the commit only",
-     [(LOCKED, LOCKED.replace(", _publish_lock(repo):", ":  # PLANT").replace(
-         "        _stage_and_commit(", "        with _publish_lock(repo):\n            _stage_and_commit("))],
+     [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT").replace(
+         "            _stage_and_commit(",
+         "            with _publish_lock(repo, deadline):\n                _stage_and_commit("))],
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-file-link-followed", "the lock file opened following a link: `O_NOFOLLOW` dropped",
      [("os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC", "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC")],
@@ -165,8 +175,7 @@ PLANTS = [
      [REPO_TESTS], ["test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says"],
      "read the user's or the system's git config"),
     ("worktree-unchecked", "a config naming another worktree not refused",
-     [("    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():",
-       "    if False:  # PLANT")],
+     [("        or Path(repo.path).resolve() != repo_root.resolve()\n", "")],
      [REPO_TESTS], ["test_a_repository_whose_config_names_another_tree_is_refused"]),
     ("lock-waits-forever", "the publish flock waited for without limit: `LOCK_NB` dropped",
      [("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", "fcntl.flock(fd, fcntl.LOCK_EX)  # PLANT")],
@@ -179,6 +188,23 @@ PLANTS = [
        '_RECIPE_ID = re.compile(r"[a-z][a-z0-9-]{0,199}")  # PLANT')],
      [REPO_TESTS], [f"test_an_id_of_the_shapes_the_studio_mints_is_accepted[{case}]"
                     for case in ("01JC5Q8K3ZP6V2T9XR4W7HMNBD", "a_b.c-1", "9")]),
+    ("one-wait-each", "the in-process lock waited for without limit, each publish's flock "
+     "wait starting only once it has it (the lane review's round 3, item 3)",
+     [(ACQUIRE, "    if not _REPOSITORY_LOCK.acquire():  # PLANT\n        raise _held_off()\n"
+                "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n")],
+     [REPO_TESTS], ["test_publishes_queued_behind_a_held_lock_share_one_wait"], "a second wait"),
+    ("git-dir-unchecked", "neither the `.git` lstat nor the control-directory check asked",
+     [(LSTAT_CHECK, "        if False:  # PLANT\n"), (GIT_DIR_CHECK, "")], [REPO_TESTS],
+     ["test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]",
+      "test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]"], "DID NOT RAISE"),
+    ("git-dir-lstat-only-removed", "the `.git` lstat not asked, the control-directory check kept: "
+     "a link at `.git` resolves to the same directory it names, so only the lstat refuses it",
+     [(LSTAT_CHECK, "        if False:  # PLANT\n")], [REPO_TESTS],
+     ["test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]"], "DID NOT RAISE"),
+    ("aside-sweep-removed", "a crashed first use's aside directory never swept",
+     [("            if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:\n",
+       "            if False:  # PLANT\n")], [REPO_TESTS],
+     ["test_an_aside_directory_a_crashed_first_use_left_is_swept"], ".git-init-crashed"),
 ]
 
 def run(files: list[str]) -> str:
@@ -188,7 +214,7 @@ def run(files: list[str]) -> str:
         cwd=CORE, capture_output=True, text=True, env={**os.environ, "COLUMNS": "400"},
     )  # fmt: skip
     keep = ("PASSED", "FAILED", "ERROR")
-    out = done.stdout.replace("\x00", "\\x00")  # one id case holds a NUL
+    out = done.stdout
     lines = [line for line in out.splitlines()
              if line.startswith(keep) and not line.startswith("ERROR  ")]  # fmt: skip
     return "\n".join(lines + [out.strip().splitlines()[-1]])
