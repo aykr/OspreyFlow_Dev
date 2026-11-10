@@ -215,6 +215,8 @@ READS_AND_OTHER: tuple[str, ...] = (
     # a watched pattern's own schedule set, What raises alerts read; with the other alert actions.
     "alert_handed_off", "alert_suppressed", "alert_raised", "monitor_schedule_set",
     "read_alert_sources",
+    # Rules-b's L2.11a (ADR-146 decision 3): a rule's .bpmn or .dmn exported.
+    "export_rule_file",
     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
     "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
     "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",

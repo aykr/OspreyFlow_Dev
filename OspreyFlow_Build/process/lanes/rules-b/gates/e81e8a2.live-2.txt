@@ -1,0 +1,88 @@
+# Second run, e81e8a2 plus the working-tree fixes (author_rules off test_route_rights' not-yet list; 413 as an int), lease rules-b on stack d (server, remote), 08:56:23Z–08:59:49Z, 10 November 2026
+# The rights table again, then the reach plant done properly (the clause and its argument both dropped in get_listed, on the server's copy only, restored after)
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261110T085846Z/log: sh process/lanes/rules-b/l2.11a/live_run.sh
+## the rights table, again (author_rules guarded now)
+....                                                                     [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 passed, 1 warning in 14.63s
+EXIT 0
+## plant: get_listed's reach clause and its argument dropped (server copy only)
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_export_reads_through_the_real_rules_lists_reach _____________
+
+world = {'case': '01M72AXB1E31FFN0VBDE9Y3GK8', 'own': '01M72AXB34BZG5XWW98SS2AWB0', 'other': '01M72AXB374ZZV4CP9JGSDWB0R', 'hidden': '01M72AXB39GGGXZNM3VZYX576B'}
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x702b1aed4790>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x702b1aed42d0>)
+
+    def test_export_reads_through_the_real_rules_lists_reach(
+        world: dict[str, str], keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        base = f"/v1/investigations/{world['case']}/rules"
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            viewer = _as(key, VIEWER, ["analyst"])
+            own = client.get(f"{base}/{world['own']}/export.bpmn", headers=viewer)
+            assert own.status_code == 200, own.text
+            assert f'osprey:rule dataset="{dataset_for(AUTHOR)}"' in own.text
+            missing = client.get(f"{base}/no-such-rule/export.bpmn", headers=viewer)
+            assert missing.status_code == 404
+            for rid in (world["other"], world["hidden"]):
+                refused = client.get(f"{base}/{rid}/export.dmn", headers=viewer)
+>               assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
+                                             ^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_models.py:832: in json
+    return jsonlib.loads(self.content, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <json.decoder.JSONDecoder object at 0x702b1fa47a10>
+s = '<?xml version="1.0" encoding="UTF-8"?>\n<dmn:definitions xmlns:dmn="https://www.omg.org/spec/DMN/20191111/MODEL/" xml..._output"><dmn:text>true</dmn:text></dmn:outputEntry></dmn:rule></dmn:decisionTable></dmn:decision></dmn:definitions>\n'
+idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+/usr/lib/python3.12/json/decoder.py:355: JSONDecodeError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 08:59:10] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py::test_export_reads_through_the_real_rules_lists_reach
+1 failed, 1 passed, 1 warning in 12.05s
+PLANT EXIT 1 (red expected)
+restored

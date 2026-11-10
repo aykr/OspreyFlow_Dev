@@ -433,6 +433,8 @@ export type { SentenceRefusal } from "./SentenceRefusal";
 export type { PreviewExample } from "./PreviewExample";
 export type { RulePreview } from "./RulePreview";
 export type { RulePreviewRequest } from "./RulePreviewRequest";
+export type { RuleFilesUpload } from "./RuleFilesUpload";
+export type { ImportedRule } from "./ImportedRule";
 export type { ScreeningSubscriptionInput } from "./ScreeningSubscriptionInput";
 export type { ScreeningListStatus } from "./ScreeningListStatus";
 export type { ScreeningListUpdate } from "./ScreeningListUpdate";

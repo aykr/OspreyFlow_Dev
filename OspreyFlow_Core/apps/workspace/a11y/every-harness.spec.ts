@@ -75,6 +75,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
   // not see.
   "rules-place-harness.html": ["address=a1", "address=not-yours", "evidence=1"],
+  // ADR-146 decision 3 (L2.11a): Show as BPMN's drawing open, and a stored file it does not draw.
+  "rule-standards-harness.html": ["open=1", "open=1&file=other"],
   // ADR-145 Amendment 2: the column's fresh-page default, the Inspector alone open.
   "panel-frames-harness.html": ["defaults=1"],
   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).

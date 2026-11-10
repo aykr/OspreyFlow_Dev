@@ -425,6 +425,7 @@ from schemas.rights import (
     RightsResponse,
     rights_for,
 )
+from schemas.rule_standards import ImportedRule
 from schemas.screening import (
     ScreeningLists,
     ScreeningListsOverview,
@@ -893,6 +894,7 @@ from .rule_sentences import (
     preview_sentence,
     sentence_of,
 )
+from .rule_standards_routes import export_rule_file, import_rule_files
 from .rules_place import PLACE as RULES_PLACE
 from .rules_place import opens_rules_place, reads_queue_rows, refusal_wait
 from .rules_place import refusal as rules_place_refusal
@@ -14766,6 +14768,57 @@ async def read_rule_schedule(
                        investigation_id=investigation.id, resolved_query={"rule_id": rule_id},
                        result_cardinality=len(runs))  # fmt: skip
     return schedule_view(rule, runs, now=datetime.now(UTC))
+
+
+# --- a rule's files to the standards, BPMN 2.0 and DMN (ADR-146 decision 3, L2.11a) ------------
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/export.{kind}",
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
+)
+async def export_rule_standard_file(
+    rule_id: str,
+    kind: Literal["bpmn", "dmn"],
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    audit: AuditDep,
+) -> Response:
+    """The rule's `.bpmn` or `.dmn`, read as the rules list reads it (the reader's reach in its
+    `WHERE`): a rule the reader may not see is the same 404 as a missing one. Audited."""
+    rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
+    exported = export_rule_file(rule, kind)
+    await audit.record(principal=principal, action="export_rule_file",
+                       investigation_id=investigation.id,
+                       resolved_query={"rule_id": rule_id, "file": kind},
+                       result_cardinality=1)  # fmt: skip
+    return exported
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/import",
+    dependencies=[
+        Depends(require_right(Right.AUTHOR_RULES)),
+        Depends(require_rules_place),
+    ],
+)
+async def import_rule_standard_files(
+    request: Request,
+    investigation: InvestigationAuthorDep,
+    datasets: DatasetsDep,
+    ontology: OntologyDep,
+) -> ImportedRule:
+    """The rule a `.bpmn` and a `.dmn` hold (sent as their text, `RuleFilesUpload`) and the
+    dataset it declares, for the editor to open as a draft; nothing is written. The body is capped
+    as it is read. Anything OspreyFlow does not run is refused by name; a dataset that is not the
+    case's own source or composite is `dataset_not_found`, whether or not it exists."""
+    return await import_rule_files(
+        request, investigation_id=investigation.id, datasets=datasets, ontology=ontology
+    )
 
 
 # --- rules written as sentences, and their preview (ADR-133 decisions 1 and 3, stage (b)) -------

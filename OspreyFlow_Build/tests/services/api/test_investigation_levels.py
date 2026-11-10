@@ -240,6 +240,10 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/rules/{rule_id}/change"): E,
     ("GET", P + "/rules/{rule_id}/versions"): V,
     ("GET", P + "/rules/{rule_id}/runs"): V,
+    # ADR-146 decision 3 (L2.11a): a rule's .bpmn and .dmn exported at Viewer, as the rules are
+    # read; an import, which writes nothing but opens a draft, at Author (`author_rules`).
+    ("GET", P + "/rules/{rule_id}/export.{kind}"): V,
+    ("POST", P + "/rules/import"): A,
     # ADR-133 stage (b): compiling, reading back and previewing a sentence read only, as a pattern
     # preview does; deploying one needs Editor ("just me") and, in the route, Author for a case or
     # the whole deployment (`test_rule_sentence_routes.py`).
