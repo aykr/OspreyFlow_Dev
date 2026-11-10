@@ -158,3 +158,46 @@ same 10609 outcomes serially (1889 s), at `-n auto` (408 s, 4.6×) and at `-n 8`
   - each worker's own Keycloak "never became ready" (now the containers group);
   - `test_valkey_config` (fixed);
   - `-n auto` refused on 16 CPUs (now capped).
+
+## After the merger's review of 0d01cfa (10 November 2026, late)
+
+Every lever below is in `t1/t1p4_plants.py`, each shown red in `gates/t1p4_plants_offline.txt`.
+
+- **Teardown did not fail closed** (1). The stores were cleared in `pytest_unconfigure`. That is after xdist's
+  worker has sent `workerfinished` (`remote.py`, `pytest_sessionfinish`), and the controller marks the worker down
+  and reads only a keyboard interrupt (status 2) from what follows (`workermanage.py`, `dsession.py`). So a store
+  that failed to clear still exited 0.
+  - The stores are now made at the worker's first test and cleared at its last, in an autouse session fixture
+    (`_worker_stores`). A failure either way is that test's error, which the controller counts.
+  - It is proved through xdist itself. A planted conftest stands in for the stores, records each make and clear,
+    and refuses one on demand. The cases: a clear that fails fails the run, and the others are still cleared; a make
+    that fails part-way fails the run, and what it made is cleared.
+  - The old in-process unit cases are gone. The one that called the loaded plugin's `pytest_configure` and
+    `pytest_unconfigure` would, under `-n`, have overwritten that worker's real state (2).
+- **The Valkey cap failed closed only in the simple case** (3):
+  - A replacement for a crashed worker (`gw<count + k>`) is refused.
+  - Each worker claims its database for its run (`SET NX`, holding the run's id, lapsing after `STALE_AFTER`). A
+    database another run holds is refused. The claim's proof is a stand-in that answers as Valkey does: `SET NX`
+    on a held key returns None and leaves it.
+- **Detection** (4):
+  - `run --rm -d` (`test_workspace_bundle.py`) and the TLS fixtures imported relatively (all four of their users)
+    are now known; the old pattern matched neither.
+  - The serial check knows `--project-name`, and `-p` after `-f` on a later line.
+  - Container files now join the serial group, so none runs beside a serial file tearing down a fixed compose
+    project.
+- **A serial test now gets Valkey's db 0 as well as the shared graph** (5).
+  - Of the 14 test files that subscribe to a case channel or connect a socket, two read pub/sub messages:
+    `test_repoint_journal_callers_live.py` and `test_valkey_store.py`. Both use a fresh case id per test (`new_id()`,
+    a timestamp), and both assert what arrives, not that nothing does. No test asserting that no frame arrives
+    exists today.
+- **The live proof's inner runs** no longer inherit an outer worker's names (6).
+- **Minor:**
+  - stores are made only where `OSPREY_LANE` names a lease's holder, as the port guard reads it;
+  - a nested run does not sweep;
+  - the run's header names its workers and Valkey databases.
+- **`make test`'s comparison** (7):
+  - it now compares each skip's reason too, and logs the worker count;
+  - "clears with the diffs applied" has its log (`gates/t1p4_coverage_with_diffs.txt`);
+  - it is re-run at the head below.
+  - Its timings are unleased: offline runs on the shared test server, beside other lanes' runs, so they are
+    contended figures (rule 14).

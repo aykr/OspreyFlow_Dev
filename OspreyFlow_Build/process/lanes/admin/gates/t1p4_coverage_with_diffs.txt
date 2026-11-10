@@ -1,0 +1,4 @@
+# test-file-coverage-check and test_test_file_coverage_check.py with makefile-T1p4.diff and ci-yml-T1p4.diff applied, then reverted, at 0d01cfa plus the working tree, 2026-11-10T22:39:54Z
+test-file-coverage-check: 922 test file(s), 0 allowlisted, no new drift.
+21 passed in 6.83s
+reverted

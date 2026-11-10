@@ -43,7 +43,10 @@ child had been on two graphs). The serial tests run one at a time on that worker
   `PYTEST_XDIST_WORKER`, so a nested pytest is not taken for its parent's worker; the sweep of a killed run's names
   runs only when the top-level command sets `OSPREY_WORKER_SWEEP=1`; stores are made and cleared only under a lease
   or `OSPREY_WORKER_STORES=1` (the live proof's inner run, so it also runs in CI's conformance job).
-- Valkey pub/sub channels are server-wide, not per database: left shared, since investigation ids keep them apart.
+- Valkey pub/sub channels are server-wide, not per database, and are left shared. The first reason given here,
+  "investigation ids keep them apart", was wrong (the orchestrator's review, item 14): tests reuse fixed case ids. A
+  publish from another worker only starts a sync against the receiving worker's own stores, so no rows cross, but it
+  can send an extra frame to a test asserting that none arrives. That is recorded in the friction row, not fixed.
 - `test_revoked_principal_precheck.py` stays serial though it never connects (its `ValkeyConfig(db=0)` matches the
   check): one small file, and the check stays simple.
 - Rule 3's live tests under the plugin: the 18 live access-control and withheld-read files plus `test_route_rights.py`,
@@ -75,3 +78,11 @@ child had been on two graphs). The serial tests run one at a time on that worker
   names.
 - (After both reviews) Wiring the plugin into `tests/conftest.py`, so it no longer needs `-p`, is a diff for the
   orchestrator (`conftest-T1p4.diff`), with the Makefile's parallel `make test` (`makefile-T1p4.diff`).
+- (After the merger's review) The stores are made and cleared inside the run (an autouse session fixture), not at
+  configure and unconfigure: only a test's report reaches xdist's controller after `workerfinished`. A worker that
+  runs no test makes nothing.
+- (After the merger's review) Files that start containers join the serial group rather than a group of their own.
+  That costs nothing in `make test`, where the serial files are all ignored, and it means no container file runs
+  beside a serial file's `down -v`.
+- (After the merger's review) CI's `test` job stays serial. `makefile-T1p4.diff` changes the Makefile's `test`
+  target only, and `ci-yml-T1p4.diff` changes no worker count. Parallel CI would be a separate change to `ci.yml`.

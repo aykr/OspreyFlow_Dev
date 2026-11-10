@@ -43,3 +43,19 @@ Gated head **3bd210d**, on main 7bdd33b; the commit after it adds this report an
    - (c) Refusals naming the person the administrator chose (a recipient, a lead) are left as they are. They name the
      administrator's own choice, not who holds a right.
 6. **Questions:** none. **Still running:** nothing. Stack c is down and its lease released.
+
+## T1 part 4: parallel test workers (10 November 2026)
+
+- **Built:** a plugin, `tests/worker_isolation.py`, gives each pytest-xdist worker its own stores. Its records are
+  `T1_P4_PLAN.md`, `T1_P4_RED_RECORD.md` and `gates/t1p4_*`.
+- **`make test` in parallel:** `makefile-T1p4.diff` sets `TEST_WORKERS ?= auto`. The comparison at the head is in
+  `gates/`.
+- **CI's `test` job stays serial:** no `ci.yml` change runs it in parallel. `ci-yml-T1p4.diff` only adds the live
+  proof to the ignore and conformance lists, and must land with the merge.
+- **Committed at the orchestrator's word:**
+  - `scripts/stack_lease.sh`, which sets the test stacks' Postgres to `max_connections 400`;
+  - `test_valkey_config.py`;
+  - `pyproject.toml` and `uv.lock`.
+- **Named and left:**
+  - a rule 3 marker, which would touch shared files;
+  - the orchestrator's items 10 and 14 (friction row).
