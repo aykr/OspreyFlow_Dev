@@ -675,6 +675,15 @@ New ones are added at the bottom as they happen.
     in the dataset's own unit, and the Reports Viewer refused every write. I gated it at the merge. My own slip,
     caught there: the merge's CI-wiring apply left a conflict in `ci.yml`; resolved, and the two tests reading it
     pass. Admin's L2.7 merges next, on top.
+99. **My mistake overnight: about six hours lost.** At about 23:45 UTC I asked you L3.9's type-mapping question as
+    a blocking question, and nothing moved until your answer at about 05:20. Eight lanes sat idle 5½–7½ hours
+    waiting for stacks, slots, reviews and merges. I now never wait on a question while lanes are running: it
+    goes here, the recommended option is built, and I carry on (saved as a standing rule).
+100. **Your ruling, about 05:20 (L3.9):** "The entity type matching should be resolved through the ingest studio
+    where the type is mapped to the types in the domain model." So the merge's Map step maps each drawn type to
+    any domain-model type, as a Studio load does, and the load writes the items as those types; recorded in
+    ADR-143 Amendment 7 (reserved). **For you, from docs:** `publish_pages.sh` must copy `drawing-boards.html` and
+    `three-places.html` before the site is next published (you alone publish).
 
 ## Evening, 7 November: your records of 7 November applied
 
