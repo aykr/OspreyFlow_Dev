@@ -1,5 +1,7 @@
 # rules-b · T3 · red record: undecided colour contrast gated (10 November 2026)
 
+**The final form is 9e8d51a, round 3 (at the end).** The sections before it describe 46e53d3, and round 3 says what changed.
+
 All browser runs were local, in slots the orchestrator granted, with no Docker. The final form's runs used `OSPREY_PORTS_SLOT=9`, at 46e53d3 as committed. Every plant was restored after its run.
 
 ## The gap
@@ -96,3 +98,59 @@ A listed finding no longer found fails. A listed title that is not a scanned loo
 
 ## Limit, stated in the code
 The probe samples points across the text, not every pixel. Where axe saw part covered it takes a denser grid, and axe's own reading fails closed unless what axe named is a clip.
+
+
+## Round 3, the final form (9e8d51a): merger-c2's review of e94b18c
+
+**What changed in the judgement (`src/color/textContrast.ts`)**
+- Surfaces are judged per probed point (`covers: boolean[]`). Text spilling past its box counts on both surfaces.
+- Each gradient layer keeps the colour beneath it as a sample.
+- A `none` layer is skipped.
+- More than 20 000 possible backgrounds is unmeasurable.
+- A colour out of range (`rgb(-1000 …)`) is unread.
+- An unmeasurable judgement carries `ownRatio`, what its own surfaces give, and a listing of it is pinned to that as a floor.
+- The dead `gradientColours` is gone.
+
+**What changed in the probe (`a11y/undecidedContrast.ts`)**
+- Points are the left, middle and right of up to five line boxes, spread first to last.
+- An SVG paints only through its shapes.
+- A foreign element's own words at the point, its inset shadow or its border band count.
+- The clip classification is gone, and axe's `relatedNodes` are no longer read.
+
+**axe's "partly obscured" (REPORT decision 3)**
+- Failing it always closed, merger-c2's suggestion, failed 174 looks in the browser. Nearly all were text below the fold or past a scrolling box (the help page, Home's cases, admin tables).
+- It is measured when the probe finds nothing foreign at its points. merger-c2 accepted that.
+- The residual, a cover wholly between the probed points, is carried for T3b.
+
+**Red in Node** (22 cases; each fault planted in `textContrast.ts`, then restored):
+- **U13:** no colour beneath a layer. Red: 2.
+- **U14:** covers all-or-nothing. Red: the spill case.
+- **U15:** no range check. Red: 1.
+- **U16:** a `none` layer kept. Red: 1.
+- **U17:** no cap on the spread. Red: 1, with four layers. Six layers had crashed the run rather than failed it.
+- **U18:** the own-surface pin ignored. Red: 1.
+- **U19:** partly-covered never measured, under the always-closed rule then in force. Red: 2. The rule itself was then replaced by decision 3.
+
+**Red in the browser, against 9e8d51a as committed (`OSPREY_PORTS_SLOT=9`)**
+- **MR1, merger-c2's spill** (the dialog's title `width: 40px; white-space: nowrap; background: var(--text-primary)`): 3 of 3 red at 1.00:1 (axe: `equalRatio`).
+  - The control proves the branch: with `covers` put back to all-or-nothing, the same plant passes 3 of 3.
+  - A first form with a near-equal box colour was decided by axe itself as a violation, so it never reached the gate.
+- **MR2, merger-c2's sized gradient** (the title on `var(--text-primary) linear-gradient(var(--surface-raised), …) 0 0 / 1px 1px no-repeat`): 3 of 3 red at 1.00:1 (axe: `bgGradient`).
+- **TT, a listed title mistyped** in `contrastFindings.json`: the title check red, naming it.
+- **P1** 6 of 6; **P2** 3 of 3; **P3** 3 of 3 (stale); **P5** 3 of 3; **M1** 3 of 3, "over or under div"; **M2b** 3 of 3, "an unread colour oklch(… none)".
+- **S1** 2 of 2; **S2** red; **S3** 34 of 34.
+
+**Runs**
+- The full workspace run at the round-3 code, before the listings were rewritten: 86 failed.
+  - 10 were old listings that now pass: the blank board, Bob's label, the metrics rarity note, the views delete question.
+  - The rest were findings to re-pin or new.
+- With `a11y/contrastFindings.json` (84 looks, 132 findings): workspace 967 passed, harness app 34 passed.
+
+**What it finds on main, final (`a11y/contrastFindings.json` and `SHOWCASE_CONTRAST_FINDINGS`)**
+- **Platform:** the map's attribution chip lies over the map canvas, in every state and theme. Its own surfaces give 11.31:1 in dark, 2.85:1 in light and 6.88:1 under GOV.UK.
+- **Shell:** variant b's ⋯ over the rail or banner; places' open More views over the banner's words under GOV.UK.
+- **Case (boards):** a handle where a link line runs under it, and the photo's handle and label where they overlap.
+- **Rules-b (Show as BPMN, L2.11a's own):** the drawing's words on the task box, in the dialog and in the rule editor. CARRIES row under rules-b.
+- **Home:** the key cap at `opacity: 0.8`, 4.12:1 in light and 3.92:1 under GOV.UK. It is fixed on lane/rules-hyg at dd60c52; the listing comes off when both land.
+- **Design system:** the warning toast's glyph, 4.41:1 in light.
+- **Outside T3's reach:** a pressed (`:active`) primary button in dark at 3.59:1 (rules' measurement). No scan presses a button. A harness state, or the token pair checked directly, is T3b's.

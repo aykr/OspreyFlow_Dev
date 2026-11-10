@@ -13,18 +13,18 @@
 3. **Green with each finding listed: met.** Main's findings are listed in `CONTRAST_FINDINGS` (every-harness) and `SHOWCASE_CONTRAST_FINDINGS` (`a11y.spec.ts`).
    - Each is excused only by its selector, its text and its ratio. An unmeasurable one is excused by its exact reason, pinned to its own surfaces' ratio.
    - A listed finding no longer found fails, and so does a listed title that is not a look.
-4. **Findings by owner:**
+4. **Findings by owner** (`a11y/contrastFindings.json`; RED_RECORD round 3):
    - platform: the map chip;
-   - design system: the toast glyph;
-   - home: the key cap;
    - shell: variant b's ⋯ and places' open menu;
-   - case: the boards' lines and views' delete question;
-   - rules: the metrics rarity note;
-   - plus the truncated texts this round lists (RED_RECORD).
+   - case: the boards' handles and labels;
+   - rules-b: Show as BPMN's words on its task box, carried;
+   - home: the key cap, fixed on rules-hyg;
+   - design system: the toast glyph.
+   - Out of reach, for T3b: a pressed button's `:active` state, and a cover lying between probed points.
 5. **Reviews:**
    - Mine and the orchestrator's of 9dab1ef: 10 must-fixes, all fixed in 7ce19d0.
    - merger-c2's of bd9b4ef: 2 must-fixes, fixed in 46e53d3.
-   - merger-c2's of e94b18c: 3 more silent passes, fixed this round.
+   - merger-c2's of e94b18c: 3 more silent passes, fixed in 9e8d51a. Its always-closed suggestion was tried and departed from, as decision 3 records.
 6. **Gates:** GATES.
 7. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-gate.md`. **Still running:** nothing.
 
