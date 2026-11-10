@@ -1,4 +1,4 @@
-# head bc80006; plant: a staged pipeline writes its step tables with its fixed markings unjudged
+# head 39141cb; plant: a staged pipeline writes its step tables with its fixed markings unjudged
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables; for the reason 'does not judge its fixed markings'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -13,4 +13,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_w
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_recipe_whose_fixed_marking_is_above_the_ceiling_is_refused_before_any_staging
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables - AssertionError: the staged branch does not judge its fixed markings
-1 failed, 11 passed in 24.77s
+1 failed, 11 passed in 25.39s

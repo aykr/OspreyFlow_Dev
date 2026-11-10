@@ -1,4 +1,4 @@
-# head bc80006; plant: a marking at the ceiling counted as above it: `>` -> `>=`
+# head 39141cb; plant: a marking at the ceiling counted as above it: `>` -> `>=`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py
 # must fail: test_a_load_at_the_ceiling_passes, test_a_document_at_the_ceiling_is_stored, test_a_picture_at_the_ceiling_is_stored, test_the_conduit_reads_the_ceiling; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -17,4 +17,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_n
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes - services.ingest.ceiling.AboveTheDeploymentCeiling: This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployment cleared to hold it.
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_document_at_the_ceiling_is_stored - AssertionError: {"error":"above_the_deployments_highest_marking","problems":["This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deploym...
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py::test_a_picture_at_the_ceiling_is_stored - AssertionError: {"error":"above_the_deployments_highest_marking","problems":["This load would write rows marked above this deployment's highest marking, OFFICIAL-SENSITIVE, so nothing was loaded. Mark the source no higher than OFFICIAL-SENSITIVE, or load it into a deployme...
-5 failed, 11 passed, 1 warning in 25.51s
+5 failed, 11 passed, 1 warning in 25.12s

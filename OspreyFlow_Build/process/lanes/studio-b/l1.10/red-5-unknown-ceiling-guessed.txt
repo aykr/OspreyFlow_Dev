@@ -1,4 +1,4 @@
-# head bc80006; plant: an unknown OSPREY_HIGHEST_MARKING read as no ceiling
+# head 39141cb; plant: an unknown OSPREY_HIGHEST_MARKING read as no ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_an_unknown_ceiling_stops_the_conduit_rather_than_guessing, test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -13,4 +13,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_unknown_ceiling_stops_the_conduit_rather_than_guessing - Failed: DID NOT RAISE CeilingUnknown
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything - AssertionError: the start went on to open the stores
-2 failed, 10 passed in 25.10s
+2 failed, 10 passed in 25.22s

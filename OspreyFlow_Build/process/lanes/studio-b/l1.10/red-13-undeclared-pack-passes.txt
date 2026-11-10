@@ -1,0 +1,10 @@
+# head 39141cb; plant: a pack that declares nothing read as the scheme's lowest
+# command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
+# must fail: test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts; for the reason 'DID NOT RAISE'; all failed: yes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_rendered_every_pack_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_its_one_marking
+FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts - Failed: DID NOT RAISE SeedRefused
+FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest - Failed: DID NOT RAISE SeedRefused
+2 failed, 4 passed in 0.36s

@@ -1,4 +1,4 @@
-# head bc80006; plant: run_recipe judges no row against the ceiling
+# head 39141cb; plant: run_recipe judges no row against the ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -13,4 +13,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing - Failed: DID NOT RAISE AboveTheDeploymentCeiling
-1 failed, 11 passed in 26.42s
+1 failed, 11 passed in 24.64s

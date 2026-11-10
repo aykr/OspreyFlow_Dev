@@ -1,4 +1,4 @@
-# head bc80006; plant: the Conduit's start reads no ceiling
+# head 39141cb; plant: the Conduit's start reads no ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything; for the reason 'the start went on to open the stores'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -13,4 +13,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_w
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_recipe_whose_fixed_marking_is_above_the_ceiling_is_refused_before_any_staging
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything - AssertionError: the start went on to open the stores
-1 failed, 11 passed in 24.95s
+1 failed, 11 passed in 25.25s
