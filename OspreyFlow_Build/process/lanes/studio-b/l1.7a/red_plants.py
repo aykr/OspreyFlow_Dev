@@ -275,7 +275,7 @@ PLANTS = [
     ("first-use-unlocked", "the in-process lock not taken, so the first-use sweep runs under no lock",
      [(ACQUIRE, "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS  # PLANT\n"),
       ("        _REPOSITORY_LOCK.release()\n", "        pass  # PLANT\n")], [REPO_TESTS],
-     ["test_the_first_use_sweep_runs_under_the_in_process_lock"], "the first sweep ran with"),
+     ["test_the_first_use_sweep_runs_under_the_in_process_lock"], "(lock, flock file) (False, False)"),
 ]
 
 def run(files: list[str]) -> str:
