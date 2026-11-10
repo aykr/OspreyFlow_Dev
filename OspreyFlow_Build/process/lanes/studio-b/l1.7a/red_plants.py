@@ -204,7 +204,7 @@ PLANTS = [
     ("aside-sweep-removed", "a crashed first use's aside directory never swept",
      [("            if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:\n",
        "            if False:  # PLANT\n")], [REPO_TESTS],
-     ["test_an_aside_directory_a_crashed_first_use_left_is_swept"], ".git-init-crashed"),
+     ["test_an_aside_directory_a_crashed_first_use_left_is_swept"], "is still there"),
 ]
 
 def run(files: list[str]) -> str:
