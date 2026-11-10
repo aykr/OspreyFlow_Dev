@@ -144,6 +144,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 21. **About 30% of the lane work on the Sol account from 20:50 (your word, 10 November).** Platform already runs on
    sol; case and studio-b switch at 20:50, each at a safe point (pause-done, then resumed on sol), so 3 of the 9
    running sessions are on sol. The demo track (rules, studio, docs) stays on ayan through tonight's release.
+22. **The decks (D2b): six questions decided on the recommendation.** The drafts are in `OspreyFlow_presentations/`
+   (not committed; no earlier draft changed). (1) A full recapture of screenshots, from the server demo deployment
+   after the release (43 marked boxes). (2) No count of rights in the decks (main has 52; a number drifts). (3) The
+   prison deck's chapter 10b takes its two minutes from chapters 7 and 9 (60-minute) or 6+7 and 8 (45-minute). (4) The
+   demo shows *Promote…* up to its preview but does not send it (a rehearsal reset cannot undo a promotion). (5) The
+   prison demo leaves `deployment.highest_marking` unset (the pack declares no marking). (6) The Pitch's reference
+   [10] is checked tonight or dropped. Also: four lines in the guides still call built features "coming" (team
+   routing, the drawn-item alert, adding a gazetteer); docs fixes those four before the publish. **To overrule:**
+   name the number.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
