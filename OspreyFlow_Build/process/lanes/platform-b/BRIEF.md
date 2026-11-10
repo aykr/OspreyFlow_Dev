@@ -108,4 +108,4 @@ folded into `lane/platform-b`'s BRIEF; no new brief is coming.
 - The keyboard cases: add, then the search asked again and the place offered, then remove at once; a
   separate removal from a preset; and a panel offering no change. The registry ids go to the orchestrator as
   `registry-P6.patch`, not on the branch (`actionRegistry.ts` is shared).
-- The ADR text is `ADR-147-amendment-P6-draft.md`, for the orchestrator to reserve.
+- The ADR text is ADR-147 Amendment 4 in `spec/06_DECISIONS.md` (reserved by the orchestrator, written here).
