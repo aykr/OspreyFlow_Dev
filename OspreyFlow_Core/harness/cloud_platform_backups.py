@@ -59,9 +59,11 @@ ARCADEDB_BACKUPS = "/home/arcadedb/backups"
 #: does not hold the next night's (`concurrencyPolicy: Forbid`).
 DEADLINE_SECONDS = 6 * 3600
 
-#: No delete: ClickHouse runs as this role, and no set is ever erased by it (sets expire by the
-#: bucket's lifecycle rule).
+#: No delete of a set: ClickHouse runs as this role, and no set is ever erased by it (sets expire by
+#: the bucket's lifecycle rule); its one delete is CLICKHOUSE_LOCK.
 OBJECT_ACTIONS = ["s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload"]
+#: The one object the role may delete: ClickHouse's own lock, in each set's ClickHouse part.
+CLICKHOUSE_LOCK = "sets/*/clickhouse/.lock"
 BUCKET_ACTIONS = ["s3:ListBucket", "s3:GetBucketLocation"]
 KMS_ACTIONS = ["kms:GenerateDataKey", "kms:Decrypt"]
 
@@ -74,6 +76,14 @@ def role_policy(bucket_arn: str, key_arn: str) -> dict[str, Any]:
             {"Effect": "Allow", "Action": BUCKET_ACTIONS, "Resource": [bucket_arn]},
             {"Effect": "Allow", "Action": OBJECT_ACTIONS, "Resource": [f"{bucket_arn}/*"]},
             {"Effect": "Allow", "Action": KMS_ACTIONS, "Resource": [key_arn]},
+            # ClickHouse 25.8's BACKUP removes its own lock at its end and fails without this
+            # (measured on osprey-p9): that object alone, never a set's data (the orchestrator's
+            # grant of 11 November 2026).
+            {
+                "Effect": "Allow",
+                "Action": ["s3:DeleteObject"],
+                "Resource": [f"{bucket_arn}/{CLICKHOUSE_LOCK}"],
+            },
         ],
     }
 

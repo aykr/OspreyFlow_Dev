@@ -278,11 +278,21 @@ def test_the_expire_lever_ends_every_session_as_an_hour_would(aws: Running) -> N
     assert _code(refused) == "ExpiredToken"
 
 
-def test_the_backup_role_is_refused_a_delete(aws: Running) -> None:
-    """Its policy as backups.tf writes it holds no delete: a set written is never erased by it."""
+@pytest.mark.parametrize("key", ["sets/a/x", "sets/a/manifest.json", "sets/a/clickhouse/data.bin",
+                                 "sets/a/clickhouse/.lock.old", "elsewhere/clickhouse/.lock"])
+def test_the_backup_role_is_refused_every_delete_but_clickhouses_lock(aws: Running, key: str) -> None:
+    """Its policy as backups.tf writes it: a set's data, its manifest, anything but ClickHouse's own
+    lock file, is never erased by it."""
     client = aws.s3()
-    client.put_object(Bucket=BUCKET, Key="sets/a/x", Body=b"x")
+    client.put_object(Bucket=BUCKET, Key=key, Body=b"x")
     with pytest.raises(ClientError) as refused:
-        client.delete_object(Bucket=BUCKET, Key="sets/a/x")
+        client.delete_object(Bucket=BUCKET, Key=key)
     assert _code(refused) == "AccessDenied"
-    assert aws.stand_in.read(BUCKET, "sets/a/x") == b"x"
+    assert aws.stand_in.read(BUCKET, key) == b"x"
+
+
+def test_the_backup_role_may_remove_clickhouses_lock(aws: Running) -> None:
+    client = aws.s3()
+    client.put_object(Bucket=BUCKET, Key="sets/a/clickhouse/.lock", Body=b"")
+    client.delete_object(Bucket=BUCKET, Key="sets/a/clickhouse/.lock")
+    assert aws.stand_in.meta(BUCKET, "sets/a/clickhouse/.lock") is None

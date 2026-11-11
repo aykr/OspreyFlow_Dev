@@ -133,16 +133,29 @@ def test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod() -> Non
     assert others == []
 
 
-def test_the_backup_role_can_never_delete_a_set() -> None:
-    """The orchestrator's ruling of 11 November 2026: ClickHouse runs as the backup role, so the role
-    holds no delete. A ClickHouse (or a runner) turned against the bucket cannot erase the sets;
-    they expire by the bucket's lifecycle rule alone."""
-    policy = backups.role_policy("arn:aws:s3:::b", "arn:aws:kms:eu-west-2:1:key/k")
-    actions = [a for s in policy["Statement"] for a in s["Action"]]
-    assert not [a for a in actions if "Delete" in a or a in ("s3:*", "*")], actions
+def test_the_backup_roles_only_delete_is_clickhouses_own_lock_file() -> None:
+    """The orchestrator's rulings of 11 November 2026: ClickHouse runs as the backup role, so the role
+    holds no delete but one. ClickHouse 25.8's BACKUP removes its own `.lock` at its end and fails
+    without that (measured on osprey-p9), so it may delete `sets/*/clickhouse/.lock` and nothing
+    else: never a set's data or manifest, never an object version."""
+    bucket = "arn:aws:s3:::b"
+    policy = backups.role_policy(bucket, "arn:aws:kms:eu-west-2:1:key/k")
+    deletes = [(a, s["Resource"]) for s in policy["Statement"] for a in s["Action"]
+               if "Delete" in a or a in ("s3:*", "*") or a.endswith(":*")]  # fmt: skip
+    assert deletes == [("s3:DeleteObject", [f"{bucket}/sets/*/clickhouse/.lock"])]
     text = rendered.terraform()
     role = re.search(r'data "aws_iam_policy_document" "backup_role" \{(.*?)\n\}', text, re.DOTALL)
-    assert role is not None and "Delete" not in role.group(1)
+    assert role is not None
+    assert re.findall(r'"s3:Delete\w*"', role.group(1)) == ['"s3:DeleteObject"']
+    assert '"${aws_s3_bucket.backups.arn}/sets/*/clickhouse/.lock"' in role.group(1)
+
+
+def test_the_bucket_keeps_no_versions_so_a_delete_hides_nothing() -> None:
+    """Not versioned: a delete of the lock removes the lock, and no delete marker can stand in front
+    of a set's data (the role could not place one on anything else anyway)."""
+    text = rendered.terraform()
+    assert "aws_s3_bucket_versioning" not in text
+    assert "versioning" not in text.lower()
 
 
 def test_the_sets_expire_by_the_buckets_lifecycle_rule() -> None:

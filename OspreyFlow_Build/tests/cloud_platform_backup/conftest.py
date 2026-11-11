@@ -186,8 +186,12 @@ class FakeStores:
         try:
             if body.startswith("BACKUP"):
                 # ClickHouse sends no encryption header: the bucket's default (its key) applies.
+                # As ClickHouse 25.8 does: its lock first, removed at the end (refused without
+                # s3:DeleteObject on it, measured on osprey-p9), then the backup's own files.
+                s3.put_object(Bucket=bucket, Key=prefix + ".lock", Body=b"")
                 s3.put_object(Bucket=bucket, Key=prefix + ".backup", Body=b"<config/>")
                 s3.put_object(Bucket=bucket, Key=prefix + "data/ospreyflow/events/all_1_1_0/data.bin", Body=b"rows")
+                s3.delete_object(Bucket=bucket, Key=prefix + ".lock")
                 return b"0b1d-backup-id\tBACKUP_CREATED\n"
             s3.get_object(Bucket=bucket, Key=prefix + ".backup")["Body"].read()
             return b"0b1d-restore-id\tRESTORED\n"
