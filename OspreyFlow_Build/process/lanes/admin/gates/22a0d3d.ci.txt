@@ -1,0 +1,121 @@
+head 22a0d3d with every p10p2/*.diff applied; stack_lease.sh offline admin (no stack)
+============================= slowest 30 durations =============================
+4.13s call     tests/test_lanes_heartbeat.py::test_watch_notifies_once_per_new_line_not_on_every_pass
+0.71s call     tests/test_lanes_heartbeat.py::test_the_lane_by_lane_view_is_kept_behind_lanes
+0.69s call     tests/test_lanes_launch.py::test_watch_never_switches_a_lane_without_the_owners_fallback_line
+0.58s call     tests/test_lanes_heartbeat.py::test_the_default_view_fits_one_screen_and_names_each_lanes_current_step
+0.49s call     tests/test_lanes_launch.py::test_open_refuses_when_a_session_is_running_in_the_worktree
+0.43s call     tests/test_lanes_heartbeat.py::test_only_what_needs_the_owner_is_under_needs_you
+0.43s call     tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines
+0.41s call     tests/test_lanes_heartbeat.py::test_an_estimate_is_cut_by_characters_never_through_one
+0.40s call     tests/test_lanes_launch.py::test_a_session_in_a_sibling_folder_is_not_the_lanes
+0.38s call     tests/test_friction_assemble.py::test_fragments_become_rows_in_date_order_after_the_last_row
+0.36s call     tests/test_lanes_heartbeat.py::test_a_needs_line_reads_the_same_ten_minutes_later
+0.35s call     tests/test_friction_assemble.py::test_a_hash_already_filled_is_never_overwritten
+0.35s call     tests/test_lanes_heartbeat.py::test_each_test_stack_is_shown_with_its_holder
+0.34s call     tests/test_stack_lease.py::test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder
+0.30s setup    tests/test_stack_lease.py::test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder
+0.29s call     tests/test_lanes_launch.py::test_no_output_log_or_commit_holds_anything_from_an_account_directory
+0.25s call     tests/test_lanes_heartbeat.py::test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[2-True]
+0.24s call     tests/test_stack_lease.py::test_live_all_and_base_are_passed_to_the_selector
+0.24s call     tests/test_lanes_heartbeat.py::test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[0-False]
+0.22s call     tests/test_lanes_heartbeat.py::test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_beats
+0.22s call     tests/test_lanes_heartbeat.py::test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners
+0.21s call     tests/test_lanes_heartbeat.py::test_watch_shows_the_summary_unless_asked_for_the_full_view
+0.21s call     tests/test_lanes_heartbeat.py::test_a_lane_at_its_usage_limit_names_its_account_for_the_owner
+0.21s call     tests/test_lanes_heartbeat.py::test_a_waiting_beat_that_names_no_owner_is_the_orchestrators
+0.21s call     tests/test_lanes_heartbeat.py::test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled
+0.21s call     tests/test_lanes_heartbeat.py::test_a_waiting_for_owner_beat_needs_you
+0.21s call     tests/test_lanes_heartbeat.py::test_the_lanes_shown_by_default_are_the_six_of_amendment_3
+0.20s call     tests/test_lanes_heartbeat.py::test_a_lease_older_than_its_limit_is_the_orchestrators
+0.20s call     tests/test_lanes_heartbeat.py::test_a_stack_b_lease_older_than_its_limit_is_the_orchestrators
+0.20s call     tests/test_stack_lease.py::test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code[as ps prints it]
+============================= 127 passed in 22.45s =============================
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/admin/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/admin/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 10 items
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 60%]
+....                                                                     [100%]
+
+============================= slowest 30 durations =============================
+7.61s call     tests/test_unfiltered_node_lookup_confined.py::test_only_the_reverts_module_names_its_unfiltered_lookups
+4.95s call     tests/test_unfiltered_node_lookup_confined.py::test_the_module_each_lookup_is_confined_to_does_call_it
+1.31s call     tests/test_unfiltered_node_lookup_confined.py::test_only_the_engines_write_path_names_the_unfiltered_lookup
+0.97s call     tests/test_unfiltered_node_lookup_confined.py::test_no_service_imports_the_revert_command
+0.30s setup    tests/test_unfiltered_node_lookup_confined.py::test_only_the_engines_write_path_names_the_unfiltered_lookup
+0.10s call     tests/test_unfiltered_node_lookup_confined.py::test_the_engine_does_call_it
+
+(24 durations < 0.005s hidden.  Use -vv to show these durations.)
+============================= 10 passed in 15.41s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/admin/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1632 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/admin/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================= slowest 30 durations =============================
+0.31s call     tests/test_no_branches_check.py::test_the_tree_names_no_branch
+0.31s call     tests/test_no_branches_check.py::test_one_branch_word_planted_in_the_glass_fails_the_gate
+0.31s setup    tests/test_no_branches_check.py::test_each_shape_the_code_used_is_flagged[apps/workspace/src/canvas/SelectionBar.tsx]
+0.16s call     tests/test_no_branches_check.py::test_the_conduit_names_no_branch
+
+(26 durations < 0.005s hidden.  Use -vv to show these durations.)
+============================== 12 passed in 1.22s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/admin/OspreyFlow_Build .venv/bin/python -m tools.no_langchain_check
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/admin/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_langchain_check.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 28 items
+
+../OspreyFlow_Build/tests/test_no_langchain_check.py ................... [ 67%]
+.........                                                                [100%]
+
+============================= slowest 30 durations =============================
+0.38s call     tests/test_no_langchain_check.py::test_the_real_tree_passes
+0.31s setup    tests/test_no_langchain_check.py::test_an_image_without_any_passes
+0.18s call     tests/test_no_langchain_check.py::test_the_image_script_prints_what_the_leg_reads
+0.03s call     tests/test_no_langchain_check.py::test_laurium_s_own_folder_alone_may_carry_it
+0.02s call     tests/test_no_langchain_check.py::test_langchain_in_another_images_requirements_file_is_named
+0.01s call     tests/test_no_langchain_check.py::test_laurium_in_the_lock_is_named
+0.01s call     tests/test_no_langchain_check.py::test_the_copied_tree_passes
+0.01s call     tests/test_no_langchain_check.py::test_laurium_put_back_into_the_conduits_context_by_a_negation_is_named
+0.01s call     tests/test_no_langchain_check.py::test_another_spelling_that_leaves_laurium_out_passes[/services/laurium/]
+0.01s call     tests/test_no_langchain_check.py::test_langchain_named_by_another_dockerfile_in_any_shape_is_named[build-arg]
+0.01s call     tests/test_no_langchain_check.py::test_langchain_named_by_another_dockerfile_in_any_shape_is_named[uv]
+0.01s call     tests/test_no_langchain_check.py::test_another_spelling_that_leaves_laurium_out_passes[services/lauri*]
+0.01s call     tests/test_no_langchain_check.py::test_laurium_left_in_the_conduits_build_context_is_named
+0.01s call     tests/test_no_langchain_check.py::test_a_pattern_leaving_part_of_laurium_in_is_named
+0.01s call     tests/test_no_langchain_check.py::test_langchain_in_the_conduits_dependencies_is_named
+0.01s call     tests/test_no_langchain_check.py::test_another_spelling_that_leaves_laurium_out_passes[services/laurium/**]
+0.01s call     tests/test_no_langchain_check.py::test_langchain_named_by_another_dockerfile_in_any_shape_is_named[continued-line]
+0.01s call     tests/test_no_langchain_check.py::test_another_dockerfile_installing_langchain_is_named
+
+(12 durations < 0.005s hidden.  Use -vv to show these durations.)
+============================== 28 passed in 1.41s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=packages:/root/osprey-runs/admin/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out /root/osprey-runs/admin/OspreyFlow_Build/dist
+osprey bundle: 80 file(s) -> /root/osprey-runs/admin/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+make: Target 'ci' not remade because of errors.
+Wall time: 591 s, exit 2 (no stack, no lease; set-up before it 11 s)

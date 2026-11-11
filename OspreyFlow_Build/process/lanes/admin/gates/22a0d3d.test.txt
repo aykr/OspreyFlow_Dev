@@ -1,0 +1,61 @@
+head 22a0d3d with every p10p2/*.diff applied; stack_lease.sh offline admin (no stack)
+    raise refresh_needs_a_key([recipe.label])
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/admin/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12197: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /root/osprey-runs/admin/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12131: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+171.54s call     tests/schemas/test_drift_gate.py::test_committed_generated_types_match_current_models
+110.46s call     tests/schemas/test_drift_gate.py::test_drift_gate_detects_a_changed_model
+66.88s setup    tests/scenarios/test_pid_files.py::test_the_mess_counts_go_red_for_one_duplicate_fewer
+63.82s setup    tests/scenarios/test_pid_files.py::test_the_first_row_of_every_number_in_each_file_is_the_plans_own_form
+61.98s setup    tests/scenarios/test_pid_files.py::test_reading_every_file_reconstructs_the_demo_plan_at_each_moment
+60.51s setup    tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends@serial
+59.34s setup    tests/scenarios/test_pid_files.py::test_no_two_distinct_calls_share_the_engines_key
+58.24s setup    tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+54.18s call     tests/conduit_common/test_s3_settings.py::test_on_an_instance_role_no_client_sends_a_key
+51.79s call     tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes
+48.87s call     tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing
+48.36s call     tests/services/api/test_deployment_ceiling.py::test_with_no_ceiling_set_a_secret_row_loads_as_before
+47.06s setup    tests/scenarios/test_pid_files.py::test_the_call_file_has_exactly_the_planted_mess_at_the_recorded_positions
+41.32s call     tests/test_seed_pid.py::test_the_seed_and_check_warn_while_resolution_is_on_and_say_nothing_when_off
+37.20s call     tests/scenarios/test_pid_plan.py::test_the_rows_dates_are_the_shared_instants_spans_and_constants
+35.09s call     tests/scenarios/test_pid_files.py::test_the_round_trip_goes_red_for_one_call_row_dropped
+30.88s call     tests/test_seed_pid.py::test_a_seed_over_loaded_stages_still_writes_the_missing_inferred_links
+30.29s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production-bedrock]
+28.39s setup    tests/scenarios/test_pid_files.py::test_no_generated_text_carries_a_name_the_naming_rule_forbids
+28.01s call     tests/test_seed_pid.py::test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks
+27.24s call     tests/test_seed_pid.py::test_a_second_seed_over_a_case_that_has_them_writes_none
+25.41s setup    tests/scenarios/test_pid_files.py::test_each_files_header_is_the_column_list_derived_from_the_shapes
+24.90s call     tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+24.70s call     tests/cp_policy_check/test_rendered_terraform.py::test_a_reference_to_nothing_is_refused
+24.35s setup    tests/scenarios/test_pid_files.py::test_the_csv_files_use_unix_line_ends_and_never_write_a_plan_key_for_a_report
+24.28s setup    tests/scenarios/test_pid_files.py::test_the_handling_columns_follow_the_contract_in_every_profile
+23.98s setup    tests/scenarios/test_pid_files.py::test_every_shape_has_a_file_and_the_chapter_9_batch_is_in_incoming
+23.26s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+23.09s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production]
+22.70s call     tests/scenarios/test_pid_files.py::test_the_writes_are_the_plan_at_each_moment_with_derived_ids[demo]
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_container_without_resources_is_refused
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py::test_every_route_naming_no_right_is_one_weighed_for_the_viewer
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_the_graph_checks_every_write_against_the_datasets_store
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_the_graph_clears_the_explore_cache_after_a_write
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_the_builder_covers_every_field_a_run_needs
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_the_schema_is_applied_for_the_ontology_in_force
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_closing_closes_everything_the_builder_opened
+FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_the_run_dependencies_are_the_stores_the_builder_opened
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[administration-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[10_ADMINISTRATION_GUIDE.md]
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_section_of_the_schema_has_its_line
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+FAILED ../OspreyFlow_Build/tests/test_route_coverage_check.py::test_no_new_drift_beyond_the_allowlist
+==== 14 failed, 11983 passed, 27 skipped, 91 warnings in 430.62s (0:07:10) =====
+make: *** [Makefile:166: test] Error 1
+Wall time: 432 s, exit 2 (no stack, no lease; set-up before it 12 s)

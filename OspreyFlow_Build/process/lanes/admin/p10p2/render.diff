@@ -15,7 +15,7 @@ index 82dc02d..6c1f87c 100644
      assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
      assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")
 diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
-index 7704c5b..507344f 100644
+index 7704c5b..230466b 100644
 --- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
 +++ b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
 @@ -98,15 +98,14 @@ def test_the_ingress_routes_each_path_and_admits_each_path_s_service(tmp_path: P
@@ -80,7 +80,7 @@ index 7704c5b..507344f 100644
  
  
  def test_a_widened_ingress_policy_is_refused(development: tuple[dict[str, Any], str]) -> None:
-@@ -619,13 +619,13 @@ def test_a_calico_ingress_allow_from_a_selector_alone_passes(
+@@ -619,14 +619,14 @@ def test_a_calico_ingress_allow_from_a_selector_alone_passes(
  def test_a_container_without_resources_is_refused(development: tuple[dict[str, Any], str]) -> None:
      values, registry = copy.deepcopy(development)
      _workload(values, "arcadedb").pop("resources")
@@ -89,13 +89,16 @@ index 7704c5b..507344f 100644
 +    gateway = _workload(values, "litellm")
 +    gateway["initContainers"][0]["resources"] = {"requests": {"cpu": "100m"}}
      found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
-     assert [(v.rule, v.where, v.detail) for v in found] == [
+-    assert [(v.rule, v.where, v.detail) for v in found] == [
++    assert sorted((v.rule, v.where, v.detail) for v in found) == [
++        ("no-resources", "Deployment/litellm container litellm-db",
++         "no requests.memory, limits.memory"),
          ("no-resources", "StatefulSet/arcadedb container arcadedb",
           "no requests.cpu, requests.memory, limits.memory"),
 -        ("no-resources", "StatefulSet/keycloak container keycloak-db",
-+        ("no-resources", "Deployment/litellm container litellm-db",
-          "no requests.memory, limits.memory"),
+-         "no requests.memory, limits.memory"),
      ]  # fmt: skip
+ 
  
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
 index 368b97b..1fcf0eb 100644
@@ -655,7 +658,7 @@ index 6583219..a797206 100644
  
  @dataclass(frozen=True)
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index ad92ded..1e6886b 100644
+index ad92ded..5aa312b 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
 @@ -58,8 +58,26 @@ from schemas.deployment import (
@@ -704,9 +707,9 @@ index ad92ded..1e6886b 100644
 +        # The orchestrator's ruling (a), P10 part 2: both signed in through Keycloak, which this
 +        # profile does not render; each gets Entra ID's sign-in in its own later step (CARRIES).
 +        raise CloudPlatformNotRenderable(
-+            "report sync and Superset are not on this profile yet: they signed in through Keycloak, "
-+            "and people sign in with Entra ID here; their own step after P10 (reporting on Entra "
-+            "ID) brings them. Set reporting.sync and reporting.superset to false"
++            "report sync and Superset are not on this profile yet: they signed in through "
++            "Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting "
++            "on Entra ID) brings them. Set reporting.sync and reporting.superset to false"
 +        )
 +    claims = _cp(config).claims
 +    if claims is None:
