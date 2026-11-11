@@ -33801,15 +33801,36 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
    (87,479 bytes), `INSERT INTO FUNCTION s3()` wrote over a set, and `url()` reached another host. Now:
    - ClickHouse's users file (`users.d`) refuses `osprey` the S3 and URL sources and BACKUP (`REVOKE S3, URL,
      BACKUP`, and access management and named collections explicitly, though the entrypoint's own user holds
-     neither), and gives a user of its own, `backup`, BACKUP, ON CLUSTER, the S3 source and the database's own
-     rights for RESTORE. **Its password is a Secret of its own** (`ospreyflow-clickhouse-backup`, made by
+     neither), and gives a user of its own, `backup`, BACKUP, ON CLUSTER, the S3 source and every right on
+     `ospreyflow*`, a prefix grant: the restore makes `ospreyflow_restoring_*` and swaps it with
+     `ospreyflow_before_*`, and with `ospreyflow.*` alone kind's restore was refused its own temporary database
+     (Code 497, round 3). Measured (`gates/p9_grants_probe3.log`): the prefix covers the live `ospreyflow` itself
+     and the restore's whole sequence, and refuses `backup` any other database, `x_ospreyflow` included; it also
+     covers any name that merely begins `ospreyflow` (none is made). **Its password is a Secret of its own** (`ospreyflow-clickhouse-backup`, made by
      backups.tf), never a key of the shared Secret, which the Conduit, the workers, the report sync and the
      workspace load whole: ClickHouse and the backup's own pods alone name it (the lane-reviewer's round-2
      blocker). Measured on ClickHouse 25.8.33.6 in throwaway containers (`gates/p9_grants_probe.log`,
      `p9_grants_probe2.log`): the narrowed `osprey` is the entrypoint's default less BACKUP and the S3 and URL
      sources; the S3 table engine, `s3Cluster` and `icebergS3` are refused it; **`RESTORE … FROM S3` is not refused by
      privilege** (it went to S3 and was refused there), and a dictionary's HTTP source is not gated by the URL grant
-     (its requests are unsigned, so the bucket refuses them, and ClickHouse's egress is denied). KIND_R3_RESTORE
+     (its requests are unsigned, so the bucket refuses them, and ClickHouse's egress is denied).
+   - **A measured limit, ruled (the orchestrator's ruling A, 11 November; listed for the owner):** `osprey` may
+     `RESTORE … FROM S3` a set's ClickHouse part into a database of its own. No ClickHouse privilege gates
+     RESTORE: it asks only CREATE and INSERT on what it makes, which the deployment's user needs, and with S3, URL
+     and BACKUP revoked it was accepted on kind (round 3) and in a container, `RESTORE TABLE` into `ospreyflow`
+     too (`p9_grants_probe3.log`). *What is readable:* ClickHouse's own rows as a set held them, those deleted
+     since included, for up to the retention (35 days). *To whom:* holders of `osprey`'s credentials, who already
+     read every live row unfiltered. *The bound:* RESTORE reads by ClickHouse's pod role, which reaches
+     `sets/*/clickhouse/*` alone, so ArcadeDB's part, the claims and the manifests stay out of reach, and BACKUP
+     (the only way to write a set through ClickHouse) stays refused. *The test that holds it:* kind's
+     `osprey_sources` accepts exactly that one statement shape (any other acceptance is red) and requires S3 to
+     refuse `osprey`'s RESTORE from ArcadeDB's and the claims' part *by access*; `osprey_bound_red` plants
+     ClickHouse's role reaching `sets/*` and shows that check red (`gates/p9_kind_osprey_sources.r3.json`,
+     `p9_kind_osprey_bound_red.r3.json`). *Rejected:* (B) taking ClickHouse's standing role away, since 25.8 takes
+     no session token in BACKUP (Code 42, measured) and the alternative is a stored IAM key, which this amendment
+     excludes; (C) a host filter (`remote_url_allow_hosts`) or an S3 endpoint credential section, which are
+     server-wide and refuse the backup user too; (D) revoking CREATE from `osprey`, which breaks the analytics
+     adapter's own schema set-up (`analytics_clickhouse/schema.py` creates its tables) and leaves table-level RESTORE, which needs CREATE TABLE and INSERT only.
    - The `backup` user's networks stay `::/0`: ClickHouse matches a user by address or reverse name, and a pod's are
      neither stable nor its own; the control is the password, now in the backup's pods alone, and P7b's per-workload
      ingress rows (ClickHouse admitting the backup's and the restore's pods by name). Carried to P9b with the rest.
