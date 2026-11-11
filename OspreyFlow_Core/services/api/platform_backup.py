@@ -6,7 +6,7 @@ Run by the chart's CronJob (`templates/backups.yaml`) in the Conduit's image, wh
 
     python -m services.api.platform_backup backup
     python -m services.api.platform_backup sets
-    python -m services.api.platform_backup fetch-graph --set <id> --to <folder>   # a restore's first step
+    python -m services.api.platform_backup fetch-graph --set <id> --to <folder>   # a restore's 1st
     python -m services.api.platform_backup restore-analytics --set <id>
 
 **A set** is `sets/<UTC stamp>/` in the bucket: `arcadedb/<database>.zip`, ClickHouse's own backup
@@ -85,7 +85,11 @@ class Settings:
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
         env = dict(os.environ if env is None else env)
-        missing = [n for n in ("OSPREY_BACKUP_BUCKET", "OSPREY_BACKUP_KMS_KEY", "AWS_REGION") if not env.get(n)]
+        missing = [
+            n
+            for n in ("OSPREY_BACKUP_BUCKET", "OSPREY_BACKUP_KMS_KEY", "AWS_REGION")
+            if not env.get(n)
+        ]
         if missing:
             raise BackupRefused("backup", "settings", f"not set: {', '.join(missing)}")
         return cls(
@@ -156,12 +160,16 @@ class Bucket:
         return {"ServerSideEncryption": "aws:kms", "SSEKMSKeyId": self.settings.kms_key}
 
     def credentials(self) -> tuple[str, str, str | None]:
-        """The role's credentials now, as ClickHouse is handed them (frozen: they do not refresh)."""
+        """The role's credentials now, as ClickHouse is handed them (frozen: never refreshed)."""
         if self.session is None:
             raise BackupRefused("clickhouse", "credentials", "no session to take them from")
         found = self.session.get_credentials()
         if found is None:
-            raise BackupRefused("clickhouse", "credentials", "the role gave no credentials (is the pod's service account the backup role's?)")
+            raise BackupRefused(
+                "clickhouse",
+                "credentials",
+                "the role gave no credentials (is the pod's service account the backup role's?)",
+            )
         frozen = found.get_frozen_credentials()
         return frozen.access_key, frozen.secret_key, frozen.token
 
@@ -297,10 +305,16 @@ class Stores:
             raise BackupRefused("arcadedb", "BACKUP DATABASE", _http_said(error)) from error
         try:
             name = json.loads(raw)["result"][0]["backupFile"]
+            if not isinstance(name, str):
+                raise TypeError(name)
         except (ValueError, KeyError, IndexError, TypeError) as error:
-            raise BackupRefused("arcadedb", "BACKUP DATABASE", f"no backup file reported: {raw[:300]!r}") from error
+            raise BackupRefused(
+                "arcadedb", "BACKUP DATABASE", f"no backup file reported: {raw[:300]!r}"
+            ) from error
         if "/" in name or name.startswith("."):
-            raise BackupRefused("arcadedb", "BACKUP DATABASE", f"an unexpected backup file name: {name!r}")
+            raise BackupRefused(
+                "arcadedb", "BACKUP DATABASE", f"an unexpected backup file name: {name!r}"
+            )
         path = s.arcadedb_folder / s.arcadedb_database / name
         if not path.is_file():
             raise BackupRefused(
@@ -336,19 +350,26 @@ class Stores:
             credentials[1:],
         )
         if "BACKUP_CREATED" not in answer:
-            raise BackupRefused("clickhouse", "BACKUP … TO S3", f"ClickHouse answered {answer.strip()[:300]!r}")
+            raise BackupRefused(
+                "clickhouse", "BACKUP … TO S3", f"ClickHouse answered {answer.strip()[:300]!r}"
+            )
         return answer.split("\t", 1)[0].strip()
 
     def clickhouse_restore(self, url: str, credentials: tuple[str, str, str | None]) -> None:
         database = _identifier(self.settings.clickhouse_database)
-        self.clickhouse(f"DROP DATABASE IF EXISTS {database}{self._on_cluster()} SYNC", "DROP DATABASE")
+        self.clickhouse(
+            f"DROP DATABASE IF EXISTS {database}{self._on_cluster()} SYNC", "DROP DATABASE"
+        )
+        source = _s3_function(url, credentials)
         answer = self.clickhouse(
-            f"RESTORE DATABASE {database}{self._on_cluster()} FROM {_s3_function(url, credentials)}",
+            f"RESTORE DATABASE {database}{self._on_cluster()} FROM {source}",
             "RESTORE … FROM S3",
             credentials[1:],
         )
         if "RESTORED" not in answer:
-            raise BackupRefused("clickhouse", "RESTORE … FROM S3", f"ClickHouse answered {answer.strip()[:300]!r}")
+            raise BackupRefused(
+                "clickhouse", "RESTORE … FROM S3", f"ClickHouse answered {answer.strip()[:300]!r}"
+            )
 
 
 def _scrub(text: str, secrets: tuple[str | None, ...]) -> str:
@@ -382,26 +403,41 @@ def take(settings: Settings, bucket: Bucket, stores: Stores, *, now: dt.datetime
     started = tick()
     set_id = stamp(now)
     prefix = f"sets/{set_id}/"
-    manifest: dict[str, Any] = {"set": set_id, "bucket": settings.bucket, "kms_key": settings.kms_key}
+    manifest: dict[str, Any] = {
+        "set": set_id,
+        "bucket": settings.bucket,
+        "kms_key": settings.kms_key,
+    }
 
     zip_path = stores.arcadedb_backup()
     graph_key = f"{prefix}arcadedb/{settings.arcadedb_database}.zip"
     try:
         size, digest = bucket.put_file(graph_key, zip_path)
     except Exception as error:  # noqa: BLE001 - reported in words
-        raise BackupRefused("arcadedb", f"upload to s3://{settings.bucket}/{graph_key}", _said(error)) from error
+        raise BackupRefused(
+            "arcadedb", f"upload to s3://{settings.bucket}/{graph_key}", _said(error)
+        ) from error
     finally:
         # Never left on the claim to fill it: the next run takes another.
         zip_path.unlink(missing_ok=True)
-    manifest["arcadedb"] = {"database": settings.arcadedb_database, "key": graph_key,
-                            "bytes": size, "sha256": digest, "seconds": round(tick() - started, 1)}  # fmt: skip
+    manifest["arcadedb"] = {
+        "database": settings.arcadedb_database,
+        "key": graph_key,
+        "bytes": size,
+        "sha256": digest,
+        "seconds": round(tick() - started, 1),
+    }
 
     analytics_started = tick()
     url = f"{settings.s3_base}/{prefix}clickhouse/"
     backup_id = stores.clickhouse_backup(url, bucket.credentials())
-    manifest["clickhouse"] = {"database": settings.clickhouse_database, "prefix": f"{prefix}clickhouse/",
-                              "backup_id": backup_id, "cluster": settings.clickhouse_cluster,
-                              "seconds": round(tick() - analytics_started, 1)}  # fmt: skip
+    manifest["clickhouse"] = {
+        "database": settings.clickhouse_database,
+        "prefix": f"{prefix}clickhouse/",
+        "backup_id": backup_id,
+        "cluster": settings.clickhouse_cluster,
+        "seconds": round(tick() - analytics_started, 1),
+    }
     manifest["seconds"] = round(tick() - started, 1)
     try:
         bucket.put_bytes(prefix + MANIFEST, json.dumps(manifest, indent=2).encode())
@@ -471,7 +507,9 @@ def fetch_graph(bucket: Bucket, set_id: str, folder: Path) -> Path:
         size, digest = bucket.get_to(graph["key"], path)
     except Exception as error:  # noqa: BLE001 - reported in words
         path.unlink(missing_ok=True)
-        raise BackupRefused("arcadedb", f"fetch s3://{bucket.settings.bucket}/{graph['key']}", _said(error)) from error
+        raise BackupRefused(
+            "arcadedb", f"fetch s3://{bucket.settings.bucket}/{graph['key']}", _said(error)
+        ) from error
     if (size, digest) != (graph["bytes"], graph["sha256"]):
         path.unlink(missing_ok=True)
         raise BackupRefused(
@@ -509,8 +547,11 @@ def main(argv: list[str] | None = None) -> int:
         stores = Stores(settings)
         if args.command == "backup":
             manifest = take(settings, bucket, stores)
-            print(f"backup: set {manifest['set']} written in {manifest['seconds']} s "
-                  f"(ArcadeDB {manifest['arcadedb']['bytes']} bytes; ClickHouse {manifest['clickhouse']['backup_id']})")  # fmt: skip
+            graph, analytics = manifest["arcadedb"], manifest["clickhouse"]
+            print(
+                f"backup: set {manifest['set']} written in {manifest['seconds']} s "
+                f"(ArcadeDB {graph['bytes']} bytes; ClickHouse {analytics['backup_id']})"
+            )
             removed = prune(bucket, settings.keep)
             if removed:
                 print(f"backup: removed {len(removed)} older set(s): {', '.join(removed)}")
