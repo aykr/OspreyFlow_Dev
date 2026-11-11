@@ -262,6 +262,9 @@ runner.PLANTS = [
      "    if taken := {irsa.service_account, irsa.gateway_service_account} & {", "    if taken := set() & {",
      [TR + "test_an_irsa_account_named_as_a_backups_account_is_refused"]),
     # ---- after P7b landed: P9's pods against its rows and its default-deny on our Secret's keys -------------------
+    ("ClickHouse's Kubernetes token mounted (P7b's token rule: it calls no Kubernetes API)", RENDER,
+     '    clickhouse["automountToken"] = False\n', '    clickhouse["automountToken"] = True\n',
+     [TR + "test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod"]),
     ("ArcadeDB's password back in every backup and restore container's env (the shape before P7b landed)", RENDER,
      '        {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},\n',
      '        {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},\n'

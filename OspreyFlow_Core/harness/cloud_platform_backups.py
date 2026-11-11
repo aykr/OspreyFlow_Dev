@@ -266,6 +266,10 @@ def clickhouse_writes_as_its_backup_role(clickhouse: dict[str, Any], region: str
     STS client asks the region AWS_DEFAULT_REGION names (us-east-1 without it). Its users file and
     its backup user's password. Amendment 7."""
     clickhouse["serviceAccountName"] = CLICKHOUSE_SERVICE_ACCOUNT
+    # Its Kubernetes token not mounted: ClickHouse calls no Kubernetes API, and EKS's IRSA webhook
+    # projects the role's web identity token by the account alone (cp-policy-check's `token` rule).
+    # Set here, not left to where the render's own token step runs (P7b, Amendment 5 point 24).
+    clickhouse["automountToken"] = False
     names = {"AWS_REGION", "AWS_DEFAULT_REGION", CLICKHOUSE_BACKUP_PASSWORD}
     clickhouse["env"] = [e for e in clickhouse.get("env", []) if e["name"] not in names] + [
         {"name": "AWS_REGION", "value": region},
@@ -544,7 +548,8 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
             ('resource "random_password" "clickhouse_backup"',
              [("length", "32"), ("special", "false")]),
             _secret(BACKUP_SECRET,
-                    {_q(BACKUP_SECRET_KEY): "random_password.clickhouse_backup.result"}),
+                    # Its key bare, as platform's Terraform writes its own (and its reader takes).
+                    {BACKUP_SECRET_KEY: "random_password.clickhouse_backup.result"}),
             _secret(OUTPUT_SECRET, {
                 OUTPUT_KEYS["bucket"]: "aws_s3_bucket.backups.bucket",
                 OUTPUT_KEYS["kms_key"]: "aws_kms_key.backups.arn",

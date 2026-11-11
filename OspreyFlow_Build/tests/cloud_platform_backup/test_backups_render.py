@@ -227,6 +227,8 @@ def test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod() -> Non
     found = rendered.values()
     clickhouse = next(w for w in found["workloads"] if w["name"] == "clickhouse")
     assert clickhouse["serviceAccountName"] == backups.CLICKHOUSE_SERVICE_ACCOUNT
+    # Its Kubernetes token not mounted, wherever the hook runs: it calls no Kubernetes API (P7b).
+    assert clickhouse["automountToken"] is False
     env = {e["name"]: e.get("value") for e in clickhouse["env"]}
     assert env["AWS_DEFAULT_REGION"] == env["AWS_REGION"] == "eu-west-2"
     # No other workload is given either backup role's account.
