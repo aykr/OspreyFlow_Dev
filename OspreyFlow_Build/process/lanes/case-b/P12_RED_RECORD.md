@@ -6,7 +6,9 @@ server, 11 November 2026, after the orchestrator's review of a5fa3c1b (its fixes
 the closed ports (59991-59994), no lease, no container; run at 1b7c2a8c and again at 283cfeb7, the same counts
 (`gates/283cfeb7.plants.txt`).
 
-- **Offline** (the Conduit's 3.12 environment): green start 205 passed; **53 plants, 53 red**.
+- **Offline** (the Conduit's 3.12 environment): green start 205 passed; **54 plants, 54 red** (53 on the server;
+  round 2's plant on the hosted engine's branch added and the whole set rerun on the Mac at 73d3f080, offline with the
+  closed ports, no lease, `gates/73d3f080.plants-offline-round2.txt`).
 - **In Laurium's own 3.13 environment** (built by hash, `laurium-env`): green start 26 passed (`test_laurium_service.py`
   17, `test_suite_extract.py` 4 × 2 engines, `test_laurium_findings_pending.py` 1); **14 plants, 14 red**. The
   service's real code with Laurium 0.6.0, LangChain and the OpenAI client in-process, every model call over real HTTP
@@ -93,6 +95,7 @@ row `2026-11-11-case-b-laurium-stale-bytecode.md`).
 | the answer trusted without the request's schema | 1 failed |
 | an engine's call sent without its own key | 4 failed |
 | **a call for the deployment's own models sent with the master key** (item 7) | 5 failed |
+| **a hosted engine's call sent with the master key** (round 2, item 2: `adapter.py`'s `call.engine != LOCAL` branch; `test_no_call_from_the_adapter_carries_the_master_key[gemini]` alone) | 1 failed |
 | **Laurium's key derived from an empty master key** (item 7) | 2 failed |
 | **Laurium's key made for every model** (item 7) | 1 failed |
 | **Laurium's key derived as an engine's** (item 7) | 1 failed |

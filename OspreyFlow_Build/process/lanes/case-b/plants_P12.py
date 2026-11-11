@@ -119,6 +119,11 @@ OFFLINE: list[Plant] = [
      [("                    token = engine_key(self._master, call.engine)\n", "                    pass\n")],
      [ADAPTER_T]),
     ("a call for the deployment's own models sent with the master key", A, [MASTER_KEY], [ADAPTER_T]),
+    # Round 2, item 2: the hosted engine's branch (adapter.py's `call.engine != LOCAL`) given the master key.
+    ("a hosted engine's call sent with the master key", A,
+     [("                    token = engine_key(self._master, call.engine)\n",
+       "                    token = self._master\n")],
+     [f"{ADAPTER_T}::test_no_call_from_the_adapter_carries_the_master_key[gemini]"]),
     ("Laurium's key derived from an empty master key", KEYS,
      [("    if not master.strip():\n        raise ValueError(\"no master key: Laurium's key",
        "    if False:\n        raise ValueError(\"no master key: Laurium's key")],
@@ -256,7 +261,7 @@ LAURIUM: list[Plant] = [
 #: the restored file, and the next run read the plant.
 ENV = {**os.environ, "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
        "CLICKHOUSE_HTTP_PORT": "59994", "PYTHONDONTWRITEBYTECODE": "1"}  # fmt: skip
-ENV.pop("OSPREY_case-b", None)
+ENV.pop("OSPREY_LANE", None)
 
 
 def run(python: str, tests: list[str]) -> str:
