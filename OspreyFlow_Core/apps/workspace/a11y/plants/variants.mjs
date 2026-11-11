@@ -28,12 +28,15 @@ export const VARIANTS = {
         const u = getComputedStyle(up);`, `for (let up: Element | null = e; up; up = null) {
         const u = getComputedStyle(up);`]],
   // `opaque()`'s SVG exclusion (item 2, 7befa52).
-  "no-svg-exclusion": [[`      if (e instanceof SVGElement && e.tagName.toUpperCase() !== "SVG") return false;
+  "no-svg-exclusion": [[`      if (e instanceof SVGElement && !outermostSvg(e)) return false;
 `, ``]],
+  // The exclusion as 7befa52 had it, by tag: a nested <svg> passes for the outermost.
+  "svg-by-tag": [[`      if (e instanceof SVGElement && !outermostSvg(e)) return false;`, `      if (e instanceof SVGElement && e.tagName.toUpperCase() !== "SVG") return false;`]],
   // The pixel of slack round the cover's box, and the rounded-corner test.
   "no-slack": [[`const r = { left: box.left - 1, top: box.top - 1, right: box.right + 1, bottom: box.bottom + 1, width: box.width + 2, height: box.height + 2 };`, `const r = { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height };`]],
   "no-corner-test": [[`      return corners.every(([corner, cx, cy, sx, sy]) => {`, `      return corners.length >= 0 || corners.every(([corner, cx, cy, sx, sy]) => {`]],
   // The clip check's narrowing: an ancestor that clips nothing, and one past an out-of-flow box.
   "no-overflow-narrowing": [[`if (c.overflowX === "visible" && c.overflowY === "visible") return false;`, ``]],
   "no-flow-narrowing": [[`if (/absolute|fixed/.test(getComputedStyle(below).position)) flowing = false;`, `void below;`]],
+  "no-inline-narrowing": [[`if (!flowing || /^inline/.test(c.display) || c.display === "contents") return false;`, `if (!flowing) return false;`]],
 };

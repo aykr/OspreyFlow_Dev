@@ -15,6 +15,7 @@ const { PNG } = createRequire(import.meta.url)("playwright-core/lib/utilsBundle"
   PNG: { sync: { read(b: Buffer): { width: number; height: number; data: Buffer } } };
 };
 
+// The normal CDF again, apart from the judgement's own, so the plant's reference does not share its code.
 const erf = (x: number) => {
   const t = 1 / (1 + 0.3275911 * Math.abs(x));
   const e = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
@@ -27,6 +28,12 @@ const GEOMETRIES = [
   { name: "offset 12, 8, blur 16", dx: 12, dy: 8, blur: 16, spread: 0, radius: 0 },
   { name: "rounded 16, blur 16", dx: 0, dy: 0, blur: 16, spread: 0, radius: 16 },
   { name: "rounded 8, blur 24, spread 4", dx: 0, dy: 0, blur: 24, spread: 4, radius: 8 },
+  // The tokens' own blurred shadows, with negative spread (tokens.css), and the commonest outer shadow
+  // in the workspace, a sharp one (boards.css, admin.css, welcome.css), on a box at fractional edges.
+  { name: "the tokens' 0 8px 24px -8px", dx: 0, dy: 8, blur: 24, spread: -8, radius: 0 },
+  { name: "the tokens' 0 6px 20px -6px, rounded 8", dx: 0, dy: 6, blur: 20, spread: -6, radius: 8 },
+  { name: "sharp 2px 2px 0 0 at fractional edges", dx: 2, dy: 2, blur: 0, spread: 0, radius: 0, at: 0.4 },
+  { name: "sharp 0 0 0 3px at fractional edges", dx: 0, dy: 0, blur: 0, spread: 3, radius: 0, at: 0.7 },
 ];
 const BANDS = [-3, -2, -1, 0, 1, 2, 3];
 
@@ -34,7 +41,8 @@ test("Chromium's shadow paint lies inside the judgement's bracket at every pixel
   await page.setViewportSize({ width: 900, height: 700 });
   const lines: string[] = [];
   for (const g of GEOMETRIES) {
-    const box = { left: 200, top: 150, right: 600, bottom: 450 };
+    const f = "at" in g ? (g.at as number) : 0;
+    const box = { left: 200 + f, top: 150 + f, right: 600 + f, bottom: 450 + f };
     await page.setContent(
       `<body style="margin:0;background:#fff"><div style="position:absolute;left:${box.left}px;top:${box.top}px;width:${box.right - box.left}px;height:${box.bottom - box.top}px;background:#fff;border-radius:${g.radius}px;box-shadow:${g.dx}px ${g.dy}px ${g.blur}px ${g.spread}px rgb(0, 0, 0)"></div></body>`,
     );
@@ -55,11 +63,11 @@ test("Chromium's shadow paint lies inside the judgement's bracket at every pixel
         const radius = g.radius > 0 ? g.radius + Math.max(0, g.spread) : 0;
         const [least, most] = shadowCoverageRange({ colour: "rgb(0, 0, 0)", edges, blur: g.blur, radius, x, y });
         const past = Math.max(left - x, x - right, top - y, y - bottom);
-        const band = BANDS.indexOf(Math.max(-3, Math.floor(past / sigma)));
+        const band = sigma > 0 ? BANDS.indexOf(Math.max(-3, Math.floor(past / sigma))) : -1;
         const reach = radius + 1.5 * g.blur;
         const nearCorner = radius > 0 && (x < left + reach || x > right - reach) && (y < top + reach || y > bottom - reach);
         const across = (v: number, lo: number, hi: number) => cdf((hi - v) / sigma) - cdf((lo - v) / sigma);
-        const gauss = Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom));
+        const gauss = sigma > 0 ? Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom)) : 0;
         if (band >= 0) {
           if (!nearCorner) under[band] = Math.max(under[band] as number, gauss - measured);
           over[band] = Math.max(over[band] as number, measured - most);
