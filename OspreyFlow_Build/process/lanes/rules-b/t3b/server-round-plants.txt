@@ -305,3 +305,718 @@ blur 60: [-2σ,-1σ) paint≤0.9804 short≤0.0041; [-1σ,0σ) paint≤0.8314 sh
   3 passed (8.4s)
   5 passed (17.8s)
 Wall time: 29 s, exit 0 (no stack, no lease; set-up before it 17 s)
+
+# The orchestrator review of 9697ad3: the committed plants (a11y/plants/), run 20261111T152043Z on the test server, slot 13, the tree at d677105. SUPERSEDED: its filter, blend, mask, mask-border and content-box plants left the covered words passing (the lane-reviewer's finding 3); the final plants are in the last sections. Each row is the probe or a variant with the guard named removed; "!!" would mark an outcome other than the plant records.
+
+[1/19] a11y/plants/guards.plant.ts:207:3 › a cover with its own opacity
+a11y/plants/guards.plant.ts:207:3 › a cover with its own opacity
+## a cover with its own opacity
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: passes
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[2/19] a11y/plants/guards.plant.ts:207:3 › a cover in a translucent wrapper
+a11y/plants/guards.plant.ts:207:3 › a cover in a translucent wrapper
+## a cover in a translucent wrapper
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[3/19] a11y/plants/guards.plant.ts:207:3 › a cover painted to its content box, the words under its padding
+a11y/plants/guards.plant.ts:207:3 › a cover painted to its content box, the words under its padding
+## a cover painted to its content box, the words under its padding
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: passes
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[4/19] a11y/plants/guards.plant.ts:207:3 › a cover with a filter
+a11y/plants/guards.plant.ts:207:3 › a cover with a filter
+## a cover with a filter
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: passes
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[5/19] a11y/plants/guards.plant.ts:207:3 › a cover in a filtered wrapper
+a11y/plants/guards.plant.ts:207:3 › a cover in a filtered wrapper
+## a cover in a filtered wrapper
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: passes
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: passes
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[6/19] a11y/plants/guards.plant.ts:207:3 › a cover with a blend
+a11y/plants/guards.plant.ts:207:3 › a cover with a blend
+## a cover with a blend
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: passes
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[7/19] a11y/plants/guards.plant.ts:207:3 › a cover in a blended wrapper
+a11y/plants/guards.plant.ts:207:3 › a cover in a blended wrapper
+## a cover in a blended wrapper
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: passes
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: passes
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[8/19] a11y/plants/guards.plant.ts:207:3 › a cover with a mask
+a11y/plants/guards.plant.ts:207:3 › a cover with a mask
+## a cover with a mask
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: passes
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[9/19] a11y/plants/guards.plant.ts:207:3 › a cover in a masked wrapper
+a11y/plants/guards.plant.ts:207:3 › a cover in a masked wrapper
+## a cover in a masked wrapper
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: passes
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: passes
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[10/19] a11y/plants/guards.plant.ts:207:3 › a cover under a mask border (item 2)
+a11y/plants/guards.plant.ts:207:3 › a cover under a mask border (item 2)
+## a cover under a mask border (item 2)
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: passes
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[11/19] a11y/plants/guards.plant.ts:207:3 › a cover clipped away from the words
+a11y/plants/guards.plant.ts:207:3 › a cover clipped away from the words
+## a cover clipped away from the words (unreachable: Chromium's hit test respects clip-path: the clipped cover is never found over the words, so hides() is never asked)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+[12/19] a11y/plants/guards.plant.ts:207:3 › a cover in a wrapper clipped away from the words
+a11y/plants/guards.plant.ts:207:3 › a cover in a wrapper clipped away from the words
+## a cover in a wrapper clipped away from the words (unreachable: as above, for the wrapper's clip)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+[13/19] a11y/plants/guards.plant.ts:207:3 › an SVG rect with a CSS background over half the label (item 2)
+a11y/plants/guards.plant.ts:207:3 › an SVG rect with a CSS background over half the label (item 2)
+## an SVG rect with a CSS background over half the label (item 2)
+     the probe: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: passes
+     no-slack: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[14/19] a11y/plants/guards.plant.ts:207:3 › an opaque cover, its edge a pixel from a probe point
+a11y/plants/guards.plant.ts:207:3 › an opaque cover, its edge a pixel from a probe point
+## an opaque cover, its edge a pixel from a probe point (unreachable: the slack only widens the box hides() accepts; without it a point the browser hit-tests on the edge stays a cover, flagged, never a silent pass)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+[15/19] a11y/plants/guards.plant.ts:207:3 › a rounded opaque cover, its 12px corners over the words
+a11y/plants/guards.plant.ts:207:3 › a rounded opaque cover, its 12px corners over the words
+## a rounded opaque cover, its 12px corners over the words (unreachable: Chromium's hit test respects border-radius: a point outside the curve never finds the cover, so the corner test is never what decides)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+[16/19] a11y/plants/guards.plant.ts:207:3 › a rounded opaque cover, its 50% (elliptical) corners over the words
+a11y/plants/guards.plant.ts:207:3 › a rounded opaque cover, its 50% (elliptical) corners over the words
+## a rounded opaque cover, its 50% (elliptical) corners over the words
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: passes
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[17/19] a11y/plants/guards.plant.ts:207:3 › a modal elsewhere, the label's drawing overflowing a 1px box that clips nothing
+a11y/plants/guards.plant.ts:207:3 › a modal elsewhere, the label's drawing overflowing a 1px box that clips nothing
+## a modal elsewhere, the label's drawing overflowing a 1px box that clips nothing (unreachable: the modal misses every point alike, so without the narrowing every point is hidden and the words are unmeasurable (hidden at every point): flagged either way)
+     the probe: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: hidden at every point, under an opaque element over the words or clipped (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+[18/19] a11y/plants/guards.plant.ts:207:3 › a modal elsewhere, the label's drawing absolute past a 1px box that clips
+a11y/plants/guards.plant.ts:207:3 › a modal elsewhere, the label's drawing absolute past a 1px box that clips
+## a modal elsewhere, the label's drawing absolute past a 1px box that clips (unreachable: as above: the out-of-flow drawing escapes the clip, and without the narrowing every point is hidden, so unmeasurable)
+     the probe: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+[19/19] a11y/plants/shadow-paint.plant.ts:33:1 › Chromium's shadow paint lies inside the judgement's bracket at every pixel
+a11y/plants/shadow-paint.plant.ts:33:1 › Chromium's shadow paint lies inside the judgement's bracket at every pixel
+straight, blur 4, spread 4: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0077 over-most≤-0.0161; [-1σ,0σ) under≤0.0138 over-most≤-0.0142; [0σ,1σ) under≤0.0000 over-most≤0.0004; [1σ,2σ) under≤0.0016 over-most≤-0.0056; [2σ,3σ) under≤0.0016 over-most≤-0.0035; [3σ,4σ) under≤0.0006 over-most≤0.0000
+straight, blur 8, spread 8: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0113 over-most≤-0.0095; [-1σ,0σ) under≤0.0133 over-most≤-0.0133; [0σ,1σ) under≤0.0011 over-most≤-0.0002; [1σ,2σ) under≤0.0016 over-most≤-0.0019; [2σ,3σ) under≤0.0028 over-most≤-0.0013; [3σ,4σ) under≤0.0009 over-most≤0.0000
+straight, blur 16, spread 16: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0082 over-most≤-0.0043; [-1σ,0σ) under≤0.0128 over-most≤-0.0105; [0σ,1σ) under≤0.0015 over-most≤0.0005; [1σ,2σ) under≤0.0016 over-most≤-0.0040; [2σ,3σ) under≤0.0040 over-most≤-0.0002; [3σ,4σ) under≤0.0011 over-most≤0.0000
+straight, blur 24, spread 24: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0113 over-most≤-0.0053; [-1σ,0σ) under≤0.0139 over-most≤-0.0104; [0σ,1σ) under≤0.0033 over-most≤0.0011; [1σ,2σ) under≤0.0016 over-most≤-0.0019; [2σ,3σ) under≤0.0041 over-most≤0.0001; [3σ,4σ) under≤0.0012 over-most≤0.0000
+straight, blur 40, spread 40: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0124 over-most≤-0.0048; [-1σ,0σ) under≤0.0148 over-most≤-0.0113; [0σ,1σ) under≤0.0029 over-most≤0.0013; [1σ,2σ) under≤0.0025 over-most≤-0.0019; [2σ,3σ) under≤0.0045 over-most≤0.0004; [3σ,4σ) under≤0.0012 over-most≤0.0000
+offset 12, 8, blur 16: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0082 over-most≤-0.0117; [-1σ,0σ) under≤0.0128 over-most≤-0.0105; [0σ,1σ) under≤0.0015 over-most≤0.0005; [1σ,2σ) under≤0.0016 over-most≤-0.0040; [2σ,3σ) under≤0.0040 over-most≤-0.0002; [3σ,4σ) under≤0.0011 over-most≤0.0000
+rounded 16, blur 16: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0000 over-most≤-Infinity; [0σ,1σ) under≤0.0095 over-most≤-0.0157; [1σ,2σ) under≤0.0120 over-most≤-0.0157; [2σ,3σ) under≤0.0078 over-most≤-0.0033; [3σ,4σ) under≤0.0011 over-most≤0.0000
+rounded 8, blur 24, spread 4: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0021 over-most≤-0.0117; [0σ,1σ) under≤0.0042 over-most≤-0.0104; [1σ,2σ) under≤0.0069 over-most≤-0.0156; [2σ,3σ) under≤0.0088 over-most≤-0.0030; [3σ,4σ) under≤0.0012 over-most≤0.0000
+  19 passed (28.0s)
+plants_rc=0
+
+# shadow-paint.plant.ts with SHADOW_SHORT set to 0 (run 20261111T152143Z): red
+    OUTSIDE the bracket by 0.0138 at (197.5, 147.5) measured 0.5843 bracket [0.5981, 0.6131]
+    OUTSIDE the bracket by 0.0133 at (194.5, 144.5) measured 0.5255 bracket [0.5388, 0.5538]
+    OUTSIDE the bracket by 0.0128 at (190.5, 139.5) measured 0.5843 bracket [0.5971, 0.6121]
+    OUTSIDE the bracket by 0.0139 at (187.5, 133.5) measured 0.5961 bracket [0.6100, 0.6250]
+    OUTSIDE the bracket by 0.0148 at (179.5, 123.5) measured 0.6118 bracket [0.6266, 0.6416]
+    OUTSIDE the bracket by 0.0128 at (605.5, 163.5) measured 0.5843 bracket [0.5971, 0.6121]
+    OUTSIDE the bracket by 0.0120 at (612.5, 216.5) measured 0.0471 bracket [0.0591, 0.0741]
+    OUTSIDE the bracket by 0.0088 at (293.5, 121.5) measured 0.0118 bracket [0.0206, 0.0351]
+  1 failed
+
+# Run 20261111T151936Z (slot 13): the harness red, its three wrapper plants failing (removing a property also silences the wrapper's own)
+## a cover in a filtered wrapper
+  !! no-filter: passes
+## a cover in a blended wrapper
+  !! no-blend: passes
+## a cover in a masked wrapper
+  !! no-mask: passes
+
+# The final plants (the lane-reviewer's pass on d677105), run 20261111T154842Z on the test server, slot 13, the tree committed as f5a4b4c: each covering plant read in pixels, then the probe and every variant
+
+[2m      Tests [22m [1m[32m117 passed[39m[22m[90m (117)[39m
+## a cover with its own opacity 0.5
+  pixels: 14.74:1 on the uncovered half, 3.08:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: passes
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover in a wrapper of opacity 0.5
+  pixels: 14.74:1 on the uncovered half, 3.08:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover painted to its padding box, a 60% white border over the words
+  pixels: 14.74:1 on the uncovered half, 2.36:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: passes
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover with filter: opacity(0.5)
+  pixels: 14.74:1 on the uncovered half, 3.11:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: passes
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover in a wrapper with filter: opacity(0.5)
+  pixels: 14.74:1 on the uncovered half, 3.11:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: passes
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: passes
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a grey cover screened over the words
+  pixels: 14.74:1 on the uncovered half, 1.48:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: passes
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a grey cover in a screened wrapper
+  pixels: 14.74:1 on the uncovered half, 1.48:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: passes
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: passes
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover with a 50% mask
+  pixels: 14.74:1 on the uncovered half, 3.08:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: passes
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover in a wrapper with a 50% mask
+  pixels: 14.74:1 on the uncovered half, 3.08:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: passes
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: passes
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover under a 50% mask border (item 2)
+  pixels: 14.74:1 on the uncovered half, 3.08:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: passes
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## an SVG rect with a CSS background over half the label (item 2)
+  pixels: 14.74:1 on the uncovered half, 1.48:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: passes
+     svg-by-tag: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+## a nested SVG with a CSS background over half the label (unreachable: Chromium neither paints a nested <svg>'s CSS background (the covered half reads as the translucent rect alone) nor lists the nested <svg> in its hit test, so opaque() is never asked of it; the outermost-only test stays, the stricter reading)
+  pixels: 14.74:1 on the uncovered half, 1.48:1 under the cover
+     the probe: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under rect (axe: bgOverlap) [own surfaces 13.17:1] ("If a Person meets"))
+## a cover clipped away from the words (unreachable: Chromium's hit test respects clip-path: the clipped cover is never found over the words, so hides() is never asked)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     svg-by-tag: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+     no-inline-narrowing: passes
+## a cover in a wrapper clipped away from the words (unreachable: as above, for the wrapper's clip)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     svg-by-tag: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+     no-inline-narrowing: passes
+## an opaque cover over half the words (unreachable: the pixel of slack only widens the box hides() accepts; without it a point the browser hit-tests on the cover's edge stays a cover, flagged, never a silent pass)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     svg-by-tag: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+     no-inline-narrowing: passes
+## a rounded opaque cover, its 12px corners over the words (unreachable: Chromium's hit test respects border-radius: a point outside the curve never finds the cover, so the corner test never decides)
+     the probe: passes
+     no-opacity-walk: passes
+     own-opacity-only: passes
+     no-background-clip: passes
+     no-filter: passes
+     no-blend: passes
+     no-mask: passes
+     no-clip-path: passes
+     no-mask-border: passes
+     cover-only-walk: passes
+     no-svg-exclusion: passes
+     svg-by-tag: passes
+     no-slack: passes
+     no-corner-test: passes
+     no-overflow-narrowing: passes
+     no-flow-narrowing: passes
+     no-inline-narrowing: passes
+## a rounded opaque cover, its 50% (elliptical) corners over the words (unreachable: the corner test reads each corner as a circle of the larger radius, stricter than the ellipse Chromium hit-tests, so the real probe's flag is its own false positive and the variant's pass is right: every point the hit test puts on the cover is under opaque white)
+     the probe: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-corner-test: passes
+     no-overflow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets"))
+## a modal elsewhere, the label's drawing overflowing a 1px box that clips nothing (unreachable: the modal makes the hit test miss every point of the words alike (inertness the probe cannot lift), so without the narrowing every point is clipped and the words are unmeasurable (hidden at every point): flagged either way)
+     the probe: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-opacity-walk: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     own-opacity-only: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-background-clip: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-filter: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-blend: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-mask: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-clip-path: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-mask-border: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     cover-only-walk: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-svg-exclusion: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     svg-by-tag: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-slack: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-corner-test: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-overflow-narrowing: flagged (#zz-words: not measurable: hidden at every point, under an opaque element over the words or clipped (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-flow-narrowing: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+     no-inline-narrowing: flagged (#zz-words: not measurable: over or under tspan missed by the browser's hit test (axe: imgNode) [own surfaces 15.69:1] ("If a Person meets"))
+straight, blur 4, spread 4: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0077 over-most≤-0.0567; [-1σ,0σ) under≤0.0138 over-most≤-0.0905; [0σ,1σ) under≤0.0000 over-most≤-0.0514; [1σ,2σ) under≤0.0016 over-most≤-0.0195; [2σ,3σ) under≤0.0016 over-most≤-0.0088; [3σ,4σ) under≤0.0006 over-most≤0.0000
+straight, blur 8, spread 8: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0113 over-most≤-0.0231; [-1σ,0σ) under≤0.0133 over-most≤-0.0499; [0σ,1σ) under≤0.0011 over-most≤-0.0271; [1σ,2σ) under≤0.0016 over-most≤-0.0153; [2σ,3σ) under≤0.0028 over-most≤-0.0035; [3σ,4σ) under≤0.0009 over-most≤0.0000
+straight, blur 16, spread 16: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0082 over-most≤-0.0100; [-1σ,0σ) under≤0.0128 over-most≤-0.0315; [0σ,1σ) under≤0.0015 over-most≤-0.0161; [1σ,2σ) under≤0.0016 over-most≤-0.0136; [2σ,3σ) under≤0.0040 over-most≤-0.0013; [3σ,4σ) under≤0.0011 over-most≤0.0000
+straight, blur 24, spread 24: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0113 over-most≤-0.0088; [-1σ,0σ) under≤0.0139 over-most≤-0.0263; [0σ,1σ) under≤0.0033 over-most≤-0.0114; [1σ,2σ) under≤0.0016 over-most≤-0.0110; [2σ,3σ) under≤0.0041 over-most≤-0.0006; [3σ,4σ) under≤0.0012 over-most≤0.0000
+straight, blur 40, spread 40: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0124 over-most≤-0.0069; [-1σ,0σ) under≤0.0148 over-most≤-0.0215; [0σ,1σ) under≤0.0029 over-most≤-0.0065; [1σ,2σ) under≤0.0025 over-most≤-0.0073; [2σ,3σ) under≤0.0045 over-most≤-0.0000; [3σ,4σ) under≤0.0012 over-most≤0.0000
+offset 12, 8, blur 16: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0082 over-most≤-0.0228; [-1σ,0σ) under≤0.0128 over-most≤-0.0315; [0σ,1σ) under≤0.0015 over-most≤-0.0161; [1σ,2σ) under≤0.0016 over-most≤-0.0136; [2σ,3σ) under≤0.0040 over-most≤-0.0013; [3σ,4σ) under≤0.0011 over-most≤0.0000
+rounded 16, blur 16: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0000 over-most≤-Infinity; [0σ,1σ) under≤0.0095 over-most≤-0.0393; [1σ,2σ) under≤0.0120 over-most≤-0.0159; [2σ,3σ) under≤0.0078 over-most≤-0.0041; [3σ,4σ) under≤0.0011 over-most≤0.0000
+rounded 8, blur 24, spread 4: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0021 over-most≤-0.0285; [0σ,1σ) under≤0.0042 over-most≤-0.0262; [1σ,2σ) under≤0.0069 over-most≤-0.0158; [2σ,3σ) under≤0.0088 over-most≤-0.0035; [3σ,4σ) under≤0.0012 over-most≤0.0000
+the tokens' 0 8px 24px -8px: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0000 over-most≤-Infinity; [0σ,1σ) under≤0.0013 over-most≤-0.0114; [1σ,2σ) under≤0.0016 over-most≤-0.0110; [2σ,3σ) under≤0.0041 over-most≤-0.0006; [3σ,4σ) under≤0.0012 over-most≤0.0000
+the tokens' 0 6px 20px -6px, rounded 8: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0000 over-most≤-Infinity; [0σ,1σ) under≤0.0064 over-most≤-0.0214; [1σ,2σ) under≤0.0099 over-most≤-0.0147; [2σ,3σ) under≤0.0084 over-most≤-0.0038; [3σ,4σ) under≤0.0011 over-most≤0.0000
+sharp 2px 2px 0 0 at fractional edges: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0000 over-most≤-Infinity; [0σ,1σ) under≤0.0000 over-most≤-Infinity; [1σ,2σ) under≤0.0000 over-most≤-Infinity; [2σ,3σ) under≤0.0000 over-most≤-Infinity; [3σ,4σ) under≤0.0000 over-most≤-Infinity
+sharp 0 0 0 3px at fractional edges: [-3σ,-2σ) under≤0.0000 over-most≤-Infinity; [-2σ,-1σ) under≤0.0000 over-most≤-Infinity; [-1σ,0σ) under≤0.0000 over-most≤-Infinity; [0σ,1σ) under≤0.0000 over-most≤-Infinity; [1σ,2σ) under≤0.0000 over-most≤-Infinity; [2σ,3σ) under≤0.0000 over-most≤-Infinity; [3σ,4σ) under≤0.0000 over-most≤-Infinity
+  19 passed (39.2s)
+plants_rc=0
+
+# shadow-paint.plant.ts with no margin over the Gaussian (run 20261111T154743Z): red in 6 blurred geometries, by up to 0.0085 (straight blurs 8, 16, 24 and 40 by 0.0021 to 0.0085, the offset by 0.0028, the tokens' 0 8px 24px -8px by 0.0040)
+# shadow-paint.plant.ts without the near-corner least (run 20261111T154802Z): red, rounded 16, blur 16, by 0.0659 at (601.5, 152.5)

@@ -1,0 +1,481 @@
+Running on ospreyflow-test (stack offline, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261111T154955Z/log: bash -c cd OspreyFlow_Core/apps/workspace && export OSPREY_PORTS_SLOT=13; echo "== vitest src/color"; npx vitest run src/color 2>&1 | tail -6; echo vitest_rc=${PIPESTATUS[0]}; echo "== workspace a11y"; npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts a11y/a11y.spec.ts a11y/canvas-focus.spec.ts --reporter=line 2>&1 | grep -vE "^\[[0-9]+/[0-9]+\]" | grep -vE "WebServer" | tail -400; echo pw_rc=${PIPESTATUS[0]}; echo "== harness a11y"; cd ../harness && npx playwright test --config a11y/playwright.config.ts --reporter=line 2>&1 | grep -vE "^\[[0-9]+/[0-9]+\]" | tail -15; echo hpw_rc=${PIPESTATUS[0]}
+== vitest src/color
+     1 ms  src/color/textContrast.test.ts > the thresholds > passes 3.01:1 at 24px and fails it at 23.9px
+     1 ms  src/color/textContrast.test.ts > a listed finding > excuses an unmeasurable one only while it gives exactly the same reason
+     1 ms  src/color/textContrast.test.ts > the findings file > refuses a malformed entry, naming it
+     1 ms  src/color/nodeVisualIcon.test.ts > an image icon > refuses anything that is not a small raster picture given as a data address
+     1 ms  src/color/nodeVisualIcon.test.ts > a glyph icon > stays inside every shape's own outline
+     1 ms  src/color/textContrast.test.ts > a shadow at the words, measured (T3b's server round) > takes the worst of the shadow under the words, over them and away
+vitest_rc=0
+== workspace a11y
+
+
+
+
+
+Running 979 tests using 3 workers
+
+en files, watch '/root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/src/search/AddFromList.test.tsx'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  1) a11y/canvas-focus.spec.ts:10:1 › the focused node is announced in a polite status region, and the page passes axe 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('application', { name: 'Network canvas' })
+
+
+      12 |   await page.goto("/keyboard/harness.html");
+      13 |   const canvas = page.getByRole("application", { name: "Network canvas" });
+    > 14 |   await canvas.focus();
+         |                ^
+      15 |   await page.keyboard.press("ArrowRight");
+      16 |
+      17 |   const region = page.getByRole("status").filter({ hasText: /^n1, Person, \d+ links?$/ });
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/canvas-focus.spec.ts:14:16
+
+    Error Context: test-results/canvas-focus-the-focused-n-3e179-ion-and-the-page-passes-axe/error-context.md
+
+
+  2) a11y/a11y.spec.ts:65:3 › dark theme canvas screen has no automated wcag2aa violations ─────────
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('application', { name: 'Network canvas' }) to be visible
+
+
+      69 |       await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      70 |     }
+    > 71 |     await page.getByRole("application", { name: "Network canvas" }).waitFor();
+         |                                                                     ^
+      72 |     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+      73 |     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      74 |     const contrast = await checkUndecidedContrast(page, results);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/a11y.spec.ts:71:69
+
+    Error Context: test-results/a11y-dark-theme-canvas-scr-2adf7-utomated-wcag2aa-violations/error-context.md
+
+
+  3) a11y/every-harness.spec.ts:355:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-admin-harnes-1d96d-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  4) a11y/every-harness.spec.ts:355:7 › map-view-harness.html searched=1 (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-map-view-har-bc739-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  5) a11y/every-harness.spec.ts:355:7 › map-view-harness.html gazetteers=added (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: listed contrast findings no longer found as listed: update CONTRAST_FINDINGS
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "main > div > div > div:nth-child(2)",
+    + ]
+
+      373 |         const { unlisted, gone } = await checkUndecidedContrast(page, results, CONTRAST_FINDINGS[title]);
+      374 |         expect(unlisted, "colour contrast axe left undecided, too low or unmeasurable").toEqual([]);
+    > 375 |         expect(gone, "listed contrast findings no longer found as listed: update CONTRAST_FINDINGS").toEqual([]);
+          |                                                                                                      ^
+      376 |       });
+      377 |     }
+      378 |     // The words do not change with the theme or the brand, so one look per state.
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:375:102
+
+    Error Context: test-results/every-harness-map-view-har-fda1b-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  6) a11y/every-harness.spec.ts:355:7 › maps-harness.html open=key (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-maps-harness-ef40b-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  7) a11y/every-harness.spec.ts:355:7 › models-harness.html usage=fail (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-models-harne-7fbd5-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  8) a11y/every-harness.spec.ts:355:7 › monitoring-harness.html tab=rules&sentence=strength-client (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-monitoring-h-6cc34-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  9) a11y/every-harness.spec.ts:355:7 › timeline-playback-harness.html (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-timeline-pla-fcc46-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  10) a11y/every-harness.spec.ts:355:7 › view-over-cap-harness.html state=form (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-view-over-ca-b1d15-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  11) a11y/every-harness.spec.ts:355:7 › views-harness.html show=merged (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-views-harnes-43749-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  11 failed
+    a11y/a11y.spec.ts:65:3 › dark theme canvas screen has no automated wcag2aa violations ──────────
+    a11y/canvas-focus.spec.ts:10:1 › the focused node is announced in a polite status region, and the page passes axe 
+    a11y/every-harness.spec.ts:355:7 › admin-harness.html rights=read_audit,read_rule_audit&serve=audit (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › map-view-harness.html searched=1 (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › map-view-harness.html gazetteers=added (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › maps-harness.html open=key (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › models-harness.html usage=fail (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › monitoring-harness.html tab=rules&sentence=strength-client (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › timeline-playback-harness.html (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › view-over-cap-harness.html state=form (govuk) has no automated WCAG 2.2 A or AA violations 
+    a11y/every-harness.spec.ts:355:7 › views-harness.html show=merged (govuk) has no automated WCAG 2.2 A or AA violations 
+  968 passed (25.9m)
+pw_rc=1
+== harness a11y
+    > 42 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+         |                                                                   ^
+      43 |   if (theme === "light") {
+      44 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      45 |   }
+        at openInstallPage (/root/osprey-runs/rules-b/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:42:67)
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:78:7
+
+    Error Context: test-results/install-page-install-page--4665b-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  2 failed
+    a11y/install-page.spec.ts:58:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations 
+  32 passed (2.4m)
+hpw_rc=1
+Wall time: 1702 s, exit 0 (no stack, no lease; set-up before it 13 s)
+
+== second full run, 20261111T161902Z (slot 13; --last-failed found no record of the first, so the whole set ran again), load average 4.8 at its start
+ 16:19:02 up 16 days, 57 min,  9 users,  load average: 4.83, 10.85, 16.29
+  1) a11y/every-harness.spec.ts:355:7 › ingest-studio-harness.html pipeline=map-preview (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  2) a11y/every-harness.spec.ts:355:7 › ingest-studio-harness.html contacts=built&staged=fuzzy&mode=expert&rights=expert (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  3) a11y/every-harness.spec.ts:355:7 › ingest-studio-harness.html contacts=built&staged=yaml&mode=expert&rights=expert (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  4) a11y/every-harness.spec.ts:355:7 › inspector-harness.html strength=1 (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  5) a11y/every-harness.spec.ts:355:7 › inspector-harness.html strength=parity (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  6) a11y/every-harness.spec.ts:355:7 › map-view-harness.html searched=fail (light) has no automated WCAG 2.2 A or AA violations 
+    Error: listed contrast findings no longer found as listed: update CONTRAST_FINDINGS
+    - Expected  - 1
+    + Received  + 3
+    - Array []
+    + Array [
+    +   "main > div > div > div:nth-child(2)",
+    + ]
+  7) a11y/every-harness.spec.ts:355:7 › maps-harness.html open=area (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  8) a11y/every-harness.spec.ts:355:7 › matrix-harness.html (govuk) has no automated WCAG 2.2 A or AA violations 
+    Error: expect(locator).toHaveAttribute(expected) failed
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+           - unexpected value "null"
+  8 failed
+  976 passed (26.0m)
+  34 passed (41.7s)
+Wall time: 1601 s, exit 0 (no stack, no lease; set-up before it 12 s)
+
+== diagnostic, 20261111T164630Z (slot 13, load average 30): map-view's listed "Harness tiles ©" (main > div > div > div:nth-child(2)), each look 5 times, a scratch spec never committed. The first repeat found no node at all (the map's attribution not yet drawn when axe ran); the other 14 measured as listed (not measurable over canvas.sigma-mouse, own 11.31 dark, 2.85 light). The two "gone" failures above are that race in the harness's wait, not the probe.

@@ -1,6 +1,6 @@
 # rules-b · T3b · red record: the contrast probe's limits, and Show as BPMN's task box (10 November 2026)
 
-All browser runs were local, in the orchestrator's slot (`OSPREY_PORTS_SLOT=9`), against 9dd994b as committed. Every plant was restored after its run.
+The first rounds' browser runs were local, in the orchestrator's slot (`OSPREY_PORTS_SLOT=9`), against 9dd994b as committed; the server round and the review fixes after it ran on the test server, slot 13 (`OSPREY_PORTS_SLOT=13`). Every plant was restored after its run.
 
 ## Red in Node (`src/color/textContrast.test.ts`, 26 cases; each fault planted in `textContrast.ts`, then restored)
 - **V1:** an SVG label's shapes ignored. Red: the label measured on its task box.
@@ -214,3 +214,107 @@ All three of the second pass's must-fixes were confirmed closed. The third pass 
   - Unit plants: S10, the margin flat to 3σ, is red (the no-cliff case); S8, no margin to 2σ, is red (2).
 - **The σ run's slot:** 20261111T132837Z ran in slot 13, now written in item 5.
 - **The full set at 896bbf7** (20261111T133108Z): 975 passed, 4 failed, and all 4 failed before the probe ran, on the GOV.UK brand's `data-brand` not set within 5s. The harness set: 34 passed. The 4, with the 1 from 8bd3eef's run, passed on the retake (5 passed). A different set fails each run (4, 1, 4).
+
+## The orchestrator's review of 9697ad3, and the lane-reviewer's pass on d677105: the fixes (11 November 2026, 664ea74 to f5a4b4c)
+
+Every browser run below is on the test server, slot 13. The plants are committed in `a11y/plants/` and run by
+`node a11y/plants/run.mjs`. That folder has its own config (`testMatch: *.plant.ts`), so no CI a11y run picks the
+plants up. The runner writes each guard-removed variant of the probe (`a11y/plants/variants.mjs`, 16 variants)
+into a fresh folder under the system's temporary directory, outside the repository, and deletes it after the run.
+Each variant's edit must match the probe exactly once, or the run stops. The logs are in `server-round-plants.txt`'s
+last sections.
+
+**Item 1: each `hides()`/`opaque()` guard shown red with that guard removed** (`guards.plant.ts`; the final run is
+20261111T154842Z, 19 plants plus the shadow plant, all green).
+- Every covering plant lies over the right half of Show as BPMN's "If a Person meets", whose own surfaces give 13.17:1.
+  Each one is a real failure, read from the screenshot's pixels:
+  - 14.74:1 on the uncovered half;
+  - under the cover, 3.08:1 (opacity, filter, mask and mask border at 0.5), 2.36:1 (a 60% white border) or 1.48:1
+    (`#ccc` screened, an SVG rect at 0.8).
+- The plant fails if the covered half reads 4.5:1 or more, or if the uncovered half reads under 9:1. That second check
+  confirms the glyphs reach their ink.
+- The real probe flags every covering plant. The variants named below pass the words silently:
+  - opacity 0.5 on the cover: `no-opacity-walk`;
+  - opacity 0.5 on a wrapper: `no-opacity-walk`, `own-opacity-only`;
+  - the cover's background painted to its padding box, under a 60% white border: `no-background-clip`;
+  - `filter: opacity(0.5)` on the cover: `no-filter`. On a wrapper: `no-filter`, `cover-only-walk`;
+  - a `#ccc` cover with `mix-blend-mode: screen`: `no-blend`. On a wrapper: `no-blend`, `cover-only-walk`;
+  - a 50% `mask-image` on the cover: `no-mask`. On a wrapper: `no-mask`, `cover-only-walk`. Chromium's hit test
+    ignores a mask;
+  - a 50% `-webkit-mask-box-image` (item 2): `no-mask-border`;
+  - an SVG `<rect style="background-color:#fff" fill="rgba(255,255,255,.8)">` (item 2): `no-svg-exclusion`.
+- **The harness shown red.** Run 20261111T151936Z failed 3 plants, the wrappers'. Removing a property's check also
+  silences the wrapper's own property, which is a second red. Each plant now records it.
+- **The first plants were withdrawn, the lane-reviewer's finding 3.** Run 20261111T152043Z's filter, blend, mask,
+  mask-border and content-box plants left the covered words passing WCAG: 30% white, a `difference` blend with
+  white, a transparent mask, an empty content box. A variant's "passes" there was the right verdict, so those plants
+  showed only that a guard decides the outcome, not that it stops a false pass. They were re-planted as above, with
+  the pixel check added.
+
+**Recorded unreachable, each with its plant, all variants agreeing** unless noted:
+- `clip-path` on the cover or on a wrapper: Chromium's hit test respects it.
+- The pixel of slack: removing it only narrows what `hides()` accepts.
+- A 12px corner: the hit test respects `border-radius`.
+- A 50% (elliptical) corner, the lane-reviewer's finding 4:
+  - the corner test reads each corner as a circle of the larger radius, which is stricter than the ellipse
+    Chromium hit-tests;
+  - so the real probe's flag is its own false positive, and `no-corner-test` passing is the right verdict;
+  - this is not a red.
+- A nested `<svg>` with a CSS background, the lane-reviewer's finding 2:
+  - Chromium neither paints that background (the covered half reads as the 0.8 rect alone, 1.48:1) nor lists the
+    nested `<svg>` in `elementsFromPoint`;
+  - so `opaque()` is never asked about it: `svg-by-tag` (7befa52's test) and `no-svg-exclusion` both still flag;
+  - the fix (only the outermost `<svg>`, `ownerSVGElement === null`) stays, as the stricter reading.
+- The clip check's narrowings, the lane-reviewer's finding 5:
+  - Only the overflow narrowing is reached by a plant: a modal elsewhere, with the drawing overflowing a 1px box that
+    clips nothing. With `no-overflow-narrowing`, every point is "hidden", so the words are unmeasurable.
+  - The flow narrowing (past an out-of-flow box) and the inline/`display: contents` narrowing have no plant that
+    reaches them. Two tries are recorded in run 20261111T154629Z: an absolute drawing left the viewport, and an
+    inline `<text>` with `overflow: hidden` was never counted. Both were withdrawn rather than claimed.
+  - The argument: a modal's inertness is the one miss the probe cannot lift, and it misses every point alike. So every
+    narrowing decides only between "a cover" and "hidden at every point", and both are flagged.
+
+**Item 3** (664ea74; 1d4b441, the lane-reviewer's finding 8):
+- Words hidden at every point are read on their own surfaces with the hiding left aside. Unit case 37 is red on
+  the old judge (`ownRatio` null).
+- The findings file now refuses a "hidden at every point" listing with `own: null`. That case is red on d677105.
+- A hiding-ignored walk that cannot be read gives `ownRatio` null, which no listing excuses.
+- Places' two GOV.UK menu listings are pinned at 19.59, as on main.
+- **Carried:** at a hidden point the probe reads no SVG shapes and no shadows, so the pin is taken on the walk up the
+  words' tree alone. An SVG label hidden everywhere is pinned without its task box.
+
+**Minor 1, the shadow's alpha bracketed** (110c368, 1d4b441):
+- The crossing case, 38, is red on the old judge: 1.027:1 where the bracket holds a 1:1 crossing.
+- The near-corner case is red with the near-corner branch removed (0.053, not 0).
+- The pixel case is red on d677105. A sharp shadow's edge within half a pixel of the point gave [1, 1]; it is now
+  [0, 1].
+- `shadow-paint.plant.ts` measured every pixel round a black shadow on white (final run 20261111T154842Z), in 12
+  geometries:
+  - a straight edge at blurs 4, 8, 16, 24 and 40;
+  - an offset;
+  - two rounded shapes;
+  - the tokens' `0 8px 24px -8px` and `0 6px 20px -6px` (rounded 8), which have negative spread;
+  - two sharp shadows on a box at fractional edges.
+- What Chromium paints:
+  - under the Gaussian of half the blur, away from a rounded corner, at most 0.0148, so `SHADOW_SHORT` is 0.0175;
+  - over the bracket's most, nothing beyond an 8-bit step.
+- The bracket is taken over the pixel round each point, which covers a probe point's sub-pixel position.
+- The plant is red three ways:
+  - with `SHADOW_SHORT` at 0 (20261111T152143Z): all 8 geometries of that run, by 0.0088 to 0.0148;
+  - with no margin over the Gaussian (20261111T154743Z): 6 blurred geometries, by up to 0.0085;
+  - without the near-corner least (20261111T154802Z): the 16px rounded shape, by 0.066.
+- **The worse-end rule, the lane-reviewer's finding 6.**
+  - The reviewer is right that luminance need not move one way across the bracket. In its own example (black words
+    on red, a cyan shadow laid under them near a corner) that one placement dips to about 4.0:1 inside, from 5.25 and
+    5.17 at the ends.
+  - But the judgement takes the worst over every placement together, and laid over everything the shadow is worse
+    still. Unit case "fails the reviewer's coloured dip" holds that.
+  - Random searches found no case worse inside the bracket than at an end or a sign swap, with the tolerance down to
+    0.005:
+    - 200,000 one-shadow cases on one layer;
+    - 343 two-shadow cases on a translucent layer;
+    - 50 cases passing at the ends.
+  - Three two-shadow cases did reach 1:1 inside with no swap at their own pair of ends. Built as real brackets, the
+    judgement's sign check over all four ends caught them (1:1).
+  - Sampling inside the bracket could not be shown red, so it was not added. **Carried:** the rule rests on that
+    search, not on a proof.
