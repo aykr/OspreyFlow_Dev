@@ -171,3 +171,40 @@ async def test_stale_keys_are_named_by_their_hash_alone() -> None:
     deletes = [b for b in sent if b"keys" in b]
     assert deletes and hashlib.sha256(stale.encode()).hexdigest().encode() in deletes[0]
     assert all(stale.encode() not in b for b in sent), "the stale key itself travelled"
+
+
+async def test_every_page_is_read_before_anything_is_deleted() -> None:
+    """The lane-reviewer's item 9: 150 stale keys, two pages of 100 (newest first, measured).
+    Deleting while reading would move the second page under the reader and skip keys."""
+    gateway = _gateway()
+    stale = [f"sk-osprey-laurium-old-{n:03d}" for n in range(150)]
+    for key in stale:
+        _hold(gateway, key, METADATA)
+    async with httpx.AsyncClient(transport=gateway.transport(), base_url="http://litellm:4000") as c:
+        key = await laurium_at_start(c, MASTER, [MODEL])
+    assert set(gateway.virtual_keys()) == {key}, "a stale Laurium key survived the sweep"
+
+
+@pytest.mark.parametrize("refused", ["list", "delete"])
+async def test_a_refused_list_or_delete_is_said_and_raised(refused: str) -> None:
+    """A gateway that refuses the list, or a delete part-way, is a failure in words (which the
+    Conduit's start logs and tries again, `test_laurium_start.py`), never a silent partial sweep."""
+    from adapters.extract_laurium.keys import LauriumKeyRefused
+
+    gateway = _gateway()
+    _hold(gateway, laurium_key(OLD_MASTER), METADATA)
+    inner = gateway.transport()
+
+    def _refusing(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if (refused == "list" and path == "/key/list") or (
+            refused == "delete" and path == "/key/delete"
+        ):
+            return httpx.Response(500, json={"error": {"message": "Internal Server Error"}})
+        return inner.handle_request(request)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(_refusing), base_url="http://litellm:4000"
+    ) as c:
+        with pytest.raises(LauriumKeyRefused, match="refused"):
+            await laurium_at_start(c, MASTER, [MODEL])

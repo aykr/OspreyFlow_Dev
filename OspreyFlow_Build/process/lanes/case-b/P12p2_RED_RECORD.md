@@ -144,3 +144,7 @@ the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model s
   written first (red at collection), 5 passed. **Plants:** the routes inside Laurium's composition (the reversed
   wrapping), 3 failed; a key failure raised, 2 failed; Laurium's calls sent before its key is held, 1 failed; its
   client left open, 1 failed.
+- **Item 9, the sweep's paging and failures untested:** `test_every_page_is_read_before_anything_is_deleted` (150 stale
+  keys, two pages of 100) and `test_a_refused_list_or_delete_is_said_and_raised` (list, delete): regression guards,
+  green on the code; **plants**: deleting while reading, 2 failed (the 150 keys and the refused delete); a refused
+  delete passed over, 1 failed.
