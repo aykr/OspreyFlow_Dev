@@ -74,6 +74,11 @@ def pod(name: str, port: int = 0, protocol: str = "TCP") -> Endpoint:
     )
 
 
+class UnreadableShape(Exception):
+    """A manifest this evaluator cannot read (round 2, item 4): never an `AssertionError`, so it can
+    never pass as a strict xfail's expected failure."""
+
+
 # --- Calico's selectors, as far as the chart writes them -------------------------------------
 
 _TERM = re.compile(
@@ -87,7 +92,7 @@ def calico_selects(selector: str, labels: dict[str, str]) -> bool:
     for term in selector.split("&&"):
         m = _TERM.match(term)
         if m is None:
-            raise AssertionError(f"a Calico selector this test cannot read: {selector!r}")
+            raise UnreadableShape(f"a Calico selector this test cannot read: {selector!r}")
         if m.group(1):
             continue
         if m.group(2):
@@ -195,7 +200,7 @@ _UNREAD = {"notNets", "notSelector", "notPorts", "serviceAccounts", "notProtocol
 def _refuse_unread(rule: dict[str, Any]) -> None:
     for part in (rule, rule.get("source") or {}, rule.get("destination") or {}):
         if found := _UNREAD & set(part):
-            raise AssertionError(f"a Calico rule this test cannot read: {sorted(found)}")
+            raise UnreadableShape(f"a Calico rule this test cannot read: {sorted(found)}")
 
 
 def decide(docs: list[dict[str, Any]], subject: Endpoint, peer: Endpoint, direction: str) -> str:
@@ -203,7 +208,7 @@ def decide(docs: list[dict[str, Any]], subject: Endpoint, peer: Endpoint, direct
     ordered: list[tuple[float, str, dict[str, Any]]] = []
     for doc in docs:
         if doc.get("kind") in ("GlobalNetworkPolicy", "StagedNetworkPolicy"):
-            raise AssertionError(f"a {doc['kind']} this test cannot read")
+            raise UnreadableShape(f"a {doc['kind']} this test cannot read")
         if doc.get("kind") != "NetworkPolicy":
             continue
         spec = doc.get("spec") or {}
@@ -271,6 +276,9 @@ LAURIUM = pod("laurium")
 LAURIUM_EGRESS = "default.ospreyflow-egress-laurium"
 UNTIL_P7B = pytest.mark.xfail(
     strict=True,
+    # Only the stated failure (Laurium reaching what it must not, or no policy of its rendered),
+    # an assertion; an unreadable manifest (`UnreadableShape`) or any other error is FAILED.
+    raises=AssertionError,
     reason="until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's "
     "`laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything",
 )
@@ -414,13 +422,13 @@ def test_the_evaluator_lets_an_all_selector_through_as_today() -> None:
 
 
 def test_the_evaluator_refuses_a_selector_it_cannot_read() -> None:
-    with pytest.raises(AssertionError, match="cannot read"):
+    with pytest.raises(UnreadableShape, match="cannot read"):
         calico_selects("has(app.kubernetes.io/name)", {})
 
 
 def test_the_evaluator_refuses_a_field_it_cannot_read() -> None:
     rules = [{"action": "Allow", "destination": {"notNets": ["10.0.0.0/8"]}}]
-    with pytest.raises(AssertionError, match="cannot read"):
+    with pytest.raises(UnreadableShape, match="cannot read"):
         decide([_calico("x", 100, "all()", rules)], LAURIUM, pod("arcadedb", 2480), "Egress")
-    with pytest.raises(AssertionError, match="cannot read"):
+    with pytest.raises(UnreadableShape, match="cannot read"):
         decide([{"kind": "GlobalNetworkPolicy", "spec": {}}], LAURIUM, pod("x"), "Egress")

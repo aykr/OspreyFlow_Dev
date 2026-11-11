@@ -146,6 +146,7 @@ def test_left_unset_cloud_platform_renders_laurium_its_preset(name: str) -> None
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,  # only the field's absence; a render that raises is FAILED
     reason="until P7b lands (ADR-148 Amendment 5 point 24, lane/platform-p7b b530eb6): the render "
     "then sets automountToken from whether a pod has a service account of its own",
 )

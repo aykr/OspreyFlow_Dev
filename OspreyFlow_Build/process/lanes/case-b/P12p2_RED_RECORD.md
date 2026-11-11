@@ -225,3 +225,17 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
 5. **The call sites by scan:** every module under `services/` and `packages/` for `laurium_may_read=True` or
    `laurium_reads(`; only the route, `run_extraction` and the marker's own module. **Plant** (`laurium_reads()` in
    `questions.py`): 1 failed, naming it.
+4. **The strict xfails take the stated failure alone:** `UNTIL_P7B` and the token xfail now `raises=AssertionError`,
+   and the evaluator's "cannot read this shape" is its own `UnreadableShape` (never an `AssertionError`), so an
+   unreadable P7b manifest is FAILED, not the expected failure. Shown with the same mark on a scratch test (removed):
+   an `UnreadableShape` FAILED, the stated `AssertionError` XFAIL.
+
+### The merge step for P12 part 2 (after P7b, with Laurium's row) — not to be skipped
+
+1. Apply Laurium's rows to P7b's `egress.paths` (`P12p2_egress_paths.md`) in the same merge.
+2. **Remove** the `UNTIL_P7B` mark (`tests/harness/test_laurium_network_policy.py`) and the token test's xfail
+   (`tests/harness/test_laurium_render.py::test_lauriums_pod_mounts_no_service_account_token`).
+3. **Run, on the test server (Helm in Docker), against P7b's render:** `tests/harness/test_laurium_network_policy.py`,
+   `tests/harness/test_laurium_render.py`, `tests/harness/test_laurium_cp_policy.py`. All three green, or the merge
+   stops: Laurium reaches the gateway on 4000 and DNS and nothing else; only the Conduit reaches it; its pod mounts no
+   token; P7b's rules (`token`, `wide-egress`, `whole-secret` among them) hold with Laurium rendered on three shapes.
