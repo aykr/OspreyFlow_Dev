@@ -379,6 +379,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **The server sessions cannot take a lease** (`stack_lease.sh` from the server itself finds no host, and its
       Claude is refused the approval). So P7, P12, the carries and P11 moved to the Mac lanes, on `ayan`,
       with your approvals; the heavy runs still go to the server.
+    - **More rulings (afternoon), yours to overrule:**
+      4. P11: on cloud-platform the model gateway had no IAM identity, so Bedrock by role could not work (the
+         stand-in hid it). Its own service account and IAM role, made only when a Bedrock engine is enabled,
+         granting only Bedrock invocation in eu-west-2, with no S3 (least privilege), built in P11 part 2. Part 1
+         says so and carries it.
+      5. P7b: the poc shape renders no OpenSearch domain (nothing reads it; a paid resource); the standard shape is
+         unchanged and carries it. The ceiling defaults to OFFICIAL-SENSITIVE, so the HMP pack (SECRET) is out of
+         the poc kind run.
+      6. P11's two render fixes in `harness/cloud_platform/__init__.py` (platform's) come as a diff applied at merge.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
