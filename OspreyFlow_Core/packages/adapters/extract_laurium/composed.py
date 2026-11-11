@@ -13,7 +13,9 @@ read as Deep read.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from adapters.extract_laurium.adapter import ExtractLauriumAdapter, LauriumConfig
 from ports.model import ModelPort
@@ -32,19 +34,38 @@ URL = "OSPREY_LAURIUM_URL"
 DEEP_READ, LAURIUM = "deep_read", "laurium"
 
 
+#: Set by the one caller Laurium serves (Amendment 9; the orchestrator's ruling of 11 November):
+#: document extraction into the review queue (`services.api.review.run_extraction`). Every other
+#: caller of `extract` (Questions, Ask to search, email extraction, a document's content) is outside
+#: it and stays with Deep read.
+_LAURIUM_READS: ContextVar[bool] = ContextVar("laurium_reads", default=False)
+
+
+@contextmanager
+def laurium_reads() -> Iterator[None]:
+    """Inside, `extract` goes to Laurium when the deployment chose it; outside, to Deep read."""
+    token = _LAURIUM_READS.set(True)
+    try:
+        yield
+    finally:
+        _LAURIUM_READS.reset(token)
+
+
 class LauriumNotConfigured(Exception):
     """The deployment chose an extraction engine the Conduit cannot run as named; in fixed words."""
 
 
 class LauriumExtracts:
-    """A `ModelPort`: `extract` by Laurium, every other operation by `inner`."""
+    """A `ModelPort`: `extract` by Laurium inside `laurium_reads()`, every other call by `inner`."""
 
     def __init__(self, inner: ModelPort, laurium: ExtractLauriumAdapter) -> None:
         self.inner = inner
         self.laurium = laurium
 
     async def extract(self, req: ExtractionRequest) -> ExtractionResult:
-        return await self.laurium.extract(req)
+        if _LAURIUM_READS.get():
+            return await self.laurium.extract(req)
+        return await self.inner.extract(req)
 
     async def transcribe(self, req: TranscribeRequest) -> Transcript:
         return await self.inner.transcribe(req)

@@ -48,6 +48,7 @@ from services.extract.profile import DEFAULT_CONFIDENCE_FLOOR, ExtractionProfile
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
 
+from adapters.extract_laurium.composed import laurium_reads
 from ports.graph import GraphPort
 from ports.model import ModelPort
 from ports.recognise import RecognisePort
@@ -412,17 +413,20 @@ async def run_extraction(
     candidates: list[ExtractionCandidate] = []
     seen: set[tuple[str, str]] = set()
     for offset, window in text_windows(text, window_chars, overlap_chars):
-        result = await model.extract(
-            ExtractionRequest(
-                document_id=document_id,
-                text=window,
-                json_schema=schema,
-                model=extraction_model,
-                handling=handling,
-                # ADR-136: the datasets the text comes from; not given is `none`.
-                datasets=list(datasets) if datasets is not None else None,
+        # ADR-135 Amendment 9: document extraction into the review queue is the one call Laurium
+        # serves, when the deployment chose it; every other caller of `extract` stays Deep read.
+        with laurium_reads():
+            result = await model.extract(
+                ExtractionRequest(
+                    document_id=document_id,
+                    text=window,
+                    json_schema=schema,
+                    model=extraction_model,
+                    handling=handling,
+                    # ADR-136: the datasets the text comes from; not given is `none`.
+                    datasets=list(datasets) if datasets is not None else None,
+                )
             )
-        )
         for found in extract_candidates(result, profile, ontology, window, handling):
             located = _shifted(found, offset)
             key = (located.entity_type, located.locator)

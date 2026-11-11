@@ -26,6 +26,7 @@ from adapters.extract_laurium.composed import (
     LauriumExtracts,
     LauriumNotConfigured,
     extraction_from_env,
+    laurium_reads,
 )
 from adapters.extract_laurium.keys import METADATA, laurium_at_start, laurium_key
 from adapters.model_litellm.stand_in import StandInGateway
@@ -79,7 +80,8 @@ def _request() -> ExtractionRequest:
 async def test_extract_alone_goes_to_laurium() -> None:
     inner, laurium = _Inner(), _Laurium()
     model = LauriumExtracts(inner, laurium)  # type: ignore[arg-type]
-    result = await model.extract(_request())
+    with laurium_reads():  # the review queue's extraction, the one caller Laurium serves
+        result = await model.extract(_request())
     assert result.data == {"by": "laurium"} and laurium.asked == ["d-1"]
     await model.embed(["a"])
     await model.transcribe(object())

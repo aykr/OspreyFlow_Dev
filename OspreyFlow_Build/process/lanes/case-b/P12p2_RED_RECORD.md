@@ -132,3 +132,8 @@ the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model s
   the shared instance.
 - **Item 4, the key in an address:** the live factory looks for Laurium's key by its hash in `/key/list`;
   `test_live_factory_guard.py` 2 passed.
+- **Item 2, every caller of `extract` sent to Laurium** (ruled: the review queue's document extraction alone, a rule 11
+  gap for Amendment 9): `LauriumExtracts` sends `extract` to Laurium only inside `laurium_reads()`, set by
+  `services.api.review.run_extraction` alone. `test_laurium_reads_findings_alone.py`, written first (red at
+  collection), through the real `run_extraction` and store and through a direct call: 3 passed. **Plants:** the marker
+  left out of `run_extraction` (`nullcontext()`), 1 failed; every caller sent to Laurium, 2 failed.
