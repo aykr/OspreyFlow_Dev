@@ -1,0 +1,144 @@
+# The named live run at 16a4e76, the gated head of round 5 (the merger's review of round 4). Its code is 576fa06
+# (the fix) and 16a4e76 (the schema, at the head); a12bd2e is records and spec only. Stack b under the rules lease
+# (taken 2026-11-11T05:33:20Z), down and released after. Three files by name, nothing skipped:
+# test_schedule_notice_words 14, test_schedule_executor 53, test_schedule_notices_needs_you 5: 72 passed, 0 failed.
+# The 12 plants under the same lease: hyg/3-schedule-notices-red.txt, round 5.
+
+Running on ospreyflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261111T053429Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -v ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/rules/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 72 items
+
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[failed] PASSED [  1%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[timed_out] PASSED [  2%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[refused_reach] PASSED [  4%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[refused_rights] PASSED [  5%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[sign_in_unavailable] PASSED [  6%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[in_progress] PASSED [  8%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[keyless_refresh] PASSED [  9%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_each_kind_is_one_fixed_sentence_after_the_runs_name[refused_quota] PASSED [ 11%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error0-failed] PASSED [ 12%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error1-failed] PASSED [ 13%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error2-timed_out] PASSED [ 15%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error3-timed_out] PASSED [ 16%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_an_error_is_told_by_its_kind_alone[error4-in_progress] PASSED [ 18%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::test_only_a_fixed_sentence_is_served_and_anything_else_is_the_fallback PASSED [ 19%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_nothing_is_due_before_the_first_slot PASSED [ 20%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_due_slot_runs_once_as_its_owner_and_is_not_run_again PASSED [ 22%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_after_downtime_the_latest_slot_runs_once_and_the_rest_are_missed PASSED [ 23%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_flagged_recipe_is_blocked_not_run PASSED [ 25%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_paused_schedule_does_nothing PASSED [ 26%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_who_may_no_longer_run_it_is_refused_in_words[revoked] PASSED [ 27%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_who_may_no_longer_run_it_is_refused_in_words[unknown-to-idp] PASSED [ 29%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_who_may_no_longer_run_it_is_refused_in_words[idp-unreachable] PASSED [ 30%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_who_may_no_longer_run_it_is_refused_in_words[right-withdrawn] PASSED [ 31%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_who_may_no_longer_run_it_is_refused_in_words[case-access-lowered] PASSED [ 33%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_whose_clearance_dropped_below_the_source_is_refused PASSED [ 34%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_the_third_refusal_in_a_row_pauses_the_schedule PASSED [ 36%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_slot_due_while_the_last_run_is_still_going_is_skipped PASSED [ 37%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_run_a_slot_once PASSED [ 38%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_take_a_watched_file_once PASSED [ 40%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_identity_provider_outage_is_refused_but_never_pauses_the_schedule PASSED [ 41%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_an_owner_the_identity_provider_no_longer_knows_pauses_on_the_third_slot PASSED [ 43%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule PASSED [ 44%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule PASSED [ 45%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_refused_run_tells_its_owner_in_words PASSED [ 47%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_failed_run_tells_its_owner_in_words PASSED [ 48%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_graph_store_error_never_reaches_the_owners_words PASSED [ 50%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_run_that_succeeds_or_is_missed_tells_nobody PASSED [ 51%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_run_now_runs_at_once_as_the_owner PASSED [ 52%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_run_now_is_refused_in_words_when_the_owner_may_not_run_it[revoked] PASSED [ 54%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_run_now_is_refused_in_words_when_the_owner_may_not_run_it[case-access-lowered] PASSED [ 55%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_run_now_is_refused_while_a_run_of_the_recipe_is_going PASSED [ 56%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_waiting_file_runs_once_as_the_owner_on_that_file PASSED [ 58%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_replaced_file_is_a_new_file_and_runs_again PASSED [ 59%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_one_file_a_tick_the_earliest_first PASSED [ 61%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_file_waits_while_a_run_of_the_recipe_is_going PASSED [ 62%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_flagged_recipes_files_wait_and_run_once_it_is_published_again PASSED [ 63%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_paused_watch_takes_nothing PASSED [ 65%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_quota_refusal_tells_its_owner_in_the_quota_sentence PASSED [ 66%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_quota_refused_file_tells_its_owner_the_quota_sentence PASSED [ 68%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried PASSED [ 69%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_failed_file_tells_its_owner_and_is_not_retried PASSED [ 70%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_three_refused_files_in_a_row_pause_the_watch PASSED [ 72%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_schedule_and_a_watch_on_one_recipe_both_run PASSED [ 73%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_watch_whose_dataset_left_the_case_is_refused_and_reads_nothing PASSED [ 75%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_file_taken_before_valkey_lost_its_claims_is_not_taken_again PASSED [ 76%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_replica_that_read_the_ledger_before_anothers_run_began_does_not_take_it_too PASSED [ 77%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_source_watch_runs_each_pipeline_reading_it_once_on_the_file_as_its_owner PASSED [ 79%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_source_watch_runs_its_pipelines_in_the_sources_mode PASSED [ 80%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_pipeline_reading_a_watched_source_runs_by_the_source_not_by_its_own_watch PASSED [ 81%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_needs_attention_pipeline_is_recorded_blocked_and_the_others_run PASSED [ 83%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_keyless_pipeline_is_refused_in_words_and_never_run PASSED [ 84%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_paused_source_watch_takes_nothing PASSED [ 86%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_refresh_whose_owner_lost_clearance_or_their_account_is_refused PASSED [ 87%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_three_refused_refreshes_pause_the_sources_policy_not_the_pipeline PASSED [ 88%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_the_run_goes_through_the_owners_case_loading_into_the_dataset_or_is_refused PASSED [ 90%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_file_a_refresh_took_is_not_taken_again_once_valkey_lost_its_claims PASSED [ 91%]
+../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_ledger_made_before_source_refresh_takes_it_once_connected PASSED [ 93%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_only_the_owner_reads_or_counts_a_notice PASSED [ 94%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_stamped_notice_and_an_unstamped_one_are_both_served PASSED [ 95%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_notice_is_any_schedule_alert_and_nothing_else PASSED [ 97%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_the_window_and_the_status_bound_it PASSED [ 98%]
+../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_more_than_the_limit_is_said_by_the_total PASSED [100%]
+
+--------------------- 58 unmarked test(s) reached a store ----------------------
+tests/services/api/test_schedule_executor.py::test_a_due_slot_runs_once_as_its_owner_and_is_not_run_again: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_failed_file_tells_its_owner_and_is_not_retried: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_failed_run_tells_its_owner_in_words: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_file_a_refresh_took_is_not_taken_again_once_valkey_lost_its_claims: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_file_taken_before_valkey_lost_its_claims_is_not_taken_again: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_file_waits_while_a_run_of_the_recipe_is_going: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_flagged_recipe_is_blocked_not_run: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_flagged_recipes_files_wait_and_run_once_it_is_published_again: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_graph_store_error_never_reaches_the_owners_words: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_keyless_pipeline_is_refused_in_words_and_never_run: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_ledger_made_before_source_refresh_takes_it_once_connected: Postgres on port 55434
+tests/services/api/test_schedule_executor.py::test_a_needs_attention_pipeline_is_recorded_blocked_and_the_others_run: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_paused_schedule_does_nothing: Postgres on port 55434
+tests/services/api/test_schedule_executor.py::test_a_paused_source_watch_takes_nothing: Postgres on port 55434
+tests/services/api/test_schedule_executor.py::test_a_paused_watch_takes_nothing: Postgres on port 55434
+tests/services/api/test_schedule_executor.py::test_a_pipeline_reading_a_watched_source_runs_by_the_source_not_by_its_own_watch: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_quota_refusal_tells_its_owner_in_the_quota_sentence: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_quota_refused_file_tells_its_owner_the_quota_sentence: Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_schedule_executor.py::test_a_refresh_whose_owner_lost_clearance_or_their_account_is_refused: Postgres on port 55434, Valkey on port 6380
+… and 38 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+1.02s call     tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_take_a_watched_file_once
+1.00s call     tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_run_a_slot_once
+0.05s call     tests/services/api/test_schedule_executor.py::test_a_file_a_refresh_took_is_not_taken_again_once_valkey_lost_its_claims
+0.04s call     tests/services/api/test_schedule_executor.py::test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule
+0.04s call     tests/services/api/test_schedule_executor.py::test_a_slot_due_while_the_last_run_is_still_going_is_skipped
+0.04s call     tests/services/api/test_schedule_executor.py::test_an_identity_provider_outage_is_refused_but_never_pauses_the_schedule
+0.03s call     tests/services/api/test_schedule_executor.py::test_a_file_taken_before_valkey_lost_its_claims_is_not_taken_again
+0.03s call     tests/services/api/test_schedule_executor.py::test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule
+0.02s call     tests/services/api/test_schedule_executor.py::test_a_ledger_made_before_source_refresh_takes_it_once_connected
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_schedule_and_a_watch_on_one_recipe_both_run
+0.02s setup    tests/services/api/test_schedule_notices_needs_you.py::test_the_window_and_the_status_bound_it
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_run_that_succeeds_or_is_missed_tells_nobody
+0.02s setup    tests/services/api/test_schedule_executor.py::test_an_identity_provider_outage_is_refused_but_never_pauses_the_schedule
+0.02s call     tests/services/api/test_schedule_executor.py::test_a_file_waits_while_a_run_of_the_recipe_is_going
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_flagged_recipes_files_wait_and_run_once_it_is_published_again
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_refused_run_tells_its_owner_in_words
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_paused_watch_takes_nothing
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_file_taken_before_valkey_lost_its_claims_is_not_taken_again
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_quota_refused_file_tells_its_owner_the_quota_sentence
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_failed_file_tells_its_owner_and_is_not_retried
+0.02s setup    tests/services/api/test_schedule_executor.py::test_an_owner_whose_clearance_dropped_below_the_source_is_refused
+0.02s setup    tests/services/api/test_schedule_executor.py::test_the_run_goes_through_the_owners_case_loading_into_the_dataset_or_is_refused
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_quota_refusal_tells_its_owner_in_the_quota_sentence
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_waiting_file_runs_once_as_the_owner_on_that_file
+0.02s setup    tests/services/api/test_schedule_executor.py::test_three_refused_files_in_a_row_pause_the_watch
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule
+0.02s setup    tests/services/api/test_schedule_executor.py::test_nothing_is_due_before_the_first_slot
+0.02s setup    tests/services/api/test_schedule_executor.py::test_a_watch_whose_dataset_left_the_case_is_refused_and_reads_nothing
+0.02s setup    tests/services/api/test_schedule_executor.py::test_an_owner_who_may_no_longer_run_it_is_refused_in_words[case-access-lowered]
+============================== 72 passed in 4.80s ==============================
+Wall time: 5 s, exit 0 (stack b, the lease rules took at 2026-11-11T05:33:20Z; set-up before it 8 s)
