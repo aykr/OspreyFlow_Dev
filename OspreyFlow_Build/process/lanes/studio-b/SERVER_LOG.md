@@ -109,8 +109,14 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
   with the exports `run_on_host` sets for an offline run (ports 59991–59994, `OSPREY_PORTS_LANE=studio-b`,
   `OSPREY_PORTS_SLOT=11`, `--durations=30`), no stack and no lease, in the `.venv` synced from the branch's lock
   by `uv sync --frozen` immediately before.
+- History reordered so the schemas commit sits at the head again (tree unchanged, checked by diff).
+- Gates at **7f0b49aa** (`gates/7f0b49aa.explained.md`): `make test` 2 failed of 11,027 (the server's GPU and
+  Valkey port), `make -k ci` only `trivy-image-workspace` (upstream Alpine `libxslt`); keyboard (slot 11) 58/58,
+  axe 4 states × 3 themes = 12 scans clean (16 with the label checks), the sent diffs applied for the run and
+  restored by name. `opentofu-check`'s rewritten `.terraform.lock.hcl` files put back by name.
 - Not run: `graphify update .` (outside this session's permitted commands), and a leased live run
   (`test_route_rights.py`): the round adds no route, and item 10 names the offline gates and the browser ones.
+- **Built at 7f0b49aa.** Safe point: waiting for round 2. No further commit to code; only this record follows.
 
 ## Decisions taken (the owner may overrule)
 
