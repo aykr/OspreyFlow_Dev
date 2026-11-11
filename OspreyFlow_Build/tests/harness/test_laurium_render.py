@@ -140,3 +140,19 @@ def test_left_unset_cloud_platform_renders_laurium_its_preset(name: str) -> None
     a cloud-platform deployment that names no engine runs Laurium and its gateway."""
     workloads = _workloads(_artefacts(_config(name, UNSET)))
     assert {"laurium", "litellm"} <= set(workloads)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="until P7b lands (ADR-148 Amendment 5 point 24, lane/platform-p7b b530eb6): the render "
+    "then sets automountToken from whether a pod has a service account of its own",
+)
+@pytest.mark.parametrize("name", FIXTURE_NAMES)
+def test_lauriums_pod_mounts_no_service_account_token(name: str) -> None:
+    """Laurium calls no Kubernetes API and has no account of its own, so its pod mounts no token
+    (`automountServiceAccountToken: false`, cp-policy-check's `token` rule; the lane reviewer's item
+    17, built by platform in P7b). Strict: it fails the day P7b lands and holds, so the mark is
+    taken off."""
+    laurium = _workloads(_artefacts(_config(name, "laurium")))["laurium"]
+    assert not laurium.get("serviceAccountName")
+    assert laurium.get("automountToken") is False

@@ -169,3 +169,13 @@ the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model s
 - **Item 10, cp-policy-check with Laurium on all three shapes:** `tests/harness/test_laurium_cp_policy.py`
   (development, production and production-bedrock, each with Laurium chosen and its Deployment asserted present); run
   on the server with the gates.
+
+## After "built": Laurium mounts no service-account token (P7b's `token` rule)
+
+P7b (`lane/platform-p7b` b530eb6) sets `automountToken` on every cloud-platform pod from whether it has a service account
+of its own, and cp-policy-check's `token` rule refuses a token anywhere else; Laurium has none, so P7b renders it
+`false` with no change of case-b's (there is no Laurium template: its pod is the chart's workload).
+`test_lauriums_pod_mounts_no_service_account_token` pins it for Laurium, strict-xfailed until P7b lands: today it fails
+for the field's absence (`--runxfail`, 2 failed); **with P7b's line put into the render for one run, the strict mark
+fails both** (XPASS), so the mark comes off when P7b merges. `test_laurium_cp_policy.py` runs the `token` rule itself
+once P7b's check is on main.
