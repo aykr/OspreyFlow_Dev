@@ -1,0 +1,253 @@
+P9 (case) for the platform lane, after P7b landed (3673660): P7b's rows for P9's pods (61f782d) held to the pods as
+built (ADR-148 Amendment 7, "P7b's rows checked"; `tests/cloud_platform_backup/test_backups_rows.py`, which reads what
+each container's command calls from `services.api.platform_backup`'s own call graph). Apply with `git apply` from the
+repository root, after P9 merges. Three differences:
+
+1. `restore-claims` runs the writers check (its `verify` init container and its own command both call
+   `writers_stopped`) and had no `kube-api`, so on EKS every claims restore would be refused, "cannot confirm the
+   writers are stopped". profile.yaml: `restore-claims: [kube-api]`.
+2. `restore` had ArcadeDB, which none of its commands calls: ArcadeDB's restore (`restore-graph`) is `restore.sh`
+   from the zip on the Job's own claim. A path never used, as KMS was (the orchestrator's ruling of 11 November).
+   profile.yaml: `restore: [kube-api, clickhouse]`.
+3. cp-policy-check's default-deny on our Secret's keys listed none for the backup, which needs ArcadeDB's password
+   (ARCADEDB_ROOT_PASSWORD) to ask ArcadeDB for its backup: every render with the backups was refused
+   (`whole-secret: CronJob/ospreyflow-backup/backup`). P9 now gives that key to the backup's own container alone
+   (committed on the branch); `NAMED_SECRET_ALLOWED["backup"]` lists it here. The other three pods hold no key of ours.
+
+Also here: P7b's two tests and Amendment 5 point 21's words follow the rows; three plants in `p7b_reds.py`, each red
+with this diff applied (the record: `gates/p9_rows.r1.log`); and P9's own two test files lose their waiting
+conditions (`AWAITED`, the strict xfail on the restores' rows), so once applied nothing reads its own expectation
+from the rows it checks. With this diff on the branch: the four suites 583 passed, none held; without it, the
+branch's 579 passed and the two restores' rows xfailed (strict).
+
+diff --git a/OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py b/OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py
+index 2700d09..ffe8728 100644
+--- a/OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py
++++ b/OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py
+@@ -29,6 +29,7 @@ T_ID = "../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::"
+ T_AWS = "../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::"
+ T_EG = "../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::"
+ T_EO = "../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::"
++T_P9 = "../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py::"
+ CHECK = C + "harness/cloud_platform/decommission_check.py"
+ INIT = C + "harness/cloud_platform/__init__.py"
+ RUN = C + "harness/cloud_platform/runbooks.py"
+@@ -433,7 +434,23 @@ runner.PLANTS = [
+     ("images: the refusal names a render command missing the packages", C + "cli/ospreyflow/images.py",
+      '"OspreyFlow_Core: PYTHONPATH=.:packages .venv/bin/python -m harness.render"',
+      '"OspreyFlow_Core: PYTHONPATH=. .venv/bin/python -m harness.render"',
+-     [T_IMG + "test_no_plan_is_refused_with_a_command_that_renders_it"])
++     [T_IMG + "test_no_plan_is_refused_with_a_command_that_renders_it"]),
++    # ---- P9's pods as built, checked after P7b landed (case's P9_rows.diff) ----------------------------
++    ("profile: the claims' restore not given the cluster's API (its writers check refused)",
++     C + "harness/cloud_platform/profile.yaml", "    restore-claims: [kube-api]\n", "",
++     [T_EG + "test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api",
++      T_EO + "test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more",
++      T_P9 + "test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore-claims]"]),
++    ("profile: the restore given ArcadeDB, which none of its commands calls (P7b's row as landed)",
++     C + "harness/cloud_platform/profile.yaml", "    restore: [kube-api, clickhouse]\n",
++     "    restore: [kube-api, arcadedb, clickhouse]\n",
++     [T_EG + "test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api",
++      T_EO + "test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more",
++      T_P9 + "test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore]"]),
++    ("cp-policy-check: the backup's key not listed (P7b as landed)", B + "tools/cp_policy_check.py",
++     '    "backup": frozenset({"ARCADEDB_ROOT_PASSWORD"}),\n', "",
++     ["../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::"
++      "test_the_render_with_its_backups_passes_the_policy_check"]),
+ ]
+ 
+ if __name__ == "__main__":
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+index a93987f..28f3d3b 100644
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -34812,10 +34812,14 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
+     - P9's backup and restore pods (`backup`, `backup-claims`, `restore`, `restore-claims`) are
+       rows by their own pods' names (`egress.others`), which the render gives to
+       `egress_policy(..., others=...)`, since they render beside the workloads. A row whose pod is
+-      not rendered selects nothing. Each admits nothing and reaches S3 and STS. The backup and the
+-      restore also reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
+-      cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that the
+-      writers have stopped. The claims' runs reach none of ours: a claim is a mount, not a path.
++      not rendered selects nothing. Each admits nothing and reaches S3 and STS. Each also reaches
++      what its commands call, and no more (`test_backups_rows.py` reads them from
++      `platform_backup`'s own call graph): the backup ArcadeDB and ClickHouse, the restore
++      ClickHouse alone (ArcadeDB's restore is from the zip on the Job's own claim and calls
++      nothing), each admitted; and the two restores (`restore`, `restore-claims`), alone of every
++      pod, the cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that
++      the writers have stopped (P9's check after P7b landed). The claims' runs reach none of ours:
++      a claim is a mount, not a path.
+       No row names KMS: S3 calls it on the backups' behalf (SSE-KMS), so a row to it would be a
+       path never used (the orchestrator's ruling with case, 11 November). Calico matches networks,
+       not names, so an STS or regional range that also holds KMS is not excluded (a question for
+diff --git a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py
+index e567103..74147e9 100644
+--- a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py
++++ b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py
+@@ -15,15 +15,14 @@ from typing import Any
+ import pytest
+ import yaml
+ from tools import helm_chart
+-from tools.cp_policy_check import NAMED_SECRET_ALLOWED, check_manifests, pod_spec
++from tools.cp_policy_check import check_manifests, pod_spec
+ 
+ from tests.cloud_platform_backup import rendered
+ 
+ TEMPLATE = Path("templates") / "backups.yaml"
+-# cp-policy-check's default-deny on our Secret's keys (P7b) lists no key for P9's backup, which
+-# needs ArcadeDB's password; the platform lane's `process/lanes/case/P9_rows.diff` lists it. Until
+-# then every render with the backups is refused for that one key, and for nothing else.
+-AWAITED = [] if "backup" in NAMED_SECRET_ALLOWED else ["whole-secret: CronJob/ospreyflow-backup/backup"]
++# cp-policy-check's default-deny on our Secret's keys (P7b) lists ArcadeDB's password for P9's
++# backup (P9_rows.diff): every render with the backups passes, with nothing awaited.
++AWAITED: list[str] = []
+ 
+ 
+ def _docs(values: dict[str, Any], *, chart: Path | None = None) -> list[dict[str, Any]]:
+diff --git a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py
+index 3b6494e..0e26306 100644
+--- a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py
++++ b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py
+@@ -31,14 +31,9 @@ REACHES = {
+     KUBE_API: {"_pods"},
+ }
+ SET = "20261111T021500Z"
+-# P7b's rows as P9 checked them after P7b landed: `restore-claims` runs the writers check and had no
+-# `kube-api`; `restore` had ArcadeDB, which none of its commands calls. The platform lane's
+-# `process/lanes/case/P9_rows.diff` gives the rows; until it is applied the two cases are held red.
+-_PATHS = load_profile().egress.paths
+-ROWS_LANDED = KUBE_API in _PATHS.get("restore-claims", []) and "arcadedb" not in _PATHS["restore"]
+-_UNTIL_THE_DIFF = pytest.mark.xfail(
+-    not ROWS_LANDED, strict=True, reason="P9_rows.diff (the platform lane's) not yet applied"
+-)
++# P7b's rows as P9 checked them after P7b landed, and as P9_rows.diff gave them: `restore-claims`
++# runs the writers check, so it reaches `kube-api`; `restore` reaches ClickHouse and no ArcadeDB,
++# which none of its commands calls.
+ 
+ 
+ def _names(node: ast.AST) -> set[str]:
+@@ -164,9 +159,8 @@ def test_p9_s_pods_are_rows_by_their_own_names_under_their_own_account() -> None
+ 
+ @pytest.mark.parametrize(
+     "name",
+-    ["backup", "backup-claims", pytest.param("restore", marks=_UNTIL_THE_DIFF),
+-     pytest.param("restore-claims", marks=_UNTIL_THE_DIFF)],
+-)  # fmt: skip
++    ["backup", "backup-claims", "restore", "restore-claims"],
++)
+ def test_each_pod_s_row_reaches_what_its_commands_call_and_no_more(name: str) -> None:
+     docs, values = _docs()
+     commands = _commands()
+diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py
+index 66db585..b559c7d 100644
+--- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py
++++ b/OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py
+@@ -311,9 +311,9 @@ def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
+     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
+ ) -> None:
+     """P9's pods by their own rows (the render's `egress_policy(..., others=...)`), evaluated in
+-    Helm's own output: the backup and the restore reach ArcadeDB and ClickHouse, which admit them;
+-    the claims' runs reach none of ours; a restore alone reaches the cluster's API; each reaches S3
+-    and STS and nothing else outside; ClickHouse reaches S3."""
++    Helm's own output: the backup reaches ArcadeDB and ClickHouse, the restore ClickHouse alone,
++    each admitted; the claims' runs reach none of ours; the two restores alone reach the cluster's
++    API; each reaches S3 and STS and nothing else outside; ClickHouse reaches S3."""
+     docs, values, registry = rendered
+     pods_of_p9 = tuple(load_profile().egress.others)
+     labels = {name: {"app.kubernetes.io/name": name, "app.kubernetes.io/part-of": "ospreyflow"}
+@@ -326,11 +326,12 @@ def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
+         return allowed and (dest.get("labels") is None or _ingress(docs, pods[source], dest))
+ 
+     api_server = {"service": ("default", "kubernetes"), "port": 443}
+-    assert [p for p in pods if reaches(p, api_server)] == ["restore"]
+-    stores = {"backup": True, "restore": True, "backup-claims": False, "restore-claims": False}
++    assert sorted(p for p in pods if reaches(p, api_server)) == ["restore", "restore-claims"]
++    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"clickhouse"},
++              "backup-claims": set(), "restore-claims": set()}  # fmt: skip
+     for source, reached in stores.items():
+-        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}) == reached, source
+-        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}) == reached, source
++        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}) == ("arcadedb" in reached), source
++        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}) == ("clickhouse" in reached), source
+         assert not reaches(source, {"labels": pods["api"], "port": 8000}), source
+         assert not reaches(source, {"ip": _internet(values), "port": 443}), source
+         for host in values["egress"]["hosts"]:
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py
+index 0ef233a..8c660c1 100644
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py
+@@ -131,25 +131,25 @@ def test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api(
+ ) -> None:
+     """P9's backup and restore pods render beside the workloads (`values.backups`), so the render
+     gives `egress_policy` their names (`egress.others`): each has its row and admits nothing. The
+-    backup and the restore reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
+-    cluster's API (`kube-api`); the claims' runs reach none of ours (a claim is a mount). All four
+-    reach S3 and STS, and nothing reaches KMS: S3 calls it on their behalf (SSE-KMS)."""
++    backup reaches ArcadeDB and ClickHouse, the restore ClickHouse alone (ArcadeDB's restore calls
++    nothing), each admitted; the two restores alone the cluster's API (`kube-api`, the writers
++    check); the claims' runs none of ours (a claim is a mount). All four reach S3 and STS, and
++    nothing reaches KMS: S3 calls it on their behalf (SSE-KMS)."""
+     rows = _rows(values)
+     hosts = {h["host"] for h in values["egress"]["hosts"]}
+     assert not [h for h in hosts if h.startswith("kms.")]
+     s3_sts = {h for h in hosts if h.startswith(("s3.", "sts."))}
+-    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"arcadedb", "clickhouse"},
++    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"clickhouse"},
+               "backup-claims": set(), "restore-claims": set()}  # fmt: skip
+     for name, reached in stores.items():
+         assert set(rows[name]["hosts"]) == s3_sts, name
+         assert {t["name"] for t in rows[name].get("toPods", [])} == reached, name
+         assert "fromPods" not in rows[name] and "ports" not in rows[name], name
+         assert not rows[name].get("managed"), name
+-        assert rows[name].get("toKubeApi", False) == (name == "restore"), name
+-    for store in ("arcadedb", "clickhouse"):
+-        callers = set(rows[store]["fromPods"]) & set(stores)
+-        assert callers == {"backup", "restore"}, store
+-    assert [n for n, r in rows.items() if r.get("toKubeApi")] == ["restore"]
++        assert rows[name].get("toKubeApi", False) == name.startswith("restore"), name
++    for store, callers in {"arcadedb": {"backup"}, "clickhouse": {"backup", "restore"}}.items():
++        assert set(rows[store]["fromPods"]) & set(stores) == callers, store
++    assert sorted(n for n, r in rows.items() if r.get("toKubeApi")) == ["restore", "restore-claims"]
+ 
+ 
+ # ---- the service account's token (Amendment 5 point 24, case-b's P12 part 2) --------------------
+diff --git a/OspreyFlow_Build/tools/cp_policy_check.py b/OspreyFlow_Build/tools/cp_policy_check.py
+index 1310135..a8a7c43 100644
+--- a/OspreyFlow_Build/tools/cp_policy_check.py
++++ b/OspreyFlow_Build/tools/cp_policy_check.py
+@@ -277,6 +277,9 @@ WHOLE_SECRET_ALLOWED = frozenset({"api", "worker", "report-sync"})
+ NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
+     "arcadedb": frozenset({"OSPREY_ARCADEDB_CLUSTER_TOKEN", "OSPREY_ARCADEDB_PASSWORD"}),
+     "clickhouse": frozenset({"OSPREY_CLICKHOUSE_PASSWORD"}),
++    # P9's backup (ADR-148 Amendment 7): ArcadeDB's password, to ask ArcadeDB for its backup. Its
++    # other pods (the claims' runs, the restores) call ArcadeDB never and hold no key of ours.
++    "backup": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
+     "keycloak": frozenset({"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD",
+                            "OSPREY_KEYCLOAK_DB_PASSWORD"}),
+     # The engines' keys are not listed: this deployment's keyed engines' alone (`_engine_keys`),
+diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+index 0af3ab4..b245a83 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
++++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+@@ -82,13 +82,15 @@ egress:
+     arcadedb: [arcadedb]
+     clickhouse: [clickhouse, clickhouse-keeper]
+     clickhouse-keeper: [clickhouse-keeper]
+-    # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names: ArcadeDB's
+-    # backup and ClickHouse's BACKUP and RESTORE; a restore also asks the cluster's API whether the
+-    # writers have stopped (`kube-api`, the `kubernetes` Service), as no other workload may. The
+-    # claims' runs (`backup-claims`, `restore-claims`) call none of ours: a claim is a mount, and
+-    # they reach S3 and STS alone (`reach.always`).
++    # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names, each reaching
++    # what its commands call: the backup ArcadeDB's backup and ClickHouse's BACKUP; the restore
++    # ClickHouse's RESTORE alone (ArcadeDB's is from the zip on the Job's own claim, no call). Both
++    # restores ask the cluster's API whether the writers have stopped (`kube-api`, the `kubernetes`
++    # Service), as no other workload may. The claims' runs call none of ours (a claim is a mount);
++    # the backup's reaches S3 and STS alone (`reach.always`).
+     backup: [arcadedb, clickhouse]
+-    restore: [kube-api, arcadedb, clickhouse]
++    restore: [kube-api, clickhouse]
++    restore-claims: [kube-api]
+ 
+ # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
+ # shared platform may carry a LimitRange, whose defaults are given to exactly the containers that

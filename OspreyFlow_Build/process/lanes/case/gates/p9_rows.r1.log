@@ -1,0 +1,29 @@
+# P9_rows.diff verified on the server (stack_lease.sh offline case, run 20261111T224337Z), with the diff applied on lane/case-p9 at 4b6b8b7 (P9's part committed, platform's part and the un-gating applied in the tree): the four suites, then the diff's three plants in p7b_reds.py, each red.
+583 passed, 7 skipped, 1 warning in 444.92s (0:07:24)
+RED      profile: the claims' restore not given the cluster's API (its writers check refused)  [OspreyFlow_Core/harness/cloud_platform/profile.yaml]
+    7 failed in 5.95s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[poc]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py::test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore-claims]
+RED      profile: the restore given ArcadeDB, which none of its commands calls (P7b's row as landed)  [OspreyFlow_Core/harness/cloud_platform/profile.yaml]
+    7 failed in 5.96s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[poc]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py::test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore]
+RED      cp-policy-check: the backup's key not listed (P7b as landed)  [OspreyFlow_Build/tools/cp_policy_check.py]
+    4 failed in 6.00s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_render_with_its_backups_passes_the_policy_check[development]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_render_with_its_backups_passes_the_policy_check[poc]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_render_with_its_backups_passes_the_policy_check[production]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_render_with_its_backups_passes_the_policy_check[production-bedrock]
+
+3 plants, 3 red, 0 not red
+Wall time: 467 s, exit 0 (no stack, no lease; set-up before it 13 s)
