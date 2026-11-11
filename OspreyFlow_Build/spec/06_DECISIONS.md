@@ -34535,6 +34535,18 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     the ConfigMap whose checksum restarts every pod, so a P7 deployment does not restart on
     upgrade for a setting it never wrote.
 
+20. **A decommission keeps the backups** (the orchestrator's ruling from P9's work): the backups
+    bucket and its key are the decommission's one named exception, so no decommission makes a
+    retained backup unreadable. P9 (ADR-148 Amendment 7) holds the rule, in
+    `harness.cloud_platform_backups`: the bucket's name after the prefix (`BUCKET_SUFFIX`) and its
+    kept resources (`KEPT_AT_DECOMMISSION`). Its diff to this step's decommission check and runbook
+    is applied at merge, once both steps have merged. The check then reports the bucket and those
+    resources as kept, and only when the render declares them; anything else of ours, the backup
+    role among it, still fails. The runbook takes the last backup into that bucket, takes the kept
+    resources out of the state before the removal, and says how they are removed when the
+    retention ends. That diff was shown here to apply cleanly to this step's files and to pass
+    (66 tests, with P9's module beside them).
+
 **Open question for the client's platform team**, added to Amendment 1's list: the storage class's
 volume binding. The poc shape's Conduit mounts two ReadWriteOnce claims, the shared one and the
 Ingest root's. With `WaitForFirstConsumer` both are made in its node's zone. With `Immediate`
