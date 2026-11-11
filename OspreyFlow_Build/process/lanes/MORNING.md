@@ -287,6 +287,17 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     **P7 now needs two review rounds and green gates to merge without you** (your word, replacing the one round of
     about 06:30); it is listed for you after. It can still land only while my session, on your laptop, is online.
 
+35. **The server sessions at 07:22, and rules left until you are back (your word).**
+    - **Running, each committing as it goes, with no refused commands:** P7 (`make test`), case-b's P12 part 1,
+      studio-b's L1.9 part 1 (its own review's findings fixed; gates running), platform-b's P11 part 1, and admin's
+      P10 part 1. Their logs are each lane's `SERVER_LOG.md` and `~/osprey-srv/<lane>.session.log`; their
+      branches are in `~/osprey-p7/repo.git`.
+    - **Rules stopped at 07:07.** Its upgrade driver must write to `/root/osprey-runs/rules-upg`, outside its
+      worktree, which the server's Claude refuses whatever the allow list says. Nothing was created. Studio's hyg
+      finding is fixed and shown red, then green, in `~/osprey-srv/rules-hyg`, but uncommitted.
+    - **On your return:** I run the update check under a lease from the Mac, and commit the hyg fix from that
+      worktree.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
