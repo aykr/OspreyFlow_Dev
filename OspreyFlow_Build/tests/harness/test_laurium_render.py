@@ -29,9 +29,17 @@ from schemas.deployment import OspreyConfig
 GATEWAY_URL = "http://litellm:4000/v1"
 
 
+#: The engine left unset: the profile's preset (Laurium on cloud-platform; Amendment 9).
+UNSET = "unset"
+
+
 def _config(name: str, engine: str | None) -> OspreyConfig:
+    """`engine` None: the fixture as it is (it names `deep_read`, so platform's own tests keep their
+    meaning); `UNSET`: the fixture with the engine taken out; otherwise that engine named."""
     raw: dict[str, Any] = yaml.safe_load((FIXTURES / f"{name}.yaml").read_text("utf-8"))
-    if engine is not None:
+    if engine == UNSET:
+        raw.setdefault("models", {}).pop("extraction_engine", None)
+    elif engine is not None:
         raw["models"] = {**raw.get("models", {}), "extraction_engine": engine}
     return OspreyConfig.model_validate(raw)
 
@@ -122,3 +130,11 @@ def test_the_conduit_is_told_the_choice_and_lauriums_address(name: str) -> None:
     environment = values["environment"]
     assert environment["OSPREY_EXTRACTION_ENGINE"] == "laurium"
     assert environment["OSPREY_LAURIUM_URL"] == "http://laurium:8000"
+
+
+@pytest.mark.parametrize("name", FIXTURE_NAMES)
+def test_left_unset_cloud_platform_renders_laurium_its_preset(name: str) -> None:
+    """ADR-135 Amendment 5 decision 2 (the owner's), read as the profile's preset (Amendment 9):
+    a cloud-platform deployment that names no engine runs Laurium and its gateway."""
+    workloads = _workloads(_artefacts(_config(name, UNSET)))
+    assert {"laurium", "litellm"} <= set(workloads)

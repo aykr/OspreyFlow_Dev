@@ -65,9 +65,9 @@ export type Transcription = "Systran/faster-whisper-tiny.en";
  */
 export type Embedding = "all-minilm:22m-l6-v2-fp16";
 /**
- * ADR-135 Amendments 5 and 6: deep_read (the default) or, at profile: cloud-platform only, laurium (its own service, every call through the gateway).
+ * ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, laurium (its own service, every call through the gateway). Left unset: laurium on cloud-platform (its preset), deep_read on every other profile.
  */
-export type ExtractionEngine = "deep_read" | "laurium";
+export type ExtractionEngine = ("deep_read" | "laurium") | null;
 
 /**
  * `05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback

@@ -71,3 +71,18 @@ the render's `test_the_conduit_is_told_the_choice_and_lauriums_address` (2 faile
 `laurium_at_start` after the model admin starts) run only in the Conduit's lifespan, which needs the stores; no
 offline test reaches them. The test that fails if either is dropped is piece 7's leased live case through the
 Conduit, carried to it.
+
+## Piece 6: the cloud-platform profile presets Laurium (ADR-135 Amendment 5 decision 2, the owner's)
+
+The orchestrator withdrew its ruling (b) on case-b's stop (an accepted owner decision), and closed the rule 11 gap
+("the profile's pack" names no artefact) as a **profile default**: left unset, `laurium` on `cloud-platform`,
+`deep_read` everywhere else; naming `deep_read` opts out. For Amendment 9. Platform's two fixtures name `deep_read`
+(in `P12p2_platform.diff`) so its tests keep their meaning; P7b's poc fixture leaves it unset, so it renders Laurium.
+
+- Written first: `test_left_unset_it_is_the_profiles_preset`, `test_a_cluster_translation_keeps_what_cloud_platform_chose`
+  — **2 failed** against the deep_read default; green after (17 of 17), and
+  `test_left_unset_cloud_platform_renders_laurium_its_preset` (the render) green.
+- Found running it: `test_any_other_value_is_refused[None]` turned red (DID NOT RAISE). Correct under the new rule:
+  null written out is the field left unset, so the preset. Taken out of the refused values, with that said.
+- With the diff applied: the schemas, harness, CLI, cp-policy-check, engine and Laurium adapter suites, 2,160 passed;
+  the one failure is `test_deployment_schema.py` reading the owner's own local `osprey.yaml`, as before.

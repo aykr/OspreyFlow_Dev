@@ -1,3 +1,31 @@
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
+index 368b97b..031e18f 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
+@@ -5,6 +5,10 @@ components:
+   analytics_engine: clickhouse
+ network:
+   public_origin: https://ospreyflow-dev.apps.example.org
++# ADR-135 Amendment 9: named, so this fixture keeps its meaning; left unset, the profile
++# presets Laurium (Amendment 5 decision 2).
++models:
++  extraction_engine: deep_read
+ cloud_platform:
+   platform: client
+   namespace: ospreyflow-dev
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
+index 11ed572..b360edf 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
+@@ -9,6 +9,8 @@ reporting:
+   sync: true
+   superset: true
+ models:
++  # ADR-135 Amendment 9: named; left unset, the profile presets Laurium.
++  extraction_engine: deep_read
+   local_only: false
+   provider:
+     name: openai
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
 index a0e35c6..13ecfd6 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py

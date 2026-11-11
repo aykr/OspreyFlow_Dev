@@ -1,8 +1,10 @@
 """The extraction-engine setting (`06_DECISIONS.md` ADR-135 Amendments 5 and 6; P12 part 2, the
 orchestrator's rulings of 11 November): `models.extraction_engine`, `deep_read` or `laurium`.
 
-- **Default `deep_read`**: a deployment that names nothing extracts as before, and the
-  cloud-platform pack presets it (Laurium is chosen, never assumed).
+- **Left unset, the profile's preset**: `laurium` on `cloud-platform` (ADR-135 Amendment 5
+  decision 2, the owner's: "the `cloud-platform` profile's pack presets Laurium"; read as this
+  profile default, Amendment 9, a rule 11 gap closed) and `deep_read` on every other profile.
+  Naming `deep_read` opts out.
 - **`laurium` on the `cloud-platform` profile alone**, as P11's engine kinds are (Amendment 7
   decision 1): on every other profile it is refused in words naming the profile; its cluster
   translation (`ENGINES_AS`) carries it, so the render does not refuse what it renders.
@@ -26,7 +28,10 @@ CLOUD = "cloud-platform"
 
 
 def _cloud_raw() -> dict[str, Any]:
+    """The cloud-platform fixture with the engine left unset (the fixture itself names
+    `deep_read`, so platform's tests keep their meaning)."""
     raw: dict[str, Any] = yaml.safe_load((FIXTURES / "development.yaml").read_text("utf-8"))
+    raw.setdefault("models", {}).pop("extraction_engine", None)
     return raw
 
 
@@ -44,11 +49,35 @@ def _with_engine(raw: dict[str, Any], engine: Any) -> dict[str, Any]:
     return raw
 
 
-@pytest.mark.parametrize("profile", [CLOUD, "local-lite", "small", "cluster"])
-def test_the_default_is_deep_read_on_every_profile(profile: str) -> None:
+@pytest.mark.parametrize(
+    ("profile", "preset"),
+    [
+        (CLOUD, "laurium"),
+        ("local-lite", "deep_read"),
+        ("small", "deep_read"),
+        ("cluster", "deep_read"),
+    ],
+)
+def test_left_unset_it_is_the_profiles_preset(profile: str, preset: str) -> None:
     raw = _raw(profile)
     raw.get("models", {}).pop("extraction_engine", None)
-    assert OspreyConfig.model_validate(raw).models.extraction_engine == "deep_read"
+    assert OspreyConfig.model_validate(raw).models.extraction_engine == preset
+
+
+def test_naming_deep_read_on_cloud_platform_opts_out() -> None:
+    assert (
+        OspreyConfig.model_validate(
+            _with_engine(_cloud_raw(), "deep_read")
+        ).models.extraction_engine
+        == "deep_read"
+    )
+
+
+def test_a_cluster_translation_keeps_what_cloud_platform_chose() -> None:
+    """The translation is validated as `profile: cluster`, where unset means `deep_read`: the
+    cloud-platform choice must arrive named, not be re-derived there."""
+    chosen = OspreyConfig.model_validate(_cloud_raw()).models.model_dump(mode="json")
+    assert chosen["extraction_engine"] == "laurium"
 
 
 def test_laurium_is_taken_on_cloud_platform() -> None:
@@ -75,7 +104,8 @@ def test_a_cloud_platform_cluster_translation_carries_laurium() -> None:
         OspreyConfig.model_validate(raw, context={ENGINES_AS: "small"})
 
 
-@pytest.mark.parametrize("value", ["Laurium", "deep-read", "", "local", None, 1])
+#: `None` is not among them: written out, null is the field left unset, so the profile's preset.
+@pytest.mark.parametrize("value", ["Laurium", "deep-read", "", "local", 1])
 def test_any_other_value_is_refused(value: Any) -> None:
     """Refused as a value outside the two, not as an unknown field (before the setting existed,
     `extra="forbid"` refused the field itself, which a bare match on its name would also take)."""
