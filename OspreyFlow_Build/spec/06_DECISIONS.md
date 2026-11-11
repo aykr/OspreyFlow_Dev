@@ -32054,7 +32054,14 @@ Superset.
    capability dropped). ArcadeDB, ClickHouse and Keeper start that way on volumes given to group 10001
    (`process/lanes/platform/gates/p7_stores_uid_proof.sh`), each given a folder of its own for what the
    image's own user owned (ArcadeDB's `log`, `backups`, `replication`; ClickHouse's and Keeper's logs;
-   Keeper's `/var/lib/clickhouse`, which it checks): no thin image is needed.
+   Keeper's `/var/lib/clickhouse`, which it checks): no thin image is needed. **One exception, until
+   P10:** Keycloak's pod adds group 0 as a supplementary group (`harness.cloud_platform.GROUP_ZERO`).
+   Its image is built for any user in group 0 (`/opt/keycloak` is `1000:0`, group-writable) and builds
+   itself there at start; as 10001:10001 alone it cannot (measured on the kind cluster, 10 November).
+   Its user stays 10001 and non-root, with no privilege and every capability dropped. Decision 3's thin
+   image is not built for it, since P10 replaces Keycloak with Entra ID. `make cp-policy-check` allows
+   group 0 to the pod named `keycloak` alone, from a list of its own (`GROUP_ZERO_ALLOWED`), and refuses
+   any other supplementary group, `runAsGroup` or `fsGroup` (item 9).
 5. **The chart** gains `templates/ingress.yaml` (the class, the hosts from `network.public_origin`'s sites,
    TLS, the platform's annotations, the allow-list annotation from `cloud_platform.allow_from`, and a policy
    admitting the controller's namespace alone), and, gated on values the cluster's do not carry: the pod
@@ -32098,17 +32105,19 @@ Superset.
    affinity). P8 removes it (`process/lanes/CARRIES.md`).
 9. **`make cp-policy-check`** (`tools/cp_policy_check.py`) renders both fixture environments, templates
    the chart with Helm and refuses: a container without `runAsNonRoot: true` or a numeric non-zero
-   `runAsUser`, privilege or a kept capability, a port below 1024 (a container's or a Service's), a
+   `runAsUser`, a user or a group (`runAsGroup`, `fsGroup`) other than 10001, a supplementary group
+   (but item 4's group 0 for Keycloak), privilege or a kept capability, a port below 1024 (a container's or a Service's), a
    `ReadWriteMany` claim, a `hostPath`, an image not from the profile's registry, no Calico policy denying
-   every pod's egress, and a Dockerfile of ours not `USER 10001:10001`. Each rule is red on its own planted
+   every pod's egress, and a Dockerfile of ours not `USER 10001:10001`. It reads every pod kind, a Job's
+   and a CronJob's included (P9's scheduled backup is a CronJob). Each rule is red on its own planted
    fault, in the values Helm reads or Helm's own output (`tests/cp_policy_check/`). Its Makefile target and
    CI job are the owner's (`process/lanes/platform/P7_ci_makefile.diff`).
 10. **A defect fixed on the way**: `harness.cluster._Pins` pinned an image already given by its digest a
     second time (`ref@sha256:…@sha256:…`: the gateway, Ollama, speaches), which no registry pulls; the
     cluster's values change in those image lines alone.
 
-**Left, and why:** the acceptance scenarios on the kind cluster (see the report: what ran there, and what
-a full run still needs); Entra ID (decision 9, P10); the marking ceiling (10, studio-b's L1.10); backups
+**Left, and why:** the acceptance scenarios on the kind cluster, now step **P7a** after P9 (the build
+plan's; see the report: what ran there, and what a full run still needs); Entra ID (decision 9, P10); the marking ceiling (10, studio-b's L1.10); backups
 (13); the shared folders, the settings files and the recipes repository off the shared disk (6, P8);
 `ospreyflow map upload` (decision 12's upload; with the tiles bucket, P8); reading Admin's runtime model
 and map settings for the egress list (the render reads `osprey.yaml`'s; L1.9's); the platform's own
