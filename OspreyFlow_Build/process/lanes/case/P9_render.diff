@@ -9,6 +9,22 @@ StatefulSet is deleted with `--cascade=orphan` (its pod and claims kept) before 
 the new StatefulSet adopts the running pod and its two claims, and arcadedb-0, deleted once, starts again with the
 third. A fresh install is unaffected.
 
+For DECOMMISSION.md step 2 ("the last backup"), the command and where the set lands:
+
+    S=$(( $(date +%s) / 60 ))   # the slot: both runs name the set by it
+    kubectl -n "$NAMESPACE" create job "ospreyflow-backup-$S" --from=cronjob/ospreyflow-backup
+    kubectl -n "$NAMESPACE" create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims  # poc shape
+    kubectl -n "$NAMESPACE" wait --for=condition=complete "job/ospreyflow-backup-$S" --timeout=6h
+    LAST_BACKUP="s3://${PREFIX}backups/sets/$(date -u -d "@$(( S * 60 ))" +%Y%m%dT%H%M%SZ)/"
+
+The set is in the backups bucket (`<prefix>backups`), under the namespace's backups key (`alias/<namespace>-backups`),
+finished when its `manifest.json` is there. Its bucket policy lets only the backup role read it, so nobody copies it
+elsewhere by hand. **Proposed for the platform lane** (it changes step 2 and step 6): the backups bucket and its key
+are the decommission's one exception. backups.tf keeps both from a destroy (`prevent_destroy`, spec 05 §6.1), so
+step 6 leaves `<prefix>backups` unemptied and runs `terraform state rm` on backups.tf's resources before its
+destroy, and step 2 accepts a LAST_BACKUP in that bucket. The client's team removes the bucket and the key when
+the retention they agree ends.
+
 diff --git a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
 index 5d53b1c..a7a4300 100644
 --- a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
