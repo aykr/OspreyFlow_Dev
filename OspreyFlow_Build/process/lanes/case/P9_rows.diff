@@ -1,7 +1,7 @@
 P9 (case) for the platform lane, after P7b landed (3673660): P7b's rows for P9's pods (61f782d) held to the pods as
 built (ADR-148 Amendment 7, "P7b's rows checked"; `tests/cloud_platform_backup/test_backups_rows.py`, which reads what
 each container's command calls from `services.api.platform_backup`'s own call graph). Apply with `git apply` from the
-repository root, after P9 merges. Three differences:
+repository root, after P9 merges and `P9_render.diff` is applied (checked in that order). Three differences:
 
 1. `restore-claims` runs the writers check (its `verify` init container and its own command both call
    `writers_stopped`) and had no `kube-api`, so on EKS every claims restore would be refused, "cannot confirm the

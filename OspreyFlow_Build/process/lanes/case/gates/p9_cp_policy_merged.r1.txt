@@ -1,0 +1,86 @@
+# The merged render: lane/case-p9 at a7ee07f with P9's uncommitted part (ClickHouse's token, the Secret's key bare; committed next), P9_render.diff and P9_rows.diff applied in that order, on the server (stack_lease.sh offline case, run 20261111T233126Z). make cp-policy-check unfiltered, then platform's tests/harness/test_cloud_platform_*.py and tests/cloud_platform_backup (the pytest tail).
+cd ../OspreyFlow_Core && PYTHONPATH=.:packages:/root/osprey-runs/case/OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check
+development.yaml: 60 manifests, 0 violation(s)
+poc.yaml: 53 manifests, 0 violation(s)
+production-bedrock.yaml: 67 manifests, 0 violation(s)
+production.yaml: 67 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 381 items
+
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py . [  0%]
+...................................                                      [  9%]
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py ...... [ 11%]
+ss..................ss..                                                 [ 17%]
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py ....s. [ 18%]
+............................s........................................... [ 37%]
+........................................................................ [ 56%]
+..............................................................           [ 72%]
+../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py ... [ 73%]
+.......                                                                  [ 75%]
+../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py ........ [ 77%]
+........................................................................ [ 96%]
+.............                                                            [100%]
+
+=============================== warnings summary ===============================
+tests/harness/test_cloud_platform_render.py::test_with_bedrock_enabled_the_gateway_runs_as_its_own_account
+  /root/osprey-runs/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+14.61s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[development]
+13.57s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production]
+12.79s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production-bedrock]
+12.31s call     tests/cp_policy_check/test_rendered_terraform.py::test_a_reference_to_nothing_is_refused
+12.28s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[poc]
+12.22s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production+opensearch]
+4.37s call     tests/cp_policy_check/test_cp_policy_check.py::test_main_passes_on_the_fixtures
+3.21s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_never_runs_as_the_bucket_role
+2.53s call     tests/harness/test_cloud_platform_render.py::test_with_bedrock_enabled_the_gateway_runs_as_its_own_account
+2.50s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[poc-named]
+2.41s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused[poc]
+2.41s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused[development]
+2.35s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[development]
+2.19s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[production]
+2.17s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[poc]
+2.00s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_iam_role_engine_s_held_key_is_refused_to_the_gateway
+1.99s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_keyless_single_provider_s_key_is_refused_to_the_gateway
+1.73s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[production]
+1.70s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_new_workload_given_one_key_of_ours_is_refused[production]
+1.69s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[poc-none]
+1.68s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[poc]
+1.68s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[production]
+1.66s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_supplementary_group_outside_its_allowance_is_refused[poc]
+1.66s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_irsa_pods_mount_their_tokens_and_pass[production]
+1.66s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[development]
+1.64s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[development-none]
+1.63s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[poc]
+1.62s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_supplementary_group_outside_its_allowance_is_refused[development]
+1.61s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[development]
+1.61s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_read_write_many_claim_is_refused[development]
+============ 375 passed, 6 skipped, 1 warning in 306.34s (0:05:06) =============
+make cp-policy-check exit 0
+1.62s call     tests/cloud_platform_backup/test_backups_chart.py::test_each_of_p9s_pods_runs_as_its_own_account_with_its_token
+1.59s call     tests/cloud_platform_backup/test_backups_rows.py::test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[backup-claims]
+1.55s call     tests/cloud_platform_backup/test_backups_rows.py::test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[backup]
+1.55s call     tests/cloud_platform_backup/test_backups_rows.py::test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore]
+1.54s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_cronjob_runs_on_arcadedbs_node_with_its_claim_one_run_at_a_time
+1.53s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_standard_shape_has_no_claims_run
+1.53s call     tests/cloud_platform_backup/test_backups_chart.py::test_a_refused_run_is_never_retried
+1.50s call     tests/cloud_platform_backup/test_backups_rows.py::test_only_the_backup_s_own_container_holds_a_key_of_our_secret
+1.49s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_replaced
+1.48s call     tests/cloud_platform_backup/test_backups_rows.py::test_p9_s_pods_are_rows_by_their_own_names_under_their_own_account
+1.47s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_backups_account_may_see_pods_and_nothing_else
+1.29s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_restore_needs_its_writers_named
+1.23s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_render_with_its_backups_passes_the_policy_check[production]
+1.22s call     tests/cloud_platform_backup/test_backups_chart.py::test_the_render_with_its_backups_passes_the_policy_check[production-bedrock]
+384 passed, 1 warning in 177.56s (0:02:57)
+Wall time: 492 s, exit 0 (no stack, no lease; set-up before it 11 s)
