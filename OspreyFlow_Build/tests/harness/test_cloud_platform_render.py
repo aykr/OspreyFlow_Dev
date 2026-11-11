@@ -878,3 +878,61 @@ def test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own(n
     assert _values(_config(name))["environment"]["OSPREY_HIGHEST_MARKING"] == "OFFICIAL-SENSITIVE"
     own = _config(name, deployment={"highest_marking": "OFFICIAL"})
     assert _values(own)["environment"]["OSPREY_HIGHEST_MARKING"] == "OFFICIAL"
+
+
+def test_a_first_render_into_an_empty_folder_writes_every_artefact(tmp_path: Any) -> None:
+    """The D2c guide's finding (a): `harness.render.write` made the output folder but not
+    `terraform/`, so a first render stopped on `terraform/ecr.tf`. Every artefact is written, its
+    folder made readable as the others are."""
+    from harness.render import SHARED_FOLDER_MODE, render, write
+
+    result = render(_config("poc"), resolver=_resolver)
+    out = tmp_path / "new" / "cloud-platform"
+    written = write(result, out)
+    assert sorted(p.relative_to(out).as_posix() for p in written) == sorted(result.artefacts)
+    assert (out / "terraform" / "ecr.tf").is_file()
+    assert (out / "terraform").stat().st_mode & 0o777 == SHARED_FOLDER_MODE
+
+
+# ---- one digest from the plan to the pin (the D2c guide's finding (b)) ------------------------
+
+
+def test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copied(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guide's order: render `--allow-unpinned` (ours are not pushed yet), `images push` copies
+    the plan, render again pinned. The plan named the third-party images by tag, so the pinned
+    render resolved each afresh, and a tag moved in between pinned a digest the registry's copy
+    does not have. Now the first render resolves theirs (only ours may stay unresolved), the push
+    copies by that digest, and the second render carries it forward from the plan. The stand-in
+    registry moves every tag between the two renders, through `harness.render.main`'s own
+    resolver."""
+    import harness.render as render_module
+
+    moved = {"yet": False}
+
+    def registry(ref: str) -> str | None:
+        if ref.startswith(REGISTRY + "/ospreyflow/"):
+            return ("sha256:" + "b" * 64) if moved["yet"] else None  # ours, once pushed
+        if "@" in ref:
+            return None
+        return "sha256:" + ("2" if moved["yet"] else "1") * 64
+
+    monkeypatch.setattr(render_module, "daemon_then_registry_digest_resolver", registry)
+    config = FIXTURES / "poc.yaml"
+    out = tmp_path / "out"
+    assert (
+        render_module.main(["--config", str(config), "--out-root", str(out), "--allow-unpinned"])
+        == 0
+    )
+    folder = next(p for p in out.rglob("images.yaml")).parent
+    plan = yaml.safe_load((folder / "images.yaml").read_text(encoding="utf-8"))
+    theirs = [i for i in plan["images"] if "source" in i]
+    assert theirs and all(i["source"].endswith("@sha256:" + "1" * 64) for i in theirs), theirs
+    moved["yet"] = True  # the push made the copies, and every tag at its source moved
+    assert render_module.main(["--config", str(config), "--out-root", str(out)]) == 0
+    values = yaml.safe_load((folder / "values.yaml").read_text(encoding="utf-8"))
+    pinned = {c["image"] for p in [*values["workloads"], *values["jobs"]]
+              for c in [p, *p.get("initContainers", [])]}  # fmt: skip
+    assert not [i for i in pinned if i.endswith("2" * 64)], pinned
+    assert all(i.endswith(("1" * 64, "b" * 64)) for i in pinned), pinned

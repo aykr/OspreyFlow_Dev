@@ -2017,6 +2017,9 @@ def write(result: RenderResult, out_dir: Path) -> list[Path]:
     written = []
     for name, content in sorted(result.artefacts.items()):
         target = out_dir / name
+        # An artefact in a folder of its own (the cloud-platform profile's `terraform/`): the
+        # folder made, readable as the rest, before the file (a first render stopped without it).
+        make_shared_folder(target.parent, under=out_dir)
         if name == SECRETS_FILE:
             write_private(target, content)
         else:
@@ -2117,8 +2120,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.build:
         components = config.components.model_copy(update={"source_path": str(REPO_ROOT)})
         config = config.model_copy(update={"components": components})
-    result = render(config, allow_unpinned=args.allow_unpinned)
     out_dir = args.out_root / generated_folder(config)
+    resolver = None
+    if config.profile is Profile.CLOUD_PLATFORM:
+        # ADR-148 decision 8: theirs resolved even when unpinned (ours alone wait for the push),
+        # and each one the previous plan copied pinned by the digest it copied.
+        from harness.cloud_platform.carry import carried_resolver
+
+        resolver = carried_resolver(out_dir / "images.yaml", daemon_then_registry_digest_resolver)
+    result = render(config, resolver=resolver, allow_unpinned=args.allow_unpinned)
 
     if args.check:
         drifted = find_drift(result, out_dir)
