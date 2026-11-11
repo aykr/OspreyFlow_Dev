@@ -27,6 +27,7 @@ _spec.loader.exec_module(runner)
 T = "../OspreyFlow_Build/tests/cloud_platform_backup/"
 TP, TC, TR = T + "test_platform_backup.py::", T + "test_platform_backup_claims.py::", T + "test_backups_render.py::"
 TS, TH = T + "test_s3_standin.py::", T + "test_backups_chart.py::"
+TW = T + "test_backups_rows.py::"
 RUN = "OspreyFlow_Core/services/api/platform_backup.py"
 RENDER = "OspreyFlow_Core/harness/cloud_platform_backups.py"
 CHART = "OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml"
@@ -211,7 +212,8 @@ runner.PLANTS = [
     ("main's restore-claims without its writers check", RUN,
      "            writers_stopped(settings)\n            names = fetch_claims(bucket, set_id, settings.claims_folder)",
      "            names = fetch_claims(bucket, set_id, settings.claims_folder)",
-     [TP + "test_mains_restore_steps_fail_closed_when_the_pods_cannot_be_listed[restore-claims]"]),
+     [TP + "test_mains_restore_steps_fail_closed_when_the_pods_cannot_be_listed[restore-claims]",
+      TW + "test_the_module_s_commands_are_read_as_they_call"]),
     ("ClickHouse's live database set aside before its restore is proven", RUN,
      ["        self.clickhouse(f\"RENAME DATABASE {database} TO {old}{on}\", \"set the live one aside\")\n",
       "        try:\n            answer = self.clickhouse(\n"],
@@ -259,6 +261,18 @@ runner.PLANTS = [
     ("an IRSA account named as one of the backups' let through (P7b: each pod under its own account)", RENDER,
      "    if taken := {irsa.service_account, irsa.gateway_service_account} & {", "    if taken := set() & {",
      [TR + "test_an_irsa_account_named_as_a_backups_account_is_refused"]),
+    # ---- after P7b landed: P9's pods against its rows and its default-deny on our Secret's keys -------------------
+    ("ArcadeDB's password back in every backup and restore container's env (the shape before P7b landed)", RENDER,
+     '        {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},\n',
+     '        {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},\n'
+     '        {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},\n',
+     [TW + "test_only_the_backup_s_own_container_holds_a_key_of_our_secret",
+      TR + "test_the_backup_pod_is_given_no_other_secret"]),
+    ("ArcadeDB's password given to the claims' restore too", CHART,
+     '"env" $restoreEnv "resources" $b.resources "claims" $mounts)',
+     '"env" (concat $restoreEnv ($b.arcadedb.env | default list)) "resources" $b.resources "claims" $mounts)',
+     [TW + "test_only_the_backup_s_own_container_holds_a_key_of_our_secret",
+      TH + "test_a_restore_with_claims_puts_them_back_in_a_job_of_its_own"]),
 ]
 
 if __name__ == "__main__":
