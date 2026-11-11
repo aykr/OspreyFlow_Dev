@@ -33762,7 +33762,7 @@ passed, not skipped.
 
 ### ADR-148, Amendment 7 (11 November 2026) — backups on the `cloud-platform` profile as built (P9, cut)
 
-Status: accepted. Written in the case lane at step P9 (cut, ADR-142 Amendment 8 decision 4), reserved 11 November.
+Status: accepted. Written in the case lane at step P9 (cut to what a proof of concept needs), reserved 11 November.
 It records decision 13 as built: the scheduled, encrypted backup of ArcadeDB and ClickHouse (and, in the poc shape,
 Amendment 5's claim of its own) to S3 by the namespace's role, with no stored key; one restore rehearsed and timed;
 the orchestrator's rulings of 11 November on the claims part, the role's delete and the decommission. Moved to P9b:
