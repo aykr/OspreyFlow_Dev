@@ -388,6 +388,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
          unchanged and carries it. The ceiling defaults to OFFICIAL-SENSITIVE, so the HMP pack (SECRET) is out of
          the poc kind run.
       6. P11's two render fixes in `harness/cloud_platform/__init__.py` (platform's) come as a diff applied at merge.
+    - **Your word, about 14:50: 40% of the work on `sol`.** docs, case and rules-b move to `sol` (3 of 7 sessions),
+      each paused at a safe point with a HANDOFF.md and resumed there; platform, platform-b and case-b stay on
+      `ayan` so their runs are not broken; new lanes start on `sol` until the split holds. The orphan `vite` on the
+      server's port 5893 (platform-b's, 18 h old) stopped at your word.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
