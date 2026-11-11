@@ -1,0 +1,23 @@
+P11 part 2's gates at af486fe0d6bfdc1122c85223246989895d9ee8a2 (rebased onto main ff0e07d, the carries merged),
+offline on ospreyflow-test through `stack_lease.sh offline platform-b`, 11 November 2026, run 20261111T162531Z, with
+p11p2/cloud-platform-P11p2.diff and p11p2/docs-admin-guide-P11p2.diff applied in the run's copy (as at merge) and
+the worktree restored by name once the copy was made. Raw output: gates-af486fe.raw.txt (colour codes removed).
+
+Command: make -k test; make live-collect; make -C OspreyFlow_Core test-js; make -k ci; test_lanes_heartbeat.py alone.
+- make -k ci: exit 0. Every target green: cp-policy-check over the three fixtures (production-bedrock's gateway
+  account and role included), OpenTofu's configuration valid on each shape, harness-a11y 34 passed at the lane's
+  slot 7, chart-check, schemas-check, lint.
+- make test: 6 failed / 11555 passed / 27 skipped. None is this step's:
+  - test_webapp_preflight GPU case: the server's host, as on every run here.
+  - test_render_memory's OpenSearch kill: fails on main itself (the orchestrator, CARRIES).
+  - test_docs_pdf: the guide diff changes the appendix with no version row and no PDF; the docs lane's at merge.
+  - test_lanes_heartbeat (2) and test_lanes_launch's open-refuses case: process tooling this step does not touch,
+    reading the server's live lane and session state. Run 20261111T165142Z and this run's own tail, alone:
+    test_lanes_launch.py 28 passed, test_lanes_heartbeat.py 33 passed.
+  - tests/cp_policy_check/test_rendered_terraform.py, production-bedrock included: passed (OpenTofu fmt, init and
+    validate on gateway.tf).
+- live-collect: exit 0.
+- test-js: 2 failed / 3035 passed: App.test's hook timed out (10 s), MatrixView.test's paging case timed out (5 s),
+  MatrixView.budget 4814 ms against 2500. Alone (run 20261111T165142Z, load 6.4, raw gates-af486fe-alone.raw.txt):
+  App.test and MatrixView.test pass; MatrixView.budget 4696 ms, the loaded-server budget the carries' gates showed
+  too, in the Glass's matrix, which this step does not touch; carried to a run under a lease.

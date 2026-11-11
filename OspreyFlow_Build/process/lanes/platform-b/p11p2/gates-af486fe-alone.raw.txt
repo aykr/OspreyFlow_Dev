@@ -1,0 +1,110 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform-b/), logged at osprey-runs/platform-b.meta/runs/20261111T165142Z/log: sh -c uptime; (cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_lanes_launch.py); echo "=== LANES-LAUNCH ALONE EXIT $?"; (cd OspreyFlow_Core/apps/workspace && npx vitest run src/App.test.tsx src/matrix/MatrixView.test.tsx src/matrix/MatrixView.budget.test.tsx); echo "=== THREE JS FILES ALONE EXIT $?"; uptime
+ 16:51:43 up 16 days,  1:29,  9 users,  load average: 6.43, 15.64, 21.56
+............................                                             [100%]
+============================= slowest 30 durations =============================
+0.78s call     tests/test_lanes_launch.py::test_watch_never_switches_a_lane_without_the_owners_fallback_line
+0.50s call     tests/test_lanes_launch.py::test_open_refuses_when_a_session_is_running_in_the_worktree
+0.41s call     tests/test_lanes_launch.py::test_a_session_in_a_sibling_folder_is_not_the_lanes
+0.35s setup    tests/test_lanes_launch.py::test_setup_leaves_osprey_yaml_marked_so_git_add_all_cannot_stage_it
+0.32s call     tests/test_lanes_launch.py::test_no_output_log_or_commit_holds_anything_from_an_account_directory
+0.21s call     tests/test_lanes_launch.py::test_a_lane_started_with_an_account_runs_under_that_accounts_directory
+0.16s call     tests/test_lanes_launch.py::test_resume_after_a_pause_starts_prompt_r_with_the_handoff_named_first
+0.12s call     tests/test_lanes_launch.py::test_opening_a_lane_leaves_its_pending_nudge_for_the_lane
+0.12s call     tests/test_lanes_launch.py::test_pausing_a_lane_holding_the_lease_releases_it_before_the_lane_is_paused
+0.11s call     tests/test_lanes_launch.py::test_the_merge_gate_refuses_a_branch_holding_a_wip_commit
+0.11s call     tests/test_lanes_launch.py::test_open_with_no_session_opens_one_window_on_the_lanes_prompt
+0.09s call     tests/test_lanes_launch.py::test_pausing_a_lane_holding_stack_b_releases_stack_b
+0.08s call     tests/test_lanes_launch.py::test_a_lane_that_cannot_answer_is_paused_from_outside_and_nothing_is_committed
+0.07s call     tests/test_lanes_launch.py::test_a_pause_is_refused_while_the_stack_is_still_up
+0.06s call     tests/test_lanes_launch.py::test_an_unclean_pause_names_the_stack_still_held
+0.04s call     tests/test_lanes_launch.py::test_an_unknown_account_or_a_missing_directory_is_refused_before_any_session_starts
+0.04s call     tests/test_lanes_launch.py::test_headless_refuses_any_lane_but_docs[admin]
+0.03s call     tests/test_lanes_launch.py::test_headless_refuses_any_lane_but_docs[platform]
+0.03s call     tests/test_lanes_launch.py::test_headless_refuses_any_lane_but_docs[rules]
+0.03s call     tests/test_lanes_launch.py::test_setup_leaves_osprey_yaml_marked_so_git_add_all_cannot_stage_it
+0.03s call     tests/test_lanes_launch.py::test_headless_refuses_any_lane_but_docs[case]
+0.03s call     tests/test_lanes_launch.py::test_headless_refuses_any_lane_but_docs[studio]
+0.02s call     tests/test_lanes_launch.py::test_the_new_lanes_are_known[rules-b]
+0.02s call     tests/test_lanes_launch.py::test_the_new_lanes_are_known[studio-b]
+0.02s setup    tests/test_lanes_launch.py::test_opening_a_lane_leaves_its_pending_nudge_for_the_lane
+0.02s setup    tests/test_lanes_launch.py::test_open_with_no_session_opens_one_window_on_the_lanes_prompt
+0.02s call     tests/test_lanes_launch.py::test_the_new_lanes_are_known[admin]
+0.02s call     tests/test_lanes_launch.py::test_the_new_lanes_are_known[case-b]
+0.02s call     tests/test_lanes_launch.py::test_the_new_lanes_are_known[rules]
+0.02s call     tests/test_lanes_launch.py::test_the_new_lanes_are_known[platform]
+28 passed in 4.45s
+=== LANES-LAUNCH ALONE EXIT 0
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /root/osprey-runs/platform-b/OspreyFlow_Core/apps/workspace
+
+ ✓ src/matrix/MatrixView.test.tsx (20 tests) 2450ms
+   ✓ MatrixView — the tables (8)
+     ✓ pages a long view and says plainly which rows are shown (rule 2) 996ms
+   ✓ MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) (3)
+     ✓ PageDown and PageUp turn the page 417ms
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 4696ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 4694ms
+ ✓ src/App.test.tsx (37 tests) 8688ms
+   ✓ windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) (6)
+     ✓ a token near expiry is renewed in the background, with no navigation, and the next call carries it 560ms
+     ✓ an unattended window lets its token lapse: no renewal, and nothing asked 2555ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 2534 ms: expected 2534.1684219999997 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 57 passed (58)
+   Start at  16:51:48
+   Duration  9.76s (tests 83%, environment 10%, transform 4%, import 2%)
+
+
+Slowest 30 of 58 tests:
+  4694 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+  2555 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+   996 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+   560 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   417 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+   268 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   268 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > an unauthenticated load shows the sign-in screen and issues no /v1 call
+   248 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > is two real tables, each with a caption, column headers and a row header per row
+   236 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+   172 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the switcher and the cross-link move between the places, and coming back returns to the view that was open
+   162 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after a reload in the Studio, Back returns to the Glass's last view on the open case
+   146 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > an alert of another case is opened by a reload into that case, on the alert's address
+   114 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the journey's banner ends when the reader leaves the screen it opened
+   113 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a failed renewal leaves the page in place and asks to sign in again there
+   112 ms  src/matrix/MatrixView.test.tsx > MatrixView — selection, the same one the canvas uses > opens on the page that holds the selection made on the canvas
+   105 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > two triggers at once make one renewal, and both calls are answered with its token
+    99 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > sorts by a column, saying which way in aria-sort and in the caption
+    99 ms  src/App.test.tsx > the launcher's hand-off (a person who has just signed in at the launcher) > React's development double-run does not start two sign-ins
+    90 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > neither the rail nor the banner holds Monitoring: Rules and Monitoring is a place of the switcher
+    84 ms  src/matrix/MatrixView.test.tsx > MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12) > shows what the Conduit gave for the reader, and nothing for a link it left out (rule 3)
+    84 ms  src/matrix/MatrixView.test.tsx > MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12) > shows each link's strength as soon as it arrives, without waiting for the rarity
+    81 ms  src/matrix/MatrixView.test.tsx > MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12) > keeps the strengths when the rarity is refused, and says why the rarity is missing
+    76 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > choosing a case at the gate keeps the Studio tile's choice
+    76 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after the Glass tile, the graph is the one showing and the Studio is not
+    75 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > after the Ingest Studio tile, the Ingest Studio is the one showing
+    73 ms  src/App.test.tsx > the launcher's hand-off (a person who has just signed in at the launcher) > the Studio tile's sign-in screen says Ingest Studio, not the same words as the Glass's
+    69 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > the rail is at the far left and the places are in the bar, not the rail; the bar begins with the mark
+    68 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > a hand-off to the Studio opens the Glass for someone the Studio is not open to
+    65 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an identity provider that cannot be reached is not said as an ended session
+    65 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > a wrong-audience token refused by the Conduit shows the sign-in screen with the reason
+=== THREE JS FILES ALONE EXIT 1
+ 16:51:58 up 16 days,  1:30,  9 users,  load average: 6.35, 15.16, 21.31
+Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 13 s)
