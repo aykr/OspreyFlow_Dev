@@ -61,8 +61,7 @@ FROM python:3.12-slim AS java-omitted
 RUN mkdir -p /opt/jre
 FROM java-${CONDUIT_JAVA} AS java-chosen
 
-FROM python:3.12-slim
-ARG CONDUIT_JAVA
+FROM python:3.12-slim AS conduit
 
 # Base-image OS packages lag the upstream image's own last-published point
 # release; picking up current Debian security patches at build time is
@@ -75,13 +74,6 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 # Amendment 17). `tests/test_connectors_are_carried_into_the_image.py` fails if `git` is installed
 # again, and `make licence-check` names it as an offender.
 
-COPY --from=java-chosen /opt/jre /opt/java
-# Whether this build carries the runtime the two labels below declare (`omitted`: /opt/java is
-# empty, and the labels describe the runtime this Dockerfile adds by default).
-LABEL org.ospreyflow.runtime.java.included="${CONDUIT_JAVA}"
-LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
-LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
-
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
@@ -91,8 +83,7 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/connectors ./connectors
 COPY --from=builder /app/recipes ./recipes
 
-ENV PATH="/app/.venv/bin:/opt/java/bin:${PATH}" \
-    JAVA_HOME="/opt/java" \
+ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1 \
     HOME="/app"
@@ -139,3 +130,23 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=6 \
          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status==200 else 1)"]
 
 ENTRYPOINT ["uvicorn", "services.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# The runtime, and what declares it, only in the build that carries it (ADR-148 decision 12): an image
+# built with `CONDUIT_JAVA=omitted` has no /opt/java, no JAVA_HOME and no Java on its path, and is not
+# labelled with Java's licence or version, so neither `make licence-check` nor a reader of the image's
+# labels is told it carries a runtime it does not (the independent review of P7, item 9).
+FROM conduit AS conduit-included
+ARG CONDUIT_JAVA
+COPY --from=java-chosen /opt/jre /opt/java
+LABEL org.ospreyflow.runtime.java.included="${CONDUIT_JAVA}"
+LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
+LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
+# On the path the Conduit's `shutil.which("java")` reads (`map_admin.MapAdmin.basemap`).
+ENV PATH="/opt/java/bin:${PATH}" \
+    JAVA_HOME="/opt/java"
+
+FROM conduit AS conduit-omitted
+LABEL org.ospreyflow.runtime.java.included="omitted"
+
+FROM conduit-${CONDUIT_JAVA}
+USER 10001:10001

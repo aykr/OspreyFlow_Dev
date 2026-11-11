@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 from tools.layout import CORE
+from tools.licence_check import _instructions
 
 DOCKERFILE = (CORE / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
 
@@ -48,3 +49,25 @@ def test_the_cloud_platform_s_build_carries_no_java() -> None:
     assert set(re.findall(r"^FROM (\S+) AS java-(?:included|omitted)$", DOCKERFILE, re.M)) == {
         "java", "python:3.12-slim"
     }
+
+
+def _stage(name: str) -> str:
+    return DOCKERFILE.split(f"\nFROM conduit AS {name}\n", 1)[1].split("\nFROM ", 1)[0]
+
+
+def test_the_omitted_image_does_not_declare_java() -> None:
+    """The independent review of P7, item 9: the build without Java is not labelled with Java's
+    licence or version, has no JAVA_HOME and no Java on its path; only the build that copies the
+    runtime declares it, and the build argument chooses between the two (the build itself, run
+    once: `process/lanes/platform/gates/p7_conduit_no_java.sh`)."""
+    included, omitted = _stage("conduit-included"), _stage("conduit-omitted")
+    assert "COPY --from=java-chosen /opt/jre /opt/java" in included
+    for declared in ("runtime.java.licence", "runtime.java.version", "JAVA_HOME", "/opt/java/bin"):
+        assert declared in included, declared
+        assert declared not in omitted, declared
+    assert omitted.strip() == 'LABEL org.ospreyflow.runtime.java.included="omitted"'
+    common = DOCKERFILE.split("\nFROM python:3.12-slim AS conduit\n", 1)[1].split("\nFROM ", 1)[0]
+    # Its instructions, as Docker reads them (comments left out): none names Java.
+    assert not [i for i in _instructions(common) if "java" in i.lower()], "Java in the common stage"
+    final = DOCKERFILE.rsplit("\nFROM ", 1)[1]
+    assert final.splitlines()[0] == "conduit-${CONDUIT_JAVA}"

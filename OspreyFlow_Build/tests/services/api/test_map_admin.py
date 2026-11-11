@@ -411,11 +411,13 @@ async def test_a_build_with_no_java_or_no_jar_is_refused_before_anything_is_down
     assert asked == []
 
 
-async def test_on_a_cloud_platform_the_build_says_it_is_made_off_the_platform(
+async def test_on_a_cloud_platform_the_build_says_there_is_no_basemap_route_yet(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ADR-148 decision 12: the `cloud-platform` profile's Conduit is built without Java, and its
-    Build says, in words, where the basemap is made instead, and fetches nothing."""
+    Build says so in words, and fetches nothing. It offers no route that does not exist: `ospreyflow
+    map build` runs in a local deployment's Conduit, and the tiles bucket and `map upload` are not
+    built (ADR-148 Amendment 1, "Left"), so neither is named."""
     monkeypatch.setenv("OSPREY_PROFILE", "cloud-platform")
     w = World(tmp_path)
     asked: list[str] = []
@@ -430,9 +432,11 @@ async def test_on_a_cloud_platform_the_build_says_it_is_made_off_the_platform(
     w.admin._java = lambda _name: None  # noqa: SLF001 - the profile's image has none
     state = w.admin.basemap()
     assert not state.builder_ready
-    assert "built off the platform" in state.builder_state
-    assert "ospreyflow map build" in state.builder_state
-    with pytest.raises(MapAdminRefused, match="built off the platform"):
+    assert "the basemap cannot be built here" in state.builder_state
+    assert "cannot yet be brought onto the platform" in state.builder_state
+    for route in ("map build", "bucket", "map upload"):
+        assert route not in state.builder_state, route
+    with pytest.raises(MapAdminRefused, match="the basemap cannot be built here"):
         await build_basemap(w.admin, by="a", region="rutland", load_places=load_places,
                             downloader=downloader, tiles_root=w.tiles_root)  # fmt: skip
     assert asked == []
