@@ -173,7 +173,9 @@ def test_a_listing_condition_never_holds_an_action_that_carries_no_prefix() -> N
         ({"actions": ["s3:GetObject"], "resources": ["*"]}, "names a wildcard resource"),
         ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::*"]},
          "names a wildcard resource"),
-        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::synthetic-export?/client-a/*"]},
+        # A `?` alone, in a declared bucket under its declared folder, with no `*`: only the `?`
+        # branch can refuse it (a `?` beside a `*` is refused by the `*` branch either way).
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::synthetic-exports/client-a/a?.csv"]},
          "names a wildcard resource"),
         ({"actions": ["s3:PutObject"], "resources": ["arn:aws:s3:::synthetic-exports/client-a/*"]},
          "writes outside a declared results_location"),
