@@ -431,6 +431,13 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       allowed outside host; Kubernetes policies are never reached for egress. Ruled into P7b: egress per workload
       along real call paths, a cp-policy-check rule refusing all() except DNS, tested in Calico's order. P7b may move
       to 14 November.
+    - **A question for you (P12 part 2):** your ADR-135 Amendment 5 decision 2 has the cloud-platform pack preset
+      Laurium. I had ruled deep_read instead, which contradicted it; case-b stopped on it, and I withdrew my ruling, so
+      Laurium is the preset, as you decided. The concern behind my ruling stands: Laurium has not yet read any real
+      model's answer (the pinned 0.5B model, 3 of 3 unreadable). It is guarded: P12 part 2 cannot merge until a leased
+      case shows Laurium reading a conforming answer from the client's own engine. **Your choice:** keep Laurium as the
+      preset (as now), or preset deep_read until that case passes. Also ruled: the extraction engine is chosen at
+      set-up only; Admin › Models shows it read-only, with how to change it.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
