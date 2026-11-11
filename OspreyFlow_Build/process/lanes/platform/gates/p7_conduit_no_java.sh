@@ -46,7 +46,7 @@ if echo "$found" | grep -q '^java: not found$' && ! echo "$found" | grep -q '/bi
   ok "no java executable anywhere in the image"
 else bad "a java executable is in the image"; fi
 
-say "it starts"
+say "it imports, and uvicorn reaches the application's lifespan (not /healthz: serving needs a deployment's stores and IdP)"
 if docker run --rm --entrypoint python "$IMAGE" -c \
     'import shutil, services.api.app; print("imported services.api.app; shutil.which(java) =", shutil.which("java"))'; then
   ok "the application imports without Java"
@@ -59,7 +59,7 @@ for _ in $(seq 1 30); do
 done
 docker logs "$P-start" 2>&1 | tail -8 | sed 's/^/log: /'
 if docker logs "$P-start" 2>&1 | grep -q 'Waiting for application startup'; then
-  ok "uvicorn started the application (its start-up then needs a deployment's settings, not Java)"
+  ok "uvicorn reached the application's lifespan, which then stops on a deployment's missing settings, not on Java (/healthz is not reached here)"
 else bad "uvicorn never reached the application's start-up"; fi
 if docker logs "$P-start" 2>&1 | grep -qi 'java'; then bad "the log names Java"; else ok "the log names no Java"; fi
 

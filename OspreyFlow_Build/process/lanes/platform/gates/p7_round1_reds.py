@@ -1,4 +1,5 @@
-"""P7's round-1 fixes (the orchestrator's two independent reviews of 1a63953d), each shown red first (rule 15).
+"""P7's round-1 fixes (the orchestrator's two independent reviews of 1a63953d) and the two branches round 2 found
+unproven, each shown red first (rule 15).
 
 Each plant undoes one fix, or plants one fault, **in the file the fix lives in**, in the shape that code really
 had or emits, then runs the tests that hold it, which must fail; the file is then written back byte for byte
@@ -30,8 +31,9 @@ T_MAP = "../OspreyFlow_Build/tests/services/api/test_map_admin.py::"
 CHECK, INIT = B + "tools/cp_policy_check.py", C + "harness/cloud_platform/__init__.py"
 TF, HELPERS = C + "harness/cloud_platform/terraform.py", C + "deploy/helm/ospreyflow/templates/_helpers.tpl"
 
-#: (what is planted, file, old text, new text, the tests that must go red)
-PLANTS: list[tuple[str, str, str, str, list[str]]] = [
+#: (what is planted, file, old text, new text, the tests that must go red); a plant of two edits gives
+#: each of old and new as a list, applied in pairs.
+PLANTS: list[tuple[str, str, str | list[str], str | list[str], list[str]]] = [
     # ---- item 3: egress opened by one setting -------------------------------------------------------------
     ("open-egress: a too-wide or default-route network passes", CHECK,
      '    return too_wide_for_egress(net) or ""\n', '    return ""\n',
@@ -49,6 +51,9 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("platform settings: managed/service nets of any width accepted", C + "harness/cloud_platform/settings.py",
      "        if why := too_wide_for_egress(net):\n", "        if why := None:\n",
      [T_R + "test_a_platform_s_networks_that_would_open_egress_are_refused"]),
+    ("open-egress: a Kubernetes egress ipBlock of any width passes (round 2)", CHECK,
+     "                if cidr and (why := _too_wide(cidr)):\n", "                if False:\n",
+     [T_CP + "test_a_kubernetes_egress_address_block_that_opens_egress_is_refused"]),
     # ---- item 4: other tenants ----------------------------------------------------------------------------
     ("ingress-isolation: a pod no policy selects passes", CHECK,
      "        if not any(_matches(selector, labels) for selector in selectors):\n",
@@ -66,6 +71,9 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("ingress-isolation: a rule from every source passes", CHECK,
      '            if not rule.get("from"):\n', "            if False:\n",
      [T_CP + "test_the_public_policy_admitting_every_address_is_refused"]),
+    ("ingress-isolation: a Calico ingress Allow beyond a selector passes (round 2)", CHECK,
+     '            if rule.get("action") == "Allow" and set(source) != {"selector"}:\n', "            if False:\n",
+     [T_CP + "test_a_calico_ingress_allow_beyond_a_selector_is_refused"]),
     ("chart: ospreyflow-public rendered behind the platform's Ingress", C + "deploy/helm/ospreyflow/templates/networkpolicies.yaml",
      '{{- if not (dig "enabled" false (.Values.ingress | default dict)) }}\n', "{{- if true }}\n",
      [T_CP + "test_the_render_passes"]),
@@ -80,6 +88,10 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ("ingress: no body size rendered", INIT,
      '    annotations[nginx + "proxy-body-size"] = _nginx_size(upload_cap_bytes(environment))\n', "",
      [T_R + "test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads"]),
+    ("ingress: the deployment's upload cap read as a bare int (round 2: 0 became 0m, no limit)", INIT,
+     "    if given > 0:\n        return given\n",
+     "    if UPLOAD_CAP_VARIABLE in environment:\n        return int(environment[UPLOAD_CAP_VARIABLE])\n",
+     [T_R + "test_the_ingress_reads_the_upload_cap_as_the_conduit_does"]),
     ("ingress: the upload cap's source bound at import (the defect the test found)", INIT,
      "def upload_cap_bytes(environment: dict[str, Any], path: Path | None = None) -> int:\n",
      "def upload_cap_bytes(environment: dict[str, Any], path: Path | None = CONDUIT_UPLOADS) -> int:\n",
@@ -122,12 +134,19 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
      "    if cloud is None:\n", "    if False:\n",
      [T_CP + "test_a_configuration_of_another_profile_is_refused_in_words"]),
     # ---- item 9: the Conduit without Java -----------------------------------------------------------------
+    ("Dockerfile: the upgrade after the code, as root (round 2, item 5: the shape at dd0233e1)", C + "services/api/Dockerfile",
+     ["RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*\n\n",
+      'ENTRYPOINT ["uvicorn", "services.api.app:app", "--host", "0.0.0.0", "--port", "8000"]\n'],
+     ["\n",
+      'ENTRYPOINT ["uvicorn", "services.api.app:app", "--host", "0.0.0.0", "--port", "8000"]\n'
+      "USER root\nRUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*\nUSER 10001:10001\n"],
+     [T_JAVA + "test_the_final_stage_upgrades_before_the_code_and_as_root"]),
     ("Dockerfile: the omitted image given JAVA_HOME", C + "services/api/Dockerfile",
-     'FROM conduit AS conduit-omitted\nLABEL org.ospreyflow.runtime.java.included="omitted"\n',
-     'FROM conduit AS conduit-omitted\nLABEL org.ospreyflow.runtime.java.included="omitted"\nENV JAVA_HOME="/opt/java"\n',
+     'FROM python:3.12-slim AS runtime-omitted\nLABEL org.ospreyflow.runtime.java.included="omitted"\n',
+     'FROM python:3.12-slim AS runtime-omitted\nLABEL org.ospreyflow.runtime.java.included="omitted"\nENV JAVA_HOME="/opt/java"\n',
      [T_JAVA + "test_the_omitted_image_does_not_declare_java"]),
     ("Dockerfile: the omission's stage Java's (a red record for an older test)", C + "services/api/Dockerfile",
-     "FROM python:3.12-slim AS java-omitted\n", "FROM java AS java-omitted\n",
+     "FROM python:3.12-slim AS runtime-omitted\n", "FROM runtime-included AS runtime-omitted\n",
      [T_JAVA + "test_the_cloud_platform_s_build_carries_no_java"]),
     ("profile.yaml: the Conduit planned with Java (a red record for an older test)",
      C + "harness/cloud_platform/profile.yaml",
@@ -171,21 +190,26 @@ def main() -> int:
         original = path.read_bytes()
         before = _digest(path)
         text = original.decode("utf-8")
-        if old not in text:
-            print(f"NOT PLANTED  {what}: its text is not in {relative}")
+        olds, news = ([old], [new]) if isinstance(old, str) else (old, new)
+        if missing := [o for o in olds if text.count(o) != 1]:
+            print(f"NOT PLANTED  {what}: its text is not once in {relative}: {missing[0][:80]!r}")
             not_red += 1
             continue
+        for o, n in zip(olds, news, strict=True):
+            text = text.replace(o, n)
         try:
-            path.write_text(text.replace(old, new), encoding="utf-8")
+            path.write_text(text, encoding="utf-8")
             done = subprocess.run(
                 [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-q", "-p", "no:cacheprovider",
-                 "--no-header", "-rf", *tests],
+                 "--no-header", "-rf", "--tb=short", *tests],
                 capture_output=True, text=True, env={**os.environ, **PORTS}, check=False,
             )  # fmt: skip
         finally:
             path.write_bytes(original)
         assert _digest(path) == before, f"{relative} was not restored"
         failed = [line for line in done.stdout.splitlines() if line.startswith("FAILED")]
+        # Each failure's own text (its assertion or error lines), in full: the record shows why it failed.
+        reasons = [line for line in done.stdout.splitlines() if line.startswith("E ")]
         summary = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else done.stderr[-200:]
         if done.returncode == 0 or not failed:
             not_red += 1
@@ -193,7 +217,9 @@ def main() -> int:
         else:
             print(f"RED      {what}  [{relative}]\n    {summary}")
             for line in failed:
-                print(f"    {line[:230]}")
+                print(f"    {line}")
+            for line in reasons:
+                print(f"      {line}")
     print(f"\n{len(PLANTS)} plants, {len(PLANTS) - not_red} red, {not_red} not red")
     return 1 if not_red else 0
 
