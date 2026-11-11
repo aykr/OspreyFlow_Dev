@@ -63,6 +63,8 @@ PROFILE_FLOORS: dict[str, int] = {
     "local-lite": LOCAL_LITE_FLOOR_BYTES,
     "small": 30 * 1024**3,
     "cluster": 16 * 1024**3,
+    # ADR-148: the same as a cluster's, for the same reason.
+    "cloud-platform": 16 * 1024**3,
 }
 
 #: ArcadeDB's maximum heap, as a fraction of the profile floor — see this module's own docstring

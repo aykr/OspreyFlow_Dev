@@ -1,0 +1,40 @@
+# A kind cluster on the test server, set up to the client platform's rules (ADR-148 Consequences:
+# Calico's deny policy, no ReadWriteMany class), for P7's proof before a namespace exists
+# (the platform lane's kind script, in the build record). Never a deployment's settings: a test
+# fixture, read only where OSPREY_PLATFORM_FOLDERS names this folder (the render's tests; P7a's
+# kind script).
+name: kind
+aws_region: eu-west-2
+ingress:
+  class: nginx
+  annotations: {}
+  allow_list_annotation: nginx.ingress.kubernetes.io/whitelist-source-range
+  controller_namespace: ingress-nginx
+storage:
+  class: gp2-expand
+egress:
+  kind: calico
+  # The stand-ins for the managed stores run as pods (namespace platform-managed), on the pod network.
+  managed_nets: ["192.168.0.0/16"]
+  # S3's stand-in is a pod on the same network; kind has no STS (no IRSA), so its host is the pod
+  # network too, which nothing answers on.
+  service_nets:
+    s3.eu-west-2.amazonaws.com: ["192.168.0.0/16"]
+    sts.eu-west-2.amazonaws.com: ["192.168.0.0/16"]
+  dns_namespace: kube-system
+secrets:
+  postgres:
+    name: rds-postgresql-instance-output
+    keys: {host: rds_instance_address, port: rds_instance_port, user: database_username,
+           password: database_password, database: database_name}
+  redis:
+    name: elasticache-redis
+    keys: {host: primary_endpoint_address, port: port, password: auth_token}
+  opensearch:
+    name: opensearch-output
+    keys: {url: proxy_url}
+  s3:
+    name: s3-bucket-output
+    keys: {prefix: bucket_prefix}
+  irsa:
+    service_account: ospreyflow

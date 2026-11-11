@@ -1,0 +1,45 @@
+== pods
+NAME                         READY   STATUS             RESTARTS        AGE     IP                NODE               NOMINATED NODE   READINESS GATES
+api-688bd44d9-lfzjz          0/1     CrashLoopBackOff   3 (35s ago)     4m1s    192.168.194.253   osprey-p7-worker   <none>           <none>
+arcadedb-0                   1/1     Running            0               4m      192.168.194.195   osprey-p7-worker   <none>           <none>
+clickhouse-0                 1/1     Running            0               3m58s   192.168.194.196   osprey-p7-worker   <none>           <none>
+clickhouse-keeper-0          1/1     Running            0               3m58s   192.168.194.197   osprey-p7-worker   <none>           <none>
+keycloak-0                   0/1     Running            3 (48s ago)     4m      192.168.194.255   osprey-p7-worker   <none>           <none>
+ner-847c56c877-82mr8         1/1     Running            1 (2m11s ago)   4m1s    192.168.194.251   osprey-p7-worker   <none>           <none>
+worker-8cc47bfbd-z7gnj       0/1     CrashLoopBackOff   4 (44s ago)     4m1s    192.168.194.252   osprey-p7-worker   <none>           <none>
+workspace-5577f8856b-qls64   0/1     ImagePullBackOff   0               4m1s    192.168.194.254   osprey-p7-worker   <none>           <none>
+workspace-5d59bfcfb4-z695w   0/1     ErrImagePull       0               11m     192.168.194.243   osprey-p7-worker   <none>           <none>
+== each running container's user
+pod/api-688bd44d9-lfzjz: error: Internal error occurred: unable to upgrade connection: container not found ("api")
+pod/arcadedb-0: uid=10001 gid=10001 groups=10001
+pod/clickhouse-0: uid=10001 gid=10001 groups=10001
+pod/clickhouse-keeper-0: uid=10001 gid=10001 groups=10001
+pod/keycloak-0: Defaulted container "keycloak" out of: keycloak, keycloak-db (init)
+pod/ner-847c56c877-82mr8: uid=10001(ner) gid=10001(ner) groups=10001(ner)
+pod/worker-8cc47bfbd-z7gnj: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+== claims and budgets
+NAME                               STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+config-arcadedb-0                  Bound    pvc-938db588-02c7-44a5-9f21-19111458a68e   1Gi        RWO            gp2-expand     <unset>                 37m
+coordination-clickhouse-keeper-0   Bound    pvc-1b5df747-7f7c-4e3b-9b1f-afbb67b22e4f   10Gi       RWO            gp2-expand     <unset>                 37m
+data-clickhouse-0                  Bound    pvc-b26260d0-1d40-4da2-b42e-caf5d3202c64   200Gi      RWO            gp2-expand     <unset>                 37m
+databases-arcadedb-0               Bound    pvc-322a8270-dc2a-4c72-8ba5-683ef7f411ce   100Gi      RWO            gp2-expand     <unset>                 37m
+ospreyflow-shared                  Bound    pvc-a4862a26-36cc-4d58-9d91-3548aeeb2622   200Gi      RWO            gp2-expand     <unset>                 37m
+NAME                MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+arcadedb            N/A             1                 1                     20m
+clickhouse          N/A             1                 1                     20m
+clickhouse-keeper   N/A             1                 1                     20m
+keycloak            N/A             1                 0                     20m
+== Calico policies
+NAME                              CREATED AT
+default.ospreyflow-allow-egress   2026-11-10T07:38:05Z
+default.ospreyflow-deny-egress    2026-11-10T07:38:05Z
+== egress: the internet refused; the managed stand-ins and the namespace's own pods reached
+pod "p7-egress" deleted
+error: timed out waiting for the condition
+== the Conduit's exit
+RuntimeError: OIDC_JWKS_URL is not set — Principal resolution has no key source. Point it at an IdP's JWKS endpoint (http/https only — a bare local file is not a supported scheme).
+
+ERROR:    Application startup failed. Exiting.
+== Keycloak, as 10001 with group 0 supplementary
+2026-11-10 07:55:54,117 INFO  [org.key.com.Profile] (main) Preview features enabled: token-exchange:v1
+2026-11-10 07:55:56,846 INFO  [org.key.com.Profile] (main) Preview features enabled: token-exchange:v1

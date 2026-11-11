@@ -1,0 +1,25 @@
+# bash process/lanes/platform/gates/p7_stores_uid_proof.sh, on the test server, 11 November 2026 (about 10:00 UTC),
+# its whole output, from OspreyFlow_Build, no lease (Docker only, no dev stack; containers osprey-p7-stores-*, removed
+# at the end). The run before it failed four times on the script's two wrong image references, fixed in the same change.
+
+== 3. ArcadeDB, ClickHouse and Keeper as 10001:10001, their volumes given to group 10001 (a pod's fsGroup)
+PASS  arcadedb answers ready as uid=10001 gid=10001 groups=10001
+PASS  clickhouse answers ping as uid=10001 gid=10001 groups=10001
+PASS  keeper answers imok as uid=10001 gid=10001 groups=10001
+
+== 3. postgres as the init containers (keycloak-db, litellm-db), then LiteLLM, as 10001 with every capability dropped
+postgres: postgres:16.4, image sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412
+litellm: ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
+uid=10001 gid=10001 groups=10001
+CREATE ROLE
+ALTER ROLE
+CREATE DATABASE
+PASS  the keycloak-db init container made its database as 10001, no capabilities
+uid=10001 gid=10001 groups=10001
+CREATE ROLE
+ALTER ROLE
+CREATE DATABASE
+PASS  the litellm-db init container made its database as 10001, no capabilities
+PASS  litellm answers liveliness as uid=10001 gid=10001 groups=10001
+
+== result: 0 failure(s)

@@ -28,7 +28,7 @@ are never here: every workload reads them from one Kubernetes Secret the install
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import yaml
@@ -277,6 +277,10 @@ class _Pins:
 
     def __call__(self, service: str, image: str) -> str:
         self.ran.setdefault(service, ServiceImage(service, image))
+        if "@sha256:" in image:
+            # Already pinned (the gateway, the local models): its own digest is the pin; another
+            # would make `ref@sha256:…@sha256:…`, which no registry pulls.
+            return image
         digest = self.resolver(image)
         if digest is None:
             self.unresolved.append(image)
@@ -437,8 +441,11 @@ def render_cluster(
     resolver: DigestResolver,
     allow_unpinned: bool,
     resolved_source_label: str,
+    replicas: Mapping[str, int] | None = None,
 ) -> dict[str, str]:
-    """`values.yaml` for the chart, and the `versions.lock` of every image it runs."""
+    """`values.yaml` for the chart, and the `versions.lock` of every image it runs. `replicas`
+    changes 05 §3b's counts (the `cloud-platform` profile's development namespace runs one of
+    each, ADR-148 decision 5); a cluster passes none."""
     from harness.render import (
         GATEWAY_DB_PASSWORD,
         GATEWAY_MASTER,
@@ -453,6 +460,7 @@ def render_cluster(
     from harness.site import render_caddyfile, render_glass_settings
 
     _refuse_what_a_cluster_cannot_run(config)
+    counts = {**REPLICAS, **(replicas or {})}
     services = compose_services(config, images)
     environment = _environment(config)
     translate = _Translator(environment)
@@ -465,9 +473,9 @@ def render_cluster(
         ),
         "litellm.yaml": render_litellm_config(config),
         "realm.json": render_realm_json(config, demo_analyst=False),
-        "clickhouse.xml": clickhouse_config(REPLICAS["clickhouse"], REPLICAS["clickhouse-keeper"]),
+        "clickhouse.xml": clickhouse_config(counts["clickhouse"], counts["clickhouse-keeper"]),
         "clickhouse-users.xml": CLICKHOUSE_USERS,
-        "keeper.xml": keeper_config(REPLICAS["clickhouse-keeper"]),
+        "keeper.xml": keeper_config(counts["clickhouse-keeper"]),
         **{_theme_key(path): content for path, content in theme.items()},
     }
     pin = _Pins(resolver)
@@ -515,7 +523,7 @@ def render_cluster(
             jobs.append(_job(workload, services, name, waits))
             continue
         workload["kind"] = "StatefulSet" if name in STATEFUL else "Deployment"
-        workload["replicas"] = REPLICAS.get(name, 1)
+        workload["replicas"] = counts.get(name, 1)
         if name == "proxy":
             workload["ports"] = _proxy_ports(config)
         elif name in PORTS:
@@ -530,14 +538,14 @@ def render_cluster(
     workers = {
         "name": "worker",
         "kind": "Deployment",
-        "replicas": REPLICAS["worker"],
+        "replicas": counts["worker"],
         "image": pin("worker", _owned(api_image, "worker")),
         "envFrom": True,
         # The managed Valkey is outside the cluster's network.
         "egress": True,
     }
     workloads.append(workers)
-    workloads.append(_keeper(pin))
+    workloads.append(_keeper(pin, counts["clickhouse-keeper"]))
     # ADR-135 decision 2: a workload that reads the whole Secret (`envFrom`) has every model key
     # blanked above it; only the gateway reads one, by name.
     blanks = [{"name": key, "value": ""} for key in model_key_variables(config).values()]
@@ -635,12 +643,12 @@ def _job(
     return workload
 
 
-def _keeper(pin: _Pins) -> dict[str, Any]:
+def _keeper(pin: _Pins, replicas: int) -> dict[str, Any]:
     """ClickHouse's coordination (05 §3b), which compose does not run: one server needs none."""
     return {
         "name": "clickhouse-keeper",
         "kind": "StatefulSet",
-        "replicas": REPLICAS["clickhouse-keeper"],
+        "replicas": replicas,
         "image": pin("clickhouse-keeper", KEEPER_IMAGE),
         "command": ["/bin/sh", "-c"],
         # The id is the pod's ordinal plus one: the Keepers' Raft numbers its servers from one.

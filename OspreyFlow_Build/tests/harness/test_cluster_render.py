@@ -98,9 +98,21 @@ def test_every_store_keeps_its_data_on_a_volume_of_its_own() -> None:
     assert not [w for w in workloads.values() if w["kind"] == "Deployment" and "claims" in w]
 
 
+#: One reference and one digest, anchored at both ends: an image already given by its digest
+#: (the gateway, the local models) once came out `ref@sha256:…@sha256:…`, which the end-anchored
+#: pattern passed and no registry pulls.
+PINNED = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+
+
 def test_every_image_is_pinned_by_digest() -> None:
     for container in _containers(values_for(cluster_config())):
-        assert re.search(r"@sha256:[0-9a-f]{64}$", container["image"]), container["name"]
+        assert PINNED.fullmatch(container["image"]), (container["name"], container["image"])
+
+
+def test_the_pin_pattern_refuses_a_second_digest() -> None:
+    digest = "sha256:" + "a" * 64
+    assert PINNED.fullmatch(f"ghcr.io/berriai/litellm@{digest}")
+    assert not PINNED.fullmatch(f"ghcr.io/berriai/litellm@{digest}@{digest}")
 
 
 def test_the_job_workers_are_the_releases_own_images() -> None:

@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: publish-user-repo ci lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
+.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
 
 CORE := ../OspreyFlow_Core
 BUILD := $(CURDIR)
@@ -19,7 +19,7 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check bundle
+ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check bundle
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
@@ -203,6 +203,14 @@ HELM := docker run --rm -v "$(CURDIR)/$(CORE)/deploy/helm/ospreyflow:/chart:ro" 
 chart-check:
 	$(HELM) lint /chart
 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py ../OspreyFlow_Build/tests/harness/test_proxy_health.py
+
+# ADR-148 decision 14: the `cloud-platform` profile rendered, templated by Helm and held to the shared
+# platform's rules (root, a named or other UID or GID, privilege, a low port, RWX, hostPath, a foreign
+# registry, no deny-egress, open egress, ingress from other tenants, no resources, a Dockerfile not 10001);
+# each rule red on a planted fault by its own test (rule 15); the Terraform formatted and valid. Docker.
+cp-policy-check:
+	$(IN_CORE) PYTHONPATH=.:packages:$(BUILD) $(PY) -m tools.cp_policy_check
+	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 
 # ADR-114 decision 9: two Conduit processes on one ClickHouse, against the `dev-up` stores and a
 # throwaway ClickHouse on 18123 (run by `test-all` once `dev-up` is up).

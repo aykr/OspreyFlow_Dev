@@ -716,6 +716,15 @@ class MapAdmin:
         jar = (self._tiles_root / PLANETILER_JAR).is_file()
         if java and jar:
             builder = "Ready: Java and the map builder are installed."
+        elif not java and os.environ.get("OSPREY_PROFILE") == "cloud-platform":
+            # ADR-148 decision 12: this profile's Conduit is built without Java. `ospreyflow map
+            # build` runs in a local deployment's Conduit and the tiles bucket and its upload do
+            # not exist yet (ADR-148 Amendment 1, "Left"), so neither is offered as a route.
+            builder = (
+                "On this platform the Conduit has no Java, so the basemap cannot be built here, "
+                "and a basemap built elsewhere cannot yet be brought onto the platform. Until it "
+                "can, the map uses its providers alone."
+            )
         elif not java:
             builder = "Java is not installed in the Conduit, so the map cannot be built here."
         else:

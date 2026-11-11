@@ -93,6 +93,8 @@ SECTIONS = {
     "governance": "Identity, handling, ontology and the marking shown on screen.",
     "cluster": "A Kubernetes deployment: its namespace, storage classes and machines.",
     "cluster.hosts": "One machine.",
+    "cloud_platform": "A namespace on a shared Kubernetes platform (profile cloud-platform only): "
+    "the platform's settings file, the namespace, its registry, and what its egress may reach.",
     "network": "The address the deployment answers at, and what it publishes.",
     "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
     "governance.organisation_provider": "Small on a server of your own: the organisation's identity "

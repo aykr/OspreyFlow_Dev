@@ -63,6 +63,10 @@ class Profile(StrEnum):
     LOCAL_LITE = "local-lite"
     SMALL = "small"
     CLUSTER = "cluster"
+    #: ADR-148 decision 1: values for the chart into a namespace on a shared platform someone else
+    #: runs, and that namespace's Terraform; no cluster, no VPC, none of the stores the platform
+    #: manages.
+    CLOUD_PLATFORM = "cloud-platform"
 
 
 class GraphStore(StrEnum):
@@ -680,6 +684,106 @@ class ClusterConfig(BaseModel):
         return self
 
 
+_KUBE_NAME = r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+
+#: ADR-148 decision 7: the widest network an egress allowance may name, by IP version. **IPv4
+#: /16** is the largest block AWS gives a VPC, so no one AWS service's network, and no platform's
+#: shared VPC (the client's is a /16), is wider; **IPv6 /48** is one site's allocation (RFC 6177).
+#: Anything wider, the default routes above all, opens the namespace's egress to far more than
+#: one host, which one setting must never do.
+EGRESS_WIDEST_PREFIX = {4: 16, 6: 48}
+
+
+def too_wide_for_egress(net: str) -> str | None:
+    """Why `net` may not be an egress allowance (a default route, or wider than
+    `EGRESS_WIDEST_PREFIX`), or None. `net` must already be a network."""
+    import ipaddress
+
+    network = ipaddress.ip_network(net, strict=False)
+    widest = EGRESS_WIDEST_PREFIX[network.version]
+    if network.prefixlen == 0:
+        return f"{net} is a default route: it would allow egress to every address"
+    if network.prefixlen < widest:
+        return (
+            f"{net} is wider than /{widest}, the widest network egress may be allowed to "
+            f"(IPv{network.version}); name the host's own, narrower networks"
+        )
+    return None
+
+
+class CloudPlatformConfig(BaseModel):
+    """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
+    namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
+    is the platform's (ingress class and annotations, storage class, egress policy kind, its
+    secrets' names) is in the platform's settings file, `harness/cloud_platform/platforms/
+    <platform>.yaml`, so another shared platform is a new file, not a new profile."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    platform: str = Field(
+        default="client",
+        pattern=r"^[a-z][a-z0-9-]*$",
+        description="Default: client. The platform's settings file, by name",
+    )
+    namespace: str | None = Field(
+        default=None,
+        pattern=_KUBE_NAME,
+        description="The namespace the platform's team created for the deployment (required)",
+    )
+    environment: Literal["development", "production"] = Field(
+        default="development",
+        description="Default: development — one copy of each store; production runs the "
+        "cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3)",
+    )
+    registry: str | None = Field(
+        default=None,
+        pattern=r"^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)*$",
+        description="Where every image is pulled from (required): the namespace's ECR, as "
+        "`ospreyflow images push --registry` copied them there",
+    )
+    allow_from: list[str] = Field(
+        default_factory=list,
+        description="The networks (CIDR) the platform's ingress admits; empty: every address",
+    )
+    egress_nets: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="For each host the namespace reaches (a model provider, a proxied map "
+        "provider, the mail server, a connector host, S3 and STS "
+        "unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed "
+        "to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 "
+        "(IPv6), and never a default route",
+    )
+    tls_secret: str | None = Field(
+        default=None,
+        pattern=_KUBE_NAME,
+        description="Default: none — the platform's own certificate. The Kubernetes Secret "
+        "holding the certificate for the deployment's names (its id. and bi. names among them), "
+        "where the platform's wildcard does not cover them",
+    )
+    connector_hosts: list[str] = Field(
+        default_factory=list,
+        description="The hosts a SQL or API connection may reach, each with its networks in "
+        "egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list "
+        "(OSPREY_CONNECTOR_EGRESS), so the two never disagree",
+    )
+
+    @model_validator(mode="after")
+    def _networks_are_networks(self) -> CloudPlatformConfig:
+        import ipaddress
+
+        for net in [*self.allow_from, *(n for nets in self.egress_nets.values() for n in nets)]:
+            try:
+                ipaddress.ip_network(net)
+            except ValueError:
+                raise ValueError(f"{net!r} is not a network (for example 192.0.2.0/24)") from None
+        # ADR-148 decision 7: one setting must never open the namespace's egress.
+        for host, nets in self.egress_nets.items():
+            for net in nets:
+                if why := too_wide_for_egress(net):
+                    raise ValueError(f"cloud_platform.egress_nets[{host!r}]: {why}")
+        return self
+
+
 class TlsFiles(BaseModel):
     """ADR-114 Amendment 33 decision 3: the organisation's own certificate for a Small on a server
     of its own. Paths on the server, absolute; the front proxy mounts the two files read-only and
@@ -1263,6 +1367,9 @@ class OspreyConfig(BaseModel):
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     cluster: ClusterConfig = Field(default_factory=ClusterConfig)
+    cloud_platform: CloudPlatformConfig | None = Field(
+        default=None, description="Default: none — only at profile: cloud-platform (ADR-148)"
+    )
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     map: MapConfig | None = Field(default=None, description="Default: none declared")
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
@@ -1312,6 +1419,37 @@ class OspreyConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _a_cloud_platform_names_its_namespace_and_registry(self) -> OspreyConfig:
+        """ADR-148: the platform's settings belong to that profile alone; the platform's own
+        managed stores replace every one of ours, so `external:` names none (their details are
+        read from the platform's secrets, never written here)."""
+        given = self.cloud_platform
+        if self.profile is not Profile.CLOUD_PLATFORM:
+            if given is not None:
+                raise ValueError(
+                    "cloud_platform settings are declared but profile is "
+                    f"{self.profile.value!r}; they are only meaningful at profile: cloud-platform"
+                )
+            return self
+        missing = [
+            name
+            for name in ("namespace", "registry")
+            if given is None or getattr(given, name) is None
+        ]
+        if missing:
+            raise ValueError(
+                "a cloud-platform deployment names "
+                + " and ".join(f"cloud_platform.{name}" for name in missing)
+                + ": the platform's team creates the namespace and its registry"
+            )
+        if self.external.any:
+            raise ValueError(
+                "on a cloud platform its managed stores replace ours and their details come from "
+                "the platform's secrets; external: names none"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _a_cluster_runs_on_its_managed_services(self) -> OspreyConfig:
         """05 §3b: on Kubernetes the cloud runs PostgreSQL, Valkey and the object store, and a
         managed Valkey or search is for a cluster only (Small runs its own on the server)."""
@@ -1347,12 +1485,20 @@ class OspreyConfig(BaseModel):
         page say why and what to write instead."""
         origin = self.network.public_origin
         if self.profile is not Profile.LOCAL_LITE and not origin.startswith("https://"):
-            name = "a Small" if self.profile is Profile.SMALL else "an Enterprise"
+            name = {
+                Profile.SMALL: "a Small",
+                Profile.CLOUD_PLATFORM: "a cloud platform",
+            }.get(self.profile, "an Enterprise")
+            front = (
+                "the platform's ingress serves its certificate"
+                if self.profile is Profile.CLOUD_PLATFORM
+                else "the front proxy obtains its certificate"
+            )
             raise ValueError(
                 f"network.public_origin {origin!r} is plain HTTP: {name} deployment's "
                 "network.public_origin must be an https:// address (for example "
-                "https://osprey.example.org), because other people reach it over a network and the "
-                "front proxy obtains its certificate. Plain HTTP is for Lite, on this computer only"
+                "https://osprey.example.org), because other people reach it over a network and "
+                f"{front}. Plain HTTP is for Lite, on this computer only"
             )
         host = (urlsplit(origin).hostname or "").rstrip(".").lower()
         if self.profile is Profile.LOCAL_LITE and (host == "gov.uk" or host.endswith(".gov.uk")):
@@ -1434,10 +1580,14 @@ class OspreyConfig(BaseModel):
         (ADR-114), so it is refused there in words. macOS and Windows, whose Docker Desktop gives a
         container no NVIDIA GPU, are refused by the doctor, which reads the machine."""
         if self.resources.gpu == "nvidia" and (
-            self.profile is Profile.CLUSTER or self.external.any
+            self.profile in (Profile.CLUSTER, Profile.CLOUD_PLATFORM) or self.external.any
         ):
             where = (
-                "Enterprise" if self.profile is Profile.CLUSTER else "a Small on managed services"
+                "Enterprise"
+                if self.profile is Profile.CLUSTER
+                else "a cloud platform (ADR-148 decision 11)"
+                if self.profile is Profile.CLOUD_PLATFORM
+                else "a Small on managed services"
             )
             raise ValueError(
                 "resources.gpu: nvidia is for Lite on a Linux computer or Small on a server of "

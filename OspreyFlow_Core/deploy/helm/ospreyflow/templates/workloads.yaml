@@ -28,10 +28,14 @@ spec:
         {{- if .public }}
         ospreyflow.io/public: "true"
         {{- end }}
+        {{- if .sharedAffinity }}
+        ospreyflow.io/shared: "true"
+        {{- end }}
       annotations:
-        # A changed configuration restarts what reads it.
-        checksum/files: {{ toJson $.Values.files | sha256sum | trunc 16 }}
-        checksum/environment: {{ toJson $.Values.environment | sha256sum | trunc 16 }}
+        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
+        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
+        checksum/files: {{ toJson $.Values.files | sha256sum | trunc 16 | quote }}
+        checksum/environment: {{ toJson $.Values.environment | sha256sum | trunc 16 | quote }}
     spec:
       {{- include "ospreyflow.podSpec" $ctx | nindent 6 }}
   {{- if .claims }}
@@ -49,4 +53,19 @@ spec:
             storage: {{ .size }}
     {{- end }}
   {{- end }}
+{{- with .disruptionBudget }}
+---
+# ADR-148 decision 5: one copy down at a time, whatever drains the node.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $ctx.name }}
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  maxUnavailable: {{ .maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "ospreyflow.selector" $ctx | nindent 6 }}
+{{- end }}
 {{- end }}

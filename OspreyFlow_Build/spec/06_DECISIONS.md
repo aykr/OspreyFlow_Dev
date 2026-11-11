@@ -32010,6 +32010,188 @@ ourselves. What the platform requires, and where `main` stands:
 - Solirius runs ArcadeDB and ClickHouse in production: backups, patching, upgrades and monitoring are in
   the support service, and their runbooks are part of the documentation step (D2c).
 
+### ADR-148, Amendment 1 (10 November 2026) — the `cloud-platform` profile as built (P7)
+
+Status: built by the platform lane in P7, the choices the brief left open taken as recommended and
+logged in `process/lanes/platform/REPORT.md` ("Decisions taken") for the owner to overrule. Decisions 1–5,
+7, 8, 12 and 14 are this step; 6, 9–11 and 13 are not, except where it says so. The context table's
+"six Dockerfiles" is **eight**: api, ingest, worker, report-sync, ner, the harness, the workspace and
+Superset.
+
+**As built.**
+
+1. **The profile** (`Profile.CLOUD_PLATFORM`, `osprey.yaml`'s `cloud_platform:`: the platform's
+   settings file by name, the namespace, the environment, the registry, the networks the ingress admits
+   and each enabled host's networks). `python -m harness.render` writes `deploy/generated/cloud-platform/`:
+   `values.yaml`, `versions.lock`, `images.yaml` (the push plan) and `terraform/*.tf`. **The values are
+   translated from the cluster's** (`harness/cloud_platform/`, over `harness.cluster.render_cluster`, which
+   gains a replica override), so a service is one thing on both. **A platform is a settings file**,
+   `harness/cloud_platform/platforms/<name>.yaml` (the client's; `kind`, for the local proof, is a test
+   fixture, item 11): ingress
+   class, annotations and controller namespace, storage class, egress kind and managed networks, and the
+   names of the secrets the managed stores' details arrive in. The set-up console does not offer the
+   profile: it is rendered for a pull request, not installed.
+2. **The Terraform is plain AWS and Kubernetes resources** in the environments repository's folder shape,
+   not the platform's modules, whose sources name the client's organisation; each file says what it makes,
+   so swapping a block for a module is a reviewer's edit. It writes every secret the values read, under the
+   settings' names (a test holds every `secretKeyRef` in the values to a key the Terraform writes), our own
+   Secret's passwords as `random_password`, and a key a person holds (a model engine's) as a sensitive
+   variable. `tofu fmt` leaves it unchanged and `tofu validate` accepts it, for both environments.
+3. **The managed stores' details** are read from those secrets by name, by the pods that read the stores
+   (the Conduit, the workers, the report sync, Superset, which take the whole env), and otherwise only by a
+   container that read the same detail on the cluster (Keycloak's and the gateway's database, their init
+   containers' `psql`), and only those details: the workspace's nginx, which reads the whole env, is not
+   handed the database's password. A `$(VAR)` in a command or a value is defined before it.
+   **What a cluster's install writes into our Secret, and this profile has no install to write**
+   (`harness.cluster_install`: the OIDC addresses and client, the object store's endpoint, region and
+   credentials mode, the database's TLS mode, the reporting secrets, the Conduit's client secret) is
+   rendered instead: a setting into the ConfigMap; a secret into our Secret's keys, which the Terraform
+   makes; and a password the install writes under two names (`ARCADEDB_ROOT_PASSWORD`,
+   `CLICKHOUSE_PASSWORD`, `OIDC_TOKEN_EXCHANGE_CLIENT_SECRET`) as a copy (`secrets.copies`), written
+   from the one `random_password`. A test holds every key the cluster's install writes to one of the
+   three, and every copy to its original's password.
+4. **Every pod runs as 10001:10001** (`podSecurity`: `runAsNonRoot`, the user and group, `fsGroup`,
+   seccomp `RuntimeDefault`; every container `allowPrivilegeEscalation: false`, not privileged, every
+   capability dropped). ArcadeDB, ClickHouse and Keeper start that way on volumes given to group 10001,
+   and LiteLLM and the init containers' `postgres` as 10001 with every capability dropped, in Docker as
+   the chart runs them (`process/lanes/platform/gates/p7_stores_uid_proof.sh`, its whole output of
+   11 November beside it), each store given a folder of its own for what the image's own user owned
+   (ArcadeDB's `log`, `backups`, `replication`; ClickHouse's and Keeper's logs; Keeper's
+   `/var/lib/clickhouse`, which it checks): no thin image is needed. A volume's group is applied once
+   (`fsGroupChangePolicy: OnRootMismatch`), not walked at every start. **One exception, until P10:**
+   Keycloak's pod adds group 0 as a supplementary group (`profile.yaml`'s `group_zero`). Its image is
+   built for any user in group 0 (`/opt/keycloak` is `1000:0`, group-writable) and builds itself there
+   at start; as 10001:10001 alone it did not start on the kind cluster (10 November). **That it starts
+   with group 0 is not shown**: on kind its pod was still restarting, so it is P7a's to show. Its user
+   stays 10001 and non-root, with no privilege and every capability dropped. Decision 3's thin image is
+   not built for it, since P10 replaces Keycloak with Entra ID. `make cp-policy-check` allows group 0
+   to the pod named `keycloak` alone, from a list of its own (`GROUP_ZERO_ALLOWED`), and refuses any
+   other supplementary group, `runAsGroup` or `fsGroup` (item 9). **The Conduit and the workers as
+   10001 on a cluster, and the egress policies enforced, are not shown either** (on kind their pods
+   were restarting and the egress check timed out): P7a's too.
+5. **The chart** gains `templates/ingress.yaml` (the class, the hosts from `network.public_origin`'s sites,
+   TLS, the platform's annotations, the allow-list annotation from `cloud_platform.allow_from`, and a policy
+   admitting the controller's namespace alone), and, gated on values the cluster's do not carry: the pod
+   and container security contexts, a service account (the S3 role's, IRSA), a grace period (ArcadeDB
+   120 s), a PodDisruptionBudget for each StatefulSet (one copy down), Services never `LoadBalancer`
+   behind an ingress, the shared claim's access mode, and Calico's two policies. The cluster's manifests
+   are unchanged (`p7_renders_unchanged.py --helm` compares Helm's own output for the cluster's values).
+   **The Ingress routes as Caddy does**: under the GOV.UK brand, `id.<host>/assets/govuk` goes to the
+   workspace before `/` to Keycloak (ADR-132 Amendment 2), and the controller is admitted to each path's
+   service. **TLS** is the platform's certificate unless `cloud_platform.tls_secret` names one; a
+   platform settings file may name its certificate's wildcard (`ingress.wildcard`, one name deep), and a
+   host it does not cover (`id.` and `bi.` below the deployment's own name are two deep) is then refused
+   without a named certificate. The client's file names none until its team give it.
+6. **Egress** (decision 7): Calico's `ospreyflow-allow-egress` (order 100: the cluster's DNS, the
+   namespace's own pods, the platform's managed networks, each enabled host's networks) before
+   `ospreyflow-deny-egress` (order 200: every pod, egress, deny), and the chart's open-egress
+   `NetworkPolicy` not rendered. **No one setting opens it**: a network wider than /16 (IPv4: the
+   largest block AWS gives a VPC, so no one AWS service's network and no platform's shared VPC is
+   wider) or /48 (IPv6: one site's), a default route above all, is refused in `cloud_platform.
+   egress_nets` and in a platform's `managed_nets` and `service_nets`
+   (`schemas.deployment.EGRESS_WIDEST_PREFIX`). **The managed networks are wider than our stores**: the
+   client's file names the whole shared VPC (`172.20.0.0/16`), so every pod may reach every address in
+   it, other tenants' managed stores included; narrow it to our stores' subnets once the platform's
+   team give them (spec 05 §3c). Ingress is the controller's alone: every pod is selected by an ingress
+   policy admitting the namespace's own pods and the controller's namespace, and the chart's
+   `ospreyflow-public` (every address) is not rendered behind the platform's Ingress. **Calico's open-source policy matches networks, not names**, so a host an
+   enabled feature reaches (a model engine's address, a proxied map provider's source or endpoint) names its
+   networks in `cloud_platform.egress_nets`; one without is refused at render, in words naming it.
+   **The hosts are**: S3 and STS on every render (the bucket; IRSA's role), their networks the
+   platform settings file's `egress.service_nets` where the platform's team give them, else the
+   deployment's (a gateway endpoint routes S3 by a prefix list, never by the VPC's network, so
+   `managed_nets` does not cover it); each enabled model engine; each proxied map provider; the mail
+   server, which Keycloak reaches; and each host of `cloud_platform.connector_hosts`, the one list
+   that renders both the egress and the Conduit's own connector allow-list (`OSPREY_CONNECTOR_EGRESS`,
+   in the ConfigMap), so the two never disagree. The organisation's own sign-in is Small's alone and
+   refused at this profile; P10's Entra ID adds its host.
+7. **Images** (decision 8): `ospreyflow images push --registry` follows the render's `images.yaml`: ours
+   built from the checkout and pushed, the third-party ones copied by digest
+   (`docker buildx imagetools create`), so the digest the values pin is the source's. Ours are built
+   for the platform's nodes (`--platform`, default `linux/amd64`, so an arm64 Mac does not push arm64);
+   a test's fake registry refuses as ECR does (a repository the Terraform did not make; anything before
+   signing in), and every target is one the rendered `ecr.tf` makes. Ours are pinned by the
+   digest the registry gives for its copy; until they are pushed the render is refused unless unpinned is
+   asked for. **No Java** (decision 12, building to the recommended answer of question 3): the Conduit's
+   Dockerfile takes `--build-arg CONDUIT_JAVA=omitted` (the default stays `included`; the Java stage is
+   then never pulled by BuildKit (Docker's default builder; the legacy builder builds every stage), and the image carries no Java label, `JAVA_HOME` or path: built and checked
+   once, `process/lanes/platform/gates/p7_conduit_no_java.sh`), and *Admin › Maps*' Build says, on
+   this profile, that the basemap cannot be built here and that a basemap built elsewhere cannot yet
+   be brought onto the platform (`ospreyflow map build` runs in a local deployment's Conduit, and the
+   tiles bucket and `map upload` are P8's).
+8. **The shared folders until P8** (the orchestrator's acceptance, 10 November 2026): one ReadWriteOnce
+   claim on the platform's class, and every pod that mounts it placed on its node (a required pod
+   affinity). P8 removes it (`process/lanes/CARRIES.md`).
+9. **`make cp-policy-check`** (`tools/cp_policy_check.py`) renders both fixture environments, templates
+   the chart with Helm and refuses: a container without `runAsNonRoot: true` or a numeric non-zero
+   `runAsUser`, a user or a group (`runAsGroup`, `fsGroup`) other than 10001, a supplementary group
+   (but item 4's group 0 for Keycloak), privilege or a kept capability, a port below 1024 (a container's or a Service's), a
+   `ReadWriteMany` claim, a `hostPath`, an image not from the profile's registry, no Calico policy denying
+   every pod's egress, an allowing egress rule with no destination or with a default route or a network
+   wider than the cap (`open-egress`), a pod no ingress policy selects or an ingress rule admitting
+   anything but the namespace's own pods and the controller's namespace (`ingress-isolation`), a
+   container without its requests and memory limit (`no-resources`), an `fsGroup` walked at every
+   start (`fs-group-walk`), and a Dockerfile of ours not `USER 10001:10001`. It reads every pod kind, a Job's
+   and a CronJob's included (P9's scheduled backup is a CronJob). Each rule is red on its own planted
+   fault, in the values Helm reads or Helm's own output (`tests/cp_policy_check/`). Its Makefile target and
+   CI job are the owner's (`process/lanes/platform/P7_ci_makefile.diff`).
+10. **A defect fixed on the way**: `harness.cluster._Pins` pinned an image already given by its digest a
+    second time (`ref@sha256:…@sha256:…`: the gateway, Ollama, speaches), which no registry pulls; the
+    cluster's values change in those image lines alone.
+
+11. **The extension points are data** (so the later cloud-platform steps each add a row, not an edit
+    to the render): the Ingress's doors, the
+    images of ours and how each is built, the workloads given group 0, the hosts every render reaches
+    and each container's resources are rows of `harness/cloud_platform/profile.yaml`, read and checked
+    at render; an image of ours with no row is refused in words. A platform's own settings file may
+    also come from a folder named in `OSPREY_PLATFORM_FOLDERS` (the kind platform is a test fixture).
+12. **The Ingress in front of the Glass** keeps its delta stream (a WebSocket) open, and its own
+    body-size annotation does not refuse an upload the Conduit takes: the controller's read and send
+    timeouts are the Glass's own proxy's (1 h) and its `proxy-body-size` the Conduit's upload cap
+    (512 MiB), each read from its source at render, never copied. That is the annotation alone, not
+    a promise that a 512 MiB upload arrives, and nothing here has run behind the platform's
+    controller. Expected, unmeasured: with ModSecurity on (the client's platform file sets
+    `SecRuleEngine On` in its snippet), ModSecurity's recommended `modsecurity.conf`, which
+    ingress-nginx bundles, refuses a request body over 12.5 MiB (`SecRequestBodyLimit 13107200`,
+    `SecRequestBodyLimitAction Reject`), and its `SecRequestBodyNoFilesLimit 131072` may refuse one
+    over 128 KiB, since the Conduit's uploads are raw bodies, not multipart (`request.stream()`);
+    whether the snippet's `On` or the bundled file's `DetectionOnly` takes effect depends on the
+    order the controller's template loads them in, not read here. The limit an upload meets on that
+    platform is therefore the open question below, not 512 MiB.
+13. **Resources**: every container names a CPU and memory request and a memory limit (no CPU limit),
+    so a namespace's LimitRange never caps it by default, and ArcadeDB's heap is three quarters of
+    its memory limit. The sizes are proposals, unmeasured on the platform.
+
+**Left, and why:** the acceptance scenarios on the kind cluster, now step **P7a** after P9 (the build
+plan's; see the report: what ran there, and what a full run still needs), with **what the kind run of
+10 November did not show** (item 4): the Conduit and the workers running as 10001, Keycloak starting
+with group 0, and the egress policies enforced; Entra ID (decision 9, P10); the marking ceiling (10,
+studio-b's L1.10); backups (13); the shared folders, the settings files and the recipes repository
+off the shared disk (6, P8); **a basemap on the client's install**: there is no route to one until P8
+(the Conduit has no Java there, `ospreyflow map build` needs a local deployment, and the tiles bucket
+and `ospreyflow map upload`, decision 12's upload, are P8's), so the map uses its providers alone;
+reading Admin's runtime model and map settings for the egress list (the render reads `osprey.yaml`'s;
+L1.9's); the platform's own Gatekeeper constraints, not published to us; **the identity step a
+cluster's install runs once Keycloak answers** (the Conduit's client secret set on its clients, its
+service account's roles), which on this profile the kind proof runs by hand (`p7_kind.sh identity`) and
+P10's sign-in replaces; **the resources' sizes**, measured under load in P7a. **Open questions for the
+client's platform team** (none blocks the render; each is the team's to answer): the Calico version
+and whether its policies take a tier (the render names `default.`, as Calico 3.28 and later store
+them; kubeconform is run with `-ignore-missing-schemas`, so Calico's objects are not schema-checked);
+whether Gatekeeper admits `supplementalGroups` (Keycloak's group 0); whether the controller's admission
+accepts the `modsecurity-snippet` annotation (some installs refuse snippets); whether the platform's
+certificate covers the `id.` and `bi.` names two labels below the deployment's (item 5); and whether
+the cluster runs node-local DNS (its address is outside `dnsNamespace`, which the allow policy names). Which request-body limits the controller's ModSecurity applies to this Ingress (the bundled
+`SecRequestBodyLimit`, 12.5 MiB, and `SecRequestBodyNoFilesLimit`, 128 KiB, which a raw upload body
+may meet), whether the snippet's `SecRuleEngine On` takes effect over the bundled `DetectionOnly`, and
+whether the limits may be raised for this Ingress (in the `modsecurity-snippet`, if snippets are
+admitted) or the upload paths exempted (item 12); until it is answered, the largest upload the
+client's platform takes is unknown, and may be well under the Conduit's 512 MiB. And what ResourceQuota the namespace is
+given: the render's requests total about 27 GiB of memory and 3.7 CPU in development (one of each
+store) and about 70 GiB and 9.7 CPU in production (ArcadeDB ×3, ClickHouse ×2, Keeper ×3), limits
+about 33 GiB and 86 GiB (item 13's unmeasured proposals); a quota below them leaves pods unscheduled,
+and the sizes, or the quota, change before the first install.
+
 ### ADR-143, Amendment 5 (9 November 2026) — promotion and a removed case's layer as built (L3.4)
 
 Status: built by the case lane at L3.4 under Prompt L. The decisions the brief left open were taken

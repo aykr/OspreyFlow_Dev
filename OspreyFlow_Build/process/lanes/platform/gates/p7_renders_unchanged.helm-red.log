@@ -1,0 +1,118 @@
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+DIFFERS  cluster-aws  helm template
+--- 
++++ 
+@@ -178,2 +178,3 @@
+ spec:
++  # ADR-148: a platform with no ReadWriteMany class holds it on one node's ReadWriteOnce claim.
+   accessModes: ["ReadWriteMany"]
+@@ -592,4 +593,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: 0b3580b08deb311c
+-        checksum/environment: 1e0eefe51ff9964a
++        checksum/files: 0bea7209fcc76304
++        checksum/environment: c8e14ca9a8cb9e5a
+     spec:
+@@ -662,4 +663,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: 0b3580b08deb311c
+-        checksum/environment: 1e0eefe51ff9964a
++        checksum/files: 0bea7209fcc76304
++        checksum/environment: c8e14ca9a8cb9e5a
+     spec:
+@@ -770,4 +771,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: 0b3580b08deb311c
+-        checksum/environment: 1e0eefe51ff9964a
++        checksum/files: 0bea7209fcc76304
++        checksum/environment: c8e14ca9a8cb9e5a
+     spec:
+@@ -826,4 +827,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: 0b3580b08deb311c
+-        checksum/environment: 1e0eefe51ff9964a
++        checksum/files: 0bea7209fcc76304
++        checksum/environment: c8e14ca9a8cb9e5a
+     spec:
+@@ -884,4 +885,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: 0b3580b08deb311c
+-        checksum/environment: 1e0eefe51ff9964a
++        checksum/files: 0bea7209fcc76304
++        checksum/environment: c8e14ca9a8cb9e5a
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+DIFFERS  cluster-azure  helm template
+--- 
++++ 
+@@ -168,2 +168,3 @@
+ spec:
++  # ADR-148: a platform with no ReadWriteMany class holds it on one node's ReadWriteOnce claim.
+   accessModes: ["ReadWriteMany"]
+@@ -649,4 +650,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: d502fca8ede4ef90
+-        checksum/environment: 2982693f5af94f2e
++        checksum/files: 4ff7049f23509b6a
++        checksum/environment: 31941f9eac419bb8
+     spec:
+@@ -719,4 +720,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: d502fca8ede4ef90
+-        checksum/environment: 2982693f5af94f2e
++        checksum/files: 4ff7049f23509b6a
++        checksum/environment: 31941f9eac419bb8
+     spec:
+@@ -827,4 +828,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: d502fca8ede4ef90
+-        checksum/environment: 2982693f5af94f2e
++        checksum/files: 4ff7049f23509b6a
++        checksum/environment: 31941f9eac419bb8
+     spec:
+@@ -883,4 +884,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: d502fca8ede4ef90
+-        checksum/environment: 2982693f5af94f2e
++        checksum/files: 4ff7049f23509b6a
++        checksum/environment: 31941f9eac419bb8
+     spec:
+@@ -941,4 +942,4 @@
+         # A changed configuration restarts what reads it.
+-        checksum/files: d502fca8ede4ef90
+-        checksum/environment: 2982693f5af94f2e
++        checksum/files: 4ff7049f23509b6a
++        checksum/environment: 31941f9eac419bb8
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+p7_renders_unchanged: 2 artefact(s) differ from main
+exit 1

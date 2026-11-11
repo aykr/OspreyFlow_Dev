@@ -17,8 +17,9 @@ someone will improvise one.
 | `local-lite` | One laptop, 16 GB | ArcadeDB | DuckDB | Ollama, CPU or one consumer GPU | Docker Compose |
 | `small` | One cloud server on the cloud's managed services (ADR-114 decision 8, §3a), or one server of your own with every store in a container (ADR-114 Amendment 33, §3a.1) | ArcadeDB | DuckDB | Ollama, CPU, or an NVIDIA GPU on a server of your own (§3a.1) | Docker Compose |
 | `cluster` | Kubernetes — EKS or AKS (ADR-114 decision 9, §3b) | ArcadeDB, three Raft replicas | ClickHouse, a replicated pair with Keeper | Ollama in the cluster for now — decision 11's vLLM on a GPU pool is not built; a client's provider through LiteLLM | Kubernetes, from the Helm chart |
+| `cloud-platform` | One namespace on a shared Kubernetes platform someone else runs, first the UK public sector client's Cloud Platform (ADR-148, §3c) | ArcadeDB, three replicas (one in development) | ClickHouse, a replicated pair with Keeper (one each in development) | None until ADR-135 Amendment 4's route (P11) | The Helm chart into the platform's namespace; the managed stores by the namespace's Terraform |
 
-The same container images run in all three. Only configuration differs. That is the
+The same container images run in all of them (the Conduit's built without Java on `cloud-platform`, ADR-148 decision 12). Only configuration differs. That is the
 transportability requirement, and it is verifiable: the acceptance scenarios in
 `08_ACCEPTANCE_SCENARIOS.md` must pass unchanged on `local-lite` and on `cluster`.
 
@@ -1011,6 +1012,60 @@ every `$(VAR)` defined before it is named, nothing but the proxy published, and 
 route out given one (`tests/harness/test_helm_chart.py`, `test_cluster_render.py`); every image a
 pulled deployment names is one the release builds (`test_release_matrix.py`); and the proxy's own
 health check passes against the real Caddy on HTTPS and HTTP (`test_proxy_health.py`).
+
+## 3c. A namespace on a shared platform (ADR-148, Amendment 1)
+
+The `cloud-platform` profile renders `deploy/generated/cloud-platform/`: the chart's values for
+an **existing** namespace (no namespace, no cluster-wide object, no LoadBalancer), the namespace's
+Terraform in the environments repository's shape (RDS Postgres, ElastiCache, OpenSearch, S3, ECR
+repositories, the IRSA role), and `images.yaml`, the plan `ospreyflow images push --registry`
+follows. A platform's own rules (its ingress class and annotations, storage class, egress
+mechanism and the names its secrets take) live in a platform settings file under
+`harness/cloud_platform/platforms/`, never in `osprey.yaml`. Its invariants, each with the test
+that would fail if it were broken:
+
+- every container runs as 10001:10001 (user, group and `fsGroup`) with `runAsNonRoot`, no
+  privilege escalation and every capability dropped, and no supplementary group but group 0 for
+  Keycloak alone (its image is built for group 0; until P10); no hostPath, no port below 1024, no
+  `ReadWriteMany` claim, every image from the deployment's registry, and the deny-egress policy over
+  every pod: `make cp-policy-check` (`tools/cp_policy_check.py`), each rule red on its own planted
+  fault in its tests;
+- a managed store's detail reaches only a container that reads it, from the platform's secrets,
+  and no secret is in a rendered file: `tests/harness/test_cloud_platform_render.py`;
+- egress is allowed to the cluster's DNS, the namespace's own pods, the platform settings file's
+  `managed_nets`, and the hosts the settings name (S3, STS, the mail server, enabled model engines,
+  proxied map sources, connector hosts), each by its own networks, and nowhere else: the same file.
+  **`managed_nets` is wider than our stores**: in the client's settings file it is the whole shared
+  VPC (`172.20.0.0/16`), every other tenant's managed stores in it as well as ours, so a pod may
+  reach any address in that VPC. It should be narrowed to our stores' own subnets (the database's,
+  the cache's and the search domain's) once the platform's team give them;
+- no one setting opens egress: an egress network wider than /16 (IPv4, the largest block AWS gives
+  a VPC) or /48 (IPv6, one site's), a default route above all, is refused in `osprey.yaml` and in a
+  platform's settings file (`test_a_network_that_would_open_egress_is_refused`,
+  `test_a_platform_s_networks_that_would_open_egress_are_refused`), and in the rendered policies an
+  allowing egress rule with no destination or with such a network is refused by `make
+  cp-policy-check` (`open-egress`, each red on the rendered values);
+- no other tenant reaches a pod: every pod is selected by an ingress policy, and every ingress rule
+  admits only the namespace's own pods or the platform's ingress controller's namespace (`make
+  cp-policy-check`'s `ingress-isolation`, red on a dropped and on a widened policy);
+- every container names its CPU and memory request and its memory limit, ArcadeDB's heap is set
+  from its limit, and a volume's group is applied once, not walked at every start
+  (`fsGroupChangePolicy: OnRootMismatch`): `make cp-policy-check`'s `no-resources` and
+  `fs-group-walk`;
+- `local-lite`, `small` and `cluster` render as before: shown once, at P7's merge, by a comparison
+  against `main` in the build record (a script in no gate); after it, each profile's own render
+  tests hold it (`test_cluster_render.py`, `test_helm_chart.py`),
+  and the profile's settings are refused at every other profile
+  (`tests/harness/test_cloud_platform_render.py::test_the_settings_belong_to_the_profile_alone`).
+
+It is **not yet** proven on a cluster: the acceptance run on a kind cluster set up to the platform's
+rules is the build plan's step P7a, and live on the platform is recorded once the client's
+namespaces exist. What P7 showed is narrower, and is in the build record: ArcadeDB, ClickHouse,
+Keeper and LiteLLM, and the init containers' `postgres`, each started as 10001:10001 with every
+capability dropped, as the chart starts them, in Docker; on kind, the stores' pods ran as 10001.
+**P7a's to show**, since the kind run did not: the Conduit and the workers running as 10001 (both
+were restarting there), Keycloak starting with group 0, and the egress policies enforced (the
+egress check timed out).
 
 ## 4. Moving up a profile
 

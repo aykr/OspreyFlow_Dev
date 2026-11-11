@@ -21,7 +21,6 @@ from harness.render import REPO_ROOT, render
 from tests.harness.test_cluster_render import AWS, AZURE, _resolver, cluster_config
 
 CHART = REPO_ROOT / "deploy" / "helm" / "ospreyflow"
-HELM = "alpine/helm:3.16.3"
 KUBECONFORM = "ghcr.io/yannh/kubeconform:v0.6.7"
 
 
@@ -35,13 +34,10 @@ def _docker(*args: str, stdin: str | None = None) -> str:
 
 
 def helm_template(values: str | None) -> str:
-    mounts = ["-v", f"{CHART}:/chart:ro"]
-    if values is None:
-        return _docker(*mounts, HELM, "template", "ospreyflow", "/chart", "--namespace", "osprey")
-    return _docker(
-        *mounts, HELM, "template", "ospreyflow", "/chart", "--namespace", "osprey", "-f", "-",
-        stdin=values,
-    )  # fmt: skip
+    # The one Helm runner, shared with `make cp-policy-check`.
+    from tools.helm_chart import template_text
+
+    return template_text(values, "osprey")
 
 
 def manifests_for(external: dict[str, Any]) -> list[dict[str, Any]]:
@@ -150,6 +146,45 @@ def test_a_variable_is_defined_before_it_is_named(manifests: list[dict[str, Any]
 def test_the_files_fit_a_configmap(manifests: list[dict[str, Any]]) -> None:
     for config_map in _of(manifests, "ConfigMap"):
         assert len(yaml.safe_dump(config_map).encode()) < 1_000_000, config_map["metadata"]
+
+
+def _all_digit_environment() -> tuple[dict[str, str], str]:
+    """An environment whose checksum annotation (`toJson | sha256sum | trunc 16`) is sixteen digits,
+    which YAML reads as a number. Helm's `toJson` of a flat map of plain strings is Go's: its keys
+    sorted, no spaces, as `json.dumps` writes it here (the annotation below proves they agree).
+
+    **Not led by a 0**: Kubernetes' Go YAML reads `0264…` as a number too, but PyYAML (this test's
+    reader) reads a leading-0 string holding an 8 or 9 as text, so the first such digest found let
+    the unquoted template pass here (the red record, 11 November)."""
+    import hashlib
+    import json
+
+    for n in range(1_000_000):
+        environment = {"OSPREY_CHECKSUM_PLANT": str(n)}
+        text = json.dumps(environment, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(text.encode()).hexdigest()[:16]
+        if digest.isdigit() and not digest.startswith("0"):
+            assert isinstance(yaml.safe_load(f"a: {digest}")["a"], int)
+            return environment, digest
+    raise AssertionError("no all-digit checksum in a million tries")
+
+
+def test_a_checksum_of_digits_alone_is_still_text() -> None:
+    """An annotation is a string; an unquoted all-digit checksum is read as a number and the
+    install is refused (`cannot unmarshal number into ... map[string]string`). Planted in the values
+    the chart reads, so Helm's own output is what is parsed."""
+    rendered = render(cluster_config(AWS), resolver=_resolver).artefacts["values.yaml"]
+    values = yaml.safe_load(rendered)
+    values["environment"], digest = _all_digit_environment()
+    docs = [doc for doc in yaml.safe_load_all(helm_template(yaml.safe_dump(values))) if doc]
+    annotations = [
+        d["spec"]["template"]["metadata"]["annotations"]
+        for d in docs if d["kind"] in {"Deployment", "StatefulSet"}
+    ]  # fmt: skip
+    assert annotations
+    for annotation in annotations:
+        assert annotation["checksum/environment"] == digest
+        assert all(isinstance(v, str) for v in annotation.values()), annotation
 
 
 def test_the_chart_on_its_own_defaults_creates_nothing() -> None:

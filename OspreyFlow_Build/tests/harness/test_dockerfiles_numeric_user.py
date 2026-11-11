@@ -3,7 +3,8 @@ decision 3): a platform that sets `runAsNonRoot` cannot check a user given by na
 refuses to start it, and a pod spec's `runAsUser` then has to agree with the image's own user.
 
 Every `Dockerfile*` is read, as `make licence-check` reads them, with its parser
-(`tools.licence_check._instructions`: continued lines joined, comments left out), so a variant (a
+(`tools.licence_check._instructions`: continued lines joined, comments left out), through
+`make cp-policy-check`'s own `final_user`, so the gate and this test are one reading; a variant (a
 Conduit built without Java, say) is held to it too; `FROM` and `USER` are matched as Docker matches
 them, in any case. Each refusal is planted in a real Dockerfile's own text (rule 15)."""
 
@@ -12,8 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from tools.licence_check import _instructions
+from tools.cp_policy_check import final_user
 
 CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
 OURS = sorted(
@@ -22,18 +22,6 @@ OURS = sorted(
     if p.is_file() and not {"node_modules", ".venv"} & set(p.parts)
 )
 API = (CORE / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
-
-
-def final_user(text: str) -> str | None:
-    """The `USER` the image's last stage runs as, or None when its last stage sets none."""
-    user: str | None = None
-    for instruction in _instructions(text):
-        word, _, rest = instruction.partition(" ")
-        if word.upper() == "FROM":
-            user = None  # a new stage starts as its base's user
-        elif word.upper() == "USER":
-            user = rest.strip()
-    return user
 
 
 def test_every_dockerfile_is_found() -> None:

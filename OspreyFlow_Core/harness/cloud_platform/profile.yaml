@@ -1,0 +1,68 @@
+# The `cloud-platform` profile's extension points (spec/06_DECISIONS.md ADR-148, Amendment 1
+# item 11): what a later step adds to the profile is a row here, not an edit to
+# `harness/cloud_platform/__init__.py`. Read and checked by `harness.cloud_platform.settings.
+# load_profile`; a row it cannot read is refused in words at render. What a *platform* fixes
+# (its ingress class, its storage class, its managed networks) is its own file under
+# `platforms/`, not this one.
+
+# What the Ingress serves (decision 2), by `harness.site.sites`' names: the site's attribute, the
+# workload behind it and the workload's port. A door whose workload is not rendered is left out.
+doors:
+  - {site: glass, workload: workspace, port: 8080}
+  - {site: identity, workload: keycloak, port: 8080}
+  - {site: dashboards, workload: superset, port: 8088}
+
+# An image built for any user in group 0 (OpenShift's convention) that writes into its own folders
+# at start: its pod adds group 0 as a supplementary group, its user staying 10001 and non-root.
+# Keycloak's (`/opt/keycloak` is `1000:0`, group-writable; it builds itself there), until P10
+# replaces it. `make cp-policy-check` holds its own list (`GROUP_ZERO_ALLOWED`), so a row added
+# here alone is refused there.
+group_zero: [keycloak]
+
+# How each image of ours is built (decision 8): its Dockerfile and context, from OspreyFlow_Core,
+# and its build arguments. The Conduit without Java on this profile (decision 12). An image of
+# ours the render meets with no row here is refused in words.
+ours:
+  workspace: {dockerfile: apps/workspace/Dockerfile, context: .}
+  api: {dockerfile: services/api/Dockerfile, context: ., build_args: {CONDUIT_JAVA: omitted}}
+  ner: {dockerfile: services/ner/Dockerfile, context: .}
+  worker: {dockerfile: services/worker/Dockerfile, context: .}
+  report-sync: {dockerfile: services/report_sync/Dockerfile, context: .}
+  superset: {dockerfile: deploy/superset/Dockerfile, context: deploy/superset}
+
+# The hosts the namespace reaches (decision 7), each allowed by its networks
+# (`cloud_platform.egress_nets`, or the platform's `egress.service_nets`) or the render is refused.
+egress:
+  # On every render: the bucket (S3) and IRSA's role (STS). `{region}` is the platform's.
+  always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
+  # A model engine that names no `api_base` is reached at its provider's own host.
+  engine_hosts:
+    openai: api.openai.com
+    anthropic: api.anthropic.com
+    gemini: generativelanguage.googleapis.com
+
+# Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
+# shared platform may carry a LimitRange whose defaults would otherwise cap a container that names
+# none, the stores among them. Memory is limited; CPU is requested, not limited (a CPU limit
+# throttles a store's compaction and the Conduit's bursts for no gain on a node it shares).
+# **Proposals, not measurements**: no load has been run on the platform (P7a measures them).
+resources:
+  default: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}  # init containers, and any not named
+  workspace: {cpu: 100m, memory: 128Mi, memory_limit: 256Mi}
+  api: {cpu: 500m, memory: 2Gi, memory_limit: 4Gi}
+  worker: {cpu: 500m, memory: 2Gi, memory_limit: 4Gi}
+  report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
+  ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+  superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+  keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+  litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
+  # Requested at its limit: the store is the last thing a node under pressure should evict.
+  arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
+  clickhouse: {cpu: "1", memory: 8Gi, memory_limit: 8Gi}
+  clickhouse-keeper: {cpu: 100m, memory: 512Mi, memory_limit: 512Mi}
+
+# ArcadeDB's heap, set from its container's memory limit (`-Xmx`, whole GiB, rounded down), so the
+# JVM never grows past what the kubelet allows it: the rest of the limit is the JVM's own (its
+# metaspace, threads and direct buffers). Its readiness cannot see a heap OOM (harness.profiles),
+# so it exits on one.
+arcadedb_heap_fraction: 0.75

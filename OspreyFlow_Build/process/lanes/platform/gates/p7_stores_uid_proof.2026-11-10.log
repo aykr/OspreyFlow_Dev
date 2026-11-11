@@ -1,0 +1,8 @@
+# Section 3 of p7_uid_proof.sh as it stood at the third full run, 10 November 2026 (now p7_stores_uid_proof.sh), on the test server.
+== 3. ArcadeDB, ClickHouse and Keeper as 10001:10001, their volumes given to group 10001 (a pod's fsGroup)
+PASS  arcadedb answers ready as uid=10001 gid=10001 groups=10001
+PASS  clickhouse answers ping as uid=10001 gid=10001 groups=10001
+PASS  keeper answers imok as uid=10001 gid=10001 groups=10001
+
+== result: 1 failure(s)
+# The run's one failure was Superset not resolving valkey, in section 1 (see p7_uid_proof.7a89a87.log for the passing Superset proof); none in this section.

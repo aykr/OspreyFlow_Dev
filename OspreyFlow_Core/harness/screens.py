@@ -54,6 +54,17 @@ PROFILE_TABLE: dict[Profile, ProfileFootprint] = {
         allowed_graph_stores=(GraphStore.JANUSGRAPH,),
         allowed_analytics_engines=(AnalyticsEngine.CLICKHOUSE,),
     ),
+    # ADR-148: a namespace on a shared platform, rendered for a pull request rather than installed
+    # from the set-up console (whose Profile screen does not offer it); ArcadeDB and ClickHouse
+    # run in it, as decision 5 has them.
+    Profile.CLOUD_PLATFORM: ProfileFootprint(
+        label="A namespace on a shared Kubernetes platform",
+        machines="the platform's",
+        memory_gb_floor=16,
+        orchestrator="the platform's Kubernetes",
+        allowed_graph_stores=(GraphStore.ARCADEDB,),
+        allowed_analytics_engines=(AnalyticsEngine.CLICKHOUSE,),
+    ),
 }
 
 

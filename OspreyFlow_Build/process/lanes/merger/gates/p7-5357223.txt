@@ -1,0 +1,9 @@
+P7 (lane/platform-p7, 5357223, code 0f17781b) merged onto main 1684f12, gated by the orchestrator, 11 November 2026.
+Tree rsynced to the test server at 13:40Z (stack_lease.sh offline merge; the commit was later amended for records only).
+- make -k test: 3 failed, 11243 passed, 24 skipped (302.9 s).
+  - harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass: the server has a GPU (on main's records too).
+  - test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines: timing under load; failed on P7's own run, passes alone (P7 lane).
+  - test_lanes_launch.py::test_open_refuses_when_a_session_is_running_in_the_worktree: the server's process listing ('no' == 'yes'); failed on admin's T1p5 run too.
+- make -k ci: every target green but harness-a11y, which refused to start (OSPREY_PORTS_SLOT=unlisted-merge: the merge worktree has no slot).
+  Re-run on the same tree with OSPREY_PORTS_SLOT=14: 34 passed.
+- Docs: test_docs_pdf.py + test_admin_guide.py on the merged tree (with P7_admin_guide.diff as admin guide 1.73): 79 passed.

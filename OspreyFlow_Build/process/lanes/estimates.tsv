@@ -1,5 +1,4 @@
-# as of 2026-11-11T13:16Z
-platform	P7	round 2: every round-1 item fixed; five small must-fixes (two untested check branches, the reds recorded, the uploads claim) on the Mac now, then gates; merges without you (Am 8)	11 Nov, ~17:00	B
+# as of 2026-11-11T13:40Z
 admin	P10	round 2: every code item fixed; gates at 5ef24c6 running on the server (the orchestrator); access step, listed for you after	11 Nov, ~16:00	B
 case	P9	cut: encrypted S3 backup, one timed restore; briefed when P7 merges (a fresh session)	12 Nov	B
 platform-b	P11	round 2: every round-1 item fixed; rebase onto P7 once it merges, the JWT-shaped key check, then gates; credential step, listed for you	12 Nov, morning	B

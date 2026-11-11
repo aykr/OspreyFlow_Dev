@@ -48,7 +48,7 @@ platform	P2	M	done	Model usage and limits
 platform	P3	L	done	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
 platform	P4	M	done	The analyst's map: basemap switch, place search, contrast in three themes
 platform	P5	M	done	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2) (merged 1ddbc9a)
-platform	P7	L	building	The cloud-platform profile: merges on its render, cp-policy-check (red on each plant) and the ordinary gates (ADR-142 Am 8); its kind acceptance is P7a
+platform	P7	L	done	The cloud-platform profile (ADR-148): the render, the Helm chart, cp-policy-check; merged 0f17781 after two review rounds and a fixes check, without the owner (Am 8), listed for the owner; its kind acceptance is P7a
 platform	P8	M	todo	DEFERRED until after the client's install (ADR-142 Am 8): Nothing on a shared disk: S3 for uploads, staging, tiles, models; settings and recipes per the owner's rulings (ADR-148)
 case	P9	M	todo	Cut for the proof of concept (ADR-142 Am 8): the scheduled, encrypted backup of ArcadeDB and ClickHouse to S3, one restore rehearsed and timed, its runbook section
 admin	P10	M	building	Sign-in claims from Entra ID mapped by settings; no Keycloak on this profile (ADR-148)

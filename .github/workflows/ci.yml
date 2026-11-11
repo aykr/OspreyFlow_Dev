@@ -376,6 +376,17 @@ jobs:
       # OspreyFlow_Build/tools/schemas_check.py shells out to node_modules/.bin/json2ts.
       - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.schemas_check
 
+  # ADR-148 decision 14: the cloud-platform profile held to the shared platform's rules, Helm and
+  # OpenTofu as their pinned images (Docker is on the runner).
+  cp-policy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: make -C OspreyFlow_Build cp-policy-check
+        working-directory: .
+
   conformance-guard:
     runs-on: ubuntu-latest
     steps:

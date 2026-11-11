@@ -1,0 +1,266 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T124319Z/log: .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_round1_reds.py
+RED      open-egress: a too-wide or default-route network passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    5 failed in 7.01s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_host_s_network_that_opens_egress_is_refused[0.0.0.0/0-0.0.0.0/0 is a default route]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_host_s_network_that_opens_egress_is_refused[::/0-::/0 is a default route]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_host_s_network_that_opens_egress_is_refused[10.0.0.0/8-10.0.0.0/8 is wider than /16]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_host_s_network_that_opens_egress_is_refused[2001:db8::/32-2001:db8::/32 is wider than /48]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_managed_networks_that_open_egress_are_refused
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      open-egress: an Allow with no destination passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.46s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_allow_rule_with_no_destination_is_refused
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      open-egress: a Kubernetes egress rule to everywhere passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.40s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_open_egress_policy_is_refused
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      schema: egress_nets of any width accepted  [OspreyFlow_Core/packages/schemas/deployment.py]
+    5 failed in 0.68s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_network_that_would_open_egress_is_refused[0.0.0.0/0-is a default route]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_network_that_would_open_egress_is_refused[::/0-is a default route]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_network_that_would_open_egress_is_refused[0.0.0.0/1-is wider than /16]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_network_that_would_open_egress_is_refused[10.0.0.0/8-is wider than /16]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_network_that_would_open_egress_is_refused[2001:db8::/32-is wider than /48]
+      E   Failed: DID NOT RAISE ValidationError
+      E   Failed: DID NOT RAISE ValidationError
+      E   Failed: DID NOT RAISE ValidationError
+      E   Failed: DID NOT RAISE ValidationError
+      E   Failed: DID NOT RAISE ValidationError
+RED      platform settings: managed/service nets of any width accepted  [OspreyFlow_Core/harness/cloud_platform/settings.py]
+    2 failed in 0.62s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_platform_s_networks_that_would_open_egress_are_refused[managed_nets]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_platform_s_networks_that_would_open_egress_are_refused[service_nets]
+      E   Failed: DID NOT RAISE ValidationError
+      E   Failed: DID NOT RAISE ValidationError
+RED      open-egress: a Kubernetes egress ipBlock of any width passes (round 2)  [OspreyFlow_Build/tools/cp_policy_check.py]
+    3 failed in 2.82s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_kubernetes_egress_address_block_that_opens_egress_is_refused[0.0.0.0/0-0.0.0.0/0 is a default route]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_kubernetes_egress_address_block_that_opens_egress_is_refused[10.0.0.0/8-10.0.0.0/8 is wider than /16]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_kubernetes_egress_address_block_that_opens_egress_is_refused[2001:db8::/32-2001:db8::/32 is wider than /48]
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      ingress-isolation: a pod no policy selects passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.45s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_dropped_internal_policy_leaves_pods_open_and_is_refused
+      E   AssertionError: assert set() == {'ingress-isolation'}
+      E     
+      E     Extra items in the right set:
+      E     'ingress-isolation'
+      E     Use -v to get more diff
+RED      ingress-isolation: any namespace selector passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 2.08s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_controller_namespace_not_the_platform_s_is_refused
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      ingress-isolation: an address block passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 2.82s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      ingress-isolation: a rule from every source passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.41s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_public_policy_admitting_every_address_is_refused
+      E   AssertionError: assert ('ingress-isolation', 'NetworkPolicy/ospreyflow-public') in set()
+RED      ingress-isolation: a Calico ingress Allow beyond a selector passes (round 2)  [OspreyFlow_Build/tools/cp_policy_check.py]
+    3 failed in 2.82s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_calico_ingress_allow_beyond_a_selector_is_refused[another-namespace]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_calico_ingress_allow_beyond_a_selector_is_refused[nets]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_calico_ingress_allow_beyond_a_selector_is_refused[no-source]
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      chart: ospreyflow-public rendered behind the platform's Ingress  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/networkpolicies.yaml]
+    2 failed in 2.48s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[production]
+      E   AssertionError: assert [Violation(ru... source: {}')] == []
+      E     
+      E     Left contains one more item: Violation(rule='ingress-isolation', where='NetworkPolicy/ospreyflow-public', detail='a rule admitting any source: {}')
+      E     Use -v to get more diff
+      E   AssertionError: assert [Violation(ru... source: {}')] == []
+      E     
+      E     Left contains one more item: Violation(rule='ingress-isolation', where='NetworkPolicy/ospreyflow-public', detail='a rule admitting any source: {}')
+      E     Use -v to get more diff
+RED      chart: the checksums unquoted (as at 1a63953d)  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/workloads.yaml]
+    1 failed in 1.40s
+    FAILED ../OspreyFlow_Build/tests/harness/test_helm_chart.py::test_a_checksum_of_digits_alone_is_still_text
+      E   AssertionError: assert 5931908800767718 == '5931908800767718'
+RED      ingress: no timeouts rendered  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.86s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads
+      E   KeyError: 'nginx.ingress.kubernetes.io/proxy-read-timeout'
+RED      ingress: no body size rendered  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.85s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads
+      E   KeyError: 'nginx.ingress.kubernetes.io/proxy-body-size'
+RED      ingress: the deployment's upload cap read as a bare int (round 2: 0 became 0m, no limit)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    3 failed, 2 passed in 0.65s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ingress_reads_the_upload_cap_as_the_conduit_does[0]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ingress_reads_the_upload_cap_as_the_conduit_does[-1]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ingress_reads_the_upload_cap_as_the_conduit_does[lots]
+      E   AssertionError: assert 0 == 536870912
+      E    +  where 0 = <function upload_cap_bytes at 0x7dbe534911c0>({'OSPREY_INGEST_MAX_UPLOAD_BYTES': '0'})
+      E    +  and   536870912 = <function max_upload_bytes at 0x7dbe52e934c0>()
+      E   AssertionError: assert -1 == 536870912
+      E    +  where -1 = <function upload_cap_bytes at 0x7dbe534911c0>({'OSPREY_INGEST_MAX_UPLOAD_BYTES': '-1'})
+      E    +  and   536870912 = <function max_upload_bytes at 0x7dbe52e934c0>()
+      E   ValueError: invalid literal for int() with base 10: 'lots'
+RED      ingress: the upload cap's source bound at import (the defect the test found)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.87s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ingress_s_settings_follow_their_sources
+      E   AssertionError: assert '512m' == '2048m'
+      E     
+      E     - 2048m
+      E     + 512m
+RED      chart: no fsGroupChangePolicy (as at 1a63953d)  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/_helpers.tpl]
+    2 failed in 2.32s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[production]
+      E   AssertionError: assert [Violation(ru...olumes'), ...] == []
+      E     
+      E     Left contains 8 more items, first extra item: Violation(rule='fs-group-walk', where='Deployment/workspace', detail='fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes')
+      E     Use -v to get more diff
+      E   AssertionError: assert [Violation(ru...olumes'), ...] == []
+      E     
+      E     Left contains 11 more items, first extra item: Violation(rule='fs-group-walk', where='Deployment/workspace', detail='fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes')
+      E     Use -v to get more diff
+RED      fs-group-walk: an fsGroup walked at every start passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.38s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_volume_walk_at_every_start_is_refused
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      chart: resources not rendered  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/_helpers.tpl]
+    2 failed in 2.35s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[production]
+      E   AssertionError: assert [Violation(ru...memory'), ...] == []
+      E     
+      E     Left contains 9 more items, first extra item: Violation(rule='no-resources', where='Deployment/workspace container workspace', detail='no requests.cpu, requests.memory, limits.memory')
+      E     Use -v to get more diff
+      E   AssertionError: assert [Violation(ru...memory'), ...] == []
+      E     
+      E     Left contains 13 more items, first extra item: Violation(rule='no-resources', where='Deployment/workspace container workspace', detail='no requests.cpu, requests.memory, limits.memory')
+      E     Use -v to get more diff
+RED      no-resources: a container without them passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.35s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_container_without_resources_is_refused
+      E   AssertionError: assert [] == [('no-resourc...mits.memory')]
+      E     
+      E     Right contains 2 more items, first extra item: ('no-resources', 'StatefulSet/arcadedb container arcadedb', 'no requests.cpu, requests.memory, limits.memory')
+      E     Use -v to get more diff
+RED      render: no resources on a container  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    2 failed in 1.12s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_every_container_asks_for_what_it_needs_and_is_limited[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_every_container_asks_for_what_it_needs_and_is_limited[production]
+      E   KeyError: 'resources'
+      E   KeyError: 'resources'
+RED      render: ArcadeDB's heap not from its limit  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    2 failed in 1.17s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_arcadedb_s_heap_follows_its_memory_limit[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_arcadedb_s_heap_follows_its_memory_limit[production]
+      E   KeyError: 'value'
+      E   KeyError: 'value'
+RED      render: an image of ours with no row is a bare KeyError  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.79s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_an_image_of_ours_with_no_build_row_is_refused_in_words
+      E   AttributeError: 'NoneType' object has no attribute 'dockerfile'
+RED      render: group 0 a constant, not the row  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.91s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_door_group_zero_and_an_always_host_are_rows
+      E   AssertionError: assert 'supplementalGroups' not in {'name': 'keycloak', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/keycloak/keycloak:26.0@sha256:84fb1eeacb6c...d35a3ca4daa77e2a10215e66efb5aa', 'egress': True, 'args': ['start', '--import-realm', '--features=token-exchange'], ...}
+RED      render: the always-hosts constants, not the rows  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.89s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_door_group_zero_and_an_always_host_are_rows
+      E   KeyError: 'login.example.org'
+RED      cp_policy_check: another profile's config is a bare AttributeError  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 0.46s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_configuration_of_another_profile_is_refused_in_words
+      E   AttributeError: 'NoneType' object has no attribute 'registry'
+RED      Dockerfile: the upgrade after the code, as root (round 2, item 5: the shape at dd0233e1)  [OspreyFlow_Core/services/api/Dockerfile]
+    1 failed in 0.45s
+    FAILED ../OspreyFlow_Build/tests/test_conduit_image_java_licence.py::test_the_final_stage_upgrades_before_the_code_and_as_root
+      E   AssertionError: RUN useradd --create-home --uid 10001 osprey
+      E   assert False
+      E    +  where False = <built-in method startswith of str object at 0x71b6b90bd3b0>('RUN apt-get update && apt-get upgrade -y')
+      E    +    where <built-in method startswith of str object at 0x71b6b90bd3b0> = 'RUN useradd --create-home --uid 10001 osprey'.startswith
+RED      Dockerfile: the omitted image given JAVA_HOME  [OspreyFlow_Core/services/api/Dockerfile]
+    1 failed in 0.45s
+    FAILED ../OspreyFlow_Build/tests/test_conduit_image_java_licence.py::test_the_omitted_image_does_not_declare_java
+      E   AssertionError: JAVA_HOME
+      E   assert 'JAVA_HOME' not in 'LABEL org.o.../opt/java"\n'
+      E     
+      E     'JAVA_HOME' is contained here:
+      E       tted"
+      E       ENV JAVA_HOME="/opt/java"
+      E     ?     +++++++++
+RED      Dockerfile: the omission's stage Java's (a red record for an older test)  [OspreyFlow_Core/services/api/Dockerfile]
+    1 failed in 0.43s
+    FAILED ../OspreyFlow_Build/tests/test_conduit_image_java_licence.py::test_the_cloud_platform_s_build_carries_no_java
+      E   AssertionError: assert {'python:3.12...ime-included'} == {'python:3.12-slim'}
+      E     
+      E     Extra items in the left set:
+      E     'runtime-included'
+      E     Use -v to get more diff
+RED      profile.yaml: the Conduit planned with Java (a red record for an older test)  [OspreyFlow_Core/harness/cloud_platform/profile.yaml]
+    1 failed in 0.96s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_conduit_is_planned_without_java
+      E   AssertionError: assert {} == {'CONDUIT_JAVA': 'omitted'}
+      E     
+      E     Right contains 1 more item:
+      E     {'CONDUIT_JAVA': 'omitted'}
+      E     Use -v to get more diff
+RED      map_admin: a route that does not exist offered again  [OspreyFlow_Core/services/api/map_admin.py]
+    1 failed in 0.88s
+    FAILED ../OspreyFlow_Build/tests/services/api/test_map_admin.py::test_on_a_cloud_platform_the_build_says_there_is_no_basemap_route_yet
+      E   AssertionError: map build
+      E   assert 'map build' not in 'On this pla...iles bucket.'
+      E     
+      E     'map build' is contained here:
+      E       spreyflow map build` and copy the tiles into the tiles bucket.
+      E     ?           +++++++++
+RED      terraform: a provider block rendered  [OspreyFlow_Core/harness/cloud_platform/terraform.py]
+    2 failed in 0.82s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py::test_the_providers_and_backend_are_the_namespace_folder_s[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py::test_the_providers_and_backend_are_the_namespace_folder_s[production+opensearch]
+      E   AssertionError: main.tf
+      E   assert not <re.Match object; span=(0, 16), match='provider "aws" {'>
+      E    +  where <re.Match object; span=(0, 16), match='provider "aws" {'> = <function search at 0x753c727f8860>('^\\s*(terraform|provider\\s+\\"[^\\"]+\\")\\s*\\{', 'provider "aws" {\n  region = "eu-west-2"\n}\n', re.MULTILINE)
+      E    +    where <function search at 0x753c727f8860> = re.search
+      E    +    and   re.MULTILINE = re.M
+      E   AssertionError: main.tf
+      E   assert not <re.Match object; span=(0, 16), match='provider "aws" {'>
+      E    +  where <re.Match object; span=(0, 16), match='provider "aws" {'> = <function search at 0x753c727f8860>('^\\s*(terraform|provider\\s+\\"[^\\"]+\\")\\s*\\{', 'provider "aws" {\n  region = "eu-west-2"\n}\n', re.MULTILINE)
+      E    +    where <function search at 0x753c727f8860> = re.search
+      E    +    and   re.MULTILINE = re.M
+RED      terraform: no :aud condition  [OspreyFlow_Core/harness/cloud_platform/terraform.py]
+    1 failed in 0.63s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py::test_the_bucket_role_trusts_the_service_account_s_tokens_for_sts_alone
+      E   assert None
+      E    +  where None = <function search at 0x759a359f4860>('variable = "\\$\\{var\\.eks_oidc_issuer\\}:aud"\\s+values\\s+= \\["sts\\.amazonaws\\.com"\\]', '# Decision 4: the service account the Conduit, the workers and the report sync run as,\n# given the buckets through i...e = var.namespace\n    annotations = {\n      "eks.amazonaws.com/role-arn" = aws_iam_role.service.arn\n    }\n  }\n}\n')
+      E    +    where <function search at 0x759a359f4860> = re.search
+RED      terraform: OpenSearch with no security group  [OspreyFlow_Core/harness/cloud_platform/terraform.py]
+    1 failed in 0.66s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py::test_opensearch_is_reached_from_the_namespace_s_networks_by_the_bucket_role_alone
+      E   assert 'security_group_ids = [aws_security_group.search.id]' in '# Decision 4: the platform\'s OpenSearch 2.x, encrypted, HTTPS only, inside the VPC,\n# reached on 443 from the names...space = var.namespace\n  }\n\n  data = {\n    proxy_url = "https://${aws_opensearch_domain.search.endpoint}"\n  }\n}\n'
+RED      terraform: a secret key the values read and the Terraform does not write (an older test)  [OspreyFlow_Core/harness/cloud_platform/terraform.py]
+    2 failed in 1.14s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_every_secret_the_values_read_is_one_the_terraform_writes[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_every_secret_the_values_read_is_one_the_terraform_writes[production]
+      E   AssertionError: ('rds-postgresql-instance-output', 'rds_instance_address')
+      E   assert 'rds_instance_address' in {'database_name', 'database_password', 'database_username', 'rds_host', 'rds_instance_port'}
+      E    +  where {'database_name', 'database_password', 'database_username', 'rds_host', 'rds_instance_port'} = <built-in method get of dict object at 0x703a3b1f6680>('rds-postgresql-instance-output', set())
+      E    +    where <built-in method get of dict object at 0x703a3b1f6680> = {'rds-postgresql-instance-output': {'database_name', 'database_password', 'database_username', 'rds_host', 'rds_instan...', 'port', 'primary_endpoint_address'}, 'opensearch-output': {'proxy_url'}, 's3-bucket-output': {'bucket_prefix'}, ...}.get
+      E    +    and   set() = set()
+      E   AssertionError: ('rds-postgresql-instance-output', 'rds_instance_address')
+      E   assert 'rds_instance_address' in {'database_name', 'database_password', 'database_username', 'rds_host', 'rds_instance_port'}
+      E    +  where {'database_name', 'database_password', 'database_username', 'rds_host', 'rds_instance_port'} = <built-in method get of dict object at 0x703a3ae61ac0>('rds-postgresql-instance-output', set())
+      E    +    where <built-in method get of dict object at 0x703a3ae61ac0> = {'rds-postgresql-instance-output': {'database_name', 'database_password', 'database_username', 'rds_host', 'rds_instan...', 'port', 'primary_endpoint_address'}, 'opensearch-output': {'proxy_url'}, 's3-bucket-output': {'bucket_prefix'}, ...}.get
+      E    +    and   set() = set()
+
+36 plants, 36 red, 0 not red
+Wall time: 64 s, exit 0 (no stack, no lease; set-up before it 12 s)

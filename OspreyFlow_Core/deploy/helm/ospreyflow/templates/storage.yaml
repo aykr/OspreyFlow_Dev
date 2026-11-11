@@ -12,7 +12,8 @@ metadata:
     # Kept when the release is removed: it holds the evidence and the recipes.
     helm.sh/resource-policy: keep
 spec:
-  accessModes: ["ReadWriteMany"]
+  {{- /* ADR-148: a platform with no ReadWriteMany class holds it on one node's ReadWriteOnce claim. */}}
+  accessModes: [{{ .Values.storage.sharedAccessMode | default "ReadWriteMany" | quote }}]
   {{- with .Values.storage.sharedClassName }}
   storageClassName: {{ . }}
   {{- end }}

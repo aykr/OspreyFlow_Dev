@@ -1832,6 +1832,21 @@ def render(
         if build_context is None
         else service_images(config, build_context=build_context)
     )
+    if config.profile is Profile.CLOUD_PLATFORM:
+        # ADR-148: the chart's values into a namespace on a shared platform, and its Terraform,
+        # translated from the cluster's (`harness/cloud_platform/`).
+        from harness.cloud_platform import render_cloud_platform
+
+        return RenderResult(
+            profile=config.profile,
+            artefacts=render_cloud_platform(
+                config,
+                images,
+                resolver=resolver,
+                allow_unpinned=allow_unpinned,
+                resolved_source_label=resolved_source_label,
+            ),
+        )
     if config.profile is Profile.CLUSTER:
         # 05 §3b: the chart's values, translated from the same services (`harness/cluster.py`).
         from harness.cluster import render_cluster
