@@ -33866,6 +33866,105 @@ host, addressing and no key; a request bound elsewhere never sent; the listing s
 `test_s3_connector.py`, `test_s3_connector_live.py`, `tests/services/api/test_cloud_connector_access.py`; red
 records in `process/lanes/studio-b/L1.9_RED_RECORD.md` and `l1.9r1/plants.txt`.
 
+### ADR-140, Amendment 21 (11 November 2026) — L1.9 part 2 as built: S3 and Athena on the cloud-platform profile, declared at install
+
+Status: built by studio-b at L1.9 part 2, 11 November 2026, under Prompt L, offline (no stack, no cloud account). The
+orchestrator ruled on the three questions in `process/lanes/studio-b/L1.9p2_PLAN.md` and added three points (a–c
+below); every other open choice was taken as recommended and is listed in `process/lanes/studio-b/REPORT.md`.
+
+1. **Declared at install, beside `connector_hosts`.** `cloud_platform.connector_sources` names:
+   - `s3`: each bucket, its region and the folder a connection may read at or under;
+   - `athena`: each workgroup, with its region, its databases, its `results_location` (a folder, never a
+     bucket's top) and its `table_locations`.
+
+   Every part is a checked name (part 1's patterns), so no setting can be a pattern or a wildcard. Nothing
+   declared renders nothing: no row, no statement, no setting.
+2. **The Conduit alone reads, and only it gets the rows.** `read_into_file` and `check_connection` are called
+   from `services/api/app.py` alone, and the worker's jobs (supersede, resolve) read no connection. Each declared
+   source's own host, `<bucket>.s3.<region>.amazonaws.com` or `athena.<region>.amazonaws.com`, becomes a new host
+   kind, `sources`, reached by `api` alone on 443 through P7b's per-workload egress. Each still needs its networks
+   under `egress_nets`, or the render is refused in words.
+   - **The orchestrator's addition (a):** `connector_hosts` is narrowed from `api` and `worker` to `api` alone.
+     That is narrower than ADR-148 Amendment 5 point 21, which said "the Conduit and the workers".
+   - **The orchestrator's Q2 and Q3:** neither the results location's bucket nor a table location's bucket is an
+     egress row. Athena reads and writes those itself, as the caller's role. The reader reaches Athena's own host
+     alone, and `only_to` refuses any other host.
+3. **One declaration, three uses, so they cannot disagree.**
+   - The egress rows.
+   - The Conduit's allow-list: `OSPREY_CONNECTOR_EGRESS` now holds `connector_hosts`' hosts and the declared
+     sources' hosts.
+   - What Admin is told: `OSPREY_CONNECTOR_SOURCES`, the declaration as JSON.
+4. **Admin refuses what was not rendered**, in words naming `cloud_platform.connector_sources`, the re-render,
+   `helm upgrade` and the Terraform, as ADR-135 Amendment 8 words an engine. It refuses at save, at *Test
+   connection* (before the allow-list, whose own words would mislead) and before every read; an author is told
+   the fixed words.
+   - **On the cloud-platform profile, every S3 or Athena connection is refused unless the declaration covers it.**
+     With nothing declared, every one is refused (fail closed).
+   - **S3** must match bucket and region, with its folder at or under the declared one. Folders end in `/`, so
+     `client-ab/` never passes as `client-a/`.
+   - **Athena** must match workgroup and region, with every database among the declared ones and the default
+     catalog, the only one whose Glue entries the role may read. Its results location is the declared one, or
+     left to the workgroup.
+   - Every other profile keeps part 1's allow-list alone.
+5. **IAM: read-only and scoped, on the role the Conduit already has.** `terraform/connector_sources.tf` attaches one
+   policy to P7b's namespace role (`aws_iam_role.service`, IRSA's account). No new account is made and no key
+   exists anywhere. Its statements:
+   - **S3 source:** `s3:ListBucket` on the bucket, held to the folder by `s3:prefix`, and `s3:GetObject` under it.
+   - **Workgroup:** Athena's Start, Get and Stop of a query execution, `GetQueryResults`, `GetNamedQuery` and
+     `GetWorkGroup` (which *Test connection* asks; beyond the brief's list, and logged).
+   - **Databases:** Glue's `Get` actions on the catalog, each database and its tables.
+   - **Table locations:** list and read alone.
+   - **Results location:** list, read, `s3:PutObject` and `s3:AbortMultipartUpload`, under that folder alone.
+
+   The render refuses a statement that is not so (`refuse_wide_statements`): an action outside the read set,
+   a write anywhere but a results location's objects, a `*` resource, or a `*` anywhere but a named folder's
+   objects or a named database's tables.
+   - **The orchestrator's addition (b), a decision for the owner:** P7b's IRSA account is shared by api, worker
+     and report-sync, so **the worker and report-sync gain these reads by IAM, though not by egress**. A role of
+     the Conduit's own would mean a fourth account; that question is carried to the platform team (CARRIES).
+6. **Region refusals (CARRIES row 150).** Modelled, and measured only where this build can measure.
+   - **pyarrow, measured** on the pinned pyarrow 26.0.0, the real C++ SDK, against a local server answering S3's
+     documented `PermanentRedirect` (301) and `AuthorizationHeaderMalformed` (400):
+     - it follows neither, sending one request to one host;
+     - it raises `AWS Error UNKNOWN (HTTP status 301|400)`, and on HeadBucket adds its own "Looks like the
+       configured region is … while the bucket is located in …".
+   - **The words.** A 301, or pyarrow's own region words, are told as another region in fixed words; the last
+     `AWS Error` in the message is pyarrow's own, so a key naming another code is never read as one. A HEAD's
+     bare 400 has no body to say why, so it is told only as unreadable. An empty listing asked in another region
+     is refused as another region, no longer read as an empty folder. botocore's listing already words both
+     answers (part 1).
+   - **The orchestrator's addition (c): real S3 has not been measured.** The answers are AWS's documented ones,
+     served by the build's own fake; what pyarrow and botocore do with them is measured.
+   - **Athena.** An unparseable query may fail as an execution (FAILED, the parser's reason) or be refused at
+     `StartQueryExecution` (`InvalidRequestException` carrying the same reason). Both are now modelled, and the
+     reader gives one set of words for both: "Athena could not run the query: line N:M: …". The parser's
+     `line N:M:` shape alone is taken for a parse error; any other `InvalidRequestException` stays a refused
+     request.
+   - **Q3's plant.** A table whose objects the role may not read fails as an execution ("Permission denied on S3
+     path …", modelled from AWS's troubleshooting guide). It is told in typed words naming `table_locations`,
+     the path not repeated.
+   - **Not measured against Athena itself:** `test_athena_connector_live.py`, on the client's platform, records
+     which answer Athena gives.
+7. **cp-policy-check** gains a fifth fixture, `development-sources.yaml`, with an S3 and an Athena source declared.
+   - All five are 0 violation(s) at the gate (the server's Helm; this Mac has none).
+   - Local-lite, Small and cluster render byte for byte (`process/lanes/studio-b/l1.9p2/renders-byte-for-byte.txt`).
+   - The four undeclared cloud-platform fixtures differ only in the deployment's own `osprey.yaml` copy, which
+     carries the empty default, as it does `connector_hosts: []`.
+
+**Files.** Studio-b's: the connectors, `connector_reads.py` and their tests. The schema (`packages/schemas/deployment.py`
+and its generated types) is the head commit. `harness/cloud_platform/**`, `profile.yaml` and the new cp fixture are
+`process/lanes/studio-b/l1.9p2/cloud-platform-L19p2.diff`; the guide's generated appendix and its tool are
+`docs-admin-guide-L19p2.diff`. Both are applied at merge.
+
+**The test that would fail.**
+- `tests/harness/test_cloud_sources_render.py`: the rows, the allow-list, no results or table bucket, the worker,
+  the statements, four planted wide statements, nothing undeclared.
+- `tests/services/api/test_cloud_sources_declared.py`: save, *Test* and read refused; ten wider connections; a
+  narrower one passed; another profile.
+- `tests/connectors/test_cloud_clients.py` and `test_s3_connector.py`: pyarrow's shapes.
+- `tests/connectors/test_athena_connector.py`: both parse answers, the denied table data.
+- Red records and eleven plants at their call sites are in `process/lanes/studio-b/l1.9p2/`.
+
 ### ADR-135, Amendment 7 (11 November 2026) — Amendment 4 as built in *Admin › Models* (P11 part 1): on the `cloud-platform` profile alone, the client's own gateway at its address by a token and Bedrock in London by the IAM role and a model's own id, no key stored for an IAM-role engine
 
 Status: as built by the platform-b lane (P11 part 1), after its own lane reviewer's round and the orchestrator's
