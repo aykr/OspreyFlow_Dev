@@ -15,7 +15,7 @@
 
 **Lane-reviewer**: run on round 2's commits; 13 findings (the live test unguarded in CI's DB-less gateway, no positive control, cleanup gaps, the plant testing another defect, records); all fixed before the lease, or carried above.
 
-**Commits**: round 2 is b315601…46c1b0c on `lane/case-b-p12` (rebased twice); never pushed. Friction: `2026-11-11-case-b-conformance-suite-ownership.md`.
+**Commits**: round 2 is 6d2195c…46c1b0c, then the records in 238a700 and this report, on `lane/case-b-p12` (rebased twice); never pushed. Friction: `2026-11-11-case-b-conformance-suite-ownership.md`.
 
 **Requests**: apply `P12_CI.diff` and `P12_MAKEFILE.diff` at merge; mark ADR-135 Amendment 6 written; add part 2's live exit case to the plan's P12 row; D2c's wording on Laurium.
 
