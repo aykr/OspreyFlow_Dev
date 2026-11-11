@@ -16,9 +16,16 @@ from pathlib import Path
 from typing import Protocol
 
 _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
-#: A variable named, with no value after it, is advice, not a secret (ADR-114 Amendment 8: a
-#: private repository is read with `GITHUB_TOKEN`). Its value, and every other line, stays hidden.
-_NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)\b(?!\s*[=:])")
+#: Advice that names a variable is not a secret (ADR-114 Amendment 8: a private repository is read
+#: with `GITHUB_TOKEN`), but a name followed by a word cannot be told from a name followed by its
+#: value (`GH_TOKEN hunter2`), so only **the producers' own fixed phrases** pass:
+#: `harness.release`'s two lines for a private repository and `harness.apply`'s unset sign-in secret (the orchestrator's
+#: confirmation of b2feedf, item 1). Any other line naming one stays hidden.
+_NAMED_ONLY = re.compile(
+    r"\bor (?:GITHUB_TOKEN|GH_TOKEN) on this machine cannot read it\b"
+    r"|\bset (?:GITHUB_TOKEN|GH_TOKEN) to (?:one|a token) that can read it\b"
+    r"|\bOSPREY_ORG_SIGN_IN_SECRET is not set\."
+)
 #: Refresh's own refusals, as its `main` prints them and as `update` reports its files step's: a
 #: line naming a secret is shown **only as one of these sentences in full** (anchored, the
 #: variables' names alone, a deployment's name, nothing after), so neither a value after our words
@@ -26,7 +33,12 @@ _NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)
 #: variable's name has an underscore; a deployment's is lower case, digits and hyphens
 #: (`secret-lab` too).
 _DEPLOYMENT = r" --name [a-z0-9][a-z0-9-]*"
-_VARIABLE = r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+"
+#: Every variable a deployment's compose file requires is ours (`OSPREY_…`), so a bare value shaped
+#: like a name (`HUNTER_2`) is hidden. **Known limit**: a value shaped like one of ours
+#: (`OSPREY_HUNTER_2`) would be shown as a name; no producer puts a value there (the
+#: orchestrator's confirmation of b2feedf, item 2; checking the names against the compose file
+#: would hide a refusal naming a variable only the new checkout requires, after update's rollback).
+_VARIABLE = r"OSPREY(?:_[A-Z0-9]+)+"
 _UNSET = (
     rf"This checkout's compose file requires {_VARIABLE}(?:, {_VARIABLE})*, which deployment\.env "
     rf"does not hold, so nothing was changed\. Run `ospreyflow apply{_DEPLOYMENT}` with the "
@@ -46,7 +58,8 @@ _GATEWAY_WORDS = (
 )
 _GATEWAY = re.escape(_GATEWAY_WORDS).replace(re.escape("{_N}"), _DEPLOYMENT)
 _OUR_SENTENCE = re.compile(
-    r"(?:refresh: |ospreyflow: the update to v[0-9][0-9A-Za-z.\-]* failed at '[a-z ]+': refresh: )"
+    r"(?:refresh: |ospreyflow: the update to v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)? failed at "
+    r"'bring the files up to date': refresh: )"
     rf"(?:{_UNSET}|{_GATEWAY})"
 )
 

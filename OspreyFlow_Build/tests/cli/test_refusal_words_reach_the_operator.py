@@ -144,6 +144,39 @@ def test_update_shows_the_files_step_s_refusal_naming_the_variable(
     assert "ospreyflow apply --name osprey-upg" in failure
 
 
+#: The names the redactor lets through in advice (`run._NAMED_ONLY`), each with a value after it in
+#: the four shapes the orchestrator's confirmation of b2feedf found shown (its item 1).
+EXEMPT = ("GITHUB_TOKEN", "GH_TOKEN", "OSPREY_ORG_SIGN_IN_SECRET")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [shape.format(name=name) for name in EXEMPT for shape in (
+        '"{name}": "hunter2"', "{name} hunter2", "{name} ghp_abc123", "{name} is hunter2",
+        "set {name} to ghp_abc123", "{name} ghp_abc123 on this machine cannot read it",
+    )],
+)  # fmt: skip
+def test_an_exempt_name_with_a_value_after_it_stays_hidden(line: str) -> None:
+    assert HIDDEN in Redactor("deployment.env")(line)
+
+
+def test_the_advice_that_names_an_exempt_variable_is_shown() -> None:
+    """The exemption's real producers, quoted from their source so the case moves with them:
+    `harness.release`'s two lines for a private repository, `harness.apply`'s unset secret."""
+    release = (CORE / "harness" / "release.py").read_text(encoding="utf-8")
+    for advice in ("or GITHUB_TOKEN on this machine cannot read it",
+                   "or it is private: set GITHUB_TOKEN to one that can read it"):  # fmt: skip
+        assert advice.split(": ")[-1] in release
+        line = f"ospreyflow: the release is not found ({advice})"
+        assert Redactor("deployment.env")(line) == line
+    assert "OSPREY_ORG_SIGN_IN_SECRET is not set." in (CORE / "harness" / "apply.py").read_text(
+        encoding="utf-8"
+    )
+    assert Redactor("deployment.env")("OSPREY_ORG_SIGN_IN_SECRET is not set.") == (
+        "OSPREY_ORG_SIGN_IN_SECRET is not set."
+    )
+
+
 @pytest.mark.parametrize(
     "line",
     [
@@ -164,6 +197,8 @@ def test_update_shows_the_files_step_s_refusal_naming_the_variable(
         # upper-case value inside the names list (a variable's name has an underscore), and our
         # whole sentence with a value after it.
         "refresh: requires OSPREY_X_PASSWORD, which deployment.env does not hold: hunter2",
+        # Update's form pinned: its files step's name and a release tag's shape (the confirmation
+        # of b2feedf, minor), so neither slot carries a value.
         "refresh: This checkout's compose file requires OSPREY_POSTGRES_PASSWORD, HUNTER2, which "
         "deployment.env does not hold, so nothing was changed. Run `ospreyflow apply --name lab` "
         "with the checkout at the version you are moving to.",
@@ -199,6 +234,34 @@ def test_our_own_refusal_naming_a_variable_is_shown(tmp_path: Path, name: str) -
     folder = tmp_path / "deployments" / name
     for line in _our_sentences(folder):
         assert Redactor("deployment.env")(line) == line, line
+
+
+@pytest.mark.parametrize(
+    ("slot", "value"),
+    [("bring the files up to date", "hunter password"), ("v0.5.0", "v0.5.0hunter")],
+    ids=["step", "version"],
+)
+def test_update_s_slots_take_only_their_own_words(tmp_path: Path, slot: str, value: str) -> None:
+    folder = tmp_path / "deployments" / "lab"
+    line = next(
+        x for x in _our_sentences(folder) if x.startswith("ospreyflow:") and "requires" in x
+    )
+    assert Redactor("deployment.env")(line) == line
+    assert HIDDEN in Redactor("deployment.env")(line.replace(slot, value))
+
+
+@pytest.mark.parametrize("among", ["HUNTER_2", "SECRET_VALUE_9", "hunter_2"])
+def test_a_value_shaped_like_a_variable_among_the_names_stays_hidden(
+    tmp_path: Path, among: str
+) -> None:
+    """A value shaped like a variable's name among the names is hidden unless it is one of ours
+    (`OSPREY_…`), which every variable a compose file requires is (the orchestrator's confirmation
+    of b2feedf, item 2). The known limit, `OSPREY_HUNTER_2`, is `run._VARIABLE`'s comment's."""
+    folder = tmp_path / "deployments" / "lab"
+    line = next(x for x in _our_sentences(folder) if "requires" in x)
+    planted = line.replace("OSPREY_LITELLM_SALT_SECRET", f"OSPREY_LITELLM_SALT_SECRET, {among}")
+    assert planted != line
+    assert HIDDEN in Redactor("deployment.env")(planted)
 
 
 def test_our_unset_refusal_is_refresh_s_own_words() -> None:
