@@ -33815,7 +33815,10 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
      privilege** (it went to S3 and was refused there), and a dictionary's HTTP source is not gated by the URL grant
      (its requests are unsigned, so the bucket refuses them, and ClickHouse's egress is denied).
    - **A measured limit, ruled (the orchestrator's ruling A, 11 November; listed for the owner):** `osprey` may
-     `RESTORE … FROM S3` a set's ClickHouse part into a database of its own. No ClickHouse privilege gates
+     `RESTORE … FROM S3` a set's ClickHouse part into a database of its own (the restore's own shape: a plain
+     database it creates, then `RESTORE … AS` it with `allow_different_database_def`; a bare `RESTORE … AS` is
+     refused whenever the set's Replicated database names the Keeper path the live one holds, Code 253, so it is
+     no bound). No ClickHouse privilege gates
      RESTORE: it asks only CREATE and INSERT on what it makes, which the deployment's user needs, and with S3, URL
      and BACKUP revoked it was accepted on kind (round 3) and in a container, `RESTORE TABLE` into `ospreyflow`
      too (`p9_grants_probe3.log`). *What is readable:* ClickHouse's own rows as a set held them, those deleted
@@ -33825,8 +33828,11 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
      (the only way to write a set through ClickHouse) stays refused. *The test that holds it:* kind's
      `osprey_sources` accepts exactly that one statement shape (any other acceptance is red) and requires S3 to
      refuse `osprey`'s RESTORE from ArcadeDB's and the claims' part *by access*; `osprey_bound_red` plants
-     ClickHouse's role reaching `sets/*` and shows that check red (`gates/p9_kind_osprey_sources.r3.json`,
-     `p9_kind_osprey_bound_red.r3.json`). *Rejected:* (B) taking ClickHouse's standing role away, since 25.8 takes
+     ClickHouse's role reaching `sets/*` and shows that check red. A refused RESTORE and a missing backup read alike
+     to ClickHouse (`BACKUP_NOT_FOUND`), so the check copies a whole ClickHouse backup under ArcadeDB's and the
+     claims' prefixes first (removed after): with the role as rendered S3 refuses it ("Access Denied: while reading
+     key …/arcadedb/p9-bound/.backup"), and with the role planted wide all three are restored
+     (`gates/p9_kind_osprey_sources.r3.json`, `p9_kind_osprey_bound_red.r3.json`, `p9_kind_bound.r3.log`). *Rejected:* (B) taking ClickHouse's standing role away, since 25.8 takes
      no session token in BACKUP (Code 42, measured) and the alternative is a stored IAM key, which this amendment
      excludes; (C) a host filter (`remote_url_allow_hosts`) or an S3 endpoint credential section, which are
      server-wide and refuse the backup user too; (D) revoking CREATE from `osprey`, which breaks the analytics
@@ -33890,7 +33896,8 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
      later step checks its own part again as it reads it.
    Then ArcadeDB's own `restore.sh` into the databases claim; **ClickHouse restored into a database of its own** (its
    own Keeper path), then the two swapped by rename and the old one dropped only after, so a refused restore leaves
-   the live database as it was; each claim unpacked beside itself by tarfile's `data` filter before its contents are
+   the live database as it was (the live one set aside only if it is there: after its loss, the case the restore is
+   for, it is not, and kind's round-3 restore was refused renaming what was gone, Code 81); each claim unpacked beside itself by tarfile's `data` filter before its contents are
    replaced. **The restore is proven for the single-replica shapes (development, and the poc shape the client
    installs).** The production shape (three ArcadeDB copies, ON CLUSTER with two ClickHouse replicas) is P9b's.
 9. **The decommission** (the orchestrator's ruling): the backups bucket and its key are its one named exception, kept,

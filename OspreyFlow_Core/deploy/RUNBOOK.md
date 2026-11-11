@@ -266,7 +266,8 @@ kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-
 
 If a Job did not finish after its `verify` passed (ArcadeDB's `restore.sh` failing, say), ArcadeDB's
 database may already be removed: restore another set, or the same one again, before starting ArcadeDB.
-ClickHouse is never left without its database: its restore is swapped in only once complete.
+ClickHouse is never left without its database: its restore is swapped in only once complete (and put
+straight in if ClickHouse's database was lost).
 
 **An upgrade that brings the backups in.** First the namespace's Terraform, with `backups.tf`, is applied
 (the platform team's pull request): ClickHouse cannot start without its backup role's service account and
