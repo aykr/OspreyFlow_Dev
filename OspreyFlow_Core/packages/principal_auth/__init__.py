@@ -159,6 +159,10 @@ CLAIM_ROLES = "roles"
 # group grants nothing.
 
 
+#: An Entra object id (a tenant, a group): lower-case, as Entra writes it in a token.
+_GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
 class _Source(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -176,8 +180,11 @@ class _Source(BaseModel):
                 raise ValueError("`groups` must map at least one group")
             for group, value in groups.items():
                 values = value if isinstance(value, list) else [value]
-                if not group or not values or not all(values):
+                if not values or not all(values):
                     raise ValueError(f"group {group!r} must grant a non-empty value")
+                if not _GUID.match(group):
+                    # A mistyped id would match no token's group and silently grant nothing.
+                    raise ValueError(f"group {group!r} is not an Entra group id (a GUID)")
         return self
 
 
@@ -195,9 +202,6 @@ class CodesSource(_Source):
     groups: dict[str, list[str]] | None = None
 
 
-_GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-
-
 class ClaimMapping(BaseModel):
     """The deployment's claim settings.
 
@@ -206,7 +210,12 @@ class ClaimMapping(BaseModel):
     names with protocol mappers). With `tenant_id` set the token must carry `oid` and `exp` and a
     `tid` equal to it, the resolver must check issuer and audience, and **roles are not read from
     the token**: an Entra token's `roles` are app roles an Entra administrator assigns, and roles
-    stay assigned in Admin › People (decision 9)."""
+    stay assigned in Admin › People (decision 9). An app-only token (a daemon's, with no `scp`) is
+    no person and is refused.
+
+    **The validators are the safety, so the resolver validates again** what it is given:
+    `model_copy` and `model_construct` skip them, and a copy of the default mapping with a changed
+    source would otherwise be Keycloak-handled (no tenant check, the token's roles read)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -218,6 +227,8 @@ class ClaimMapping(BaseModel):
 
     @model_validator(mode="after")
     def _entra_needs_its_tenant(self) -> ClaimMapping:
+        if not self.groups_claim:
+            raise ValueError("`groups_claim` must name a claim")
         if self.tenant_id is not None and not _GUID.match(self.tenant_id):
             raise ValueError("`tenant_id` must be the Entra tenant's id (a GUID)")
         fixed = (
@@ -292,16 +303,20 @@ def _single_value(
     return found.pop()
 
 
+def _string_list(claims: Mapping[str, Any], claim: str, what: str) -> list[str]:
+    """A claim holding names: a list of strings, or one string as **one** name (never its
+    letters, as `list("RS")` would make it); absent is none. Anything else is refused."""
+    value = claims.get(claim, [])
+    if isinstance(value, str):
+        return [value] if value else []
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise PrincipalResolutionError(f"token's {what} claim ({claim!r}) is not a list of names")
+    return list(value)
+
+
 def _handling_codes(claims: Mapping[str, Any], source: CodesSource, groups: list[str]) -> list[str]:
     if source.claim is not None:
-        value = claims.get(source.claim, [])
-        if isinstance(value, str):
-            return [value] if value else []
-        if not isinstance(value, list) or not all(isinstance(c, str) for c in value):
-            raise PrincipalResolutionError(
-                f"token's handling codes claim ({source.claim!r}) is not a list of codes"
-            )
-        return list(value)
+        return _string_list(claims, source.claim, "handling codes")
     assert source.groups is not None
     codes: list[str] = []
     for g in groups:
@@ -315,8 +330,19 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
     claims."""
-    if mapping.is_entra and claims.get("tid") != mapping.tenant_id:
-        raise PrincipalResolutionError("token's tid is missing or names another tenant")
+    subject = claims.get("sub")
+    if not isinstance(subject, str) or not subject:
+        raise PrincipalResolutionError("token's sub is not a non-empty string")
+    if mapping.is_entra:
+        if claims.get("tid") != mapping.tenant_id:
+            raise PrincipalResolutionError("token's tid is missing or names another tenant")
+        if not isinstance(claims.get("oid"), str) or not _GUID.match(claims["oid"]):
+            raise PrincipalResolutionError("token's oid is not an Entra object id")
+        scope = claims.get("scp")
+        if claims.get("idtyp") == "app" or not isinstance(scope, str) or not scope:
+            raise PrincipalResolutionError(
+                "token is app-only (no delegated scp): a service principal is no person"
+            )
     uses_groups = any(
         s.groups is not None for s in (mapping.clearance, mapping.org_unit, mapping.handling_codes)
     )
@@ -324,23 +350,13 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     clearance = _single_value(claims, mapping.clearance, "clearance", groups)
     org_unit = _single_value(claims, mapping.org_unit, "organisational unit", groups)
     return Principal(
-        id=str(claims["sub"]),
+        id=subject,
         clearance=clearance,
         org_unit=org_unit,
         receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
-        roles=[] if mapping.is_entra else _roles(claims),
+        # Keycloak's `roles` come from Admin › People; an Entra token's are not ours to read.
+        roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
     )
-
-
-def _roles(claims: Mapping[str, Any]) -> list[str]:
-    """The token's `roles` (Keycloak's, from Admin › People): a list of names, or one name as a
-    string, never split into its letters."""
-    value = claims.get(CLAIM_ROLES, [])
-    if isinstance(value, str):
-        return [value] if value else []
-    if not isinstance(value, list) or not all(isinstance(r, str) for r in value):
-        raise PrincipalResolutionError("token's roles claim is not a list of role names")
-    return list(value)
 
 
 #: RFC 8693 §2.1's own grant-type URI, unchanged by this simplified client.
@@ -419,7 +435,11 @@ class PrincipalResolver:
     client this codebase already closes there."""
 
     def __init__(self, config: OidcSettings, *, claim_mapping: ClaimMapping | None = None) -> None:
-        mapping = claim_mapping or DEFAULT_CLAIM_MAPPING
+        # Validated again from plain data: a copy or a `model_construct` skips the validators,
+        # and they are what make an Entra mapping checked as one.
+        mapping = ClaimMapping.model_validate(
+            (claim_mapping or DEFAULT_CLAIM_MAPPING).model_dump(mode="python")
+        )
         if mapping.is_entra:
             # A tenant-bound mapping that did not check `iss` and `aud` would take another tenant's
             # (or another app's) token signed by a key it trusts: refused before any token is read.

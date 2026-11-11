@@ -17,7 +17,12 @@ made-up application. **The stand-in refuses what Entra's tokens are refused for*
 15's second worked example): a token with no `oid` or no `tid`, another tenant's `tid`, the wrong
 issuer or audience, an expired token or one with no expiry, and a group overage (Entra omits
 `groups` and points to Graph instead, past 200 groups in a JWT) — each refused, never read as "no
-groups".
+groups" — and an app-only token (no delegated `scp`).
+
+**Shaped from Microsoft's documentation, not measured.** No real tenant's token has been through
+this code (rule 15): the claim names, the v2.0 issuer, a multi-valued extension attribute arriving
+as a JSON list and the overage forms are as documented, and are assumptions until the client's
+tenant issues a token in their development namespace (P10 part 2's live check).
 
 **Decided here (logged in `process/lanes/admin/SERVER_LOG.md`):** groups granting more than one
 clearance, or more than one organisational unit, are **refused**, not resolved to the lowest —
@@ -28,6 +33,7 @@ groups is a directory error for the operator to see, not one to guess past.
 from __future__ import annotations
 
 import ast
+import re
 import time
 from pathlib import Path
 
@@ -79,6 +85,7 @@ def entra_claims(**overrides: object) -> dict[str, object]:
         "sub": "pairwise-subject-AbCdEf0123456789",
         "name": "Synthetic Analyst",
         "preferred_username": "synthetic.analyst@example.test",
+        "scp": "access_as_user",
         "roles": ["analyst"],
     }
     base.update(overrides)
@@ -388,6 +395,25 @@ def test_a_token_entra_would_not_accept_is_refused(keypair, jwks_url, overrides,
         _resolver(jwks_url, BY_EXTENSION).resolve(token)
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [{"idtyp": "app", "scp": _ABSENT}, {"scp": _ABSENT}, {"idtyp": "app"}],
+    ids=["app-token", "no-scp", "idtyp-app"],
+)
+def test_an_app_only_token_is_no_person(keypair, jwks_url, overrides) -> None:
+    """A daemon's client-credentials token for this API carries no `scp` (and, asked for, `idtyp:
+    app`); in a mapped group it would otherwise resolve as a person."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, **overrides))
+    with pytest.raises(PrincipalResolutionError, match="app-only"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+def test_an_oid_that_is_not_an_object_id_is_refused(keypair, jwks_url) -> None:
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, oid="synthetic.analyst"))
+    with pytest.raises(PrincipalResolutionError, match="oid"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
 def test_another_tenants_whole_token_is_refused(keypair, jwks_url) -> None:
     """The shape Entra really issues for another tenant: its issuer and its `tid` together. Every
     tenant's tokens are signed by the same published keys, so the signature alone proves nothing."""
@@ -459,6 +485,40 @@ def test_the_tenant_id_must_be_a_guid(tenant) -> None:
         ClaimMapping(tenant_id=tenant, clearance=ValueSource(claim=f"{EXT}_clearance"))
 
 
+def test_a_group_table_key_must_be_a_group_id() -> None:
+    """A mistyped group id matches no token's group, so its grant would vanish without a word."""
+    with pytest.raises(ValidationError, match="group id"):
+        ValueSource(groups={"Clearance-Official": "OFFICIAL"})
+    with pytest.raises(ValidationError, match="group id"):
+        CodesSource(groups={G_CODE_R[:-1]: ["R"]})  # one digit short
+
+
+def test_the_groups_claim_must_be_named() -> None:
+    with pytest.raises(ValidationError, match="groups_claim"):
+        ClaimMapping(tenant_id=TENANT, groups_claim="", clearance=ValueSource(groups=_G_OFF))
+
+
+_G_OFF = {G_OFFICIAL: "OFFICIAL"}
+
+
+@pytest.mark.parametrize("how", ["copy", "construct"])
+def test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver(jwks_url, how) -> None:
+    """`model_copy` and `model_construct` skip the validators. A copy of the default with a group
+    source and no tenant would otherwise be Keycloak-handled: no tenant check, the token's roles."""
+    if how == "copy":
+        mapping = ClaimMapping().model_copy(update={"clearance": ValueSource(groups=_G_OFF)})
+    else:
+        mapping = ClaimMapping.model_construct(
+            clearance=ValueSource(groups=_G_OFF),
+            org_unit=ValueSource(claim="org_unit"),
+            handling_codes=CodesSource(claim="receivable_handling_codes"),
+            groups_claim="groups",
+            tenant_id=None,
+        )
+    with pytest.raises(ValidationError, match="tenant_id"):
+        PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping)
+
+
 def test_the_settings_refuse_an_unknown_key() -> None:
     """A misspelt setting (`clearence`) must fail the install, not leave the default in place."""
     with pytest.raises(ValidationError):
@@ -483,11 +543,13 @@ def test_the_settings_load_from_a_plain_mapping() -> None:
 
 def test_the_default_mapping_is_the_fixed_claim_names(keypair, jwks_url) -> None:
     """No mapping given: today's behaviour exactly (`test_auth.py`'s cases, unchanged)."""
-    assert ClaimMapping() == ClaimMapping(
-        clearance=ValueSource(claim="clearance"),
-        org_unit=ValueSource(claim="org_unit"),
-        handling_codes=CodesSource(claim="receivable_handling_codes"),
+    default = ClaimMapping()
+    assert (default.clearance.claim, default.org_unit.claim, default.handling_codes.claim) == (
+        "clearance",
+        "org_unit",
+        "receivable_handling_codes",
     )
+    assert default.tenant_id is None
     principal = PrincipalResolver(_config(jwks_url)).resolve(
         sign_token(_key(keypair), default_claims(receivable_handling_codes=["R"]))
     )
@@ -519,8 +581,16 @@ def test_the_default_mapping_reads_one_code_or_role_as_one_not_its_letters(
         {"org_unit": 3},
         {"receivable_handling_codes": {"R": True}},
         {"roles": 1},
+        {"sub": 5},
     ],
-    ids=["list-clearance", "empty-clearance", "numeric-unit", "object-codes", "numeric-roles"],
+    ids=[
+        "list-clearance",
+        "empty-clearance",
+        "numeric-unit",
+        "object-codes",
+        "numeric-roles",
+        "numeric-sub",
+    ],
 )
 def test_the_default_mapping_refuses_a_claim_of_the_wrong_type(
     keypair, jwks_url, overrides
@@ -542,8 +612,10 @@ def test_the_default_mapping_does_not_read_entra_attributes(keypair, jwks_url) -
 async def test_the_owner_exchange_maps_claims_through_the_same_path(
     keypair, jwks_url, token_exchange_url: str, token_exchange_registry: TokenExchangeRegistry
 ) -> None:
-    """ADR-043's one claims-construction path: a token got by exchange is mapped as a session's
-    is, so two clearances are refused there too, never resolved by a second path."""
+    """ADR-043's one claims-construction path: a token got by exchange is mapped by the
+    deployment's mapping, as a session's is (owner-ok's clearance and unit come from its groups),
+    and two clearances are refused there too. It proves the path, not Entra's behaviour: Entra has
+    no impersonation exchange, and how owners resolve on Entra is P10 part 2's question."""
     token_exchange_registry.register(
         "owner-ok", entra_claims(sub="owner-ok", groups=[G_OFFICIAL, G_UNIT_1, G_CODE_R])
     )
@@ -572,16 +644,43 @@ async def test_the_owner_exchange_maps_claims_through_the_same_path(
         await resolver.aclose()
 
 
+_PRINCIPAL_CALL = re.compile(r"(^|\.)Principal(\.|$)")
+
+
 def test_one_principal_construction_in_principal_auth() -> None:
-    """`Principal(` is called in exactly one place in `principal_auth`, `principal_from_claims`."""
+    """A `Principal` is built in exactly one place in `principal_auth`, `principal_from_claims`:
+    any call naming the class (`Principal(…)`, `domain.Principal(…)`, `Principal.model_validate`,
+    `Principal.model_construct`), in a function or at module level."""
     source = (
         Path(__file__).resolve().parents[4] / "OspreyFlow_Core/packages/principal_auth/__init__.py"
     )
     tree = ast.parse(source.read_text())
-    calls: list[str] = []
+    owner: dict[ast.AST, str] = {}
     for fn in ast.walk(tree):
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for node in ast.walk(fn):
-                if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Principal":
-                    calls.append(fn.name)
+                owner.setdefault(node, fn.name)
+    calls = [
+        owner.get(node, "<module>")
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and _PRINCIPAL_CALL.search(ast.unparse(node.func))
+    ]
     assert calls == ["principal_from_claims"]
+
+
+@pytest.mark.parametrize(
+    "plant",
+    [
+        "def _p(c):\n    return domain.Principal(id='x', clearance='x', org_unit='x')\n",
+        "def _p(c):\n    return Principal.model_validate(c)\n",
+        "_P = Principal.model_construct()\n",
+    ],
+    ids=["qualified", "model-validate", "module-level"],
+)
+def test_the_construction_check_sees_each_other_way_to_build_one(plant) -> None:
+    """The check above, shown red on the shapes a second path could take (rule 15)."""
+    tree = ast.parse(plant)
+    assert any(
+        isinstance(n, ast.Call) and _PRINCIPAL_CALL.search(ast.unparse(n.func))
+        for n in ast.walk(tree)
+    )
