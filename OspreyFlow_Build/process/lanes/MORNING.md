@@ -426,6 +426,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       lock stays P9b); a KMS key policy; a restore that verifies every part before touching anything and refuses
       while writers run; the restore proven for the single-replica shapes (production's procedure to P9b); the kept
       bucket's expiry replaced by the client's retention at decommission.
+    - **Cloud-platform egress was namespace-wide (case-b's finding, about 18:00, from the chart and Calico's order):**
+      one Calico Allow with selector all() let every pod (the Glass, NER, Superset included) reach RDS, S3 and every
+      allowed outside host; Kubernetes policies are never reached for egress. Ruled into P7b: egress per workload
+      along real call paths, a cp-policy-check rule refusing all() except DNS, tested in Calico's order. P7b may move
+      to 14 November.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
