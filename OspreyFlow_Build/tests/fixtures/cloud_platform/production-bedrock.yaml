@@ -1,0 +1,47 @@
+# A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
+# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+network:
+  public_origin: https://ospreyflow.apps.example.org
+reporting:
+  sync: true
+  superset: true
+# P11 part 2: production with a Bedrock engine as well, so the gateway's own account and role
+# (terraform/gateway.tf) pass the policy check and OpenTofu's fmt, init and validate (the
+# orchestrator's round 1, item 4).
+models:
+  local_only: false
+  providers:
+  - name: openai
+    roles: {extraction: gpt-4o-mini}
+  - name: bedrock
+    label: Bedrock (London)
+    kind: bedrock
+    roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}
+cloud_platform:
+  platform: client
+  namespace: ospreyflow-bedrock
+  environment: production
+  registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+  allow_from: ["192.0.2.0/24", "198.51.100.0/24"]
+  # S3 and STS by their networks (synthetic): the bucket and IRSA's role, on every render.
+  egress_nets:
+    s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+    sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
+    api.openai.com: ["203.0.113.0/24"]
+    bedrock-runtime.eu-west-2.amazonaws.com: ["198.18.2.0/24"]
+# The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+map:
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "\xA9 OpenStreetMap contributors"

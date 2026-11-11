@@ -1541,7 +1541,7 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     if args.action in ("key", "remove-key") and (states or {}).get(args.name) == "iam_role":
         # ADR-135 Amendment 4: refused before any key is read, so none is ever typed for it.
         print(
-            f"{args.name} signs in by the namespace's IAM role and keeps no key; nothing was "
+            f"{args.name} signs in by the gateway's own IAM role and keeps no key; nothing was "
             "changed.",
             file=sys.stderr,
         )
@@ -1555,7 +1555,7 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
         # may keep no key, so none is read for it until the Conduit can say.
         print(
             f"The Conduit did not answer, so whether {args.name} keeps a key or signs in by the "
-            "namespace's IAM role cannot be told; no key was read and nothing was changed. Start "
+            "gateway's own IAM role cannot be told; no key was read and nothing was changed. Start "
             "the deployment (ospreyflow start), then try again.",
             file=sys.stderr,
         )

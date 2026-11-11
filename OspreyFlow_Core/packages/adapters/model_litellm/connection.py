@@ -16,7 +16,7 @@ The outcomes, as the LiteLLM proxy answers them:
 - `gateway_token`: 401 naming the proxy's own token: the Conduit and the gateway disagree on the
   gateway's key, a deployment fault, not the provider's;
 - `key_refused`: any other 401 or 403, or the 500 a missing key gives ("AuthenticationError"): the
-  provider refused the key, or there was none; for an engine signed in by the namespace's IAM role
+  provider refused the key, or there was none; for an engine signed in by the gateway's own IAM role
   (ADR-135 Amendment 4), also botocore's "Unable to locate credentials" (no identity on the
   gateway's pod), STS refusing `AssumeRoleWithWebIdentity` (the role does not trust the gateway's
   service account), and the role's own refusal (403);

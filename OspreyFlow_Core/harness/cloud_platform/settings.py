@@ -12,11 +12,19 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from schemas.deployment import too_wide_for_egress
 
@@ -89,8 +97,34 @@ class SecretSettings(_Strict):
     keys: dict[str, str]
 
 
+#: A Kubernetes object's name (RFC 1123 subdomain): lower case, digits, `-` and `.`, beginning and
+#: ending with a letter or digit, at most 253.
+_KUBERNETES_NAME = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
+
+
 class IrsaSettings(_Strict):
     service_account: str = Field(min_length=1)
+    #: The model gateway's own account, its role Bedrock's invoke in London alone, made only while a
+    #: Bedrock engine is enabled (P11 part 2; the orchestrator's ruling, option A).
+    gateway_service_account: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _two_accounts_apart(self) -> IrsaSettings:
+        """Each a Kubernetes name, and never one account for both: the gateway's role would trust
+        the buckets' account, or two service accounts would share one name (the orchestrator's
+        review of P11 part 2, round 1, item 5)."""
+        for field, name in (("service_account", self.service_account),
+                            ("gateway_service_account", self.gateway_service_account)):  # fmt: skip
+            if name is not None and not _KUBERNETES_NAME.fullmatch(name):
+                raise ValueError(
+                    f"secrets.irsa.{field} must be a Kubernetes name (lower case, digits, - and .)"
+                )
+        if self.gateway_service_account == self.service_account:
+            raise ValueError(
+                "secrets.irsa.gateway_service_account must differ from service_account: the "
+                "gateway's role grants Bedrock alone, the namespace's the buckets"
+            )
+        return self
 
 
 class PlatformSecrets(_Strict):

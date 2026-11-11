@@ -244,7 +244,7 @@ def provider_secret_lines(
     held = _env_pairs(previous)
     in_gateway = held.get(KEYS_IN_GATEWAY) == "yes"
     lines: list[str] = [f"{KEYS_IN_GATEWAY}=yes\n"] if in_gateway else []
-    # An engine signed in by the namespace's IAM role keeps no key (ADR-135 Amendment 4).
+    # An engine signed in by the gateway's own IAM role keeps no key (ADR-135 Amendment 4).
     for provider in config.models.keyed_providers:
         variable = config.models.key_variable(provider.name)
         key = environ.get(variable, "") or held.get(variable, "")

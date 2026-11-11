@@ -546,4 +546,119 @@ def render_terraform(
         "here, and each key a person holds (a model engine's, a connection's) given as a variable.",
         blocks,
     )
+    from harness.cloud_platform import bedrock_enabled
+
+    if bedrock_enabled(config):
+        files["gateway.tf"] = _gateway_role(config, platform)
     return files
+
+
+def _gateway_role(config: OspreyConfig, platform: PlatformSettings) -> str:
+    """P11 part 2 (the orchestrator's ruling, option A, least privilege): the model gateway's own
+    service account and IAM role, made only while a Bedrock engine is enabled. The role grants
+    Bedrock's two invoke actions on the foundation models of each Bedrock engine's region (London
+    alone, by ADR-135 Amendment 4), so IAM itself holds the region; no S3 action, no other service.
+    Its trust is that one account's, through the cluster's OIDC provider, for STS alone."""
+    from harness.cloud_platform import gateway_account
+
+    account = gateway_account(platform)
+    regions = sorted(
+        {p.region or "eu-west-2" for p in config.models.enabled_providers if p.kind == "bedrock"}
+    )
+    models = "[" + ", ".join(_q(f"arn:aws:bedrock:{r}::foundation-model/*") for r in regions) + "]"
+    return _file(
+        "P11 part 2: the model gateway's own service account, given Bedrock's invoke in London\n"
+        "by its role (IRSA), made only while a Bedrock engine is enabled. No key exists anywhere,\n"
+        "and the role holds no S3 action: the buckets are the namespace's own account's (irsa.tf).",
+        [
+            (
+                'data "aws_iam_policy_document" "gateway_bedrock"',
+                [
+                    (
+                        "statement",
+                        [
+                            (
+                                "actions",
+                                '["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]',
+                            ),
+                            ("resources", models),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                'resource "aws_iam_policy" "gateway_bedrock"',
+                [
+                    ("name", '"${var.namespace}-gateway-bedrock"'),
+                    ("policy", "data.aws_iam_policy_document.gateway_bedrock.json"),
+                ],
+            ),
+            (
+                'data "aws_iam_policy_document" "gateway_trust"',
+                [
+                    (
+                        "statement",
+                        [
+                            ("actions", '["sts:AssumeRoleWithWebIdentity"]'),
+                            (
+                                "principals",
+                                [
+                                    ("type", _q("Federated")),
+                                    ("identifiers", "[var.eks_oidc_provider_arn]"),
+                                ],
+                            ),
+                            (
+                                "condition",
+                                [
+                                    ("test", _q("StringEquals")),
+                                    ("variable", '"${var.eks_oidc_issuer}:sub"'),
+                                    (
+                                        "values",
+                                        f'["system:serviceaccount:${{var.namespace}}:{account}"]',
+                                    ),
+                                ],
+                            ),
+                            (
+                                "condition",
+                                [
+                                    ("test", _q("StringEquals")),
+                                    ("variable", '"${var.eks_oidc_issuer}:aud"'),
+                                    ("values", '["sts.amazonaws.com"]'),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                'resource "aws_iam_role" "gateway"',
+                [
+                    ("name", '"${var.namespace}-gateway"'),
+                    ("assume_role_policy", "data.aws_iam_policy_document.gateway_trust.json"),
+                ],
+            ),
+            (
+                'resource "aws_iam_role_policy_attachment" "gateway_bedrock"',
+                [
+                    ("role", "aws_iam_role.gateway.name"),
+                    ("policy_arn", "aws_iam_policy.gateway_bedrock.arn"),
+                ],
+            ),
+            (
+                'resource "kubernetes_service_account" "gateway"',
+                [
+                    (
+                        "metadata",
+                        [
+                            ("name", _q(account)),
+                            ("namespace", "var.namespace"),
+                            (
+                                "annotations",
+                                {_q("eks.amazonaws.com/role-arn"): "aws_iam_role.gateway.arn"},
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )

@@ -6,7 +6,7 @@ second worked example: a fixture models the dependency's refusals, not only its 
   its address, with or without a trailing slash): no token, a wrong token, a model it does not
   offer, a model its policy refuses (403), its own rate limit (429), and a refusal in a shape that
   is not OpenAI's from whatever stands in front of it.
-- **Bedrock in London**, signed by the gateway pod's own identity (the namespace's IAM role): no
+- **Bedrock in London**, signed by the gateway pod's own identity (the gateway's own IAM role): no
   identity at all, a role the account does not allow, the role not trusting the service account,
   the role's credentials expired, a model not granted to the account, a model not offered or
   offered only through an inference profile, throttling. No other region: `engine_refusal` holds
@@ -179,7 +179,7 @@ async def test_an_address_with_no_gateway_behind_it_is_not_reachable() -> None:
     assert classify(refused.status_code, refused.text) == "unreachable"
 
 
-# --- Bedrock by the namespace's IAM role --------------------------------------------------------
+# --- Bedrock by the gateway's own IAM role --------------------------------------------------------
 
 
 async def _bedrock(gateway: StandInGateway, *, region: str = "eu-west-2",

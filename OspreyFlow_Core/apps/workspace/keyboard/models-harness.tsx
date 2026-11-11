@@ -34,7 +34,7 @@ const engines: Engine[] = [
                 privacy_contract: true, contract_reference: "DPA 2026/07" },
     key_state: "lost", key_set_at: "2026-11-01T09:00:00Z", key_set_by: "admin-1", default_for: [] },
 ];  // prettier-ignore
-// ADR-135 Amendment 4: `iam=1` adds Bedrock in London, signed in by the namespace's IAM role.
+// ADR-135 Amendment 4: `iam=1` adds Bedrock in London, signed in by the gateway's own IAM role.
 if (params.get("iam")) {
   engines.push({ provider: { name: "bedrock", label: "Bedrock (London)", roles: { extraction: "anthropic.claude-3-haiku" },
                              api_base: null, privacy_contract: false, contract_reference: null, kind: "bedrock", auth: "iam_role" },
@@ -87,7 +87,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   }  // prettier-ignore
   if (path === "" && method === "GET") return reply(200, view());
   if (path === "/engines" && method === "POST") {
-    // ADR-135 Amendment 4: an engine signed in by the namespace's IAM role has no key to set.
+    // ADR-135 Amendment 4: an engine signed in by the gateway's own IAM role has no key to set.
     const provider = body.provider as Engine["provider"];
     engines.push({ provider, key_state: provider.auth === "iam_role" ? "iam_role" : "none", key_set_at: null, key_set_by: null, default_for: [] });
     return reply(200, view());

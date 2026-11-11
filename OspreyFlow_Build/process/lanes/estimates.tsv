@@ -1,7 +1,6 @@
-# as of 2026-11-11T17:40Z
+# as of 2026-11-11T18:40Z
 admin	P10	part 1: merge prepared (7c33ea8), gates and the leased live selection running; part 2 next	part 1 11 Nov, ~15:30	B
 case	P9	built; review: not mergeable (ClickHouse's SQL users could reach the backups, now closed by its own backup user and two scoped roles; versioning; a restore that verifies first); fixes and kind measurements, then round 2	12 Nov, evening	B
-platform-b	P11	part 1 merged; part 2 (the gateway by default and its own IAM role) after the carries	part 2 13 Nov	B
 case-b	P12	part 1 merged; part 2: the service in the profile and a leased case on the client's own engine (after P11 part 2)	part 2 13 Nov	B
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B

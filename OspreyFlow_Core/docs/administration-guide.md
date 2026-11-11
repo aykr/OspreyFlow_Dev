@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.77** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.78** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.78 | 2026-11-11 | §10.1: on the `cloud-platform` profile *Admin › Models* refuses an engine the render did not make (declare it, re-render, have the platform team apply the Terraform); `secrets.irsa.gateway_service_account`; Bedrock signs in by the gateway's own IAM role (P11 part 2, ADR-135 Amendment 8). |
 | 1.77 | 2026-11-11 | Appendix A: `models.provider(s).kind`, `auth` and `region`, the client's gateway and Bedrock by the IAM role on the `cloud-platform` profile (P11 part 1, ADR-135 Amendment 7). |
 | 1.76 | 2026-11-11 | §6a's re-check: the policy check on your own settings in its working form, which needs Docker (Helm's own image) and is unrun until P7b's kind run; the example's map said to be empty on this profile; a named deployment's `terraform` folder; the chart, not the render, makes the two Calico policies (`default.`); which commands ran, and where. |
 | 1.75 | 2026-11-11 | §6a after its two reviews, its render commands run as written from `OspreyFlow_Core`: the example's required `map:` section; make the `terraform` folder before the first render (a known issue); the unpinned render first, never installed, then `ecr.tf`, the push with `--from`, and the pinned render; the third-party images copied by tag (a known issue); no CPU limit, so a LimitRange's default and a quota on `limits.cpu` both apply; who reads which keys of `ospreyflow-secrets`, by the blanks; the Terraform state holds every secret; OpenSearch made and unused; Keycloak's group 0 and the identity step not shown; the policy check's fixtures, and `tools.cp_policy_check --config`; the ingress by backend; the coming list and three more questions for the platform's team. |
@@ -1968,6 +1969,15 @@ are requests a minute, tokens a minute and a token budget for a period, applied 
 the engine's own key. **Usage** gives each engine's calls, failures and tokens by job, from the
 gateway's own records, never by person. Every change is in **History** and the audit log.
 
+**On a cloud platform** (`profile: cloud-platform`), an engine is reached only once the deployment's
+render has made its way out of the namespace, and for Amazon Bedrock the gateway's own IAM role,
+whose service account the platform's settings name as `secrets.irsa.gateway_service_account`
+(ADR-135 Amendment 8). Admin → **Models** therefore refuses, in words, to add an engine, or to move
+one to an address, that the render did not make: declare it in `osprey.yaml`, render the deployment
+again, and have the platform team apply the Terraform, then add it here. An engine a restored models
+file names but the render did not make is marked *not made by the render* and is neither offered to
+analysts nor given to the gateway.
+
 ## 10a. Maps
 
 Admin → **Maps** (`manage_geospatial`) holds the map providers, the local basemap and prefetched
@@ -2394,7 +2404,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
 | `models.provider.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
-| `models.provider.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key. |
+| `models.provider.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key. |
 | `models.provider.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
 | `models.providers.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
@@ -2404,7 +2414,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
 | `models.providers.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
-| `models.providers.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key. |
+| `models.providers.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key. |
 | `models.providers.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.defaults` | mapping | — | Each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it). |
 | `models.extraction` | `qwen2.5:7b-instruct` \| `qwen2.5:14b-instruct` | `qwen2.5:7b-instruct` | The local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with; with resources.gpu: nvidia and this not named, qwen2.5:14b-instruct. |

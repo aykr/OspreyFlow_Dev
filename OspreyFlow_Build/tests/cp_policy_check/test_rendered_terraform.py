@@ -47,9 +47,14 @@ def _tofu(folder: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )  # fmt: skip
 
 
-@pytest.mark.parametrize("fixture", ["development", "production", "production+opensearch"])
+@pytest.mark.parametrize(
+    "fixture", ["development", "production", "production+opensearch", "production-bedrock"]
+)
 def test_the_terraform_is_formatted_and_valid(tmp_path: Path, fixture: str) -> None:
+    """`production-bedrock` renders the gateway's own account and role (P11 part 2)."""
     folder = _write(tmp_path, fixture)
+    if fixture == "production-bedrock":
+        assert (folder / "gateway.tf").is_file()
     fmt = _tofu(folder, "fmt", "-check", "-diff")
     assert fmt.returncode == 0, fmt.stdout + fmt.stderr
     init = _tofu(folder, "init", "-backend=false", "-input=false", "-no-color")

@@ -1,0 +1,16 @@
+P11 part 2's gates after round 2 at ef9e837f298ab1462b3aec2a70672e8b3f7c7c71 (rebased onto main b0eab6e), offline on
+ospreyflow-test through `stack_lease.sh offline platform-b`, 11 November 2026, run 20261111T171816Z, both p11p2 diffs
+applied in the run's copy (as at merge), the worktree restored by name after the copy. Raw: gates-ef9e837.raw.txt.
+This supersedes gates-af486fe.txt (round 1's head).
+
+Command: make -k test; make live-collect; make -C OspreyFlow_Core test-js; make -k ci; test_lanes_heartbeat.py and
+test_lanes_launch.py alone.
+- make -k ci: exit 0, every target green (cp-policy-check on the three fixtures with production-bedrock's gateway
+  role, OpenTofu on every shape, harness-a11y 34 passed at slot 7, chart, schemas, lint).
+- make test: 3 failed / 11776 passed / 27 skipped, none this step's: the GPU host case; test_docs_pdf (the guide
+  diff's appendix and Models paragraph with no version row and no PDF, the docs lane's at merge); one
+  test_lanes_heartbeat case reading the server's live lease state, and the two process-tooling files alone in the
+  same run: 61 passed.
+- live-collect: exit 0.
+- test-js: 1 failed / 3074 passed: MatrixView.budget, opened in 4268 ms against 2500 at the run's load, in the
+  Glass's matrix this step does not touch; carried as it is (the orchestrator).

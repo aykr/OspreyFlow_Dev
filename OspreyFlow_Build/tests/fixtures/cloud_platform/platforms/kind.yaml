@@ -38,3 +38,4 @@ secrets:
     keys: {prefix: bucket_prefix}
   irsa:
     service_account: ospreyflow
+    gateway_service_account: ospreyflow-gateway

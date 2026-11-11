@@ -50,3 +50,6 @@ secrets:
   irsa:
     # The service account the Conduit, ingest and the workers run as, given S3 by its role.
     service_account: ospreyflow
+    # The model gateway's own, given Bedrock's invoke in London by its role, only while a Bedrock
+    # engine is enabled (P11 part 2).
+    gateway_service_account: ospreyflow-gateway

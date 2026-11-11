@@ -51,7 +51,7 @@ type Auth = "key" | "iam_role";
 const KINDS: { kind: Kind; label: string }[] = [
   { kind: "provider", label: "A model provider (Gemini, OpenAI, Anthropic, Azure)" },
   { kind: "gateway", label: "Your organisation's own AI gateway (OpenAI-compatible)" },
-  { kind: "bedrock", label: "Amazon Bedrock in London, by the namespace's IAM role" },
+  { kind: "bedrock", label: "Amazon Bedrock in London, by the gateway's own IAM role" },
 ];
 
 interface Draft {
@@ -79,7 +79,7 @@ function kindsOf(view: ModelsAdminView): Kind[] {
   return (view.engine_kinds as Kind[] | undefined) ?? ["provider"];
 }
 
-/** How an engine of `kind` signs in: Bedrock by the namespace's IAM role, any other by its key or token. */
+/** How an engine of `kind` signs in: Bedrock by the gateway's own IAM role, any other by its key or token. */
 function authFor(kind: Kind): Auth {
   return kind === "bedrock" ? "iam_role" : "key";
 }
@@ -174,13 +174,13 @@ function EngineForm({
       )}
       {draft.kind === "gateway" && (
         <p className="label" style={{ margin: 0 }}>
-          Signs in by a token, entered next and kept by the model gateway alone. Signing in by the namespace&apos;s IAM
-          role waits for your gateway&apos;s owners to say how it accepts the role.
+          Signs in by a token, entered next and kept by the model gateway alone. Signing in by an IAM role waits for
+          your gateway&apos;s owners to say how it accepts one.
         </p>
       )}
       {draft.kind === "bedrock" && (
         <p className="label" style={{ margin: 0 }}>
-          Signs in by the namespace&apos;s IAM role in London (eu-west-2); no key is kept, and no other region is used.
+          Signs in by the gateway&apos;s own IAM role in London (eu-west-2); no key is kept, and no other region is used.
         </p>
       )}
       <label htmlFor={`${id}-label`}>Label analysts see</label>
@@ -402,6 +402,8 @@ export function Models({ api }: { api: ModelsApi }) {
                             {when(engine.key_set_at)}, by {engine.key_set_by}
                           </div>
                         )}
+                        {/* ADR-135 Amendment 8: never offered nor written into the gateway. */}
+                        {engine.not_made && <div role="note">{engine.not_made}</div>}
                       </td>
                       <td>{limitsInWords(engine.limits)}</td>
                       <td className="admin-models-actions">
@@ -512,7 +514,7 @@ export function Models({ api }: { api: ModelsApi }) {
                   act(
                     addEngine(api, added),
                     added.auth === "iam_role"
-                      ? `${added.name} is added. It signs in by the namespace's IAM role: no key is needed.`
+                      ? `${added.name} is added. It signs in by the gateway's own IAM role: no key is needed.`
                       : `${added.name} is added. Enter its key next.`,
                   );
                 }}

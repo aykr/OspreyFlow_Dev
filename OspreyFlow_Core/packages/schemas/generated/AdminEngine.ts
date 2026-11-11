@@ -25,7 +25,7 @@ export type ContractReference = string | null;
  */
 export type Kind = "provider" | "gateway" | "bedrock";
 /**
- * ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key.
+ * ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key.
  */
 export type Auth = ("key" | "iam_role") | null;
 /**
@@ -40,6 +40,7 @@ export type RequestsPerMinute = number | null;
 export type TokensPerMinute = number | null;
 export type BudgetTokens = number | null;
 export type BudgetPeriod = ("day" | "month") | null;
+export type NotMade = string | null;
 
 /**
  * One hosted engine as *Admin › Models* shows it: its settings, its limits, and its key's state
@@ -52,6 +53,7 @@ export interface AdminEngine {
   key_set_by?: KeySetBy;
   default_for?: DefaultFor;
   limits?: EngineLimits;
+  not_made?: NotMade;
   [k: string]: unknown;
 }
 /**

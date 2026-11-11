@@ -9,7 +9,10 @@ Run from `OspreyFlow_Core`, offline (closed ports, no stack):
         .venv/bin/python ../OspreyFlow_Build/process/lanes/platform-b/p11/plant.py [ID…]
 
 Each plant's id is the red record's (`RED_RECORD.md`): 1-8 and A-L from the first round, as they now
-stand; N1-N24 and U1-U3 from the orchestrator's review, round 1.
+stand; N1-N24 and U1-U3 from the orchestrator's review, round 1; R1-R6 from round 2 and its review
+(carried into P11 part 2 by the confirmation); W1-W8 P11 part 2's own (the gateway by default and
+its own identity). The R and W plants need `cloud-platform`'s files as on main after 2733de4, and
+the W plants part 2's own changes to them.
 """
 
 from __future__ import annotations
@@ -36,6 +39,10 @@ STAND_IN = "packages/adapters/model_litellm/stand_in.py"
 CLI_MODELS = "cli/ospreyflow/models.py"
 CLI_MAIN = "cli/ospreyflow/main.py"
 GLASS = "apps/workspace/src/admin/sections/Models.tsx"
+CLOUD = "harness/cloud_platform/__init__.py"
+TERRAFORM = "harness/cloud_platform/terraform.py"
+G = "../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py"
+R = "../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py"
 
 
 @dataclass(frozen=True)
@@ -92,7 +99,7 @@ PLANTS = [
           (f"{K}::test_bedrock_answers_through_the_gateway_pod_s_role_in_london",)),
     Plant("6", "apply.provider_secret_lines", "the install asks every engine for a key",
           "harness/apply.py",
-          "    # An engine signed in by the namespace's IAM role keeps no key (ADR-135 Amendment 4).\n"
+          "    # An engine signed in by the gateway's own IAM role keeps no key (ADR-135 Amendment 4).\n"
           "    for provider in config.models.keyed_providers:",
           "    for provider in config.models.enabled_providers:",
           (f"{K}::test_the_install_asks_no_key_for_an_iam_role_engine",)),
@@ -119,10 +126,10 @@ PLANTS = [
     Plant("E", "ModelAdmin.remove_key", "removal not refused", ADMIN,
           "            if any(p.name == name and p.keyless for p in current.providers):\n"
           "                raise ModelAdminRefused(\n"
-          '                    f"{name} signs in by the namespace\'s IAM role and keeps no key; there',
+          '                    f"{name} signs in by the gateway\'s own IAM role and keeps no key; there',
           "            if False:\n"
           "                raise ModelAdminRefused(\n"
-          '                    f"{name} signs in by the namespace\'s IAM role and keeps no key; there',
+          '                    f"{name} signs in by the gateway\'s own IAM role and keeps no key; there',
           (f"{K}::test_an_iam_role_engine_keeps_no_key_anywhere",)),
     Plant("F", "ModelAdmin._start_once", "no entries for a declared IAM-role engine", ADMIN,
           "        if self._settings is None and not any(p.keyless for p in self._installed.providers):",
@@ -144,7 +151,7 @@ PLANTS = [
           '        "model identifier is invalid" in body',
           (f"{S}::test_bedrock_refuses_a_model_offered_only_through_an_inference_profile",)),
     Plant("K", "ospreyflow.models._STATE_WORDS", "`iam_role` unknown to the CLI", CLI_MODELS,
-          '    "iam_role": "none kept: signs in by the namespace\'s IAM role",\n', "",
+          '    "iam_role": "none kept: signs in by the gateway\'s own IAM role",\n', "",
           (f"{C}::test_an_iam_role_engine_is_listed_as_keeping_no_key",)),
     Plant("L", "ospreyflow.main._models", "`models key`/`remove-key` not refused first", CLI_MAIN,
           '    if args.action in ("key", "remove-key") and (states or {}).get(args.name) == "iam_role":',
@@ -172,7 +179,7 @@ PLANTS = [
           "        if refused := None:",
           (K,), "refuses_each_shape or neither_offered_nor_taken"),
     Plant("N6", "OspreyConfig._engines_suit_the_profile", "osprey.yaml ignores the profile", SCHEMA,
-          "            if refused := engine_refusal(provider, self.profile.value):",
+          "            if refused := engine_refusal(provider, profile):",
           "            if refused := None:",
           (f"{K}::test_osprey_yaml_off_the_cloud_platform_profile_takes_bedrock_by_key_and_refuses_the_kinds",)),
     Plant("N7", "engine_refusal", "a cross-region inference profile's id taken (item 2)", SCHEMA,
@@ -186,7 +193,7 @@ PLANTS = [
           "    if False:",
           (f"{K}::test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row",)),
     Plant("N10", "engine_refusal", "a key-shaped label taken (item 4)", SCHEMA,
-          "    if provider.label and _looks_like_a_key(provider.label):", "    if False:",
+          "    if provider.label and _label_looks_like_a_key(provider.label):", "    if False:",
           (f"{K}::test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row",)),
     Plant("N11", "connection.classify", "Bedrock's model access read as the role refused (item 3)",
           CONNECTION, '    if "have access to the model with the specified model ID" in body:',
@@ -272,6 +279,94 @@ PLANTS = [
     Plant("U5", "Models.tsx providerOf", "an engine of the two kinds sent as a provider", GLASS,
           '...(draft.kind === "provider" ? {} : { kind: draft.kind, auth: authFor(draft.kind) }),',
           "...{},", (KEYBOARD,)),
+    # --- round 2 and its review, carried into P11 part 2 (CARRIES: their reds were prose only) ----
+    Plant("R1", "_a_key_in_the_path", "a token in one case (lower or upper hex, base32) taken",
+          SCHEMA, 're.fullmatch(r"[a-z0-9]{24,}|[A-Z0-9]{24,}", segment)',
+          're.fullmatch(r"(?!)", segment)', (K,), "never_echoed"),
+    Plant("R2", "_label_looks_like_a_key", "a token among a label's or reference's words taken",
+          SCHEMA, "    return _looks_like_a_key(text) or any(",
+          "    return _looks_like_a_key(text) or False and any(", (K,), "never_echoed"),
+    Plant("R3", "_JWT", "a padded or encoded JWT's dot not read", SCHEMA,
+          '_DOT = r"=*(?:\\.|%2[eE])"', '_DOT = r"\\."', (K,), "never_echoed"),
+    Plant("R4", "_JWT", "a JWE (its second part not `eyJ`) not read", SCHEMA,
+          '_JWT = re.compile(rf"eyJ{_B64}{{8,}}{_DOT}{_B64}{{8,}}',
+          '_JWT = re.compile(rf"eyJ{_B64}{{8,}}{_DOT}eyJ{_B64}{{8,}}', (K,), "never_echoed"),
+    Plant("R5", "OspreyConfig._engines_suit_the_profile", "ENGINES_AS honoured on any profile",
+          SCHEMA,
+          "translated = engines_as == MODEL_ROUTE_PROFILE and self.profile is Profile.CLUSTER",
+          "translated = engines_as == MODEL_ROUTE_PROFILE", (K,), "engines_as_context"),
+    Plant("R6", "_egress_hosts", "a no-address engine's host found by its name, not its kind",
+          CLOUD,
+          "    if kind in profile.egress.engine_kind_hosts:\n"
+          "        # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
+          "        return profile.egress.engine_kind_hosts[kind]",
+          "    if name in profile.egress.engine_kind_hosts:\n"
+          "        # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
+          "        return profile.egress.engine_kind_hosts[name]",
+          (K,), "egress_host"),
+    # --- P11 part 2: the gateway by default, and its own identity ---------------------------------
+    Plant("W1", "render_cloud_platform", "the gateway only with an engine enabled at install", CLOUD,
+          '    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED]',
+          '    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED\n'
+          '                 and (config.models.enabled_providers or w["name"] != "litellm")]',
+          (G, R), "gateway_is_rendered"),
+    # W2 planted with a host whose networks the test gives (Gemini's), so it is red on the egress
+    # itself, not on the render's own refusal of a host with none (the orchestrator's round 1).
+    Plant("W2", "_egress_hosts", "a model host allowed out with no engine enabled", CLOUD,
+          "    hosts += engine_hosts(config, profile)",
+          "    hosts += engine_hosts(config, profile)\n"
+          '    hosts += [profile.egress.engine_hosts["gemini"]]',
+          (G,), "no_model_host"),
+    Plant("W3", "render_cloud_platform", "the gateway given no account of its own (the engine "
+          "kinds' Bedrock cases red too: the stand-in's role is the render's)", CLOUD,
+          '        if pod["name"] == "litellm" and bedrock_enabled(config):',
+          '        if False and pod["name"] == "litellm":',
+          (G, R, K)),
+    Plant("W4", "_gateway_role", "the role's trust bound to the namespace's account", TERRAFORM,
+          "    account = gateway_account(platform)",
+          "    account = platform.secrets.irsa.service_account", (G,), "grants_bedrock"),
+    Plant("W5", "_gateway_role", "an S3 action granted the gateway", TERRAFORM,
+          "'[\"bedrock:InvokeModel\", \"bedrock:InvokeModelWithResponseStream\"]'",
+          "'[\"bedrock:InvokeModel\", \"bedrock:InvokeModelWithResponseStream\", \"s3:GetObject\"]'",
+          (G,), "grants_bedrock"),
+    Plant("W6", "_gateway_role", "every region's models granted", TERRAFORM,
+          '_q(f"arn:aws:bedrock:{r}::foundation-model/*")',
+          '_q("arn:aws:bedrock:*::foundation-model/*")', (G,), "grants_bedrock"),
+    Plant("W7", "render_terraform", "a gateway role made with no Bedrock engine", TERRAFORM,
+          "    if bedrock_enabled(config):\n        files",
+          "    if True:\n        files", (G,), "without_bedrock"),
+    Plant("W8", "render_cloud_platform", "the gateway run as the namespace's own account", CLOUD,
+          "            pod[\"serviceAccountName\"] = gateway_account(platform)",
+          "            pod[\"serviceAccountName\"] = platform.secrets.irsa.service_account",
+          (G, R, K)),
+    # --- P11 part 2, round 1's fixes ---------------------------------------------------------------
+    Plant("W9", "ModelAdmin._made_by_the_render", "an engine the render did not make enabled",
+          ADMIN, "        if self._file.profile != MODEL_ROUTE_PROFILE:\n            return",
+          "        if True:\n            return", (K,), "render_did_not or host_the_render"),
+    Plant("W10", "gateway_account", "Bedrock rendered with no gateway account named", CLOUD,
+          "    if not account:\n        raise CloudPlatformNotRenderable(",
+          "    if False:\n        raise CloudPlatformNotRenderable(", (G,), "naming_no_gateway"),
+    Plant("W11", "IrsaSettings", "one account for both, or a name Kubernetes refuses",
+          "harness/cloud_platform/settings.py",
+          "        if self.gateway_service_account == self.service_account:",
+          "        return self\n        if self.gateway_service_account == self.service_account:",
+          (G,), "kubernetes_name"),
+    Plant("W12", "ModelProviderConfig._reference_is_words", "the reference's word-by-word check "
+          "on every profile", SCHEMA, "        if _looks_like_a_key(cleaned):",
+          "        if _label_looks_like_a_key(cleaned):", (K,), "long_reference"),
+    # --- P11 part 2, round 2: an engine from the models file the render did not make ---------------
+    Plant("W13", "ModelAdmin._hosted", "a restored engine the render did not make written into "
+          "the gateway", ADMIN,
+          "        made = [p for p in settings.providers if self._not_made(p) is None]",
+          "        made = list(settings.providers)", (K,), "restored_engine or no_word_from"),
+    Plant("W14", "ModelAdmin.routes", "an engine the render did not make offered to analysts", ADMIN,
+          "            if self._not_made(p) is None  # never offered unless the render made its way out",
+          "            if True", (K,), "restored_engine or no_word_from"),
+    Plant("W15", "ModelAdmin.set_key", "a key written for an engine the render did not make", ADMIN,
+          "            if refused := self._not_made(next(p for p in current.providers if p.name == name)):\n"
+          "                raise ModelAdminRefused(refused)  # never written into the gateway (round 2)\n"
+          "            if any(p.name == name and p.keyless",
+          "            if any(p.name == name and p.keyless", (K,), "restored_engine"),
 ]
 
 
@@ -304,7 +399,7 @@ def run(plant: Plant) -> tuple[bool, str]:
               if line.startswith(("FAILED", "E  ", " FAIL ", "  ×", " ×")) or "AssertionError" in line
               or re.match(r"\s+\d+\) .+ › ", line) or "toMatchObject" in line]  # fmt: skip
     summary = next((line for line in reversed(out.splitlines()) if line.strip()), "")
-    return done.returncode != 0, "\n      ".join([summary, *dict.fromkeys(failed[:6])])
+    return done.returncode != 0, "\n      ".join([summary, *dict.fromkeys(failed)])
 
 
 def main(wanted: list[str]) -> int:

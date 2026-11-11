@@ -17,8 +17,8 @@ the platform changes (ADR-148's decisions):
 - 7: the platform's Calico deny-egress policy, and an allow policy for the managed stores, the
   cluster's DNS and each host an enabled feature reaches (by its declared networks).
 - 8: every image from the deployment's registry, by the digest it was copied with.
-- 11 (as far as this step needs it): no local model and no Whisper; the gateway only when an engine
-  is enabled.
+- 11 (as far as this step needs it): no local model and no Whisper; the gateway always (P11 part 2),
+  its model hosts allowed out only while an engine is enabled.
 
 **The shared folders until P8** (the orchestrator's acceptance, 10 November 2026; ADR-148 decision 6
 and its open questions 1 and 2 move them to S3 and Postgres): one ReadWriteOnce claim holds them,
@@ -29,6 +29,7 @@ Conduits still read one folder. It is not spread across nodes; P8 removes it (a 
 from __future__ import annotations
 
 import ast
+import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -59,8 +60,6 @@ UID = 10001
 
 #: What a cluster runs that this profile does not: Caddy (decision 2), the local models (11).
 NOT_RENDERED = frozenset({"proxy", "ollama", "ollama-models", "whisper", "whisper-models"})
-#: The gateway and its database, rendered only when an engine is enabled (decision 11).
-GATEWAY = frozenset({"litellm", "litellm-db"})
 
 #: What reads the managed stores' details: only these are given them (a pod that reads the whole
 #: env, as the workspace's nginx does, is not handed the database's password for that).
@@ -223,6 +222,23 @@ def _what_the_install_writes(
         if original != key:
             copies[key] = original
     return _InstallWrites(settings, keys, defaults, copies)
+
+
+def bedrock_enabled(config: OspreyConfig) -> bool:
+    """Whether an enabled engine is Bedrock, signed by the gateway's own role (ADR-135 Am 4)."""
+    return any(p.kind == "bedrock" for p in config.models.enabled_providers)
+
+
+def gateway_account(platform: PlatformSettings) -> str:
+    """The gateway's own service account (`secrets.irsa.gateway_service_account`), refused in
+    words when the platform's settings name none and a Bedrock engine needs it."""
+    account = platform.secrets.irsa.gateway_service_account
+    if not account:
+        raise CloudPlatformNotRenderable(
+            "a Bedrock engine is enabled, and Bedrock's calls are signed by the gateway's own IAM "
+            "role, but the platform's settings name no secrets.irsa.gateway_service_account"
+        )
+    return account
 
 
 def _as_cluster(config: OspreyConfig, platform: PlatformSettings) -> OspreyConfig:
@@ -395,6 +411,35 @@ def _host(address: str) -> str | None:
     return urlsplit(re.sub(r"\{[^}]*\}", "x", address)).hostname
 
 
+def engine_host(
+    name: str, kind: str, api_base: str | None, region: str | None, profile: ProfileSettings
+) -> str | None:
+    """The one host a model engine's calls reach: its address's, its kind's (Bedrock's runtime in
+    its region, `egress.engine_kind_hosts`), or its provider's own (`egress.engine_hosts`)."""
+    if api_base:
+        return _host(api_base)
+    if kind in profile.egress.engine_kind_hosts:
+        # A kind that names no address (Bedrock): by its kind, its region's (P11).
+        return profile.egress.engine_kind_hosts[kind].format(region=region)
+    return profile.egress.engine_hosts.get(name)
+
+
+def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
+    """Each enabled engine's host, refused in words when one cannot be known."""
+    hosts = []
+    for provider in config.models.enabled_providers:
+        host = engine_host(
+            provider.name, provider.kind, provider.api_base, provider.region, profile
+        )
+        if host is None:
+            raise CloudPlatformNotRenderable(
+                f"the model engine {provider.name!r} names no api_base, so its traffic's host is "
+                "not known and cannot be allowed"
+            )
+        hosts.append(host)
+    return hosts
+
+
 def _egress_hosts(
     config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
 ) -> list[str]:
@@ -404,20 +449,8 @@ def _egress_hosts(
     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
     mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
     is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)"""
-    defaults = profile.egress.engine_hosts
     hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]
-    for provider in config.models.enabled_providers:
-        host = _host(provider.api_base) if provider.api_base else None
-        if host is None and provider.kind in profile.egress.engine_kind_hosts:
-            # A kind that names no address (Bedrock): by its kind, its region's (P11).
-            host = profile.egress.engine_kind_hosts[provider.kind].format(region=provider.region)
-        host = host or defaults.get(provider.name)
-        if host is None:
-            raise CloudPlatformNotRenderable(
-                f"the model engine {provider.name!r} names no api_base, so its traffic's host is "
-                "not known and cannot be allowed"
-            )
-        hosts.append(host)
+    hosts += engine_hosts(config, profile)
     for map_provider in config.map.providers if config.map is not None else []:
         if map_provider.proxy == "none":
             continue  # fetched by the browser, never from the namespace
@@ -627,13 +660,10 @@ def render_cloud_platform(
     profile = load_profile()
     production = _cp(config).environment == "production"
     as_cluster = _as_cluster(config, platform)
-    engines = bool(config.models.enabled_providers)
-    # The images the cluster's configuration runs: none of the stores the platform manages, and
-    # the gateway's only with an engine enabled, so the lock names nothing a pod does not run.
-    images = [
-        i for i in service_images(as_cluster)
-        if i.service not in NOT_RENDERED and (engines or i.service not in GATEWAY)
-    ]  # fmt: skip
+    # The images the cluster's configuration runs: none of the stores the platform manages. The
+    # gateway always (P11 part 2): an engine first added in Admin › Models then has one without a
+    # re-render, and the namespace reaches a model host only while an engine is enabled (egress).
+    images = [i for i in service_images(as_cluster) if i.service not in NOT_RENDERED]
     rendered = render_cluster(
         as_cluster,
         images,
@@ -649,16 +679,11 @@ def render_cloud_platform(
     api_image = next(i.image for i in images if i.service == "api")
     copies = _Copies(registry, api_image.rsplit("/", 1)[0], resolver, profile)
 
-    workloads = [
-        w for w in values["workloads"]
-        if w["name"] not in NOT_RENDERED and (engines or w["name"] not in GATEWAY)
-    ]  # fmt: skip
+    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED]
     jobs = [j for j in values["jobs"] if j["name"] not in NOT_RENDERED]
     for pod in [*workloads, *jobs]:
         pod.pop("runAs", None)  # decision 3: every pod is 10001's (the chart's podSecurity)
-        pod["initContainers"] = [
-            c for c in pod.get("initContainers", []) if engines or c["name"] not in GATEWAY
-        ]
+        pod["initContainers"] = list(pod.get("initContainers", []))
         if not pod["initContainers"]:
             pod.pop("initContainers")
         for container in _containers(pod):
@@ -683,6 +708,10 @@ def render_cloud_platform(
             pod["sharedAffinity"] = True
         if pod["name"] in ("api", "worker", "report-sync"):
             pod["serviceAccountName"] = platform.secrets.irsa.service_account
+        if pod["name"] == "litellm" and bedrock_enabled(config):
+            # Bedrock's calls signed by the gateway's own role, Bedrock's invoke in London alone
+            # (P11 part 2, least privilege): never the namespace's, which holds the buckets.
+            pod["serviceAccountName"] = gateway_account(platform)
         if pod.get("kind") == "StatefulSet":
             pod["disruptionBudget"] = {"maxUnavailable": 1}
     names = {w["name"] for w in workloads}
@@ -698,6 +727,19 @@ def render_cloud_platform(
     # Decision 12: no Java in this profile's Conduit; Admin › Maps' Build reads the profile and
     # says where the basemap is built instead.
     environment["OSPREY_PROFILE"] = Profile.CLOUD_PLATFORM.value
+    # What this render made for the model route, so Admin › Models refuses, in words, an engine
+    # whose host the egress does not allow or, for Bedrock, whose identity the render did not make
+    # (the orchestrator's ruling on P11 part 2, round 1): the hosts, the rules that place a new
+    # engine's host, and whether the gateway's own IAM role exists.
+    environment["OSPREY_MODEL_ROUTES_MADE"] = json.dumps(
+        {
+            "hosts": sorted(set(engine_hosts(config, profile))),
+            "provider_hosts": profile.egress.engine_hosts,
+            "kind_hosts": profile.egress.engine_kind_hosts,
+            "gateway_identity": bedrock_enabled(config),
+        },
+        sort_keys=True,
+    )
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
     environment.update(install.settings)

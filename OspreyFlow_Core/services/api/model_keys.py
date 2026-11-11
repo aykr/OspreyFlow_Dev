@@ -73,7 +73,7 @@ async def move_keys(
         name, sep, value = line.strip().partition("=")
         if sep and value:
             pairs[name.strip().lower()] = SecretStr(value.strip())
-    # An engine signed in by the namespace's IAM role keeps no key (ADR-135 Amendment 4): a line
+    # An engine signed in by the gateway's own IAM role keeps no key (ADR-135 Amendment 4): a line
     # for it is skipped and named, as a removed engine's is.
     enabled = {p.name for p in admin.settings.providers if not p.keyless}
     skipped = sorted(set(pairs) - enabled)
@@ -104,7 +104,7 @@ async def _run(argv: Sequence[str]) -> int:
             if skipped:
                 print(
                     "dropped, as no enabled engine keeps a key by that name (removed, or signed "
-                    f"in by the namespace's IAM role): {', '.join(skipped)}"
+                    f"in by the gateway's own IAM role): {', '.join(skipped)}"
                 )
         elif args.name is None:
             print("name the engine", file=sys.stderr)
