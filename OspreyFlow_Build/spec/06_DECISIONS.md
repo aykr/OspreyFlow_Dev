@@ -35271,8 +35271,11 @@ stand. Record: `process/lanes/case-b/P12p2_RED_RECORD.md`.
    so `ospreyflow images push` copies it; its port; **no `env_file`, so on a cluster no `envFrom` of the deployment's
    Secret** (which holds the gateway's master key and every store's password): its environment is its gateway's address
    alone. The Conduit is told the choice and Laurium's address (`OSPREY_EXTRACTION_ENGINE`, `OSPREY_LAURIUM_URL`). The
-   gateway is rendered always (Amendment 8). Platform's files (`render.py`'s two hooks, `cluster.py`'s port, the
-   profile's image and resources, `model_admin.py`'s two lines, the two fixtures) as the lane's diff.
+   gateway is rendered always (Amendment 8). **`harness/laurium.py` is case-b's** (the orchestrator's ratification of
+   11 November), beside platform's folder on the same terms as P9's module: one hook in each of `compose_services` and
+   the environment file, and imports one way (the render imports it; it imports nothing of the render). Platform's
+   files (`render.py`'s two hooks, `cluster.py`'s port, the profile's image and resources, `model_admin.py`'s two
+   lines, the two fixtures) as the lane's diff.
 4. **Laurium's key at start** (Amendment 6 decision 8's part 2): made with the deployment's extraction model alone, and
    **every older Laurium key deleted**, by its hash, every page read first, so a key from a master key since rotated is
    not left valid. **A key that cannot be made never stops the Conduit** (the lane reviewer's item 1): tried again in the
@@ -35286,9 +35289,11 @@ stand. Record: `process/lanes/case-b/P12p2_RED_RECORD.md`.
    makes, so a change here could not take effect; there is no write route and so nothing to audit.
 6. **Where Laurium's traffic may go is P7b's** (platform, ADR-148 Amendment 5): its row in the per-workload egress,
    `laurium: [litellm]`, and `laurium` in the Conduit's row; ingress derived from the same rows (the Conduit alone
-   reaches it; no worker holds a model). **Until P7b and the row land, the namespace's `allow-egress` (`all()`, order
-   100) admits Laurium's pod, as every pod, to every pod, the managed stores and each allowed host** (the lane's
-   finding of 11 November, measured on the rendered chart): the preset ships with that until then.
+   reaches it; no worker holds a model). **Before P7b, the namespace's `allow-egress` (`all()`, order 100) admits
+   every pod to every pod, the managed stores and each allowed host** (the lane's finding of 11 November, measured
+   on the rendered chart). **So the default never ships open** (rule 3; the orchestrator's ruling on round 1):
+   P12 part 2 merges after P7b, with Laurium's row in the same merge, and its network-policy xfails come off there.
+   The merge order: P9, P7b, case's decommission diff, then P12 part 2 with its row.
 7. **The exit: Laurium reads a real model's answer.** Leased on stack b (11 November, 18:01 UTC) beside the
    orchestrator's pinned gateway (LiteLLM with its own database) and Ollama: **`qwen2.5:7b-instruct`, the product's own
    extraction model, 3 of 3**; the 0.5B conformance model 0 of 3, the control (part 1's strict xfail on it stays,
