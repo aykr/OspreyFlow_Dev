@@ -665,6 +665,12 @@ class PrincipalResolver:
         )
         self._exchange_http = httpx.AsyncClient(timeout=10.0)
 
+    @property
+    def claim_mapping(self) -> ClaimMapping:
+        """The mapping this resolver was built with, validated: what the run API's service
+        identities are judged by too, so the two never disagree."""
+        return self._claim_mapping
+
     async def aclose(self) -> None:
         await self._exchange_http.aclose()
 

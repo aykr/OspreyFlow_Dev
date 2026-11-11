@@ -1330,7 +1330,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.recipe_runs = recipe_runs
     app.state.run_quotas = run_quotas
     # ADR-141 decision 10: a service identity's sign-in, for the run API alone.
-    app.state.service_identities = ServiceIdentityVerifier(config)
+    app.state.service_identities = ServiceIdentityVerifier(
+        config, claim_mapping=resources.principal_resolver.claim_mapping
+    )
     # The external runs going on in the background, held so none is collected mid-run.
     app.state.external_runs = set()
     app.state.judgements_store = judgements_store
