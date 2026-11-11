@@ -15,10 +15,12 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.41** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.43** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.43 | 2026-11-10 | Describes v0.5.0. §7: the alerts journey, the rule editor included, built and no longer *coming*; the section is still to be rewritten for it. |
+| 1.42 | 2026-11-10 | Rules' L2.10, case's L3.6 and L3.H1 as built, no longer *coming*. §4: a rule's alerts routed to one team, read by its members and the home case's Authors, given out or suppressed by its lead. §5.14: a drawn item's watch, the *Drawn items* alert when a load meets it, and the load result's count |
 | 1.41 | 2026-11-10 | Admin's L2.7 as built. §3: Home's *What you can do, and what you answer for*, with *Why can I do this?*; *Needs you* in the top bar. |
 | 1.40 | 2026-11-10 | Promotion as built (case lane's L3.4). §5.14: *Promote…*, its sheet and its checks, one load into the case's dataset, reviewed where the dataset asks; *Promotions from this board*; the board's Alerts panel and the canvas's alert badge. §7.1: the place's tabs as built, Connection strength in the Glass's rail. Still coming: Figures' Drawing panel (the Conduit does not count it yet). |
 | 1.39 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places. §3: Home, the place switcher and the context banner. §4: no branches; the new-case form; home cases, a dataset's Authors, teams; levels and roles in the words the Glass's help uses; views in the Cases drawer. §5: the rail, the view switch and More views; §5.2 *Save as a view*; §5.3 the basemap switch and *Find a place*; new §5.13 case views, §5.14 drawing boards, §5.15 your own link types. §9: the case's Figures tab, Dashboards on the rail, the Alert monitoring board, and the Reports Viewer's journey. §7 and the alerts it describes wait for the alerts journey (one queue, what raises alerts, watches, team routing, Raise an alert, the rule editor); its place is now Rules and Monitoring. Coming, and said so: promoting drawn items, *What you can do* on Home. |
@@ -207,7 +209,10 @@ accepting a type also needs that right.
 
 **Teams.** A team is a set of people with a lead, made by an administrator. A dataset's Authors may
 be a team as well as people: its members answer for the dataset while they are in the team, and not
-after. *Coming:* a case level given to a team, and alerts routed to a team and handed out by its lead.
+after. A rule's alerts can go to one team (**‹Team› only**, under the rule's *Alert goes to*): only its
+members, and the Authors of the dataset's home case, read them, and its lead, or their cover, gives
+each to a member (**Give to**) or sets it aside with **Suppress until…**. *Coming:* a case level
+given to a team.
 
 The case menu at the top left lists your cases. The rail's **Cases** drawer lists them too, with
 **Who can open this case**, which the Author manages, and the case's **views** (section 5.13). A link
@@ -739,7 +744,12 @@ and taken back like any load (the developer guide, section 7.8).
   and the newest, counted for you. Nothing is opened from it. On the canvas, an entity with open
   alerts carries a badge: **!** for one, **!3** for three.
 
-*Coming:* an alert when new data meets a drawn item.
+**When new data meets a drawn item.** What you draw is watched in the case's dataset, with nothing to
+set. When a load writes something that looks like a drawn item (the same identifier, or a like name
+of the same type), a **Drawn items** alert, "A load met a drawn item", reaches Rules and Monitoring ›
+Alerts, with **Open the board**, and the Ingest Studio's load result says how many it raised for you.
+The watch holds while you keep a level on the case. *Coming:* a list of your drawn items' watches,
+and a drawn link meeting new data.
 
 ### 5.15 Your own link types
 
@@ -820,9 +830,10 @@ To ask in words for a pattern rather than an answer, use **Ask to search** in th
 > **Alerts are worked in Rules and Monitoring**, the fourth place (key `R`), which the Analyst and
 > Rule author roles open. Its tabs are **Alerts**, **What raises alerts**, **Held rows** and
 > **Changes**. An alert has its own address, and **Open the evidence** saves a private view of the
-> case and opens it with **← Back to the alert**. This section is being rewritten for the alerts
-> journey (one queue, what raises alerts, watches, team routing, *Raise an alert* and the rule
-> editor), which is coming; where it says *Monitoring*, read Rules and Monitoring.
+> case and opens it with **← Back to the alert**. The alerts journey (one queue, what raises
+> alerts, watches, team routing, *Raise an alert* and the rule editor) is built, and the v0.5.0
+> release notes describe it; this section is still to be rewritten for it. Where it says
+> *Monitoring*, read Rules and Monitoring.
 
 ### 7.1 The Rules and Monitoring place
 

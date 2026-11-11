@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.32** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.33** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.33 | 2026-11-10 | Describes v0.5.0. §3: Releases as built (studio's L1.7), no longer *coming*. |
 | 1.32 | 2026-11-10 | Admin's L2.5c as built. §7.8: after the delete's dry run, an administrator may delete a removed case's layer on Admin → Datasets' screen; the merge is still the Ingest Studio's only. |
 | 1.31 | 2026-11-10 | Studio's L1.5 and platform's P5 as built. §3.2: the expert steps offered by + Step in expert mode, with `write_sql_transforms`; new §3.4b: the SQL transform and the fuzzy match, their sandbox and limits, disclosed in Test, runs and 4 Runs; Admin → Connections' four kinds. §7.8: proposed link types only on 1 Model (Admin's Proposed types removed), its count and *Needs you*. §9.1: a dataset's gazetteers. |
 | 1.30 | 2026-11-10 | §3: 4 Runs lists Analyst promotions and Removed cases' layers. §9.1: the routes of promotion, its review and a removed case's layer, and Admin's delete of one. §7.8: Admin's screen offers dry runs, though its delete route exists. |
@@ -122,10 +123,10 @@ pipelines (and how many are untested) and its last run. Its four steps are tabs:
 | **4 Runs** | One row per deployed pipeline and one cell per day; **Run now**, its schedule and its folder watch; held rows; the command that reverts a load; and, under the grid, **Analyst promotions** and **Removed cases' layers** (section 7.8) |
 
 **A recipe** is what a pipeline is stored as: a declarative YAML description of how one source
-becomes part of the dataset's graph. What it loads goes into the dataset. *Coming:* **Releases**,
-moving a dataset's definitions (its domain model, pipelines and reference lists, never data,
-credentials, membership or owners) between environments as YAML, with `ospreyflow release export`
-and `import --dry-run`.
+becomes part of the dataset's graph. What it loads goes into the dataset. **Releases** move a
+dataset's definitions (its domain model, pipelines and reference lists, never data, credentials,
+membership or owners) between environments as YAML, with `ospreyflow release export` and
+`import --dry-run` (the administration guide, section 8), or Studio › Releases' *Export*.
 
 ### 3.1 Pipelines
 
