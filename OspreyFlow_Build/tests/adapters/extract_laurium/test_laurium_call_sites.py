@@ -5,14 +5,17 @@ orchestrator's round 1 on P12 part 2, its blocker): `run_extraction` is also how
 `run_extraction(laurium_may_read=True)` is passed by the review queue's route alone.
 
 At the email and document call sites, in their real call shape (each service's own `extract`, built
-as its own tests build it, with its model composed as the Conduit composes it): **Deep read is asked
-and Laurium is not.** The route's own call is read from its code: it alone passes the flag.
+as its own tests build it, its model a `LauriumExtracts` over the same two engines; the Conduit's own
+composition is `routed_model`'s, tested in `test_laurium_start.py`): **Deep read is asked and Laurium
+is not.** And no module under `services/` or `packages/` may pass the flag or set the marker but the
+two sanctioned sites (the review queue's route, and `run_extraction` itself), read from every module.
 """
 
 from __future__ import annotations
 
 import inspect
 import json
+from pathlib import Path
 from typing import Any
 
 from adapters.extract_laurium.composed import LauriumExtracts
@@ -55,11 +58,33 @@ async def test_a_documents_content_by_the_model_reaches_deep_read_not_laurium() 
     assert laurium.asked == []
 
 
-def test_the_review_queues_route_alone_passes_the_flag() -> None:
-    from services.api import app as app_module
-    from services.api import document_content, email_extraction
+#: The two sanctioned sites (round 2, item 5), and the marker's own definition.
+SANCTIONED = {
+    ("services/api/app.py", "laurium_may_read=True"): 1,  # run_extraction_route's call
+    ("services/api/review.py", "laurium_reads("): 1,  # inside run_extraction, behind the flag
+    ("packages/adapters/extract_laurium/composed.py", "laurium_reads("): 2,  # its definition, its docstring
+}
+CORE = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
 
-    route = inspect.getsource(app_module.run_extraction_route)
-    assert "laurium_may_read=True" in route
-    for module in (email_extraction, document_content):
-        assert "laurium_may_read" not in inspect.getsource(module), module.__name__
+
+def _found() -> dict[tuple[str, str], int]:
+    found: dict[tuple[str, str], int] = {}
+    for root in ("services", "packages"):
+        for path in sorted((CORE / root).rglob("*.py")):
+            if ".venv" in path.parts or "node_modules" in path.parts:
+                continue
+            text = path.read_text("utf-8")
+            for needle in ("laurium_may_read=True", "laurium_reads("):
+                if count := text.count(needle):
+                    found[(str(path.relative_to(CORE)), needle)] = count
+    return found
+
+
+def test_only_the_two_sanctioned_sites_reach_laurium() -> None:
+    assert _found() == SANCTIONED
+
+
+def test_the_route_that_passes_it_is_the_review_queues() -> None:
+    from services.api import app as app_module
+
+    assert "laurium_may_read=True" in inspect.getsource(app_module.run_extraction_route)

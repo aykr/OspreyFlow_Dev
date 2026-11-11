@@ -214,3 +214,14 @@ printed at merge as P11's was.
 **How the gates ran, said plainly:** a chain of server runs started with a shell `&` outlived its tool call and kept
 going (its local process lived on), so the next chains were refused by the lease's own guard ("case-b's last remote run
 is still running") and nothing ran twice. Its runs are the gates below, each recorded against the tree it copied.
+
+## Round 2 of the orchestrator's review (11ba10d): not yet — each item
+
+1. **The guide diff as 1.82** on main e996106 (docs' D2c part 2 took 1.79–1.81): Appendix A's generated row, spec 10's
+   hunk, §6a.2's Laurium row and "these totals are for Deep read", the history row without a claim no section makes;
+   **the PDF reprinted** (one `docs_pdf --write` on a local Playwright slot the orchestrator gave; the three other PDFs
+   and their manifest entries restored, so only the guide's moves); the diff is `--binary`. With it applied,
+   `test_admin_guide` and `test_docs_pdf`: 79 passed.
+5. **The call sites by scan:** every module under `services/` and `packages/` for `laurium_may_read=True` or
+   `laurium_reads(`; only the route, `run_extraction` and the marker's own module. **Plant** (`laurium_reads()` in
+   `questions.py`): 1 failed, naming it.
