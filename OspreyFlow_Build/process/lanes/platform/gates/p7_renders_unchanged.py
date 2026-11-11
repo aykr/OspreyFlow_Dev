@@ -8,6 +8,9 @@ the image tags and the release version name.
 
     cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_renders_unchanged.py [--helm] 78bb4ae
 
+Where the tree has no history (the server's copy, `stack_lease.sh offline`), `--base-tar=<file>` names the base's
+`git archive <base> OspreyFlow_Core`, made where the history is; the base's name is then only its label.
+
 Prints each configuration's artefacts and whether they match; exits 1 on any difference. The chart's
 manifests for the cluster's values are compared the same way when Docker is there (`--helm`).
 """
@@ -132,15 +135,18 @@ def parsed(text: str) -> str:
     return json.dumps(docs, indent=1, sort_keys=True)
 
 
-def main(base: str, helm: bool = False) -> int:
+def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
     with tempfile.TemporaryDirectory() as folder:
         old = Path(folder) / "OspreyFlow_Core"
         old.mkdir()
-        archive = subprocess.run(
-            ["git", "archive", base, "OspreyFlow_Core"], cwd=CORE.parent, capture_output=True,
-            check=True,
-        )  # fmt: skip
-        subprocess.run(["tar", "-x", "-C", folder], input=archive.stdout, check=True)
+        if base_tar:  # made where the history is (`git archive <base> OspreyFlow_Core`), for a copy without it
+            subprocess.run(["tar", "-x", "-C", folder, "-f", base_tar], check=True)
+        else:
+            archive = subprocess.run(
+                ["git", "archive", base, "OspreyFlow_Core"], cwd=CORE.parent, capture_output=True,
+                check=True,
+            )  # fmt: skip
+            subprocess.run(["tar", "-x", "-C", folder], input=archive.stdout, check=True)
         before, after = renders(old), renders(CORE)
         if helm:
             with_helm(old, before)
@@ -164,5 +170,7 @@ def main(base: str, helm: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--helm"]
-    sys.exit(main(args[0] if args else "78bb4ae", helm="--helm" in sys.argv[1:]))
+    tars = [a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--base-tar=")]
+    args = [a for a in sys.argv[1:] if a != "--helm" and not a.startswith("--base-tar=")]
+    sys.exit(main(args[0] if args else "78bb4ae", helm="--helm" in sys.argv[1:],
+                  base_tar=tars[0] if tars else None))  # fmt: skip
