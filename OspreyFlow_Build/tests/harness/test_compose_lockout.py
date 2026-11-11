@@ -131,7 +131,8 @@ def test_a_value_the_shell_sets_empty_is_said_to_be_the_shell_s(tmp_path: Path) 
     ):
         assert "REQUIRED_EMPTY_REFUSED, which this shell sets empty" in words
         assert "unset REQUIRED_EMPTY_REFUSED first" in words
-        assert "deployment.env does not hold" not in words  # the file holds it (my own lane review, item 6)
+        # The file holds it (my own lane review, item 6).
+        assert "deployment.env does not hold" not in words
 
 
 def test_the_stop_meanwhile_runs_nothing_when_no_container_is_up(tmp_path: Path) -> None:

@@ -10,8 +10,9 @@ keeps every secret", so `ospreyflow start --build` and `ospreyflow update` showe
 Each case runs the real child (`python -m scripts.refresh`, or `harness.update`'s own printed lines)
 through the real `SubprocessRunner` and `Redactor` main.py builds, and asserts the route is shown.
 The child's `PATH` is a folder holding only a link to Python (Python's own folder may hold `docker`
-too, as Homebrew's does), so a refusal that did not fire could not reach Docker. `test_a_value_is_still_hidden_...` holds the other side: a line that holds a value stays
-hidden, whatever it begins with.
+too, as Homebrew's does), so a refusal that did not fire could not reach Docker.
+`test_a_value_is_still_hidden_...` holds the other side: a line that holds a value stays hidden,
+whatever it begins with.
 """
 
 from __future__ import annotations
@@ -52,8 +53,8 @@ def _child_env(directory: Path) -> dict[str, str]:
     }
 
 
-def _without(deployment: Path, name: str) -> None:
-    env = deployment / "deployment.env"
+def _without(folder: Path, name: str) -> None:
+    env = folder / "deployment.env"
     env.write_text(
         "".join(
             line + "\n"
