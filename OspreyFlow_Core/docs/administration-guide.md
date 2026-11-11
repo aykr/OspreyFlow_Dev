@@ -14,11 +14,10 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.71** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.70** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.71 | 2026-11-11 | The commands table: `ospreyflow images push`, for the `cloud-platform` profile. Appendix A: the `cloud-platform` profile and its `cloud_platform` settings. |
 | 1.70 | 2026-11-11 | §13's synced-folder warning names a Windows home folder under WSL's `/mnt/c/` in words. |
 | 1.69 | 2026-11-10 | Describes v0.5.0. No change to its content. |
 | 1.68 | 2026-11-10 | Rules' L2.10 and platform-b's P6 as built, no longer *coming*. §9.8: a rule's alerts routed to one team (*‹Team› only*), read by its members and the home case's Authors, enforced in the query; the lead's or cover's *Give to* and *Suppress until…*. §10a: the case map's *Gazetteers in this case's dataset*, with *Add* and *Remove* for `run_pipelines` |
@@ -1011,7 +1010,6 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
 | `ospreyflow map build <region> --unit <unit> [--planetiler-jar <path>]` | Builds the tier-1 basemap in the Conduit (the jar copied into the tiles folder first), and its place names as the gazetteer dataset `gazetteer-osm-<region>`, held by `--unit` (required; an unknown unit, or a re-build for another unit, is refused) |
-| `ospreyflow images push --registry <registry> [--from <folder>] [--platform <platform>] [--dry-run]` | On the `cloud-platform` profile: builds our images from this checkout for the platform's nodes (`linux/amd64` by default; the Conduit without Java) and copies each third-party image by its digest, into the namespace's registry, following the render's `images.yaml` (`deploy/generated/cloud-platform/` unless `--from` names another). A repository the namespace's Terraform did not make, or a registry you are not signed in to, stops the push; `--dry-run` says each step and runs none |
 | `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, and the next install of the same deployment finds them; without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched. (Before the stores had named volumes, section 13, a reinstall did not find the stores' data) |
 
 Every command takes `--name <name>` to act on a deployment kept by name, or `--name default` for the
@@ -1981,7 +1979,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 <!-- options:begin -->
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
-| `profile` | `local-lite` \| `small` \| `cluster` \| `cloud-platform` | `local-lite` | Which kind of deployment: one machine (local-lite), a cloud server on managed services or a server of your own with every store in a container (small), or a cluster. |
+| `profile` | `local-lite` \| `small` \| `cluster` | `local-lite` | Which kind of deployment: one machine (local-lite), a cloud server on managed services or a server of your own with every store in a container (small), or a cluster. |
 | `components` | section | — | Which stores the deployment runs, and where their data lives. |
 | `components.graph_store` | `arcadedb` \| `janusgraph` | `arcadedb` | The graph store. |
 | `components.analytics_engine` | `duckdb` \| `clickhouse` | `duckdb` | Where events are counted: DuckDB inside the Conduit, or ClickHouse shared by several. |
@@ -2037,15 +2035,6 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cluster.namespace` | str | `ospreyflow` | The Kubernetes namespace the deployment is installed in |
 | `cluster.storage_class` | str or none | none | The storage class each store's own volumes use; the cluster's default when unset |
 | `cluster.shared_storage_class` | str or none | none | Required for a cluster: the storage class of the one volume every Conduit shares (ReadWriteMany) — EFS on AWS, Azure Files on Azure |
-| `cloud_platform` | section or none | none | A namespace on a shared Kubernetes platform (profile cloud-platform only): the platform's settings file, the namespace, its registry, and what its egress may reach. |
-| `cloud_platform.platform` | str | `client` | The platform's settings file, by name |
-| `cloud_platform.namespace` | str or none | none | The namespace the platform's team created for the deployment (required) |
-| `cloud_platform.environment` | `development` \| `production` | `development` | One copy of each store; production runs the cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3) |
-| `cloud_platform.registry` | str or none | none | Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there |
-| `cloud_platform.allow_from` | list of str | — | The networks (CIDR) the platform's ingress admits; empty: every address |
-| `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render |
-| `cloud_platform.tls_secret` | str or none | none | The platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them |
-| `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each with its networks in egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS), so the two never disagree |
 | `network` | section | — | The address the deployment answers at, and what it publishes. |
 | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
 | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |
