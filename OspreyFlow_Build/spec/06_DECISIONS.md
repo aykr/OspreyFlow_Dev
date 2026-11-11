@@ -34098,9 +34098,10 @@ client shows. Part 2 (after P7 and P11 part 1) renders the service in the
 Models*.
 
 **The tests that would fail.** A gateway URL naming another host, `OPENAI_BASE_URL` set, or LangSmith tracing on:
-`tests/services/laurium/test_settings.py`, and the built image refusing to start (`test_service_live.py`). A
-refusal returned as an empty finding: `test_service_live.py`'s refused cases through the stand-in. A schema
-outside the subset: `test_schema_map.py`. An image without Laurium carrying LangChain: `tests/test_no_langchain_check.py`
-(planted). A fourth package admitted by the recorded entries, or one of the three at another version:
+`tests/services/laurium/test_settings.py`, and the service's own code refusing to start
+(`tests/conformance/model_port/test_laurium_service.py`, run in Laurium's environment). A refusal returned as an
+empty finding: that file's refused cases through the stand-in. A schema outside the subset:
+`tests/services/laurium/test_schema_map.py`. An image without Laurium carrying LangChain:
+`tests/test_no_langchain_check.py` (planted). A fourth package admitted by the recorded entries, or one of the three at another version:
 `tests/licence_check/test_recorded_licence_evidence.py`. Laurium's findings auto-accepted:
 `tests/adapters/extract_laurium/test_findings_inferred.py`.

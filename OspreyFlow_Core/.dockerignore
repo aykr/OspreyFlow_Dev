@@ -94,3 +94,9 @@ apps/workspace/.env.local
 # `deploy/generated/` is rendered deployment output (`python -m harness.render`) and is
 # covered by the `deploy` line below; named here so it is not later assumed absent.
 deploy
+
+# --- Laurium's service, built from its own folder alone ---------------------------------
+# spec/06_DECISIONS.md ADR-135 Amendment 6: Laurium runs in its own image, built only when chosen
+# (`docker build services/laurium`), so no other image carries its code; tools/no_langchain_check.py
+# fails if this line goes.
+services/laurium
