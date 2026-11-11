@@ -216,6 +216,19 @@ def rights_for(
     return frozenset(held)
 
 
+class MeResponse(BaseModel):
+    """`GET /v1/me`: the signed-in person's own principal as the Conduit resolved it (ADR-148
+    Amendment 8), which the Glass shows and gates its places on: never a claim of its token. Their
+    own id (an Entra object id, or Keycloak's subject), clearance, unit, roles and handling codes;
+    nothing of anyone else's and no count."""
+
+    id: str
+    clearance: str
+    org_unit: str
+    roles: list[str]
+    receivable_handling_codes: list[str]
+
+
 class RightsResponse(BaseModel):
     """`GET /v1/me/rights`: what the signed-in person may do, so the Glass and the Studio can leave
     out what they would only refuse. The Conduit still refuses it (decision 1)."""
@@ -223,4 +236,4 @@ class RightsResponse(BaseModel):
     rights: list[Right]
 
 
-ALL_MODELS = [RightsResponse]
+ALL_MODELS: list[type[BaseModel]] = [RightsResponse, MeResponse]

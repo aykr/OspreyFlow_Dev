@@ -30,6 +30,14 @@ class PersonAccount(BaseModel):
     #: Joined to an account at the organisation's identity provider: signing in through the
     #: organisation lands here (ADR-112 Amendment 3 (b)).
     organisation_linked: bool = False
+    #: Has signed in at least once (ADR-148 Amendment 8): on Entra ID, a person added by object id
+    #: has not, and counts for nothing a sign-in proves (the lock-out's last manager among them).
+    #: Always true on Keycloak, whose accounts are the directory's own.
+    signed_in: bool = True
+    #: On Entra ID, when this person's clearance, unit and handling codes were last read from their
+    #: token (ADR-148 Amendment 8); older than a day, they are not trusted to receive anything. None
+    #: on Keycloak, whose directory attributes are current.
+    access_read_at: datetime | None = None
 
 
 #: A sign-in name the identity provider takes (measured: spaces and most punctuation are refused).
@@ -124,6 +132,24 @@ class RolesInput(BaseModel):
     """A person's roles, set whole: the four roles, `right:<name>` grants, the old role names."""
 
     roles: list[str] = Field(max_length=64)
+
+
+class SignInKind(BaseModel):
+    """`GET /v1/admin/sign-in`: how this deployment's people sign in (ADR-148 Amendment 8), so Admin
+    › People offers what it can do: invite on Keycloak; add by object id on Entra ID, where Entra
+    holds the accounts."""
+
+    kind: Literal["keycloak", "entra"]
+
+
+class AddPersonInput(BaseModel):
+    """A person added to Admin › People by their Entra object id, ahead of their first sign-in
+    (ADR-148 Amendment 8). Only on Entra ID sign-in; Graph gives the object id."""
+
+    object_id: str = Field(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        description="The person's Entra object id, in lower case",
+    )
 
 
 class DashboardInput(BaseModel):
@@ -777,7 +803,8 @@ class NeedsYou(BaseModel):
 
 
 ALL_MODELS: list[type[BaseModel]] = [
-    PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
+    PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, AddPersonInput,
+    SignInKind, DashboardInput,
     ComponentHealth, UpdateNotice, ConvertedViews, SystemStatus, EmbeddedDashboard,
     DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
