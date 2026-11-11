@@ -1,0 +1,11 @@
+# At 21e7891f (tree 19bd638f), rebased on main 2733de4 (P11 part 1), test server through stack_lease.sh offline platform, 11 November 2026: tests/cp_policy_check (Helm), make cp-policy-check's own run, then the red record and the render comparison below.
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T151646Z/log: bash -c .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/cp_policy_check 2>&1 | tail -2; echo "cp exit ${PIPESTATUS[0]}"; PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check | tail -4; .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py > ../p7b_reds.out 2>&1; echo "reds exit $?"; .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_renders_unchanged.py --helm --base-tar=../OspreyFlow_Build/p7b-base.tar 2733de4 > ../renders.out 2>&1; echo "renders exit $?"; echo ==== REDS; cat ../p7b_reds.out; echo ==== RENDERS; cat ../renders.out
+1.10s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_controller_namespace_not_the_platform_s_is_refused[development]
+140 passed in 178.00s (0:02:57)
+cp exit 0
+development.yaml: 31 manifests, 0 violation(s)
+poc.yaml: 25 manifests, 0 violation(s)
+production.yaml: 36 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+reds exit 0
+renders exit 0

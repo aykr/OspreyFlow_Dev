@@ -1,0 +1,243 @@
+# p7b_reds.py at 21e7891f (tree 19bd638f), on main 2733de4, same run.
+RED      decommission: an object labelled ours passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.21s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[labelled]
+      E   AssertionError: assert [] == ['ConfigMap/ospreyflow-env']
+      E     
+      E     Right contains one more item: 'ConfigMap/ospreyflow-env'
+      E     Use -v to get more diff
+RED      decommission: our Secret and the kept claims, by name, pass  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    3 failed in 1.22s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[our-secret]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[kept-shared-claim]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[kept-ingest-claim]
+      E   AssertionError: assert [] == ['Secret/ospreyflow-secrets']
+      E     
+      E     Right contains one more item: 'Secret/ospreyflow-secrets'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['PersistentV...yflow-shared']
+      E     
+      E     Right contains one more item: 'PersistentVolumeClaim/ospreyflow-shared'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['PersistentV...yflow-ingest']
+      E     
+      E     Right contains one more item: 'PersistentVolumeClaim/ospreyflow-ingest'
+      E     Use -v to get more diff
+RED      decommission: an object Helm annotates as the release's passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.16s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[helm-annotated]
+      E   AssertionError: assert [] == ['ServiceAcco...eyflow-extra']
+      E     
+      E     Right contains one more item: 'ServiceAccount/ospreyflow-extra'
+      E     Use -v to get more diff
+RED      decommission: a StatefulSet's claim (the selector's labels alone) passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.93s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[statefulset-claim]
+      E   AssertionError: assert [] == ['PersistentV...clickhouse-0']
+      E     
+      E     Right contains one more item: 'PersistentVolumeClaim/data-clickhouse-0'
+      E     Use -v to get more diff
+RED      decommission: a disk kept after our claim passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.79s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_disk_kept_after_its_claim_is_named
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      decommission: a volume object kept after our claim passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.75s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_volume_object_kept_after_its_claim_is_named_where_it_may_be_listed
+      E   AssertionError: assert [] == ['PersistentV...pvc-0a1b2c3d']
+      E     
+      E     Right contains one more item: 'PersistentVolume/pvc-0a1b2c3d'
+      E     Use -v to get more diff
+RED      decommission: the platform's own Terraform resources called ours (the self-review's point 1)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.73s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_namespace_holding_only_the_platform_s_own_passes
+      E   assert [Leftover(wha...moval again')] == []
+      E     
+      E     Left contains 2 more items, first extra item: Leftover(what='terraform/module.namespace.aws_eks_access_entry.team', why="still in the namespace's Terraform state: apply the removal again")
+      E     Use -v to get more diff
+RED      decommission: the Terraform state not read  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    6 failed in 0.80s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_role.service]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_policy.buckets]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_role_policy_attachment.buckets]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_s3_bucket.store["media"]]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_db_instance.postgres]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[module.ospreyflow.kubernetes_service_account.service]
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      decommission: an IAM role or policy not named as such  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    2 failed in 0.73s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_role.service]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_policy.buckets]
+      E   assert 'IAM' in "still in the namespace's Terraform state: apply the removal again"
+      E    +  where "still in the namespace's Terraform state: apply the removal again" = Leftover(what='terraform/aws_iam_role.service', why="still in the namespace's Terraform state: apply the removal again").why
+      E   assert 'IAM' in "still in the namespace's Terraform state: apply the removal again"
+      E    +  where "still in the namespace's Terraform state: apply the removal again" = Leftover(what='terraform/aws_iam_policy.buckets', why="still in the namespace's Terraform state: apply the removal again").why
+RED      decommission: a KMS key alias not named as such  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.73s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_kms_key_alias_is_named_as_such_when_the_render_makes_one
+      E   assert ('terraform/aw...s_alias.store' == 'terraform/aw...s_alias.store'
+      E     
+      E       terraform/aws_kms_alias.store and 'KMS key alias' in "still in the namespace's Terraform state: apply the removal again")
+      E    +  where "still in the namespace's Terraform state: apply the removal again" = Leftover(what='terraform/aws_kms_alias.store', why="still in the namespace's Terraform state: apply the removal again").why
+RED      decommission: a bucket of ours passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.73s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_bucket_of_this_deployment_s_is_named
+      E   AssertionError: assert [] == ['bucket/ospr...2b3c4d-media']
+      E     
+      E     Right contains one more item: 'bucket/ospreyflow-poc-1a2b3c4d-media'
+      E     Use -v to get more diff
+RED      decommission: main exits 0 with a leftover  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 0.81s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_main_exits_1_on_a_leftover_and_0_on_none
+      E   AssertionError: assert 0 == 1
+      E    +  where 0 = main(['--values', '/tmp/pytest-of-root/pytest-2701/test_main_exits_1_on_a_leftove0/values.yaml', '--objects', '/tmp/pytest-...e0/objects-0.json', '--objects', '/tmp/pytest-of-root/pytest-2701/test_main_exits_1_on_a_leftove0/objects-1.json', ...])
+RED      runbooks: a cluster-wide listing of the volumes  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 0.89s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_no_command_needs_more_than_a_namespace_s_rights
+      E   AssertionError: DECOMMISSION.md
+      E   assert not <re.Match object; span=(3024, 3038), match='kubectl get pv'>
+      E    +  where <re.Match object; span=(3024, 3038), match='kubectl get pv'> = <function search at 0x71c4373f49a0>('kubectl (get|delete) (pv|persistentvolume)s?\\b', 'export NS=ospreyflow-poc RELEASE=ospreyflow FOLDER=deploy/generated/cloud-platform CHART=deploy/helm/ospreyflow\nexpo...\\n  --state "$WORK/state.txt" --terraform "$WORK/terraform" --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"\n')
+      E    +    where <function search at 0x71c4373f49a0> = re.search
+RED      runbooks: no pinned render between the push and the install  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 0.82s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_signs_in_to_the_registry_and_pins_before_it_installs
+      E   ValueError: substring not found
+RED      runbooks: no registry sign-in before the push  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 0.83s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_signs_in_to_the_registry_and_pins_before_it_installs
+      E   ValueError: substring not found
+RED      identity: our Secret alone, not the settings with it  [OspreyFlow_Core/harness/cloud_platform/identity.py]
+    1 failed in 0.97s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::test_identity_is_given_the_settings_and_our_secret_together
+      E   KeyError: 'OSPREY_PROFILE'
+RED      identity: a refused first administrator passes  [OspreyFlow_Core/harness/cloud_platform/identity.py]
+    1 failed in 0.91s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::test_a_refused_administrator_fails_the_step
+      E   AssertionError: assert 0 == 1
+      E    +  where 0 = <function main at 0x7db6d9747a60>(['/tmp/pytest-of-root/pytest-2706/test_a_refused_administrator_f0/values.yaml'], kube=<tests.harness.test_cloud_platform_identity.Kube object at 0x7db6d8e81910>)
+      E    +    where <function main at 0x7db6d9747a60> = identity.main
+RED      poc: the Keeper named in the lock  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.83s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_lock_names_only_the_images_a_poc_pod_runs
+      E   AssertionError: assert ('clickhouse-keeper' not in {'api', 'arcadedb', 'clickhouse', 'clickhouse-keeper', 'keycloak', 'keycloak-db', ...})
+RED      cp-policy-check: a poc container with no CPU limit passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.64s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_poc_container_without_a_cpu_limit_is_refused
+      E   AssertionError: assert [] == [('no-cpu-lim...ent/api/api')]
+      E     
+      E     Right contains one more item: ('no-cpu-limit', 'Deployment/api/api')
+      E     Use -v to get more diff
+RED      poc: the Keeper StatefulSet still rendered  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.88s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_one_arcadedb_one_clickhouse_and_no_keeper_of_its_own
+      E   AssertionError: assert 'clickhouse-keeper' not in {'workspace': {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:8efee9...rList=arcadedb-0.arcadedb-headless:2434:2480 -Darcadedb.ha.clusterToken=$(OSPREY_ARCADEDB_CLUSTER_TOKEN)'}], ...}, ...}
+RED      poc: the server's own Keeper not configured  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.83s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_clickhouse_server_runs_its_own_keeper
+      E   AssertionError: <clickhouse>
+      E       <macros><shard>01</shard><replica from_env="POD_NAME"/></macros>
+      E       <interserver_http_host from_env="POD_ADDRESS"/>
+      E       <zookeeper>
+      E         <node><host>clickhouse-keeper-0.clickhouse-keeper-headless</host><port>9181</port></node>
+      E       </zookeeper>
+      E       <remote_servers>
+      E         <osprey>
+      E           <shard>
+      E             <internal_replication>true</internal_replication>
+      E             <replica><host>clickhouse-0.clickhouse-headless</host><port>9000</port><user>osprey</user><password from_env="CLICKHOUSE_PASSWORD"/></replica>
+      E           </shard>
+      E         </osprey>
+      E       </remote_servers>
+      E       <distributed_ddl><path>/clickhouse/task_queue/ddl</path></distributed_ddl>
+      E     </clickhouse>
+      E     
+      E   assert None
+RED      poc: disruption budgets rendered  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.82s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_no_disruption_budgets
+      E   AssertionError: assert not ['arcadedb', 'keycloak', 'clickhouse']
+RED      poc: the Ingest root left on the shared claim  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.82s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_ingest_root_is_on_a_claim_of_its_own
+      E   AssertionError: assert ([{'subPath': 'ingest', 'mountPath': '/var/lib/osprey/ingest', 'readOnly': True}, {'subPath': 'ingest/uploaded', 'mountPath': '/var/lib/osprey/ingest/uploaded', 'readOnly': False}] and False)
+      E    +  where False = all(<generator object test_the_ingest_root_is_on_a_claim_of_its_own.<locals>.<genexpr> at 0x7050827d4380>)
+RED      schema: poc accepted in production  [OspreyFlow_Core/packages/schemas/deployment.py]
+    1 failed in 0.63s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_poc_shape_is_refused_in_production
+      E   Failed: DID NOT RAISE ValidationError
+RED      chart: a claim's mount named the shared volume  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/_helpers.tpl]
+    1 failed in 1.79s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_poc_shape_s_own_claim_is_rendered_and_mounted
+      E   AssertionError: assert 'shared' == 'claim-ingest'
+      E     
+      E     - claim-ingest
+      E     + shared
+RED      chart: the own claims not rendered  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/storage.yaml]
+    1 failed in 1.44s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_poc_shape_s_own_claim_is_rendered_and_mounted
+      E   StopIteration
+RED      ceiling: the scheme's highest kept on the profile  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    3 failed in 1.54s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own[poc]
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+RED      images: the refusal names a render command missing the packages  [OspreyFlow_Core/cli/ospreyflow/images.py]
+    1 failed in 0.50s
+    FAILED ../OspreyFlow_Build/tests/cli/test_images_verb.py::test_no_plan_is_refused_with_a_command_that_renders_it
+      E   AssertionError: Traceback (most recent call last):
+      E       File "<frozen runpy>", line 198, in _run_module_as_main
+      E       File "<frozen runpy>", line 88, in _run_code
+      E       File "/root/osprey-runs/platform/OspreyFlow_Core/harness/render.py", line 67, in <module>
+      E         from harness.realm import CONDUIT_CLIENT_ID
+      E       File "/root/osprey-runs/platform/OspreyFlow_Core/harness/realm.py", line 44, in <module>
+      E         from schemas.deployment import OspreyConfig
+      E     ModuleNotFoundError: No module named 'schemas'
+      E     
+      E   assert 1 == 0
+      E    +  where 1 = CompletedProcess(args=['.venv/bin/python', '-m', 'harness.render', '--help'], returncode=1, stdout='', stderr='Traceba... 44, in <module>\n    from schemas.deployment import OspreyConfig\nModuleNotFoundError: No module named \'schemas\'\n').returncode
+RED      poc: no CPU limit named  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.88s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_every_poc_container_names_a_cpu_limit_at_or_above_its_request
+      E   AssertionError: workspace
+      E   assert 'cpu' in {'memory': '256Mi'}
+RED      poc: a CPU limit below its request accepted  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.77s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_a_cpu_limit_below_its_request_is_refused_in_words
+      E   Failed: DID NOT RAISE CloudPlatformNotRenderable
+RED      poc: the OpenSearch domain still made  [OspreyFlow_Core/harness/cloud_platform/terraform.py]
+    1 failed in 0.79s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_poc_shape_makes_no_opensearch_domain
+      E   assert 'terraform/opensearch.tf' not in {'values.yaml': "# Generated by harness.render from osprey.yaml (profile: cloud-platform) — do not edit by\n# hand. he..."eks_oidc_issuer" {\n  type        = string\n  description = "The cluster\'s OIDC issuer, without https://"\n}\n', ...}
+RED      render: an artefact's own folder not made (terraform/)  [OspreyFlow_Core/harness/render.py]
+    1 failed in 0.87s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_first_render_into_an_empty_folder_writes_every_artefact
+      E   FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-root/pytest-2721/test_a_first_render_into_an_em0/new/cloud-platform/terraform/ecr.tf'
+RED      render: the plan's digests not carried forward (each tag resolved afresh)  [OspreyFlow_Core/harness/cloud_platform/carry.py]
+    1 failed in 1.06s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copied
+      E   AssertionError: {'123456789012.dkr.ecr.eu-west-2.amazonaws.com/arcadedata/arcadedb:26.10.1@sha256:222222222222222222222222222222222222...8efee9123bee760e26149023b5f4c48ebf0c4f08@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ...}
+      E   assert not ['123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-server:25.8.33.6@sha256:2222222222222222222222222...u-west-2.amazonaws.com/keycloak/keycloak:26.0@sha256:2222222222222222222222222222222222222222222222222222222222222222']
+RED      images: a third-party image copied by its tag alone  [OspreyFlow_Core/cli/ospreyflow/images.py]
+    1 failed in 0.72s
+    FAILED ../OspreyFlow_Build/tests/cli/test_images_verb.py::test_a_third_party_image_named_by_tag_alone_is_never_copied
+      E   AssertionError: assert 0 != 0
+      E    +  where 0 = Rig(product=PosixPath('/tmp/pytest-of-root/pytest-2723/test_a_third_party_image_named0/ospreyflow'), runner=<tests.cli...image_named0/home'}, capture_envs=[], tags_at_head='', responses={}, captured=[], secret_prompts=[], secret_replies=[])('images', 'push', '--registry', '123456789012.dkr.ecr.eu-west-2.amazonaws.com')
+
+34 plants, 34 red, 0 not red

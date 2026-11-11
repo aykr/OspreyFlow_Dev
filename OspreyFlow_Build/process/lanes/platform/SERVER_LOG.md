@@ -149,3 +149,15 @@ the orchestrator fetches this clone.
 - Torn down: `osprey-p7-api-nojava:check` and `osprey-p7-api-included:check` removed; 0 `osprey-p7-*` containers or
   images left. `ospreyflow/api:ci` was retagged by another run on the shared daemon during this one (REPORT.md).
 - **P7 ready to merge at `0f17781bffdb968de2b6ac379a2d265da19c7ba3`** (tree `64582b9033c755906e07546aa92fd962cd5dcaf9`).
+
+## 11 November 2026, P7b, from the Mac (lane/platform-p7b, through `stack_lease.sh offline platform`; no stack, no lease)
+
+- One run at a time: P7b's reds at b01e9116 (24/24) and 957b8805 (34/34); the renders against 8aa3da5 at 72390f14 and
+  957b8805 (0 differences beyond the two forgiven); `make test` at 957b8805 (found the render test's PodDisruptionBudget
+  assumption, fixed), then at 8b46eda0 `make test`, `make -k ci` and `harness-a11y` alone. Every output is in `gates/`.
+- 957b8805 and earlier hashes were rewritten by later rebases onto main (8aa3da5, then fc32dce, which moved by docs alone).
+- No kind cluster, no image of mine left; nothing pushed.
+- **P7b ready to merge at `8b46eda0eec109399e5ab3fc2bf48be8a63ea670`** (tree `8df1696b60f09062981398d9cae8c0d1476b5efc`).
+- Rebased onto 2733de4 (P11 part 1) at the orchestrator's word: one conflict, `spec/06_DECISIONS.md`'s end (both amendments
+  kept). Re-run at 21e7891f: tests/cp_policy_check 140 passed, cp-policy-check 0 violations, 34/34 red, renders 0 differences.
+  **P7b ready to merge at `21e7891fafcf8cf7ff84008b913ac925d93e5be9`** (tree `19bd638f9052cbea952ce9c83b8481064d62cf0e`).

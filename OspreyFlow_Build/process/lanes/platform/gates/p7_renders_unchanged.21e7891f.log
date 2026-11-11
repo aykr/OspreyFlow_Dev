@@ -1,0 +1,67 @@
+# p7_renders_unchanged.py --helm --base-tar (git archive 2733de4 OspreyFlow_Core) 2733de4, at 21e7891f, same run. Exit 0, beyond the two forgiven changes.
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+same  cluster-aws  helm template
+same  cluster-aws  helm template, parsed
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+same  cluster-azure  helm template
+same  cluster-azure  helm template, parsed
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+same  cloud-platform-development  helm template
+same  cloud-platform-development  helm template, parsed
+same  cloud-platform-development  images.yaml
+same  cloud-platform-development  terraform/ecr.tf
+same  cloud-platform-development  terraform/elasticache.tf
+same  cloud-platform-development  terraform/irsa.tf
+same  cloud-platform-development  terraform/opensearch.tf
+same  cloud-platform-development  terraform/rds.tf
+same  cloud-platform-development  terraform/s3.tf
+same  cloud-platform-development  terraform/secrets.tf
+same  cloud-platform-development  terraform/variables.tf
+same  cloud-platform-development  values.yaml
+same  cloud-platform-development  versions.lock
+same  cloud-platform-production  helm template
+same  cloud-platform-production  helm template, parsed
+same  cloud-platform-production  images.yaml
+same  cloud-platform-production  terraform/ecr.tf
+same  cloud-platform-production  terraform/elasticache.tf
+same  cloud-platform-production  terraform/irsa.tf
+same  cloud-platform-production  terraform/opensearch.tf
+same  cloud-platform-production  terraform/rds.tf
+same  cloud-platform-production  terraform/s3.tf
+same  cloud-platform-production  terraform/secrets.tf
+same  cloud-platform-production  terraform/variables.tf
+same  cloud-platform-production  values.yaml
+same  cloud-platform-production  versions.lock
+p7_renders_unchanged: 0 artefact(s) differ from 2733de4
+Wall time: 239 s, exit 0 (no stack, no lease; set-up before it 25 s)
