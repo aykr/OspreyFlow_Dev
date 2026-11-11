@@ -52,6 +52,13 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
   Six new plants, each red (`L1.9_RED_RECORD.md`); the live suite again on `studio-b-seaweedfs-2` (port 58334),
   6/6; stopped.
 
+- 08:20 History reordered so the schema commit sits at the head (tree unchanged, checked by diff).
+- 08:25–08:55 Gates at b29dba44 on main 459ae1d4: `make -k ci` (only `trivy-image-workspace`, upstream Alpine
+  libxslt CVEs) and `make test` (2 of 10,940, the server's GPU and the pinned Valkey port), explained in
+  `gates/b29dba44.explained.md`. Report: `L1.9_REPORT.md`.
+- **Built at b29dba44.** Safe point: waiting for the orchestrator's two review rounds (an access step). No
+  rebase, no further commit to code until then; only this record follows.
+
 ## Decisions taken (the owner may overrule)
 
 1. **No credential field on either kind.** Options: (a) none, the deployment's own cloud identity (pyarrow's
