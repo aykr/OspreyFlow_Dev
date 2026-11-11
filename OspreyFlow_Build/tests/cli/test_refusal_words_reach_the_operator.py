@@ -9,8 +9,8 @@ keeps every secret", so `ospreyflow start --build` and `ospreyflow update` showe
 
 Each case runs the real child (`python -m scripts.refresh`, or `harness.update`'s own printed lines)
 through the real `SubprocessRunner` and `Redactor` main.py builds, and asserts the route is shown.
-The child's `PATH` holds only Python's own folder, so a refusal that did not fire could not reach
-Docker. `test_a_value_is_still_hidden_...` holds the other side: a line that holds a value stays
+The child's `PATH` is a folder holding only a link to Python (Python's own folder may hold `docker`
+too, as Homebrew's does), so a refusal that did not fire could not reach Docker. `test_a_value_is_still_hidden_...` holds the other side: a line that holds a value stays
 hidden, whatever it begins with.
 """
 
@@ -35,12 +35,33 @@ CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
 HIDDEN = "a line naming a secret was hidden"
 
 
+def _no_docker(directory: Path) -> str:
+    """A `PATH` with Python alone on it."""
+    folder = directory.parent / "python-only"
+    folder.mkdir(exist_ok=True)
+    if not (folder / "python").exists():
+        (folder / "python").symlink_to(sys.executable)
+    return str(folder)
+
+
 def _child_env(directory: Path) -> dict[str, str]:
     return {
         refresh.DEPLOYMENT_DIR_VARIABLE: str(directory),
         "PYTHONPATH": os.pathsep.join([str(CORE), str(CORE / "packages")]),
-        "PATH": str(Path(sys.executable).parent),  # no docker to reach
+        "PATH": _no_docker(directory),
     }
+
+
+def _without(deployment: Path, name: str) -> None:
+    env = deployment / "deployment.env"
+    env.write_text(
+        "".join(
+            line + "\n"
+            for line in env.read_text(encoding="utf-8").splitlines()
+            if not line.startswith(f"{name}=")
+        ),
+        encoding="utf-8",
+    )
 
 
 def _start_build(directory: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
@@ -51,10 +72,12 @@ def _start_build(directory: Path, capsys: pytest.CaptureFixture[str]) -> tuple[i
     return code, capsys.readouterr().out
 
 
-def test_start_build_shows_the_gateway_database_refusal(
+def test_start_build_shows_the_gateway_database_refusal_reworded(
     deployment: Path,  # noqa: F811
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Names no variable: shown since its words no longer say "every secret" (the reword alone;
+    the redactor's own branch is held by the cases naming a variable)."""
     code, said = _start_build(deployment, capsys)
     assert code == 1
     assert HIDDEN not in said, said
@@ -67,15 +90,7 @@ def test_start_build_shows_the_unset_required_refusal_naming_the_variable(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _after_the_gateway_database(deployment)
-    env = deployment / "deployment.env"
-    env.write_text(
-        "".join(
-            line + "\n"
-            for line in env.read_text(encoding="utf-8").splitlines()
-            if not line.startswith("OSPREY_POSTGRES_PASSWORD=")
-        ),
-        encoding="utf-8",
-    )
+    _without(deployment, "OSPREY_POSTGRES_PASSWORD")
     code, said = _start_build(deployment, capsys)
     assert code == 1
     assert HIDDEN not in said, said
@@ -84,19 +99,34 @@ def test_start_build_shows_the_unset_required_refusal_naming_the_variable(
     assert "held-" not in said  # names, never a value
 
 
-def test_update_shows_the_files_step_s_refusal(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_update_shows_the_files_step_s_refusal_naming_the_variable(
+    deployment: Path,  # noqa: F811
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """`ospreyflow update` runs `harness.update`, through the same runner (main.py's `update`
-    branch). Its files step fails with the last line refresh prints; update's own lines (the
-    failure and the rollback) are replayed by a child through the runner as update printed them."""
+    """`ospreyflow update` runs `harness.update` through the same runner (main.py's `update`
+    branch). Its files step is the real `--files-only` child on a deployment missing
+    `OSPREY_POSTGRES_PASSWORD`, its failure read as update reads it (`_ok_real`); update's own
+    printed lines (the failure and the rollback) are replayed by a child through the runner."""
+    _after_the_gateway_database(deployment)
+    _without(deployment, "OSPREY_POSTGRES_PASSWORD")
+    code, child_said = update._subprocess(
+        [sys.executable, "-m", "scripts.refresh", "--files-only"],
+        cwd=CORE,
+        env={**os.environ, **_child_env(deployment)},
+    )
+    assert code == 1
+    with pytest.raises(update.UpdateFailed) as failed:
+        update._ok_real(lambda _argv: (code, child_said), [], "bring the files up to date")
+    refused = failed.value
+    assert "OSPREY_POSTGRES_PASSWORD" in refused.why
+
     fake = _Host(tmp_path)
-    words = "refresh: " + refresh.before_the_gateway_database(fake.directory)
 
-    def refused() -> dict[str, bool]:
-        raise update.UpdateFailed("bring the files up to date", words)
+    def files_step() -> dict[str, bool]:
+        raise refused
 
-    fake.files_up_to_date = refused  # type: ignore[method-assign]
+    fake.files_up_to_date = files_step  # type: ignore[method-assign]
     assert _update(fake) == 1
     printed = capsys.readouterr()
     lines = tmp_path / "update-said.txt"
@@ -104,12 +134,13 @@ def test_update_shows_the_files_step_s_refusal(
     runner = SubprocessRunner(Redactor(fake.directory / "deployment.env"))
     runner(
         [sys.executable, "-c", f"print(open({str(lines)!r}, encoding='utf-8').read())"],
-        env={"PATH": str(Path(sys.executable).parent)},
+        env={"PATH": _no_docker(deployment)},
     )
     said = capsys.readouterr().out
-    assert "failed at 'bring the files up to date'" in said
-    assert HIDDEN not in said.split("failed at")[1].splitlines()[0], said
-    assert "ospreyflow apply" in said
+    failure = next(x for x in said.splitlines() if "failed at" in x)
+    assert HIDDEN not in failure, said
+    assert "requires OSPREY_POSTGRES_PASSWORD, which deployment.env does not hold" in failure
+    assert "ospreyflow apply --name osprey-upg" in failure
 
 
 @pytest.mark.parametrize(
@@ -122,6 +153,12 @@ def test_update_shows_the_files_step_s_refusal(
         "ospreyflow: OSPREY_POSTGRES_PASSWORD hunter2",
         "refresh: the admin password is hunter2",
         "OSPREY_POSTGRES_PASSWORD, which deployment.env does not hold",  # not our own words
+        # A name in prose outside our two fixed phrases (my own lane review, item 4).
+        "ospreyflow: OSPREY_POSTGRES_PASSWORD is hunter2",
+        "ospreyflow: OSPREY_POSTGRES_PASSWORD, hunter2",
+        "refresh: (OSPREY_X_SECRET) hunter2",
+        "ospreyflow: the update to v0.5.0 failed at 'start the release': OSPREY_DB_PASSWORD was "
+        "hunter2",
         "postgres  | password authentication failed for user osprey",
     ],
 )
@@ -136,6 +173,9 @@ def test_a_value_is_still_hidden_whatever_the_line_begins_with(line: str) -> Non
         "OSPREY_LITELLM_SALT_SECRET, which deployment.env does not hold, so nothing was changed.",
         "ospreyflow: the update to v0.5.0 failed at 'bring the files up to date': refresh: "
         "requires OSPREY_LITELLM_DB_PASSWORD, which deployment.env does not hold.",
+        "ospreyflow: The compose file needs OSPREY_POSTGRES_PASSWORD, which this shell sets empty "
+        "(Compose reads the shell before deployment.env: unset OSPREY_POSTGRES_PASSWORD first), so "
+        "Docker Compose refuses every command on this deployment and nothing was changed.",
     ],
 )
 def test_our_own_refusal_naming_a_variable_is_shown(line: str) -> None:

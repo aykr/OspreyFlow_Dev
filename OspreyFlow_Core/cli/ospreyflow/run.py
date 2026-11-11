@@ -23,10 +23,15 @@ _NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)
 #: name the variables Compose requires and never a value (CARRIES, the orchestrator's review,
 #: item 2).
 _OUR_WORDS = re.compile(r"^(?:refresh|ospreyflow): ")
-#: In our own words, a variable's NAME in prose: upper case, and followed by a comma, a full stop,
-#: a closing mark, the end of the line or a joining word, never by `=`, `:`, a quote or a value.
-_A_NAME_IN_PROSE = re.compile(
-    r"\b[A-Z][A-Z0-9_]*[A-Z0-9]\b(?=[,.;)\]`]|\s*$|\s+(?:which|is|are|and|or|nor|was|were)\b)"
+#: The two phrases our own refusals name a variable in, and only these, the names in them being
+#: upper case alone: refresh's and the lockout's "A, B, which deployment.env does not hold", and the
+#: lockout's shell clause. A name anywhere else in a line, or a line embedding a child's text that
+#: names a secret, stays hidden (my own lane review of the carries' round, item 4).
+_NAMES = r"[A-Z][A-Z0-9_]*(?:, [A-Z][A-Z0-9_]*)*"
+_OUR_PHRASES = re.compile(
+    rf"\b{_NAMES}, which deployment\.env does not hold\b"
+    rf"|\b{_NAMES}, which this shell sets empty \(Compose reads the shell before deployment\.env: "
+    rf"unset {_NAMES} first\)"
 )
 
 
@@ -61,7 +66,7 @@ class Redactor:
     def __call__(self, line: str) -> str:
         left = _NAMED_ONLY.sub("", line)
         if _OUR_WORDS.match(line):
-            left = _A_NAME_IN_PROSE.sub("", left)
+            left = _OUR_PHRASES.sub("", left)
         return self._notice if _SECRET.search(left) else line
 
 
@@ -181,16 +186,19 @@ def locked_out(
     name = project(directory)
     shell = os.environ if environ is None else environ
     emptied = [name for name in missing if name in shell]
-    where = "which deployment.env does not hold"
+    unheld = [name for name in missing if name not in shell]
+    parts = []
+    if unheld:
+        parts.append(f"{', '.join(unheld)}, which deployment.env does not hold")
     if emptied:
         names = ", ".join(emptied)
-        where += (
-            f" ({names} {'is' if len(emptied) == 1 else 'are'} set empty in this shell, which "
-            f"Compose reads before deployment.env: unset {names} first)"
+        parts.append(
+            f"{names}, which this shell sets empty (Compose reads the shell before "
+            f"deployment.env: unset {names} first)"
         )
     named = f" --name {directory.name if directory.parent.name == 'deployments' else 'default'}"
     return (
-        f"The compose file needs {', '.join(missing)}, {where}, so Docker Compose refuses every "
+        f"The compose file needs {'; and '.join(parts)}, so Docker Compose refuses every "
         f"command on this deployment and nothing was changed. Run `ospreyflow apply{named}`: it "
         "renders the compose file again and keeps or mints every value it needs (a backup set "
         "from before the value existed does not hold it). To stop its containers meanwhile: "

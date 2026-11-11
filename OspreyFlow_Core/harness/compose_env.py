@@ -56,16 +56,19 @@ def locked_out(
     when none is up)."""
     shell = os.environ if environ is None else environ
     emptied = [name for name in missing if name in shell]
-    where = "which deployment.env does not hold"
+    unheld = [name for name in missing if name not in shell]
+    parts = []
+    if unheld:
+        parts.append(f"{', '.join(unheld)}, which deployment.env does not hold")
     if emptied:
         names = ", ".join(emptied)
-        where += (
-            f" ({names} {'is' if len(emptied) == 1 else 'are'} set empty in this shell, which "
-            f"Compose reads before deployment.env: unset {names} first)"
+        parts.append(
+            f"{names}, which this shell sets empty (Compose reads the shell before "
+            f"deployment.env: unset {names} first)"
         )
     named = f" --name {directory.name if directory.parent.name == 'deployments' else 'default'}"
     return (
-        f"The compose file needs {', '.join(missing)}, {where}, so Docker Compose refuses every "
+        f"The compose file needs {'; and '.join(parts)}, so Docker Compose refuses every "
         f"command on this deployment and nothing was changed. Run `ospreyflow apply{named}`: it "
         "renders the compose file again and keeps or mints every value it needs (a backup set "
         "from before the value existed does not hold it). To stop its containers meanwhile: "

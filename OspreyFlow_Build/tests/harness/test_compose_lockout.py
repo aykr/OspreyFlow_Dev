@@ -129,8 +129,9 @@ def test_a_value_the_shell_sets_empty_is_said_to_be_the_shell_s(tmp_path: Path) 
         compose_env.locked_out(folder, missing, shell),
         cli_run.locked_out(folder, missing, shell),
     ):
-        assert "REQUIRED_EMPTY_REFUSED is set empty in this shell" in words
-        assert "unset REQUIRED_EMPTY_REFUSED" in words
+        assert "REQUIRED_EMPTY_REFUSED, which this shell sets empty" in words
+        assert "unset REQUIRED_EMPTY_REFUSED first" in words
+        assert "deployment.env does not hold" not in words  # the file holds it (my own lane review, item 6)
 
 
 def test_the_stop_meanwhile_runs_nothing_when_no_container_is_up(tmp_path: Path) -> None:
