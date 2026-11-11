@@ -56,6 +56,11 @@ class Leftover:
     why: str
 
 
+class ListingRefused(ValueError):
+    """A listing the check cannot vouch for (the wrong account or region, or no answer at all): a
+    listing that says nothing must not read as nothing left."""
+
+
 @dataclass
 class Leftovers:
     items: list[Leftover] = field(default_factory=list)
@@ -72,13 +77,31 @@ def _claim_patterns(values: dict[str, Any]) -> list[re.Pattern[str]]:
     ]
 
 
+def _config(values: dict[str, Any]) -> dict[str, Any]:
+    """The deployment's own configuration, as the render carries it in its values."""
+    return yaml.safe_load((values.get("files") or {}).get("osprey.yaml") or "{}") or {}
+
+
+def _platform(values: dict[str, Any]) -> Any:
+    from harness.cloud_platform.settings import load_platform
+
+    return load_platform((_config(values).get("cloud_platform") or {}).get("platform", "client"))
+
+
 def _our_names(values: dict[str, Any]) -> set[str]:
+    """What the deployment made by name: our Secret, the shared claims, and what the namespace's
+    Terraform writes into the namespace (the managed stores' Secrets, the bucket role's service
+    account), none of which carries the chart's label."""
     storage = values.get("storage") or {}
+    secrets = _platform(values).secrets
     return {
         f"Secret/{(values.get('secrets') or {}).get('name', 'ospreyflow-secrets')}",
         "PersistentVolumeClaim/ospreyflow-shared",
         *(f"PersistentVolumeClaim/ospreyflow-{c['name']}" for c in storage.get("claims", [])),
-    }
+        *(f"Secret/{s.name}" for s in (secrets.postgres, secrets.redis, secrets.s3,
+                                       secrets.opensearch)),
+        f"ServiceAccount/{secrets.irsa.service_account}",
+    }  # fmt: skip
 
 
 def _is_ours(item: dict[str, Any], values: dict[str, Any], names: set[str]) -> bool:
@@ -91,6 +114,11 @@ def _is_ours(item: dict[str, Any], values: dict[str, Any], names: set[str]) -> b
         return True
     if (metadata.get("annotations") or {}).get("meta.helm.sh/release-name") == RELEASE:
         return True
+    # Helm's own record of the release, kept by `helm uninstall --keep-history`.
+    if item.get("kind") == "Secret" and str(metadata.get("name")).startswith(
+        f"sh.helm.release.v1.{RELEASE}."
+    ):
+        return True
     if item.get("kind") == "PersistentVolumeClaim":
         return any(p.match(str(metadata.get("name"))) for p in _claim_patterns(values))
     return False
@@ -98,8 +126,7 @@ def _is_ours(item: dict[str, Any], values: dict[str, Any], names: set[str]) -> b
 
 def _namespace(values: dict[str, Any]) -> str:
     """The deployment's namespace, from its own configuration as the render carries it."""
-    config = yaml.safe_load((values.get("files") or {}).get("osprey.yaml") or "{}") or {}
-    namespace = (config.get("cloud_platform") or {}).get("namespace")
+    namespace = (_config(values).get("cloud_platform") or {}).get("namespace")
     if not namespace:
         raise SystemExit("the values carry no cloud_platform.namespace: render them first")
     return str(namespace)
@@ -114,12 +141,39 @@ def declared_resources(terraform: dict[str, str]) -> set[str]:
     }
 
 
-def _resource_of(address: str) -> str:
-    """`module.x.aws_iam_role.service` or `aws_s3_bucket.store["media"]` → `type.name`."""
+def _ours_in_state(address: str, declared: set[str], module: str | None) -> str | None:
+    """The `type.name` of `address` if it is one of the rendered Terraform's resources where the
+    deployment's files sit: the folder's root, or `module.<module>` when the environments
+    repository wraps them in one. A resource of the same type and name in another module is the
+    platform's."""
     parts = re.sub(r"\[[^\]]*\]", "", address).split(".")
-    while parts[:1] == ["module"] and len(parts) > 2:
+    if module is not None:
+        if parts[:2] != ["module", module]:
+            return None
         parts = parts[2:]
-    return ".".join(parts)
+    if parts[:1] == ["module"] or len(parts) != 2:
+        return None
+    resource = ".".join(parts)
+    return resource if resource in declared else None
+
+
+def _disks(
+    disks: dict[str, Any], namespace: str, region: str, account: str | None
+) -> list[dict[str, Any]]:
+    """The listing's volumes, once it says it is the cluster's account's, in the platform's region:
+    `aws ec2 describe-volumes`, wrapped by the runbook with the account and region it asked."""
+    if not isinstance(disks.get("Volumes"), list):
+        raise ListingRefused("the disks listing holds no Volumes: describe-volumes did not answer")
+    if disks.get("Region") != region:
+        raise ListingRefused(
+            f"the disks were listed in {disks.get('Region')!r}, not the platform's {region!r}"
+        )
+    if account is None or str(disks.get("Account")) != account:
+        raise ListingRefused(
+            f"the disks were listed in account {disks.get('Account')!r}, not the cluster's "
+            f"({account!r}, --disks-account)"
+        )
+    return list(disks["Volumes"])
 
 
 def _state_why(resource: str) -> str:
@@ -139,7 +193,9 @@ def check(
     buckets: str,
     bucket_prefix: str,
     disks: dict[str, Any] | None = None,
+    disks_account: str | None = None,
     volumes: dict[str, Any] | None = None,
+    module: str | None = None,
 ) -> Leftovers:
     found = Leftovers()
     names = _our_names(values)
@@ -149,13 +205,21 @@ def check(
             metadata = item.get("metadata") or {}
             what = f"{item.get('kind')}/{metadata.get('name')}"
             if _is_ours(item, values, names):
-                kind, name = str(item.get("kind")).lower(), metadata.get("name")
+                group = str(item.get("apiVersion", "")).rpartition("/")[0]
+                kind = str(item.get("kind")).lower() + (f".{group}" if group else "")
+                name = metadata.get("name")
                 found.items.append(Leftover(what, f"kubectl -n {namespace} delete {kind} {name}"))
             else:
                 found.not_ours.append(what)
-    for disk in (disks or {}).get("Volumes") or []:
+    patterns = _claim_patterns(values)
+
+    def our_claim(claim: str) -> bool:
+        return f"PersistentVolumeClaim/{claim}" in names or any(p.match(claim) for p in patterns)
+
+    region = _platform(values).aws_region
+    for disk in _disks(disks, namespace, region, disks_account) if disks is not None else []:
         tags = {t.get("Key"): t.get("Value") for t in disk.get("Tags") or []}
-        if tags.get(DISK_NAMESPACE_TAG) == namespace:
+        if tags.get(DISK_NAMESPACE_TAG) == namespace and our_claim(str(tags.get(DISK_CLAIM_TAG))):
             volume = disk.get("VolumeId")
             found.items.append(
                 Leftover(
@@ -164,13 +228,12 @@ def check(
                     f"aws ec2 delete-volume --volume-id {volume}",
                 )
             )
-    patterns = _claim_patterns(values)
     for volume in (volumes or {}).get("items") or []:
         ref = (volume.get("spec") or {}).get("claimRef") or {}
         claim = str(ref.get("name") or "")
         if ref.get("namespace") != namespace:
             continue
-        if f"PersistentVolumeClaim/{claim}" in names or any(p.match(claim) for p in patterns):
+        if our_claim(claim):
             name = (volume.get("metadata") or {}).get("name")
             found.items.append(
                 Leftover(
@@ -182,8 +245,8 @@ def check(
     for address in (line.strip() for line in state.splitlines()):
         if not address:
             continue
-        resource = _resource_of(address)
-        if resource in ours:
+        resource = _ours_in_state(address, ours, module)
+        if resource is not None:
             found.items.append(Leftover(f"terraform/{address}", _state_why(resource)))
         else:
             found.not_ours.append(f"terraform/{address}")
@@ -206,13 +269,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--values", required=True, type=Path)
     parser.add_argument("--objects", required=True, type=Path, action="append")
     parser.add_argument("--disks", type=Path)
+    parser.add_argument("--disks-account", help="the cluster's AWS account, which holds its disks")
+    parser.add_argument("--module", help="the module the environments repository puts ours in")
     parser.add_argument("--volumes", type=Path)
     parser.add_argument("--state", required=True, type=Path)
     parser.add_argument("--terraform", required=True, type=Path)
     parser.add_argument("--buckets", required=True, type=Path)
     parser.add_argument("--bucket-prefix", required=True)
     args = parser.parse_args(argv)
-    found = check(
+    try:
+        found = _run(args)
+    except ListingRefused as refused:
+        print(f"decommission check: refused: {refused}", file=sys.stderr)
+        return 2
+    for name in sorted(found.not_ours):
+        print(f"left alone (not the deployment's): {name}")
+    for item in found.items:
+        print(f"LEFT BEHIND  {item.what}: {item.why}")
+    print(f"decommission check: {len(found.items)} thing(s) left behind")
+    return 1 if found.items else 0
+
+
+def _run(args: argparse.Namespace) -> Leftovers:
+    return check(
         yaml.safe_load(args.values.read_text(encoding="utf-8")),
         objects=[json.loads(p.read_text(encoding="utf-8")) for p in args.objects],
         state=args.state.read_text(encoding="utf-8"),
@@ -222,14 +301,10 @@ def main(argv: list[str] | None = None) -> int:
         buckets=args.buckets.read_text(encoding="utf-8"),
         bucket_prefix=args.bucket_prefix,
         disks=_json(args.disks),
+        disks_account=args.disks_account,
         volumes=_json(args.volumes),
+        module=args.module,
     )
-    for name in sorted(found.not_ours):
-        print(f"left alone (not the deployment's): {name}")
-    for item in found.items:
-        print(f"LEFT BEHIND  {item.what}: {item.why}")
-    print(f"decommission check: {len(found.items)} thing(s) left behind")
-    return 1 if found.items else 0
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ import yaml
 from harness.cloud_platform.decommission_check import (
     DISK_NAMESPACE_TAG,
     Leftovers,
+    ListingRefused,
     check,
     declared_resources,
     main,
@@ -32,6 +33,8 @@ from schemas.deployment import OspreyConfig
 
 NAMESPACE = "ospreyflow-poc"
 PREFIX = "ospreyflow-poc-1a2b3c4d-"
+#: The cluster's account (synthetic), which holds its disks; the client platform's region.
+ACCOUNT, REGION = "210987654321", "eu-west-2"
 
 
 @pytest.fixture(scope="module")
@@ -84,7 +87,15 @@ def _clean() -> dict[str, Any]:
             _list(_object("ConfigMap", "kube-root-ca.crt")),
             _list(_object("Secret", "platform-team-registry-pull", {"owner": "platform-team"})),
         ],
-        "disks": {"Volumes": [_disk("vol-0another", "another-tenant", "data-db-0")]},
+        "disks": {
+            "Account": ACCOUNT,
+            "Region": REGION,
+            "Volumes": [
+                _disk("vol-0another", "another-tenant", "data-db-0"),
+                # The namespace's own disk of a claim that is not the deployment's (the platform's).
+                _disk("vol-0platform", NAMESPACE, "platform-team-scratch"),
+            ],
+        },
         "state": "module.namespace.aws_eks_access_entry.team\nmodule.namespace.aws_iam_role.team\n",
         "buckets": "someone-elses-bucket\nospreyflow-dev-9f9f9f9f-media\n",
     }
@@ -99,7 +110,9 @@ def _check(values: dict[str, Any], terraform: dict[str, str], given: dict[str, A
         buckets=given["buckets"],
         bucket_prefix=PREFIX,
         disks=given["disks"],
+        disks_account=ACCOUNT,
         volumes=given.get("volumes"),
+        module=given.get("module"),
     )
 
 
@@ -147,6 +160,17 @@ def test_a_namespace_holding_only_the_platform_s_own_passes(
             _object("ConfigMap", "ospreyflow-env", {"app.kubernetes.io/part-of": "ospreyflow"}),
             "ConfigMap/ospreyflow-env",
         ),
+        # What the namespace's Terraform writes, which carries no label of the chart's: the
+        # managed stores' Secrets (the database's password among them) and the bucket role's
+        # service account.
+        (_object("Secret", "rds-postgresql-instance-output"),
+         "Secret/rds-postgresql-instance-output"),
+        (_object("Secret", "elasticache-redis"), "Secret/elasticache-redis"),
+        (_object("Secret", "s3-bucket-output"), "Secret/s3-bucket-output"),
+        (_object("ServiceAccount", "ospreyflow"), "ServiceAccount/ospreyflow"),
+        # Helm's record of the release, kept by `helm uninstall --keep-history`.
+        (_object("Secret", "sh.helm.release.v1.ospreyflow.v3", {"owner": "helm"}),
+         "Secret/sh.helm.release.v1.ospreyflow.v3"),
         # Annotated as the release's by Helm, with no label of ours.
         (
             _object("ServiceAccount", "ospreyflow-extra",
@@ -155,6 +179,7 @@ def test_a_namespace_holding_only_the_platform_s_own_passes(
         ),
     ],
     ids=["statefulset-claim", "kept-shared-claim", "kept-ingest-claim", "our-secret", "labelled",
+         "rds-secret", "redis-secret", "s3-secret", "bucket-role-account", "helm-release",
          "helm-annotated"],
 )  # fmt: skip
 def test_a_leftover_in_the_namespace_is_named(
@@ -202,7 +227,7 @@ def test_a_volume_object_kept_after_its_claim_is_named_where_it_may_be_listed(
         "aws_iam_role_policy_attachment.buckets",
         'aws_s3_bucket.store["media"]',
         "aws_db_instance.postgres",
-        "module.ospreyflow.kubernetes_service_account.service",
+        "kubernetes_service_account.service",
     ],
 )
 def test_a_resource_the_render_declares_left_in_the_state_is_named(
@@ -264,9 +289,71 @@ def test_main_exits_1_on_a_leftover_and_0_on_none(tmp_path: Path, rendered: dict
     (tmp_path / "state.txt").write_text(given["state"], encoding="utf-8")
     (tmp_path / "buckets.txt").write_text(given["buckets"], encoding="utf-8")
     argv = ["--values", str(tmp_path / "values.yaml"), *objects,
-            "--disks", str(tmp_path / "disks.json"), "--state", str(tmp_path / "state.txt"),
+            "--disks", str(tmp_path / "disks.json"), "--disks-account", ACCOUNT,
+            "--state", str(tmp_path / "state.txt"),
             "--terraform", str(folder), "--buckets", str(tmp_path / "buckets.txt"),
             "--bucket-prefix", PREFIX]  # fmt: skip
     assert main(argv) == 0
     (tmp_path / "state.txt").write_text("aws_iam_role.service\n", encoding="utf-8")
     assert main(argv) == 1
+    (tmp_path / "disks.json").write_text(json.dumps({"Volumes": []}), encoding="utf-8")
+    assert main(argv) == 2
+
+
+def test_a_calico_policy_s_removal_names_its_api_group(
+    values: dict[str, Any], terraform: dict[str, str]
+) -> None:
+    given = _clean()
+    policy = _object("NetworkPolicy", "default.ospreyflow-allow-egress",
+                     {"app.kubernetes.io/part-of": "ospreyflow"})  # fmt: skip
+    policy["apiVersion"] = "projectcalico.org/v3"
+    given["objects"].append(_list(policy))
+    [item] = _check(values, terraform, given).items
+    assert item.why == (
+        f"kubectl -n {NAMESPACE} delete networkpolicy.projectcalico.org "
+        "default.ospreyflow-allow-egress"
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "said"),
+    [
+        (lambda d: d.pop("Volumes"), "holds no Volumes"),
+        (lambda d: d.update(Region="eu-west-1"), "not the platform's 'eu-west-2'"),
+        (lambda d: d.update(Account="111111111111"), "not the cluster's"),
+        (lambda d: d.pop("Account"), "not the cluster's"),
+    ],
+    ids=["no-volumes", "other-region", "other-account", "no-account"],
+)
+def test_a_disks_listing_it_cannot_vouch_for_is_refused(
+    values: dict[str, Any], terraform: dict[str, str], change: Any, said: str
+) -> None:
+    """`describe-volumes` answers `[]` for an account or region that holds none of the cluster's
+    disks, and a listing with no answer at all must not read as nothing left either."""
+    given = _clean()
+    change(given["disks"])
+    with pytest.raises(ListingRefused, match=said):
+        _check(values, terraform, given)
+
+
+@pytest.mark.parametrize(
+    ("address", "module", "ours"),
+    [
+        ("aws_iam_role.service", None, True),
+        ("module.ospreyflow.aws_iam_role.service", None, False),
+        ("module.ospreyflow.aws_iam_role.service", "ospreyflow", True),
+        ("aws_iam_role.service", "ospreyflow", False),
+        # The platform's own resource of the same type and name, in a module of its own.
+        ("module.namespace.aws_iam_role.service", "ospreyflow", False),
+        ("module.ospreyflow.module.inner.aws_iam_role.service", "ospreyflow", False),
+    ],
+)
+def test_only_the_deployment_s_place_in_the_state_is_its_own(
+    values: dict[str, Any], terraform: dict[str, str], address: str, module: str | None,
+    ours: bool,
+) -> None:  # fmt: skip
+    given = _clean()
+    given["state"] += f"{address}\n"
+    given["module"] = module
+    found = _check(values, terraform, given)
+    assert [i.what for i in found.items] == ([f"terraform/{address}"] if ours else [])
