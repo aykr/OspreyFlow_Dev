@@ -3,25 +3,20 @@
 `lane/docs` = main `ac8735d` plus this file (and, if listed below, the report). Nothing is running; no stack is held.
 The decks are outside the product repo, in `OspreyFlow_presentations/` (git-excluded), so they are not in any commit.
 
-## First, on resume: the rule editor in the guides (the orchestrator's order)
+## First, on resume: the rule editor's guide step (built at 3b602a5, waiting for review)
 
-The published guides describe the rule editor as built but do not yet explain it. Write, from main's code and ADR-146
-Amendment 6 (facts already gathered in `OspreyFlow_presentations/D2B/CLAIMS.md`, section "The rule editor"):
-- **User guide §7** (Monitoring and alerts): §7.1 the place's four tabs (Alerts, What raises alerts, Held rows for an Editor
-  or Author, Changes for an Author or administrator); §7.4 and §7.6 rewritten around **Write a rule on a dataset**: the
-  dataset chosen once, the sentence, severity, *For* this case, *Alert goes to*, *Runs* (after/before commit, schedule,
-  list refresh), *Show the drawn pattern*, *Preview on the last 90 days*, **Save the draft**, **Test on the last 30 days**,
-  **Make live** (needs `deploy_rules`; a Rule author alone cannot), the second person by the dataset's
-  `promotion_policy`; *Open in the rule editor*; Versions, *Schedule and runs*, the Changes tab; **Show as BPMN**
-  (read-only; export and import are API routes only). The older forms keep a rule "just for me" (`use_the_rule_editor`).
-- **Administration guide §9.4–9.6**: who writes and makes rules live (rights by role, from `packages/schemas/rights.py`),
-  no whole-deployment rule, `migrate_rules_to_datasets`, a rule running as its author who must still hold `author_rules`
-  or `deploy_rules` (decision 13), assigning Rule author after the update, the second person.
-- MORNING items 13 and 17's decisions as built (all built; item 17(a)'s template-to-draft path is *coming*).
-- Version rows (user 1.44, administration 1.70 or the next free), `make docs-pdf`, the docs tests and gates, a friction
-  row; send "built at <hash>" for the independent review.
-- A note to the orchestrator already sent: CHANGELOG.md:135's "export or show as BPMN" is true for export only through
-  the API; its v0.5.0 section is the orchestrator's.
+User guide 1.44 §7.1–7.6 (and §7.11–7.12 where they contradicted it) and administration guide 1.70 §9.4–9.6, with spec 10's
+mirror, describe rules' L2.10 and L2.11 as built, from main's code and ADR-146 Amendment 6 (MORNING items 13 and 17's
+decisions included; 17(a)'s template-to-draft path is *coming*). PDFs reprinted (user and administration; the developer and
+architecture PDFs kept, their sources unchanged); the docs tests (182) and gates green; friction row
+`2026-11-11-docs-rule-editor-guides.md`. Sent to the orchestrator as "built at 3b602a5".
+- On resume: fix both reviews' findings together, rebase onto main, then gate once on the server
+  (`stack_lease.sh offline docs -- sh -c 'make -k ci'` and `make test`), and send ready-to-merge with the head from git.
+- Captures this step needs (default and GOV.UK): `images/user/09-monitoring.png` (the queue's filters, What fired it),
+  `13-watches.png` (its subject, the Watches tab, is gone: What raises alerts' hotlists and patterns instead),
+  `22-rule-sentences.png` (the rule editor: dataset, draft, Test, Make live).
+- Told the orchestrator: CHANGELOG.md:135's "export or show as BPMN" is true for export only through the API (its v0.5.0
+  section is the orchestrator's).
 
 ## Then: D2b, the decks
 
