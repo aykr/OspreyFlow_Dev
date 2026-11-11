@@ -50,8 +50,8 @@ def _run(cmd: list[str], **kwargs: object) -> None:
 
 def build_and_scan(sha: str) -> list[str]:
     """Builds and trivy-scans every owned image in `SERVICES`, tagged the same way the release
-    workflow tags them (`<service>:<sha>` plus `:latest`). Returns every reference a real run would push,
-    in push order — the list `push()` below either pushes for real or only prints."""
+    workflow tags them (`<service>:<sha>` plus `:latest`). Returns every reference a real run would
+    push, in push order — the list `push()` below either pushes for real or only prints."""
     refs: list[str] = []
     for service, dockerfile, build_arg_name, context in SERVICES:
         sha_tag = f"{REGISTRY}/{service}:{sha}"
