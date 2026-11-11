@@ -1,13 +1,13 @@
-# as of 2026-11-11T06:25Z
+# as of 2026-11-11T06:35Z
 platform	P7	running on the test server since 06:13; merges on render, cp-policy-check and the gates (Am 8); one review round on your return, a retrospective one after	11 Nov, ~12:30	B
 admin	P10	Entra ID claims: the mapping and access tests on the server from 07:08; profile wiring after P7; two review rounds	12 Nov	B
 platform	P9	cut: encrypted S3 backup of ArcadeDB and ClickHouse, one timed restore	13 Nov	B
-platform-b	P11	the model route, after its carries	13–14 Nov	B
-case-b	P12	Laurium as its own Python 3.13 service (licence ruled)	13–14 Nov	B
-studio-b	L1.9	S3 and Athena connectors	13–14 Nov	B
+platform-b	P11	part 1 (engine kinds) on the server from 07:08, two rounds; part 2 after P7	12 Nov	B
+case-b	P12	part 1 (the service and adapter) on the server since 06:30; part 2 after P7	13 Nov	B
+studio-b	L1.9	part 1 (connectors on stand-ins) on the server since 06:30, two rounds; part 2 after P7	12–13 Nov	B
 platform	P7a	P7's acceptance run on kind	14 Nov	B
-platform	P7b	shape: poc, install and decommission runbooks (ADR-148 Am 5)	14 Nov	B
-docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where Laurium runs	15 Nov	B
+platform	P7b	shape: poc, install and decommission runbooks (ADR-148 Am 5)	13–14 Nov	B
+docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where Laurium runs	14 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 4 lands on your return; part 5 after P10's first part (the swap)	12 Nov	A
 rules	UPG-check	the real update to the published v0.5.0, on the server from 07:08	11 Nov, ~09:30	A
@@ -15,5 +15,5 @@ rules	hyg	an access step: two rounds; studio's finding fixed on the server	11 No
 rules-b	T3b	ready; the merger's review on your return	11 Nov, ~12:00	A
 docs	D2d	the review's nine must-fixes, then merge without you (Am 8)	11 Nov, afternoon	A
 studio-b	L1.10b	lands on your return	11 Nov, ~12:00	A
-platform-b	carries	chart quoting first; on the server from 07:08	11 Nov, ~12:00	B
+platform-b	carries	after P11 part 1 (chart quoting first)	12 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B

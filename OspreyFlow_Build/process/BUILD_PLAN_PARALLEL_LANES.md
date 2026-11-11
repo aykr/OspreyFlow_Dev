@@ -235,6 +235,19 @@ profile's settings model and `render.py`'s profile entry are platform's, the oth
 until after the install (P7's interim stands), and **P9b** (alerts, drain test, volume expansion) after it too.
 Paused until the chain merges: T3b's follow-ups, D2b's captures, rules' `lists`.
 
+**Split into parts (the owner, 11 November, about 06:30):** P12, L1.9 and P11 split as P10 was. Each part 1 needs
+no cloud-platform profile, started at once on the test server in a fresh session, and merges on its own gates
+without waiting for P7. Each part 2 wires it into the profile after P7 merges.
+
+| Step | Part 1 (now, on the test server) | Part 2 (after P7) |
+| --- | --- | --- |
+| P12, case-b | Laurium's service and the thin adapter, on local-lite through the gateway's stand-in: the conformance suite on both adapters, findings inferred, another host refused, no langchain without the extra | The service in the profile, its egress line, the pack's preset; the extraction-engine setting in Admin › Models after P11 part 1 |
+| L1.9, studio-b | S3 and Athena against SeaweedFS and a recorded fixture: golden files, another dataset's source refused, the byte cap, keyboard and axe | The namespace's IAM role, the egress allow list |
+| P11, platform-b | The two engine kinds in Admin › Models (the client's gateway; Bedrock by IAM role, no stored key), with the access and key tests on recorded fixtures; ahead of its carries | The gateway rendered by default; the model host allowed only while an engine is enabled |
+
+Part 1s share no file. P11 part 1 owns *Admin › Models*, so P12's setting waits for it; `packages/schemas/generated/`
+and `uv.lock` are regenerated at merge. P11 part 1 and L1.9 part 1 are credential and access steps, with two rounds.
+
 ## File ownership
 
 A lane changes only what it owns. Anything else is a request to the orchestrator, who either makes a

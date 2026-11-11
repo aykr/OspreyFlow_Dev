@@ -264,6 +264,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **P7 gets one review round, then merges (your word, about 06:30).** A retrospective second review follows once
       your laptop is back, and anything it finds becomes a follow-up item, not a revert. It still lands only when the
       laptop is online, since merges go through me.
+    - **P12, L1.9 and P11 split into two parts each (your word, about 06:30).** Part 1 needs no profile and merges
+      on its own gates; part 2 wires it in after P7.
+      - case-b's P12 part 1 and studio-b's L1.9 part 1 started on the test server at 06:30, in fresh sessions with
+        your allow list plus the Docker additions you approved.
+      - platform-b's P11 part 1 starts at 07:08, ahead of its carries.
+      - The three part 1s share no file: P11 owns *Admin › Models*, so P12's extraction-engine setting waits for it.
+      - New dates: P11 on 12 November, L1.9 on 12–13 November, P12 on 13 November, and the whole chain about 13–14
+        November, with D2c on 14 November.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
