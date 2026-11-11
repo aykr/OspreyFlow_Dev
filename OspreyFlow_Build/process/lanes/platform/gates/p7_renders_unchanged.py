@@ -115,6 +115,21 @@ def with_helm(root: Path, rendered: dict[str, dict[str, str]]) -> None:
     for artefacts in rendered.values():
         if "values.yaml" in artefacts:
             artefacts["helm template"] = helm_manifests(root, artefacts["values.yaml"])
+            artefacts["helm template, parsed"] = parsed(artefacts["helm template"])
+
+
+def parsed(text: str) -> str:
+    """Helm's manifests as Kubernetes reads them: comments gone, and each checksum annotation a
+    value, quoted or not (P7 round 1 quoted them; a digest may be all digits)."""
+    import yaml
+
+    docs = [d for d in yaml.safe_load_all(normalised(text)) if d]
+    for doc in docs:
+        template = ((doc.get("spec") or {}).get("template") or {}).get("metadata") or {}
+        for key in list(template.get("annotations") or {}):
+            if key.startswith("checksum/"):
+                template["annotations"][key] = "<checksum>"
+    return json.dumps(docs, indent=1, sort_keys=True)
 
 
 def main(base: str, helm: bool = False) -> int:

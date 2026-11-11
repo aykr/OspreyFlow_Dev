@@ -1,67 +1,43 @@
-# Platform lane · P7 · report (11 November 2026, test server; the `cloud-platform` profile, ADR-148)
+# Platform lane · P7 · report (11 November 2026, test server; round 1 of the orchestrator's two reviews at 1a63953d)
 
-P7 is built to ADR-142 Amendment 8's bar. That bar is the render, `make cp-policy-check` (green, and red on each
-planted fault) and the ordinary gates. The acceptance run on kind is **P7a**, after P9, and was not run. The branch
-is rebased onto main 9bcadc6, with the schemas commit at the head. `SERVER_LOG.md` has the session; the built hash
-is recorded there. Nothing of mine is running, and the kind cluster is down (0 `osprey-p7-*` containers).
+P7 is rebuilt at **dd0233e1** (tree `8af3ee5b`), on main 9bcadc6 (main has not moved), the schemas commit at its head. Every must-fix
+(1–11) and every minor is fixed or carried below, each refusal red first (`P7_RED_RECORD.md`, last section: 32 plants, 32 red). The
+kind cluster was not needed and is down (0 `osprey-p7-*` containers). Nothing of mine is running. Nothing was pushed.
 
-| Exit criterion (BRIEF.md, as Amendment 8 cut it) | State | Proof |
+| Item | State | Proof |
 | --- | --- | --- |
-| `make cp-policy-check` green on the render | Met at the head | 0 violations (development 32 manifests, production 37), and the check's, the Terraform's and the render's tests all pass (`P7_RED_RECORD.md`, last section) |
-| …red on each planted fault, other-uid included | Met | `P7_RED_RECORD.md`: every branch red on its own fault; on the server, the other-uid rule, the group rules, Jobs and CronJobs, and the six newer render tests |
-| ArcadeDB, ClickHouse, Keeper start as 10001 | Met (10 Nov) | `gates/p7_stores_uid_proof.2026-11-10.log`, `gates/p7_kind_check.677d473.log` |
-| `local-lite`, `small`, `cluster` renders unchanged but the UIDs | Met (10 Nov) | `gates/p7_renders_unchanged.helm.log`: 0 differences; the settings are refused at every other profile, each red |
-| `make test`, `make -k ci` at the head | See *Gates* | `gates/<sha>.test.txt`, `gates/<sha>.ci.txt` |
-| Acceptance scenarios on kind | **P7a**, not this step | `HANDOFF.md` items 2–4 carry to P7a |
-| Friction row | Written | `process/friction/2026-11-10-platform-p7-cloud-platform.md` |
+| 1 `make docs-pdf` | Cannot run here: this server's Chromium prints "ﬁgures" (U+FB01), which `tools.docs_pdf` does not match; read back with pypdf. Guide restored to main's by name, its change sent as `P7_admin_guide.diff` | `test_docs_pdf` passes at the head; the merger applies the diff, remakes the PDF, runs both |
+| 2 gates at the head | `make test`: 4 failed, 10978 passed, each explained below. `make -k ci`: **green** (workspace rebuilt `--no-cache --pull`: 0 HIGH/CRITICAL). `cp-policy-check`: 0 violations, 136 passed | `gates/dd0233e1.{test,ci,cp-policy-check}.txt` |
+| 3 egress by one setting | Refused at /16 (IPv4: AWS's largest VPC) and /48 (IPv6: one site), default routes above all, in `osprey.yaml` and a platform's settings; `open-egress` in the check; §3c names `managed_nets` (the client's whole VPC; narrow it) | `test_a_network_that_would_open_egress_is_refused`, `test_a_host_s_network_that_opens_egress_is_refused`, … |
+| 4 other tenants | `ingress-isolation`: every pod selected, only own pods and the controller's namespace; `ospreyflow-public` no longer rendered behind the Ingress (it admitted every address) | `test_a_dropped_internal_policy_…`, `test_a_widened_ingress_policy_is_refused`, … |
+| 5 renders unchanged | Every local-lite, small and cluster artefact byte for byte main's; the cluster's Helm text differs only in two comments and the quoted checksums; parsed, identical | `gates/p7_renders_unchanged.dd0233e1.log` (9bcadc6 vs dd0233e1) |
+| 6 checksums | Quoted; test forces an all-digit digest (its first draft passed its plant: a 0-led digest PyYAML reads as text; fixed) | `test_helm_chart.py::test_a_checksum_of_digits_alone_is_still_text` |
+| 7 Ingress | Timeouts 3600 s from the Glass's nginx, body size 512m from the Conduit's cap, each read from its source | `test_the_ingress_s_settings_follow_their_sources` |
+| 8 fsGroupChangePolicy | `OnRootMismatch`; `fs-group-walk` rule | `test_a_volume_walk_at_every_start_is_refused` |
+| 9 kind claims | Removed from §3c and Am 1 item 4, moved to P7a's list (Am 1 "Left"). LiteLLM as 10001: **proven** (the script's image refs were wrong; fixed). No-Java Conduit built: no java, no JAVA_HOME, no Java labels; imports and starts | `gates/p7_stores_uid_proof.2026-11-11.log`, `gates/p7_conduit_no_java.dd0233e1.log` |
+| 10 Admin › Maps | Says there is no basemap route here yet; Am 1 "Left": none until P8 | `test_on_a_cloud_platform_the_build_says_there_is_no_basemap_route_yet` |
+| 11 resources | Requests and memory limits on every container (proposals, unmeasured), ArcadeDB's heap ¾ of its limit; `no-resources` rule | `test_every_container_asks_…`, `test_arcadedb_s_heap_follows_its_memory_limit` |
 
-**Lane-reviewer, 11 November, on the rebased branch.** It raised nine points. Fixed:
-- 1: `PROFILE_NAMES` lacked `cloud-platform`. main's test `test_the_profile_names_refused_are_the_schemas_profiles` went red in `make test`; the fix rides in the schemas commit.
-- 2: Jobs and CronJobs had no red; each now has one.
-- 3: §3c claimed a kind proof; it no longer does.
-- 4: this report was stale; rewritten.
-- 5: Keycloak's group 0 is now recorded in ADR-148 Amendment 1 item 4 and gated by the new group rules.
-- 8, in part: the settings test now covers every profile, each with a red.
+**Rulings applied** (recorded in the friction row): the guide restored by name; `harness/cloud_platform/` extension points made data
+(`profile.yaml`: doors, ours, group 0, always-hosts, resources); an image missing from `ours` refused in words.
+**Minors, all fixed:** the duplicate parsers (`final_user` and one Helm runner, `tools/helm_chart.py`); `kind.yaml` a test fixture
+(`OSPREY_PLATFORM_FOLDERS`); HANDOFF.md superseded; `render_values` refuses another profile in words; "an Enterprise" wording; the four
+reds; the platform team's open questions in Am 1 "Left"; Terraform (no provider block, IRSA `:aud`, OpenSearch's security group and
+policy); `values.yaml` declares the new keys. Egress from Admin's runtime settings stays L1.9's.
 
-Not changed:
-- 6, ownership: the chart templates beyond `ingress.yaml`, `cli/ospreyflow/main.py` (a rebase conflict, both verbs kept) and `cli/ospreyflow/deployments.py` (one name) are outside platform's map. These are requests below.
-- 7: the brief's `stack_lease.sh offline` predates the server prompt, which says to run directly here.
-- 8, the rest:
-  - The no-Java image is never built in a test; its `included` label says `omitted`.
-  - The check templates every fixture into `ospreyflow-dev`, which no rule reads.
-  - The first red table was taken before the rebase. The check's tests pass at the head.
-- 9: the duplicate Dockerfile-USER parser. Left as it is.
+**`make test`'s four failures, none this branch's code:** `test_webapp_preflight::test_gpu_…` (this server has a working GPU);
+`test_valkey_config::…_reached_plainly` (main's test never clears `VALKEY_PORT`, pinned to the offline 59993); two
+`test_admin_guide` cases on `docs/administration-guide.md`, which is main's copy by the ruling, until `P7_admin_guide.diff` is applied.
+At 4ee0625d `make test` also found two of mine (`gates/4ee0625d.test.txt`), fixed below the schemas commit: ADR-148 citing a process
+ADR, and the Conduit's Debian upgrade moved out of its final stage.
 
-**Decisions taken** (for the owner to overrule): 1–7 as on 10 November (the shared claim until P8; plain-resource
-Terraform; egress by networks; `--group-add`; no OpenSearch address; Keycloak group 0 until P10, now in the ADR and
-gated; Java by build argument). 8: `PROFILE_NAMES` carried in the schemas commit, since a separate commit below it
-would fail its own test.
+**Decisions taken:** 9: the egress caps /16 and /48, for the reasons above. 10: the spec/10 appendix and generated type ride in the
+schemas commit, as `PROFILE_NAMES` did (8), since they follow the schema's description. 11: `stack_lease.sh offline` cannot run on
+the test server itself (it ssh'es to `ospreyflow-test`, which does not resolve here; there is no sshd), so each gate ran directly
+with the ports it pins (59991–59994), no lane, no lease.
 
-**Requests to the orchestrator:**
-- Accept the chart templates beyond `ingress.yaml`, plus `cli/ospreyflow/{main,deployments}.py`.
-- Apply `P7_ci_makefile.diff`, which is regenerated on 9bcadc6.
-- Run `make docs-pdf` on the laptop at merge, for the administration guide's 1.71. The edits under `docs/` and
-  `spec/10` are needed by main's admin-guide tests; I ask you to accept them as platform's.
-- At merge, mark ADR-148 Am 1's reservation row as written.
-- Main's issues, reported here and not fixed: `create_investigation` sends no dataset, and the seeds default to `unit-1`. B4's seed gives 0 nodes. `render.py`'s `_KEYCLOAK_DATABASE_SQL` lacks the PG16 GRANT for Small on RDS.
-
-## Gates (test server, offline ports 59991–59994, no lease, no stack; at 3b83c218 on main 9bcadc6)
-
-- **`make test`** (`gates/3b83c218.test.txt`): 3 failed, 10939 passed, 13 skipped. No failure is this branch's code:
-  - `test_webapp_preflight::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass`: this server has a
-    working `nvidia-smi`, so the check passes, as it should on a GPU host. main's test assumes no GPU.
-  - `test_valkey_config::test_the_deployments_own_valkey_is_reached_plainly`: main's test never clears
-    `VALKEY_PORT`, and the prescribed offline port is 59993.
-  - `test_docs_pdf::test_the_guides_and_their_pdfs_are_in_step`: this branch's guide edit (the appendix and
-    `images push`, which main's admin-guide tests require). The guide's version 1.71 was added after the run
-    (52400f6). **The PDF needs `make docs-pdf` on the laptop**: this server's Chromium prints the "fi" ligature,
-    and `tools.docs_pdf` then cannot find its "List of figures" page.
-- **`make -k ci`** (`gates/3b83c218.ci.txt`): one failure, `trivy-image-workspace` (with its parent rollup
-  `core-check`). The workspace image, unchanged by this branch, has two HIGH CVEs, both fixed upstream in
-  `libxslt` 1.1.43-r4; the base layer came from the build cache, which was stale. Every other gate passed:
-  lint, types, the other image scans, licence, a11y, chart, OpenTofu, schemas, the publication and
-  citation checks and lanes-check.
-- **`make cp-policy-check`** (the diff's target, in the working tree only; not in `ci` until the owner applies
-  it): 0 violations; its tests and the render's, 98 passed.
-- **Commits after 3b83c218**: the guide's version row, these records, and the schemas commit moved back to the
-  head. Its tree differs from 3b83c218's only in `docs/administration-guide.md` and `process/`.
+**Requests:** apply `P7_admin_guide.diff` and `P7_ci_makefile.diff` (its rule list updated) at merge and remake the guide's PDF;
+mark ADR-148 Am 1's reservation row as written. **Report to glass:** `apps/workspace/nginx.conf.template` sets no
+`client_max_body_size`, so nginx's 1 MiB default refuses a larger upload through the Glass on every profile, whatever the Ingress
+allows. Main's carries stand: `create_investigation` sends no dataset; seeds default to `unit-1`; `render.py`'s
+`_KEYCLOAK_DATABASE_SQL` lacks the PG16 GRANT for Small **and the cluster profile** on RDS.

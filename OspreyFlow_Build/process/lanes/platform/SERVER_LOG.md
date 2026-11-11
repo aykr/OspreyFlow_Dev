@@ -120,3 +120,21 @@ the orchestrator fetches this clone.
   change against main, this round's settings row included, is `P7_admin_guide.diff`, and the guide is restored to
   main's copy by name, so `test_docs_pdf` passes here and the two admin-guide cases on the package guide fail until
   the merger applies the diff, regenerates the PDF and runs both on the merged tree.
+- **The fixes**, in small commits, the schemas commit at the head (REPORT.md has each item and its proof). The red
+  record: 32 plants, 32 red (`gates/p7_round1_reds.py`); the checksum test passed its own plant at first (a 0-led
+  digest PyYAML reads as text) and was corrected. The workspace image rebuilt `--no-cache --pull` before the gates.
+- **Gates.** `stack_lease.sh offline platform` cannot run here: it ssh'es to `ospreyflow-test`, which does not
+  resolve on the server itself, and there is no sshd (`localhost`: connection refused). Each gate ran directly with
+  the ports it pins (59991–59994), no lane, no lease, nothing else of mine running.
+  - At 4ee0625d `make test`: 6 failed. Two were mine and are fixed below the schemas commit: ADR-148 citing ADR-142
+    (decision-log-publication-check) and the Conduit's Debian upgrade no longer in its final stage
+    (`test_images_built_fresh[api]`). `gates/4ee0625d.test.txt` is kept for that; its other 4ee0625d logs are
+    superseded by dd0233e1's.
+  - At dd0233e1: `make test` 4 failed, 10978 passed (each explained in REPORT.md); `make -k ci` green, the workspace
+    scan 0 HIGH/CRITICAL; `cp-policy-check` 0 violations (31 and 36 manifests) and 136 passed; the renders against
+    main 9bcadc6 unchanged but the cluster's Helm comments and quotes (parsed, identical); the no-Java Conduit, 0
+    failures. `make ci`'s OpenTofu step rewrote three `.terraform.lock.hcl` files; restored by name, not committed.
+- **P7 built at `dd0233e155c915ce57618f761ad0c894310a7103`** (tree `8af3ee5b8959f87a971c879efb5a6ccf1155120c`), the
+  schemas commit at its head, on main 9bcadc6. The commit above it holds this log, REPORT.md and the gates' outputs
+  alone. **Stopped here** for round 2 of both reviews. Nothing of this session is running; no kind cluster; the
+  image `osprey-p7-api-nojava:check` is kept for the record; nothing was pushed.

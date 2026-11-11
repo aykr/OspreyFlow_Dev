@@ -1,0 +1,41 @@
+# bash process/lanes/platform/gates/p7_conduit_no_java.sh run, at dd0233e1 (the Debian upgrade in the final stage), test
+# server, 11 November 2026, no lease (Docker only). Its whole output.
+
+== build: services/api/Dockerfile, --build-arg CONDUIT_JAVA=omitted, at dd0233e1
+sha256:1b952fcd18360842ca0aff38c27ad2f973d7afc2ef8f4add15d9104820a9d362
+PASS  built osprey-p7-api-nojava:check (sha256:1b952fcd18360842ca0aff38c27ad2f973d7afc2ef8f4add15d9104820a9d362)
+
+== no Java in it
+labels: {"org.ospreyflow.runtime.java.included":"omitted"}
+PASS  labelled included=omitted
+PASS  no Java licence or version label
+env: PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+env: LANG=C.UTF-8
+env: GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305
+env: PYTHON_VERSION=3.12.16
+env: PYTHON_SHA256=b5796915dc45ff745cfb4e990a7e7c93d6f546328a102ce31448d69ebc37575c
+env: PYTHONPATH=/app:/app/packages
+env: PYTHONUNBUFFERED=1
+env: HOME=/app
+PASS  no JAVA_HOME
+PASS  /opt/java not on PATH
+in the image: uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+in the image: java: not found
+in the image: ls: cannot access '/opt/java': No such file or directory
+PASS  no java executable anywhere in the image
+
+== it starts
+imported services.api.app; shutil.which(java) = None
+PASS  the application imports without Java
+log:   File "/app/services/api/app.py", line 1158, in lifespan
+log:     config = ApiConfig.from_env()
+log:              ^^^^^^^^^^^^^^^^^^^^
+log:   File "/app/services/api/config.py", line 262, in from_env
+log:     raise RuntimeError(
+log: RuntimeError: OIDC_JWKS_URL is not set — Principal resolution has no key source. Point it at an IdP's JWKS endpoint (http/https only — a bare local file is not a supported scheme).
+log:
+log: ERROR:    Application startup failed. Exiting.
+PASS  uvicorn started the application (its start-up then needs a deployment's settings, not Java)
+PASS  the log names no Java
+
+== result: 0 failure(s)

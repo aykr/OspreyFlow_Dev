@@ -1,0 +1,125 @@
+# p7_renders_unchanged.py --helm 9bcadc6 (main, 9bcadc6e6c898c01543374fc3b5114135996092f) against this tree at
+# dd0233e1 (dd0233e155c915ce57618f761ad0c894310a7103, tree 8af3ee5b8959f87a971c879efb5a6ccf1155120c; the script's
+# parsed leg uncommitted then, OspreyFlow_Core untouched), test server, 11 November 2026, no lease (Docker for Helm).
+# Exit 1, by design: the cluster's `helm template` text differs from main's in two template comments and in the
+# checksum annotations, now quoted (item 6). Parsed as Kubernetes reads it, each is the same ("helm template,
+# parsed"), and every other artefact of local-lite, small and cluster is byte for byte main's.
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+DIFFERS  cluster-aws  helm template
+--- 
++++ 
+@@ -58,3 +58,5 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# The one door: the proxy, from anywhere.
++# The one door: the proxy, from anywhere. Not on a shared platform (ADR-148 decision 2), where the
++# platform's ingress controller is the door and `ospreyflow-from-ingress` admits it alone: a policy
++# admitting every address, there, would open any pod later labelled public to other tenants.
+ apiVersion: networking.k8s.io/v1
+@@ -592,5 +594,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "42a631f2c2b1b154"
++        checksum/environment: "23602b2a4d97c29e"
+     spec:
+@@ -662,5 +665,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "42a631f2c2b1b154"
++        checksum/environment: "23602b2a4d97c29e"
+     spec:
+@@ -770,5 +774,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "42a631f2c2b1b154"
++        checksum/environment: "23602b2a4d97c29e"
+     spec:
+@@ -826,5 +831,6 @@
+same  cluster-aws  helm template, parsed
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+DIFFERS  cluster-azure  helm template
+--- 
++++ 
+@@ -58,3 +58,5 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# The one door: the proxy, from anywhere.
++# The one door: the proxy, from anywhere. Not on a shared platform (ADR-148 decision 2), where the
++# platform's ingress controller is the door and `ospreyflow-from-ingress` admits it alone: a policy
++# admitting every address, there, would open any pod later labelled public to other tenants.
+ apiVersion: networking.k8s.io/v1
+@@ -649,5 +651,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "520ba0c13416042e"
++        checksum/environment: "f9bb1bc576cf0556"
+     spec:
+@@ -719,5 +722,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "520ba0c13416042e"
++        checksum/environment: "f9bb1bc576cf0556"
+     spec:
+@@ -827,5 +831,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "520ba0c13416042e"
++        checksum/environment: "f9bb1bc576cf0556"
+     spec:
+@@ -883,5 +888,6 @@
+same  cluster-azure  helm template, parsed
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+p7_renders_unchanged: 2 artefact(s) differ from 9bcadc6
