@@ -100,8 +100,8 @@ runner.PLANTS = [
      [TS + "test_a_policy_changed_by_the_lever_judges_the_sessions_already_running"]),
     # ---- the chart (Helm, on the server) ----------------------------------------------------------------------------
     ("the backup pod given the whole Secret (envFrom)", CHART,
-     '"env" $env "resources" $b.resources\n                  "claims" (list (dict "name" "arcadedb-backups"',
-     '"env" $env "envFrom" true "resources" $b.resources\n                  "claims" (list (dict "name" "arcadedb-backups"',
+     '"env" (concat $env ($b.arcadedb.env | default list)) "resources" $b.resources',
+     '"env" (concat $env ($b.arcadedb.env | default list)) "envFrom" true "resources" $b.resources',
      [TH + "test_the_cronjob_runs_on_arcadedbs_node_with_its_claim_one_run_at_a_time"]),
     ("the claims mounted writable by the claims run", CHART, "                readOnly: true\n", "",
      [TH + "test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only"]),
