@@ -79,7 +79,8 @@ these steps in this order. Each takes `--name <x>`, the deployment's own name.
    7. `remark_alert_nodes` re-marks alerts written before this release no lower than the links they
       cite. An alert resting on markings of different units is listed, not changed.
 6. Assign the **Rule author** role to someone in Admin, so that the converted rule drafts can be
-   tested and made live. No one is given it on update.
+   written and tested; no one is given it on update. Making a rule live needs *Deploy rules*, which
+   Analysts and Data Engineers hold (and the Super user preset), not Rule author alone.
 7. Give an owner to each home case named "needs an owner": Admin › Datasets › *Change owner…*.
 
 - **Plain `ospreyflow update` first is refused.** Run on a v0.4.12 deployment before step 2, it
@@ -132,9 +133,11 @@ these steps in this order. Each takes `--name <x>`, the deployment's own name.
   as a sentence whose conditions offer only the types in the dataset's live model. It is saved as a
   draft, tested on the last 30 days (the count is of what you may see), and made live; where the
   dataset asks for a second person, someone other than its author approves it. Every step is listed
-  under *Changes*. Each version keeps its BPMN and DMN files, to export or to show as BPMN. A rule can
-  read a reference list, and a refresh of that list starts the rules that name it. A new rule cannot
-  cover the whole deployment; the existing ones are converted by `migrate_rules_to_datasets`.
+  under *Changes*. Each version keeps its BPMN and DMN files, shown as BPMN on screen, and exported or
+  checked for import through the API. A rule can read a reference list, and a refresh of that list
+  starts the rules that name it. Writing and testing a rule needs Rule author; making it live needs
+  *Deploy rules*. A new rule cannot cover the whole deployment; the existing ones are converted by
+  `migrate_rules_to_datasets`.
 
 **The Ingest Studio.**
 - **Pipelines in guided and expert mode**, with a drawer beside the pipeline and a Preview that marks nothing.
