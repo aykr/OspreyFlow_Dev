@@ -85,6 +85,10 @@ class AdminEngine(BaseModel):
     #: The roles this engine is the default for.
     default_for: list[str] = Field(default_factory=list)
     limits: EngineLimits = Field(default_factory=EngineLimits)
+    #: On `cloud-platform`, an engine the render made no way out (or, for Bedrock, no role) for,
+    #: as a restored models file can hold: "not made by the render: <words>". Such an engine is
+    #: never written into the gateway nor offered to analysts (ADR-135 Amendment 8).
+    not_made: str | None = None
 
 
 class ModelsAdminView(BaseModel):

@@ -212,6 +212,23 @@ def policy_faults(tf: str, account: str = GATEWAY_ACCOUNT) -> list[str]:
     return faults
 
 
+def stray_gateway_references(
+    artefacts: dict[str, str], account: str = GATEWAY_ACCOUNT
+) -> list[str]:
+    """Each rendered Terraform file but `gateway.tf` that names the gateway's role, its policy or
+    its account: an attachment or a trust elsewhere would widen what the role may do, or who may
+    take it, unseen by the check of `gateway.tf` alone (the orchestrator's round 2, item 3)."""
+    names = ("aws_iam_role.gateway", "gateway_bedrock", "gateway_trust", f'"{account}"',
+             f":{account}\"")  # fmt: skip
+    return [
+        f"{path} names {name}"
+        for path, text in sorted(artefacts.items())
+        if path.startswith("terraform/") and path != "terraform/gateway.tf"
+        for name in names
+        if name in text
+    ]
+
+
 def test_the_gateway_role_grants_bedrock_invoke_in_london_alone_to_its_own_account() -> None:
     for declared in ([BEDROCK], [BEDROCK, GATEWAY, GEMINI]):
         tf = _gateway_tf(*declared)
@@ -331,3 +348,54 @@ def test_bedrock_on_a_platform_naming_no_gateway_account_is_refused_in_words(
     with pytest.raises(cloud_platform.CloudPlatformNotRenderable, match="gateway_service_account"):
         _artefacts(_engines(BEDROCK))
     _artefacts(_engines(GEMINI))  # no Bedrock, no account needed
+
+
+def test_no_other_terraform_file_names_the_gateway_s_role_policy_or_account() -> None:
+    for declared in ([BEDROCK], [BEDROCK, GATEWAY, GEMINI]):
+        assert stray_gateway_references(_artefacts(_engines(*declared))) == []
+
+
+@pytest.mark.parametrize(
+    "stray",
+    [
+        'resource "aws_iam_role_policy_attachment" "buckets_bedrock" {\n'
+        "  role       = aws_iam_role.service.name\n"
+        "  policy_arn = aws_iam_policy.gateway_bedrock.arn\n}\n",
+        'resource "aws_iam_role_policy_attachment" "gateway_buckets" {\n'
+        "  role       = aws_iam_role.gateway.name\n"
+        "  policy_arn = aws_iam_policy.buckets.arn\n}\n",
+        '    values = ["system:serviceaccount:${var.namespace}:ospreyflow-gateway"]\n',
+    ],
+    ids=["gateway-policy-on-the-bucket-role", "bucket-policy-on-the-gateway-role",
+         "gateway-account-in-another-trust"],
+)  # fmt: skip
+def test_the_stray_check_flags_a_reference_planted_in_another_file(stray: str) -> None:
+    artefacts = dict(_artefacts(_engines(BEDROCK)))
+    assert stray_gateway_references(artefacts) == []
+    artefacts["terraform/irsa.tf"] += "\n" + stray
+    assert stray_gateway_references(artefacts)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [BEDROCK, {**BEDROCK, "region": None}, GATEWAY, GEMINI,
+     {"name": "openai", "roles": {"extraction": "gpt-4o-mini"}}],
+    ids=["bedrock", "bedrock-no-region", "gateway", "gemini", "openai"],
+)  # fmt: skip
+def test_the_conduit_places_an_engine_s_host_as_the_render_does(engine: dict[str, Any]) -> None:
+    """`RoutesMade.host_of` (the Conduit's) and `engine_host` (the render's) give the same host for
+    every kind, the `{region}` placeholder and Bedrock's default region included (the
+    orchestrator's round 2, minor)."""
+    from harness.cloud_platform import engine_host, load_profile
+    from services.api.model_admin import RoutesMade
+
+    from schemas.deployment import ModelProviderConfig
+
+    values = _values(_engines(BEDROCK, GATEWAY, GEMINI))
+    made = RoutesMade.from_env({k: str(v) for k, v in values["environment"].items()})
+    assert made is not None
+    provider = ModelProviderConfig.model_validate(engine)
+    rendered = engine_host(
+        provider.name, provider.kind, provider.api_base, provider.region, load_profile()
+    )
+    assert made.host_of(provider) == rendered and rendered

@@ -807,6 +807,7 @@ class ModelAdmin:
                 budget_period=current.limits.get(p.name, EngineLimits()).budget_period,
             )
             for p in current.providers
+            if self._not_made(p) is None  # never offered unless the render made its way out
         }
         if self._installed.local_only:
             engines = {}
@@ -829,6 +830,11 @@ class ModelAdmin:
                     key_set_by=records[p.name].set_by if p.name in records else None,
                     default_for=[r for r, e in current.defaults.items() if e == p.name],
                     limits=current.limits.get(p.name, EngineLimits()),
+                    not_made=(
+                        f"not made by the render: {refused}"
+                        if (refused := self._not_made(p))
+                        else None
+                    ),
                 )
                 for p in current.providers
             ],
@@ -926,9 +932,14 @@ class ModelAdmin:
             return False
 
     def _hosted(self, settings: ModelSettings) -> ModelSettings:
-        """What the gateway should hold: nothing hosted while the deployment is local only."""
+        """What the gateway should hold: nothing hosted while the deployment is local only, and on
+        `cloud-platform` no engine the render did not make (a restored models file may name one;
+        its stale entries are then deleted, never written; round 2's item 2)."""
         if self._installed.local_only:
             return settings.model_copy(update={"providers": []})
+        made = [p for p in settings.providers if self._not_made(p) is None]
+        if len(made) != len(settings.providers):
+            return settings.model_copy(update={"providers": made})
         return settings
 
     async def _reconcile(
@@ -995,14 +1006,16 @@ class ModelAdmin:
         namespace and, for Bedrock, the gateway's own IAM role; anything else is refused in words
         before the gateway is asked (the orchestrator's ruling on P11 part 2, round 1). Every other
         profile reaches any host, as before."""
-        if self._file.profile != MODEL_ROUTE_PROFILE:
-            return
-        made = self._installed.made
-        refused = (
-            made.refusal(provider) if made is not None else NOT_MADE.format(identity="", name="")
-        )
-        if refused:
+        if refused := self._not_made(provider):
             raise ModelAdminRefused(refused)
+
+    def _not_made(self, provider: ModelProviderConfig) -> str | None:
+        """Why `provider` is not one the render made, in words, or None (always None off
+        `cloud-platform`). With no word from the render there, nothing is made (fails closed)."""
+        if self._file.profile != MODEL_ROUTE_PROFILE:
+            return None
+        made = self._installed.made
+        return made.refusal(provider) if made is not None else NOT_MADE.format(identity="", name="")
 
     def _save(self, settings: ModelSettings) -> None:
         self._file.save(settings)
@@ -1204,6 +1217,8 @@ class ModelAdmin:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if refused := self._not_made(next(p for p in current.providers if p.name == name)):
+                raise ModelAdminRefused(refused)  # never written into the gateway (round 2)
             if any(p.name == name and p.keyless for p in current.providers):
                 # ADR-135 Amendment 4: no key is stored for an engine signed in by the role.
                 raise ModelAdminRefused(
@@ -1261,6 +1276,8 @@ class ModelAdmin:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if refused := self._not_made(next(p for p in current.providers if p.name == name)):
+                raise ModelAdminRefused(refused)  # never written into the gateway (round 2)
             if self._installed.local_only:
                 raise ModelAdminRefused(
                     "This deployment's osprey.yaml declares local_only: true, so no engine outside "

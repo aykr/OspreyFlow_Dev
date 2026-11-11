@@ -27,6 +27,7 @@ real services do (`tests/adapters/model_litellm/test_stand_in_engine_kinds.py`, 
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import json
 import logging
@@ -136,7 +137,11 @@ def _as_rendered(names: tuple[str, ...]) -> tuple[dict[str, str], str | None]:
     for a deployment declaring `names` (the orchestrator's round 1 blocker, rule 15's second
     example): `ROLE` only if `litellm` runs as the gateway's own account and the rendered
     `gateway.tf` grants Bedrock's two invoke actions in London to that account alone."""
-    from tests.harness.test_cloud_platform_gateway import GATEWAY_ACCOUNT, policy_faults
+    from tests.harness.test_cloud_platform_gateway import (
+        GATEWAY_ACCOUNT,
+        policy_faults,
+        stray_gateway_references,
+    )
     from tests.harness.test_cloud_platform_render import _artefacts
 
     engines = {"bedrock": BEDROCK, "acme": GATEWAY, "gemini": GEMINI, "acme_two": GATEWAY_TWO}
@@ -146,7 +151,8 @@ def _as_rendered(names: tuple[str, ...]) -> tuple[dict[str, str], str | None]:
     gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
     policy = artefacts.get("terraform/gateway.tf", "")
     own = gateway.get("serviceAccountName") == GATEWAY_ACCOUNT
-    return environment, ROLE if own and policy and not policy_faults(policy) else None
+    sound = policy and not policy_faults(policy) and not stray_gateway_references(artefacts)
+    return environment, ROLE if own and sound else None
 
 
 class World:
@@ -1026,8 +1032,8 @@ def test_an_iam_role_engine_s_held_key_is_blanked_in_every_cloud_platform_worklo
 def test_the_gateway_workload_carries_no_static_aws_key(declared: list[dict[str, Any]]) -> None:
     """The gateway's pod signs Bedrock's calls by its own identity alone (the review's item 8):
     botocore prefers static keys in the environment to the pod's web identity, so none is given,
-    declared at install (a cloud-platform render runs the gateway only with an engine enabled, P7;
-    one added later in *Admin › Models* is held by the case after this)."""
+    declared at install (the gateway runs by default since P11 part 2, but only a declared engine
+    is reached; one first added in *Admin › Models* is refused until declared and re-rendered)."""
     values = _cloud_values(*declared)
     gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
     # Nothing reaches it unnamed: it reads no Secret whole, so a key held there is not handed on.
@@ -1151,3 +1157,57 @@ def test_on_cloud_platform_a_token_among_a_reference_s_words_is_refused() -> Non
     )
     refused = deployment.engine_refusal(engine, CLOUD)
     assert refused and "contract reference" in refused and "Q7Z4" not in refused
+
+
+# --- an engine the render did not make, arriving from the models file (round 2's item 2) -------
+
+
+def _restored(world: World, *engines: dict[str, Any]) -> None:
+    """A models file holding `engines`, as a restore (or a re-render dropping them) leaves it."""
+    from services.api.model_admin import ModelSettings
+
+    providers = [ModelProviderConfig.model_validate(e) for e in engines]
+    world.admin._file.save(ModelSettings(providers=providers))  # noqa: SLF001
+    world.admin._fresh()  # noqa: SLF001 - as a Conduit started after the restore reads it
+
+
+def test_a_restored_engine_the_render_did_not_make_is_never_written_or_offered(
+    tmp_path: Path, serve: Callable[[World], TestClient]
+) -> None:
+    """A restore brings back a models file naming Bedrock and a gateway on a host this render never
+    opened (it declared Gemini alone): neither reaches the gateway at start, neither is offered to
+    analysts, each is marked in Admin › Models with the ruling's words, and a key or a limit for
+    one is refused; the made engine beside them is untouched."""
+    world = World(tmp_path, rendered_with=("gemini",))
+    _restored(world, BEDROCK, GATEWAY_TWO, GEMINI)
+    asyncio.run(world.admin.start())
+    assert world.gateway.entry_for(f"bedrock/{CLAUDE}") is None
+    assert world.gateway.entry_for("acme_two/gpt-4o-mini") is None
+    assert world.gateway.entry_for("gemini/g-flash") is not None
+    assert set(world.admin.routes().engines) == {"gemini"}
+    view = {e.provider.name: e for e in world.admin.view().engines}
+    for name in ("bedrock", "acme_two"):
+        assert view[name].not_made and view[name].not_made.startswith("not made by the render: ")
+        assert REDO in view[name].not_made
+    assert view["gemini"].not_made is None
+    client = serve(world)
+    refused = client.put("/v1/admin/models/engines/acme_two/key", json={"key": TOKEN})
+    assert refused.status_code == 422 and REDO in _refusal(refused)
+    limits = client.put("/v1/admin/models/engines/acme_two/limits", json={"limits": {}})
+    assert limits.status_code == 422 and REDO in _refusal(limits)
+    assert world.gateway.credential("osprey-acme_two") is None
+
+
+def test_on_cloud_platform_with_no_word_from_the_render_every_engine_is_closed(
+    tmp_path: Path, serve: Callable[[World], TestClient]
+) -> None:
+    """`OSPREY_MODEL_ROUTES_MADE` absent on cloud-platform (a render from before part 2): nothing
+    is known to be made, so nothing is enabled, written or offered (fails closed)."""
+    world = World(tmp_path)
+    world.admin._installed = dataclasses.replace(world.installed, made=None)  # noqa: SLF001
+    refused = serve(world).post("/v1/admin/models/engines", json={"provider": GEMINI})
+    assert refused.status_code == 422 and REDO in _refusal(refused)
+    _restored(world, GEMINI)
+    asyncio.run(world.admin.start())
+    assert world.gateway.entry_for("gemini/g-flash") is None
+    assert world.admin.routes().engines == {}

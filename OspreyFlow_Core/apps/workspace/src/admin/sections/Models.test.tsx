@@ -49,6 +49,14 @@ function stub(answers: (path: string, init?: RequestInit) => Answer | undefined)
 }
 
 describe("Models", () => {
+  it("marks an engine the render did not make, in the Conduit's words (ADR-135 Amendment 8)", async () => {
+    const words = "not made by the render: Declare it in osprey.yaml, re-render, and have the platform team apply the Terraform";
+    const UNMADE = { ...VIEW, engines: [{ ...VIEW.engines[0], not_made: words }] };
+    stub((path) => (path === "/v1/admin/models" ? { status: 200, body: UNMADE } : undefined));
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    expect((await screen.findByRole("note")).textContent).toBe(words);
+  });
+
   it("sends the key once, clears the field, and never shows it again", async () => {
     const sent = stub((path, init) =>
       path === "/v1/admin/models/engines/gemini/key" && init?.method === "PUT" ? { status: 200, body: SET } : undefined,

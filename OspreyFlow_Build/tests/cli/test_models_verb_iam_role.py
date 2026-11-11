@@ -68,7 +68,7 @@ def test_models_key_and_remove_key_refuse_an_iam_role_engine_before_reading_a_ke
     rig.env["OSPREY_MODEL_KEY_BEDROCK"] = PLANTED
     assert rig("models", action, "bedrock") == 1
     out = capsys.readouterr()
-    assert "IAM role" in out.err and PLANTED not in out.out + out.err
+    assert "signs in by the gateway's own IAM role" in out.err and PLANTED not in out.out + out.err
     # Only the status was asked; nothing handed to the Conduit's key path.
     assert rig.runner.calls == []
     assert PLANTED not in _every_argv_word(rig)
@@ -84,12 +84,12 @@ def test_with_the_conduit_silent_no_key_is_read_where_the_engine_may_keep_none(
     rig: Rig, capsys: pytest.CaptureFixture[str], action: str, engine: str
 ) -> None:
     _on_cloud_platform(rig)
-    rig.responses["status"] = [(1, "service \"api\" is not running")]
+    rig.responses["status"] = [(1, 'service "api" is not running')]
     rig.env[f"OSPREY_MODEL_KEY_{engine.upper()}"] = PLANTED
     rig.secret_replies.append(PLANTED)
     assert rig("models", action, engine) == 1
     out = capsys.readouterr()
-    assert "IAM role" in out.err and "no key was read" in out.err
+    assert "signs in by the gateway's own IAM role" in out.err and "no key was read" in out.err
     assert rig.secret_prompts == []
     assert rig.runner.calls == []
     assert PLANTED not in _every_argv_word(rig) + out.out + out.err
@@ -101,7 +101,7 @@ def test_with_the_conduit_silent_another_profile_s_key_is_read_as_before(
     # local-lite (the rig's own profile), a plain provider: as before Amendment 4, the key is read
     # and handed on, and the hand-over is what fails or not.
     _installed(rig, models={**BEDROCK_MODELS, "providers": BEDROCK_MODELS["providers"][:1]})
-    rig.responses["status"] = [(1, "service \"api\" is not running")]
+    rig.responses["status"] = [(1, 'service "api" is not running')]
     rig.secret_replies.append("g-key-typed")
     rig("models", "key", "gemini")
     assert rig.secret_prompts == ["Key for Gemini (OSPREY_MODEL_KEY_GEMINI; not shown): "]

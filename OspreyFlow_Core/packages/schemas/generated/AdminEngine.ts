@@ -40,6 +40,7 @@ export type RequestsPerMinute = number | null;
 export type TokensPerMinute = number | null;
 export type BudgetTokens = number | null;
 export type BudgetPeriod = ("day" | "month") | null;
+export type NotMade = string | null;
 
 /**
  * One hosted engine as *Admin › Models* shows it: its settings, its limits, and its key's state
@@ -52,6 +53,7 @@ export interface AdminEngine {
   key_set_by?: KeySetBy;
   default_for?: DefaultFor;
   limits?: EngineLimits;
+  not_made?: NotMade;
   [k: string]: unknown;
 }
 /**

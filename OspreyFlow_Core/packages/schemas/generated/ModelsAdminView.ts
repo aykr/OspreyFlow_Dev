@@ -40,6 +40,7 @@ export type RequestsPerMinute = number | null;
 export type TokensPerMinute = number | null;
 export type BudgetTokens = number | null;
 export type BudgetPeriod = ("day" | "month") | null;
+export type NotMade = string | null;
 export type Engines = AdminEngine[];
 export type LocalOnly = boolean;
 export type SendableHandlingCodes = string[];
@@ -70,6 +71,7 @@ export interface AdminEngine {
   key_set_by?: KeySetBy;
   default_for?: DefaultFor;
   limits?: EngineLimits;
+  not_made?: NotMade;
   [k: string]: unknown;
 }
 /**

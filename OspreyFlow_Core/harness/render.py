@@ -316,7 +316,7 @@ def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
 
 def model_key_variables(config: OspreyConfig) -> dict[str, str]:
     """Each enabled provider's name and the `deployment.env` variable its key is kept in."""
-    # An engine signed in by the namespace's IAM role has none (ADR-135 Amendment 4).
+    # An engine signed in by the gateway's own IAM role has none (ADR-135 Amendment 4).
     return {p.name: config.models.key_variable(p.name) for p in config.models.keyed_providers}
 
 

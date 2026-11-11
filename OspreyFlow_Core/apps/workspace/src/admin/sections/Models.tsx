@@ -402,6 +402,8 @@ export function Models({ api }: { api: ModelsApi }) {
                             {when(engine.key_set_at)}, by {engine.key_set_by}
                           </div>
                         )}
+                        {/* ADR-135 Amendment 8: never offered nor written into the gateway. */}
+                        {engine.not_made && <div role="note">{engine.not_made}</div>}
                       </td>
                       <td>{limitsInWords(engine.limits)}</td>
                       <td className="admin-models-actions">
