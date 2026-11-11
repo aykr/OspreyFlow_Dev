@@ -289,7 +289,7 @@ started; its lease file is in the record). The server was shared with other lane
 15). The seed is synthetic: 5,000 vertices and 1,000 edges, 200,000 ClickHouse rows, and 301 files (7.7 MB) on the
 Ingest claim; the set was 9.6 MB in 17 objects. These are what that cluster did, not a service level: the
 platform's disks, network and S3 differ, and a real database is larger. The record is
-`OspreyFlow_Build/process/lanes/case/gates/p9_kind_roundtrip_timed.r3.json` (round 3, under the case lane's
+the case lane's `p9_kind_roundtrip_timed.r3.json` (round 3, under the case lane's
 lease on test stack c; another lane's live run held stack b on the same server meanwhile; round 2's, under lease b,
 was 70.2 s).
 
