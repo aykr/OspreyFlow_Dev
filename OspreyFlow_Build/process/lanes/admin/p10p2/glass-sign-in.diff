@@ -1,8 +1,44 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_disabled_words_match_the_glass.py b/OspreyFlow_Build/tests/services/api/test_disabled_words_match_the_glass.py
+new file mode 100644
+index 0000000..ed00a11
+--- /dev/null
++++ b/OspreyFlow_Build/tests/services/api/test_disabled_words_match_the_glass.py
+@@ -0,0 +1,30 @@
++"""The Glass tells a person disabled in this deployment so only when the Conduit's 401 carries
++`principal_auth`'s own words, compared exactly (`apps/workspace/src/auth/disabledAccount.ts`;
++ADR-148 Amendment 8). The two are in two languages: this holds them equal, so a change of words
++on either side turns it red rather than quietly sending a disabled person to the misconfiguration
++message."""
++
++from __future__ import annotations
++
++import re
++from pathlib import Path
++
++import pytest
++
++from principal_auth import PrincipalResolutionError, StoredPerson, principal_from_claims
++from tests.services.api.test_auth_entra_claims import _GOOD, BY_EXTENSION, entra_claims
++
++GLASS = (
++    Path(__file__).resolve().parents[4]
++    / "OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts"
++)
++
++
++def test_the_glass_names_the_conduits_disabled_words_exactly() -> None:
++    found = re.search(r'CONDUIT_DISABLED_DETAIL = "([^"]+)"', GLASS.read_text(encoding="utf-8"))
++    assert found
++    with pytest.raises(PrincipalResolutionError) as refused:
++        principal_from_claims(
++            {**entra_claims(**_GOOD)}, BY_EXTENSION, StoredPerson(roles=(), disabled=True)
++        )
++    assert str(refused.value) == found.group(1)
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
-index 4ed79b8..01f7e26 100644
+index 4ed79b8..3f845c1 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.test.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
-@@ -931,3 +931,56 @@ describe("windows stay signed in: the token is renewed silently before it expire
+@@ -931,3 +931,85 @@ describe("windows stay signed in: the token is renewed silently before it expire
      expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
    });
  });
@@ -59,11 +95,40 @@ index 4ed79b8..01f7e26 100644
 +    expect(screen.getByRole("button", { name: /^ana/ }).textContent).toContain("OFFICIAL");
 +  });
 +});
++
++// ADR-148 Amendment 8 (the orchestrator's ruling 4): a person disabled in this deployment is told so, only
++// when the Conduit's 401 says so; any other refusal keeps the words it had.
++describe("a person disabled in this deployment is told so (ADR-148 Amendment 8)", () => {
++  beforeEach(() => {
++    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
++    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
++      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
++    } as never);
++  });
++
++  test("the Conduit's disabled refusal is shown in its own words, not as a misconfiguration", async () => {
++    vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ detail: "this account is disabled in this deployment: ask an administrator" }), { status: 401 }),
++    );
++    render(<App />);
++    expect(await screen.findByText(/Your account is disabled in this deployment\. Ask an administrator\./)).toBeTruthy();
++    expect(screen.queryByText(/configured correctly/)).toBeNull();
++  });
++
++  test("any other refusal is never taken for a disabled account", async () => {
++    vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ detail: "token rejected: Invalid audience" }), { status: 401 }),
++    );
++    render(<App />);
++    expect(await screen.findByText(/could not be used to reach the workspace/i)).toBeTruthy();
++    expect(screen.queryByText(/disabled in this deployment/)).toBeNull();
++  });
++});
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
-index 460c470..b83d8ab 100644
+index 460c470..bc46027 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
-@@ -17,13 +17,16 @@ import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
+@@ -17,18 +17,22 @@ import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
  import {
    clearRedirectCallbackParams,
    completeSignInFromRedirect,
@@ -82,7 +147,13 @@ index 460c470..b83d8ab 100644
  } from "./auth/userManager";
  import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
  import { installUnauthorisedWatch } from "./auth/unauthorised";
-@@ -254,7 +257,13 @@ export function App() {
+ import { SessionPrompt } from "./auth/SessionPrompt";
+ import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
++import { DISABLED_ACCOUNT_WORDS, isDisabledRefusal } from "./auth/disabledAccount";
+ import { SignInScreen } from "./auth/SignInScreen";
+ import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
+ import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
+@@ -254,7 +258,13 @@ export function App() {
    const [rights, setRights] = useState<ReadonlySet<string> | null>(null);
    // Start waits for the rights, so a tile does not appear late or a single place go unnoticed.
    const [rightsSettled, setRightsSettled] = useState(false);
@@ -97,7 +168,7 @@ index 460c470..b83d8ab 100644
    // `null` until the very first bootstrap effect below has run once — distinguishes "still
    // checking whether this load is a redirect callback" from "checked, and there is no session",
    // which is the difference between showing nothing for one frame and showing the sign-in screen
-@@ -308,7 +317,7 @@ export function App() {
+@@ -308,7 +318,7 @@ export function App() {
            clearRedirectCallbackParams();
            if (cancelled) return;
            setBearerToken(user.access_token);
@@ -106,7 +177,7 @@ index 460c470..b83d8ab 100644
            scheduleRenewal(user.expires_at);
            restoreViewStateAfterReauth();
            const noted = takeNotedAddress();
-@@ -363,6 +372,16 @@ export function App() {
+@@ -363,6 +373,16 @@ export function App() {
    }
  
    const unauthenticatedHandledRef = useRef(false);
@@ -123,7 +194,7 @@ index 460c470..b83d8ab 100644
    useEffect(() => {
      if (!bearerToken) {
        setRights(null);
-@@ -403,8 +422,8 @@ export function App() {
+@@ -403,8 +423,8 @@ export function App() {
    const sessionPromptRef = useRef<"ended" | "unreachable" | null>(null);
    const [sessionPromptBusy, setSessionPromptBusy] = useState(false);
    const [sessionPromptProblem, setSessionPromptProblem] = useState<string | null>(null);
@@ -134,7 +205,7 @@ index 460c470..b83d8ab 100644
    const askToSignInAgain = useCallback((why: "ended" | "unreachable" | null) => {
      sessionPromptRef.current = why;
      setSessionPrompt(why);
-@@ -412,12 +431,12 @@ export function App() {
+@@ -412,12 +432,12 @@ export function App() {
    }, []);
    const adoptRenewedUser = useCallback(
      (user: RenewedUser) => {
@@ -149,7 +220,24 @@ index 460c470..b83d8ab 100644
        } else {
          renewedRef.current = { for: bearerTokenRef.current, token: user.access_token };
        }
-@@ -466,7 +485,7 @@ export function App() {
+@@ -459,14 +479,23 @@ export function App() {
+    * `true` when a renewed token is in place, so the refused call can be made once more. The two need
+    * different reactions, and a bare 401 cannot tell them apart on its own — only "has this session
+    * ever produced a usable token" can. */
+-  const renewAfterRefusal = useCallback(async (): Promise<boolean> => {
++  const renewAfterRefusal = useCallback(async (refusal?: Response): Promise<boolean> => {
+     if (isDevBypass) return false;
++    // ADR-148 Amendment 8: disabled in this deployment, said only when the Conduit says so; no
++    // renewal is tried, since Entra would sign them in again to the same refusal.
++    if (refusal && (await isDisabledRefusal(refusal))) {
++      unauthenticatedHandledRef.current = true;
++      setBearerToken("");
++      setSession(null);
++      setSignInReason(DISABLED_ACCOUNT_WORDS);
++      return false;
++    }
+     if (!hasResolvedAPrincipalOnceRef.current) {
+       // Once per sign-in: several calls refused together say it once.
        if (unauthenticatedHandledRef.current) return false;
        unauthenticatedHandledRef.current = true;
        setBearerToken("");
@@ -194,6 +282,61 @@ index 8e18f37..e524bfa 100644
    });
  });
  
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts
+new file mode 100644
+index 0000000..fb98f2b
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts
+@@ -0,0 +1,22 @@
++// ADR-148 Amendment 8: the disabled-account words only when the Conduit's 401 says exactly that.
++import { describe, expect, it } from "vitest";
++
++import { CONDUIT_DISABLED_DETAIL, isDisabledRefusal } from "./disabledAccount";
++
++const answer = (status: number, body: string) => new Response(body, { status });
++
++describe("a refusal is a disabled account's", () => {
++  it("only on a 401 whose detail is the Conduit's words exactly", async () => {
++    expect(await isDisabledRefusal(answer(401, JSON.stringify({ detail: CONDUIT_DISABLED_DETAIL })))).toBe(true);
++  });
++
++  it.each([
++    ["another 401", answer(401, JSON.stringify({ detail: "token rejected: Signature has expired" }))],
++    ["the words on a 403", answer(403, JSON.stringify({ detail: CONDUIT_DISABLED_DETAIL }))],
++    ["the words inside other words", answer(401, JSON.stringify({ detail: `x ${CONDUIT_DISABLED_DETAIL}` }))],
++    ["a body that is not JSON", answer(401, "<html>")],
++    ["no body", answer(401, "")],
++  ])("never from %s", async (_why, refusal) => {
++    expect(await isDisabledRefusal(refusal)).toBe(false);
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts
+new file mode 100644
+index 0000000..698f310
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts
+@@ -0,0 +1,21 @@
++// ADR-148 Amendment 8: a person an administrator disabled in this deployment (Entra ID sign-in, where
++// Entra still signs them in) is told so, and only when the Conduit says exactly that: its 401 carries
++// `principal_auth`'s own words. Any other refusal keeps its own handling; none is read as this one.
++
++/** `principal_auth`'s words for a person disabled in this deployment (`principal_from_claims`). */
++export const CONDUIT_DISABLED_DETAIL = "this account is disabled in this deployment: ask an administrator";
++
++/** What the sign-in screen says to them. */
++export const DISABLED_ACCOUNT_WORDS = "Your account is disabled in this deployment. Ask an administrator.";
++
++/** Whether a refusal is the Conduit saying this person is disabled here: a 401 whose `detail` is those
++ * words exactly, never a guess from any other status, body or failure to read one. */
++export async function isDisabledRefusal(refusal: Response): Promise<boolean> {
++  if (refusal.status !== 401) return false;
++  try {
++    const body = (await refusal.json()) as { detail?: unknown };
++    return body.detail === CONDUIT_DISABLED_DETAIL;
++  } catch {
++    return false;
++  }
++}
 diff --git a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
 index 48e6e7e..631db76 100644
 --- a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
@@ -331,10 +474,10 @@ index b82124b..a2a5ea2 100644
   * trailing slash on the redirect URI only, never on the origin itself, mirrors that renderer's own
 diff --git a/OspreyFlow_Core/apps/workspace/src/auth/resolvedPrincipal.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/resolvedPrincipal.test.ts
 new file mode 100644
-index 0000000..ff505dc
+index 0000000..b4d3bae
 --- /dev/null
 +++ b/OspreyFlow_Core/apps/workspace/src/auth/resolvedPrincipal.test.ts
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,98 @@
 +// ADR-148 Amendment 8: what the Glass shows and gates on is the Conduit's resolved principal (`GET /v1/me`),
 +// never a claim of a token. On Entra ID a token's `roles` are app roles an Entra administrator assigns, and
 +// its subject is not the principal's id. The source check below fails if a token's role or access claim is
@@ -392,6 +535,14 @@ index 0000000..ff505dc
 +const READ = new RegExp(String.raw`profile\??\.(${CLAIMS})\b|profile\??\[\s*["'\x60](${CLAIMS})["'\x60]\s*\]|\{[^}]*\b(${CLAIMS})\b[^}]*\}\s*=\s*[\w.?]*profile\b`);
 +const SRC = join(__dirname, "..");
 +
++/** A claim read through a name the profile was given (`const c = user.profile; c.roles`), as well as
++ * through `profile` itself (the lane-reviewer's finding 14). */
++function readsAClaim(source: string): boolean {
++  if (READ.test(source)) return true;
++  const aliases = [...source.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*[\w.?]*\bprofile\b/g)].map((m) => m[1]);
++  return aliases.some((alias) => new RegExp(String.raw`\b${alias}\??\.(${CLAIMS})\b|\b${alias}\??\[\s*["'\x60](${CLAIMS})`).test(source));
++}
++
 +function sources(dir: string): string[] {
 +  return readdirSync(dir).flatMap((name) => {
 +    const path = join(dir, name);
@@ -403,7 +554,7 @@ index 0000000..ff505dc
 +describe("no token claim of role or access is read in the Glass", () => {
 +  it("is read nowhere in apps/workspace/src", () => {
 +    const found = sources(SRC)
-+      .filter((path) => READ.test(readFileSync(path, "utf8")))
++      .filter((path) => readsAClaim(readFileSync(path, "utf8")))
 +      .map((path) => relative(SRC, path));
 +    expect(found).toEqual([]);
 +  });
@@ -414,14 +565,44 @@ index 0000000..ff505dc
 +    'profile["org_unit"]',
 +    "profile[`receivable_handling_codes`]",
 +    "const { roles } = user.profile;",
++    "const c = user.profile; return c.roles;",
++    "let p = session?.profile;\nconst level = p?.clearance;",
 +  ])("catches %s", (planted) => {
-+    expect(READ.test(planted)).toBe(true);
++    expect(readsAClaim(planted)).toBe(true);
 +  });
 +
 +  it("does not catch the names", () => {
-+    expect(READ.test("String(profile.preferred_username ?? '')")).toBe(false);
++    expect(readsAClaim("String(profile.preferred_username ?? '')")).toBe(false);
++    expect(readsAClaim("const c = user.profile; return c.preferred_username;")).toBe(false);
 +  });
 +});
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts b/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts
+index de25c41..43ded02 100644
+--- a/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts
++++ b/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts
+@@ -23,9 +23,10 @@ export interface UnauthorisedWatch {
+   getToken: () => string;
+   /** The token to send now: the latest renewal's. Defaults to `getToken`. */
+   currentToken?: () => string;
+-  /** Called when the Conduit refuses a request that carried the page's token. Resolving `true`
+-   * means a renewed token is now in place, and the request is made once more with it. */
+-  onUnauthorised: () => void | boolean | Promise<boolean | void>;
++  /** Called when the Conduit refuses a request that carried the page's token, with a copy of the
++   * refusal (its words may say why, ADR-148 Amendment 8). Resolving `true` means a renewed token is
++   * now in place, and the request is made once more with it. */
++  onUnauthorised: (refusal: Response) => void | boolean | Promise<boolean | void>;
+ }
+ 
+ function authorisationOf(input: RequestInfo | URL, init?: RequestInit): string | null {
+@@ -103,7 +104,7 @@ export function installUnauthorisedWatch(watch: UnauthorisedWatch): () => void {
+     const replay = replayable(input, init);
+     const response = await original(...withAuthorisation(input, init, `Bearer ${sending}`));
+     if (response.status !== 401) return response;
+-    const renewed = await watch.onUnauthorised();
++    const renewed = await watch.onUnauthorised(response.clone());
+     const now = current();
+     if (renewed !== true || !replay || now === sending) return response;
+     return original(...withAuthorisation(input, init, `Bearer ${now}`));
 diff --git a/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts b/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts
 index 58e3d6a..9bbaa14 100644
 --- a/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts

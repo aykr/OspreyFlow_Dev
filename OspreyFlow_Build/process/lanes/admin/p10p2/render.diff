@@ -1,3 +1,19 @@
+diff --git a/OspreyFlow_Build/tests/cli/test_images_verb.py b/OspreyFlow_Build/tests/cli/test_images_verb.py
+index 82dc02d..6c1f87c 100644
+--- a/OspreyFlow_Build/tests/cli/test_images_verb.py
++++ b/OspreyFlow_Build/tests/cli/test_images_verb.py
+@@ -60,7 +60,10 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str,
+         c.argv[c.argv.index("-t") + 1].split(":")[0].rsplit("/", 1)[-1]: c
+         for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]
+     }  # fmt: skip
+-    assert {"api", "workspace", "worker", "report-sync", "superset", "ner"} <= set(built)
++    # Report sync and Superset are not on the profile until their step after P10 (ADR-148
++    # Amendment 8), so their images are not built for it.
++    assert {"api", "workspace", "worker", "ner"} <= set(built)
++    assert not {"report-sync", "superset"} & set(built)
+     api = built["api"].argv
+     assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
+     assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")
 diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
 index 7704c5b..507344f 100644
 --- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
@@ -104,10 +120,29 @@ index 368b97b..1fcf0eb 100644
  map:
    default: osm-local
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml
-index 1a5420c..6f2e9e1 100644
+index 1a5420c..fef7aee 100644
 --- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml
 +++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml
-@@ -32,6 +32,17 @@ cloud_platform:
+@@ -1,13 +1,15 @@
+ # A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
+-# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
++# a model engine enabled, so the gateway and its egress are rendered too.
+ profile: cloud-platform
+ components:
+   analytics_engine: clickhouse
+ network:
+   public_origin: https://ospreyflow.apps.example.org
++# Reporting off: report sync and Superset are not on this profile until their step after P10
++# (ADR-148 Amendment 8; the orchestrator's ruling (a)).
+ reporting:
+-  sync: true
+-  superset: true
++  sync: false
++  superset: false
+ # P11 part 2: production with a Bedrock engine as well, so the gateway's own account and role
+ # (terraform/gateway.tf) pass the policy check and OpenTofu's fmt, init and validate (the
+ # orchestrator's round 1, item 4).
+@@ -32,6 +34,17 @@ cloud_platform:
      sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
      api.openai.com: ["203.0.113.0/24"]
      bedrock-runtime.eu-west-2.amazonaws.com: ["198.18.2.0/24"]
@@ -126,10 +161,29 @@ index 1a5420c..6f2e9e1 100644
  map:
    default: osm-local
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
-index 11ed572..df2ee9f 100644
+index 11ed572..51f61f5 100644
 --- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
 +++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
-@@ -24,6 +24,17 @@ cloud_platform:
+@@ -1,13 +1,15 @@
+ # A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
+-# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
++# a model engine enabled, so the gateway and its egress are rendered too.
+ profile: cloud-platform
+ components:
+   analytics_engine: clickhouse
+ network:
+   public_origin: https://ospreyflow.apps.example.org
++# Reporting off: report sync and Superset are not on this profile until their step after P10
++# (ADR-148 Amendment 8; the orchestrator's ruling (a)).
+ reporting:
+-  sync: true
+-  superset: true
++  sync: false
++  superset: false
+ models:
+   local_only: false
+   provider:
+@@ -24,6 +26,17 @@ cloud_platform:
      s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
      sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
      api.openai.com: ["203.0.113.0/24"]
@@ -149,10 +203,10 @@ index 11ed572..df2ee9f 100644
    default: osm-local
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py
 new file mode 100644
-index 0000000..6c3b284
+index 0000000..e7a3f94
 --- /dev/null
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,217 @@
 +"""Entra ID sign-in on the cloud-platform profile (`spec/06_DECISIONS.md` ADR-148 decision 9;
 +Amendment 8, P10 part 2).
 +
@@ -210,9 +264,16 @@ index 0000000..6c3b284
 +    return OspreyConfig.model_validate(raw)
 +
 +
++#: The realm's settings, named here and not read from the code under test (the lane-reviewer's
++#: finding 4): dropping one from `REALM_SETTINGS` must turn this red.
++REALM_NAMES = {"OIDC_TOKEN_EXCHANGE_URL", "OIDC_TOKEN_EXCHANGE_CLIENT_ID", "OIDC_ADMIN_USERS_URL",
++               "OSPREY_IDENTITY_ORIGIN"}  # fmt: skip
++
++
 +def test_the_realms_settings_are_gone_and_entras_are_rendered() -> None:
 +    environment = _values(_config())["environment"]
-+    assert not REALM_SETTINGS & set(environment)
++    assert REALM_SETTINGS == REALM_NAMES
++    assert not REALM_NAMES & set(environment)
 +    assert environment["OSPREY_IDENTITY_PROVIDER"] == "entra"
 +    assert environment["OIDC_ISSUER"] == f"https://login.microsoftonline.com/{TENANT}/v2.0"
 +    assert environment["OIDC_AUDIENCE"] == API
@@ -221,7 +282,8 @@ index 0000000..6c3b284
 +    )
 +    assert environment["OSPREY_FIRST_ADMINISTRATORS"] == ADMIN
 +    assert environment["SUPERSET_SIGN_IN"] == "entra"
-+    assert json.loads(environment["OSPREY_CLAIM_MAPPING"])["client_id"] == GLASS
++    mapping = json.loads(environment["OSPREY_CLAIM_MAPPING"])
++    assert (mapping["client_id"], mapping["api_client_id"]) == (GLASS, API)
 +
 +
 +def test_v1_tokens_and_a_claims_mapping_policy_change_the_issuer_audience_and_keys() -> None:
@@ -296,21 +358,74 @@ index 0000000..6c3b284
 +    assert "identity_provider" not in settings and "realm" not in settings
 +
 +
-+def test_keycloaks_deployment_file_is_as_it_was() -> None:
-+    """Every other profile's `deployment.json`: the same keys in the same order as before P10 part
-+    2, and never a `sign_in`."""
++#: Every other profile's `deployment.json` for the development fixture as a Small, byte for byte as
++#: main's `harness/site.py` rendered it before P10 part 2 (its version pinned): generated from
++#: main's own module, not from the code under test (the lane-reviewer's finding 9).
++KEYCLOAK_DEPLOYMENT_JSON = """{
++  "identity_provider": "http://id.ospreyflow.localhost",
++  "realm": "osprey",
++  "marking": "PUBLIC",
++  "organisation_sign_in": null,
++  "organisation_label": null,
++  "welcome": {
++    "about": true,
++    "links": {}
++  },
++  "appearance": {
++    "brand": "ospreyflow",
++    "service_name": null,
++    "organisation": null,
++    "phase": "none"
++  },
++  "version": "0000000"
++}
++"""
++
++
++def test_keycloaks_deployment_file_is_as_it_was(monkeypatch) -> None:
++    """Every other profile's `deployment.json`, byte for byte as before P10 part 2: never a
++    `sign_in`, no field moved."""
++    import harness.site as site
++
++    monkeypatch.setattr(site, "deployment_version", lambda: "0000000")
 +    raw = _raw()
 +    raw.pop("cloud_platform")
 +    raw["profile"] = "local-lite"
 +    for key in ("map", "models", "network"):
 +        raw.pop(key, None)
-+    settings = json.loads(render_glass_settings(OspreyConfig.model_validate(raw)))
-+    assert list(settings) == [
-+        "identity_provider", "realm", "marking", "organisation_sign_in", "organisation_label",
-+        "welcome", "appearance", "version",
-+    ]  # fmt: skip
++    assert render_glass_settings(OspreyConfig.model_validate(raw)) == KEYCLOAK_DEPLOYMENT_JSON
++
++
++def test_the_bare_profile_renders_with_reporting_at_its_defaults() -> None:
++    """The orchestrator's ruling (a): report sync and Superset are off by default, so the profile's
++    own defaults render; only an explicit `on` is refused."""
++    raw = _raw()
++    assert "reporting" not in raw
++    values = _values(OspreyConfig.model_validate(raw))
++    assert not {"report-sync", "superset"} & {w["name"] for w in values["workloads"]}
++
++
++@pytest.mark.parametrize("switch", ["sync", "superset"])
++def test_report_sync_or_superset_switched_on_is_refused_naming_its_step(switch: str) -> None:
++    raw = _raw()
++    raw["reporting"] = {switch: True}
++    with pytest.raises(CloudPlatformNotRenderable, match="their own step after P10"):
++        _artefacts(OspreyConfig.model_validate(raw))
++
++
++def test_no_rendered_value_names_keycloak_or_the_identity_host() -> None:
++    """Nothing the namespace is given points at the realm the profile no longer renders (the
++    lane-reviewer's finding 4): not a setting, a secret's name, a file or a workload."""
++    values = _values(_config("production"))
++    # The deployment's own `osprey.yaml`, mounted as it was written, keeps its settings' defaults
++    # (`governance.identity_provider`, read only at render); the Conduit is told `entra`.
++    del values["files"]["osprey.yaml"]
++    text = yaml.safe_dump(values).lower()
++    assert "keycloak" not in text
++    assert "id.ospreyflow.apps.example.org" not in text
++    assert values["environment"]["OSPREY_IDENTITY_PROVIDER"] == "entra"
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
-index 243e392..f845d8f 100644
+index 243e392..e9a80d3 100644
 --- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 @@ -24,8 +24,18 @@ from typing import Any
@@ -441,7 +556,7 @@ index 243e392..f845d8f 100644
      }
  
  
-@@ -473,32 +499,25 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
+@@ -473,32 +499,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
      assert ingress["className"] == platform.ingress.class_name
      assert ingress["annotations"][platform.ingress.allow_list_annotation] == "192.0.2.0/24"
      assert ingress["annotations"]["nginx.ingress.kubernetes.io/enable-modsecurity"] == "true"
@@ -450,9 +565,10 @@ index 243e392..f845d8f 100644
          ("ospreyflow-dev.apps.example.org", "workspace"),
 -        ("id.ospreyflow-dev.apps.example.org", "keycloak"),
      }
++    # No dashboards door either: Superset is not on this profile until its step (P10 part 2).
      prod = {r["service"] for r in _values(_config("production"))["ingress"]["rules"]}
 -    assert prod == {"workspace", "keycloak", "superset"}
-+    assert prod == {"workspace", "superset"}
++    assert prod == {"workspace"}
      assert not [w for w in _values(_config()).get("workloads", []) if w.get("public")]
  
  
@@ -481,21 +597,38 @@ index 243e392..f845d8f 100644
      assert rules["ospreyflow-dev.apps.example.org"]["paths"] == [
          {"path": "/", "service": "workspace", "port": 8080}
      ]
-@@ -522,9 +541,10 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
+@@ -511,10 +531,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
+ 
+ 
+ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named(
+-    monkeypatch: pytest.MonkeyPatch,
++    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+ ) -> None:
+     """A platform's default certificate is a wildcard one label deep: `id.` and `bi.` below the
+-    deployment's own name are two, so the browser refuses them unless a certificate is named."""
++    deployment's own name are two, so the browser refuses them unless a certificate is named. Since
++    P10 part 2 neither door is rendered (Entra ID signs people in; Superset waits for its step), so
++    the deployment's own name alone renders, and a `bi.` door is planted to show the refusal."""
+     import harness.cloud_platform as cp
+ 
+     platform = load_platform("client")
+@@ -522,9 +544,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
          update={"ingress": platform.ingress.model_copy(update={"wildcard": "*.apps.example.org"})}
      )
      monkeypatch.setattr(cp, "load_platform", lambda _name: covering)
 -    with pytest.raises(CloudPlatformNotRenderable, match="id.ospreyflow-dev.apps.example.org"):
 -        _artefacts(_config("development"))
 -    named = _config("development", cloud_platform={"tls_secret": "ospreyflow-tls"})
-+    # Since P10 part 2 there is no `id.` door (Entra ID signs people in); Superset's `bi.` is two.
++    assert "tlsSecret" not in _values(_config("production"))["ingress"]
++    _profile(tmp_path, monkeypatch,
++             lambda raw: raw["doors"].append({"site": "dashboards", "workload": "workspace", "port": 8080}))  # fmt: skip
 +    with pytest.raises(CloudPlatformNotRenderable, match="bi.ospreyflow.apps.example.org"):
 +        _artefacts(_config("production"))
 +    named = _config("production", cloud_platform={"tls_secret": "ospreyflow-tls"})
      assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
  
  
-@@ -738,8 +758,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
+@@ -738,8 +763,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
      raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
      raw["cloud_platform"]["egress_nets"]["login.example.org"] = ["198.51.100.9/32"]
      values = _values(OspreyConfig.model_validate(raw))
@@ -522,7 +655,7 @@ index 6583219..a797206 100644
  
  @dataclass(frozen=True)
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index ad92ded..090c27b 100644
+index ad92ded..1e6886b 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
 @@ -58,8 +58,26 @@ from schemas.deployment import (
@@ -563,10 +696,18 @@ index ad92ded..090c27b 100644
      "arcadedb": 1, "clickhouse": 1, "clickhouse-keeper": 1,
  }  # fmt: skip
  
-@@ -140,6 +158,38 @@ def _refuse(config: OspreyConfig) -> None:
+@@ -140,6 +158,46 @@ def _refuse(config: OspreyConfig) -> None:
          )
      if not config.network.public_origin.startswith("https://"):
          raise CloudPlatformNotRenderable("a cloud platform is reached over HTTPS")
++    if config.reporting.sync or config.reporting.superset:
++        # The orchestrator's ruling (a), P10 part 2: both signed in through Keycloak, which this
++        # profile does not render; each gets Entra ID's sign-in in its own later step (CARRIES).
++        raise CloudPlatformNotRenderable(
++            "report sync and Superset are not on this profile yet: they signed in through Keycloak, "
++            "and people sign in with Entra ID here; their own step after P10 (reporting on Entra "
++            "ID) brings them. Set reporting.sync and reporting.superset to false"
++        )
 +    claims = _cp(config).claims
 +    if claims is None:
 +        raise CloudPlatformNotRenderable(
@@ -602,7 +743,7 @@ index ad92ded..090c27b 100644
  
  
  #: Each variable a workload reads that a managed store's secret gives: (store, the secret's key).
-@@ -654,6 +704,7 @@ def render_cloud_platform(
+@@ -654,6 +712,7 @@ def render_cloud_platform(
      from harness.cloud_platform.terraform import render_terraform
      from harness.cluster import render_cluster
      from harness.render import service_images
@@ -610,7 +751,7 @@ index ad92ded..090c27b 100644
  
      _refuse(config)
      platform = load_platform(_cp(config).platform)
-@@ -720,7 +771,11 @@ def render_cloud_platform(
+@@ -720,7 +779,11 @@ def render_cloud_platform(
  
          raise UnpinnedImagesError(copies.unresolved)
  
@@ -623,7 +764,7 @@ index ad92ded..090c27b 100644
      # ArcadeDB's heap is its own container's, from its limit (above), never the cluster's
      # machine-sized setting, which nothing else reads.
      environment.pop("OSPREY_ARCADEDB_HEAP", None)
-@@ -742,17 +797,27 @@ def render_cloud_platform(
+@@ -742,17 +805,27 @@ def render_cloud_platform(
      )
      # What the cluster's install writes into our Secret, and this profile has no install to write.
      install = _what_the_install_writes(config, as_cluster, set(variables))
@@ -656,7 +797,7 @@ index ad92ded..090c27b 100644
      # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
      # master key (found on the kind cluster, where its pod could not start without it).
  
-@@ -771,7 +836,13 @@ def render_cloud_platform(
+@@ -771,7 +844,13 @@ def render_cloud_platform(
          "ingress": _ingress(config, platform, names, profile, environment),
          "environment": environment,
          "files": {
@@ -774,7 +915,7 @@ index d32695e..b40b6a6 100644
  
  
 diff --git a/OspreyFlow_Core/packages/schemas/deployment.py b/OspreyFlow_Core/packages/schemas/deployment.py
-index e9af7e4..8c26b53 100644
+index e9af7e4..a497bb9 100644
 --- a/OspreyFlow_Core/packages/schemas/deployment.py
 +++ b/OspreyFlow_Core/packages/schemas/deployment.py
 @@ -31,7 +31,7 @@ from __future__ import annotations
@@ -786,7 +927,7 @@ index e9af7e4..8c26b53 100644
  from urllib.parse import urlsplit
  
  import yaml
-@@ -944,6 +944,106 @@ def too_wide_for_egress(net: str) -> str | None:
+@@ -944,6 +944,107 @@ def too_wide_for_egress(net: str) -> str | None:
      return None
  
  
@@ -882,6 +1023,7 @@ index e9af7e4..8c26b53 100644
 +        return {
 +            "tenant_id": self.tenant_id,
 +            "client_id": self.client_id,
++            "api_client_id": self.api_client_id,
 +            "scope": self.scope,
 +            "clearance": self.clearance,
 +            "org_unit": self.org_unit,
@@ -893,7 +1035,7 @@ index e9af7e4..8c26b53 100644
  class CloudPlatformConfig(BaseModel):
      """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
      namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
-@@ -993,6 +1093,12 @@ class CloudPlatformConfig(BaseModel):
+@@ -993,6 +1094,12 @@ class CloudPlatformConfig(BaseModel):
          "holding the certificate for the deployment's names (its id. and bi. names among them), "
          "where the platform's wildcard does not cover them",
      )
