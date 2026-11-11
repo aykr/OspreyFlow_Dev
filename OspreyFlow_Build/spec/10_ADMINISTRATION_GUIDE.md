@@ -756,9 +756,10 @@ Keycloak starting with group 0 (below), and the egress policies enforced. P7b's 
 them. And nothing yet runs the identity step that a cluster's install runs once Keycloak answers
 (the Conduit's client secret set on its clients, its service account's roles), so sign-in is not
 configured on this profile until Entra ID replaces Keycloak (*coming*, section 6a.7).
-The commands that need the platform or a cluster (`helm install`, `tofu`, the push itself) have
-not yet been run anywhere; they are to be shown on a kind cluster in P7b's run. The render commands
-below have been run as written.
+The commands that need the platform, a cluster or Docker (`helm install`, `tofu`, the push itself,
+the policy check on your own settings) have not yet been run anywhere: they are unrun until P7b's
+kind run. The other commands below (the folder, the two renders and the push's dry run) have been run as
+written, from `OspreyFlow_Core`, on this example.
 
 ### 6a.1 What is rendered
 
@@ -797,7 +798,10 @@ map:                             # required
     attribution: "© OpenStreetMap contributors"
 ```
 
-Every `cloud_platform` setting is in appendix A. A map provider proxied through the Conduit also
+**The example's map is empty on this profile.** Its one provider is a local basemap file, and no
+basemap can be brought onto the platform yet (below), so copied as it is, the map shows no tiles. Name
+a remote provider instead for a map that shows, with its host's networks in `egress_nets` if the
+Conduit proxies it. Every `cloud_platform` setting is in appendix A. A map provider proxied through the Conduit also
 names its host's networks in `egress_nets` (section 6a.5). **Set `deployment.highest_marking`
 yourself**: a platform that hosts data up to, but not including, SECRET needs the ceiling at
 OFFICIAL-SENSITIVE, and the profile does not yet set it for you (*coming*). Without it the ceiling
@@ -811,7 +815,8 @@ PYTHONPATH=.:packages python -m harness.render --config osprey.yaml --allow-unpi
 ```
 
 **Make the `terraform` folder first**: the render does not make it, and the first render into a new
-folder stops with `No such file or directory: …/terraform/ecr.tf` (a known issue). The render writes
+folder stops with `No such file or directory: …/terraform/ecr.tf` (a known issue). For a deployment
+with a name, make `deploy/generated/<deployment.name>/terraform` instead. The render writes
 `deploy/generated/cloud-platform/` (`deploy/generated/<deployment.name>/` when the deployment has a
 name):
 
@@ -969,8 +974,9 @@ that each pinned third-party image is in the registry before installing.
 
 ### 6a.5 What the namespace may reach
 
-**Egress is denied by default.** The render writes two Calico policies: `ospreyflow-allow-egress`
-(order 100) and `ospreyflow-deny-egress` (order 200, every pod, every destination); the chart's own
+**Egress is denied by default.** The render writes the egress list into the values, and the chart
+makes two Calico policies from it: `default.ospreyflow-allow-egress` (order 100) and
+`default.ospreyflow-deny-egress` (order 200, every pod, every destination); the chart's own
 open-egress policy is not rendered. The allow policy admits:
 
 - the cluster's DNS (in `kube-system`) and the namespace's own pods;
@@ -1012,7 +1018,15 @@ default route or a network wider than the cap; a pod no ingress policy selects, 
 admitting anything but the namespace's own pods and the controller's namespace; a container without
 its requests and memory limit; a volume's group walked at every start; and a Dockerfile of ours not
 `USER 10001:10001`. **A pass there says nothing about your own deployment**: run the same check on your
-own settings, in the same place, with `python -m tools.cp_policy_check --config osprey.yaml`. The
+own settings. It needs Docker (it runs Helm's own pinned image, so Helm itself is not needed), and
+runs from `OspreyFlow_Core` with the build's tools on the path (the folder holding the build's
+Makefile, `<build folder>` here), as `make` runs it:
+
+```
+PYTHONPATH=.:packages:<build folder> python -m tools.cp_policy_check --config osprey.yaml
+```
+
+It is unrun here until P7b's kind run. The
 platform's own Gatekeeper constraints are not published to us, so the check does not run them.
 
 ### 6a.7 Coming
