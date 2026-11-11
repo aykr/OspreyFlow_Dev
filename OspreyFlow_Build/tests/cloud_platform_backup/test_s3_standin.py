@@ -341,3 +341,11 @@ def test_aws_kms_named_without_a_key_is_refused_by_the_bucket_policy(aws: Runnin
     with pytest.raises(ClientError) as refused:
         aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x", ServerSideEncryption="aws:kms")
     assert _code(refused) == "AccessDenied"
+
+
+def test_a_request_signed_for_another_region_is_refused(aws: Running) -> None:
+    client = aws.session().create_client("s3", region_name="us-east-1", endpoint_url=aws.endpoint, config=PATH_STYLE)
+    with pytest.raises(ClientError) as refused:
+        client.list_objects_v2(Bucket=BUCKET)
+    assert _code(refused) == "AuthorizationHeaderMalformed"
+    assert "expecting 'eu-west-2'" in refused.value.response["Error"]["Message"]

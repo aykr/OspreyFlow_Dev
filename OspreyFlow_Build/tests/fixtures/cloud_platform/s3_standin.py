@@ -376,6 +376,11 @@ class StandIn:
         if not match:
             raise Refused(400, "AuthorizationHeaderMalformed", "The authorization header is malformed")
         access_key, day, region, service, signed_headers, signature = match.groups()
+        if region != self.region:
+            # S3's own words for a request signed for another region.
+            raise Refused(400, "AuthorizationHeaderMalformed",
+                          f"The authorization header is malformed; the region '{region}' is wrong; "
+                          f"expecting '{self.region}'")  # fmt: skip
         principal = self.users.get(access_key) or self.sessions.get(access_key)
         if principal is None:
             raise Refused(

@@ -155,6 +155,8 @@ runner.PLANTS = [
      '        verdict = evaluate(principal.policies, action, key_arn, context)\n        if verdict != "allow":',
      '        verdict = "allow"\n        if verdict != "allow":',
      [TS + "test_without_kms_generate_data_key_a_write_is_refused_naming_the_key"]),
+    ("the stand-in takes a signature for any region", STANDIN, "        if region != self.region:\n",
+     "        if False:\n", [TS + "test_a_request_signed_for_another_region_is_refused"]),
     # ---- the restore's guards ---------------------------------------------------------------------------------------
     ("the restore runs beside a writer", RUN, "    writers_stopped(settings, pods)\n    manifest = verify_set(bucket, set_id)",
      "    manifest = verify_set(bucket, set_id)",

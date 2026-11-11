@@ -1,0 +1,16 @@
+rendered: backups.tf, ecr.tf, elasticache.tf, irsa.tf, opensearch.tf, providers.tf, rds.tf, s3.tf, secrets.tf, variables.tf
+image: ghcr.io/opentofu/opentofu:1.10.6
+fmt: backups.tf as tofu writes it
+
+Warning: Deprecated Resource
+
+  with kubernetes_service_account.backup,
+  on backups.tf line 317, in resource "kubernetes_service_account" "backup":
+ 317: resource "kubernetes_service_account" "backup" {
+
+Deprecated; use kubernetes_service_account_v1.
+
+(and 8 more similar warnings elsewhere)
+Success! The configuration is valid, but there were some validation warnings
+as shown above.
+Wall time: 14 s, exit 0 (no stack, no lease; set-up before it 9 s)
