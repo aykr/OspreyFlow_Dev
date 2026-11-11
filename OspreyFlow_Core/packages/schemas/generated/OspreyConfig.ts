@@ -699,7 +699,7 @@ export interface CloudPlatformConfig {
   connector_hosts?: ConnectorHosts;
 }
 /**
- * For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render
+ * For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route
  */
 export interface EgressNets {
   [k: string]: string[];

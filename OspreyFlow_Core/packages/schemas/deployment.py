@@ -686,6 +686,30 @@ class ClusterConfig(BaseModel):
 
 _KUBE_NAME = r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
 
+#: ADR-148 decision 7: the widest network an egress allowance may name, by IP version. **IPv4
+#: /16** is the largest block AWS gives a VPC, so no one AWS service's network, and no platform's
+#: shared VPC (the client's is a /16), is wider; **IPv6 /48** is one site's allocation (RFC 6177).
+#: Anything wider, the default routes above all, opens the namespace's egress to far more than
+#: one host, which one setting must never do.
+EGRESS_WIDEST_PREFIX = {4: 16, 6: 48}
+
+
+def too_wide_for_egress(net: str) -> str | None:
+    """Why `net` may not be an egress allowance (a default route, or wider than
+    `EGRESS_WIDEST_PREFIX`), or None. `net` must already be a network."""
+    import ipaddress
+
+    network = ipaddress.ip_network(net, strict=False)
+    widest = EGRESS_WIDEST_PREFIX[network.version]
+    if network.prefixlen == 0:
+        return f"{net} is a default route: it would allow egress to every address"
+    if network.prefixlen < widest:
+        return (
+            f"{net} is wider than /{widest}, the widest network egress may be allowed to "
+            f"(IPv{network.version}); name the host's own, narrower networks"
+        )
+    return None
+
 
 class CloudPlatformConfig(BaseModel):
     """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
@@ -726,7 +750,8 @@ class CloudPlatformConfig(BaseModel):
         description="For each host the namespace reaches (a model provider, a proxied map "
         "provider, the mail server, a connector host, S3 and STS "
         "unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed "
-        "to; a host with none is refused at render",
+        "to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 "
+        "(IPv6), and never a default route",
     )
     tls_secret: str | None = Field(
         default=None,
@@ -751,6 +776,11 @@ class CloudPlatformConfig(BaseModel):
                 ipaddress.ip_network(net)
             except ValueError:
                 raise ValueError(f"{net!r} is not a network (for example 192.0.2.0/24)") from None
+        # ADR-148 decision 7: one setting must never open the namespace's egress.
+        for host, nets in self.egress_nets.items():
+            for net in nets:
+                if why := too_wide_for_egress(net):
+                    raise ValueError(f"cloud_platform.egress_nets[{host!r}]: {why}")
         return self
 
 
@@ -1455,12 +1485,20 @@ class OspreyConfig(BaseModel):
         page say why and what to write instead."""
         origin = self.network.public_origin
         if self.profile is not Profile.LOCAL_LITE and not origin.startswith("https://"):
-            name = "a Small" if self.profile is Profile.SMALL else "an Enterprise"
+            name = {
+                Profile.SMALL: "a Small",
+                Profile.CLOUD_PLATFORM: "a cloud platform",
+            }.get(self.profile, "an Enterprise")
+            front = (
+                "the platform's ingress serves its certificate"
+                if self.profile is Profile.CLOUD_PLATFORM
+                else "the front proxy obtains its certificate"
+            )
             raise ValueError(
                 f"network.public_origin {origin!r} is plain HTTP: {name} deployment's "
                 "network.public_origin must be an https:// address (for example "
-                "https://osprey.example.org), because other people reach it over a network and the "
-                "front proxy obtains its certificate. Plain HTTP is for Lite, on this computer only"
+                "https://osprey.example.org), because other people reach it over a network and "
+                f"{front}. Plain HTTP is for Lite, on this computer only"
             )
         host = (urlsplit(origin).hostname or "").rstrip(".").lower()
         if self.profile is Profile.LOCAL_LITE and (host == "gov.uk" or host.endswith(".gov.uk")):
