@@ -16,4 +16,4 @@ collecting ... collected 7 items
 ../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_the_byte_cap_refuses_a_real_listing_whole PASSED [ 85%]
 ../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_a_real_listing_stops_at_the_object_cap_and_one PASSED [100%]
 
-============================== 7 passed in 2.08s ===============================
+============================== 7 passed in 2.00s ===============================
