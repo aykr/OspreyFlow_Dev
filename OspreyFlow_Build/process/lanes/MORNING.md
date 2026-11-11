@@ -346,6 +346,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       Left alone; yours to stop.
     - **New dates:** P7, P10, P11 and L1.9 on 12 November, P12 on 13 November; the client chain about 13–14
       November, unchanged.
+    - **T3b did not land.** Its browser set is red on the test server, on T3b's own tree as well as on the merge
+      (runs 20261111T091740Z and T093929Z, slot 13): new unlisted "not measurable" findings from its own probe. They
+      are on monitoring's Show as BPMN surface (the "Expires" column), places' views menu, the Studio's derive
+      preview and, once each, the map and admin harnesses. The lane's browser record was taken on the Mac (slot 9),
+      and Linux Chromium's shadow and partly-hidden geometry differ from the Mac's. It goes back to rules-b, my
+      recommendation being to make the probe's reach independent of the platform. From now on a lane's browser gate
+      is the server's. The conflict ruling (item 5 above) stands for the rebuilt merge.
+    - **D2d** was re-reviewed (the first review's findings were lost with the restart): five must-fixes, among them
+      that the guides said a Data Engineer can make a rule live. The docs lane is fixing them headless on the Mac
+      from 09:30, stopping by 10:25; its server gates are owed.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
