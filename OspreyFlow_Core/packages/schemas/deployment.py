@@ -968,6 +968,13 @@ class CloudPlatformConfig(BaseModel):
         description="Default: development — one copy of each store; production runs the "
         "cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3)",
     )
+    shape: Literal["standard", "poc"] = Field(
+        default="standard",
+        description="Default: standard — the stores as the environment sets them. poc: the "
+        "proof-of-concept shape (ADR-148 Amendment 5), a development namespace's only: one "
+        "ArcadeDB and one ClickHouse running its own Keeper, no disruption budgets, and the "
+        "Ingest root on a claim of its own",
+    )
     registry: str | None = Field(
         default=None,
         pattern=r"^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)*$",
@@ -1020,6 +1027,11 @@ class CloudPlatformConfig(BaseModel):
                 ipaddress.ip_network(net)
             except ValueError:
                 raise ValueError(f"{net!r} is not a network (for example 192.0.2.0/24)") from None
+        if self.shape == "poc" and self.environment != "development":
+            raise ValueError(
+                "cloud_platform.shape: poc is a development namespace's (one copy of each store); "
+                "a production namespace takes the standard shape"
+            )
         # ADR-148 decision 7: one setting must never open the namespace's egress.
         for host, nets in self.egress_nets.items():
             for net in nets:

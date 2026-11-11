@@ -186,6 +186,10 @@ export type Namespace1 = string | null;
  */
 export type Environment = "development" | "production";
 /**
+ * Default: standard — the stores as the environment sets them. poc: the proof-of-concept shape (ADR-148 Amendment 5), a development namespace's only: one ArcadeDB and one ClickHouse running its own Keeper, no disruption budgets, and the Ingest root on a claim of its own
+ */
+export type Shape = "standard" | "poc";
+/**
  * Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there
  */
 export type Registry = string | null;
@@ -707,6 +711,7 @@ export interface CloudPlatformConfig {
   platform?: Platform;
   namespace?: Namespace1;
   environment?: Environment;
+  shape?: Shape;
   registry?: Registry;
   allow_from?: AllowFrom;
   egress_nets?: EgressNets;
