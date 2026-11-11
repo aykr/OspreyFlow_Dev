@@ -1,15 +1,16 @@
-# as of 2026-11-10T23:10Z
-platform-b	UPG-fix	update from v0.4.12 refuses in words; the one-time apply route; reviews done at d85f514; gates once after run 4	~22:30	A
-rules	UPG	rehearsal run 4 from a fresh v0.4.12 on d85f514: refusal, apply, update, apply, the seven migrations	~22:00	A
-studio	L1.7	full live set on stack c, then make -k ci on the server; merge	~23:00	A
-docs	D2b	v0.5.0 CHANGELOG and upgrade wording (the route's command from run 4), the decks	~23:30	A
-orchestrator	publish	v0.5.0 from main after the upgrade fix, L1.7 and docs; new installs only if the upgrade is not green by 04:00	~01:00–04:00	A
-studio-b	L1.10b	gates and live run; merge by the merger	~22:30	B
-admin	T1	part 4: make test serial vs parallel offline; leased live run; merge by the merger; the marks tomorrow	11 Nov, ~11:00	A
-platform	P7	acceptance on kind on the test server; review and merge (merger, after the publish)	11 Nov, ~11:00	B
-studio-b	L1.9	S3 and Athena, after P7	11 Nov, afternoon	B
+# as of 2026-11-11T05:45Z
+orchestrator	publish	v0.5.0 from main (cut ac8735d + notes fix a74e741): release gates on the server, then tag and push the product repo	~06:30	A
+rules	UPG-check	the real update from v0.4.12 to the published v0.5.0, on the server (server session from 07:08)	11 Nov, ~09:00	A
+studio-b	L1.10b	built; lands after the tag (e97b7ef)	after the tag	A
+admin	T1	part 4 lands after the tag (b3d3e0a); part 5 on the server from 07:08	11 Nov, ~11:00	A
+rules	hyg	the Needs-you schedule notices and two fixes; studio's finding fixed on the server, then the merger's re-review	11 Nov, ~12:00	A
+rules-b	T3b	the contrast probe's limits; server gates finishing; merger review on return	11 Nov, ~12:00	A
+docs	D2b	decks rebuilt; the L2.11 guide sections next	11 Nov, afternoon	A
+platform-b	carries	chart quoting, the refresh's edge cases (server session from 07:08)	11 Nov, ~12:00	B
+platform	P7	acceptance on kind: restart when the owner is back (the server session stalled)	11 Nov, afternoon	B
+studio-b	L1.9	S3 and Athena, after P7	12 Nov	B
 platform	P11	the model route: the client's gateway or Bedrock, after P7	12 Nov	B
-platform	P12	Laurium: licence check first (stops for you if it fails), then the adapter	12 Nov	B
-platform	P8–P10	shared disk, backups, Entra; in turn after P7	12 Nov	B
-docs	D2c	Cloud Platform guide, with the extraction engine and Laurium	13 Nov	B
+platform	P12	Laurium: licence check first (stops for you if it fails), then the adapter	12–13 Nov	B
+platform	P8–P10	shared disk, backups, Entra; in turn after P7	13 Nov	B
+docs	D2c	Cloud Platform guide, with the extraction engine and Laurium	14 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build (v0.4.12: backup, apply, update, apply)	after D2c	B
