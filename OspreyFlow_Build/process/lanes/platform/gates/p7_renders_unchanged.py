@@ -56,7 +56,7 @@ CONFIGS = {
 }  # fmt: skip
 
 #: P7b: the cloud-platform profile's standard shape, its two synthetic fixtures as `make
-#: cp-policy-check` renders them, unchanged but for the two intended differences there (below).
+#: cp-policy-check` renders them, unchanged but for the one intended difference there (below).
 for _shape in ("development", "production"):
     CONFIGS[f"cloud-platform-{_shape}"] = json.loads(json.dumps(__import__("yaml").safe_load(
         (CORE.parent / "OspreyFlow_Build" / "tests" / "fixtures" / "cloud_platform" / f"{_shape}.yaml")
@@ -66,18 +66,12 @@ for _shape in ("development", "production"):
 #: deployment names none, where the base held the scheme's highest; as an env line, a ConfigMap's
 #: YAML and its JSON.
 CEILING = re.compile(r'(OSPREY_HIGHEST_MARKING"?(?:: |=)("?))SECRET(\2)')
-#: And the schema's new `cloud_platform.shape` at its default, in the copy of the deployment's own
-#: configuration the values carry (an escaped `\n` inside a quoted string, or a real newline).
-SHAPE = re.compile(r"(  environment: (?:development|production))(\\n|\n)(  registry:)")
-
-
 def intended(name: str, text: str) -> str:
-    """The base's artefact as it would read with the two intended changes, for the cloud-platform
+    """The base's artefact as it would read with the one intended change, for the cloud-platform
     configurations alone; every other configuration is compared as it is."""
     if not name.startswith("cloud-platform-"):
         return text
-    text = CEILING.sub(r"\1OFFICIAL-SENSITIVE\3", text)
-    return SHAPE.sub(r"\1\2  shape: standard\2\3", text)
+    return CEILING.sub(r"\1OFFICIAL-SENSITIVE\3", text)
 
 DRIVER = r"""
 import hashlib, json, sys

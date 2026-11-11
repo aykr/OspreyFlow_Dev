@@ -34399,9 +34399,9 @@ orchestrator asked. Amendment 1 stands except where point 6 corrects it.
    - **The fenced blocks are the runbook**, run in order in one shell. A block fenced `sh` runs
      wherever the runbook is followed. A block fenced `sh platform` runs only on the client's
      platform (the Terraform pull requests and the AWS accounts' own commands); a rehearsal on a
-     local cluster runs its stand-in instead. The rehearsal reads the blocks back
-     (`harness.cloud_platform.runbooks.command_blocks`), so it runs exactly the text the client's
-     team reads.
+     local cluster supplies its stand-in instead. `harness.cloud_platform.runbooks.command_blocks`
+     reads the blocks back, so a rehearsal can run the text the client's team reads; until one
+     has, the tests check the blocks' syntax, order and rights only.
    - No block ends the reader's shell (`exit`), each block parses as shell, and the rehearsal's
      blocks call neither the AWS command line nor Terraform. Each of these is a test.
    - **Every command runs with a namespace tenant's rights.** Nothing cluster-wide is listed or
@@ -34478,7 +34478,11 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
   install's blocks, then the decommission's, with the decommission check green at the end), and
   the final render they run, all come after P11's and P12's part 2s land, since the shape renders
   what they leave. Under point 8's ceiling the run seeds only packs declared at or below
-  OFFICIAL-SENSITIVE. Until then each runbook is proven by its tests, not by a run.
+  OFFICIAL-SENSITIVE. Until then the runbooks are checked by tests for their syntax, their order
+  and the rights they need, and nothing more: no block has run against a cluster or an account.
+  The rehearsal supplies the files the platform's blocks write (`state.txt`, `buckets.txt`, and
+  `volumes.json` in place of the disks). The identity step has never met a real Keycloak, and its
+  reading of an existing administrator ("Conflict detected") is unproven.
 - `scripts/seed_internal.py` checks a pack against the ceiling it reads from `deployment.env`, which
   this profile has none of, so before seeding it judges against the scheme's highest. Only the
   engine's refusal at each write holds the ceiling there. Carried to the seeds' owner.
@@ -34488,6 +34492,53 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
   - a gateway for an engine first added in *Admin › Models*, which the render leaves out when the
     install declares none, so that engine has no gateway until a re-render. That is P11 part 2's
     own item (the gateway rendered by default), and P7b's final render picks it up when it lands.
+
+**After the orchestrator's review of P7b (11 November 2026).**
+
+13. **The decommission check names what the namespace's Terraform writes**: the managed stores'
+    Secrets (the database's password among them) and the bucket role's service account carry no
+    label of the chart's, so they are ours by name. It also names Helm's own release record, and
+    gives each removal with its API group (Calico's `networkpolicy.projectcalico.org`). It refuses,
+    rather than reads as nothing left, a disks listing that holds no `Volumes`, or that was taken
+    in another region or another account than the cluster's. The runbook wraps the listing with
+    the account `aws sts` answers for and the region it asked. A disk counts as ours by its
+    namespace's tag and one of our claims' names together. In the Terraform state, only the
+    folder's root (or the module the environments repository names, `--module`) holds ours; a
+    resource of the same type and name in another module is the platform's.
+14. **The decommission's AWS steps.**
+    - Every AWS call names its region.
+    - The deployment's buckets are checked one by one, by name (`head-bucket`), not listed
+      account-wide.
+    - The buckets are emptied five hundred keys a call, versions and delete markers apart, and the
+      images a hundred a call.
+    - A listing that fails stops the step; it is never skipped, and never looped on.
+    - Its first step is the last backup, to a place outside the buckets it empties (refused if it
+      is inside them). The command is P9's backup, added there by P9's diff, with the poc shape's
+      Ingest claim in its set.
+15. **The runbooks are bash**, fenced `bash` and `bash platform`.
+    - Each says what it needs: the release's checkout at its tag, whose Dockerfiles and source
+      `images push` builds from; its environment (`.venv`); the `ospreyflow` command; Docker with
+      `buildx`; and bash.
+    - The install's header names the render that works before the push (`--allow-unpinned`).
+    - The tenant's-rights test reads every `kubectl` and `helm` call wherever it stands in a
+      line, every AWS call for its region, and the Python steps' own `kubectl`.
+16. **The poc shape refuses `components.search: opensearch`** in words: it makes no domain for one.
+    The poc fixture names `postgres-fulltext`.
+17. **The ceiling has one source**, `harness.site.highest_marking`, which holds each profile's own
+    default (`PROFILE_CEILINGS`, OFFICIAL-SENSITIVE for this profile) and refuses one the handling
+    scheme does not hold. The render reads it for the deployment as it is. The change to
+    `harness/site.py`, studio-b's file, was made at the orchestrator's word.
+18. **A render removes what its last render wrote and this one does not**, by the manifest it
+    leaves (`.rendered`), and never a file it did not write, so a standard shape's
+    `terraform/opensearch.tf` does not survive a poc render to be applied.
+19. **The standard shape is left out of the configuration's copy** in the values. The copy is in
+    the ConfigMap whose checksum restarts every pod, so a P7 deployment does not restart on
+    upgrade for a setting it never wrote.
+
+**Open question for the client's platform team**, added to Amendment 1's list: the storage class's
+volume binding. The poc shape's Conduit mounts two ReadWriteOnce claims, the shared one and the
+Ingest root's. With `WaitForFirstConsumer` both are made in its node's zone. With `Immediate`
+they may land in two zones, and no node could mount both.
 
 **The tests that would fail.** `tests/harness/test_cloud_platform_poc.py` (the shape, the stores,
 the claim, the CPU limits, the runbooks), `tests/cp_policy_check/test_cp_policy_check.py` (every
