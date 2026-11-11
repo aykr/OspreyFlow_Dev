@@ -34556,6 +34556,46 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     retention ends. That diff was shown here to apply cleanly to this step's files and to pass
     (66 tests, with P9's module beside them).
 
+21. **Egress is each workload's own** (the orchestrator's ruling from case-b's P12 review, for both
+    shapes). P7 rendered one Calico Allow selecting every pod (`all()`, order 100). It gave every
+    workload every other workload, the managed stores' networks and every host, and the namespace's
+    Kubernetes policies, at Calico's order 1000 after the deny, never decided egress.
+    - Now DNS is the one policy that selects every pod, and it allows DNS alone.
+    - Each workload has its own policy, `default.ospreyflow-egress-<workload>` (order 100, selecting
+      its own pods by `app.kubernetes.io/name`). It allows the namespace's workloads it calls, on
+      their Services' ports; the managed stores' networks if it reads a store; and the hosts of
+      each kind it is given.
+    - The rows are `profile.yaml`'s `egress.reach`, `egress.managed` and `egress.paths`.
+      - The paths come from the addresses each workload's environment names.
+      - S3 and STS go to the bucket role's pods, and to ClickHouse for its `BACKUP TO S3` (P9).
+      - A model engine's host goes to the gateway alone, a proxied map source to the Conduit,
+        the mail server to Keycloak, and a connector host to the Conduit and the workers.
+      - The Glass and the recogniser reach DNS and their own targets, nothing outside.
+    - P9's backup and restore pods have their rows by their own names; they are wired when P9's
+      render lands. A later workload (case-b's Laurium) is a row, not a template edit.
+    - `make cp-policy-check` refuses an Allow beyond DNS under a policy selecting every pod
+      (`wide-egress`).
+22. **Our Secret only to what reads it** (the same review). P7 gave the whole deployment Secret to
+    every workload that reads the settings (`envFrom`), the stores' passwords and the gateway's
+    master key among them, with only the model keys blanked.
+    - Now the Conduit, the workers and the report sync read it whole (`secrets.whole`).
+    - Superset is given by name only the keys it reads (`secrets.named`).
+    - The Glass and the recogniser get the ConfigMap alone (the chart's `noSecret`).
+    - `make cp-policy-check` refuses our Secret whole to any other pod, and any key outside a
+      named allowance (`whole-secret`).
+23. **Ingress is the paths turned round** (the orchestrator's ruling). Each workload's Kubernetes
+    policy, `ospreyflow-ingress-<workload>`, admits only the workloads whose paths name it, on its
+    own ports, rendered from the same rows as their egress so the two cannot drift. A workload
+    nothing calls admits nothing in the namespace. The front doors keep the ingress controller's
+    namespace (`ospreyflow-from-ingress`).
+    - On this profile `ospreyflow-internal` keeps its egress half alone; the cluster's render is
+      unchanged.
+    - `make cp-policy-check` refuses an ingress rule admitting every pod of ours (`wide-ingress`).
+    - The evaluator (`tests/cp_policy_check/test_cp_egress_order.py`) applies Calico's order to
+      egress and the Kubernetes policies to ingress, over Helm's own output. It checks every
+      workload against every other workload, the managed network, each host, the internet and DNS,
+      both ways, against the rows.
+
 **Open question for the client's platform team**, added to Amendment 1's list: the storage class's
 volume binding. The poc shape's Conduit mounts two ReadWriteOnce claims, the shared one and the
 Ingest root's. With `WaitForFirstConsumer` both are made in its node's zone. With `Immediate`

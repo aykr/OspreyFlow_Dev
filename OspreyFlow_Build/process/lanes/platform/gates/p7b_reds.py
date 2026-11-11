@@ -27,6 +27,8 @@ T_R = "../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::"
 T_IMG = "../OspreyFlow_Build/tests/cli/test_images_verb.py::"
 T_ID = "../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::"
 T_AWS = "../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::"
+T_EG = "../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::"
+T_EO = "../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::"
 CHECK = C + "harness/cloud_platform/decommission_check.py"
 INIT = C + "harness/cloud_platform/__init__.py"
 RUN = C + "harness/cloud_platform/runbooks.py"
@@ -150,6 +152,43 @@ runner.PLANTS = [
     ("aws: a bucket that cannot be seen read as not there", RUN,
      '  else echo "$PREFIX$b could not be checked: $out"; failed=1; fi\n', "  else :; fi\n",
      [T_AWS + "test_a_bucket_not_there_is_not_listed_and_one_that_cannot_be_seen_stops"]),
+    # ---- each workload's own egress, ingress and secrets (Amendment 5 points 21-23) -------------------
+    ("cp-policy-check: an Allow beyond DNS for every pod passes", B + "tools/cp_policy_check.py",
+     '        if rule.get("action") == "Allow" and not _is_dns(rule):\n', "        if False:\n",
+     [T_EO + "test_the_one_allow_for_every_pod_is_refused"]),
+    ("cp-policy-check: ingress from every pod of ours passes", B + "tools/cp_policy_check.py",
+     '            if set(peer) == {"podSelector"} and (peer["podSelector"] or {}) in _EVERY_POD:\n',
+     "            if False:\n",
+     [T_EO + "test_ingress_from_every_pod_of_ours_is_refused"]),
+    ("cp-policy-check: our Secret whole to a pod that reads none passes", B + "tools/cp_policy_check.py",
+     "                if workload not in WHOLE_SECRET_ALLOWED:\n", "                if False:\n",
+     [T_EO + "test_the_whole_secret_to_a_pod_that_reads_none_is_refused"]),
+    ("cp-policy-check: a store's password named to superset passes", B + "tools/cp_policy_check.py",
+     '            if ref.get("name") == SECRET and ref.get("key") not in allowed:\n', "            if False:\n",
+     [T_EO + "test_a_store_s_password_named_to_superset_is_refused"]),
+    ("render: the managed stores' networks to every workload", INIT,
+     "        if name in egress.managed:\n", "        if True:\n",
+     [T_EG + "test_a_workload_reaches_only_what_its_rows_give_it",
+      T_EO + "test_who_reaches_whom_is_the_rows_and_nothing_more"]),
+    ("render: every host to every workload", INIT,
+     "        hosts = sorted({h for kind, hs in by_kind.items() if name in egress.reach.get(kind, [])\n",
+     "        hosts = sorted({h for kind, hs in by_kind.items() if True\n",
+     [T_EG + "test_a_workload_reaches_only_what_its_rows_give_it",
+      T_EG + "test_a_model_engine_s_host_is_the_gateway_s_alone"]),
+    ("render: no workload admits its callers (ingress not the paths turned round)", INIT,
+     '            entry["fromPods"] = callers\n', "            pass\n",
+     [T_EG + "test_ingress_is_the_paths_turned_round",
+      T_EO + "test_who_reaches_whom_is_the_rows_and_nothing_more"]),
+    ("render: the Glass and the recogniser given our Secret whole", INIT,
+     '    pod["noSecret"] = True\n', "",
+     [T_EG + "test_the_glass_and_the_recogniser_hold_no_secret_and_superset_its_own_alone"]),
+    ("chart: a workload's egress policy selecting every pod", C + "deploy/helm/ospreyflow/templates/networkpolicies.yaml",
+     "  selector: {{ printf \"app.kubernetes.io/name == '%s'\" .name | quote }}\n", "  selector: all()\n",
+     [T_EO + "test_who_reaches_whom_is_the_rows_and_nothing_more", T_EO + "test_case_b_s_cases"]),
+    ("chart: the internal policy's ingress half kept on a shared platform", C + "deploy/helm/ospreyflow/templates/networkpolicies.yaml",
+     "  {{- if $perWorkload }}\n", "  {{- if false }}\n",
+     [T_EO + "test_ingress_from_every_pod_of_ours_is_refused",
+      T_EO + "test_who_reaches_whom_is_the_rows_and_nothing_more"]),
     ("identity: our Secret alone, not the settings with it", IDENT,
      '{**values["environment"], **held}', "held",
      [T_ID + "test_identity_is_given_the_settings_and_our_secret_together"]),
