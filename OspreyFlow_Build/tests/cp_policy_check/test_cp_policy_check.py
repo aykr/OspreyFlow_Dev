@@ -40,15 +40,23 @@ def check_manifests(docs: list[dict[str, Any]], registry: str) -> list[Violation
     return _check_manifests(docs, registry, controller_namespace=CONTROLLER)
 
 
-@pytest.fixture(scope="module", params=["development", "production"])
+@pytest.fixture(scope="module", params=["development", "production", "poc"])
 def rendered(request: pytest.FixtureRequest) -> tuple[dict[str, Any], str]:
     values, registry = render_values(FIXTURES / f"{request.param}.yaml")
     return yaml.safe_load(values), registry
 
 
+@pytest.fixture(scope="module", params=["development", "poc"])
+def development(request: pytest.FixtureRequest) -> tuple[dict[str, Any], str]:
+    """A development namespace's render, in the standard shape and in the poc shape (ADR-148
+    Amendment 5): every planted fault is refused in each shape's own render."""
+    values, registry = render_values(FIXTURES / f"{request.param}.yaml")
+    return yaml.safe_load(values), registry
+
+
 @pytest.fixture(scope="module")
-def development() -> tuple[dict[str, Any], str]:
-    values, registry = render_values(FIXTURES / "development.yaml")
+def poc() -> tuple[dict[str, Any], str]:
+    values, registry = render_values(FIXTURES / "poc.yaml")
     return yaml.safe_load(values), registry
 
 
@@ -655,3 +663,39 @@ def test_main_fails_on_a_planted_fault(tmp_path: Path, monkeypatch: pytest.Monke
     bad.write_text("FROM nginx:1.30-alpine\nUSER nginx\n", encoding="utf-8")
     monkeypatch.setattr(check, "our_dockerfiles", lambda: [*our_dockerfiles(), bad])
     assert main(["--config", str(FIXTURES / "development.yaml")]) == 1
+
+
+# ---- the poc shape's own claim (ADR-148 Amendment 5) -----------------------------------------
+
+
+def test_the_poc_shape_s_own_claim_is_rendered_and_mounted(
+    poc: tuple[dict[str, Any], str],
+) -> None:
+    """Helm's own output: `ospreyflow-ingest`, ReadWriteOnce on the platform's class and kept on
+    uninstall, mounted by the Conduit at the Ingest root, and no Keeper StatefulSet or disruption
+    budget."""
+    docs, registry = _helm(poc)
+    claim = _doc(docs, "PersistentVolumeClaim", "ospreyflow-ingest")
+    assert claim["spec"]["accessModes"] == ["ReadWriteOnce"]
+    assert claim["metadata"]["annotations"]["helm.sh/resource-policy"] == "keep"
+    spec = pod_spec(_doc(docs, "Deployment", "api"))
+    assert spec is not None
+    volumes = {v["name"]: v for v in spec["volumes"]}
+    assert volumes["claim-ingest"]["persistentVolumeClaim"]["claimName"] == "ospreyflow-ingest"
+    mounts = {m["mountPath"]: m["name"] for m in spec["containers"][0]["volumeMounts"]}
+    assert mounts["/var/lib/osprey/ingest"] == "claim-ingest"
+    assert mounts["/var/lib/osprey/data"] == "shared"
+    assert not [d for d in docs if d["kind"] == "PodDisruptionBudget"]
+    assert not [d for d in docs if d["metadata"]["name"] == "clickhouse-keeper"]
+    assert _found(docs, registry) == []
+
+
+def test_the_poc_shape_s_own_claim_read_write_many_is_refused(
+    poc: tuple[dict[str, Any], str],
+) -> None:
+    """Planted in Helm's own output: the Ingest root's claim alone made ReadWriteMany."""
+    docs, registry = _helm(poc)
+    _doc(docs, "PersistentVolumeClaim", "ospreyflow-ingest")["spec"]["accessModes"] = [
+        "ReadWriteMany"
+    ]
+    assert _found(docs, registry) == [("rwx", "accessModes ReadWriteMany")]
