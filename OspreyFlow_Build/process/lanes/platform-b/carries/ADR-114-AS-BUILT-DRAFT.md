@@ -13,7 +13,8 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
 1. **One writer for `deployment.env`** (`harness/atomic.py` `replace_whole`): a temporary file beside
    the real target, its mode set first, flushed, the old file's owner kept under sudo, renamed over the
    target, the folder flushed; **a symlink is followed** (the link kept, its target replaced); a
-   failure leaves the old file whole and nothing beside it. **Every writer of the live file uses it**:
+   failure leaves the old file whole and nothing beside it. **Each known writer of the live file uses
+   it** (one exception named below: a compose file that mounts `./deployment.env` on its own):
    `write_private`, `apply`'s move into place (which copied it with `copytree`), `store_volumes`'
    put-back, refresh's move into place (made `600`, as every other writer makes it), and since the
    orchestrator's review `register_sign_in` (every `start --build`, restore and apply), restore's
@@ -66,13 +67,20 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
 6a. **The operator sees refresh's and update's refusals**: the CLI's redactor hides a line naming
    `password|secret|token`, and these name the variables Compose requires. Such a line is shown **only
    as one of refresh's own sentences in full**, as its `main` prints them (`refresh: …`) and as
-   `update` reports its files step's (`ospreyflow: the update to … failed at '…': refresh: …`):
-   the unset-variable refusal and the gateway refusal, anchored at both ends, the variables' names
-   alone (each with an underscore) and the deployment's name (lower case, digits, hyphens) as the only
-   parts that vary, nothing after. A value after our words, an upper-case value among the names, or
-   any other line naming a secret stays hidden; a deployment called `secret-lab` still sees its
-   refusal. The redactor's copy of the gateway sentence is held to refresh's own words by a test.
-   The gateway refusal says "keeps every value deployment.env holds", no longer "every secret".
+   `update` reports its files step's (`ospreyflow: the update to <a release tag> failed at 'bring the
+   files up to date': refresh: …`): the unset-variable refusal and the gateway refusal, anchored at
+   both ends, nothing after. The parts that vary are the variables' names, which must be ours
+   (`OSPREY_…`, as every variable a compose file requires is), and the deployment's name (lower case,
+   digits, hyphens). A value after our words, a value among the names, or any other line naming a
+   secret stays hidden; a deployment called `secret-lab` still sees its refusal. **Known limit:** a
+   value shaped like one of our names (`OSPREY_HUNTER_2`) would be shown as a name; no producer puts a
+   value there, and checking the names against the deployment's compose file would hide a refusal
+   naming a variable only the new checkout requires, once update has rolled the files back. The
+   redactor's one other exemption, advice naming `GITHUB_TOKEN`, `GH_TOKEN` or
+   `OSPREY_ORG_SIGN_IN_SECRET`, passes only its producers' own fixed phrases, so such a name with a
+   value after it, in any shape, stays hidden. The copy of the gateway sentence is held to refresh's
+   own words by a test, and the gateway refusal says "keeps every value deployment.env holds", no
+   longer "every secret".
 7. **The chart's values-derived keys are quoted** — platform's under P7 at the orchestrator's
    ruling: P7 (main c73e4f1) quotes the `checksum/*` annotations; the ConfigMap data keys and a
    file's `subPath` (a key reading as a number, bool or null broke the render), with the chart
@@ -103,7 +111,9 @@ so it too is POSIX-only (it is imported by refresh and, lazily, by `apply` for a
 the scan sees `write_text`, `write_bytes`, `open` and `os.open` for writing and `shutil`'s copies,
 not `copytree` or `os.fdopen`, and keys refresh's stage edits by function, so a call of those on the
 live folder would not be seen; `store_volumes`' put-back rewrites the rollback points' copies in
-place; refresh would write `deployment.env` in place if a compose file mounted `./deployment.env`;
+place; **refresh writes `deployment.env` in place if a compose file mounts `./deployment.env` on its own**
+(as every mounted file is, to keep its inode; no render mounts it today), the one known writer of it
+that is not `replace_whole`;
 a file the staged pass creates new is moved into place with the umask's mode (under sudo with 077 a
 new mounted file would be `600`); `replace_whole` needs a symlinked `deployment.env`'s target folder
 writable, which an in-place write did not. **`OSPREYFLOW_REFRESH_LOCK_FD` and the lock's name

@@ -1,4 +1,4 @@
-"""Every write of a deployment's `deployment.env` goes through `harness.atomic` (CARRIES; the
+"""Each known writer of a deployment's `deployment.env` goes through `harness.atomic` (CARRIES; the
 orchestrator's review of c5209b1, item 1; ADR-114 Amendment 39 decision 5, "an interruption leaves
 whole files and the secrets as they were").
 
@@ -9,8 +9,8 @@ Three writers still truncated and rewrote the live file after the carries' first
 `test_atomic_writes.py`: a second name made for the old file keeps the old bytes only if the file
 was *replaced*; a rewrite in place shows the new bytes through it too.
 
-So that a fourth writer cannot appear unseen (rule 12), `test_no_module_writes_an_env_file_in_place`
-scans every module under `harness/`, `scripts/` and `cli/ospreyflow/` for a raw write (`write_text`,
+So that a fourth writer naming an env file cannot appear unseen (rule 12), the scan
+`test_no_module_writes_an_env_file_in_place` (whose limit is below) checks every module under `harness/`, `scripts/` and `cli/ospreyflow/` for a raw write (`write_text`,
 `write_bytes`, `open` for writing, `os.open` for writing, `shutil.copy`/`copy2`/`copyfile`/`move`)
 whose destination names an env file (`deployment.env`, or a name holding `env`, such as `env_path`),
 or copies a folder's files by their own names (`directory / item.name`, which reaches

@@ -158,3 +158,11 @@ the lockout case on purpose: it hands to refresh, whose own refusal O2 holds.
 | A4 | put-back's own `deployment.env` branch planted out | the writer scan **stays green**; `test_put_back_replaces_deployment_env_rather_than_rewriting_it` goes red: the scan's limit, now in its docstring |
 | M1 | the rollback point made with the umask's mode (as at ad4bef7) | `…rollback_point_is_private…`: not 700 |
 | M2 | `state/` another account's (as at ad4bef7) | `…state_folder_this_account_cannot_write…`: PermissionError |
+
+### Carries, after the orchestrator's confirmation of b2feedf (11 November 2026, on the Mac, offline)
+
+| Plant | Fault | Red |
+|---|---|---|
+| B1 | the advice exemption by next character (as at b2feedf, and on main) | `test_an_exempt_name_with_a_value_after_it_stays_hidden`: all eighteen (three names, six shapes: `"NAME": "v"`, `NAME v`, `NAME ghp_…`, `NAME is v`, `set NAME to v`, `NAME v on this machine…`) shown |
+| B2 | any upper-case name with an underscore taken as a variable (`_VARIABLE` planted back) | `…value_shaped_like_a_variable_among_the_names_stays_hidden[HUNTER_2, SECRET_VALUE_9]` shown |
+| B3 | update's step and version slots open (the earlier pattern planted back) | `test_update_s_slots_take_only_their_own_words[step, version]`: `'hunter password'` and `v0.5.0hunter` shown |
