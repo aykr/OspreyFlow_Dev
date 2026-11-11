@@ -438,6 +438,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       case shows Laurium reading a conforming answer from the client's own engine. **Your choice:** keep Laurium as the
       preset (as now), or preset deep_read until that case passes. Also ruled: the extraction engine is chosen at
       set-up only; Admin › Models shows it read-only, with how to change it.
+    - **Ruled for P12 part 2 (rule 11, case-b's recommendation), yours to overrule:** Laurium serves document
+      extraction into the review queue only (its findings, inferred); Questions, Ask to search, email extraction and
+      document content stay with Deep read, whose schemas Laurium's mapper cannot all take. The live case on a real
+      model now runs against the product's own extraction model, qwen2.5 7B (pinned), on a gateway stood up on the
+      test server.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
