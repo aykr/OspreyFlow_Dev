@@ -482,6 +482,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       is being fixed now. **My recommendation:** keep Laurium as the preset, as you decided, and record the gap in
       ADR-135 Amendment 9. The alternative is deep_read as the preset until a screen uses Laurium. I have not
       changed it; your call.
+    - **Ruled for P10 part 2 (about 22:30), yours to overrule:** report-sync and Superset are not rendered on
+      cloud-platform until their own step. Both still pointed at Keycloak, so neither could work on Entra. An explicit
+      `on` is refused in words, and the profile's defaults still render.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
