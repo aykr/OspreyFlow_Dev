@@ -187,7 +187,8 @@ runner.PLANTS = [
 ''', '''    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(deployment_user)
     values["secrets"]["keys"] = sorted({*values["secrets"]["keys"], CLICKHOUSE_BACKUP_PASSWORD})
 ''',
-     [TR + "test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password"]),
+     [TR + "test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password",
+      TR + "test_the_shared_secrets_terraform_never_makes_the_backup_users_password"]),
     ("a manifest of another set taken as this one's", RUN, '    if manifest.get("set") != set_id:', "    if False:",
      [TP + "test_a_manifest_that_is_another_sets_is_refused"]),
     ("a manifest naming objects outside its set taken", RUN, "    if outside := [k for k in named if not k.startswith(prefix)]:",

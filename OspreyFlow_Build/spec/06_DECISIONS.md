@@ -33923,9 +33923,13 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
 - The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
   (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).
 - **Left, to P9b:** the alert on a failed or missing run; object lock or a write-only role; the drain test and the
-  volume expansion; the production shape's restore (every ArcadeDB copy, ON CLUSTER with two replicas); the client's
-  retention, which sets `EXPIRE_DAYS`; the kept bucket's policy matching roles by ARN, so a role later made under the
-  same name regains it; a large database's zip staged in the restore pod's own scratch space.
+  volume expansion; the production shape's restore (every ArcadeDB copy, ON CLUSTER with two replicas; refused by
+  the render until then); the client's retention, which sets `EXPIRE_DAYS`; the kept bucket's policy matching roles by
+  ARN, so a role later made under the same name regains it; a large database's zip staged in the restore pod's own
+  scratch space; the `backup` ClickHouse user's networks (point 4); a service account of the restore's own, so the
+  nightly runner no longer holds the pods Role; restoring a kept set after a decommission (the platform team's
+  procedure, its steps written); `ospreyflow.backupPod` repeating the chart's pod security block, and the module's use
+  of platform's private `_file`, `_q` and `_secret` (asked to be made public).
 
 **Tests.** `tests/cloud_platform_backup/` (the stand-in, the runner, the claims, the render, the chart on the server's
 Helm); `process/lanes/case/gates/p9_reds.py` (the plants, each at its real call site, red); `gates/p9_kind.{sh,py}`

@@ -316,6 +316,22 @@ def test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_pa
     assert 'resource "random_password" "clickhouse_backup"' in text
 
 
+@pytest.mark.parametrize("fixture", rendered.fixtures())
+def test_the_shared_secrets_terraform_never_makes_the_backup_users_password(fixture: str) -> None:
+    """The hook's other side: the Terraform that makes the shared Secret (secrets.tf, platform's) is
+    rendered from the values the hook leaves, so it must make no backup password; backups.tf alone
+    makes it, in its own Secret."""
+    from harness.cloud_platform.settings import load_platform
+    from harness.cloud_platform.terraform import render_terraform
+
+    cfg = rendered.config(fixture)
+    assert cfg.cloud_platform is not None
+    files = render_terraform(cfg, load_platform(cfg.cloud_platform.platform), rendered.values(fixture))
+    assert backups.CLICKHOUSE_BACKUP_PASSWORD not in files["secrets.tf"]
+    assert backups.BACKUP_SECRET not in files["secrets.tf"]
+    assert f'"{backups.BACKUP_SECRET}"' in rendered.terraform(fixture)
+
+
 def test_a_render_with_one_store_and_not_the_other_is_refused() -> None:
     values = rendered.values()
     workloads = [w for w in values["workloads"] if w["name"] != "clickhouse"]
