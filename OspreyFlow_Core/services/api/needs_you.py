@@ -39,7 +39,7 @@ NOTICE_LIMIT = 20
 
 class ScheduleNotices(Protocol):
     async def list_schedule_notices(
-        self, principal: Principal, *, since: datetime, limit: int = ...
+        self, principal: Principal, *, since: datetime, limit: int
     ) -> tuple[list[Alert], int]: ...
 
 

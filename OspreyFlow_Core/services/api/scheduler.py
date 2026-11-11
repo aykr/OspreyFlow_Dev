@@ -625,6 +625,7 @@ class ScheduleExecutor:
             raise _Refused(
                 f"OspreyFlow could not act as the schedule's owner, {owner_id}",
                 kind="failed",  # a network fault or a bug, not the owner's rights (Admin's review)
+                about_the_owner=False,  # never one of the three that pause (Amendment 3)
             ) from error
 
     async def _not_run(

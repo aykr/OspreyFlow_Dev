@@ -431,6 +431,23 @@ async def test_an_identity_provider_outage_is_refused_but_never_pauses_the_sched
     assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
 
 
+async def test_a_failed_exchange_is_told_failed_and_never_pauses_the_schedule(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 (Admin's review): any other failure acting as the owner (a network fault,
+    a bug) is told "failed", and, being nothing about the owner, never counts toward the three
+    refusals that pause the schedule (Amendment 3, point 3), as an identity provider outage does not."""
+    recipe = _recipe()
+    recipes, edges = _Recipes([recipe]), _Edges(owner=RuntimeError("connection reset by peer"))
+    executor = _executor(recipes, edges, runs, valkey)
+    for day in range(4):
+        await executor.tick(FIRST_SLOT + timedelta(days=day))
+    assert recipe.recipe_id not in recipes.paused
+    assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"] * 4
+    assert all(words.endswith("failed. Its pipeline's Runs, in the Ingest Studio, say why.")
+               and "connection reset" not in words for _, _, words in edges.notices)  # fmt: skip
+
+
 async def test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule(
     runs: RecipeRunStore, valkey: Valkey
 ) -> None:
@@ -653,6 +670,23 @@ async def test_a_quota_refusal_tells_its_owner_in_the_quota_sentence(
     assert words == (f"{lead} was refused: today's run quota is used. The next may start after "
                      "midnight, or an administrator may raise the quota in Admin › Running › "
                      "Operations.")  # fmt: skip
+
+
+async def test_a_quota_refused_file_tells_its_owner_the_quota_sentence(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 with ADR-141 decision 6, at the watched-file site: the fixed quota
+    sentence, never the quota's own words."""
+    from services.api.run_quotas import QuotaRefused, quota_words
+
+    recipe = _watched()
+    edges = _Edges(fail_run=QuotaRefused(quota_words("unit", 5)), waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((_, _, words),) = edges.notices
+    assert words == ("The run of Daily export on the file a.csv was refused: today's run quota is "
+                     "used. The next may start after midnight, or an administrator may raise the "
+                     "quota in Admin › Running › Operations.")  # fmt: skip
+    assert "5 runs" not in words and "unit's" not in words
 
 
 async def test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried(

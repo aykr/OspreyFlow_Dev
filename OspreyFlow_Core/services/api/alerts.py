@@ -859,7 +859,7 @@ class AlertStore:
         return [_row_to_alert(row) for row in rows]
 
     async def list_schedule_notices(
-        self, principal: Principal, *, since: datetime, limit: int = 20
+        self, principal: Principal, *, since: datetime, limit: int
     ) -> tuple[list[Alert], int]:
         """ADR-110 Amendment 19: the principal's own open notices of their scheduled loads raised
         since `since`, newest first, at most `limit`, with how many there are in all (more than

@@ -35,6 +35,7 @@ from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
 from services.api.dataset_scope import outside_any_case
+from services.api.needs_you import NOTICE_LIMIT
 from services.api.scheduler import schedule_notice
 
 pytestmark = pytest.mark.skipif(
@@ -107,7 +108,7 @@ async def test_only_the_owner_reads_or_counts_a_notice(
         store, written, owner, NOW - timedelta(hours=2), dataset=new_id()
     )
     listed, total = await store.list_schedule_notices(
-        _reader(owner, ["data_engineer"]), since=SINCE
+        _reader(owner, ["data_engineer"]), since=SINCE, limit=NOTICE_LIMIT
     )
     assert [n.id for n in listed] == [mine.id, stamped.id] and total == 2
     # Someone else, an administrator, the owner's team lead and a principal the deployment has
@@ -119,9 +120,9 @@ async def test_only_the_owner_reads_or_counts_a_notice(
         _reader(f"lead-{new_id()}", ["analyst", "team_lead"]),
         _reader(f"unknown-{new_id()}", []),
     ):
-        assert await store.list_schedule_notices(other, since=SINCE) == ([], 0), (
-            other.roles
-        )
+        assert await store.list_schedule_notices(
+            other, since=SINCE, limit=NOTICE_LIMIT
+        ) == ([], 0), other.roles
 
 
 async def test_a_stamped_notice_and_an_unstamped_one_are_both_served(
@@ -136,7 +137,7 @@ async def test_a_stamped_notice_and_an_unstamped_one_are_both_served(
         store, written, owner, NOW - timedelta(hours=2), dataset=f"ds-{new_id()}"
     )
     listed, total = await store.list_schedule_notices(
-        _reader(owner, ["analyst"]), since=SINCE
+        _reader(owner, ["analyst"]), since=SINCE, limit=NOTICE_LIMIT
     )
     assert {n.id for n in listed} == {unstamped.id, stamped.id} and total == 2
 
@@ -159,7 +160,7 @@ async def test_a_notice_is_any_schedule_alert_and_nothing_else(
         await store.save(alert)
         written.append(alert.id)
     listed, total = await store.list_schedule_notices(
-        _reader(owner, ["analyst"]), since=SINCE
+        _reader(owner, ["analyst"]), since=SINCE, limit=NOTICE_LIMIT
     )
     assert [n.id for n in listed] == [before.id] and total == 1
 
@@ -177,7 +178,7 @@ async def test_the_window_and_the_status_bound_it(
         )
     fresh = await _notice(store, written, owner, NOW - timedelta(hours=2))
     listed, total = await store.list_schedule_notices(
-        _reader(owner, ["analyst"]), since=SINCE
+        _reader(owner, ["analyst"]), since=SINCE, limit=NOTICE_LIMIT
     )
     assert [n.id for n in listed] == [fresh.id] and total == 1
 
