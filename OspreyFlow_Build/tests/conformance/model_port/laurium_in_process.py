@@ -119,17 +119,21 @@ async def laurium_live_adapter(model: str) -> AsyncIterator[ExtractLauriumAdapte
         await put_laurium_key(gateway, config.api_key, [model])
         try:
             with resolve_litellm_here(config.host) as refused:
-                app = import_app(
-                    {"OSPREY_LAURIUM_GATEWAY_URL": f"http://litellm:{config.port}{BASE}"}
-                )
-                adapter = ExtractLauriumAdapter(
-                    LauriumConfig(base_url="http://laurium", gateway_key=config.api_key),
-                    transport=httpx.ASGITransport(app=app.app),
-                )
+                # In a `finally`: a call to another host fails inside the test too (as an
+                # unreachable gateway), and this assertion, not that failure, must be what is read.
                 try:
-                    yield adapter
+                    app = import_app(
+                        {"OSPREY_LAURIUM_GATEWAY_URL": f"http://litellm:{config.port}{BASE}"}
+                    )
+                    adapter = ExtractLauriumAdapter(
+                        LauriumConfig(base_url="http://laurium", gateway_key=config.api_key),
+                        transport=httpx.ASGITransport(app=app.app),
+                    )
+                    try:
+                        yield adapter
+                    finally:
+                        await adapter.aclose()
                 finally:
-                    await adapter.aclose()
-            assert refused == [], f"Laurium's service asked for another host: {refused}"
+                    assert refused == [], f"Laurium's service asked for another host: {refused}"
         finally:
             await delete_laurium_key(gateway, config.api_key)

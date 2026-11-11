@@ -32,15 +32,26 @@ from tests.conformance.registry import MODEL_PORT_ADAPTERS, ModelAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", MODEL_PORT_ADAPTERS, ids=str)
 
-#: ADR-135 Amendment 6 (P12 part 1, round 2; the orchestrator's ruling of 11 November): Laurium
+#: ADR-135 Amendment 6 (P12 part 1, round 2; the orchestrator's rulings of 11 November): Laurium
 #: cannot read the pinned conformance model's answer to its prompt, 3 tries of 3 on the real
-#: gateway (`process/lanes/case-b/gates/8190228d.live-*.txt`). Expected to fail for that model
-#: alone, by that refusal alone, and strictly, so the case fails the day it starts passing. Every
-#: other Laurium case stays a hard pass. Part 2's exit holds Laurium to a conforming answer from
-#: the client's own engine.
+#: gateway (`process/lanes/case-b/gates/8190228d.live-*.txt`). Expected to fail for Laurium alone
+#: and **by that refusal alone**: the adapter raises `ExtractionFailedError` for many faults (a
+#: gateway that refuses its key, one that cannot be reached, another host), so only the words of
+#: the unparseable refusal become `LauriumCouldNotRead`, the one exception the mark accepts; any
+#: other failure is an `AssertionError`, reported FAILED. Strict, so a conforming answer is
+#: reported FAILED too. No CI job runs this case in Laurium's environment: it fires on a leased
+#: run against a real gateway (the one in `P12_RED_RECORD.md`, and part 2's exit run on the
+#: client's own engine).
+UNPARSEABLE = "could not read model"
+
+
+class LauriumCouldNotRead(Exception):
+    """Laurium's service could not read the model's answer into the schema (its `unparseable`)."""
+
+
 LAURIUM_UNPARSEABLE_ON_CONFORMANCE_MODEL = pytest.mark.xfail(
     strict=True,
-    raises=ExtractionFailedError,
+    raises=LauriumCouldNotRead,
     reason="Laurium cannot read the pinned 0.5B conformance model's answer to its prompt "
     "(unparseable, 3 of 3; process/lanes/case-b/gates/8190228d.live-stack-c.txt)",
 )
@@ -65,7 +76,12 @@ async def test_extract_returns_data_conforming_to_the_requested_schema(
         model=CONFORMANCE_MODEL,
     )
     async with factory.context() as adapter:
-        result = await adapter.extract(req)
+        try:
+            result = await adapter.extract(req)
+        except ExtractionFailedError as exc:
+            if factory.label == "extract_laurium" and UNPARSEABLE in str(exc):
+                raise LauriumCouldNotRead(str(exc)) from exc
+            raise AssertionError(f"extract failed for another reason: {exc}") from exc
 
     assert result.document_id == "doc-1"
     assert result.model == CONFORMANCE_MODEL
