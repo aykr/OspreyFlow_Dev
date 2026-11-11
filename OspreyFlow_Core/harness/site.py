@@ -267,15 +267,30 @@ def marking_floor(config: OspreyConfig) -> str:
     return chosen
 
 
+#: A profile's own ceiling where the deployment names none (ADR-148 decision 10; Amendment 5): the
+#: client's platform holds OFFICIAL-SENSITIVE at most. Every other profile takes the scheme's
+#: highest.
+PROFILE_CEILINGS: dict[Profile, str] = {Profile.CLOUD_PLATFORM: "OFFICIAL-SENSITIVE"}
+
+
 def highest_marking(config: OspreyConfig) -> str:
-    """The highest marking the deployment may hold (ADR-148 decision 10): its own, or its handling
-    scheme's highest. The scheme is the one the Conduit loads (UK law enforcement)."""
+    """The highest marking the deployment may hold (ADR-148 decision 10): its own, else its
+    profile's own (`PROFILE_CEILINGS`), else its handling scheme's highest. The scheme is the one
+    the Conduit loads (UK law enforcement); a profile's default it does not hold is refused."""
     from ontology.handling import load_uk_le_scheme
 
     known = load_uk_le_scheme().classification
     chosen = config.deployment.highest_marking
     if chosen is None:
-        return known[-1]
+        default = PROFILE_CEILINGS.get(config.profile)
+        if default is None:
+            return known[-1]
+        if default not in known:
+            raise ValueError(
+                f"the {config.profile.value} profile's ceiling {default} is not a classification "
+                f"of the handling scheme: its classifications are {', '.join(known)}"
+            )
+        return default
     if chosen not in known:
         raise ValueError(
             f"deployment.highest_marking {chosen!r} is not a classification of the handling "

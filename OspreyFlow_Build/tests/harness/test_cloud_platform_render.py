@@ -936,3 +936,44 @@ def test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copi
               for c in [p, *p.get("initContainers", [])]}  # fmt: skip
     assert not [i for i in pinned if i.endswith("2" * 64)], pinned
     assert all(i.endswith(("1" * 64, "b" * 64)) for i in pinned), pinned
+
+
+def test_the_ceiling_has_one_source_and_it_is_checked_against_the_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The orchestrator's review of P7b, item 8: `harness.site.highest_marking`, which every
+    reader of the ceiling calls, gives the profile's own default, and a default the handling scheme
+    does not hold is refused, not written."""
+    from harness.site import highest_marking
+
+    import ontology.handling as handling
+
+    assert highest_marking(_config("poc")) == "OFFICIAL-SENSITIVE"
+    assert highest_marking(_config("production")) == "OFFICIAL-SENSITIVE"
+    assert highest_marking(_config("poc", deployment={"highest_marking": "OFFICIAL"})) == "OFFICIAL"
+    real = handling.load_uk_le_scheme()
+    narrow = real.model_copy(update={"classification": ["PUBLIC", "OFFICIAL", "SECRET"]})
+    monkeypatch.setattr(handling, "load_uk_le_scheme", lambda: narrow)
+    with pytest.raises(ValueError, match="OFFICIAL-SENSITIVE is not a classification"):
+        highest_marking(_config("poc"))
+
+
+def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_path: Any) -> None:
+    """The orchestrator's review of P7b, item 6: a standard render's `terraform/opensearch.tf`
+    survived a later poc render into the same folder, and would be applied. `write` removes each
+    file the previous render wrote (its manifest) that this render does not, and never a file it
+    did not write itself."""
+    from harness.render import RENDERED_MANIFEST, render, write
+
+    out = tmp_path / "cloud-platform"
+    standard = render(_config("development"), resolver=_resolver)
+    write(standard, out)
+    assert (out / "terraform" / "opensearch.tf").is_file()
+    (out / "notes.txt").write_text("the operator's own\n", encoding="utf-8")
+    poc = render(_config("poc"), resolver=_resolver)
+    write(poc, out)
+    assert not (out / "terraform" / "opensearch.tf").exists()
+    assert (out / "notes.txt").is_file()  # not ours: never removed
+    assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {
+        *poc.artefacts, RENDERED_MANIFEST, "notes.txt"
+    }
