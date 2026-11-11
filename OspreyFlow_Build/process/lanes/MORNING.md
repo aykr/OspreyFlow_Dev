@@ -233,6 +233,24 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    - The `encoder` extra (proprietary CUDA) is never installed.
    The record is `process/lanes/platform/p12/LICENCE_CHECK.md`, and P12 has no further stop for the licence.
 
+32. **v0.5.0 is published (about 06:35 on 11 November).** The user repository's main is at 2be985a ("OspreyFlow —
+    from 4b8de6c"), tagged `v0.5.0`, and pushed.
+    - **Release gates on main**, run on the server: `make -k ci` passed every target apart from harness-a11y, which
+      could not start because the orchestrator has no Playwright slot; it passed 34 of 34 when re-run on slot 14.
+      `make test` passed 10,828 with 2 failures, and the JavaScript tests 3,052 with 1 failure. All three failures
+      are known to come from the server (the GPU skip, Valkey's port 59993, MatrixView's timing).
+    - **Corrections made to the notes before the tag:**
+      - Show as BPMN is on screen; export and import are through the API only.
+      - Making a rule live needs *Deploy rules* and a role that opens Rules and Monitoring (an Analyst), so a
+        Data Engineer cannot.
+      - A rule kept just for its author raises medium *Watched pattern* alerts; this is listed as a known issue.
+      - The administration guide's WSL example is reworded, since the publish check read it as a local path.
+    - **Published tree checked:** no draft README, no real-data files, no local paths.
+    - **Still owed:** the real `ospreyflow update` from v0.4.12, which rules' server session runs from 07:08.
+    - **Not yet landed on main, by design:** L1.10b and T1 part 4. The merger rebuilt them on ac8735d, and main has
+      since gained docs commits, so they are rebuilt and landed when the merger is back.
+    - **Skipped:** the nightly full live set. It needs the Mac to bring its stack down, and the laptop goes offline.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
