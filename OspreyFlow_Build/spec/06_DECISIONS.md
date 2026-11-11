@@ -35427,13 +35427,19 @@ review rounds, listed for the owner.*
      (`OIDC_TOKEN_EXCHANGE_*`, `OIDC_ADMIN_USERS_URL`, `OSPREY_IDENTITY_ORIGIN`). No rendered value names Keycloak or
      the `id.` host (the deployment's own `osprey.yaml`, mounted as written, keeps its settings' defaults).
      `cp-policy-check`'s `GROUP_ZERO_ALLOWED` is empty.
-   - **The P7b runbook's identity step** (Entra's app registrations in place of Keycloak's) is this lane's, sent as a
-     diff with the render diff regenerated on P7b (the orchestrator's ruling, 11 November 2026).
+   - **The install runbook's step 6** (P7b's `INSTALL.md`) is Entra's: the client's app registrations (the Glass's,
+     and the API's exposing the scope) and the first administrators the settings name, then a check that the Conduit
+     reads Entra's settings. P7b's Keycloak step (`harness/cloud_platform/identity.py`) and its test are removed. This
+     lane's, sent as `runbook.diff` with the render diff regenerated on P7b (the orchestrator's ruling, 11 November
+     2026).
    - **The Glass's `deployment.json`** carries `sign_in` (Entra's authority, the Glass's registration, and `openid
      <api_id_uri>/<scope>`) in place of the realm's address, only on this profile. Every other profile's file is byte
      for byte as main rendered it (a golden from main's own module).
-   - **Egress.** `login.microsoftonline.com` is the one host P10 adds to `egress.always` (the Conduit reads Entra's
-     keys). Its networks are the deployment's (`egress_nets`), or the render is refused (the docs lane's gap (a)).
+   - **Egress.** `login.microsoftonline.com` is the one host P10 adds, a kind of its own in P7b's per-workload egress
+     (`egress.sign_in`) that the Conduit alone reaches, since it alone verifies tokens. `always` is unchanged. Its
+     networks are the deployment's (`egress_nets`), or the render is refused (the docs lane's gap (a)). Keycloak's
+     rows are gone from P7b's reach, managed, paths and CPU-limit tables, and nothing reaches the mail server, which
+     only Keycloak's sign-in mail used.
 8. **The carries of part 1, settled.**
    - **The guest check compares the tenant `idp` names to `tid`**, in either Entra issuer form. An `idp` naming no
      Entra issuer of our tenant is a guest. That includes a Microsoft account and a federation's own issuer, so a

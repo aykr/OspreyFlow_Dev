@@ -1,0 +1,308 @@
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py
+deleted file mode 100644
+index dac87b3..0000000
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py
++++ /dev/null
+@@ -1,132 +0,0 @@
+-"""The install runbook's sign-in step (`harness/cloud_platform/identity.py`, ADR-148 Amendment 5):
+-it reads our Secret, hands the cluster's identity step the deployment's settings and the Secret
+-together, as the cluster's own install does (`harness.cluster_install`, step 5: the realm's sign-in
+-reads ConfigMap settings, the dashboards' address among them, and our Secret alone has none of
+-them), then makes the first administrator, as the cluster's install's step 6 does."""
+-
+-from __future__ import annotations
+-
+-import base64
+-import json
+-from pathlib import Path
+-from typing import Any
+-
+-import pytest
+-import yaml
+-from harness.cloud_platform import identity
+-from harness.render import render
+-from tools.cp_policy_check import FIXTURES, _resolver
+-
+-from schemas.deployment import OspreyConfig
+-
+-
+-class Kube:
+-    """kubectl as the namespace's tenant sees it: our Secret, and Keycloak's admin tool."""
+-
+-    def __init__(self, made: tuple[int, str, str] = (0, "", "")) -> None:
+-        self.calls: list[tuple[list[str], str | None]] = []
+-        self.made = made
+-
+-    def run(self, argv: list[str], *, stdin: str | None = None) -> tuple[int, str, str]:
+-        self.calls.append((argv, stdin))
+-        if argv[3:6] == ["get", "secret", "ospreyflow-secrets"]:
+-            data = {"OSPREY_OIDC_CLIENT_SECRET": base64.b64encode(b"s3cret").decode()}
+-            return 0, json.dumps(data), ""
+-        return self.made
+-
+-
+-@pytest.fixture
+-def values_file(tmp_path: Path) -> Path:
+-    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+-    path = tmp_path / "values.yaml"
+-    config = OspreyConfig.model_validate(raw)
+-    path.write_text(render(config, resolver=_resolver).artefacts["values.yaml"], encoding="utf-8")
+-    return path
+-
+-
+-@pytest.fixture
+-def configured(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+-    given: dict[str, Any] = {}
+-
+-    def configure(_kube: Any, namespace: str, cfg: OspreyConfig, held: dict[str, str]) -> list[str]:
+-        given.update(namespace=namespace, held=dict(held), cfg=cfg)
+-        return ["configured"]
+-
+-    monkeypatch.setattr("harness.cluster_install._configure_identity", configure)
+-    return given
+-
+-
+-def test_identity_is_given_the_settings_and_our_secret_together(
+-    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+-) -> None:
+-    kube = Kube()
+-    assert identity.main([str(values_file)], kube=kube) == 0
+-    environment = yaml.safe_load(values_file.read_text(encoding="utf-8"))["environment"]
+-    assert configured["namespace"] == "ospreyflow-poc"
+-    assert configured["held"]["OSPREY_OIDC_CLIENT_SECRET"] == "s3cret"
+-    # Every ConfigMap setting the cluster's install would give it, not our Secret's alone.
+-    assert {k: configured["held"][k] for k in environment} == environment
+-    assert kube.calls[0][0] == ["kubectl", "-n", "ospreyflow-poc", "get", "secret",
+-                                "ospreyflow-secrets", "-o", "jsonpath={.data}"]  # fmt: skip
+-    # The Python step's own kubectl, as the runbook's: the namespace's, never cluster-wide.
+-    assert all(argv[:3] == ["kubectl", "-n", "ospreyflow-poc"] for argv, _ in kube.calls)
+-
+-
+-def test_the_first_administrator_is_made_and_its_code_said_once(
+-    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+-) -> None:
+-    kube = Kube()
+-    assert identity.main([str(values_file), "--email", "lead@example.org"], kube=kube) == 0
+-    argv, stdin = kube.calls[-1]
+-    assert argv[:6] == ["kubectl", "-n", "ospreyflow-poc", "exec", "-i", "keycloak-0"]
+-    user = json.loads(stdin or "{}")
+-    assert user["username"] == "admin" and user["email"] == "lead@example.org"
+-    out = capsys.readouterr().out
+-    assert "first administrator admin made: sign in once with the code" in out
+-
+-
+-def test_an_administrator_already_there_is_left_unchanged(
+-    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+-) -> None:
+-    kube = Kube(made=(1, "", "Conflict detected"))
+-    assert identity.main([str(values_file)], kube=kube) == 0
+-    assert "already exists; unchanged" in capsys.readouterr().out
+-
+-
+-def test_a_refused_administrator_fails_the_step(
+-    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+-) -> None:
+-    kube = Kube(made=(1, "", "forbidden"))
+-    assert identity.main([str(values_file)], kube=kube) == 1
+-    assert "making the first administrator: forbidden" in capsys.readouterr().err
+-
+-
+-def test_it_says_how_it_is_run_when_given_nothing(capsys: pytest.CaptureFixture[str]) -> None:
+-    assert identity.main([]) == 2
+-
+-
+-def test_the_sign_in_step_s_port_forward_is_the_namespace_s(
+-    monkeypatch: pytest.MonkeyPatch,
+-) -> None:
+-    """The identity step reaches Keycloak through the cluster install's own port-forward, which runs
+-    as the namespace's tenant (`kubectl -n <namespace>`), never cluster-wide."""
+-    import subprocess
+-
+-    from harness.cluster_install import SystemKube
+-
+-    asked: list[list[str]] = []
+-
+-    class Refused(Exception):
+-        pass
+-
+-    def popen(argv: list[str], **_: Any) -> Any:
+-        asked.append(argv)
+-        raise Refused
+-
+-    monkeypatch.setattr(subprocess, "Popen", popen)
+-    with (
+-        pytest.raises(Refused),
+-        SystemKube().port_forward("ospreyflow-poc", "service/keycloak", 8080),
+-    ):
+-        pass
+-    assert asked[0][:4] == ["kubectl", "-n", "ospreyflow-poc", "port-forward"]
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
+index b9bbc62..2866912 100644
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
+@@ -247,7 +247,9 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
+ ) -> None:
+     """Between the push and the install: the registry's sign-in before the push (the platform's
+     block), and a pinned render after it, so the values name ours by the digest the registry holds
+-    (decision 8), before `helm` reads them; then the first administrator."""
++    (decision 8), before `helm` reads them; then the check that the Conduit reads Entra ID's
++    sign-in (P10 part 2: no sign-in service of ours, the first administrators named in the
++    settings)."""
+     text = runbooks["INSTALL.md"]
+     order = [
+         text.index('"$CONFIG" --allow-unpinned\n```'),
+@@ -255,13 +257,33 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
+         text.index("ospreyflow images push"),
+         text.index('-m harness.render --config "$CONFIG"\n```\n\n## 5'),
+         text.index("helm upgrade --install"),
+-        text.index("-m harness.cloud_platform.identity"),
++        text.index("printenv OSPREY_IDENTITY_PROVIDER"),
+     ]
+     assert order == sorted(order), order
+     assert "aws ecr get-login-password" in "".join(command_blocks(text, on_the_platform=True))
+     assert "aws ecr" not in "".join(command_blocks(text, on_the_platform=False))
+ 
+ 
++def test_the_install_runbook_signs_in_with_entra_and_runs_no_realm_step(
++    runbooks: dict[str, str],
++) -> None:
++    """P7b's install runbook, step 6, on Entra ID (ADR-148 Amendment 8; the orchestrator's ruling):
++    the client's app registrations and the first administrators the settings name, a check that
++    the Conduit reads Entra's settings, and nothing of the realm (no identity module, no
++    Keycloak)."""
++    text = runbooks["INSTALL.md"]
++    step = text[text.index("## 6.") : text.index("## 7.")]
++    named = (
++        "00000000-1111-4222-8333-444444444444",  # the tenant
++        "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",  # the Glass's registration
++        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",  # the API's
++        "50000000-0000-4000-8000-000000000001",  # the first administrator
++    )
++    assert [n for n in named if n not in step] == []
++    assert "printenv OSPREY_IDENTITY_PROVIDER" in step
++    assert "keycloak" not in text.lower() and "cloud_platform.identity" not in text
++
++
+ # ---- CPU limits (the orchestrator's D2c finding on LimitRanges) --------------------------------
+ 
+ 
+diff --git a/OspreyFlow_Core/harness/cloud_platform/identity.py b/OspreyFlow_Core/harness/cloud_platform/identity.py
+deleted file mode 100644
+index d28f627..0000000
+--- a/OspreyFlow_Core/harness/cloud_platform/identity.py
++++ /dev/null
+@@ -1,77 +0,0 @@
+-"""The install runbook's sign-in step (`INSTALL.md` §6, ADR-148 Amendment 5): what a cluster's
+-install does once Keycloak answers (`harness.cluster_install`, its steps 5 and 6), which this
+-profile has no install of its own to do (ADR-148 Amendment 1, "Left"; P10's sign-in replaces it):
+-the Conduit's client secret set on its clients, its service account's roles and the realm's sign-in
+-settings, from the deployment's settings and our Secret together, as the cluster's install gives
+-them; then the first administrator, `admin`, made with a one-time code printed once.
+-
+-    python -m harness.cloud_platform.identity <the rendered values.yaml> [--email E]
+-"""
+-
+-from __future__ import annotations
+-
+-import argparse
+-import base64
+-import json
+-import sys
+-from pathlib import Path
+-from typing import Any
+-
+-import yaml
+-
+-from schemas.deployment import OspreyConfig
+-
+-
+-def main(argv: list[str] | None = None, kube: Any = None) -> int:
+-    from harness.cluster_install import (
+-        KCADM_CREATE_FROM_STDIN,
+-        SystemKube,
+-        _configure_identity,
+-    )
+-    from harness.first_admin import first_administrator, one_time_code
+-    from ontology.handling import load_uk_le_scheme
+-
+-    parser = argparse.ArgumentParser(prog="python -m harness.cloud_platform.identity")
+-    parser.add_argument("values", type=Path, help="the rendered values.yaml")
+-    parser.add_argument("--email", help="the first administrator's email address")
+-    try:
+-        args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+-    except SystemExit as stopped:
+-        return int(stopped.code or 0)
+-    kube = kube or SystemKube()
+-    values = yaml.safe_load(args.values.read_text(encoding="utf-8"))
+-    config = OspreyConfig.model_validate(yaml.safe_load(values["files"]["osprey.yaml"]))
+-    assert config.cloud_platform is not None and config.cloud_platform.namespace is not None
+-    namespace = config.cloud_platform.namespace
+-    status, out, err = kube.run(
+-        ["kubectl", "-n", namespace, "get", "secret", values["secrets"]["name"], "-o",
+-         "jsonpath={.data}"]
+-    )  # fmt: skip
+-    if status != 0:
+-        print(f"our Secret could not be read: {(err or out).strip()}", file=sys.stderr)
+-        return 1
+-    held = {key: base64.b64decode(value).decode() for key, value in json.loads(out).items()}
+-    # As the cluster's install gives them (`cluster_install`, step 5): the ConfigMap's settings,
+-    # which the realm's sign-in reads (the dashboards' address among them), then our Secret's.
+-    for line in _configure_identity(kube, namespace, config, {**values["environment"], **held}):
+-        print(line)
+-    code = one_time_code()
+-    user = first_administrator("admin", code=code, scheme=load_uk_le_scheme(), email=args.email)
+-    status, out, err = kube.run(
+-        ["kubectl", "-n", namespace, "exec", "-i", "keycloak-0", "-c", "keycloak", "--",
+-         "sh", "-c", KCADM_CREATE_FROM_STDIN],
+-        stdin=json.dumps(user),
+-    )  # fmt: skip
+-    if status == 0:
+-        print(f"first administrator admin made: sign in once with the code {code}")
+-    elif "Conflict" in err or "exists" in err:
+-        print("first administrator admin already exists; unchanged")
+-    else:
+-        said = (err or out).strip().splitlines()
+-        print(f"making the first administrator: {said[-1] if said else status}", file=sys.stderr)
+-        return 1
+-    return 0
+-
+-
+-if __name__ == "__main__":
+-    sys.exit(main())
+diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
+index 05efa62..8521189 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py
++++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
+@@ -84,6 +84,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
+     hosts = [r["host"] for r in values["ingress"]["rules"]]
+     glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
+     host = cp.registry.split("/")[0]
++    claims = cp.claims
++    assert claims is not None  # the render refuses this profile without them
+     return f"""# Install: OspreyFlow in `{cp.namespace}` ({cp.shape} shape)
+ 
+ Rendered for this deployment, before its images are pushed, by `PYTHONPATH=.:packages
+@@ -160,14 +162,18 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
+ {rollouts}
+ ```
+ 
+-## 6. Sign-in and the first administrator
++## 6. Sign-in: Entra ID and the first administrators
+ 
+-Sets the Conduit's client secret on its clients, its service account's roles and the realm's
+-sign-in settings, once Keycloak answers (P10 replaces this with the client's own sign-in), then makes
+-the first administrator, `admin`, and prints the one-time code they sign in with once.
++People sign in with the client's own Entra ID (ADR-148 Amendment 8): there is no sign-in service of
++ours to set up. Before step 5, the client's Entra administrator registers the Glass (application id
++`{claims.client_id}`) and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the
++Glass is granted), in tenant `{claims.tenant_id}`, with the claims `cloud_platform.claims` names. The
++first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
++Conduit first started; they give everyone else their roles in Admin › People. Check the Conduit reads
++Entra's settings:
+ 
+ ```bash
+-"$PY" -m harness.cloud_platform.identity "$FOLDER/values.yaml"
++kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUER
+ ```
+ 
+ ## 7. Check

@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Build/tests/cli/test_images_verb.py b/OspreyFlow_Build/tests/cli/test_images_verb.py
-index 82dc02d..6c1f87c 100644
+index 27672f1..c666e1b 100644
 --- a/OspreyFlow_Build/tests/cli/test_images_verb.py
 +++ b/OspreyFlow_Build/tests/cli/test_images_verb.py
-@@ -60,7 +60,10 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str,
+@@ -62,7 +62,10 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str,
          c.argv[c.argv.index("-t") + 1].split(":")[0].rsplit("/", 1)[-1]: c
          for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]
      }  # fmt: skip
@@ -15,10 +15,10 @@ index 82dc02d..6c1f87c 100644
      assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
      assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")
 diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
-index 7704c5b..230466b 100644
+index 7e9a321..4ade33b 100644
 --- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
 +++ b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
-@@ -98,15 +98,14 @@ def test_the_ingress_routes_each_path_and_admits_each_path_s_service(tmp_path: P
+@@ -110,15 +110,14 @@ def test_the_ingress_routes_each_path_and_admits_each_path_s_service(tmp_path: P
      ingress = next(d for d in docs if d["kind"] == "Ingress")
      assert ingress["spec"]["tls"][0]["secretName"] == "ospreyflow-tls"
      rules = {r["host"]: r["http"]["paths"] for r in ingress["spec"]["rules"]}
@@ -37,7 +37,7 @@ index 7704c5b..230466b 100644
      assert {p["port"] for p in policy["spec"]["ingress"][0]["ports"]} == {8080}
  
  
-@@ -264,8 +263,8 @@ def test_run_as_non_root_false_with_a_numeric_user_is_refused(
+@@ -278,8 +277,8 @@ def test_run_as_non_root_false_with_a_numeric_user_is_refused(
  
  def test_an_init_container_is_held_to_the_rules(development: tuple[dict[str, Any], str]) -> None:
      docs, registry = _helm(development)
@@ -48,7 +48,7 @@ index 7704c5b..230466b 100644
      init["securityContext"]["allowPrivilegeEscalation"] = True
      found = check_manifests(docs, registry)
      assert [(v.rule, v.where.endswith(init["name"])) for v in found] == [("privileged", True)]
-@@ -326,17 +325,18 @@ def test_a_container_s_own_group_alone_is_refused(development: tuple[dict[str, A
+@@ -340,17 +339,18 @@ def test_a_container_s_own_group_alone_is_refused(development: tuple[dict[str, A
  def test_a_supplementary_group_outside_its_allowance_is_refused(
      development: tuple[dict[str, Any], str],
  ) -> None:
@@ -71,7 +71,7 @@ index 7704c5b..230466b 100644
      docs = helm_template(yaml.safe_dump(values))
      assert _found(docs, registry) == [("supplementary-group", "supplementalGroups [4]")]
  
-@@ -503,7 +503,7 @@ def test_a_dropped_internal_policy_leaves_pods_open_and_is_refused(
+@@ -573,7 +573,7 @@ def test_a_dropped_internal_policy_leaves_pods_open_and_is_refused(
      # The doors stay selected by the controller's policy; every other pod is left open.
      assert ("ingress-isolation", "Deployment/api",
              "no ingress policy selects its pods, so any address may reach them") in found  # fmt: skip
@@ -80,7 +80,7 @@ index 7704c5b..230466b 100644
  
  
  def test_a_widened_ingress_policy_is_refused(development: tuple[dict[str, Any], str]) -> None:
-@@ -619,14 +619,14 @@ def test_a_calico_ingress_allow_from_a_selector_alone_passes(
+@@ -692,14 +692,14 @@ def test_a_calico_ingress_allow_from_a_selector_alone_passes(
  def test_a_container_without_resources_is_refused(development: tuple[dict[str, Any], str]) -> None:
      values, registry = copy.deepcopy(development)
      _workload(values, "arcadedb").pop("resources")
@@ -100,11 +100,87 @@ index 7704c5b..230466b 100644
      ]  # fmt: skip
  
  
+@@ -790,8 +790,8 @@ def test_a_poc_container_without_a_cpu_limit_is_refused(
+ # ---- the service account's token (Amendment 5 point 24) ----------------------------------------
+ 
+ 
+-@pytest.mark.parametrize("workload", ["workspace", "ner", "superset", "keycloak", "arcadedb",
+-                                      "clickhouse", "litellm"])  # fmt: skip
++# Superset and Keycloak are not rendered on this profile since P10 part 2 (ADR-148 Amendment 8).
++@pytest.mark.parametrize("workload", ["workspace", "ner", "arcadedb", "clickhouse", "litellm"])
+ def test_a_token_mounted_where_no_kubernetes_api_is_called_is_refused(
+     rendered: tuple[dict[str, Any], str], workload: str
+ ) -> None:
+@@ -1098,7 +1098,8 @@ def test_the_gateway_never_runs_as_the_bucket_role() -> None:
+         ("token", "Deployment/litellm"),
+     ]
+     values, registry = _bedrock()
+-    _workload(values, "superset")["serviceAccountName"] = irsa  # no token, the role all the same
++    # The workspace: Superset, which this planted on, is not rendered since P10 part 2.
++    _workload(values, "workspace")["serviceAccountName"] = irsa  # no token, the role all the same
+     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+     assert [(v.rule, v.detail) for v in found if v.rule == "token"] == [
+         ("token", f"runs as {irsa}, the bucket role's account")
+@@ -1173,24 +1174,26 @@ def test_a_keyless_single_provider_s_key_is_refused_to_the_gateway(tmp_path: Pat
+ 
+ 
+ def test_the_gateway_s_account_on_another_pod_is_refused() -> None:
+-    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on the dashboards,
+-    even with no token mounted, refused."""
++    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on another pod
++    (the workspace; the dashboards are not rendered since P10 part 2), even with no token mounted,
++    refused."""
+     values, registry = _bedrock()
+     gateway = _workload(values, "litellm")["serviceAccountName"]
+-    _workload(values, "superset")["serviceAccountName"] = gateway
++    _workload(values, "workspace")["serviceAccountName"] = gateway
+     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+     assert [(v.rule, v.where, v.detail) for v in found if v.rule == "token"] == [
+-        ("token", "Deployment/superset", f"runs as {gateway}, the gateway's account")
++        ("token", "Deployment/workspace", f"runs as {gateway}, the gateway's account")
+     ]
+ 
+ 
+ def test_the_older_service_account_field_is_read() -> None:
+     """Item 5: Kubernetes still reads `serviceAccount` when `serviceAccountName` is unset, so the
+-    bucket role's account named there on the dashboards is refused as by the newer field."""
++    bucket role's account named there on the workspace (the dashboards are not rendered since P10
++    part 2) is refused as by the newer field."""
+     values, registry = _bedrock()
+     irsa = _workload(values, "api")["serviceAccountName"]
+     docs = helm_template(yaml.safe_dump(values))
+-    spec = pod_spec(_doc(docs, "Deployment", "superset"))
++    spec = pod_spec(_doc(docs, "Deployment", "workspace"))
+     assert spec is not None and "serviceAccountName" not in spec
+     spec["serviceAccount"] = irsa
+     assert [(v.rule, v.detail) for v in check_manifests(docs, registry) if v.rule == "token"] == [
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
 index 368b97b..1fcf0eb 100644
 --- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
 +++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
 @@ -15,6 +15,17 @@ cloud_platform:
+   egress_nets:
+     s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.2.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+ # The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+ map:
+   default: osm-local
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml
+index fada072..06274e3 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml
+@@ -19,6 +19,17 @@ cloud_platform:
    egress_nets:
      s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
      sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
@@ -428,7 +504,7 @@ index 0000000..e7a3f94
 +    assert "id.ospreyflow.apps.example.org" not in text
 +    assert values["environment"]["OSPREY_IDENTITY_PROVIDER"] == "entra"
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
-index 243e392..e9a80d3 100644
+index d2df5e3..bf595ff 100644
 --- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 @@ -24,8 +24,18 @@ from typing import Any
@@ -526,16 +602,23 @@ index 243e392..e9a80d3 100644
  
  
  def _hosts(values: dict[str, Any]) -> dict[str, list[str]]:
-@@ -396,6 +411,16 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
+@@ -396,6 +411,23 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
      assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
  
  
-+def test_entras_sign_in_host_is_the_one_host_p10_adds_to_every_render() -> None:
-+    """ADR-148 Amendment 8: the profile's `egress.always` gained Entra ID's sign-in host and nothing
-+    else, and a render without its networks is refused in words."""
-+    assert load_profile().egress.always == [
-+        "s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com", "login.microsoftonline.com"
-+    ]  # fmt: skip
++def test_entras_sign_in_host_is_the_one_host_p10_adds_and_the_conduit_alone_reaches_it() -> None:
++    """ADR-148 Amendment 8 (the docs lane's gap (a)): Entra ID's sign-in host is the one host P10
++    adds, a kind of its own (`egress.sign_in`) the Conduit alone reaches, since it alone verifies
++    tokens; `always` is unchanged; and a render without its networks is refused in words."""
++    egress = load_profile().egress
++    assert egress.always == ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
++    assert egress.sign_in == ["login.microsoftonline.com"]
++    assert egress.reach["sign_in"] == ["api"]
++    rows = {row["name"]: row for row in _values(_config("development"))["egress"]["workloads"]}
++    reaching = sorted(
++        n for n, r in rows.items() if "login.microsoftonline.com" in r.get("hosts", [])
++    )
++    assert reaching == ["api"]
 +    with pytest.raises(CloudPlatformNotRenderable, match="login.microsoftonline.com"):
 +        _artefacts(_config("development", cloud_platform={"egress_nets": S3_AND_STS}))
 +
@@ -543,7 +626,7 @@ index 243e392..e9a80d3 100644
  def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
      monkeypatch: pytest.MonkeyPatch,
  ) -> None:
-@@ -406,11 +431,12 @@ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
+@@ -406,11 +438,12 @@ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
          _artefacts(_config("development", cloud_platform={"egress_nets": {}}))
      monkeypatch.setenv(FOLDERS_VARIABLE, str(FIXTURES / "platforms"))
      kind = load_platform("kind")
@@ -559,7 +642,7 @@ index 243e392..e9a80d3 100644
      }
  
  
-@@ -473,32 +499,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
+@@ -473,32 +506,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
      assert ingress["className"] == platform.ingress.class_name
      assert ingress["annotations"][platform.ingress.allow_list_annotation] == "192.0.2.0/24"
      assert ingress["annotations"]["nginx.ingress.kubernetes.io/enable-modsecurity"] == "true"
@@ -600,7 +683,7 @@ index 243e392..e9a80d3 100644
      assert rules["ospreyflow-dev.apps.example.org"]["paths"] == [
          {"path": "/", "service": "workspace", "port": 8080}
      ]
-@@ -511,10 +531,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
+@@ -511,10 +538,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
  
  
  def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named(
@@ -615,7 +698,7 @@ index 243e392..e9a80d3 100644
      import harness.cloud_platform as cp
  
      platform = load_platform("client")
-@@ -522,9 +544,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
+@@ -522,9 +551,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
          update={"ingress": platform.ingress.model_copy(update={"wildcard": "*.apps.example.org"})}
      )
      monkeypatch.setattr(cp, "load_platform", lambda _name: covering)
@@ -623,15 +706,15 @@ index 243e392..e9a80d3 100644
 -        _artefacts(_config("development"))
 -    named = _config("development", cloud_platform={"tls_secret": "ospreyflow-tls"})
 +    assert "tlsSecret" not in _values(_config("production"))["ingress"]
-+    _profile(tmp_path, monkeypatch,
-+             lambda raw: raw["doors"].append({"site": "dashboards", "workload": "workspace", "port": 8080}))  # fmt: skip
++    door = {"site": "dashboards", "workload": "workspace", "port": 8080}
++    _profile(tmp_path, monkeypatch, lambda raw: raw["doors"].append(door))
 +    with pytest.raises(CloudPlatformNotRenderable, match="bi.ospreyflow.apps.example.org"):
 +        _artefacts(_config("production"))
 +    named = _config("production", cloud_platform={"tls_secret": "ospreyflow-tls"})
      assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
  
  
-@@ -738,8 +763,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
+@@ -738,8 +770,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
      raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
      raw["cloud_platform"]["egress_nets"]["login.example.org"] = ["198.51.100.9/32"]
      values = _values(OspreyConfig.model_validate(raw))
@@ -641,11 +724,20 @@ index 243e392..e9a80d3 100644
      assert _hosts(values)["login.example.org"] == ["198.51.100.9/32"]
  
  
+@@ -979,5 +1010,7 @@ def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_p
+     assert not (out / "terraform" / "opensearch.tf").exists()
+     assert (out / "notes.txt").is_file()  # not ours: never removed
+     assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {
+-        *poc.artefacts, RENDERED_MANIFEST, "notes.txt"
++        *poc.artefacts,
++        RENDERED_MANIFEST,
++        "notes.txt",
+     }
 diff --git a/OspreyFlow_Build/tools/cp_policy_check.py b/OspreyFlow_Build/tools/cp_policy_check.py
-index 6583219..a797206 100644
+index 1310135..4107ecf 100644
 --- a/OspreyFlow_Build/tools/cp_policy_check.py
 +++ b/OspreyFlow_Build/tools/cp_policy_check.py
-@@ -60,9 +60,8 @@ CALICO_DESTINATIONS = {"nets", "selector", "namespaceSelector", "serviceAccounts
+@@ -74,9 +74,8 @@ CALICO_DESTINATIONS = {"nets", "selector", "namespaceSelector", "serviceAccounts
  
  #: The workloads allowed group 0 as a supplementary group, and why. Held here on its own, not read
  #: from the harness's `profile.yaml`, so a render that widens that list is refused here.
@@ -658,10 +750,10 @@ index 6583219..a797206 100644
  
  @dataclass(frozen=True)
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index ad92ded..5aa312b 100644
+index 9d68c2b..ee0f9fd 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-@@ -58,8 +58,26 @@ from schemas.deployment import (
+@@ -60,8 +60,26 @@ from schemas.deployment import (
  #: ADR-148 decision 3: the one numeric user every pod runs as.
  UID = 10001
  
@@ -690,7 +782,7 @@ index ad92ded..5aa312b 100644
  
  #: What reads the managed stores' details: only these are given them (a pod that reads the whole
  #: env, as the workspace's nginx does, is not handed the database's password for that).
-@@ -67,7 +85,7 @@ READERS = frozenset({"api", "worker", "report-sync", "superset"})
+@@ -69,7 +87,7 @@ READERS = frozenset({"api", "worker", "report-sync", "superset"})
  
  #: Decision 5: one of each in development.
  DEVELOPMENT_REPLICAS = {
@@ -699,7 +791,7 @@ index ad92ded..5aa312b 100644
      "arcadedb": 1, "clickhouse": 1, "clickhouse-keeper": 1,
  }  # fmt: skip
  
-@@ -140,6 +158,46 @@ def _refuse(config: OspreyConfig) -> None:
+@@ -152,6 +170,46 @@ def _refuse(config: OspreyConfig) -> None:
          )
      if not config.network.public_origin.startswith("https://"):
          raise CloudPlatformNotRenderable("a cloud platform is reached over HTTPS")
@@ -746,15 +838,33 @@ index ad92ded..5aa312b 100644
  
  
  #: Each variable a workload reads that a managed store's secret gives: (store, the secret's key).
-@@ -654,6 +712,7 @@ def render_cloud_platform(
+@@ -503,14 +561,14 @@ def _egress_addresses_by_kind(
+     IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
+     (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
+     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
+-    mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
+-    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)
++    mail server; Entra ID's sign-in host (`egress.sign_in`, P10 part 2); and each connector host.
+     Each with its port (Amendment 5 point 21): an AWS service's 443, an address's own or its
+     scheme's, the mail server's `mail.port`, a connector host's `host:port` or 443."""
+     region = platform.aws_region
+     kinds: dict[str, list[tuple[str, int]]] = {
+         "always": [(host.format(region=region), 443) for host in profile.egress.always],
+         "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
++        "sign_in": [(host, 443) for host in profile.egress.sign_in],
+         "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
+     }  # fmt: skip
+     for map_provider in config.map.providers if config.map is not None else []:
+@@ -887,7 +945,7 @@ def render_cloud_platform(
      from harness.cloud_platform.terraform import render_terraform
      from harness.cluster import render_cluster
      from harness.render import service_images
-+    from harness.site import render_glass_settings
+-    from harness.site import highest_marking
++    from harness.site import highest_marking, render_glass_settings
  
      _refuse(config)
      platform = load_platform(_cp(config).platform)
-@@ -720,7 +779,11 @@ def render_cloud_platform(
+@@ -968,7 +1026,11 @@ def render_cloud_platform(
  
          raise UnpinnedImagesError(copies.unresolved)
  
@@ -767,8 +877,8 @@ index ad92ded..5aa312b 100644
      # ArcadeDB's heap is its own container's, from its limit (above), never the cluster's
      # machine-sized setting, which nothing else reads.
      environment.pop("OSPREY_ARCADEDB_HEAP", None)
-@@ -742,17 +805,27 @@ def render_cloud_platform(
-     )
+@@ -993,23 +1055,37 @@ def render_cloud_platform(
+     environment["OSPREY_HIGHEST_MARKING"] = highest_marking(config)
      # What the cluster's install writes into our Secret, and this profile has no install to write.
      install = _what_the_install_writes(config, as_cluster, set(variables))
 -    environment.update(install.settings)
@@ -777,7 +887,9 @@ index ad92ded..5aa312b 100644
 +    environment.update(entra_settings(config))
      if _cp(config).connector_hosts:
          # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
-         environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(_cp(config).connector_hosts))
+         # Hosts alone: the Conduit's allow-list matches a host; the port is the egress policy's.
+         hosts = {connector_address(e)[0] for e in _cp(config).connector_hosts}
+         environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(hosts))
      secrets = values["secrets"]
 -    secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
 +    secrets["keys"] = sorted(
@@ -800,23 +912,26 @@ index ad92ded..5aa312b 100644
      # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
      # master key (found on the kind cluster, where its pod could not start without it).
  
-@@ -771,7 +844,13 @@ def render_cloud_platform(
-         "ingress": _ingress(config, platform, names, profile, environment),
+-    files = {k: v for k, v in values["files"].items() if k != "Caddyfile"}
++    files = {
++        k: v
++        for k, v in values["files"].items()
++        if k != "Caddyfile" and not k.startswith(REALM_FILES)
++    }
+     storage: dict[str, Any] = {
+         "className": platform.storage.class_name,
+         "sharedClassName": platform.storage.class_name,
+@@ -1034,6 +1110,8 @@ def render_cloud_platform(
          "environment": environment,
          "files": {
--            **{k: v for k, v in values["files"].items() if k != "Caddyfile"},
-+            **{
-+                k: v
-+                for k, v in values["files"].items()
-+                if k != "Caddyfile" and not k.startswith(REALM_FILES)
-+            },
+             **files,
 +            # The Glass signs in with Entra ID (Amendment 8): its deployment file says where.
 +            "glass.json": render_glass_settings(config, entra=_cp(config).claims),
              # The deployment's own configuration, as it was written, not the cluster's shape.
-             "osprey.yaml": yaml.safe_dump(
-                 config.model_dump(mode="json", exclude_none=True), sort_keys=False
+             "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
+         },
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-index 78d2c81..cc28b68 100644
+index 0af3ab4..429cec5 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 +++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 @@ -9,15 +9,14 @@
@@ -839,17 +954,62 @@ index 78d2c81..cc28b68 100644
  
  # How each image of ours is built (decision 8): its Dockerfile and context, from OspreyFlow_Core,
  # and its build arguments. The Conduit without Java on this profile (decision 12). An image of
-@@ -34,7 +33,8 @@ ours:
- # (`cloud_platform.egress_nets`, or the platform's `egress.service_nets`) or the render is refused.
+@@ -35,6 +34,9 @@ ours:
  egress:
    # On every render: the bucket (S3) and IRSA's role (STS). `{region}` is the platform's.
--  always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
-+  # And Entra ID's sign-in host, whose keys the Conduit reads to verify every token (P10 part 2).
-+  always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com", "login.microsoftonline.com"]
+   always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
++  # Entra ID's sign-in host, whose keys the Conduit reads to verify every token (P10 part 2): the
++  # Conduit's alone.
++  sign_in: ["login.microsoftonline.com"]
    # A model engine that names no `api_base` is reached at its provider's own host.
    engine_hosts:
      openai: api.openai.com
-@@ -58,7 +58,6 @@ resources:
+@@ -47,8 +49,8 @@ egress:
+   # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
+   # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
+   # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
+-  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host the Conduit and the
+-  # workers.
++  # the Conduit, Entra ID's sign-in host the Conduit (P10 part 2), a connector host the Conduit and
++  # the workers; nothing reaches the mail server since P10 part 2 (Keycloak sent its sign-in mail).
+   # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
+   identity: ["sts.{region}.amazonaws.com"]
+   # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
+@@ -57,15 +59,16 @@ egress:
+   others: [backup, backup-claims, restore, restore-claims]
+   reach:
+     identity: [litellm]
++    sign_in: [api]
+     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
+     # P9's backup and restore pods.
+     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
+     engines: [litellm]
+     maps: [api]
+-    mail: [keycloak]
++    mail: []
+     connectors: [api, worker]
+   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
+-  managed: [api, worker, report-sync, superset, keycloak, litellm]
++  managed: [api, worker, report-sync, superset, litellm]
+   # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
+   # 443 is added when the deployment searches with it.
+   managed_ports: [5432, 6379]
+@@ -74,11 +77,9 @@ egress:
+   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
+   paths:
+     workspace: [api]
+-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset]
+-    worker: [arcadedb, clickhouse, keycloak, ner]
+-    report-sync: [api, keycloak]
+-    superset: [keycloak]
+-    keycloak: [keycloak]
++    api: [arcadedb, clickhouse, litellm, ner, superset]
++    worker: [arcadedb, clickhouse, ner]
++    report-sync: [api]
+     arcadedb: [arcadedb]
+     clickhouse: [clickhouse, clickhouse-keeper]
+     clickhouse-keeper: [clickhouse-keeper]
+@@ -106,7 +107,6 @@ resources:
    report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
    ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
@@ -857,8 +1017,38 @@ index 78d2c81..cc28b68 100644
    litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
    # Requested at its limit: the store is the last thing a node under pressure should evict.
    arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
+@@ -147,6 +147,5 @@ poc:
+     api: "2"
+     worker: "2"
+     ner: "1"
+-    keycloak: "1"
+     arcadedb: "2"
+     clickhouse: "2"
+diff --git a/OspreyFlow_Core/harness/cloud_platform/settings.py b/OspreyFlow_Core/harness/cloud_platform/settings.py
+index 5707c7f..d101179 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/settings.py
++++ b/OspreyFlow_Core/harness/cloud_platform/settings.py
+@@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
+ 
+ #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
+ #: reached only by the workloads `egress.reach` names for it.
+-HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors")
++HOST_KINDS = ("always", "identity", "sign_in", "engines", "maps", "mail", "connectors")
+ #: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
+ KUBE_API = "kube-api"
+ 
+@@ -201,6 +201,9 @@ class EgressHosts(_Strict):
+     #: STS alone (a subset of `always`), for a workload that signs in by a role of its own and
+     #: never reaches the buckets: the gateway's, for Bedrock (P11 part 2).
+     identity: list[str] = Field(default_factory=list)
++    #: Entra ID's sign-in host, whose keys the Conduit reads to verify every token (ADR-148
++    #: Amendment 8, P10 part 2).
++    sign_in: list[str] = Field(default_factory=list)
+     #: The pods rendered outside the workloads that have rows by their own pods' names (P9's
+     #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
+     others: list[str] = Field(default_factory=list)
 diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
-index a3aeb9d..22efa4b 100644
+index 975d92d..77fb656 100644
 --- a/OspreyFlow_Core/harness/render.py
 +++ b/OspreyFlow_Core/harness/render.py
 @@ -1229,7 +1229,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
@@ -872,7 +1062,7 @@ index a3aeb9d..22efa4b 100644
      _drop_absent_dependencies(services)
      _place_on_networks(config, services)
 diff --git a/OspreyFlow_Core/harness/site.py b/OspreyFlow_Core/harness/site.py
-index d32695e..b40b6a6 100644
+index 72178a6..d698f5e 100644
 --- a/OspreyFlow_Core/harness/site.py
 +++ b/OspreyFlow_Core/harness/site.py
 @@ -17,7 +17,7 @@ from pathlib import Path
@@ -884,7 +1074,7 @@ index d32695e..b40b6a6 100644
  
  #: Caddy 2.11.4 (Apache-2.0), released 3 June 2026.
  PROXY_IMAGE = "caddy:2.11.4-alpine"
-@@ -303,10 +303,15 @@ def organisation_label(config: OspreyConfig) -> str | None:
+@@ -318,10 +318,15 @@ def organisation_label(config: OspreyConfig) -> str | None:
      return governance.organisation_provider.label.strip() or None
  
  
@@ -902,7 +1092,7 @@ index d32695e..b40b6a6 100644
      welcome = config.welcome
      links = {
          name: address
-@@ -330,6 +335,14 @@ def render_glass_settings(config: OspreyConfig) -> str:
+@@ -345,6 +350,14 @@ def render_glass_settings(config: OspreyConfig) -> str:
          "appearance": config.appearance.model_dump(),
          "version": deployment_version(),
      }
@@ -918,7 +1108,7 @@ index d32695e..b40b6a6 100644
  
  
 diff --git a/OspreyFlow_Core/packages/schemas/deployment.py b/OspreyFlow_Core/packages/schemas/deployment.py
-index e9af7e4..a497bb9 100644
+index 2aa6099..5c1aec6 100644
 --- a/OspreyFlow_Core/packages/schemas/deployment.py
 +++ b/OspreyFlow_Core/packages/schemas/deployment.py
 @@ -31,7 +31,7 @@ from __future__ import annotations
@@ -1038,7 +1228,7 @@ index e9af7e4..a497bb9 100644
  class CloudPlatformConfig(BaseModel):
      """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
      namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
-@@ -993,6 +1094,12 @@ class CloudPlatformConfig(BaseModel):
+@@ -1000,6 +1101,12 @@ class CloudPlatformConfig(BaseModel):
          "holding the certificate for the deployment's names (its id. and bi. names among them), "
          "where the platform's wildcard does not cover them",
      )
@@ -1050,12 +1240,12 @@ index e9af7e4..a497bb9 100644
 +    )
      connector_hosts: list[str] = Field(
          default_factory=list,
-         description="The hosts a SQL or API connection may reach, each with its networks in "
+         description="The hosts a SQL or API connection may reach, each as host or host:port (a "
 diff --git a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
-index 498592a..b8e7b8b 100644
+index e029cfe..fbb58b8 100644
 --- a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
 +++ b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
-@@ -197,6 +197,39 @@ export type AllowFrom = string[];
+@@ -201,6 +201,39 @@ export type AllowFrom = string[];
   * Default: none — the platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them
   */
  export type TlsSecret = string | null;
@@ -1093,9 +1283,9 @@ index 498592a..b8e7b8b 100644
 + */
 +export type ClaimsMappingPolicy = boolean;
  /**
-  * The hosts a SQL or API connection may reach, each with its networks in egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS), so the two never disagree
+  * The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both
   */
-@@ -711,6 +744,10 @@ export interface CloudPlatformConfig {
+@@ -716,6 +749,10 @@ export interface CloudPlatformConfig {
    allow_from?: AllowFrom;
    egress_nets?: EgressNets;
    tls_secret?: TlsSecret;
@@ -1106,7 +1296,7 @@ index 498592a..b8e7b8b 100644
    connector_hosts?: ConnectorHosts;
  }
  /**
-@@ -719,6 +756,44 @@ export interface CloudPlatformConfig {
+@@ -724,6 +761,44 @@ export interface CloudPlatformConfig {
  export interface EgressNets {
    [k: string]: string[];
  }
