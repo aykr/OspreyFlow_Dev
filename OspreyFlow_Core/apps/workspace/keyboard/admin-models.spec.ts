@@ -40,8 +40,24 @@ test("an engine is added by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "add-a-model-engine-by-keyboard");
 });
 
+// What reached the Conduit's stand-in in each request's body (never a key's: the harness keeps none).
+const sentBody = async (page: Page, request: string) =>
+  page.evaluate(
+    (wanted) =>
+      (window as unknown as { modelsSent: { request: string; body: Record<string, unknown> }[] }).modelsSent.find((s) => s.request === wanted)
+        ?.body,
+    request,
+  );
+
+// The cloud-platform profile (ADR-135 Amendment 7 decision 1), where the two kinds are offered.
+async function onCloudPlatform(page: Page) {
+  await page.goto("/keyboard/models-harness.html?cloud=1");
+  await expect(page.getByRole("table", { name: "Engines", exact: true })).toBeVisible();
+}
+
 // ADR-135 Amendment 4: the kind of engine is chosen by keyboard, and an IAM-role engine offers no key.
 test("Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for", async ({ page }) => {
+  await onCloudPlatform(page);
   await press(page, "Add an engine");
   await page.getByLabel("Kind of engine", { exact: true }).focus();
   await page.keyboard.press("End"); // the last kind listed, Bedrock
@@ -52,6 +68,7 @@ test("Bedrock in London is added by keyboard, signed in by the IAM role with no 
   await press(page, "Add the engine");
   await expect(page.getByRole("status")).toContainText("no key is needed");
   expect(await asked(page)).toContain("POST /engines");
+  expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({ name: "bedrock", kind: "bedrock", auth: "iam_role", api_base: null });
   await expect(page.getByRole("table", { name: "Engines", exact: true })).toContainText("IAM role: no key kept");
   await expect(page.getByRole("button", { name: /key for Bedrock/ })).toHaveCount(0);
   await press(page, "Test the connection to Bedrock");
@@ -60,6 +77,7 @@ test("Bedrock in London is added by keyboard, signed in by the IAM role with no 
 });
 
 test("the organisation's own gateway is added by keyboard, signed in by its token", async ({ page }) => {
+  await onCloudPlatform(page);
   await press(page, "Add an engine");
   await page.getByLabel("Kind of engine", { exact: true }).focus();
   // Type-ahead on the closed list (on macOS an arrow key opens it instead of moving the choice).
@@ -72,6 +90,13 @@ test("the organisation's own gateway is added by keyboard, signed in by its toke
   await press(page, "Add the engine");
   await expect(page.getByRole("status")).toContainText("acme_ai is added. Enter its key next");
   expect(await asked(page)).toContain("POST /engines");
+  // What was added, not only that POST was asked (the review's item 8).
+  expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({
+    name: "acme_ai",
+    kind: "gateway",
+    auth: "key",
+    api_base: "https://ai.example/v1",
+  });
   await press(page, "Enter key for acme_ai");
   await expect(page.getByRole("textbox", { name: /Key for acme_ai/ })).toHaveValue("");
   registerCovered(REGISTRY, "add-the-organisations-gateway-by-keyboard");

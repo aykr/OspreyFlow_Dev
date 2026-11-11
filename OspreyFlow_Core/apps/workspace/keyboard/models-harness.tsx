@@ -46,6 +46,9 @@ const history = [
 ];
 const asked: string[] = [];
 (window as unknown as { modelsAsked: string[] }).modelsAsked = asked;
+// Each request's body, so a keyboard case can say what reached the Conduit, not only that it was asked.
+const sentBodies: { request: string; body: Record<string, unknown> }[] = [];
+(window as unknown as { modelsSent: typeof sentBodies }).modelsSent = sentBodies;
 
 const view = () => ({
   engines: params.get("local") ? [] : engines.map((e) => ({ ...e, default_for: Object.keys(defaults).filter((r) => defaults[r] === e.provider.name) })),
@@ -54,6 +57,8 @@ const view = () => ({
   local_only: Boolean(params.get("local")),
   sendable_handling_codes: ["O"],
   source: "models file",
+  // ADR-135 Amendment 7 decision 1: `cloud=1` is the cloud-platform profile, which offers the two kinds.
+  engine_kinds: params.get("cloud") ? ["provider", "gateway", "bedrock"] : ["provider"],
 });
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -61,6 +66,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const method = init?.method ?? "GET";
   asked.push(`${method} ${path || "/"}`);
   const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+  if (init?.body && !path.endsWith("/key")) sentBodies.push({ request: `${method} ${path || "/"}`, body });
   const reply = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
   if (path === "/history") return reply(200, { entries: history });
   if (path === "/usage" && params.get("usage") === "fail") {

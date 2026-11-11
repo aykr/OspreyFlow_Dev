@@ -36,7 +36,8 @@ const JOBS = [
   { role: "transcription", label: "Transcription" },
 ] as const;
 const ALL_JOBS = [...JOBS, { role: "embedding", label: "Embeddings" }] as const;
-const PROVIDERS = ["gemini", "openai", "anthropic", "azure"];
+// `bedrock` is LiteLLM's Bedrock provider by its key on every profile but cloud-platform, where Bedrock is its own kind.
+const PROVIDERS = ["gemini", "openai", "anthropic", "azure", "bedrock"];
 const KEY_WORDS: Record<AdminEngine["key_state"], string> = {
   set: "Key set",
   none: "No key",
@@ -73,6 +74,11 @@ function withKind(draft: Draft, kind: Kind): Draft {
   return { ...draft, kind, auth: "key", name: "gemini" };
 }
 
+/** The kinds the deployment's profile takes (ADR-135 Amendment 7): a provider alone where the view says none. */
+function kindsOf(view: ModelsAdminView): Kind[] {
+  return (view.engine_kinds as Kind[] | undefined) ?? ["provider"];
+}
+
 /** How an engine of `kind` signs in: Bedrock by the namespace's IAM role, any other by its key or token. */
 function authFor(kind: Kind): Auth {
   return kind === "bedrock" ? "iam_role" : "key";
@@ -100,8 +106,8 @@ function providerOf(draft: Draft): ModelProviderConfig {
     api_base: draft.kind === "bedrock" ? null : draft.api_base.trim() || null,
     privacy_contract: draft.privacy_contract,
     contract_reference: draft.privacy_contract ? draft.contract_reference.trim() || null : null,
-    kind: draft.kind,
-    auth: authFor(draft.kind),
+    // A provider is sent as before Amendment 4; only the cloud-platform profile's two kinds name theirs.
+    ...(draft.kind === "provider" ? {} : { kind: draft.kind, auth: authFor(draft.kind) }),
   };
 }
 
@@ -113,29 +119,34 @@ function when(at: string | null | undefined): string {
 function EngineForm({
   initial,
   editing,
+  kinds,
   onSave,
   onCancel,
 }: {
   initial: Draft;
   editing: boolean;
+  /** The kinds this deployment's profile takes (ADR-135 Amendment 7): a provider alone but on cloud-platform. */
+  kinds: Kind[];
   onSave: (draft: Draft) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
   const id = editing ? `edit-${initial.name}` : "add-engine";
+  // The kind is shown only where the profile offers more than a provider, or for an engine of another kind.
+  const offersKinds = kinds.length > 1 || draft.kind !== "provider";
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSave(draft);
   };
   return (
     <form className="admin-models-form" aria-label={editing ? `Edit ${initial.name}` : "Add an engine"} onSubmit={submit}>
-      <label htmlFor={`${id}-kind`}>Kind of engine</label>
-      {editing ? (
+      {offersKinds && <label htmlFor={`${id}-kind`}>Kind of engine</label>}
+      {!offersKinds ? null : editing ? (
         // An engine's kind is fixed once added: another kind is another processor (ADR-135 Am 2, 4).
         <Input id={`${id}-kind`} value={KINDS.find((k) => k.kind === draft.kind)?.label ?? draft.kind} readOnly aria-readonly="true" />
       ) : (
         <Select id={`${id}-kind`} value={draft.kind} onChange={(e) => setDraft(withKind(draft, e.target.value as Kind))}>
-          {KINDS.map((k) => (
+          {KINDS.filter((k) => kinds.includes(k.kind)).map((k) => (
             <option key={k.kind} value={k.kind}>
               {k.label}
             </option>
@@ -154,7 +165,7 @@ function EngineForm({
         />
       ) : (
         <Select id={`${id}-name`} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}>
-          {PROVIDERS.map((p) => (
+          {PROVIDERS.filter((p) => p !== "bedrock" || !kinds.includes("bedrock")).map((p) => (
             <option key={p} value={p}>
               {p}
             </option>
@@ -439,6 +450,7 @@ export function Models({ api }: { api: ModelsApi }) {
                     key={open.name}
                     initial={draftOf(engine.provider)}
                     editing
+                    kinds={kindsOf(view)}
                     onCancel={() => setOpen(null)}
                     onSave={(draft) => {
                       const hadKey = engine.key_state === "set";
@@ -493,6 +505,7 @@ export function Models({ api }: { api: ModelsApi }) {
               <EngineForm
                 initial={EMPTY}
                 editing={false}
+                kinds={kindsOf(view)}
                 onCancel={() => setOpen(null)}
                 onSave={(draft) => {
                   const added = providerOf(draft);
