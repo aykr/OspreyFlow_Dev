@@ -1,11 +1,11 @@
-# as of 2026-11-11T16:20Z
+# as of 2026-11-11T17:05Z
 admin	P10	part 1: merge prepared (7c33ea8), gates and the leased live selection running; part 2 next	part 1 11 Nov, ~15:30	B
-case	P9	briefed (BRIEF_P9, cut); starting once the owner confirms in its window	12 Nov	B
+case	P9	built; review: not mergeable (ClickHouse's SQL users could reach the backups, now closed by its own backup user and two scoped roles; versioning; a restore that verifies first); fixes and kind measurements, then round 2	12 Nov, evening	B
 platform-b	P11	part 1 merged; part 2 (the gateway by default and its own IAM role) after the carries	part 2 13 Nov	B
 case-b	P12	part 1: the live run done on a real gateway (Laurium's scoped key proven; Laurium could not read the 0.5B model's answer, recorded); records and gates, then merge; part 2 after	part 1 12 Nov	B
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
-platform	P7b	shape, runbooks, decommission check, the ceiling default and CPU limits built on the Mac; final render and kind run after P11's and P12's part 2s; the server is quiet for the owner's demo from 12:00 UK time on 13 Nov	14 Nov	B
+platform	P7b	its review's fixes in and gated; waits for P9 to merge first, then case's decommission diff on top; the server quiet from 12:00 UK on 13 Nov	13 Nov, morning (before the quiet window) or 14 Nov	B
 docs	D2c	part 1 merged (admin guide 1.76 §6a); part 2 from P10's merge; resuming on sol	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 4 landed (9de435c); part 5 built (9cbb4575), its review next	12 Nov	A
