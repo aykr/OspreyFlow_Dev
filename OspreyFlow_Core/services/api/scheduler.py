@@ -634,6 +634,9 @@ class ScheduleExecutor:
                 kind="refused_rights",
             ) from error
         except Exception as error:  # noqa: BLE001 - a fault, not a refusal of the exchange
+            # The notice says "failed" and the ledger's words carry nothing of the error, so the
+            # log keeps it (Amendment 19 point 5; the studio lane's review of 531aa24).
+            log.exception("could not act as the schedule's owner, %s", owner_id)
             raise _Refused(
                 f"OspreyFlow could not act as the schedule's owner, {owner_id}",
                 kind="failed",  # a store's fault or a bug, not the owner's rights (Admin's review)

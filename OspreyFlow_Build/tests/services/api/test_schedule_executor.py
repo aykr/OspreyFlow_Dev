@@ -16,6 +16,7 @@ The two-replica case runs two executors in two processes against the same Valkey
 from __future__ import annotations
 
 import asyncio
+import logging
 import multiprocessing
 import os
 from collections.abc import AsyncIterator
@@ -493,6 +494,67 @@ async def test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_s
     assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"] * 4
     assert all(words.endswith("failed. Its pipeline's Runs, in the Ingest Studio, say why.")
                and "connection was closed" not in words for _, _, words in edges.notices)  # fmt: skip
+
+
+async def test_a_fault_acting_as_the_owner_keeps_its_error_in_the_log(
+    runs: RecipeRunStore, valkey: Valkey, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ADR-110 Amendment 19 point 5: the notice says "failed" and never the error, which "stays in
+    the run's ledger and the log". The ledger's words for a fault acting as the owner carry none of
+    it, so the log must: one record at ERROR naming the owner, with the error itself attached (the
+    studio lane's review of rules-hyg 531aa24). The error is planted where the real resolver's
+    caller meets it, the custom-role read after the exchange, in asyncpg's shape."""
+    recipe = _recipe()
+    lost = asyncpg.exceptions.ConnectionDoesNotExistError(
+        "connection was closed in the middle of operation"
+    )
+    edges = _Edges(roles_read=lost)
+    with caplog.at_level(logging.ERROR, logger="services.api.scheduler"):
+        await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    kept = [r for r in caplog.records if r.exc_info and r.exc_info[1] is lost]
+    assert len(kept) == 1 and kept[0].name == "services.api.scheduler"
+    assert kept[0].levelno == logging.ERROR
+    assert OWNER.id in kept[0].getMessage()
+    assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"]
+    assert [words for _, _, words in edges.notices] and all(
+        "connection was closed" not in words for _, _, words in edges.notices
+    )
+
+
+async def test_resolving_the_owner_logs_a_fault_but_not_a_refusal(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The same, offline, at `_resolve` itself (no store: the ledger and Valkey are never reached):
+    a fault is logged with its error attached; a refusal of the exchange (revoked, refused, not
+    reached) is the owner's or the identity provider's, in fixed words, and is not logged as a
+    fault."""
+    from services.api.scheduler import _Refused
+
+    lost = asyncpg.exceptions.ConnectionDoesNotExistError(
+        "connection was closed in the middle of operation"
+    )
+    cases: list[tuple[Exception, _Edges, bool]] = [
+        (lost, _Edges(roles_read=lost), True),
+        *(
+            (refusal, _Edges(owner=refusal), False)
+            for refusal in (
+                PrincipalRevoked("disabled"),
+                PrincipalExchangeRefused("not known"),
+                PrincipalExchangeUnavailable("down"),
+            )
+        ),
+    ]
+    for planted, edges, logged in cases:
+        executor = _executor(_Recipes([]), edges, None, None)  # type: ignore[arg-type]
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="services.api.scheduler"):
+            with pytest.raises(_Refused) as refused:
+                await executor._resolve(OWNER.id)
+        kept = [r for r in caplog.records if r.exc_info and r.exc_info[1] is planted]
+        assert (len(kept) == 1) is logged, (planted, caplog.records)
+        assert "connection was closed" not in str(refused.value)
+        if logged:
+            assert refused.value.kind == "failed" and OWNER.id in kept[0].getMessage()
 
 
 async def test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule(
