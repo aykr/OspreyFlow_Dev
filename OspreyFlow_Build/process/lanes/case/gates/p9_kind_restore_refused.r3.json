@@ -1,0 +1,13 @@
+{
+  "set": "20261111T201700Z",
+  "refused": [
+    "verify refused: restore: see what runs: cannot confirm the writers are stopped: the pods could not be listed (<urlopen error timed out>); on the cloud-platform profile every restore refuses so until P7b's restore row lands (its egress to the cluster's API); nothing was touched",
+    "verify refused: restore: see what runs: cannot confirm the writers are stopped: the pods could not be listed (<urlopen error timed out>); on the cloud-platform profile every restore refuses so until P7b's restore row lands (its egress to the cluster's API); nothing was touched"
+  ],
+  "untouched": true,
+  "at": "2026-11-11T20:07:16+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}

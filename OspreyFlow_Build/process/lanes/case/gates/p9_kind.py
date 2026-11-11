@@ -1145,9 +1145,19 @@ for name, q in [
     ("remote() to another server", "SELECT count() FROM remote('{STANDIN_HOST}:9000', system.one)"),
 ]:
     try:
+        if q.startswith("RESTORE"):
+            # The restore's own shape, which no set's history refuses: a plain database of osprey's
+            # making, then the set's tables into it (a bare `RESTORE … AS` recreates the set's
+            # Replicated database at the Keeper path the live one may hold: Code 253 on kind).
+            ch("CREATE DATABASE IF NOT EXISTS " + q.split(" AS ")[1].split()[0])
+            q += " SETTINGS allow_different_database_def = true"
         print("ACCEPTED", name, "->", ch(q).strip()[:120])
     except RuntimeError as e:
         print("REFUSED", name, "->", str(e)[:260])
+    if q.startswith("RESTORE"):
+        # Each restored database dropped before the next RESTORE: a restored Replicated database
+        # takes the set's Keeper path, and a second would be refused for it (Code 253, not access).
+        ch("DROP DATABASE IF EXISTS " + q.split(" AS ")[1].split()[0] + " SYNC")
 """)
 
     def _judge_osprey(self, out: str, record_as: str) -> None:

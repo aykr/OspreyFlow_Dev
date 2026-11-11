@@ -1,0 +1,479 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261111T195102Z/log: bash -c bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh reset && bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh deploy && bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh roundtrip; bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh osprey_sources; bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh osprey_bound_red; bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh reds; bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh restore_refused
+These resources were kept due to the resource policy:
+[PersistentVolumeClaim] ospreyflow-shared
+
+release "ospreyflow" uninstalled
+namespace "ospreyflow-dev" deleted
+namespace "platform-managed" deleted
+rendered (none): arcadedb, clickhouse, clickhouse-keeper and the backups; 3 of theirs, 1 of ours
+seeded localhost:5002/arcadedata/arcadedb:26.10.1 from arcadedata/arcadedb:26.10.1
+seeded localhost:5002/clickhouse/clickhouse-keeper:25.8.33.6 from clickhouse/clickhouse-keeper:25.8.33.6
+seeded localhost:5002/clickhouse/clickhouse-server:25.8.33.6 from clickhouse/clickhouse-server:25.8.33.6
+build localhost:5002/ospreyflow/api:6ccf9f7c853870593b3656776f89d15a92db6a37
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 8.75kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.51kB done
+#3 DONE 0.0s
+
+#4 [builder  1/10] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 resolve docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 9.44MB 0.1s done
+#5 DONE 0.1s
+
+#6 [builder  2/10] RUN pip install --no-cache-dir uv==0.5.14
+#6 CACHED
+
+#7 [builder  3/10] WORKDIR /app
+#7 CACHED
+
+#8 [builder  4/10] COPY pyproject.toml uv.lock ./
+#8 CACHED
+
+#9 [builder  5/10] RUN uv sync --frozen --no-dev --no-install-project
+#9 CACHED
+
+#10 [builder  6/10] COPY packages ./packages
+#10 CACHED
+
+#11 [builder  7/10] COPY services ./services
+#11 DONE 0.1s
+
+#12 [builder  8/10] COPY scripts ./scripts
+#12 DONE 0.1s
+
+#13 [builder  9/10] COPY connectors ./connectors
+#13 DONE 0.0s
+
+#14 [builder 10/10] COPY recipes ./recipes
+#14 DONE 0.1s
+
+#15 [stage-4  3/13] WORKDIR /app
+#15 CACHED
+
+#16 [stage-4  4/13] COPY --from=builder /app/.venv ./.venv
+#16 CACHED
+
+#17 [stage-4  1/13] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#17 CACHED
+
+#18 [stage-4  2/13] RUN useradd --create-home --uid 10001 osprey
+#18 CACHED
+
+#19 [stage-4  5/13] COPY --from=builder /app/packages ./packages
+#19 CACHED
+
+#20 [stage-4  6/13] COPY --from=builder /app/services ./services
+#20 DONE 0.1s
+
+#21 [stage-4  7/13] COPY --from=builder /app/scripts ./scripts
+#21 DONE 0.0s
+
+#22 [stage-4  8/13] COPY --from=builder /app/connectors ./connectors
+#22 DONE 0.0s
+
+#23 [stage-4  9/13] COPY --from=builder /app/recipes ./recipes
+#23 DONE 0.0s
+
+#24 [stage-4 10/13] RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension('spatial')"     && chown -R osprey:osprey /app
+#24 ...
+
+#9 [builder  5/10] RUN uv sync --frozen --no-dev --no-install-project
+#9 CACHED
+
+#24 [stage-4 10/13] RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension('spatial')"     && chown -R osprey:osprey /app
+#24 DONE 60.0s
+
+#25 [stage-4 11/13] RUN mkdir -p /var/lib/osprey/data && chown -R osprey:osprey /var/lib/osprey
+#25 DONE 0.5s
+
+#26 [stage-4 12/13] RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model-settings     && chmod 700 /run/osprey/model-settings
+#26 DONE 0.4s
+
+#27 [stage-4 13/13] RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings     && chmod 700 /run/osprey/map-settings
+#27 DONE 0.4s
+
+#28 exporting to image
+#28 exporting layers
+#28 exporting layers 27.1s done
+#28 exporting manifest sha256:c0c8b99fb5977922b1af2d09bf7fde7981f6a5948a45cd94c28fb169d3429bcc 0.1s done
+#28 exporting config sha256:f596cb81b1dccfbbdd5614d9108c64517207b183aed1068d75ac4860568990e5
+#28 exporting config sha256:f596cb81b1dccfbbdd5614d9108c64517207b183aed1068d75ac4860568990e5 0.1s done
+#28 exporting attestation manifest sha256:53ec3e02a099a839116b15184c0f475fa9a8eead5a6f01fc2beb1ae7954d67e6
+#28 exporting attestation manifest sha256:53ec3e02a099a839116b15184c0f475fa9a8eead5a6f01fc2beb1ae7954d67e6 0.1s done
+#28 exporting manifest list sha256:c864b1b9de4319761cde6bb45525a743988996586087d6dc8f1e656ed19de860 0.0s done
+#28 naming to localhost:5002/ospreyflow/api:6ccf9f7c853870593b3656776f89d15a92db6a37
+#28 naming to localhost:5002/ospreyflow/api:6ccf9f7c853870593b3656776f89d15a92db6a37 done
+#28 unpacking to localhost:5002/ospreyflow/api:6ccf9f7c853870593b3656776f89d15a92db6a37
+#28 unpacking to localhost:5002/ospreyflow/api:6ccf9f7c853870593b3656776f89d15a92db6a37 7.2s done
+#28 DONE 34.7s
+push localhost:5002/ospreyflow/api:6ccf9f7c853870593b3656776f89d15a92db6a37
+The push refers to repository [localhost:5002/ospreyflow/api]
+2dc99d2d0a39: Layer already exists
+05e0eee5572e: Layer already exists
+f47b65d8688e: Layer already exists
+35fdecf0e1bb: Layer already exists
+6a1025d79bba: Layer already exists
+1a60a7ddec60: Layer already exists
+37fb86c2a767: Layer already exists
+44136fa355b3: Already exists
+fbf91ceb308b: Layer already exists
+68bced9e0afa: Layer already exists
+db56e9c930ca: Pushed
+f7b2ce125ff2: Pushed
+cc79ba04f869: Pushed
+cec2984f4c2a: Pushed
+94018706e7aa: Pushed
+c0f12f5b7860: Pushed
+98a141629562: Pushed
+285c7642c482: Pushed
+b838bd0b0578: Pushed
+6ccf9f7c853870593b3656776f89d15a92db6a37: digest: sha256:c864b1b9de4319761cde6bb45525a743988996586087d6dc8f1e656ed19de860 size: 856
+1 images are in localhost:5002. Render again to pin ours by the digest the registry gives for its copy.
+rendered (registry): arcadedb, clickhouse, clickhouse-keeper and the backups; 3 of theirs, 1 of ours
+namespace/platform-managed created
+namespace/ospreyflow-dev created
+stand-in at https://s3-standin.platform-managed.svc.cluster.local:9443, trusting the cluster's issuer https://kubernetes.default.svc.cluster.local
+Release "ospreyflow" does not exist. Installing it now.
+NAME: ospreyflow
+LAST DEPLOYED: Wed Nov 11 19:53:36 2026
+NAMESPACE: ospreyflow-dev
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+OspreyFlow is starting in ospreyflow-dev. Its one address is the proxy's load balancer:
+
+  kubectl get service proxy -n ospreyflow-dev
+
+Point the deployment's names (the address, id. and bi.) at it. Every workload reads the Secret
+ospreyflow-secrets; a pod waiting on a missing key names it in its events.
+patched: the backups' and ClickHouse's IRSA; ClickHouse's AWS names and the stand-in's CA; the Ingest root's claim and a shared pod on it
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+partitioned roll out complete: 1 new pods have been updated...
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+seeded: {'arcadedb_vertices': {'c': 5000, 's': 12497500}, 'arcadedb_edges': 1000, 'clickhouse_rows': [200000, '17805520021964338470'], 'claims': {'files': 301, 'sha256': 'c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6'}}
+backup 29907114: succeeded
+[pod/ospreyflow-backup-29907114-tv2j7/backup] backup: set 20261111T195400Z written in 1.2 s (ArcadeDB 87478 bytes; ClickHouse 7f3f76cc-917c-4e43-af42-4cb2651336f1)
+[pod/ospreyflow-backup-claims-29907114-dt6rh/backup-claims] backup-claims: set 20261111T195400Z's claims part written: ingest 7694460 bytes
+
+destroyed; the stores now hold: {'arcadedb': 'ArcadeDB /api/v1/command/ospreyflow: 404 b\'{"error":"Database not found","requestId":"b07611d9b3dd7b89-400","exception":"com.arcadedb.exception.DatabaseNotAvail', 'clickhouse': 'ClickHouse: 404 b\'{\\n\\t"meta":\\n\\t[\\n\\n\\t],\\n\\n\\t"data":\\n\\t[\\n\\n\\t],\\n\\n\\t"rows": 0,\\n\\n\\t"exception": "Code: 81. DB::Exception: Database ospreyflow does not e', 'claims': {'files': 0, 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}}
+ospreyflow-restore-20261111t195400z: succeeded
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-analytics] restore: ClickHouse restored from set 20261111T195400Z
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/verify] restore: set 20261111T195400Z verified, every part; nothing writing
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/fetch-graph] restore: set 20261111T195400Z's ArcadeDB zip at /restore/ospreyflow.zip, checked against its manifest
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/writers] restore: nothing writing
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] WARNING: Using incubator modules: jdk.incubator.vector
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] Executing full restore of database from file 'file:///restore/ospreyflow.zip' to '/home/arcadedb/databases/ospreyflow' (8 threads)...
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'P9Person_0.1.65536.v0.bucket'... 35.51KB -> 384.00KB (90% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'P9Person_0_out_edges.2.65536.v0.bucket'... 7.44KB -> 128.00KB (94% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'P9Knows_0.4.65536.v0.bucket'... 6.32KB -> 64.00KB (90% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'P9Person_0_1398742817628229.5.262144.v1.umtidx'... 26.39KB -> 256.00KB (89% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'P9Person_0_in_edges.3.65536.v0.bucket'... 7.44KB -> 128.00KB (94% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'schema.json'... 376b -> 666b (43% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'dictionary.0.65536.v1.dict'... 331b -> 64.00KB (99% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'schema.prev.json'... 306b -> 540b (43% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] - File 'configuration.json'... 31b -> 20b (-55% compression)
+[pod/ospreyflow-restore-20261111t195400z-gtg8n/restore-graph] Full restore completed in 0 seconds 85.43KB -> 1.00MB (91% compression)
+
+ospreyflow-restore-claims-20261111t195400z: succeeded
+[pod/ospreyflow-restore-claims-20261111t195400z-lx7pd/verify] restore: set 20261111T195400Z verified, every part; nothing writing
+[pod/ospreyflow-restore-claims-20261111t195400z-lx7pd/restore-claims] restore: ingest put back from set 20261111T195400Z
+
+== record (/root/osprey-runs/case.tools/p9_roundtrip.json)
+{
+  "backup": {
+    "set": "20261111T195400Z",
+    "seconds": 12.8,
+    "objects": 17,
+    "bytes": 9599686,
+    "not_under_the_key": [],
+    "claims_part": [
+      "sets/20261111T195400Z/claims/ingest.tar.gz",
+      "sets/20261111T195400Z/claims/manifest.json"
+    ],
+    "log": [
+      "[pod/ospreyflow-backup-29907114-tv2j7/backup] backup: set 20261111T195400Z written in 1.2 s (ArcadeDB 87478 bytes; ClickHouse 7f3f76cc-917c-4e43-af42-4cb2651336f1)",
+      "[pod/ospreyflow-backup-claims-29907114-dt6rh/backup-claims] backup-claims: set 20261111T195400Z's claims part written: ingest 7694460 bytes"
+    ]
+  },
+  "destroyed": {
+    "arcadedb": "ArcadeDB /api/v1/command/ospreyflow: 404 b'{\"error\":\"Database not found\",\"requestId\":\"b07611d9b3dd7b89-400\",\"exception\":\"com.arcadedb.exception.DatabaseNotAvail",
+    "clickhouse": "ClickHouse: 404 b'{\\n\\t\"meta\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"data\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"rows\": 0,\\n\\n\\t\"exception\": \"Code: 81. DB::Exception: Database ospreyflow does not e",
+    "claims": {
+      "files": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "seeded": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restored": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restore_seconds": {
+    "stopped": 31.2,
+    "ospreyflow-restore-20261111t195400z": 11.8,
+    "ospreyflow-restore-claims-20261111t195400z": 11.9,
+    "started": 22.8,
+    "total": 65.9
+  },
+  "match": true,
+  "at": "2026-11-11T19:55:43+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+PASS round trip: set 20261111T195400Z restored in 65.9 s, counts and the claim equal
+== record (/root/osprey-runs/case.tools/p9_osprey_sources.json)
+{
+  "osprey_sources": [
+    "user: osprey",
+    "REFUSED read a set's manifest -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED read ArcadeDB's zip -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED write over a set -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant WRITE ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED url() to another host -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON URL. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "ACCEPTED RESTORE a set's ClickHouse part -> 4a2efc7f-ca60-404d-ac08-d560443f2760\tRESTORED",
+    "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T195400Z/arcadedb/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'",
+    "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T195400Z/claims/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'",
+    "REFUSED the S3 table engine -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant TABLE ENGINE ON S3. (Missing permissions: USAGE ON *.*). (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED s3Cluster -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED icebergS3 -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED deltaLake -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED remote() to another server -> ClickHouse: 500 b'Code: 519. DB::NetException: All attempts to get table structure failed. Log: \\n\\nCode: 279. DB::NetException: All connection tries failed. Log: \\n\\nTimeout exceeded while connecting to socket (s3-standin.platform-managed.svc.cluster.local:90"
+  ],
+  "clickhouse_egress_to_1.1.1.1": "REFUSED",
+  "osprey_accepted": [
+    "RESTORE a set's ClickHouse part"
+  ],
+  "osprey_restore_bound": {
+    "RESTORE from ArcadeDB's part": "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T195400Z/arcadedb/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'",
+    "RESTORE from the claims' part": "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T195400Z/claims/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'"
+  },
+  "show_grants_osprey": [
+    "GRANT SOURCES ON *.* TO osprey",
+    "GRANT TABLE ENGINE ON * TO osprey",
+    "GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE, DROP, UNDROP TABLE, TRUNCATE, OPTIMIZE, KILL QUERY, KILL TRANSACTION, MOVE PARTITION BETWEEN SHARDS, SYSTEM, dictGet, displaySecretsInShowAndSelect, INTROSPECTION, CLUSTER, FILE, URL, REMOTE, MONGO, REDIS, MYSQL, POSTGRES, SQLITE, ODBC, JDBC, HDFS, S3, HIVE, AZURE, KAFKA, NATS, RABBITMQ, SOURCES ON *.* TO osprey",
+    "GRANT SET DEFINER ON * TO osprey",
+    "REVOKE S3 ON *.* FROM osprey",
+    "REVOKE URL ON *.* FROM osprey"
+  ],
+  "at": "2026-11-11T19:59:53+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+PASS the deployment's user is refused all 11 but the ruled RESTORE of ClickHouse's own part, which S3 refuses from ArcadeDB's and the claims'; ClickHouse reaches no outside address
+== record (/root/osprey-runs/case.tools/p9_osprey_bound_planted.json)
+{
+  "osprey_sources": [
+    "user: osprey",
+    "REFUSED read a set's manifest -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED read ArcadeDB's zip -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED write over a set -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant WRITE ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED url() to another host -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON URL. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "ACCEPTED RESTORE a set's ClickHouse part -> 49b439b7-5521-4cd5-8418-41b870166762\tRESTORED",
+    "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b\"Code: 253. DB::Exception: Replica clickhouse-0 of shard 01 of replicated database at /clickhouse/databases/ospreyflow already exists. Replica host ID: 'clickhouse%2D0%2Eclickhouse%2Dheadless%2Eospreyflow%2Ddev%2Esvc%2Ecluster%2Elocal:9000:94a",
+    "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b\"Code: 253. DB::Exception: Replica clickhouse-0 of shard 01 of replicated database at /clickhouse/databases/ospreyflow already exists. Replica host ID: 'clickhouse%2D0%2Eclickhouse%2Dheadless%2Eospreyflow%2Ddev%2Esvc%2Ecluster%2Elocal:9000:94a",
+    "REFUSED the S3 table engine -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant TABLE ENGINE ON S3. (Missing permissions: USAGE ON *.*). (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED s3Cluster -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED icebergS3 -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED deltaLake -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED remote() to another server -> ClickHouse: 500 b'Code: 519. DB::NetException: All attempts to get table structure failed. Log: \\n\\nCode: 279. DB::NetException: All connection tries failed. Log: \\n\\nTimeout exceeded while connecting to socket (s3-standin.platform-managed.svc.cluster.local:90"
+  ],
+  "clickhouse_egress_to_1.1.1.1": "REFUSED",
+  "osprey_accepted": [
+    "RESTORE a set's ClickHouse part"
+  ],
+  "osprey_restore_bound": {
+    "RESTORE from ArcadeDB's part": "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b\"Code: 253. DB::Exception: Replica clickhouse-0 of shard 01 of replicated database at /clickhouse/databases/ospreyflow already exists. Replica host ID: 'clickhouse%2D0%2Eclickhouse%2Dheadless%2Eospreyflow%2Ddev%2Esvc%2Ecluster%2Elocal:9000:94a",
+    "RESTORE from the claims' part": "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b\"Code: 253. DB::Exception: Replica clickhouse-0 of shard 01 of replicated database at /clickhouse/databases/ospreyflow already exists. Replica host ID: 'clickhouse%2D0%2Eclickhouse%2Dheadless%2Eospreyflow%2Ddev%2Esvc%2Ecluster%2Elocal:9000:94a"
+  },
+  "show_grants_osprey": [
+    "GRANT SOURCES ON *.* TO osprey",
+    "GRANT TABLE ENGINE ON * TO osprey",
+    "GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE, DROP, UNDROP TABLE, TRUNCATE, OPTIMIZE, KILL QUERY, KILL TRANSACTION, MOVE PARTITION BETWEEN SHARDS, SYSTEM, dictGet, displaySecretsInShowAndSelect, INTROSPECTION, CLUSTER, FILE, URL, REMOTE, MONGO, REDIS, MYSQL, POSTGRES, SQLITE, ODBC, JDBC, HDFS, S3, HIVE, AZURE, KAFKA, NATS, RABBITMQ, SOURCES ON *.* TO osprey",
+    "GRANT SET DEFINER ON * TO osprey",
+    "REVOKE S3 ON *.* FROM osprey",
+    "REVOKE URL ON *.* FROM osprey"
+  ],
+  "at": "2026-11-11T20:04:05+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+PASS the deployment's user is refused all 11 but the ruled RESTORE of ClickHouse's own part, which S3 refuses from ArcadeDB's and the claims'; ClickHouse reaches no outside address
+== record (/root/osprey-runs/case.tools/p9_osprey_bound_red.json)
+{
+  "osprey_bound_red": {
+    "red": false,
+    "said": "the check passed with ClickHouse's role reaching every set",
+    "bound": {
+      "RESTORE from ArcadeDB's part": "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b\"Code: 253. DB::Exception: Replica clickhouse-0 of shard 01 of replicated database at /clickhouse/databases/ospreyflow already exists. Replica host ID: 'clickhouse%2D0%2Eclickhouse%2Dheadless%2Eospreyflow%2Ddev%2Esvc%2Ecluster%2Elocal:9000:94a",
+      "RESTORE from the claims' part": "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b\"Code: 253. DB::Exception: Replica clickhouse-0 of shard 01 of replicated database at /clickhouse/databases/ospreyflow already exists. Replica host ID: 'clickhouse%2D0%2Eclickhouse%2Dheadless%2Eospreyflow%2Ddev%2Esvc%2Ecluster%2Elocal:9000:94a"
+    }
+  },
+  "at": "2026-11-11T20:04:05+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+FAIL the bound planted wide: the check passed with ClickHouse's role reaching every set
+FAIL: the bound's check did not go red with the role planted wide
+PASS bucket-policy: ['[pod/ospreyflow-backup-29907135-cqlzd/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T201500Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: Access Denied)']
+PASS kms-key-policy: ['[pod/ospreyflow-backup-29907136-xwlfr/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T201600Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: User: arn:aws:sts::123456789012:assumed-role/ospreyflow-dev-backup/botocore-session-1794427453 is not authorized to perform: kms:GenerateDataKey on resource: arn:aws:kms:eu-west-2:123456789012:key/0f9e8d7c-0009-4000-8000-000000000009 because no resource-based policy allows the kms:GenerateDataKey action)']
+backup 29907137: succeeded
+[pod/ospreyflow-backup-29907137-k5dc5/backup] backup: set 20261111T201700Z written in 0.9 s (ArcadeDB 87478 bytes; ClickHouse 5d38f7db-7fe2-4dd7-96f7-dfe3a81d8d71)
+[pod/ospreyflow-backup-claims-29907137-bxjqf/backup-claims] backup-claims: set 20261111T201700Z's claims part written: ingest 7694460 bytes
+
+PASS expired sessions renewed: set 20261111T201700Z
+PASS unrenewable-role: ['[pod/ospreyflow-backup-29907138-mlqz9/backup] backup refused: backup: read set 20261111T201800Z: STS refused it (AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity)']
+PASS unrenewable-role-clickhouse: ['[pod/p9-unrenewable-29907139-5zxth/backup] clickhouse refused: clickhouse: BACKUP … TO S3: HTTP 500: Code: 499. DB::Exception: Access Denied. (S3_ERROR) (version 25.8.33.6 (official build))']
+PASS ClickHouse refused by STS: ['192.168.249.52 - - [11/Nov/2026 20:04:30] "POST / HTTP/1.1" 403 -', '192.168.249.52 - - [11/Nov/2026 20:04:30] "POST / HTTP/1.1" 403 -']
+PASS missing-claims: ["[pod/ospreyflow-backup-29907140-rlnns/backup] backup refused: claims: wait for set 20261111T202000Z's claims part: none after 45 s: the claims run (ospreyflow-backup-claims) for this slot failed or never ran, so the set is left unfinished and is never restored from"]
+PASS restore of 20261111T202000Z: ['[pod/p9-restore-refused-29907140-rczdp/backup] fetch-graph refused: restore: read set 20261111T202000Z: no finished set by that name (S3 refused it (NoSuchKey: The specified key does not exist.))']
+PASS restore beside a writer: ['verify refused: restore: see what runs: arcadedb-0, p9-shared still running: stop ArcadeDB, the Conduit, the workers and the report sync first (the recovery runbook); nothing was touched', 'verify refused: restore: see what runs: arcadedb-0, p9-shared still running: stop ArcadeDB, the Conduit, the workers and the report sync first (the recovery runbook); nothing was touched']
+== record (/root/osprey-runs/case.tools/p9_reds.json)
+{
+  "reds": [
+    {
+      "red": "bucket-policy",
+      "slot": 29907135,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29907135-cqlzd/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T201500Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: Access Denied)"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "red": "kms-key-policy",
+      "slot": 29907136,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29907136-xwlfr/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T201600Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: User: arn:aws:sts::123456789012:assumed-role/ospreyflow-dev-backup/botocore-session-1794427453 is not authorized to perform: kms:GenerateDataKey on resource: arn:aws:kms:eu-west-2:123456789012:key/0f9e8d7c-0009-4000-8000-000000000009 because no resource-based policy allows the kms:GenerateDataKey action)"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "measured": "expired-sessions-renewed",
+      "slot": 29907137,
+      "set_written": true,
+      "as_expected": true
+    },
+    {
+      "red": "unrenewable-role",
+      "slot": 29907138,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29907138-mlqz9/backup] backup refused: backup: read set 20261111T201800Z: STS refused it (AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity)"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "red": "unrenewable-role-clickhouse",
+      "slot": 29907139,
+      "refused": true,
+      "words": [
+        "[pod/p9-unrenewable-29907139-5zxth/backup] clickhouse refused: clickhouse: BACKUP \u2026 TO S3: HTTP 500: Code: 499. DB::Exception: Access Denied. (S3_ERROR) (version 25.8.33.6 (official build))"
+      ],
+      "no_new_set": true,
+      "as_expected": true,
+      "clickhouse_sts_calls": [
+        "192.168.249.52 - - [11/Nov/2026 20:04:30] \"POST / HTTP/1.1\" 403 -",
+        "192.168.249.52 - - [11/Nov/2026 20:04:30] \"POST / HTTP/1.1\" 403 -",
+        "192.168.249.52 - - [11/Nov/2026 20:04:30] \"POST / HTTP/1.1\" 403 -"
+      ]
+    },
+    {
+      "red": "missing-claims",
+      "slot": 29907140,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29907140-rlnns/backup] backup refused: claims: wait for set 20261111T202000Z's claims part: none after 45 s: the claims run (ospreyflow-backup-claims) for this slot failed or never ran, so the set is left unfinished and is never restored from"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "red": "restore-of-the-unfinished-set",
+      "refused": true,
+      "words": [
+        "[pod/p9-restore-refused-29907140-rczdp/backup] fetch-graph refused: restore: read set 20261111T202000Z: no finished set by that name (S3 refused it (NoSuchKey: The specified key does not exist.))"
+      ],
+      "as_expected": true
+    },
+    {
+      "red": "restore-beside-a-running-writer",
+      "words": [
+        "verify refused: restore: see what runs: arcadedb-0, p9-shared still running: stop ArcadeDB, the Conduit, the workers and the report sync first (the recovery runbook); nothing was touched",
+        "verify refused: restore: see what runs: arcadedb-0, p9-shared still running: stop ArcadeDB, the Conduit, the workers and the report sync first (the recovery runbook); nothing was touched"
+      ],
+      "untouched": true,
+      "as_expected": true
+    }
+  ],
+  "at": "2026-11-11T20:05:44+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+== record (/root/osprey-runs/case.tools/p9_restore_refused.json)
+{
+  "set": "20261111T201700Z",
+  "refused": [
+    "verify refused: restore: see what runs: cannot confirm the writers are stopped: the pods could not be listed (<urlopen error timed out>); on the cloud-platform profile every restore refuses so until P7b's restore row lands (its egress to the cluster's API); nothing was touched",
+    "verify refused: restore: see what runs: cannot confirm the writers are stopped: the pods could not be listed (<urlopen error timed out>); on the cloud-platform profile every restore refuses so until P7b's restore row lands (its egress to the cluster's API); nothing was touched"
+  ],
+  "untouched": true,
+  "at": "2026-11-11T20:07:16+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+PASS the restore refused closed in both Jobs; the stores untouched
+Wall time: 973 s, exit 0 (no stack, no lease; set-up before it 15 s)
