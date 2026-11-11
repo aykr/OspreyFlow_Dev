@@ -205,6 +205,11 @@ def test_adding_a_person_already_recorded_is_refused(client: Any) -> None:
     _as(ADMIN)
     response = client.post("/v1/admin/people/by-object-id", json={"object_id": OID})
     assert response.status_code == 409
+    # The words name the object id, never a sign-in name or email address (finding 13).
+    assert response.json() == {
+        "error": "person_exists",
+        "detail": f"{OID} is already in People: give them roles there.",
+    }
     assert client.store.people[(TENANT, OID)].roles == ["osprey-admin"]
 
 
@@ -366,3 +371,126 @@ async def test_admin_system_says_unreachable_when_the_store_is_down() -> None:
     store.down = True
     check = await EntraPeopleAdmin(store).credential_check()  # type: ignore[arg-type]
     assert check.state == "unreachable"
+
+
+# --- the delta socket (the lane-reviewer's finding 1: a socket outlives the request) ---
+
+
+class _Standing:
+    """`EntraPeopleStore.standing`, refusing as it does: a person not recorded is None, a failure
+    raises (never "no roles")."""
+
+    def __init__(self, stored: StoredPerson | None, fail: bool = False) -> None:
+        self.stored, self.fail = stored, fail
+
+    async def standing(self, oid: str) -> StoredPerson | None:
+        if self.fail:
+            raise ConnectionError("store down")
+        return self.stored
+
+
+class _AnyCase:
+    async def get_authorized(self, *_: Any, **__: Any) -> None:
+        return None
+
+
+def _socket_app(people: _Standing | None) -> Any:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        state=SimpleNamespace(people_store=people, investigations=_AnyCase(), custom_roles=None)
+    )
+
+
+@pytest.mark.parametrize(
+    ("people", "code"),
+    [
+        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=False)), None),
+        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=True)), 1008),
+        (_Standing(StoredPerson(roles=("analyst",), disabled=False)), 1008),
+        (_Standing(None), 1008),
+        (_Standing(None, fail=True), 1013),
+        (None, None),
+    ],
+    ids=["stands", "disabled", "roles-changed", "not-recorded", "store-down", "keycloak"],
+)
+async def test_a_socket_stands_only_while_the_store_says_so(people, code) -> None:
+    """At connect (a ticket minted before a disable) and before every message: a person disabled,
+    gone or whose roles changed is closed (1008, to sign in afresh); a read that fails is 1013."""
+    from services.api.app import _socket_standing
+
+    assert await _socket_standing(_socket_app(people), ADMIN) == code
+
+
+@pytest.mark.parametrize(
+    ("people", "admitted"),
+    [
+        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=False)), True),
+        (_Standing(StoredPerson(roles=("osprey-admin",), disabled=True)), False),
+        (_Standing(StoredPerson(roles=(), disabled=False)), False),
+        (_Standing(None, fail=True), False),
+    ],
+    ids=["stands", "disabled-mid-socket", "roles-taken-away", "store-down"],
+)
+async def test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands(
+    people, admitted
+) -> None:
+    from services.api.app import _admission
+
+    principal = await _admission(_socket_app(people), ADMIN, "case-1")()
+    assert (principal is not None) is admitted
+
+
+def _stream_asks_before_its_first_send(source: str) -> bool:
+    import ast
+
+    tree = ast.parse(source)
+    stream = next(
+        n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "stream"
+    )
+    asked = sent = None
+    for node in ast.walk(stream):
+        if isinstance(node, ast.Call):
+            name = ast.unparse(node.func)
+            if name == "_socket_standing" and asked is None:
+                asked = node.lineno
+            if name.endswith("working_set.sync") and sent is None:
+                sent = node.lineno
+    return asked is not None and sent is not None and asked < sent
+
+
+def test_the_stream_asks_the_store_before_its_first_send() -> None:
+    """A ticket minted before a disable is refused at connect, before the snapshot is sent (the
+    stream needs a live socket to run, so its order is read from the source; shown red below)."""
+    from pathlib import Path
+
+    import services.api.app as app_module
+
+    assert _stream_asks_before_its_first_send(Path(app_module.__file__).read_text())
+    planted = (
+        "async def stream(w, i):\n    await working_set.sync(i)\n    await _socket_standing(w, r)\n"
+    )
+    assert not _stream_asks_before_its_first_send(planted)
+
+
+@pytest.mark.parametrize(
+    ("call", "words"),
+    [
+        (lambda a: a.remove_person(OID), "is not removed here"),
+        (lambda a: a.link_organisation(OID, "subject"), "no organisation account"),
+        (lambda a: a.create_dashboard("Reports", clearance="OFFICIAL", org_unit="u"), "Dashboard"),
+        (lambda a: a.delete_dashboard("osprey-dashboard-reports"), "Dashboard"),
+    ],
+    ids=["remove", "organisation-link", "register-dashboard", "delete-dashboard"],
+)
+async def test_the_rest_of_what_entra_holds_is_refused_in_words(call, words) -> None:
+    """Amendment 8 point 3's other refusals, each 409 `entra_holds_accounts` through the route's
+    handler (finding 7); the store is never written."""
+    from services.api.identity_admin import PersonActionRefused
+
+    store = _Store()
+    before = dict(store.people)
+    with pytest.raises(PersonActionRefused) as refused:
+        await call(EntraPeopleAdmin(store))  # type: ignore[arg-type]
+    assert refused.value.error == "entra_holds_accounts" and words in refused.value.words
+    assert store.people == before

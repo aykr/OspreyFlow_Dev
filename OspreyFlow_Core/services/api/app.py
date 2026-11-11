@@ -139,7 +139,7 @@ from ports.graph import GraphPort
 from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
-from principal_auth import PrincipalLookupUnavailable, PrincipalRevoked
+from principal_auth import ROLE_LOOKUP_TIMEOUT_SECONDS, PrincipalLookupUnavailable, PrincipalRevoked
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
     AccessInput,
@@ -1519,7 +1519,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-114 Amendment 5: invitations by the identity provider's own email when the deployment has
     # a mail server (rendered from the install answers), else by a one-time code.
     # ADR-112 Amendment 3 (b): the organisation's sign-in, whose refused arrivals can be joined.
-    # ADR-148 Amendment 8: on Entra ID sign-in, Admin › People writes the deployment's own store.
+    # ADR-148 Amendment 8: on Entra ID sign-in, Admin › People writes the deployment's own store,
+    # which an open delta socket also asks before each message (`_socket_standing`).
+    app.state.people_store = resources.people_store
     app.state.identity_admin = (
         EntraPeopleAdmin(resources.people_store)
         if resources.people_store is not None
@@ -20145,6 +20147,27 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     return principal
 
 
+async def _socket_standing(app_: Any, raw: Principal) -> int | None:
+    """ADR-148 Amendment 8: on Entra ID sign-in, whether the socket's principal still stands as
+    the people store has them now, since a socket (or a ticket minted before a change) outlives the
+    request that resolved it. `None` when it stands (or on Keycloak, with no store); the close code
+    otherwise: 1008 for a person disabled, gone or whose roles changed (they sign in again, and the
+    one construction path builds their principal afresh), 1013 when the store cannot answer, never
+    a socket left open on a read that failed."""
+    store = getattr(app_.state, "people_store", None)
+    if store is None:
+        return None
+    try:
+        stored = await asyncio.wait_for(store.standing(raw.id), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS)
+    except Exception:  # noqa: BLE001 - every failure of the read closes the socket
+        return status.WS_1013_TRY_AGAIN_LATER
+    if stored is None or stored.disabled:
+        return status.WS_1008_POLICY_VIOLATION
+    if list(dict.fromkeys(stored.roles)) != list(raw.roles):
+        return status.WS_1008_POLICY_VIOLATION
+    return None
+
+
 def _admission(
     app_: Any, raw: Principal, investigation_id: str
 ) -> Callable[[], Awaitable[Principal | None]]:
@@ -20154,6 +20177,9 @@ def _admission(
     once the reader no longer holds a level, and the socket is closed."""
 
     async def admitted() -> Principal | None:
+        # ADR-148 Amendment 8: a person disabled, or whose roles changed, since the socket opened.
+        if await _socket_standing(app_, raw) is not None:
+            return None
         principal = await with_custom_roles(app_, raw)
         try:
             await app_.state.investigations.get_authorized(
@@ -20375,6 +20401,10 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
         return
     except PrincipalLookupUnavailable:
         await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
+        return
+    # ADR-148 Amendment 8: a ticket minted before a disable or a change of roles stands no longer.
+    if (refused := await _socket_standing(websocket.app, raw)) is not None:
+        await websocket.close(code=refused)
         return
     # One person, one principal: the bearer's and the ticket's alike have their custom roles' rights
     # read now, as `get_principal` does (ADR-145 Amendment 5).

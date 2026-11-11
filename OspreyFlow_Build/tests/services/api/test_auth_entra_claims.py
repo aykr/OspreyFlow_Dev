@@ -937,7 +937,9 @@ def test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest(keypair, jwks_ur
 
 
 @pytest.mark.parametrize(
-    "kwargs", [{"client_id": GLASS}, {"scope": "other_scope"}], ids=["client", "scope"]
+    "kwargs",
+    [{"client_id": GLASS}, {"api_client_id": CLIENT_ID}, {"scope": "other_scope"}],
+    ids=["client", "api-client", "scope"],
 )
 def test_a_client_or_scope_without_a_tenant_is_refused(kwargs) -> None:
     """Checked only for an Entra mapping, so set without a tenant they would be ignored."""
@@ -1046,8 +1048,8 @@ def test_the_synchronous_path_refuses_an_entra_mapping(keypair, jwks_url) -> Non
 
 def test_the_construction_path_refuses_an_entra_principal_without_its_stored_person() -> None:
     """The second guard behind `resolve`'s: built from claims alone, an Entra principal would have
-    no roles read for it; refused, never built with none (rule 15: `resolve`'s case alone passes with
-    either guard removed)."""
+    no roles read for it; refused, never built with none (rule 15: `resolve`'s case alone passes
+    with either guard removed)."""
     from principal_auth import principal_from_claims
 
     claims = {**entra_claims(**_GOOD), "sub": "s"}

@@ -17,11 +17,9 @@ they are checked; REPORT.md says so until it is.
 
 from __future__ import annotations
 
-import re
-
 import jwt
 
-from principal_auth import DEFAULT_CLAIM_MAPPING, ClaimMapping, OidcSettings
+from principal_auth import DEFAULT_CLAIM_MAPPING, ClaimMapping, OidcSettings, is_object_id
 
 SERVICE_ACCOUNT_PREFIX = "service-account-"
 
@@ -48,9 +46,6 @@ class ServiceIdentityRefused(Exception):
         super().__init__(words)
         self.status = status
 
-
-#: An Entra application id, lower case.
-_APP_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 NOT_A_SERVICE_IDENTITY = (
     "the sign-in is not a service identity's: sign in with the client-credentials "
@@ -127,9 +122,13 @@ class ServiceIdentityVerifier:
         if len(clients) != 1:
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
         client = clients.pop()
-        if not isinstance(client, str) or not _APP_ID.match(client):
+        if not isinstance(client, str) or not is_object_id(client):
             raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
-        if client in (self._mapping.client_id, self._config.oidc_audience):
+        if client in (
+            self._mapping.client_id,
+            self._mapping.api_client_id,
+            self._config.oidc_audience,
+        ):
             # The Glass's own registration, or this API's: the deployment's, never an orchestrator.
             raise ServiceIdentityRefused(DEPLOYMENT_CLIENT_WORDS, status=403)
         return client

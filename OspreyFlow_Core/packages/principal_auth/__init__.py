@@ -169,8 +169,13 @@ DEFAULT_SCOPE = "access_as_user"
 #: JSON (ADR-148 Amendment 8); unset, the fixed names (Keycloak).
 CLAIM_MAPPING_VARIABLE = "OSPREY_CLAIM_MAPPING"
 
-#: An Entra object id (a tenant, a group): lower-case, as Entra writes it in a token.
+#: An Entra object id (a tenant, a group, a person, an application): lower-case, as Entra writes it
+#: in a token. The one pattern: `entra_people` and `service_identity` use `is_object_id`.
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def is_object_id(value: object) -> bool:
+    return isinstance(value, str) and bool(_GUID.match(value))
 
 
 class _Source(BaseModel):
@@ -239,6 +244,9 @@ class ClaimMapping(BaseModel):
     #: The Glass's own app registration: an Entra token's `azp` (v2.0) or `appid` (v1.0) must name
     #: it, so a token another application obtained for this API is no session of ours.
     client_id: str | None = None
+    #: This API's own app registration (application id): never an orchestrator's service
+    #: identity, whichever form the audience takes (v1.0 tokens name the `api://` URI there).
+    api_client_id: str | None = None
     #: The delegated scope the Glass asks for; an Entra token's `scp` must include it.
     scope: str = DEFAULT_SCOPE
 
@@ -254,7 +262,13 @@ class ClaimMapping(BaseModel):
             raise ValueError("an Entra ID mapping needs `client_id`, the Glass's application id")
         if not self.scope or " " in self.scope:
             raise ValueError("`scope` must name one delegated scope")
-        if self.tenant_id is None and (self.client_id is not None or self.scope != DEFAULT_SCOPE):
+        if self.api_client_id is not None and not _GUID.match(self.api_client_id):
+            raise ValueError("`api_client_id` must be the API's application id (a GUID)")
+        if self.tenant_id is None and (
+            self.client_id is not None
+            or self.api_client_id is not None
+            or self.scope != DEFAULT_SCOPE
+        ):
             # Only an Entra mapping checks the client and the scope; accepted here they would be
             # ignored, and a deployment that set them would believe they were checked.
             raise ValueError(

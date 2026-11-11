@@ -33,7 +33,9 @@ AIRFLOW = "dddddddd-eeee-4fff-8000-111111111111"
 SP_OID = "60000000-0000-4000-8000-000000000001"
 ISSUER = f"https://login.microsoftonline.com/{TENANT}/v2.0"
 
-MAPPING = ClaimMapping(tenant_id=TENANT, client_id=GLASS, clearance=ValueSource(claim="c"))
+MAPPING = ClaimMapping(
+    tenant_id=TENANT, client_id=GLASS, api_client_id=API, clearance=ValueSource(claim="c")
+)
 
 _ABSENT = object()
 
@@ -144,3 +146,27 @@ def test_an_entra_verifier_without_issuer_and_audience_is_refused_at_constructio
 ) -> None:
     with pytest.raises(ValueError, match="OIDC_"):
         ServiceIdentityVerifier(_settings(jwks_url, **{missing: None}), claim_mapping=MAPPING)
+
+
+def test_on_v1_tokens_this_apis_own_registration_is_no_orchestrator(jwks_url, keypair) -> None:
+    """v1.0 tokens name the API's `api://` URI as their audience, so the API's own application id
+    is no longer the audience: it is refused by the mapping's `api_client_id` (the lane-reviewer's
+    finding 3; red with only the audience compared)."""
+    v1 = ServiceIdentityVerifier(
+        _settings(
+            jwks_url, oidc_issuer=f"https://sts.windows.net/{TENANT}/", oidc_audience=f"api://{API}"
+        ),
+        claim_mapping=MAPPING,
+    )
+    token = _app_token(
+        keypair, aud=f"api://{API}", iss=f"https://sts.windows.net/{TENANT}/", ver="1.0",
+        azp=_ABSENT, azpacr=_ABSENT, idtyp=_ABSENT, appid=API,
+    )  # fmt: skip
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        v1.client_of(token)
+    assert refused.value.status == 403
+    other = _app_token(
+        keypair, aud=f"api://{API}", iss=f"https://sts.windows.net/{TENANT}/", ver="1.0",
+        azp=_ABSENT, azpacr=_ABSENT, idtyp=_ABSENT, appid=AIRFLOW,
+    )  # fmt: skip
+    assert v1.client_of(other) == AIRFLOW

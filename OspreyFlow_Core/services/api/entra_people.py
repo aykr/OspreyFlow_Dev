@@ -31,14 +31,13 @@ account, or register a dashboard identity (a Keycloak client; Superset on Entra 
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import asyncpg
 
-from principal_auth import ClaimMapping, SeenPerson, StoredPerson
+from principal_auth import ClaimMapping, SeenPerson, StoredPerson, is_object_id
 from schemas.admin import (
     AccessInput,
     DashboardIdentity,
@@ -65,8 +64,6 @@ ADMIN_ROLE = "osprey-admin"
 #: The install's first administrators, by object id, comma-separated.
 FIRST_ADMINISTRATORS_VARIABLE = "OSPREY_FIRST_ADMINISTRATORS"
 
-#: An Entra object id, lower case, as Entra writes it.
-OBJECT_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS entra_people (
@@ -92,10 +89,6 @@ ENTRA_HOLDS_ACCOUNTS = (
     "account, and their clearance, unit and handling codes come from Entra. Here you give them "
     "roles, add them by object id, and disable them."
 )
-
-
-def is_object_id(value: str) -> bool:
-    return bool(OBJECT_ID.match(value))
 
 
 def first_administrators_from_env() -> list[str]:
@@ -211,6 +204,19 @@ class EntraPeopleStore:
         assert row is not None
         return StoredPerson(roles=tuple(row["roles"]), disabled=bool(row["disabled"]))
 
+    async def standing(self, oid: str) -> StoredPerson | None:
+        """The stored person as they are now, read without recording anyone: an open delta socket
+        asks it before each message (ADR-148 Amendment 8). None for a person not recorded."""
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT roles, disabled FROM entra_people WHERE tenant_id = $1 AND oid = $2",
+                self.tenant_id,
+                oid,
+            )
+        if row is None:
+            return None
+        return StoredPerson(roles=tuple(row["roles"]), disabled=bool(row["disabled"]))
+
     # --- the install's first administrators ---------------------------------------------------
 
     async def seed_first_administrators(self, oids: Iterable[str]) -> None:
@@ -319,7 +325,12 @@ class EntraPeopleAdmin:
             raise UnknownRoleError(
                 "not an Entra object id (like 1b2c3d4e-0000-4000-8000-00000000abcd, in lower case)"
             )
-        return await self.store.add(oid, by)
+        try:
+            return await self.store.add(oid, by)
+        except PersonExistsError:
+            raise PersonActionRefused(
+                "person_exists", f"{oid} is already in People: give them roles there."
+            ) from None
 
     async def invite(self, invite: InviteInput) -> SignInDelivery:
         raise _refused("People are not invited here.")
