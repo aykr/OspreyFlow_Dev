@@ -3,6 +3,7 @@ its test reaches, runs that test, and puts the file back. Run from `OspreyFlow_C
 closed ports pinned (59991-59994):
 
     .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/plants_P12.py            # Conduit's env
+    .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/plants_P12.py --live      # leased, a gateway
     .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/plants_P12.py --laurium \
         ../OspreyFlow_Build/laurium-env/.venv/bin/python                                # Laurium's env
 
@@ -256,6 +257,15 @@ LAURIUM: list[Plant] = [
     ("the review queue's write promoting a finding", REVIEW, [PROMOTE], [PENDING_T]),
 ]
 
+#: Leased, against the stack's real gateway (round 2, item 2): run under `stack_lease.sh remote` with the
+#: lease's ports and `LITELLM_*` exported, never with the closed ports. The token the adapter sends Laurium
+#: made the master key, so the gateway's admin routes grant it.
+KEY_LIVE_T = f"{B}/conformance/model_port/test_laurium_key_live.py"
+LIVE: list[Plant] = [
+    ("the master key sent to Laurium's service, against the real gateway's admin routes", A, [MASTER_KEY],
+     [KEY_LIVE_T]),
+]
+
 #: No bytecode is written while a plant is in: found running this, a plant that changed `0.14.0` to
 #: `0.15.0` and was put back in the same second left its `.pyc` (same size, same mtime) standing for
 #: the restored file, and the next run read the plant.
@@ -279,6 +289,10 @@ def main() -> int:
     if "--laurium" in sys.argv:
         python = sys.argv[sys.argv.index("--laurium") + 1]
         plants = LAURIUM
+    if "--live" in sys.argv:
+        plants = LIVE
+        ENV.update({k: v for k, v in os.environ.items() if k.endswith(("_PORT", "_HOST")) or k in (
+            "LITELLM_API_KEY", "OSPREY_LANE")})  # the lease's own, not the closed ports
     start = run(python, sorted({t for _, _, _, tests in plants for t in tests}))
     print(f"green start: {start}")
     if "failed" in start or "error" in start:
