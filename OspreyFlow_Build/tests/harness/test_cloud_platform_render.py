@@ -30,7 +30,7 @@ from harness.render import UnpinnedImagesError, load_config, render
 from pydantic import ValidationError
 from tools.cp_policy_check import FIXTURES, _resolver
 
-from schemas.deployment import OspreyConfig
+from schemas.deployment import OspreyConfig, Profile
 
 REGISTRY = "123456789012.dkr.ecr.eu-west-2.amazonaws.com"
 
@@ -506,9 +506,28 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
     assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
 
 
-def test_the_settings_belong_to_the_profile_alone() -> None:
+@pytest.mark.parametrize(
+    "profile", sorted(p.value for p in Profile if p is not Profile.CLOUD_PLATFORM)
+)
+def test_the_settings_belong_to_the_profile_alone(profile: str) -> None:
+    """Every other profile refuses the settings, so none of their renders can carry them. Each base
+    is valid alone first, so the refusal is the settings' and not some other rule's (rule 15)."""
+    base: dict[str, Any] = {"profile": profile}
+    if profile != "local-lite":
+        base["network"] = {"public_origin": "https://osprey.example.org"}
+    if profile == "cluster":  # `test_cluster_render.cluster_config`'s, on AWS
+        base |= {
+            "components": {"analytics_engine": "clickhouse"},
+            "external": {
+                "postgres": {"host": "db.example.internal"},
+                "valkey": {"host": "cache.example.internal", "port": 6380, "tls": True},
+                "object_store": {"endpoint": "s3.eu-west-2.amazonaws.com", "region": "eu-west-2"},
+            },
+            "cluster": {"shared_storage_class": "efs-sc"},
+        }
+    OspreyConfig.model_validate(base)
     with pytest.raises(ValidationError, match="only meaningful at profile: cloud-platform"):
-        OspreyConfig.model_validate({"cloud_platform": {"namespace": "x"}})
+        OspreyConfig.model_validate({**base, "cloud_platform": {"namespace": "x"}})
 
 
 def test_a_namespace_and_a_registry_are_required() -> None:
