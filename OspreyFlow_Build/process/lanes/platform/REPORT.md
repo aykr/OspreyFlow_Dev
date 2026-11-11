@@ -40,9 +40,28 @@ would fail its own test.
 **Requests to the orchestrator:**
 - Accept the chart templates beyond `ingress.yaml`, plus `cli/ospreyflow/{main,deployments}.py`.
 - Apply `P7_ci_makefile.diff`, which is regenerated on 9bcadc6.
+- Run `make docs-pdf` on the laptop at merge, for the administration guide's 1.71. The edits under `docs/` and
+  `spec/10` are needed by main's admin-guide tests; I ask you to accept them as platform's.
 - At merge, mark ADR-148 Am 1's reservation row as written.
 - Main's issues, reported here and not fixed: `create_investigation` sends no dataset, and the seeds default to `unit-1`. B4's seed gives 0 nodes. `render.py`'s `_KEYCLOAK_DATABASE_SQL` lacks the PG16 GRANT for Small on RDS.
 
-## Gates
+## Gates (test server, offline ports 59991–59994, no lease, no stack; at 3b83c218 on main 9bcadc6)
 
-Filled in at the head below.
+- **`make test`** (`gates/3b83c218.test.txt`): 3 failed, 10939 passed, 13 skipped. No failure is this branch's code:
+  - `test_webapp_preflight::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass`: this server has a
+    working `nvidia-smi`, so the check passes, as it should on a GPU host. main's test assumes no GPU.
+  - `test_valkey_config::test_the_deployments_own_valkey_is_reached_plainly`: main's test never clears
+    `VALKEY_PORT`, and the prescribed offline port is 59993.
+  - `test_docs_pdf::test_the_guides_and_their_pdfs_are_in_step`: this branch's guide edit (the appendix and
+    `images push`, which main's admin-guide tests require). The guide's version 1.71 was added after the run
+    (52400f6). **The PDF needs `make docs-pdf` on the laptop**: this server's Chromium prints the "fi" ligature,
+    and `tools.docs_pdf` then cannot find its "List of figures" page.
+- **`make -k ci`** (`gates/3b83c218.ci.txt`): one failure, `trivy-image-workspace` (with its parent rollup
+  `core-check`). The workspace image, unchanged by this branch, has two HIGH CVEs, both fixed upstream in
+  `libxslt` 1.1.43-r4; the base layer came from the build cache, which was stale. Every other gate passed:
+  lint, types, the other image scans, licence, a11y, chart, OpenTofu, schemas, the publication and
+  citation checks and lanes-check.
+- **`make cp-policy-check`** (the diff's target, in the working tree only; not in `ci` until the owner applies
+  it): 0 violations; its tests and the render's, 98 passed.
+- **Commits after 3b83c218**: the guide's version row, these records, and the schemas commit moved back to the
+  head. Its tree differs from 3b83c218's only in `docs/administration-guide.md` and `process/`.

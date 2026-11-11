@@ -78,3 +78,12 @@ the orchestrator fetches this clone.
     passes.
   - `test_valkey_config::test_the_deployments_own_valkey_is_reached_plainly`: the test never clears
     `VALKEY_PORT`, and the prescribed offline port is 59993.
+- **Gated run at 3b83c218** (schemas at the head). Details are in REPORT.md's *Gates*.
+  - `make test`: 3 failed, 10939 passed. Two are the environmental ones above. The third is the guide's PDF:
+    this server's Chromium prints the `ﬁ` ligature, so `tools.docs_pdf --write` cannot find its "List of
+    figures" page. **Decision taken:** no PDF printed on this server, since it would ship this machine's
+    fonts. The guide's version row is added (52400f6), and `make docs-pdf` is asked of the laptop at merge.
+  - `make -k ci`: one failure, trivy on the workspace image (libxslt r3, fixed in r4, from a stale cached
+    layer; an image this branch does not touch).
+  - `make ci`'s OpenTofu step rewrote three `.terraform.lock.hcl` files. They were restored, not committed.
+- The kind cluster was never brought up this session. No P7 gate needed it.
