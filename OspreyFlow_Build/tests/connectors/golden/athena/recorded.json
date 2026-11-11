@@ -46,6 +46,20 @@
       "StateChangeReason": "line 1:8: mismatched input 'FROM'. Expecting: '*', 'ALL', 'DISTINCT', <expression>",
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1300, "Retryable": false, "ErrorMessage": "line 1:8: mismatched input 'FROM'. Expecting: '*', 'ALL', 'DISTINCT', <expression>"}
     },
+    "syntax_eof": {
+      "_about": "A statement that ends where Athena expects more (a dangling WHERE). The column is the statement's length plus one. Whether Athena reports a syntax error as a FAILED execution (modelled here) or as an InvalidRequestException at StartQueryExecution is unconfirmed until part 2 (test_athena_connector_live.py's unparseable-query case).",
+      "StateChangeReason": "line 1:{column}: mismatched input '<EOF>'. Expecting: <expression>",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1300, "Retryable": false, "ErrorMessage": "line 1:{column}: mismatched input '<EOF>'. Expecting: <expression>"}
+    },
+    "catalog_not_found": {
+      "_about": "A catalog Athena does not hold, in QueryExecutionContext.Catalog or in a three-part name (the orchestrator's review of L1.9, round 1, item 7). Its words and whether it fails as an execution are Trino's error name, unconfirmed until part 2.",
+      "StateChangeReason": "CATALOG_NOT_FOUND: Catalog '{catalog}' does not exist",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "CATALOG_NOT_FOUND: Catalog '{catalog}' does not exist"}
+    },
+    "schema_not_found": {
+      "StateChangeReason": "SCHEMA_NOT_FOUND: line 1:15: Schema '{schema}' does not exist",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "SCHEMA_NOT_FOUND: line 1:15: Schema '{schema}' does not exist"}
+    },
     "table_not_found": {
       "StateChangeReason": "TABLE_NOT_FOUND: line 1:15: Table '{table}' does not exist",
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "TABLE_NOT_FOUND: line 1:15: Table '{table}' does not exist"}

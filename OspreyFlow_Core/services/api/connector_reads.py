@@ -116,33 +116,104 @@ def resolve_host(host: str) -> list[str]:
     return found
 
 
-def cloud_s3_store(settings: S3ConnectionSettings) -> ObjectStore:
-    """The bucket, through pyarrow's S3 filesystem signed in as the deployment's own cloud identity
-    (L1.9; ADR-148): given no key, the SDK's own chain finds it (on the `cloud-platform` profile,
-    the namespace's IAM role for service accounts). Never given one: no connection holds a key.
-    The endpoint is named, never taken from the environment (`AWS_ENDPOINT_URL`), and addressed
-    virtual-hosted, so the one host it reaches is `settings.host()`, the one the egress check
-    names (the lane review of L1.9). Unlike SQL and API, the checked addresses are not pinned: the
-    SDK resolves the name itself, and the name is AWS's own, made from a checked region and bucket,
-    never typed, so no one but AWS answers for it."""
-    store: ObjectStore = pa_fs.S3FileSystem(
+class CloudS3Store:
+    """A bucket as the S3 reader asks of it (`s3_connector.ObjectStore`): pyarrow's S3 filesystem
+    opens objects and asks for the bucket; botocore's S3 client lists a folder a page at a time
+    (`list_objects`), so a listing stops once it holds more than the cap (rule 2; the orchestrator's
+    review of L1.9, round 1, item 8: pyarrow's listing has no limit and took a folder of any size
+    whole before it was counted). Read-only: nothing here writes, copies or deletes."""
+
+    def __init__(self, fs: pa_fs.FileSystem, client: Any) -> None:
+        self.fs, self.client = fs, client
+
+    def get_file_info(self, selector_or_path: Any, /) -> Any:
+        return self.fs.get_file_info(selector_or_path)
+
+    def open_input_stream(self, path: str, /) -> Any:
+        return self.fs.open_input_stream(path)
+
+    def list_objects(self, base: str, *, recursive: bool, limit: int) -> list[pa_fs.FileInfo]:
+        """The objects under `base` (`<bucket>/<folder>`), no more than `limit` + 1: each page asks
+        for no more than are still wanted, and the listing stops past `limit`. Folder markers (a key
+        ending `/`) are no objects; one level (`recursive=False`) gives its folders as directories.
+        S3's refusals are botocore's errors, worded by `s3_connector.refused_by_s3`."""
+        bucket, _, key = base.partition("/")
+        ask: dict[str, Any] = {"Bucket": bucket, "Prefix": f"{key}/" if key else ""}
+        if not recursive:
+            ask["Delimiter"] = "/"
+        found: list[pa_fs.FileInfo] = []
+        while True:
+            page = self.client.list_objects_v2(**ask, MaxKeys=min(1_000, limit + 1 - len(found)))
+            for item in page.get("Contents", []):
+                if not str(item["Key"]).endswith("/"):
+                    found.append(pa_fs.FileInfo(f"{bucket}/{item['Key']}", pa_fs.FileType.File,
+                                                size=int(item["Size"])))  # fmt: skip
+            for item in page.get("CommonPrefixes", []):
+                found.append(pa_fs.FileInfo(f"{bucket}/{str(item['Prefix']).rstrip('/')}",
+                                            pa_fs.FileType.Directory))  # fmt: skip
+            if len(found) > limit or not page.get("IsTruncated"):
+                return found
+            ask["ContinuationToken"] = page["NextContinuationToken"]
+
+
+def only_to(client: Any, service: str, host: str) -> Any:
+    """`client` refuses to send any request to a host other than `host`, the one the egress check
+    names (ADR-148 decision 7): whatever an endpoint resolver, a region redirect (S3 answers a
+    bucket in another region with `PermanentRedirect`, which botocore may follow) or the
+    environment would make of it (the orchestrator's review of L1.9, round 1). Refused before the
+    request is sent; nothing is read."""
+
+    def _refuse_elsewhere(request: Any, **_: Any) -> None:
+        reached = (urlsplit(str(request.url)).hostname or "").lower()
+        if reached != host:
+            raise ConnectorRefused(
+                f"the {service} client was about to reach {reached}, not {host}, the host the "
+                "egress allow-list names (the bucket may be in another region than the connection "
+                "names); nothing was read"
+            )
+
+    client.meta.events.register_first(f"before-send.{service}", _refuse_elsewhere)
+    return client
+
+
+def _cloud_config(**extra: Any) -> BotoConfig:
+    return BotoConfig(connect_timeout=10, read_timeout=30,
+                      retries={"max_attempts": 3, "mode": "standard"}, **extra)  # fmt: skip
+
+
+def cloud_s3_store(settings: S3ConnectionSettings) -> CloudS3Store:
+    """The bucket, signed in as the deployment's own cloud identity (L1.9; ADR-148): given no key,
+    each SDK's own chain finds it (on the `cloud-platform` profile, the namespace's IAM role for
+    service accounts). Never given one: no connection holds a key. Both the filesystem and the
+    listing client have the endpoint named, never taken from the environment (`AWS_ENDPOINT_URL`),
+    and address the bucket virtual-hosted, so the one host they reach is `settings.host()`, the one
+    the egress check names (the lane review of L1.9); the client is held to it (`only_to`). Unlike
+    SQL and API, the checked addresses are not pinned: the SDK resolves the name itself, and the
+    name is AWS's own, made from a checked region and bucket, never typed, so no one but AWS answers
+    for it. `test_cloud_clients.py` proves each of these on the objects this builds."""
+    endpoint = f"s3.{settings.region}.amazonaws.com"
+    fs = pa_fs.S3FileSystem(
         region=settings.region, scheme="https", access_key=None, secret_key=None,
-        endpoint_override=f"s3.{settings.region}.amazonaws.com", force_virtual_addressing=True,
+        endpoint_override=endpoint, force_virtual_addressing=True,
         allow_bucket_creation=False, allow_bucket_deletion=False,
         connect_timeout=10, request_timeout=30,
     )  # fmt: skip
-    return store
+    client = botocore.session.get_session().create_client(
+        "s3", region_name=settings.region, endpoint_url=f"https://{endpoint}",
+        config=_cloud_config(s3={"addressing_style": "virtual"}),
+    )  # fmt: skip
+    return CloudS3Store(fs, only_to(client, "s3", settings.host()))
 
 
 def cloud_athena_client(settings: AthenaConnectionSettings) -> Any:
     """botocore's Athena client, signed in as the deployment's own cloud identity (no key given,
     so botocore's own chain finds it) and sent to `settings.host()` alone, the host the egress check
-    names, whatever an environment variable says."""
-    return botocore.session.get_session().create_client(
+    names, whatever an environment variable says (`only_to`)."""
+    client = botocore.session.get_session().create_client(
         "athena", region_name=settings.region, endpoint_url=f"https://{settings.host()}",
-        config=BotoConfig(connect_timeout=10, read_timeout=30,
-                          retries={"max_attempts": 3, "mode": "standard"}),
+        config=_cloud_config(),
     )  # fmt: skip
+    return only_to(client, "athena", settings.host())
 
 
 @dataclass
@@ -580,7 +651,7 @@ def _check_cloud(
         # The read's own listing, so a missing bucket is told here as at a read (the lane review:
         # the sibling path that did not have the read's fix).
         base = f"{settings.bucket}/{settings.prefix}".rstrip("/")
-        list_folder(readers.s3_store(settings), settings.bucket, base, recursive=False)
+        list_folder(readers.s3_store(settings), settings.bucket, base, recursive=False, limit=1)
         return ConnectionTest(ok=True, words="The bucket answered, and its folder can be listed.")
     try:
         readers.athena_client(settings).get_work_group(WorkGroup=settings.workgroup)

@@ -14,6 +14,16 @@ Skipped unless `OSPREY_S3_STANDIN` names the stand-in's address (`127.0.0.1:5833
 The credentials are the stand-in's own synthetic ones, from that file (rule 9); no connection's
 settings ever hold one (`test_s3_connector.test_neither_cloud_connection_takes_a_key_or_a_secret`).
 Every object this file writes is removed in teardown, even when a case fails.
+
+The store is the deployment's own (`connector_reads.CloudS3Store`: pyarrow opens, botocore lists a
+page at a time), pointed at the stand-in path-style, since it answers on an address, not on a
+bucket's name (the orchestrator's review of L1.9, round 1, item 8: the listing now stops at the
+cap and one, so the paged listing is proved against a real S3 API here, not only the recording).
+
+**Not proved here: a bucket in another region.** SeaweedFS has no regions, so it never answers
+`PermanentRedirect` or `AuthorizationHeaderMalformed`; their words are proved against the recorded
+S3 alone (`test_cloud_clients.py`), and confirmed against S3 itself in part 2 on the client's
+platform (the round-1 review, item 8).
 """
 
 from __future__ import annotations
@@ -26,11 +36,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import botocore.session
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 import pytest
-from services.ingest.connectors import reads
-from services.ingest.connectors.reads import ConnectorRefused, write_snapshot
+from botocore.config import Config
+from services.api.connector_reads import CloudS3Store
+from services.ingest.connectors import reads, s3_connector
+from services.ingest.connectors.reads import ConnectorRefused, ReadOverCap, write_snapshot
 from services.ingest.connectors.s3_connector import read_s3
 
 from schemas.sources import S3ConnectionSettings, S3Read
@@ -43,7 +56,7 @@ IDENTITIES = {i["name"]: i["credentials"][0]
               for i in json.loads((GOLDEN / "seaweedfs_s3.json").read_text())["identities"]}  # fmt: skip
 
 
-def _as(name: str, **kwargs: object) -> pa_fs.S3FileSystem:
+def _fs_as(name: str, **kwargs: object) -> pa_fs.S3FileSystem:
     key = IDENTITIES[name]
     return pa_fs.S3FileSystem(
         endpoint_override=STANDIN, scheme="http", region="eu-west-2",
@@ -51,9 +64,20 @@ def _as(name: str, **kwargs: object) -> pa_fs.S3FileSystem:
     )  # fmt: skip
 
 
+def _as(name: str) -> CloudS3Store:
+    """The deployment's store, signed in as one of the stand-in's identities."""
+    key = IDENTITIES[name]
+    client = botocore.session.get_session().create_client(
+        "s3", region_name="eu-west-2", endpoint_url=f"http://{STANDIN}",
+        aws_access_key_id=key["accessKey"], aws_secret_access_key=key["secretKey"],
+        config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 1}),
+    )  # fmt: skip
+    return CloudS3Store(_fs_as(name), client)
+
+
 @pytest.fixture(scope="module")
 def bucket() -> Iterator[None]:
-    setup = _as("setup", allow_bucket_creation=True, allow_bucket_deletion=True)
+    setup = _fs_as("setup", allow_bucket_creation=True, allow_bucket_deletion=True)
     setup.create_dir(BUCKET)
     try:
         for path in sorted(EXPORTS.rglob("*")):
@@ -103,8 +127,8 @@ def test_a_bucket_that_does_not_exist_is_refused_in_words() -> None:
     missing = S3ConnectionSettings(region="eu-west-2", bucket="synthetic-nowhere", prefix="")
     with pytest.raises(ConnectorRefused) as refused:
         read_s3(_as("setup"), missing, S3Read(folder="", format="csv"))
-    # Not "no CSV object": the folder's listing answers a missing bucket as empty, so the bucket
-    # is asked for first (found here, the first run against the stand-in).
+    # Not "no CSV object": SeaweedFS answers a listing in a missing bucket as empty, so an empty
+    # listing is checked against the bucket (found here, the first run against the stand-in).
     assert str(refused.value) == "the bucket does not exist; nothing was read"
 
 
@@ -141,3 +165,19 @@ def test_the_byte_cap_refuses_a_real_listing_whole(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(reads, "MAX_BYTES", 120)
     with pytest.raises(ConnectorRefused, match=r"more than 120 bytes.*rule 2"):
         read_s3(_as("reader"), _settings(), S3Read(folder="visits/2026/", format="csv"))
+
+
+@pytest.mark.usefixtures("bucket")
+def test_a_real_listing_stops_at_the_object_cap_and_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The round-1 review, item 8: the server's own paging, `MaxKeys` honoured, the listing stopped
+    at the cap and one, never taken whole."""
+    store = _as("reader")
+    listed: list[int] = []
+    store.client.meta.events.register(
+        "after-call.s3.ListObjectsV2",
+        lambda parsed, **_: listed.append(len(parsed.get("Contents", []))),
+    )
+    monkeypatch.setattr(s3_connector, "MAX_OBJECTS", 1)
+    with pytest.raises(ReadOverCap, match=r"more than 1 objects.*rule 2"):
+        read_s3(store, _settings(), S3Read(folder="visits/2026/", format="csv"))
+    assert listed == [2], listed  # one page, asked for two, of the folder's three or more

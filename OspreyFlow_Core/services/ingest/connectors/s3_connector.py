@@ -27,6 +27,7 @@ from typing import Any, Protocol
 
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
+from botocore.exceptions import BotoCoreError, ClientError
 
 from schemas.sources import S3ConnectionSettings, S3Read
 
@@ -36,11 +37,21 @@ from .reads import ConnectorRefused, ReadOverCap, ReadRows
 
 class ObjectStore(Protocol):
     """What the reader asks of a bucket: the two read-only calls of `pyarrow.fs.FileSystem`
-    (`get_file_info` takes a selector, answering a list, or a path, answering one)."""
+    (`get_file_info` takes a selector, answering a list, or a path, answering one). A store may
+    also list a folder a page at a time and stop (`BoundedListing`): a deployment's does
+    (`connector_reads.CloudS3Store`)."""
 
     def get_file_info(self, selector_or_path: Any, /) -> Any: ...
 
     def open_input_stream(self, path: str, /) -> Any: ...
+
+
+class BoundedListing(Protocol):
+    """A listing that stops once it holds more than `limit` objects (pyarrow's has no limit, and
+    takes a folder of any size whole before the reader can count it: the orchestrator's review of
+    L1.9, round 1, item 8)."""
+
+    def list_objects(self, base: str, *, recursive: bool, limit: int) -> list[Any]: ...
 
 
 #: The most objects one read may take; past it the read is refused whole (rule 2).
@@ -69,19 +80,54 @@ def refused_by_store(error: OSError) -> ConnectorRefused:
 
 
 MISSING_BUCKET = "the bucket does not exist; nothing was read"
+OTHER_REGION = (
+    "the bucket is in another region than the connection names: correct its Region in Admin › "
+    "Connections; nothing was read"
+)
 
 
-def list_folder(fs: ObjectStore, bucket: str, base: str, *, recursive: bool) -> list[Any]:
-    """The folder's listing, refused in words. An empty one is checked against the bucket: a listing
-    answers a bucket that does not exist as empty (found on SeaweedFS, L1.9). The bucket is asked
-    for only then, since asking needs `s3:ListBucket` on the whole bucket, which a role limited to
-    a prefix may not hold (the lane review): such a role's empty folder stays an empty folder."""
-    try:
-        found = list(
-            fs.get_file_info(pa_fs.FileSelector(base, recursive=recursive, allow_not_found=True))
+def refused_by_s3(error: ClientError | BotoCoreError) -> ConnectorRefused:
+    """What S3 said to botocore's listing, in fixed words, judged by its error code alone: never
+    S3's own message, which names the bucket, keys and hosts. A bucket in another region is told so
+    (`PermanentRedirect`, `AuthorizationHeaderMalformed`), never followed there: the client reaches
+    the one host the egress check names (`connector_reads.only_to`)."""
+    if isinstance(error, BotoCoreError):
+        return ConnectorRefused(f"the bucket could not be read ({type(error).__name__}); "
+                                "nothing was read")  # fmt: skip
+    code = str(error.response.get("Error", {}).get("Code", ""))
+    if code in {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "403"}:
+        return ConnectorRefused(
+            "the bucket refused the read (access denied): the deployment's cloud role may not read "
+            "it; nothing was read"
         )
+    if code in {"NoSuchBucket", "404"}:
+        return ConnectorRefused(MISSING_BUCKET)
+    if code in {"PermanentRedirect", "AuthorizationHeaderMalformed", "301"}:
+        return ConnectorRefused(OTHER_REGION)
+    return ConnectorRefused(f"the bucket could not be read ({code or 'unknown'}); nothing was read")
+
+
+def list_folder(
+    fs: ObjectStore, bucket: str, base: str, *, recursive: bool, limit: int
+) -> list[Any]:
+    """The folder's listing, refused in words: no more than `limit` + 1 objects from a store that
+    can stop (`BoundedListing`), so a folder past the cap is never listed whole (rule 2; the
+    review, round 1, item 8); a store that cannot (a local stand-in's) lists whole. An empty listing
+    is checked against the bucket: a listing answers a bucket that does not exist as empty (found
+    on SeaweedFS, L1.9). The bucket is asked for only then, since asking needs `s3:ListBucket` on
+    the whole bucket, which a role limited to a prefix may not hold (the lane review): such a role's
+    empty folder stays an empty folder."""
+    bounded = getattr(fs, "list_objects", None)
+    try:
+        if bounded is not None:
+            found = list(bounded(base, recursive=recursive, limit=limit))
+        else:
+            selector = pa_fs.FileSelector(base, recursive=recursive, allow_not_found=True)
+            found = list(fs.get_file_info(selector))
     except OSError as error:
         raise refused_by_store(error) from error
+    except (ClientError, BotoCoreError) as error:
+        raise refused_by_s3(error) from error
     if not found:
         try:
             missing = fs.get_file_info(bucket).type == pa_fs.FileType.NotFound
@@ -105,26 +151,27 @@ def _objects(
     folder) never."""
     folder = f"{settings.prefix}{read.folder}"
     base = f"{settings.bucket}/{folder}".rstrip("/")
-    found = list_folder(fs, settings.bucket, base, recursive=True)
-    suffixes = _SUFFIXES[read.format]
-    chosen = [
-        info
-        for info in found
-        if info.type == pa_fs.FileType.File
-        and info.path.startswith(base + "/")
-        and not any(_hidden(p) for p in info.path[len(base) + 1 :].split("/"))
-        and info.base_name.lower().endswith(suffixes)
-    ]
-    chosen.sort(key=lambda i: i.path)
+    found = list_folder(fs, settings.bucket, base, recursive=True, limit=MAX_OBJECTS)
     where = f"s3://{settings.bucket}/{folder}"
-    if not chosen:
-        raise ConnectorRefused(
-            f"there is no {_FORMAT_WORDS[read.format]} object under {where}; nothing was written"
-        )
-    if len(chosen) > MAX_OBJECTS:
+    files = [i for i in found if i.type == pa_fs.FileType.File and i.path.startswith(base + "/")]
+    # Every object under the folder counts, of any format, hidden or not: the cap is on what the
+    # listing takes, so it is counted before any is chosen (the review, round 1, item 8).
+    if len(files) > MAX_OBJECTS:
         raise ReadOverCap(
             f"{where} holds more than {MAX_OBJECTS} objects, more than one read may take; nothing "
             "was written (rule 2)"
+        )
+    suffixes = _SUFFIXES[read.format]
+    chosen = [
+        info
+        for info in files
+        if not any(_hidden(p) for p in info.path[len(base) + 1 :].split("/"))
+        and info.base_name.lower().endswith(suffixes)
+    ]
+    chosen.sort(key=lambda i: i.path)
+    if not chosen:
+        raise ConnectorRefused(
+            f"there is no {_FORMAT_WORDS[read.format]} object under {where}; nothing was written"
         )
     return where, chosen
 

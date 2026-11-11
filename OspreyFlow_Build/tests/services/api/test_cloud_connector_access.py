@@ -199,9 +199,13 @@ def test_another_dataset_s_author_cannot_read_through_it(world: SimpleNamespace,
     assert refused.status_code == 404
     assert _reads(world) == 0  # nothing was asked of the bucket or Athena
     assert list((world.root / "uploaded" / "ds-b").iterdir()) == []
-    # And through dataset A's own route, which author B does not author: refused at the dataset.
+    # And through dataset A's own route, which author B does not author: refused at the dataset,
+    # in the reply a dataset that does not exist gets, whole (rules 3 and 4; the orchestrator's
+    # review of L1.9, round 1, item 5: a status of 403 or 404 told the two apart).
     theirs = _register(world, "ds-a", connection_id, "author_b", kind)
-    assert theirs.status_code in (403, 404)
+    nowhere = _register(world, "ds-nowhere", connection_id, "author_b", kind)
+    assert (theirs.status_code, theirs.json()) == (nowhere.status_code, nowhere.json())
+    assert theirs.status_code == 404
     assert _reads(world) == 0
     audited = [e for e in world.audit.entries if e["action"] == "connector_read_refused"]
     assert [e["resolved_query"]["dataset_id"] for e in audited] == ["ds-b"]
@@ -227,15 +231,21 @@ def test_refresh_now_through_a_rebound_connection_reads_nothing(
 def test_another_dataset_s_source_is_refused(world: SimpleNamespace, kind: str) -> None:
     made = _register(world, "ds-a", _connection(world, kind), "author_a", kind).json()
     asked = _reads(world)
-    for path in (f"/v1/datasets/ds-b/sources/{made['id']}/read",
-                 f"/v1/datasets/ds-b/sources/{made['id']}"):  # fmt: skip
-        method = world.client.post if path.endswith("/read") else world.client.get
-        reply = method(path, headers=_as("author_b"))
-        assert reply.status_code == 404, (path, reply.text)
-    for path in (f"/v1/datasets/ds-a/sources/{made['id']}/read",
-                 f"/v1/datasets/ds-a/sources/{made['id']}"):  # fmt: skip
-        method = world.client.post if path.endswith("/read") else world.client.get
-        assert method(path, headers=_as("author_b")).status_code in (403, 404)
+
+    def reply(dataset: str, source: str, read: bool) -> tuple[int, Any]:
+        path = f"/v1/datasets/{dataset}/sources/{source}" + ("/read" if read else "")
+        answer = (world.client.post if read else world.client.get)(path, headers=_as("author_b"))
+        return answer.status_code, answer.json()
+
+    # Each reply pinned whole to the one a thing that does not exist gets (rules 3 and 4; the
+    # orchestrator's review of L1.9, round 1, item 5), never only its status.
+    for read in (True, False):
+        # Through author B's own dataset: as a source that does not exist.
+        assert reply("ds-b", made["id"], read) == reply("ds-b", "no-such-source", read)
+        assert reply("ds-b", made["id"], read)[0] == 404
+        # Through dataset A's route, which author B does not author: as a dataset that does not.
+        assert reply("ds-a", made["id"], read) == reply("ds-nowhere", made["id"], read)
+        assert reply("ds-a", made["id"], read)[0] == 404
     assert _reads(world) == asked
 
 

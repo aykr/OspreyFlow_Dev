@@ -10,8 +10,12 @@ refuses** (rule 15's second worked example), not only what it grants:
 - a workgroup that does not exist; a query with no results location where its workgroup names none;
 - a page asked for over 1,000 rows, a page token it did not give, results of a query not finished;
 - a named query or an execution it does not hold;
-- a query that does not parse, and a table that does not exist, each **failing as an execution**
-  (`FAILED`, with its `AthenaError`), as Athena reports them, not as a refused request.
+- a query that does not parse, and a catalog, database or table that does not exist, each
+  **failing as an execution** (`FAILED`, with its `AthenaError`), as Athena reports them, not as a
+  refused request. Every table after FROM or JOIN is resolved, not only the first: an unqualified
+  one against the execution's database, a two-part one against its catalog, and the execution's
+  own catalog (`QueryExecutionContext.Catalog`) is checked too (the orchestrator's review of L1.9,
+  round 1, item 7: the fixture had ignored the catalog and looked only at the first FROM).
 
 It also records every query it was sent, so a test can prove a statement was never sent at all.
 Every value is synthetic (rule 9).
@@ -35,8 +39,15 @@ RECORDED = json.loads((Path(__file__).parent / "golden" / "athena" / "recorded.j
 GRANTED_KEY = "AKIDSYNTHETICGRANTED"
 REFUSED_KEY = "AKIDSYNTHETICREFUSED"
 _KNOWN = {GRANTED_KEY, REFUSED_KEY}
-_SELECT_ALL = re.compile(r'^SELECT \* FROM "([a-z0-9_]+)"\."([a-z0-9_]+)"$')
-_FROM = re.compile(r"\bFROM\s+\"?([a-z0-9_]+)\"?\.\"?([a-z0-9_]+)\"?", re.IGNORECASE)
+_PART = r'(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_]*)'
+#: Each table after FROM or JOIN: one, two or three parts.
+_RELATION = re.compile(rf"\b(?:FROM|JOIN)\s+({_PART}(?:\s*\.\s*{_PART}){{0,2}})", re.IGNORECASE)
+#: A WITH's own names, which are no table.
+_WITH_NAME = re.compile(r"(?:\bWITH|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+AS\s*\(", re.IGNORECASE)
+#: What follows FROM or JOIN but is no table.
+_NOT_TABLES = {"unnest", "lateral", "table", "select"}
+#: The catalogs this Athena holds.
+CATALOGS = {"awsdatacatalog"}
 
 
 class _Raw:
@@ -97,6 +108,11 @@ class RecordedAthena:
             aws_secret_access_key="synthetic-secret-not-a-real-key",  # noqa: S106 (synthetic)
             config=Config(retries={"max_attempts": 1}),
         )  # fmt: skip
+        return self.attach(client)
+
+    def attach(self, client: Any) -> Any:
+        """Any botocore Athena client, the deployment's own included (`cloud_athena_client`),
+        answered by this fixture in place of the network."""
         client.meta.events.register("before-send.athena", self._send)
         return client
 
@@ -148,27 +164,52 @@ class RecordedAthena:
             return _error("no_output_location")
         query = body["QueryString"]
         self.sent.append(query)
-        database = (body.get("QueryExecutionContext") or {}).get("Database", "default")
+        context = body.get("QueryExecutionContext") or {}
+        database = str(context.get("Database", "default")).lower()
+        catalog = str(context.get("Catalog", "AwsDataCatalog")).lower()
         execution_id = str(uuid.uuid4())
         execution = _Execution(query, database, workgroup, self.polls, "SUCCEEDED")
         if re.match(r"^\s*SELECT\s+FROM\b", query, re.IGNORECASE):
             execution.outcome = "syntax"  # a SELECT naming nothing to select does not parse
-        if execution.outcome == "SUCCEEDED":
-            match = _SELECT_ALL.match(query) or _FROM.search(query)
-            if match:
-                db, table = match.group(1).lower(), match.group(2).lower()
-                if table == "lake_formation_locked":
-                    execution.outcome = "lake_formation_denied"  # a FAILED reason naming the role
-                elif table not in self.tables.get(db, {}):
-                    execution.outcome = "table_not_found"
-                    execution.fill = {"table": f"awsdatacatalog.{db}.{table}"}
-                else:
-                    execution.table = (db, table)
+        elif re.search(r"\bWHERE\s*;?\s*$", query, re.IGNORECASE):
+            execution.outcome = "syntax_eof"  # a WHERE with no condition
+            execution.fill = {"column": str(len(query.rstrip().rstrip(";")) + 1)}
+        elif catalog not in CATALOGS:
+            execution.outcome = "catalog_not_found"
+            execution.fill = {"catalog": catalog}
+        else:
+            self._resolve(execution, query, catalog, database)
         if output and "forbidden" in output:
             execution.outcome = "s3_access_denied"
             execution.fill = {"id": execution_id}
         self._executions[execution_id] = execution
         return _answer(200, {"QueryExecutionId": execution_id})
+
+    def _resolve(self, execution: _Execution, query: str, catalog: str, database: str) -> None:
+        """Every table after FROM or JOIN resolved as Athena resolves it: the first that does not
+        exist fails the execution; the first that does is the one whose rows the results give."""
+        own = {name.lower() for name in _WITH_NAME.findall(query)}
+        for found in _RELATION.findall(query):
+            parts = [p.strip().strip('"').lower() for p in found.split(".")]
+            if len(parts) == 1 and (parts[0] in own or parts[0] in _NOT_TABLES):
+                continue
+            where = {1: [catalog, database], 2: [catalog], 3: []}[len(parts)] + parts
+            in_catalog, db, table = where
+            if in_catalog not in CATALOGS:
+                execution.outcome, execution.fill = "catalog_not_found", {"catalog": in_catalog}
+                return
+            if db not in self.tables:
+                execution.outcome, execution.fill = "schema_not_found", {"schema": db}
+                return
+            if table == "lake_formation_locked":
+                execution.outcome = "lake_formation_denied"  # a FAILED reason naming the role
+                return
+            if table not in self.tables[db]:
+                execution.outcome = "table_not_found"
+                execution.fill = {"table": f"{in_catalog}.{db}.{table}"}
+                return
+            if execution.table is None:
+                execution.table = (db, table)
 
     def _GetQueryExecution(self, body: dict[str, Any]) -> AWSResponse:
         execution = self._executions.get(body["QueryExecutionId"])
