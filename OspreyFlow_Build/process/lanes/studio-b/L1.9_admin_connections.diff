@@ -1,0 +1,291 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/admin-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/admin-harness.tsx
+index f1681688..1a9d4e60 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/admin-harness.tsx
++++ b/OspreyFlow_Core/apps/workspace/keyboard/admin-harness.tsx
+@@ -159,6 +159,11 @@ if (serving === "policies" || serving === "connections") {
+       { id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "2026-11-01T00:00:00Z" },
+       { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "admin-1", created_at: "2026-11-05T00:00:00Z",
+         datasets: ["ds-a"], settings: { kind: "api", base_url: "https://telco.example", auth: "bearer", secret: "TELCO", pagination: "none" } },
++      // L1.9: an S3 bucket and Athena, each read as the deployment's own cloud role (no secret's name).
++      { id: "c-s3", kind: "s3", name: "Client exports (synthetic)", created_by: "admin-1", created_at: "2026-11-11T00:00:00Z",
++        datasets: ["ds-a"], settings: { kind: "s3", region: "eu-west-2", bucket: "synthetic-exports", prefix: "client-a/" } },
++      { id: "c-athena", kind: "athena", name: "Client Athena (synthetic)", created_by: "admin-1", created_at: "2026-11-11T00:00:00Z",
++        datasets: ["ds-a"], settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", databases: ["visits"] } },
+     ],
+     "/v1/admin/datasets": [{ id: "ds-a", name: "Prison records", owning_unit: "u", egress: "none", kind: "source",
+                              promotion_policy: "author_promotes" }],
+@@ -224,12 +229,13 @@ if (serving === "audit" && show === "rules") {
+   }
+   await pressWhenDrawn("Show entries");
+ }
+-if (serving === "connections" && show === "sql") {
++// `show=sql`, `show=s3` or `show=athena` (L1.9) draws that kind's fields.
++if (serving === "connections" && (show === "sql" || show === "s3" || show === "athena")) {
+   for (let i = 0; i < 60 && !document.querySelector("table[aria-label='Connections of this deployment']"); i++)
+     await new Promise((resolve) => setTimeout(resolve, 50));
+   const kind = [...document.querySelectorAll<HTMLSelectElement>("select")].find((el) => [...el.options].some((o) => o.value === "sql"));
+   if (kind) {
+-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(kind, "sql");
++    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(kind, show);
+     kind.dispatchEvent(new Event("change", { bubbles: true }));
+   }
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
+index 6d3281eb..b95e7b25 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
+@@ -560,6 +560,46 @@ test("a SQL and a JSON connection are named with their fields by keyboard", asyn
+   registerCovered(REGISTRY, "name-a-json-connection-by-keyboard");
+ });
+ 
++// L1.9 (ADR-148; rule 13): an Amazon S3 bucket and Amazon Athena named with their fields by keyboard,
++// the cloud role's words read with the region, and no field a key or a secret could be typed into.
++test("an S3 and an Athena connection are named with their fields by keyboard", async ({ page }) => {
++  await serve(page);
++  const sent = sentTo(page, "POST", "/v1/admin/connections");
++  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
++  await open(page, "Connections");
++  const type = async (name: string, text: string, clear = false) => {
++    await page.getByRole("textbox", { name, exact: true }).focus();
++    if (clear) await page.keyboard.press("ControlOrMeta+a");
++    await page.keyboard.type(text);
++  };
++  await page.getByLabel("Kind").selectOption("s3");
++  await expect(page.getByRole("textbox", { name: /secret|key|password|token/i })).toHaveCount(0);
++  await type("Connection name", "Client exports (synthetic)");
++  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
++  await page.keyboard.press("Space");
++  await expect(page.getByRole("textbox", { name: "Region", exact: true })).toHaveAccessibleDescription(/never with a key/);
++  await type("Bucket", "synthetic-exports");
++  await type("Folder sources may read under (empty for the whole bucket)", "client-a/");
++  await press(page, "Name the connection");
++  await expect(page.getByText("Named Client exports (synthetic).")).toBeVisible();
++  registerCovered(REGISTRY, "name-an-s3-connection-by-keyboard");
++  await page.getByLabel("Kind").selectOption("athena");
++  await expect(page.getByRole("textbox", { name: /secret|key|password|token/i })).toHaveCount(0);
++  await type("Connection name", "Client Athena (synthetic)");
++  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
++  await page.keyboard.press("Space");
++  await type("Databases a source may read (comma-separated)", "visits");
++  await press(page, "Name the connection");
++  await expect(page.getByText("Named Client Athena (synthetic).")).toBeVisible();
++  expect(sent).toEqual([
++    { kind: "s3", name: "Client exports (synthetic)", datasets: ["enron"],
++      settings: { kind: "s3", region: "eu-west-2", bucket: "synthetic-exports", prefix: "client-a/" } },
++    { kind: "athena", name: "Client Athena (synthetic)", datasets: ["enron"],
++      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", databases: ["visits"] } },
++  ]); // prettier-ignore
++  registerCovered(REGISTRY, "name-an-athena-connection-by-keyboard");
++});
++
+ // L2.7 (ADR-145 decision 12, ADR-143 Amendment 6; rule 13): the grading scheme read, and its change
+ // command, the dry run's, copied by keyboard; nothing on the page changes the scheme.
+ test("the grading scheme is read and its change command copied by keyboard", async ({ page, context }) => {
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx
+index ba879780..8a180d47 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx
+@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
+ import { afterEach, describe, expect, it, vi } from "vitest";
+ 
+ import { AdminPlace } from "../AdminPlace";
+-import { SECRET_TIP } from "./Connections";
++import { CLOUD_ROLE_TIP, SECRET_TIP } from "./Connections";
+ 
+ afterEach(() => {
+   cleanup();
+@@ -117,6 +117,46 @@ describe("Connections", () => {
+     expect(posts).toEqual([]);
+   });
+ 
++  // L1.9 (ADR-148): an S3 bucket and Athena are read as the deployment's own cloud role. Red if either
++  // form offers a field a key or secret could be typed into, or sends one; if a dotted bucket (which
++  // cannot be reached by its own name over verified TLS) is sent; or if the role's words are missing.
++  it("names an S3 bucket and Athena with no field for a key or a secret, and sends none", async () => {
++    const posts = serve();
++    open();
++    await screen.findByText("Files: the ingest root");
++    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "s3" } });
++    expect(screen.queryByLabelText(/secret|key|password|token/i)).toBeNull();
++    expect(document.getElementById(screen.getByLabelText("Region").getAttribute("aria-describedby")!)?.textContent).toBe(
++      CLOUD_ROLE_TIP,
++    );
++    type("Connection name", "Client exports (synthetic)");
++    fireEvent.click(await screen.findByRole("checkbox", { name: "Prison records" }));
++    type("Bucket", "client.exports");
++    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
++    expect((await screen.findByRole("alert")).textContent).toMatch(/with no dot/);
++    expect(posts).toEqual([]);
++    type("Bucket", "synthetic-exports");
++    type("Folder sources may read under (empty for the whole bucket)", "client-a/");
++    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
++    await waitFor(() => expect(posts).toHaveLength(1));
++    expect(posts[0]!.body).toEqual({
++      kind: "s3", name: "Client exports (synthetic)", datasets: ["ds-a"],
++      settings: { kind: "s3", region: "eu-west-2", bucket: "synthetic-exports", prefix: "client-a/" },
++    }); // prettier-ignore
++
++    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "athena" } });
++    expect(screen.queryByLabelText(/secret|key|password|token/i)).toBeNull();
++    type("Connection name", "Client Athena (synthetic)");
++    fireEvent.click(await screen.findByRole("checkbox", { name: "Prison records" }));
++    type("Databases a source may read (comma-separated)", "visits, calls");
++    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
++    await waitFor(() => expect(posts).toHaveLength(2));
++    expect(posts[1]!.body).toEqual({
++      kind: "athena", name: "Client Athena (synthetic)", datasets: ["ds-a"],
++      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", databases: ["visits", "calls"] },
++    }); // prettier-ignore
++  });
++
+   it("lists what a connection reads, its secret's name, its datasets by name, and tests it", async () => {
+     const posts = serve([FILES, TELCO]);
+     open();
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx
+index f7393072..082cbdc7 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx
+@@ -6,7 +6,9 @@
+ // takes it, so none is ever sent or answered. A secret's field that holds anything other than a name
+ // is refused here before it is sent, and the Conduit refuses it again without answering it back
+ // (`test_admin_connection_fields.py`). Which hosts may be reached is the operator's, not Admin's
+-// (`connectors.private_hosts`, the egress allow-list), so this screen only says so.
++// (`connectors.private_hosts`, the egress allow-list), so this screen only says so. An Amazon S3 bucket
++// or Amazon Athena (L1.9; ADR-148) is read as the deployment's own cloud role: it names no secret at
++// all, and the form has no field one could be typed into.
+ import { useEffect, useMemo, useState } from "react";
+ 
+ import type { AdminDataset, Connection, ConnectionInput } from "../../../../../packages/schemas/generated";
+@@ -16,14 +18,25 @@ import { Select } from "../../design/primitives/Select";
+ import { addConnection, listAdminConnections } from "../../ingest/sources/api";
+ import { listDatasets, testConnection, type AdminApi } from "../api";
+ 
+-type Kind = "files" | "sql" | "api" | "json";
++type Kind = "files" | "sql" | "api" | "json" | "s3" | "athena";
+ 
+ const KINDS: { id: Kind; label: string }[] = [
+   { id: "files", label: "Files" },
+   { id: "sql", label: "SQL database" },
+   { id: "api", label: "HTTP API" },
+   { id: "json", label: "JSON files" },
++  { id: "s3", label: "Amazon S3 bucket" },
++  { id: "athena", label: "Amazon Athena" },
+ ];
++
++/** L1.9 (ADR-148): an S3 or Athena connection signs in as the deployment's own cloud role, so it has no
++ * field for a key or a secret, and says so. */
++export const CLOUD_ROLE_TIP =
++  "Read as this deployment's own cloud role, never with a key: there is no field for one. The host is made from the region (and the bucket), and your operator must add it to the egress allow-list.";
++/** The shapes the Conduit takes (`schemas/sources.py`): a region, a bucket without a dot, a folder. */
++const REGION = /^[a-z]{2}(-gov)?-[a-z]+-[0-9]{1,2}$/;
++const BUCKET = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
++const FOLDER = /^([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}\/){0,20}$/;
+ const KIND_WORDS: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.id, k.label]));
+ 
+ /** The shape a secret's name takes (`schemas/sources.py`'s `SECRET_NAME`): capitals, digits and `_`. */
+@@ -48,19 +61,37 @@ interface Fields {
+   pagination: "none" | "page" | "next_link";
+   pageParam: string;
+   nextAt: string;
++  region: string;
++  bucket: string;
++  prefix: string;
++  workgroup: string;
++  databases: string;
++  resultsLocation: string;
+ }
+ 
+ const EMPTY: Fields = {
+   host: "", port: "5432", database: "", user: "", secret: "", tls: "verify-full", schemas: "public", ca: "",
+   baseUrl: "https://", auth: "none", pagination: "none", pageParam: "page", nextAt: "",
++  region: "eu-west-2", bucket: "", prefix: "", workgroup: "primary", databases: "", resultsLocation: "",
+ }; // prettier-ignore
+ 
++const list = (text: string) => text.split(",").map((s) => s.trim()).filter(Boolean);
++
+ /** What the form sends: the kind's own settings, the secret by name, and nothing a secret's value
+  * could be in. */
+ export function connectionBody(kind: Kind, name: string, datasets: string[], f: Fields): ConnectionInput {
+   const ca = f.ca.trim() ? { ca_certificate: f.ca.trim() } : {};
+   if (kind === "files") return { kind, name: name.trim() } as ConnectionInput;
+   if (kind === "json") return { kind, name: name.trim(), datasets, settings: { kind } } as ConnectionInput;
++  if (kind === "s3") {
++    return { kind, name: name.trim(), datasets,
++      settings: { kind, region: f.region.trim(), bucket: f.bucket.trim(), prefix: f.prefix.trim() } } as ConnectionInput; // prettier-ignore
++  }
++  if (kind === "athena") {
++    const results = f.resultsLocation.trim() ? { results_location: f.resultsLocation.trim() } : {};
++    return { kind, name: name.trim(), datasets,
++      settings: { kind, region: f.region.trim(), workgroup: f.workgroup.trim(), databases: list(f.databases), ...results } } as ConnectionInput; // prettier-ignore
++  }
+   if (kind === "sql") {
+     return {
+       kind, name: name.trim(), datasets,
+@@ -92,18 +123,25 @@ export function notYet(kind: Kind, name: string, datasets: string[], f: Fields):
+     return "The secret's field takes its name in capitals (such as TELCO_API), never the password or token itself.";
+   if (kind === "sql" && (!f.host.trim() || !f.database.trim() || !f.user.trim())) return "Give the host, the database and the login.";
+   if (kind === "api" && !/^https:\/\/[^\s/]+/.test(f.baseUrl.trim())) return "The base URL starts https:// and names its host.";
++  if ((kind === "s3" || kind === "athena") && !REGION.test(f.region.trim())) return "Give the region as AWS names it, such as eu-west-2.";
++  if (kind === "s3" && !BUCKET.test(f.bucket.trim())) return "Give the bucket's name: lower-case letters, digits and '-', with no dot.";
++  if (kind === "s3" && !FOLDER.test(f.prefix.trim())) return "A folder is names each ending in '/', such as exports/, or empty for the whole bucket.";
++  if (kind === "athena" && list(f.databases).length === 0) return "Name the databases a source may read.";
+   return null;
+ }
+ 
+ function where(c: Connection): string {
+-  const s = c.settings as { kind?: string; host?: string; port?: number; database?: string; base_url?: string } | null | undefined;
++  const s = c.settings;
+   if (!s) return c.kind === "files" ? "the ingest root" : "";
+   if (s.kind === "sql") return `${s.host}:${s.port}/${s.database}`;
+   if (s.kind === "api") return s.base_url ?? "";
++  if (s.kind === "s3") return `s3://${s.bucket}/${s.prefix ?? ""} (${s.region})`;
++  if (s.kind === "athena") return `workgroup ${s.workgroup ?? "primary"}: ${s.databases.join(", ")} (${s.region})`;
+   return "JSON files in the ingest root";
+ }
+ 
+ function secretOf(c: Connection): string {
++  if (c.kind === "s3" || c.kind === "athena") return "none: the deployment's own cloud role";
+   const s = c.settings as { secret?: string | null } | null | undefined;
+   return s?.secret ? s.secret : "none";
+ }
+@@ -181,9 +219,9 @@ export function Connections({ api }: { api: AdminApi }) {
+   return (
+     <section aria-label="Connections" style={{ display: "grid", gap: "var(--sp-12)", maxWidth: 760 }}>
+       <p className="label" style={{ margin: 0 }}>
+-        Where sources are read from. Files, the ingest root, is built in. A SQL database, an HTTP API or JSON files are named
+-        here with the datasets whose sources may read through them; a source is registered on a connection in the Ingest
+-        Studio&apos;s Sources tab.
++        Where sources are read from. Files, the ingest root, is built in. A SQL database, an HTTP API, JSON files, an Amazon
++        S3 bucket or Amazon Athena are named here with the datasets whose sources may read through them; a source is
++        registered on a connection in the Ingest Studio&apos;s Sources tab.
+       </p>
+       {problem && <p role="alert">{problem}</p>}
+       {connections === null && !problem && <p className="label">Reading…</p>}
+@@ -303,6 +341,27 @@ export function Connections({ api }: { api: AdminApi }) {
+             {fields.pagination === "next_link" && field("Where the next page's link is (a dotted path)", "nextAt")}
+           </>
+         )}
++        {(kind === "s3" || kind === "athena") && (
++          <>
++            <p id="connection-cloud-role-tip" className="caption" style={{ margin: 0 }}>
++              {CLOUD_ROLE_TIP}
++            </p>
++            {field("Region", "region", { tip: "", tipId: "connection-cloud-role-tip" })}
++          </>
++        )}
++        {kind === "s3" && (
++          <>
++            {field("Bucket", "bucket")}
++            {field("Folder sources may read under (empty for the whole bucket)", "prefix")}
++          </>
++        )}
++        {kind === "athena" && (
++          <>
++            {field("Workgroup", "workgroup")}
++            {field("Databases a source may read (comma-separated)", "databases")}
++            {field("Where Athena writes results, if the workgroup names nowhere (optional, s3://…)", "resultsLocation")}
++          </>
++        )}
+         {(kind === "sql" || kind === "api") && (
+           <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+             <span className="label">Your own certificate authority (optional, PEM)</span>
