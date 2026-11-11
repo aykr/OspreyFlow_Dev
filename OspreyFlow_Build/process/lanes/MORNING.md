@@ -516,6 +516,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **My ruling, which you can overrule:** ClickHouse keeps `automountToken: false`. EKS's IRSA webhook
         injects its own token whatever that setting says. It is unmeasured on EKS and is on the live-checks
         CARRIES row.
+      - **The three lane-tool timing failures were real bugs in my scripts** (568eaa8). All three had red tests
+        first. Under `pipefail`:
+        - a `| head -1` could end `show` and `watch` part-way through, and NEEDS YOU went with it;
+        - an estimates file with no rows did the same;
+        - `alive` missed a running session if another session ended at that moment. `open` could then have
+          started a second session in that worktree (rule 14).
+
+        The server ran the tests in parallel eight times with no failures; before the fix, four of five runs
+        failed. Restart your `watch` to pick this up.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
