@@ -160,6 +160,16 @@ def test_update_shows_the_files_step_s_refusal_naming_the_variable(
         "refresh: (OSPREY_X_SECRET) hunter2",
         "ospreyflow: the update to v0.5.0 failed at 'start the release': OSPREY_DB_PASSWORD was "
         "hunter2",
+        # The orchestrator's review of ad4bef7, item 1: our phrase with a value after it, an
+        # upper-case value inside the names list (a variable's name has an underscore), and our
+        # whole sentence with a value after it.
+        "refresh: requires OSPREY_X_PASSWORD, which deployment.env does not hold: hunter2",
+        "refresh: This checkout's compose file requires OSPREY_POSTGRES_PASSWORD, HUNTER2, which "
+        "deployment.env does not hold, so nothing was changed. Run `ospreyflow apply --name lab` "
+        "with the checkout at the version you are moving to.",
+        "refresh: This checkout's compose file requires OSPREY_POSTGRES_PASSWORD, which "
+        "deployment.env does not hold, so nothing was changed. Run `ospreyflow apply --name lab` "
+        "with the checkout at the version you are moving to. hunter2",
         "postgres  | password authentication failed for user osprey",
     ],
 )
@@ -167,17 +177,34 @@ def test_a_value_is_still_hidden_whatever_the_line_begins_with(line: str) -> Non
     assert HIDDEN in Redactor("deployment.env")(line)
 
 
-@pytest.mark.parametrize(
-    "line",
-    [
-        "refresh: This checkout's compose file requires OSPREY_POSTGRES_PASSWORD, "
-        "OSPREY_LITELLM_SALT_SECRET, which deployment.env does not hold, so nothing was changed.",
-        "ospreyflow: the update to v0.5.0 failed at 'bring the files up to date': refresh: "
-        "requires OSPREY_LITELLM_DB_PASSWORD, which deployment.env does not hold.",
-        "ospreyflow: The compose file needs OSPREY_POSTGRES_PASSWORD, which this shell sets empty "
-        "(Compose reads the shell before deployment.env: unset OSPREY_POSTGRES_PASSWORD first), so "
-        "Docker Compose refuses every command on this deployment and nothing was changed.",
-    ],
-)
-def test_our_own_refusal_naming_a_variable_is_shown(line: str) -> None:
-    assert Redactor("deployment.env")(line) == line
+def _our_sentences(folder: Path) -> list[str]:
+    """Refresh's own refusals as its `main` prints them, and as update reports its files step's
+    (`refresh: …` as the failure's `why`), for a deployment at `folder`, the gateway's made by
+    refresh's own function (`test_our_unset_refusal_is_refresh_s_own_words` holds the other)."""
+    unset = (
+        "This checkout's compose file requires OSPREY_POSTGRES_PASSWORD, OSPREY_LITELLM_SALT_SECRET"
+        ", which deployment.env does not hold, so nothing was changed. Run `ospreyflow "
+        f"apply{refresh._named(folder)}` with the checkout at the version you are moving to."
+    )
+    lines = [f"refresh: {x}" for x in (unset, refresh.before_the_gateway_database(folder))]
+    update = "ospreyflow: the update to v0.5.0 failed at 'bring the files up to date': "
+    return [*lines, *(update + x for x in lines)]
+
+
+@pytest.mark.parametrize("name", ["osprey-upg", "secret-lab", "token-test-2"])
+def test_our_own_refusal_naming_a_variable_is_shown(tmp_path: Path, name: str) -> None:
+    """Shown only as our sentence in full: anchored, names alone, nothing after (the
+    orchestrator's review of ad4bef7, item 1), whatever the deployment is called, `secret-lab`
+    among them (its minor 7)."""
+    folder = tmp_path / "deployments" / name
+    for line in _our_sentences(folder):
+        assert Redactor("deployment.env")(line) == line, line
+
+
+def test_our_unset_refusal_is_refresh_s_own_words() -> None:
+    """The unset sentence `_our_sentences` builds is the one refresh raises, held against its
+    source, so the redactor's template and refresh's words cannot drift apart unseen."""
+    source = Path(refresh.__file__).read_text(encoding="utf-8")
+    said = '", which deployment.env does not hold, so nothing was changed. Run `ospreyflow "'
+    assert said in source
+    assert "apply{_named(directory)}` with the checkout at the version you are moving to." in source

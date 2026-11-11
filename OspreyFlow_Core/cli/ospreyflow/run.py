@@ -19,19 +19,35 @@ _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
 #: A variable named, with no value after it, is advice, not a secret (ADR-114 Amendment 8: a
 #: private repository is read with `GITHUB_TOKEN`). Its value, and every other line, stays hidden.
 _NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)\b(?!\s*[=:])")
-#: The CLI's own modules' refusal words (`refresh: …`, `ospreyflow: …`; ADR-114 Amendment 39), which
-#: name the variables Compose requires and never a value (CARRIES, the orchestrator's review,
-#: item 2).
-_OUR_WORDS = re.compile(r"^(?:refresh|ospreyflow): ")
-#: The two phrases our own refusals name a variable in, and only these, the names in them being
-#: upper case alone: refresh's and the lockout's "A, B, which deployment.env does not hold", and the
-#: lockout's shell clause. A name anywhere else in a line, or a line embedding a child's text that
-#: names a secret, stays hidden (my own lane review of the carries' round, item 4).
-_NAMES = r"[A-Z][A-Z0-9_]*(?:, [A-Z][A-Z0-9_]*)*"
-_OUR_PHRASES = re.compile(
-    rf"\b{_NAMES}, which deployment\.env does not hold\b"
-    rf"|\b{_NAMES}, which this shell sets empty \(Compose reads the shell before deployment\.env: "
-    rf"unset {_NAMES} first\)"
+#: Refresh's own refusals, as its `main` prints them and as `update` reports its files step's: a
+#: line naming a secret is shown **only as one of these sentences in full** (anchored, the
+#: variables' names alone, a deployment's name, nothing after), so neither a value after our words
+#: nor a value among the names reaches the screen (the orchestrator's review of ad4bef7, item 1). A
+#: variable's name has an underscore; a deployment's is lower case, digits and hyphens
+#: (`secret-lab` too).
+_DEPLOYMENT = r" --name [a-z0-9][a-z0-9-]*"
+_VARIABLE = r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+"
+_UNSET = (
+    rf"This checkout's compose file requires {_VARIABLE}(?:, {_VARIABLE})*, which deployment\.env "
+    rf"does not hold, so nothing was changed\. Run `ospreyflow apply{_DEPLOYMENT}` with the "
+    r"checkout at the version you are moving to\."
+)
+#: `scripts.refresh.before_the_gateway_database`'s words, `{_N}` where it names the deployment;
+#: held to refresh's own by `tests/cli/test_refusal_words_reach_the_operator.py`.
+_GATEWAY_WORDS = (
+    "This deployment was rendered before the model gateway kept its own database (ADR-135 "
+    "Amendment 2), which a refresh cannot bring it to, so nothing was changed. With the "
+    "checkout at the version you are moving to (git checkout <its tag>), run "
+    "`ospreyflow backup{_N}`, then `ospreyflow apply{_N}` (it keeps every value deployment.env "
+    "holds, and an install from a release on its own images), then "
+    "`ospreyflow update{_N}` and `ospreyflow apply{_N}` "
+    "once more for an install from a release (the second apply moves the providers' keys into "
+    "the gateway), or `ospreyflow start --build{_N}` for one built from a checkout."
+)
+_GATEWAY = re.escape(_GATEWAY_WORDS).replace(re.escape("{_N}"), _DEPLOYMENT)
+_OUR_SENTENCE = re.compile(
+    r"(?:refresh: |ospreyflow: the update to v[0-9][0-9A-Za-z.\-]* failed at '[a-z ]+': refresh: )"
+    rf"(?:{_UNSET}|{_GATEWAY})"
 )
 
 
@@ -64,10 +80,9 @@ class Redactor:
         )
 
     def __call__(self, line: str) -> str:
-        left = _NAMED_ONLY.sub("", line)
-        if _OUR_WORDS.match(line):
-            left = _OUR_PHRASES.sub("", left)
-        return self._notice if _SECRET.search(left) else line
+        if not _SECRET.search(_NAMED_ONLY.sub("", line)) or _OUR_SENTENCE.fullmatch(line):
+            return line
+        return self._notice
 
 
 class SubprocessRunner:
