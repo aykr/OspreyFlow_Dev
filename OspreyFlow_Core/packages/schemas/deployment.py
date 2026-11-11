@@ -265,11 +265,17 @@ MAX_CONTRACT_REFERENCE = 200
 _KEY_PREFIXES = ("sk-", "AIza")
 
 
+#: A JSON Web Token, the shape most gateways issue their tokens in: three base64url parts joined by
+#: dots, the first two starting `eyJ` (`{"` encoded). Its dots hid it from the unbroken-run check
+#: (the orchestrator's review of P11, round 2, item b).
+_JWT = re.compile(r"eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]*")
+
+
 def _looks_like_a_key(text: str) -> bool:
-    """A key's shape: a known key prefix, or one unbroken run of 24 or more letters, digits, `-`
-    and `_` mixing letters and digits. A reference in words (`DPA-2026-0001, signed 3 March`) has
-    spaces or is short."""
-    if any(word.startswith(_KEY_PREFIXES) for word in text.split()):
+    """A key's shape: a known key prefix, a JWT anywhere in it, or one unbroken run of 24 or more
+    letters, digits, `-` and `_` mixing letters and digits. A reference in words
+    (`DPA-2026-0001, signed 3 March`) has spaces or is short."""
+    if any(word.startswith(_KEY_PREFIXES) for word in text.split()) or _JWT.search(text):
         return True
     return bool(
         re.fullmatch(r"[A-Za-z0-9_\-]{24,}", text)
@@ -479,7 +485,26 @@ def _address_refusal(address: str) -> str | None:
             "the address carries a query or fragment (?… or #…), where a key is often pasted; "
             "give the address alone, and the key or token with Enter key"
         )
+    if any(_a_key_in_the_path(segment) for segment in parts.path.split("/")):
+        return (
+            "the address's path carries what looks like a key or token (https://…/<key>); give "
+            "the address alone, and the key or token with Enter key"
+        )
     return None
+
+
+def _a_key_in_the_path(segment: str) -> bool:
+    """A path segment shaped like a key: a key prefix, a JWT, or 24 or more characters mixing upper
+    case, lower case and digits. A deployment's name in a path (`my-deployment-2024-08-06`,
+    `gpt-4o-mini-2024-07-18`) is lower case, so is taken (the orchestrator's round 2, item d)."""
+    if segment.startswith(_KEY_PREFIXES) or _JWT.search(segment):
+        return True
+    return bool(
+        len(segment) >= 24
+        and re.search(r"[A-Z]", segment)
+        and re.search(r"[a-z]", segment)
+        and re.search(r"[0-9]", segment)
+    )
 
 
 def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:

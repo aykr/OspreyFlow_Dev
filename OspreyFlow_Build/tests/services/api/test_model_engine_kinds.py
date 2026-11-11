@@ -468,6 +468,45 @@ PASTED = [
 ]
 
 
+#: A gateway's token in the shape most gateways issue: a JWT (header, payload and signature, each
+#: base64url, the first two starting `eyJ`, which is `{"` encoded). It holds dots, so a check for
+#: "one unbroken run" never saw it (the orchestrator's round 2, item b).
+JWT = ("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhY21lIiwic3ViIjoib3NwcmV5In0."
+       "Q7Z4dGhpcy1pcy1hLXNpZ25hdHVyZS1mb3ItdGhlLXRlc3Q")  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("label", JWT),
+        ("label", f"Acme gateway {JWT}"),
+        ("contract_reference", JWT),
+        ("contract_reference", f"DPA 2026/07 {JWT}"),
+        # A key in the address's path (item d): the token pasted after the address.
+        ("api_base", f"{BASE}/{PLANTED}"),
+        ("api_base", f"{BASE}/{JWT}"),
+        ("api_base", f"https://ai-gateway.client.example/sk-proj-{PLANTED}/v1"),
+    ],
+    ids=["label-jwt", "label-words-and-jwt", "reference-jwt", "reference-words-and-jwt",
+         "path-token", "path-jwt", "path-sk"],
+)  # fmt: skip
+def test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed(
+    client: TestClient, world: World, field: str, value: str
+) -> None:
+    for body in ({**GATEWAY, field: value}, {**GATEWAY, "name": "acme_two", field: value}):
+        refused = client.post("/v1/admin/models/engines", json={"provider": body})
+        assert refused.status_code == 422, (field, refused.text)
+        assert "Q7Z4" not in refused.text and "eyJ" not in refused.text
+    assert world.models_file() == ""
+
+
+@pytest.mark.parametrize("path", ["/v1", "/openai/deployments/my-deployment-2024-08-06/v1",
+                                  "/api/v2/gpt-4o-mini-2024-07-18"])  # fmt: skip
+def test_an_address_s_ordinary_path_is_taken(client: TestClient, path: str) -> None:
+    body = {**GATEWAY, "api_base": f"https://ai-gateway.client.example{path}"}
+    assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
+
+
 def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
     client: TestClient, world: World, caplog: pytest.LogCaptureFixture
 ) -> None:
