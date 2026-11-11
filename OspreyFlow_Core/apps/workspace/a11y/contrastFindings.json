@@ -1051,15 +1051,15 @@
   ".context-banner__sep[aria-hidden=\"true\"]:nth-child(4)": {
    "text": "·",
    "ratio": "unmeasurable",
-   "reason": "over or under div.menu-panel",
-   "own": 19.59,
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": null,
    "owner": "shell"
   },
   "span:nth-child(5)": {
    "text": "reads Prison intel",
    "ratio": "unmeasurable",
-   "reason": "over or under div.menu-panel",
-   "own": 19.59,
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": null,
    "owner": "shell"
   }
  }

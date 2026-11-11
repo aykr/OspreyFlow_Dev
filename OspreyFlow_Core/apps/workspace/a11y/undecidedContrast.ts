@@ -23,8 +23,9 @@
 // few pixels). Another element's outer shadow is measured by what it paints at each point, not failed
 // by how far it reaches. A point where the words are hidden is not judged: under an opaque element the
 // browser's hit test finds over them (never one of their own descendants), or clipped by a scrolling
-// box. Each node is scrolled to the middle of its boxes at once and every scroll put back after it, so
-// neither the order of the nodes nor where the viewport's edge falls on the words changes its result.
+// box; hidden at every point, the words are unmeasurable, never passed. Each node is scrolled to the
+// middle of its boxes at once and every scroll put back after it, so neither the order of the nodes
+// nor where the viewport's edge falls on the words changes its result.
 import type { Page } from "@playwright/test";
 
 import {
@@ -109,7 +110,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       for (const one of shadow.split(/,(?![^(]*\))/)) {
         if (/inset/.test(one)) continue;
         const colour = one.match(/\b(?:rgba?|color|oklab|oklch|lab|lch|hsla?|hwb)\([^()]*\)|\b(?:transparent|currentcolor)\b/i)?.[0] ?? one.trim();
-        const lengths = (one.replace(/\b[a-z-]+\([^()]*\)/gi, "").match(/-?[\d.]+px/g) ?? []).map(parseFloat);
+        const lengths = (one.replace(/\b[a-z-]+\([^()]*\)/gi, "").match(/-?[\d.]+(?:e[-+]?\d+)?px/gi) ?? []).map(parseFloat);
         const [dx = 0, dy = 0, blur = 0, spread = 0] = lengths;
         parts.push({ colour, dx, dy, blur, spread });
       }
@@ -153,13 +154,18 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     };
     // An element over the words that hides them at (x, y), which the browser's own hit test has found
     // there: its own background an opaque colour painted to its border box, nothing translucent from it
-    // up, no filter or blend on it, and the point inside its box (to within the pixel the browser snaps
-    // its paint and its hit test to) clear of every rounded corner (each corner's largest radius taken,
-    // so a corner is only ever read as smaller than it is).
+    // up, no filter, blend, mask or clip on it or any ancestor (the hit test ignores a mask), and the
+    // point inside its box (to within the pixel the browser snaps its paint and its hit test to) clear
+    // of every rounded corner (each corner's largest radius taken, so the box is only ever read as
+    // smaller than it is).
     const hides = (e: Element, x: number, y: number) => {
       const s = getComputedStyle(e);
       if (!opaque(e) || s.backgroundClip !== "border-box") return false;
-      if (s.filter !== "none" || s.backdropFilter !== "none" || s.mixBlendMode !== "normal") return false;
+      for (let up: Element | null = e; up; up = up.parentElement) {
+        const u = getComputedStyle(up);
+        if (u.filter !== "none" || u.backdropFilter !== "none" || u.mixBlendMode !== "normal") return false;
+        if (u.maskImage !== "none" || u.getPropertyValue("-webkit-mask-image") !== "none" || u.clipPath !== "none") return false;
+      }
       const box = e.getBoundingClientRect();
       const r = { left: box.left - 1, top: box.top - 1, right: box.right + 1, bottom: box.bottom + 1, width: box.width + 2, height: box.height + 2 };
       if (!within(x, y, r)) return false;
@@ -316,17 +322,39 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
           // Clipped: the innermost of the words' own boxes holding the point is not hit there, so a
           // scrolling box (or a clip) hides the words at it.
           const holder = chainOf.find((a) => within(x, y, a.getBoundingClientRect()));
-          if (stack.length && holder && !stack.includes(holder)) {
+          // Nothing hit at all: a point outside the viewport, which nothing here can judge.
+          if (!stack.length) {
+            overlappedBy = "nothing the browser hit-tests (a point outside the viewport)";
+            return;
+          }
+          // Clipped only where the hit test misses the words' own box there and an ancestor that clips
+          // its overflow has the point outside its padding box too; a miss for any other reason (a
+          // modal's inertness, a rotation, pointer events kept off) is a cover, never hidden.
+          if (holder && !stack.includes(holder)) {
+            const clipped = chainOf.slice(1).some((a) => {
+              const c = getComputedStyle(a);
+              if (c.overflowX === "visible" && c.overflowY === "visible") return false;
+              const b = a.getBoundingClientRect();
+              const left = b.left + a.clientLeft;
+              const top = b.top + a.clientTop;
+              return !within(x, y, { left, top, right: left + a.clientWidth, bottom: top + a.clientHeight });
+            });
+            if (!clipped) {
+              overlappedBy = `${name(holder)} missed by the browser's hit test`;
+              return;
+            }
+            hidden[p] = true;
+            return;
+          }
+          // Over the words and opaque there: nothing beneath it, the words included, is seen, whatever
+          // lies over it in turn (a menu's items over its panel). A descendant of the words' own element
+          // is never taken as hiding them (it stays a cover).
+          const at = stack.indexOf(node);
+          if (stack.slice(0, at < 0 ? 0 : at).some((e) => !e.contains(node) && !node.contains(e) && hides(e, x, y))) {
             hidden[p] = true;
             return;
           }
           for (const e of stack) {
-            if (!below && e !== node && !e.contains(node) && !node.contains(e) && hides(e, x, y)) {
-              // Over the words and opaque there: nothing beneath it, the words included, is seen. A
-              // descendant of the words' own element is never taken as hiding them (it stays a cover).
-              hidden[p] = true;
-              return;
-            }
             if (e === node) {
               below = true;
               if (opaque(e)) break;
@@ -381,8 +409,8 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         color: ink, fontSize: style.fontSize, fontWeight: style.fontWeight,
       };
       } finally {
-        for (const [e] of scrollers()) [e.scrollTop, e.scrollLeft] = [0, 0];
-        for (const [e, top, left] of scrolled) [e.scrollTop, e.scrollLeft] = [top, left];
+        for (const [e] of scrollers()) e.scrollTo({ left: 0, top: 0, behavior: "instant" });
+        for (const [e, top, left] of scrolled) e.scrollTo({ left, top, behavior: "instant" });
         scrollTo({ left: pageX, top: pageY, behavior: "instant" });
       }
     });

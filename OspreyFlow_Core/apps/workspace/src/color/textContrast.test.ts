@@ -375,6 +375,27 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
     expect(darkened.ratio as number).toBeLessThan(none - 1);
   });
 
+  it("lays a shadow between the words' own layers too, where neither under nor over them is the worst", () => {
+    // Found by a search over random colours (the lane-reviewer's finding 4): blue words, a 22% pale
+    // layer over a pink panel, a sharp 75% blue shadow. Laid between the layer and the panel it gives
+    // 1.04:1; straight under the words 1.30:1, over everything 1.13:1, away 2.00:1.
+    const W: Rgba = [9, 80, 239, 1];
+    const L: Rgba = [154, 195, 246, 0.22];
+    const P: Rgba = [221, 95, 161, 1];
+    const S: Rgba = [32, 40, 187, 0.75];
+    const between = ratioOf(W, over(L, over(S, P)));
+    const above = ratioOf(over(S, W), over(S, over(L, P)));
+    const j = judge(
+      sample({
+        color: "rgb(9, 80, 239)",
+        chain: [layer({ name: "span" }), layer({ backgroundColor: "rgba(154, 195, 246, 0.22)" }), layer({ backgroundColor: "rgb(221, 95, 161)" })],
+        shadows: [[at("rgba(32, 40, 187, 0.75)", [-10, -10, 10, 10], 0)]],
+      }),
+    );
+    expect(between).toBeLessThan(above - 0.05);
+    expect(j.ratio as number).toBeCloseTo(between, 4);
+  });
+
   it("fails a shadow colour it cannot read, and more shadows at a point than it will combine", () => {
     const unread = judge(sample({ shadows: [[at("lab(50 0 0)", [-10, -10, 10, 10], 0)]] }));
     expect(unread.ratio).toBeNull();
@@ -387,7 +408,8 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
 
 describe("words hidden at a point (T3b's server round)", () => {
   // Under an opaque element laid over them, or clipped by a scrolling box, the words are not shown
-  // there, so there is no contrast to judge at that point; the rest of them still is.
+  // there, so there is no contrast to judge at that point; the rest of them still is, and words with
+  // no point left are unmeasurable.
   const twoPoints = (hidden?: boolean[]) =>
     judge(
       sample({
@@ -404,10 +426,10 @@ describe("words hidden at a point (T3b's server round)", () => {
     expect(twoPoints([true, false]).why).toMatch(/^1\.00:1/);
   });
 
-  it("passes words hidden at every point, with no ratio, as nothing of them is shown", () => {
+  it("fails words hidden at every point as unmeasurable, never a silent pass", () => {
     const gone = twoPoints([true, true]);
-    expect(gone.why).toBe("");
     expect(gone.ratio).toBeNull();
+    expect(gone.why).toBe("not measurable: hidden at every point, under an opaque element over the words or clipped");
   });
 });
 

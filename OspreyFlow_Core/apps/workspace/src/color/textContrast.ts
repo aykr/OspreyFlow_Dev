@@ -61,7 +61,8 @@ export interface Sample {
    * measured by what it paints there. Absent or shorter than the points means none. */
   shadows?: ShadowAt[][];
   /** For each probed point, whether the words are hidden there: under an opaque element laid over
-   * them, or clipped by a scrolling box. A hidden point is not judged. Absent means none. */
+   * them, or clipped by a scrolling box. A hidden point is not judged; hidden at every point, the
+   * words are unmeasurable. Absent means none. */
   hidden?: boolean[];
   /** axe's own reason for leaving it undecided (`messageKey`), kept for the message. */
   axeReason: string | null;
@@ -274,11 +275,20 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
       if (alpha > 0) cast.push([colour[0], colour[1], colour[2], alpha]);
     }
     if (cast.length > MAX_SHADOWS) return `more than ${MAX_SHADOWS} shadows at one point`;
-    // Where each lies is not read: it may be laid away under an opaque ancestor (none), straight under
-    // the words (under), or over them (over). Every combination is measured and the worst counts.
-    for (let combination = 0; combination < 3 ** cast.length; combination += 1) {
-      const place = cast.map((_, i) => Math.floor(combination / 3 ** i) % 3);
-      const measured = atPoint(sample, fg, page, p, cast.filter((_, i) => place[i] === 1), cast.filter((_, i) => place[i] === 2));
+    // Where each lies is not read, so each is laid in turn at every place it could be: away (none),
+    // over everything there, or under the words' first j elements and over the rest (j from 0, straight
+    // under the words, to the chain's length, straight on the page). Every combination is measured and
+    // the worst counts.
+    const places = sample.chain.length + 3;
+    if (places ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
+    for (let combination = 0; combination < places ** cast.length; combination += 1) {
+      const place = cast.map((_, i) => Math.floor(combination / places ** i) % places);
+      const laid = new Map<number, Rgba[]>();
+      cast.forEach((shadow, i) => {
+        const at = (place[i] ?? 0) - 2;
+        if (at >= 0) laid.set(at, [...(laid.get(at) ?? []), shadow]);
+      });
+      const measured = atPoint(sample, fg, page, p, laid, cast.filter((_, i) => place[i] === 1));
       if (typeof measured === "string") return measured;
       worst = Math.min(worst, measured);
     }
@@ -288,8 +298,10 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
   return Number.isFinite(worst) ? worst : `a measure that came out ${worst}`;
 }
 
-/** Past this many shadows at one point their placements (3 to the power of the count) are not combined. */
+/** Past this many shadows at one point their placements are not combined. */
 const MAX_SHADOWS = 5;
+/** Past this many combinations of shadow placements at one point, the words are not measured. */
+const MAX_PLACEMENTS = 20_000;
 
 /** The standard normal distribution's CDF (Abramowitz and Stegun 7.1.26, error under 1.5e-7). */
 function normalCdf(z: number): number {
@@ -312,9 +324,10 @@ export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }
   return Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom));
 }
 
-/** The text's worst ratio at point `p` on its own surfaces, with `under` laid straight beneath the
- * words and `above` over everything there. */
-function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, under: Rgba[], above: Rgba[]): number | string {
+/** The text's worst ratio at point `p` on its own surfaces, with each shadow in `laid` at index j laid
+ * under the chain's first j elements (straight on the page past the last), and `above` over everything
+ * there. */
+function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, laid: Map<number, Rgba[]>, above: Rgba[]): number | string {
   let worst = Infinity;
   {
     let pairs: [Rgba, Rgba][] = [[fg, [0, 0, 0, 0]]];
@@ -324,8 +337,11 @@ function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, under: Rgba[],
       pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
       return null;
     };
-    for (const shadow of under) lay([shadow]);
     for (const [i, layer] of sample.chain.entries()) {
+      for (const shadow of laid.get(i) ?? []) {
+        const refused = lay([shadow]);
+        if (refused) return refused;
+      }
       // A label's shapes lie under its own line of ancestors and over the ancestor they share with it.
       for (const shape of (sample.under?.[p] ?? []).filter((u) => u.at === i)) {
         const colour = parseColour(shape.fill);
@@ -353,6 +369,10 @@ function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, under: Rgba[],
         ]);
       }
     }
+    for (const shadow of laid.get(sample.chain.length) ?? []) {
+      const refused = lay([shadow]);
+      if (refused) return refused;
+    }
     for (const [ink, bg] of pairs) {
       let [seenInk, seenBg] = [over(ink, page), over(bg, page)];
       for (const shadow of above) [seenInk, seenBg] = [over(shadow, seenInk), over(shadow, seenBg)];
@@ -378,8 +398,9 @@ export function judge(sample: Sample): Judgement {
   if (sample.overlappedBy) return fail(`over or under ${sample.overlappedBy}`);
   if (!fg) return fail(`an unread colour ${sample.color}`);
   if (typeof own === "string") return fail(own);
-  // Hidden at every point (under an opaque element over them, or clipped): nothing of them is shown.
-  if (own === null) return { ...base, ratio: null, ownRatio: null, why: "" };
+  // Hidden at every point (under an opaque element over them, or clipped): never a silent pass, as a
+  // probe that excluded every point has measured nothing (the orchestrator's condition on T3b).
+  if (own === null) return fail("hidden at every point, under an opaque element over the words or clipped");
   const ratio = own;
   const why = ratio < need ? `${ratio.toFixed(2)}:1 < ${need}:1${axe}` : "";
   return { ...base, ratio, ownRatio: null, why };
