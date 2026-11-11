@@ -106,6 +106,17 @@ def test_the_bucket_is_encrypted_by_its_own_key() -> None:
     assert re.search(r'bucket\s*=\s*"\$\{local\.prefix\}backups"', text)
 
 
+def test_the_key_and_the_bucket_outlive_a_destroy_of_the_namespace() -> None:
+    """spec/05_DEPLOYMENT.md §6.1: a backup must never become data nobody can read. The sets are
+    S3's ciphertext under the backups key, so a `terraform destroy` that scheduled the key's
+    deletion while the bucket still held them (S3 refuses to delete a bucket that is not empty)
+    would leave every set unreadable thirty days later. Both are kept from a destroy."""
+    text = rendered.terraform()
+    for resource in ('resource "aws_kms_key" "backups"', 'resource "aws_s3_bucket" "backups"'):
+        block = text.split(resource, 1)[1].split("\nresource ", 1)[0]
+        assert re.search(r"lifecycle\s*\{\s*prevent_destroy\s*=\s*true\s*\}", block), resource
+
+
 def test_a_render_with_one_store_and_not_the_other_is_refused() -> None:
     values = rendered.values()
     workloads = [w for w in values["workloads"] if w["name"] != "clickhouse"]

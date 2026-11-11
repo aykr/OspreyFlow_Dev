@@ -66,6 +66,7 @@ def bucket_policy(bucket_arn: str, key_arn: str, role_arn: str) -> dict[str, Any
     deny by it would refuse every upload without one; `Null: false` denies only a header present
     and wrong (found by the stand-in, 11 November 2026)."""
     every = [bucket_arn, f"{bucket_arn}/*"]
+    key_header = "s3:x-amz-server-side-encryption-aws-kms-key-id"
     return {
         "Version": "2012-10-17",
         "Statement": [
@@ -77,8 +78,8 @@ def bucket_policy(bucket_arn: str, key_arn: str, role_arn: str) -> dict[str, Any
                            "Null": {"s3:x-amz-server-side-encryption": "false"}}},
             {"Sid": "ItsOwnKey", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
              "Resource": [f"{bucket_arn}/*"],
-             "Condition": {"StringNotEquals": {"s3:x-amz-server-side-encryption-aws-kms-key-id": key_arn},
-                           "Null": {"s3:x-amz-server-side-encryption-aws-kms-key-id": "false"}}},
+             "Condition": {"StringNotEquals": {key_header: key_arn},
+                           "Null": {key_header: "false"}}},
             # The objects the backup role's alone: the Conduit's role, which holds every other
             # bucket, is refused here. The bucket's own settings stay the Terraform's to change.
             {"Sid": "BackupRoleOnly", "Effect": "Deny", "Principal": "*",
@@ -95,7 +96,9 @@ def _workload(workloads: list[dict[str, Any]], name: str) -> dict[str, Any] | No
 def give_arcadedb_its_backups_claim(arcadedb: dict[str, Any]) -> dict[str, Any]:
     """ArcadeDB's backups folder as a claim (`backups`, the databases claim's size: a backup is
     never larger than the database), no longer a scratch folder. Returns the claim."""
-    arcadedb["scratch"] = [s for s in arcadedb.get("scratch", []) if s["mountPath"] != ARCADEDB_BACKUPS]
+    arcadedb["scratch"] = [
+        s for s in arcadedb.get("scratch", []) if s["mountPath"] != ARCADEDB_BACKUPS
+    ]
     if not arcadedb["scratch"]:
         arcadedb.pop("scratch")
     databases = next(c for c in arcadedb["claims"] if c["mountPath"] == "/home/arcadedb/databases")
@@ -123,7 +126,11 @@ def backups_values(
     if arcadedb is None and clickhouse is None:
         return None
     if arcadedb is None or clickhouse is None or api is None:
-        missing = [n for n, w in (("arcadedb", arcadedb), ("clickhouse", clickhouse), ("api", api)) if w is None]
+        missing = [
+            n
+            for n, w in (("arcadedb", arcadedb), ("clickhouse", clickhouse), ("api", api))
+            if w is None
+        ]
         raise ValueError(
             "the backups (ADR-148 decision 13) take ArcadeDB and ClickHouse together, in the "
             f"Conduit's image; this render has no {', '.join(missing)}"
@@ -197,6 +204,7 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
     bucket_arn = "${aws_s3_bucket.backups.arn}"
     key_arn = "${aws_kms_key.backups.arn}"
     role_arn = "${aws_iam_role.backup.arn}"
+    subject = f"system:serviceaccount:${{var.namespace}}:{SERVICE_ACCOUNT}"
     return _file(
         "Decision 13 (ADR-148 Amendment 7): the backups' bucket, encrypted by a key of its own,\n"
         "its objects the backup role's alone; that role, trusted for the backup's service account\n"
@@ -206,12 +214,19 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                 ("description", '"${var.namespace} backups"'),
                 ("enable_key_rotation", "true"),
                 ("deletion_window_in_days", "30"),
+                # spec/05 §6.1: a set must never become data nobody can read. A destroy of the
+                # namespace would schedule this key's deletion while the bucket (not empty, so not
+                # deleted) still held its sets; it is kept from a destroy, and so is the bucket.
+                ("lifecycle", [("prevent_destroy", "true")]),
             ]),
             ('resource "aws_kms_alias" "backups"', [
                 ("name", '"alias/${var.namespace}-backups"'),
                 ("target_key_id", "aws_kms_key.backups.key_id"),
             ]),
-            ('resource "aws_s3_bucket" "backups"', [("bucket", '"${local.prefix}backups"')]),
+            ('resource "aws_s3_bucket" "backups"', [
+                ("bucket", '"${local.prefix}backups"'),
+                ("lifecycle", [("prevent_destroy", "true")]),
+            ]),
             ('resource "aws_s3_bucket_public_access_block" "backups"', [
                 ("bucket", "aws_s3_bucket.backups.id"),
                 ("block_public_acls", "true"),
@@ -252,7 +267,7 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                     ("condition", [
                         ("test", _q("StringEquals")),
                         ("variable", '"${var.eks_oidc_issuer}:sub"'),
-                        ("values", f'["system:serviceaccount:${{var.namespace}}:{SERVICE_ACCOUNT}"]'),
+                        ("values", f'["{subject}"]'),
                     ]),
                     ("condition", [
                         ("test", _q("StringEquals")),
@@ -265,7 +280,8 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                 ("name", '"${var.namespace}-backup"'),
                 ("assume_role_policy", "data.aws_iam_policy_document.backup_trust.json"),
             ]),
-            ('data "aws_iam_policy_document" "backup_role"', policy_document(role_policy(bucket_arn, key_arn))),
+            ('data "aws_iam_policy_document" "backup_role"',
+             policy_document(role_policy(bucket_arn, key_arn))),
             ('resource "aws_iam_role_policy" "backup"', [
                 ("name", '"${var.namespace}-backups"'),
                 ("role", "aws_iam_role.backup.id"),
