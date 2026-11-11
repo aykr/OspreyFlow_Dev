@@ -34396,8 +34396,8 @@ orchestrator asked. Amendment 1 stands except where point 6 corrects it.
 7. **The runbooks.** The poc render writes `INSTALL.md` and `DECOMMISSION.md` beside the values,
    with the deployment's own names in them, for the client's team to run end to end from the
    release's `OspreyFlow_Core` folder.
-   - **The fenced blocks are the runbook**, run in order in one shell. A block fenced `sh` runs
-     wherever the runbook is followed. A block fenced `sh platform` runs only on the client's
+   - **The fenced blocks are the runbook**, run in order in one shell. A block fenced `bash` runs
+     wherever the runbook is followed. A block fenced `bash platform` runs only on the client's
      platform (the Terraform pull requests and the AWS accounts' own commands); a rehearsal on a
      local cluster supplies its stand-in instead. `harness.cloud_platform.runbooks.command_blocks`
      reads the blocks back, so a rehearsal can run the text the client's team reads; until one
@@ -34509,9 +34509,18 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     - Every AWS call names its region.
     - The deployment's buckets are checked one by one, by name (`head-bucket`), not listed
       account-wide.
-    - The buckets are emptied five hundred keys a call, versions and delete markers apart, and the
-      images a hundred a call.
-    - A listing that fails stops the step; it is never skipped, and never looped on.
+    - The buckets are emptied five hundred keys a call, versions and delete markers apart, each
+      listing sliced in its query (`--max-items` counts the versions alone, so it cannot cap the
+      delete markers). The images go a hundred a call, buildx's tagged indexes before the untagged
+      images they hold.
+    - A step stops, and ends on having stopped, on a listing that fails, a call that answers exit 0
+      with per-key `Errors` or `failures`, and a listing that comes back the same after a delete. A
+      loop that cannot finish never runs on, and each loop's block ends on its own result, so a
+      pasted block never carries on past a stop.
+    - These steps are run under bash in the tests, against a stand-in `aws` that refuses what AWS
+      refuses: more than a thousand keys, a 403 against a 404 from `head-bucket`, a failing
+      listing, and exit 0 with errors. Each branch is shown red
+      (`tests/harness/test_cloud_platform_decommission_aws.py`).
     - Its first step is the last backup, to a place outside the buckets it empties (refused if it
       is inside them). The command is P9's backup, added there by P9's diff, with the poc shape's
       Ingest claim in its set.

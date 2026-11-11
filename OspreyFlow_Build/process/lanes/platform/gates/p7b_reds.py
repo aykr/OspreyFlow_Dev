@@ -26,6 +26,7 @@ T_POC = "../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::"
 T_R = "../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::"
 T_IMG = "../OspreyFlow_Build/tests/cli/test_images_verb.py::"
 T_ID = "../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::"
+T_AWS = "../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::"
 CHECK = C + "harness/cloud_platform/decommission_check.py"
 INIT = C + "harness/cloud_platform/__init__.py"
 RUN = C + "harness/cloud_platform/runbooks.py"
@@ -124,6 +125,31 @@ runner.PLANTS = [
      'aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin {host}\n',
      "",
      [T_POC + "test_the_install_signs_in_to_the_registry_and_pins_before_it_installs"]),
+    # ---- the decommission's AWS steps against a stand-in that refuses as AWS does (confirmation item 3) -----
+    ("aws: the delete markers not sliced (--max-items counts the versions alone)", RUN,
+     "$kind[:500].{{Key: Key, VersionId: VersionId}}", "$kind[].{{Key: Key, VersionId: VersionId}}",
+     [T_AWS + "test_every_version_and_every_delete_marker_go_in_calls_under_a_thousand_keys"]),
+    ("aws: a delete's per-key Errors passed over", RUN,
+     '      [ "$errors" = "0" ] || {{', "      true || {{",
+     [T_AWS + "test_a_refused_delete_or_listing_stops_the_step[per-key-errors]"]),
+    ("aws: a listing that fails passed over", RUN,
+     "        echo \"listing $PREFIX$b's $kind failed: stopped\"; failed=1; break 3\n", "        break\n",
+     [T_AWS + "test_a_refused_delete_or_listing_stops_the_step[listing-fails]"]),
+    ("aws: a delete that fails passed over", RUN,
+     "        echo \"deleting from $PREFIX$b failed: stopped\"; failed=1; break 3\n", "        break\n",
+     [T_AWS + "test_a_refused_delete_or_listing_stops_the_step[delete-fails]"]),
+    ("aws: a listing the same after a delete looped on", RUN,
+     '      if cmp -s "$WORK/versions.json" "$WORK/versions.last.json"; then\n', "      if false; then\n",
+     [T_AWS + "test_a_refused_delete_or_listing_stops_the_step[nothing-deleted]"]),
+    ("aws: the untagged images before the indexes that hold them", RUN,
+     "  for status in TAGGED UNTAGGED; do\n", "  for status in UNTAGGED TAGGED; do\n",
+     [T_AWS + "test_buildx_s_indexes_go_before_the_images_they_hold"]),
+    ("aws: an image's failures passed over", RUN,
+     '      [ "$refused" = "0" ] || {{', "      true || {{",
+     [T_AWS + "test_an_image_refused_stops_the_step"]),
+    ("aws: a bucket that cannot be seen read as not there", RUN,
+     '  else echo "$PREFIX$b could not be checked: $out"; failed=1; fi\n', "  else :; fi\n",
+     [T_AWS + "test_a_bucket_not_there_is_not_listed_and_one_that_cannot_be_seen_stops"]),
     ("identity: our Secret alone, not the settings with it", IDENT,
      '{**values["environment"], **held}', "held",
      [T_ID + "test_identity_is_given_the_settings_and_our_secret_together"]),
