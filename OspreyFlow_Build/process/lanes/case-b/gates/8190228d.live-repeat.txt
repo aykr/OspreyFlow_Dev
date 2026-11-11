@@ -1,0 +1,11 @@
+Running on ospreyflow-test (stack c, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T145440Z/log: bash process/lanes/case-b/p12_live_repeat.sh
+=== try 2
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+1 failed in 4.96s
+=== try 3
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+1 failed in 3.35s
+=== left on the gateway
+keys: [('orch-probe', {})]
+models: ['Systran/faster-whisper-tiny.en', 'all-minilm:22m-l6-v2-fp16', 'moondream:1.8b-v2-q4_K_M', 'qwen2.5:0.5b-instruct']
+Wall time: 12 s, exit 0 (stack c, the lease case-b took at 2026-11-11T14:39:46Z; set-up before it 10 s)

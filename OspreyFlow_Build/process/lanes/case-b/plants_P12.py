@@ -286,7 +286,10 @@ def run(python: str, tests: list[str]) -> str:
          *tests], capture_output=True, text=True, env=ENV, check=False,  # fmt: skip
     )
     tail = [line for line in out.stdout.splitlines() if re.search(r"\d+ (passed|failed|error)", line)]
-    return tail[-1] if tail else out.stdout[-300:]
+    if tail:
+        return tail[-1]
+    # No tally: pytest did not run (found on the server's first --live run, which printed nothing).
+    return f"NO TALLY (exit {out.returncode}): {(out.stdout + out.stderr)[-600:]}"
 
 
 def main() -> int:
@@ -300,9 +303,12 @@ def main() -> int:
         if not (os.environ.get("OSPREY_LIVE_GATEWAY_URL") and os.environ.get("OSPREY_LIVE_GATEWAY_MASTER")):
             print("--live needs OSPREY_LIVE_GATEWAY_URL and OSPREY_LIVE_GATEWAY_MASTER: a real gateway")
             return 2
+        # The stores stay closed, as offline: the object store's lease setting too (the port guard
+        # refused the run with it set and no lane, on the server's second --live run).
+        ENV.pop("MINIO_ENDPOINT", None)
     start = run(python, sorted({t for _, _, _, tests in plants for t in tests}))
     print(f"green start: {start}")
-    if "failed" in start or "error" in start:
+    if "failed" in start or "error" in start or "passed" not in start:
         return 1
     bad = 0
     for name, path, edits, tests in plants:

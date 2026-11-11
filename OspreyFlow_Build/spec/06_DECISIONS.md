@@ -34117,7 +34117,12 @@ is told to, whatever the prompt says, and so proves nothing of a model's answer 
 own cases run on both through `ModelPort`'s suite (`test_suite.py`, Laurium registered in
 `registry.MODEL_PORT_ADAPTERS`, `extract` only), against a stack's real LiteLLM and the pinned conformance model:
 **as of 11 November that leased run has not been taken** (this session could not take a lease;
-`process/lanes/case-b/SERVER_LOG.md`), so Laurium has not yet met a real gateway or model. D2c
+`process/lanes/case-b/SERVER_LOG.md`), so Laurium has not yet met a real gateway or model. **It was taken later
+that day** (stack c, beside the orchestrator's gateway pair at CI's pinned digests, the gateway with its own
+database; `process/lanes/case-b/P12_RED_RECORD.md`, "Round 2"): **Laurium cannot read the pinned conformance
+model's answer to its prompt** (the conforming-answer case red three times of three, the service answering
+`unparseable`), while the LiteLLM adapter's same case passes on the same model; and Laurium's own key is refused
+at the gateway's admin routes. D2c
 records that Laurium runs in its own container, not inside the Conduit and Workers as the page shared with the
 client shows. Part 2 (after P7 and P11 part 1) renders the service in the
 `cloud-platform` profile with its egress line, presets it in that profile's pack, and adds the setting to *Admin ›
@@ -34135,7 +34140,9 @@ empty finding: that file's refused cases through the stand-in. A schema outside 
 `tests/licence_check/test_recorded_licence_evidence.py`. A call bound for any host but the gateway (Laurium's
 chat model without `openai_api_base`): `test_laurium_service.py`, every other name refused at the lookup and named.
 The master key sent to the service: `tests/adapters/extract_laurium/test_adapter.py`, read off every byte the
-adapter sends. Laurium's findings auto-accepted: `tests/adapters/extract_laurium/test_findings_inferred.py`
+adapter sends. Laurium's key given an admin right: `tests/conformance/model_port/test_laurium_key_live.py`, live
+against a gateway with its own database (no admin-granting field of the key's request is known, so its plant is the
+master key at the adapter's call site). Laurium's findings auto-accepted: `tests/adapters/extract_laurium/test_findings_inferred.py`
 (the fake service) and `tests/conformance/model_port/test_laurium_findings_pending.py` (the real service
 in-process), each through `run_extraction` and the real `ExtractionCandidateStore`'s own `pending` write, down to
 the row its `INSERT` sends; asyncpg's pool under the store is stood in for (refusing a NULL where the store's table

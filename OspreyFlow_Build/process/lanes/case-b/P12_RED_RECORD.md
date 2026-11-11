@@ -3,12 +3,14 @@
 Every refusal and rule P12 part 1 adds was shown red at its real call site by `plants_P12.py`, each plant put back
 after. It needs a green start, and counts a plant red only when pytest reports failed tests and no error. On the test
 server, 11 November 2026, after the orchestrator's review of a5fa3c1b (its fixes in ca85e385…283cfeb7), offline with
-the closed ports (59991-59994), no lease, no container; run at 1b7c2a8c and again at 283cfeb7, the same counts
-(`gates/283cfeb7.plants.txt`).
+the closed ports (59991-59994), no lease, no container; run at 1b7c2a8c and again at 283cfeb7 with 53 offline
+plants and 14 in Laurium's environment (`gates/283cfeb7.plants.txt`). Round 2 (on the Mac and leased on the server,
+below) added one offline plant and the leased live section.
 
 - **Offline** (the Conduit's 3.12 environment): green start 205 passed; **54 plants, 54 red** (53 on the server;
-  round 2's plant on the hosted engine's branch added and the whole set rerun on the Mac at 73d3f080, offline with the
-  closed ports, no lease, `gates/73d3f080.plants-offline-round2.txt`).
+  round 2's plant on the hosted engine's branch added and the whole set rerun on the Mac, offline with the closed
+  ports, no lease, `gates/73d3f080.plants-offline-round2.txt`: the code at 73d3f080 with the plants file as committed
+  in 07f50ea, not yet committed when it ran).
 - **In Laurium's own 3.13 environment** (built by hash, `laurium-env`): green start 26 passed (`test_laurium_service.py`
   17, `test_suite_extract.py` 4 × 2 engines, `test_laurium_findings_pending.py` 1); **14 plants, 14 red**. The
   service's real code with Laurium 0.6.0, LangChain and the OpenAI client in-process, every model call over real HTTP
@@ -162,16 +164,48 @@ CandidateRows`), refusing a NULL where the store's own `CREATE TABLE` says NOT N
 statement, and a repeated id (`test_the_pools_stand_in_refuses_what_postgres_refuses`). **They do not prove that
 Postgres accepts the row**: that is `tests/services/api/test_review_store.py`'s, live. Said so in the ADR draft.
 
+## Round 2: leased, against a real gateway and the pinned model (11 November 2026)
+
+**The lease:** stack c, taken by case-b at 14:39:46Z on the test server and released after (`stack_lease.sh acquire
+case-b … c`, `up`, `remote`, `down`, `release`), at 8190228d. No leased stack has a model gateway, so the gateway was
+the orchestrator's pair beside it, stood up for this run and torn down by the orchestrator after: LiteLLM at CI's
+pinned digest with `deploy/compose/litellm_config.yaml`, **its own Postgres** (virtual keys real) and the
+repository's synthetic dev master key, on the server's loopback (24000); Ollama at CI's pinned digest with
+`qwen2.5:0.5b-instruct` and `all-minilm:22m-l6-v2-fp16`, manifests verified as CI does. The stores' ports stayed
+unused (no case here reaches a store). Runners: `p12_live_run.sh`, `p12_live_plants.sh`, `p12_live_repeat.sh`; logs
+in full: `gates/8190228d.live-stack-c.txt`, `gates/8190228d.live-plants-{1-guard-refused,2}.txt`,
+`gates/8190228d.live-repeat.txt`.
+
+| Run | Outcome |
+| --- | --- |
+| `test_suite.py -k laurium` in Laurium's environment, through `laurium_live_adapter` | **1 failed, 1 passed, 4 skipped** (the four not `extract`) |
+| — the conforming-answer case (`{name: string}`, "Owen Wilson went to the store.") | **failed, 3 of 3 tries**: the service answered `unparseable`, *"Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema."* (19 s, 5 s, 3 s) |
+| — the malformed schema refused before any call | passed |
+| the same two cases on the LiteLLM adapter, same gateway and model, for comparison | 2 passed |
+| `test_laurium_service.py` and `test_suite_extract.py` in Laurium's environment (stand-in over HTTP) | 25 passed |
+| `test_laurium_key_live.py` (the Conduit's environment) | **passed**, twice (before and after the plants): the adapter's token is Laurium's key, it works (a chat call), and `/key/generate`, `/key/update`, `/key/delete` and `/model/new` each refused it as a known key; the decoy and its own key unchanged |
+| what was left on the gateway after every run | only the orchestrator's own probe key, and the configured models alone |
+
+**The finding: Laurium has met the real gateway and model, and cannot read the pinned conformance model's answer to
+its prompt.** Nothing in the run was changed to make it pass. The same model answers the LiteLLM adapter's own prompt
+in the schema; whether a larger model answers Laurium's, and what the 0.5b model actually says to it, is not
+measured here (the service does not log the model's answer, by design: ADR-135 Amendment 6's debug-log refusal).
+So `ModelPort.extract`'s contract case is **red on Laurium** against the pinned model, and part 1 does not meet its
+own exit on that case.
+
+**The `--live` plants**, against the same gateway (`gates/8190228d.live-plants-2.txt`; green start 1 passed):
+
+| Plant | Outcome |
+| --- | --- |
+| the master key sent to Laurium's service, at the adapter's call site | **red** (1 failed). On the real gateway it is caught first by the token-is-the-key-held check, so the four admin-route assertions themselves are shown red only on the stand-in (the dry run before the lease: master token → all four answered 200, red) |
+| Laurium's own key made with `"user_role": "proxy_admin"` (where `put_laurium_key` makes it) | **green**: the pinned LiteLLM does not make a key admin for that field on `/key/generate`. So no field of the request this code sends is known to grant an admin right; a plant that gives the scoped key one at its making is not known, and is recorded so (the review's defect 4) |
+
+The plants' first leased attempt printed no tally: `plants_P12.py` counted an empty green start as green (fixed: no
+tally is now a failure, with pytest's own output), and the port guard refused that run on the lease's
+`MINIO_ENDPOINT` with no lane set (`gates/8190228d.live-plants-1-guard-refused.txt`; fixed: `--live` drops it, the
+stores closed as offline).
+
 ## Not shown red here, and why
-
-Each needs a command this unattended session may not run: it asks for approval, which nobody can give here, and I
-did not route around it (no `docker run` from inside a script, no other gateway).
-
-- **Laurium against a real gateway and model** (item 1): `stack_lease.sh acquire case-b … && stack_lease.sh live
-  case-b` asked for approval; **no lease was taken and no stack touched**. So the model's answer to Laurium's prompt
-  has still never been parsed: Laurium has never met a real gateway or model. The leased run (`make -C
-  OspreyFlow_Build laurium-env` on the host, then `test_suite.py`, `test_laurium_service.py` and
-  `test_suite_extract.py` in Laurium's environment with the stack's ports) is carried.
 - **The built image refusing to start on a planted host, the image leg of `no_langchain_check` on the real Conduit
   and worker images, and `trivy image` on Laurium's image** (item 8): `docker run` and `trivy` each asked for
   approval. Kept out of `P12_CI.diff` and carried.
