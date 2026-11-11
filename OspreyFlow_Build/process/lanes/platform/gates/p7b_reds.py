@@ -91,6 +91,12 @@ runner.PLANTS = [
      '"OspreyFlow_Core: PYTHONPATH=.:packages .venv/bin/python -m harness.render"',
      '"OspreyFlow_Core: PYTHONPATH=. .venv/bin/python -m harness.render"',
      [T_IMG + "test_no_plan_is_refused_with_a_command_that_renders_it"]),
+    ("poc: no CPU limit named", INIT,
+     '    container["resources"]["limits"]["cpu"] = limit\n', "    return\n",
+     [T_POC + "test_every_poc_container_names_a_cpu_limit_at_or_above_its_request"]),
+    ("poc: a CPU limit below its request accepted", INIT,
+     "    if _millicores(limit) < _millicores(request):\n", "    if False:\n",
+     [T_POC + "test_a_cpu_limit_below_its_request_is_refused_in_words"]),
 ]
 
 if __name__ == "__main__":
