@@ -548,7 +548,9 @@ def run_vitest(case: str) -> tuple[int, str]:
         ["npx", "vitest", "run", path, "-t", name], capture_output=True, text=True, cwd=CORE
     )
     out = done.stdout + done.stderr
-    summary = next((line.strip() for line in out.splitlines() if line.strip().startswith("Tests")), "")
+    summary = next(
+        (line.strip() for line in out.splitlines() if line.strip().startswith("Tests")), ""
+    )
     collect = "Error:" in out.split("Tests", 1)[0] and "AssertionError" not in out
     return done.returncode, summary + (" [collection error]" if collect else "")
 
