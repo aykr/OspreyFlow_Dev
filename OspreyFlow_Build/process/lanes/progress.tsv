@@ -50,7 +50,7 @@ platform	P4	M	done	The analyst's map: basemap switch, place search, contrast in 
 platform	P5	M	done	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2) (merged 1ddbc9a)
 platform	P7	L	building	The cloud-platform profile: merges on its render, cp-policy-check (red on each plant) and the ordinary gates (ADR-142 Am 8); its kind acceptance is P7a
 platform	P8	M	todo	DEFERRED until after the client's install (ADR-142 Am 8): Nothing on a shared disk: S3 for uploads, staging, tiles, models; settings and recipes per the owner's rulings (ADR-148)
-platform	P9	M	todo	Cut for the proof of concept (ADR-142 Am 8): the scheduled, encrypted backup of ArcadeDB and ClickHouse to S3, one restore rehearsed and timed, its runbook section
+case	P9	M	todo	Cut for the proof of concept (ADR-142 Am 8): the scheduled, encrypted backup of ArcadeDB and ClickHouse to S3, one restore rehearsed and timed, its runbook section
 admin	P10	M	building	Sign-in claims from Entra ID mapped by settings; no Keycloak on this profile (ADR-148)
 platform-b	P11	M	building	The model route on the cloud-platform profile: the client's gateway or Bedrock (ADR-135 Am 4), after P7
 case-b	P12	L	building	Laurium as a second extraction engine: licence checked and ruled 11 Nov (p12/LICENCE_CHECK.md); its own Python 3.13 service behind a thin ModelPort.extract adapter (ADR-135 Am 5 and 6)
@@ -83,6 +83,6 @@ rules-b	T3b	S	review	The contrast probe's limits (SVG surfaces, shadows, points)
 platform-b	carries	M	building	The chart's quoted checksums; ADR-114 Am 39's edge cases (crash flags, ownership, atomic writes, stale stage, shell values); the lockout's words
 studio	carries	S	todo	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19)
 docs	D2d	S	review	The rule editor and the one queue in the user and admin guides (user 1.44, admin 1.70), with their PDFs
-platform	P7a	M	todo	P7's acceptance run on kind (the over-the-wire scenarios, pods on both nodes, the Ingress's certificate)
-platform	P7b	M	todo	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks, each run on kind
+platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape
+platform	P7b	M	todo	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks, each run on kind; its kind run is the client install's acceptance
 platform	P9b	S	todo	After the client's install: alerts, the PodDisruptionBudgets' drain test, the volume-expansion procedure

@@ -33399,6 +33399,13 @@ sprint. With the orchestrator's adjustments, which the owner accepted.*
    orchestrator (Amendment 7), so nothing lands while the orchestrator's machine is offline.
    **P7 is treated as an ordinary step** (the owner, about 06:30): one review round, then it merges; a retrospective
    second review follows the merge, its findings carried forward, not reverted.
+10. **The platform lane's queue, revised (the owner, about 06:40).**
+    - **P9 moves to case**, in a fresh session on the `sol` account, once P7 merges. Case is the idle lane, and
+      `sol` keeps the owner's 30% share. Platform keeps P7, then P7b.
+    - **P7b comes before P7a.** P7b's exit runs the acceptance scenarios on kind in the poc shape, and that run stands
+      as the client install's acceptance. P7b's shape work starts once P7 merges; it renders Laurium's service and the
+      gateway once P11's and P12's part 2s land.
+    - **P7a**, the production-shape run on kind, moves to after the client's install, with P8 and P9b.
 8. **Paused until the client chain has merged:** T3b's follow-ups, D2b's captures and rules' `lists`. T1 carries on,
    since it shortens every gate.
 9. **D2c records where Laurium runs** (its container, image and repository) once P12 settles it, and lists what

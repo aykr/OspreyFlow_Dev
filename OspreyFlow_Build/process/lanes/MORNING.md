@@ -272,6 +272,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - The three part 1s share no file: P11 owns *Admin › Models*, so P12's extraction-engine setting waits for it.
       - New dates: P11 on 12 November, L1.9 on 12–13 November, P12 on 13 November, and the whole chain about 13–14
         November, with D2c on 14 November.
+    - **The platform lane's queue, revised (your word, about 06:40).**
+      - **P9 goes to case** (a fresh `sol` session once P7 merges). Case is the free lane; glass was retired on
+        8 November, and rules-b still has T3b to land.
+      - **P7b comes before P7a**, and its poc-shape kind run is the install's acceptance.
+      - **P7a** (the production shape) moves to after the install.
+      - New dates: P7b on 13 November, and the whole client chain on 13 November, with D2c on 13–14 November.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
