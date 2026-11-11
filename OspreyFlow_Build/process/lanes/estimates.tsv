@@ -1,16 +1,19 @@
-# as of 2026-11-11T05:45Z
-orchestrator	publish	v0.5.0 from main (cut ac8735d + notes fix a74e741): release gates on the server, then tag and push the product repo	~06:30	A
-rules	UPG-check	the real update from v0.4.12 to the published v0.5.0, on the server (server session from 07:08)	11 Nov, ~09:00	A
-studio-b	L1.10b	built; lands after the tag (e97b7ef)	after the tag	A
-admin	T1	part 4 lands after the tag (b3d3e0a); part 5 on the server from 07:08	11 Nov, ~11:00	A
-rules	hyg	the Needs-you schedule notices and two fixes; studio's finding fixed on the server, then the merger's re-review	11 Nov, ~12:00	A
-rules-b	T3b	the contrast probe's limits; server gates finishing; merger review on return	11 Nov, ~12:00	A
-docs	D2b	decks rebuilt; the L2.11 guide sections next	11 Nov, afternoon	A
-platform-b	carries	chart quoting, the refresh's edge cases (server session from 07:08)	11 Nov, ~12:00	B
-platform	P7	acceptance on kind: restart when the owner is back (the server session stalled)	11 Nov, afternoon	B
+# as of 2026-11-11T06:05Z
+orchestrator	publish	v0.5.0 from main: release gates finishing on the server, then tag and push	~06:45	A
+studio-b	L1.10b	lands after the tag (e97b7ef)	after the tag	A
+admin	T1	part 4 lands after the tag (b3d3e0a); part 5 on the server from 07:08	11 Nov, ~12:00	A
+rules	UPG-check	the real update to the published v0.5.0, on the server from 07:08	11 Nov, ~09:30	A
+rules	hyg	studio's finding fixed on the server; the merger's re-review on your return	11 Nov, ~12:00	A
+rules-b	T3b	server gates done ~06:10; the merger's review on your return	11 Nov, ~12:00	A
+docs	D2d	the rule-editor guides: review fixes, one rebase, one round of gates	11 Nov, ~13:00	A
+docs	D2b	decks rebuilt; your three items (MORNING 30), then captures	11 Nov, afternoon	A
+platform-b	carries	chart quoting first, then the refresh's edge cases (server session from 07:08)	11 Nov, ~12:00	B
+platform	P7	acceptance on kind: restart when you are back (the server session stalled)	11 Nov, evening	B
+studio	carries	draft import; a source's default marking (ADR-140 Am 19)	12 Nov	B
+rules	lists	list teardown; ADR-146's two-list question	12 Nov	B
 studio-b	L1.9	S3 and Athena, after P7	12 Nov	B
 platform	P11	the model route: the client's gateway or Bedrock, after P7	12 Nov	B
-platform	P12	Laurium: licence check first (stops for you if it fails), then the adapter	12–13 Nov	B
-platform	P8–P10	shared disk, backups, Entra; in turn after P7	13 Nov	B
-docs	D2c	Cloud Platform guide, with the extraction engine and Laurium	14 Nov	B
+platform	P12	Laurium: its own Python 3.13 service (licence ruled; no stop), after P7	12–13 Nov	B
+platform	P8–P10	shared disk, backups, Entra; in turn after P7	13–14 Nov	B
+docs	D2c	Cloud Platform guide, with the extraction engine and Laurium as a service	14 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build (v0.4.12: backup, apply, update, apply)	after D2c	B

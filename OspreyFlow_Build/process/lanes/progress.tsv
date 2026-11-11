@@ -53,7 +53,7 @@ platform	P8	M	todo	Nothing on a shared disk: S3 for uploads, staging, tiles, mod
 platform	P9	M	todo	Running it on the platform: backups to S3, restore rehearsed, alerts, runbook (ADR-148)
 platform	P10	M	todo	Sign-in claims from Entra ID mapped by settings; no Keycloak on this profile (ADR-148)
 platform	P11	M	todo	The model route on the cloud-platform profile: the client's gateway or Bedrock (ADR-135 Am 4), after P7
-platform	P12	M	todo	Laurium as a second extraction engine, licence check first (ADR-135 Am 5), after P7
+platform	P12	L	todo	Laurium as a second extraction engine: licence checked and ruled 11 Nov (p12/LICENCE_CHECK.md); its own Python 3.13 service behind a thin ModelPort.extract adapter (ADR-135 Am 5 and 6)
 platform-b	P6	S	done	The case's gazetteer panel beside place search, by keyboard (merged fd171f7)
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	done	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed) (merged 99d927d)
@@ -63,7 +63,7 @@ platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
 rules-b	L2.11a	S	done	The rule editor's standards: BPMN 2.0 and DMN, export, import refusal, Show as BPMN (split from L2.11) (merged 1d01f49)
-admin	T1	M	building	Faster live runs (merged so far: part 1 afe3354, the batched schema 2456d2c, part 3 94a74c5, part 2a 0d6d924; left: marks, parallel, sleeps)
+admin	T1	M	building	Faster live runs (merged so far: part 1 afe3354, the batched schema 2456d2c, part 3 94a74c5, part 2a 0d6d924; left: marks, parallel, sleeps); part 4 waits for the tag (b3d3e0a); part 5 on the test server from 11 Nov
 platform-b	preflight	S	done	A named install's preflight checks its own published ports (merged dc93d13)
 platform-b	ADR-147 Am 3	S	done	The six gazetteer-only identifiers withheld from every reader (merged 6db8ce8)
 docs	P5b rows	S	done	P5b's guide rows, and L2.5b's and L2.5c's lines (merged c4c294c)
@@ -76,3 +76,10 @@ platform-b	T2	S	done	Tooling: per-lane Playwright ports, docker-shelling tests s
 rules-b	T3	S	done	Dialogs' and invisible text's colour contrast actually gated in every-harness (merged ea3ba26)
 rules	UPG	S	done	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, before the publish: four runs; run 4 passed on platform-b's d85f514 (refusal, the one-time apply, the migrations, end state); update's real pull, pin and rollback owed to the post-tag check (merged e620588)
 platform-b	UPG-fix	S	done	Update from v0.4.12 refuses in words before writing anything and names the one-time `ospreyflow apply` route; a named update reaches its own deployment; files moved into place whole; apply starts a newly added service with its dependencies (ADR-114 Am 39; merged 1223cc8)
+rules	UPG-check	S	building	The real update from v0.4.12 to the published v0.5.0 (CHANGELOG steps 1–7), on the test server
+rules	hyg	M	review	Home's key cap, the metrics note, schedule notices in Needs you (ADR-110 Am 19); studio's finding fixed on the server
+rules	lists	S	todo	Live files remove the screening lists they load; ADR-146: one owner on two lists, one alert or two
+rules-b	T3b	S	review	The contrast probe's limits (SVG surfaces, shadows, points); Show as BPMN's task-box contrast
+platform-b	carries	M	building	The chart's quoted checksums; ADR-114 Am 39's edge cases (crash flags, ownership, atomic writes, stale stage, shell values); the lockout's words
+studio	carries	S	todo	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19)
+docs	D2d	S	review	The rule editor and the one queue in the user and admin guides (user 1.44, admin 1.70), with their PDFs
