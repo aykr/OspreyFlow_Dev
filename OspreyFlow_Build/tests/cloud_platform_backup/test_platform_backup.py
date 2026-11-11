@@ -16,122 +16,23 @@ servers are the kind run's (`process/lanes/case/gates/p9_kind.sh`).
 from __future__ import annotations
 
 import datetime as dt
-import io
-import json
-import re
-import urllib.error
-import urllib.request
-from email.message import Message
 from pathlib import Path
 from typing import Any
 
-import botocore.session
 import pytest
-
 from services.api import platform_backup as pb
+
 from tests.cloud_platform_backup.conftest import (
     BUCKET,
     KEY_ARN,
-    PATH_STYLE,
     REGION,
+    REGIONAL,
     ROLE_ARN,
+    ZIP,
     Running,
-    role_policy,
+    _deny_kms,
+    _objects,
 )
-from tests.fixtures.cloud_platform.s3_standin import Role
-
-ZIP = b"PK\x03\x04 an ArcadeDB backup" * 1000
-#: The address ClickHouse reaches S3 by on the platform: the region's own, path style.
-REGIONAL = f"https://s3.{REGION}.amazonaws.com"
-
-
-class FakeStores:
-    """ArcadeDB's and ClickHouse's HTTP, as `Stores.http` calls them."""
-
-    def __init__(self, aws: Running, folder: Path) -> None:
-        self.aws, self.folder = aws, folder
-        self.statements: list[str] = []
-        self.arcadedb_answer: bytes | None = None
-        self.client: Any = None
-        self.access_key: str | None = None
-
-    def _s3(self) -> Any:
-        """ClickHouse's S3 client as the role, by its pod's web identity, its credentials kept
-        until they expire (as ClickHouse keeps them)."""
-        if self.client is None:
-            frozen = self.aws.session().get_credentials().get_frozen_credentials()
-            self.access_key = frozen.access_key
-            self.client = botocore.session.get_session().create_client(
-                "s3", region_name=REGION, endpoint_url=self.aws.endpoint, config=PATH_STYLE,
-                aws_access_key_id=frozen.access_key, aws_secret_access_key=frozen.secret_key,
-                aws_session_token=frozen.token)  # fmt: skip
-        return self.client
-
-    def __call__(self, request: urllib.request.Request, timeout: float) -> bytes:
-        url = request.full_url
-        body = (request.data or b"").decode()  # type: ignore[union-attr]
-        if "/api/v1/command/" in url:
-            assert json.loads(body) == {"language": "sql", "command": "BACKUP DATABASE"}
-            if self.arcadedb_answer is not None:
-                return self.arcadedb_answer
-            database = url.rsplit("/", 1)[1]
-            name = f"{database}-backup-20261111-020000.zip"
-            (self.folder / database).mkdir(parents=True, exist_ok=True)
-            (self.folder / database / name).write_bytes(ZIP)
-            return json.dumps({"result": [{"operation": "backup database", "backupFile": name}]}).encode()
-        self.statements.append(body)
-        if body.startswith("DROP DATABASE"):
-            return b""
-        match = re.search(r"S3\((.*)\)", body)
-        assert match, body
-        arguments = re.findall(r"'((?:[^'\\]|\\.)*)'", match.group(1))
-        if len(arguments) not in (1, 3):  # ClickHouse 25.8's own refusal, word for word
-            text = (b"Code: 42. DB::Exception: Backup S3 requires 1 or 3 arguments: url, "
-                    b"[access_key_id, secret_access_key]. (NUMBER_OF_ARGUMENTS_DOESNT_MATCH)")  # fmt: skip
-            raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
-        assert len(arguments) == 1, "the runner never hands ClickHouse a key"
-        assert arguments[0].startswith(REGIONAL + "/"), arguments[0]
-        bucket, _, prefix = arguments[0].removeprefix(REGIONAL + "/").partition("/")
-        s3 = self._s3()
-        try:
-            if body.startswith("BACKUP"):
-                # ClickHouse sends no encryption header: the bucket's default (its key) applies.
-                s3.put_object(Bucket=bucket, Key=prefix + ".backup", Body=b"<config/>")
-                s3.put_object(Bucket=bucket, Key=prefix + "data/ospreyflow/events/all_1_1_0/data.bin", Body=b"rows")
-                return b"0b1d-backup-id\tBACKUP_CREATED\n"
-            s3.get_object(Bucket=bucket, Key=prefix + ".backup")["Body"].read()
-            return b"0b1d-restore-id\tRESTORED\n"
-        except Exception as error:  # what ClickHouse says: its code, S3's words, the query
-            said = getattr(error, "response", {}).get("Error", {})
-            text = (f"Code: 499. DB::Exception: {said.get('Code')}: {said.get('Message')}. "
-                    f"(S3_ERROR) (query: {body})").encode()  # fmt: skip
-            raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text)) from None
-
-
-@pytest.fixture
-def run(aws: Running, tmp_path: Path) -> tuple[pb.Settings, pb.Bucket, pb.Stores, FakeStores]:
-    folder = tmp_path / "arcadedb-backups"
-    folder.mkdir()
-    settings = pb.Settings.from_env({
-        "OSPREY_BACKUP_BUCKET": BUCKET, "OSPREY_BACKUP_KMS_KEY": KEY_ARN, "AWS_REGION": REGION,
-        "AWS_ENDPOINT_URL_S3": aws.endpoint, "OSPREY_BACKUP_ARCADEDB_FOLDER": str(folder),
-        "OSPREY_BACKUP_ARCADEDB_HOST": "arcadedb-0.arcadedb-headless",
-        "ARCADEDB_ROOT_PASSWORD": "pw", "CLICKHOUSE_USER": "osprey", "CLICKHOUSE_PASSWORD": "pw",
-    })  # fmt: skip
-    aws.session()  # the pod's IRSA environment
-    fake = FakeStores(aws, folder)
-    return settings, pb.Bucket(settings), pb.Stores(settings, http=fake), fake
-
-
-def _objects(aws: Running) -> list[str]:
-    return [m["key"] for m in aws.stand_in.listing(BUCKET)]
-
-
-def _deny_kms(aws: Running, *kept: str) -> None:
-    role = aws.stand_in.roles[ROLE_ARN]
-    aws.stand_in.roles[ROLE_ARN] = Role(arn=role.arn, policies=[role_policy(kms_actions=kept)],
-                                        issuer_secret=role.issuer_secret, subject=role.subject)  # fmt: skip
-    aws.stand_in.sessions.clear()
 
 
 def test_a_backup_writes_a_set_encrypted_by_the_deployments_key_its_manifest_last(aws: Running, run: Any) -> None:

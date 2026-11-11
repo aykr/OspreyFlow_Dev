@@ -10,8 +10,8 @@ import re
 import pytest
 import yaml
 from harness import cloud_platform_backups as backups
-
 from services.api.platform_backup import Settings
+
 from tests.cloud_platform_backup import rendered
 
 

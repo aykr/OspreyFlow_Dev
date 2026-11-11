@@ -19,10 +19,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from services.api import platform_backup as pb
-from tests.cloud_platform_backup.conftest import BUCKET, KEY_ARN, Running
-from tests.cloud_platform_backup.test_platform_backup import _deny_kms, _objects, run  # noqa: F401 - the fixture
+
+from tests.cloud_platform_backup.conftest import BUCKET, KEY_ARN, Running, _deny_kms, _objects
 
 # 11 November 2026, 02:15 UTC, as minutes since the epoch: the name a CronJob gives that slot's Job.
 SLOT = 29_906_055
