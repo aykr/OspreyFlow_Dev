@@ -33965,7 +33965,12 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
   backup, which needs ArcadeDB's password: P9 now gives that key to the backup's own container alone
   (`backups.arcadedb.env`), not to the claims' runs or the restores, and the diff lists it for `backup`. Until the
   diff is applied, the two rows' cases are held red (strict) and every render with the backups is refused for that
-  one key and nothing else; the diff makes both unconditional.
+  one key and nothing else; the diff makes both unconditional. With `P9_render.diff` refreshed on P7b's render and
+  both applied, `make cp-policy-check` gives 0 violation(s) on every fixture (`gates/p9_cp_policy_merged.r1.txt`).
+  Two more found there: backups.tf wrote its Secret's key quoted, which platform's reader does not take (now bare);
+  and the hook runs after the render's token step, so P9 sets ClickHouse's `automountToken: false` itself (it calls
+  no Kubernetes API; IRSA's webhook gives its web identity by the account alone, not measured on EKS here), with
+  platform's token test given ClickHouse as its one exception in `P9_render.diff`, for platform to rule on.
 - The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
   (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).
 - **Left, to P9b:** the alert on a failed or missing run; object lock or a write-only role; the drain test and the
