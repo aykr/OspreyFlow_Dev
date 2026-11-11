@@ -464,6 +464,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       no invite on this profile (Entra holds the accounts). Two things stay unavailable on Entra until a later step:
       a scheduled run acting as its owner (marked stopped, ADR-044's path), and Superset roles (everyone Gamma).
       The alternatives were roles from Entra groups or app roles, which would contradict ADR-148 decision 9.
+    - **Ruled for P9 (about 21:15), access, yours to overrule:** ClickHouse's own user (`osprey`) can run RESTORE from
+      ClickHouse's backup sets. No ClickHouse privilege gates RESTORE (measured on 25.8). Bound: the pod's role
+      reaches only ClickHouse's own parts, so this exposes rows deleted in the last 35 days to anyone holding
+      `osprey`'s credentials, who can already read every live row. Accepted as a measured limit with a kind check
+      that the bound holds. The alternatives each break the backup or the app (Amendment 7 point 4).
+    - **Ruled for P10 part 2 (about 21:10):** a new `GET /v1/me` gives the Glass the signed-in person's roles and
+      clearance on every profile, so the Glass no longer reads them from the sign-in token. It fails closed (no
+      Admin place while loading or on error). Keycloak's sign-in settings are unchanged, with a test.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
