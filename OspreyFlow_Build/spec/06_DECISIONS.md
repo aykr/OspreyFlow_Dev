@@ -34574,13 +34574,19 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     - The gateway, which signs Bedrock's calls by its own role (P11 part 2), reaches STS alone
       (`egress.identity`), never S3.
     - P9's backup and restore pods (`backup`, `backup-claims`, `restore`, `restore-claims`) are
-      rows by their own pods' names. P9's render gives their names to `egress_policy(...,
-      others=...)`, since they render beside the workloads; each then admits nothing and reaches
-      ArcadeDB, ClickHouse, S3, STS and KMS (`egress.keys`). A restore alone also reaches the
+      rows by their own pods' names (`egress.others`), which the render gives to
+      `egress_policy(..., others=...)`, since they render beside the workloads. A row whose pod is
+      not rendered selects nothing. Each admits nothing and reaches S3 and STS. The backup and the
+      restore also reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
       cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that the
-      writers have stopped. No lane renders a Calico policy of its own: every path is a row, and
-      a later workload (case-b's Laurium) is a row, not a template edit.
-    - A host that no rendered pod reaches is not rendered (KMS, before P9's pods exist).
+      writers have stopped. The claims' runs reach none of ours: a claim is a mount, not a path.
+      No pod reaches KMS: S3 calls it on the backups' behalf (SSE-KMS), so a row to it would be a
+      path never used (the orchestrator's ruling with case, 11 November). No lane renders a Calico
+      policy of its own: every path is a row, and a later workload (case-b's Laurium) is a row,
+      not a template edit.
+    - Point 22's whole-secret rule is about our Secret alone. A Secret of its own (P9's ClickHouse
+      backup user's password, read by ClickHouse and the backup and restore pods) passes it,
+      whole or by key.
     - `make cp-policy-check` refuses an Allow beyond DNS under a policy selecting every pod
       (`wide-egress`).
 22. **Our Secret only to what reads it** (the same review). P7 gave the whole deployment Secret to
