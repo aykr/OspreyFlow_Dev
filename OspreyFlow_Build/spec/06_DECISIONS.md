@@ -33955,6 +33955,17 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
 - The restore's pods reach the cluster's API only once P7b's per-workload egress gives them that row; until then
   every restore on this profile is refused, in words, touching nothing. ClickHouse's own egress is the platform's
   policy (measured: no outside address reached).
+- **P7b's rows checked against P9's pods as built, after P7b landed (3673660)**
+  (`tests/cloud_platform_backup/test_backups_rows.py`): each pod's row is held to what its containers' commands call,
+  read from `platform_backup`'s own call graph, on the ports their environment names. Three differences, each
+  fixed in `P9_rows.diff` (platform's: `profile.yaml`, cp-policy-check's allowance, its two tests, Amendment 5
+  point 21's words). `restore-claims` runs the writers check and had no `kube-api`, so every claims restore would
+  be refused. `restore` had ArcadeDB, which none of its commands calls (ArcadeDB's restore is from the zip on the
+  Job's own claim), so the row is now ClickHouse and `kube-api`. cp-policy-check listed no key of our Secret for the
+  backup, which needs ArcadeDB's password: P9 now gives that key to the backup's own container alone
+  (`backups.arcadedb.env`), not to the claims' runs or the restores, and the diff lists it for `backup`. Until the
+  diff is applied, the two rows' cases are held red (strict) and every render with the backups is refused for that
+  one key and nothing else; the diff makes both unconditional.
 - The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
   (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).
 - **Left, to P9b:** the alert on a failed or missing run; object lock or a write-only role; the drain test and the
