@@ -7,7 +7,8 @@ Rendered from `backups` in the values (`profile: cloud-platform` alone writes it
 cluster's render is unchanged):
 
   schedule, image, serviceAccountName, resources, deadlineSeconds, env (each item as a workload's),
-  arcadedb: {pod, backupsClaim, databasesClaim, database, image, resources}
+  arcadedb: {pod, backupsClaim, databasesClaim, database, image, resources, env}
+            (its `env` to the backup's own container alone: ArcadeDB's password, of our Secret)
   restore: {set}   # given only to run a restore, e.g.
                    # helm template … --set backups.restore.set=<id> --show-only templates/backups.yaml
 
@@ -98,7 +99,7 @@ spec:
           containers:
             {{- include "ospreyflow.container" (dict "w" (dict "name" "backup" "image" $b.image
                   "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "backup")
-                  "env" $env "resources" $b.resources
+                  "env" (concat $env ($b.arcadedb.env | default list)) "resources" $b.resources
                   "claims" (list (dict "name" "arcadedb-backups" "mountPath" "/arcadedb-backups")))
                 "root" $root) | nindent 12 }}
           volumes:

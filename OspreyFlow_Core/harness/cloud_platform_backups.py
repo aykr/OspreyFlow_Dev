@@ -323,7 +323,6 @@ def backups_values(
         # The pod whose claim the CronJob mounts, by name: the Service would hand the request to
         # whichever copy answered, and its zip would be on another claim.
         {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},
-        {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
         *_env_from(environment, ["CLICKHOUSE_HOST", "CLICKHOUSE_HTTP_PORT", "CLICKHOUSE_CLUSTER"]),
         # ClickHouse's backup user, the runner's alone (the deployment's own is refused BACKUP).
         {"name": "CLICKHOUSE_USER", "value": CLICKHOUSE_BACKUP_USER},
@@ -350,6 +349,10 @@ def backups_values(
             "database": "ospreyflow",
             "image": arcadedb["image"],
             "resources": copy.deepcopy(arcadedb.get("resources") or {}),
+            # ArcadeDB's password, a key of our Secret, to the backup's own container alone: the
+            # one that calls ArcadeDB (P7b's default-deny on our Secret's keys, cp-policy-check's
+            # `whole-secret`). The restore's ArcadeDB step is from the zip, with no call.
+            "env": [{"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"}],
         },
     }
 

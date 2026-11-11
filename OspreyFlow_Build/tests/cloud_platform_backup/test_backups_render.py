@@ -30,7 +30,7 @@ def test_arcadedb_writes_its_backups_onto_a_claim_of_its_own(fixture: str) -> No
 def test_every_setting_the_runner_needs_is_rendered(fixture: str) -> None:
     """The runner refuses without its bucket, key and region; each is in the CronJob's env."""
     values = rendered.values(fixture)
-    names = {e["name"] for e in values["backups"]["env"]}
+    names = {e["name"] for e in values["backups"]["env"] + values["backups"]["arcadedb"]["env"]}
     with pytest.raises(Exception, match="not set"):
         Settings.from_env({})
     for needed in ("OSPREY_BACKUP_BUCKET", "OSPREY_BACKUP_KMS_KEY", "AWS_REGION",
@@ -38,7 +38,7 @@ def test_every_setting_the_runner_needs_is_rendered(fixture: str) -> None:
                    "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_CLUSTER"):  # fmt: skip
         assert needed in names, needed
     # Each `config:` is a key of the ConfigMap; each `secret:` one of our Secret's keys.
-    for item in values["backups"]["env"]:
+    for item in values["backups"]["env"] + values["backups"]["arcadedb"]["env"]:
         if "config" in item:
             assert item["config"] in values["environment"], item
         if "secret" in item:
@@ -59,9 +59,11 @@ def test_each_secret_the_backup_reads_is_one_the_terraform_writes(fixture: str) 
 
 def test_the_backup_pod_is_given_no_other_secret() -> None:
     """Not the whole Secret (`envFrom`): the two passwords it uses, by name (Amendment 1 item 3):
-    ArcadeDB's and ClickHouse's backup user's, never the deployment's own ClickHouse user's."""
+    ArcadeDB's and ClickHouse's backup user's, never the deployment's own ClickHouse user's.
+    ArcadeDB's, a key of our Secret, to the backup's own container alone (`arcadedb.env`)."""
     values = rendered.values()
-    secret_items = [e for e in values["backups"]["env"] if "secret" in e]
+    assert not [e for e in values["backups"]["env"] if "secret" in e]
+    secret_items = [e for e in values["backups"]["arcadedb"]["env"] if "secret" in e]
     assert [e["secret"] for e in secret_items] == ["ARCADEDB_ROOT_PASSWORD"]
     own = [e for e in values["backups"]["env"] if (e.get("secretKeyRef") or {}).get("name") == backups.BACKUP_SECRET]
     assert [e["name"] for e in own] == ["CLICKHOUSE_PASSWORD"]
