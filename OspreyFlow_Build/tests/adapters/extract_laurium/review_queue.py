@@ -44,6 +44,14 @@ ANSWER = json.dumps(
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 HANDLING = Handling(classification="OFFICIAL", handling_code="P", originator="u", owning_unit="u")
 
+#: asyncpg's own refusals, as the stand-in raises them (named here so a test reading them imports no
+#: driver: it opens no connection).
+REFUSALS = {
+    "not_null": asyncpg.exceptions.NotNullViolationError,
+    "unique": asyncpg.exceptions.UniqueViolationError,
+    "arguments": asyncpg.exceptions.InterfaceError,
+}
+
 _INSERT = re.compile(r"INSERT INTO (\w+) \(([^)]*)\) VALUES \(([^)]*)\)", re.S)
 _NOT_NULL = re.compile(r"^\s+(\w+) [A-Z ]*?(NOT NULL|PRIMARY KEY)", re.M)
 _TABLE = re.compile(r"CREATE TABLE IF NOT EXISTS (\w+) \((.*?)\n\);", re.S)

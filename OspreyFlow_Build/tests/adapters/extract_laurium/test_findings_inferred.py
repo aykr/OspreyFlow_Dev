@@ -54,10 +54,9 @@ async def test_laurium_findings_reach_the_review_queue_pending() -> None:
 async def test_the_pools_stand_in_refuses_what_postgres_refuses() -> None:
     """Rule 15: the stand-in under the real store refuses a NULL where the store's own table says
     NOT NULL, values that do not match the statement, and a candidate's id twice."""
-    import asyncpg
     import pytest
 
-    from tests.adapters.extract_laurium.review_queue import CandidateRows
+    from tests.adapters.extract_laurium.review_queue import REFUSALS, CandidateRows
 
     sql = (
         "INSERT INTO extraction_candidates (id, document_id, entity_type, properties, confidence, "
@@ -69,9 +68,9 @@ async def test_the_pools_stand_in_refuses_what_postgres_refuses() -> None:
            "2026-11-11", None, None)  # fmt: skip
     rows = CandidateRows()
     await rows.executemany(sql, [row])
-    with pytest.raises(asyncpg.exceptions.UniqueViolationError):
+    with pytest.raises(REFUSALS["unique"]):
         await rows.executemany(sql, [row])
-    with pytest.raises(asyncpg.exceptions.NotNullViolationError, match="status"):
+    with pytest.raises(REFUSALS["not_null"], match="status"):
         await rows.executemany(sql, [(*row[:9], None, *row[10:])])
-    with pytest.raises(asyncpg.exceptions.InterfaceError):
+    with pytest.raises(REFUSALS["arguments"]):
         await rows.executemany(sql, [row[:-1]])
