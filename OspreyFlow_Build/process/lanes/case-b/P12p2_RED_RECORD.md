@@ -113,7 +113,7 @@ its own:
 
 | Run | qwen2.5:7b-instruct | qwen2.5:0.5b-instruct (the control) |
 | --- | --- | --- |
-| 2e3ec43 (`gates/2e3ec43.p12p2-live-run1-event-loop.txt`) | 2 passed, 1 failed: **"Event loop is closed" in 0.07 s**, before any model call | 3 failed, `unparseable` |
+| 2e3ec43 (`gates/2e3ec43.p12p2-live-run1-event-loop.txt`) | 2 passed, 1 failed: **"Event loop is closed" in 0.07 s**, before any model call | 3 failed: 2 `unparseable`, 1 "Event loop is closed" (the same harness fault; corrected from "3 unparseable", the orchestrator's round 1) |
 | b21d6db (`gates/b21d6db.p12p2-live-run2.txt`) | **3 passed** (about 2–12 s a call) | 3 failed, `unparseable` |
 
 The first run's failure was the test's, not the model's: LangChain's OpenAI client caches its HTTP client across
@@ -122,7 +122,7 @@ Laurium's service each run one loop; the module now shares one (`loop_scope="mod
 but the orchestrator's probe key. **What is not proven:** the client's own engine (not reachable from the test server;
 the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model stays, and the control above is it.
 
-## The lane-reviewer's round (13 findings must-fix and minor), as fixed
+## The lane-reviewer's round (18 findings, must-fix and minor), as fixed
 
 - **Item 3, the preset written into the stored config:** now read, never written (`OspreyConfig.extraction_engine`, a
   property; the validator records only a cloud-platform translation). Written first:
@@ -189,3 +189,10 @@ once P7b's check is on main.
    real call shape (each service's own `extract(using="model")`, built as its own tests build it). **Plants:** the
    marker back inside `run_extraction`, 2 failed (email, document); the route not passing it, 1 failed. The review-queue
    test now passes the flag as the route does and asserts with `assert_queued_pending`.
+2. **The Conduit's wiring tested offline:** the lifespan's block is `laurium_start.laurium_in_the_conduit` (the key
+   started, `ready` wired), the lifespan's one call. `test_laurium_start.py` +2, written first (2 failed), then 7 passed:
+   `ready` is false until the key exists, true after; nothing when not chosen; the lifespan calls it once. **Plants:**
+   `ready` not wired, 1 failed; the lifespan's call dropped, 1 failed. **The live case went through Laurium's adapter
+   over the real service (`laurium_live_adapter`), not through the Conduit's routed model**: the Conduit's lifespan needs
+   the stores and Keycloak, not cheap on a lease beside the gateway pair; the composition, the marker and the key's
+   readiness are the offline tests above.

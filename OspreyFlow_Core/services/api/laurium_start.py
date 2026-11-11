@@ -118,3 +118,23 @@ class LauriumKeyAtStart:
                 await self._task
             except asyncio.CancelledError:
                 pass
+
+
+async def laurium_in_the_conduit(
+    model: ModelPort,
+    gateway: httpx.AsyncClient,
+    master: str,
+    models: Sequence[str],
+    *,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> LauriumKeyAtStart | None:
+    """The lifespan's block (round 1, item 2): when the deployment chose Laurium, its key started
+    (`LauriumKeyAtStart`) and Laurium's calls made ready only once it is held; nothing otherwise.
+    The caller stops what it returns at shutdown."""
+    composed = lauriums(model)
+    if composed is None:
+        return None
+    start = LauriumKeyAtStart(gateway, master, models, sleep=sleep)
+    composed.ready = lambda: start.held
+    await start.start()
+    return start

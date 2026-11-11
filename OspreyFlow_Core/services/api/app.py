@@ -762,7 +762,7 @@ from .kyc_expiries import KycExpiryStore
 from .kyc_sweep import SweepReport
 from .kyc_sweep import run_daily as run_daily_kyc_sweep
 from .kyc_sweep import sweep as kyc_sweep
-from .laurium_start import LauriumKeyAtStart, close_laurium, lauriums, routed_model
+from .laurium_start import close_laurium, laurium_in_the_conduit, routed_model
 from .link_changes import (
     ChangeNotMadeError,
     InvalidChangeError,
@@ -1460,16 +1460,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await model_admin.start()
     if routed is not None:
         routed.follow(model_admin.routes)
-    laurium_key_start: LauriumKeyAtStart | None = None
-    if (composed := lauriums(model)) is not None:
-        # ADR-135 Amendment 6 decision 8: Laurium's own key, the deployment's extraction model
-        # alone, and any older one (a master key since rotated) deleted; tried again in the
-        # background until held, never stopping the Conduit, Laurium's calls refused until then.
-        laurium_key_start = LauriumKeyAtStart(
-            gateway_http, gateway_config.api_key, [models.extraction]
-        )
-        composed.ready = lambda: laurium_key_start is not None and laurium_key_start.held
-        await laurium_key_start.start()
+    # ADR-135 Amendment 6 decision 8: Laurium's own key, the deployment's extraction model alone,
+    # any older one (a master key since rotated) deleted; tried again in the background until held,
+    # never stopping the Conduit, Laurium's calls refused until then (`laurium_start`).
+    laurium_key_start = await laurium_in_the_conduit(
+        model, gateway_http, gateway_config.api_key, [models.extraction]
+    )
     app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme

@@ -140,3 +140,42 @@ async def test_lauriums_client_is_closed_at_shutdown() -> None:
 
     await close_laurium(model)
     assert composed.laurium._http.is_closed  # noqa: SLF001
+
+
+async def test_the_conduits_laurium_block_starts_the_key_and_is_unready_until_it_exists() -> None:
+    """Round 1, item 2: the lifespan's block is `laurium_in_the_conduit`, here offline: chosen, it
+    starts Laurium's key and wires `ready`, false until the key is held; not chosen, nothing."""
+    from services.api.laurium_start import laurium_in_the_conduit
+
+    gateway = _Gateway(down=1)
+    waits: list[float] = []
+    proceed = asyncio.Event()
+
+    async def held_back(seconds: float) -> None:
+        waits.append(seconds)
+        await proceed.wait()
+
+    async with httpx.AsyncClient(transport=gateway.transport(), base_url="http://litellm:4000") as c:
+        model = routed_model(_Inner(), routes=_routes(), egress=None, environ=LAURIUM_ENV, master=MASTER)  # type: ignore[arg-type]
+        start = await laurium_in_the_conduit(model, c, MASTER, [MODEL], sleep=held_back)
+        assert start is not None
+        composed = model._inner  # noqa: SLF001
+        assert isinstance(composed, LauriumExtracts)
+        assert composed.ready() is False, "ready before Laurium's key exists"
+        proceed.set()
+        await asyncio.wait_for(start.wait(), timeout=5)
+        assert composed.ready() is True
+        await start.stop()
+        plain = routed_model(_Inner(), routes=_routes(), egress=None, environ={}, master=MASTER)  # type: ignore[arg-type]
+        assert await laurium_in_the_conduit(plain, c, MASTER, [MODEL]) is None
+
+
+def test_the_conduits_lifespan_runs_the_laurium_block() -> None:
+    """Dropping the block from the lifespan fails here (the plant): the one call `app.py` makes."""
+    import inspect
+
+    from services.api import app as app_module
+
+    source = inspect.getsource(app_module)
+    assert source.count("await laurium_in_the_conduit(") == 1
+    assert "routed_model(" in source and "await close_laurium(" in source
