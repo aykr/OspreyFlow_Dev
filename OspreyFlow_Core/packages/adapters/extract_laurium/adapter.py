@@ -14,7 +14,9 @@ decision 1). What it holds to, as that adapter does:
   state;
 - **each call names its engine and job** (ADR-135 Amendment 3): inside `usage.calling`, the call
   carries its tag and goes with the engine's own gateway key, which the service uses for that call
-  alone; a call for `local`, or outside the routing, goes with the master key;
+  alone; a call for `local`, or outside the routing, goes with Laurium's own scoped key
+  (`keys.laurium_key`). **Never the master key** (Amendment 6 decision 8): it is admin on the
+  gateway, and Laurium's container runs 126 third-party packages;
 - **each refusal is a typed error in our words**, never the gateway's, which can name part of a
   key: a limit is `ModelLimitReached` (read by `usage.limit_refusal`, the measured reader), a model
   the provider does not offer `ModelUnavailableError`, anything else `ExtractionFailedError`.
@@ -40,13 +42,15 @@ from adapters.model_litellm.errors import (
 from adapters.model_litellm.usage import LOCAL, current_call, engine_key, limit_refusal, usage_tag
 from schemas.model import ExtractionRequest, ExtractionResult
 
+from .keys import laurium_key
+
 
 @dataclass(frozen=True, slots=True)
 class LauriumConfig:
     #: Laurium's service, e.g. `http://laurium:8000`.
     base_url: str
-    #: The gateway's master key, which the Conduit already holds (`LITELLM_API_KEY`): sent for the
-    #: deployment's own models, and the root an engine's own key is derived from.
+    #: The gateway's master key, which the Conduit already holds (`LITELLM_API_KEY`): the root
+    #: Laurium's own key and each engine's are derived from, and never itself sent to the service.
     gateway_key: str
     #: As the LiteLLM adapter's (ADR-095): a long document on a small model takes minutes.
     timeout_seconds: float = 900.0
@@ -80,13 +84,20 @@ class ExtractLauriumAdapter:
                 f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
             ) from exc
 
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
         call = current_call()
-        token = self._master
         tag: str | None = None
-        if call is not None:
-            tag = usage_tag(call.engine, call.job)
-            if call.engine != LOCAL:
-                token = engine_key(self._master, call.engine)
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
 
         body: dict[str, Any] = {
             "document_id": req.document_id,

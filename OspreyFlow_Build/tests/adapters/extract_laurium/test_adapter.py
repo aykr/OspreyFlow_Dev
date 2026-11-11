@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from adapters.extract_laurium.adapter import ExtractLauriumAdapter, LauriumConfig
+from adapters.extract_laurium.keys import laurium_key, put_laurium_key
 from adapters.model_litellm.errors import (
     ExtractionFailedError,
     InvalidExtractionSchemaError,
@@ -34,13 +35,17 @@ SCHEMA = {
 
 
 def _gateway(answer: str = '{"name": "Owen Wilson"}') -> StandInGateway:
-    return StandInGateway(
+    gateway = StandInGateway(
         master_key=MASTER,
         salt_key="salt",
         providers={"openai": StandInProvider("sk-provider", frozenset({"gpt-x"}))},
         config_models=frozenset({MODEL}),
         answer=answer,
     )
+    # Laurium's own key, as the deployment holds it on its gateway: the deployment's model alone.
+    _admin(gateway, "/key/generate", {"key": laurium_key(MASTER), "models": [MODEL],
+                                      "metadata": {"osprey_service": "laurium"}})  # fmt: skip
+    return gateway
 
 
 def _adapter(service: FakeLauriumService) -> ExtractLauriumAdapter:
@@ -150,7 +155,11 @@ async def test_a_wrong_gateway_key_is_a_failure_that_never_repeats_the_key() -> 
     with pytest.raises(ExtractionFailedError) as caught:
         await adapter.extract(_request())
     await adapter.aclose()
-    assert "WXYZ" not in str(caught.value)
+    # The gateway's 401 names the last four characters of the key it was sent (measured): the key
+    # derived from the wrong master key, never repeated in our words.
+    sent = laurium_key("sk-wrong-key-WXYZ")
+    assert service.gateway.received == [] and sent[-4:] not in str(caught.value)
+    assert "HTTP 401" in str(caught.value)
 
 
 async def test_an_engines_call_carries_its_tag_and_its_own_key() -> None:
@@ -169,25 +178,103 @@ async def test_an_engines_call_carries_its_tag_and_its_own_key() -> None:
     assert gateway.received[-1][0] == key
 
 
-async def test_a_local_call_goes_with_the_master_key_and_its_tag() -> None:
-    service = FakeLauriumService(_gateway())
+async def test_a_local_call_goes_with_lauriums_own_key_and_its_tag() -> None:
+    gateway = _gateway()
+    service = FakeLauriumService(gateway)
     adapter = _adapter(service)
     with calling("local", "extraction"):
         await adapter.extract(_request())
     await adapter.aclose()
     token, body = service.received[-1]
-    assert token == MASTER
+    assert token == laurium_key(MASTER)
     assert body["tag"] == usage_tag("local", "extraction")
+    assert gateway.received[-1][0] == laurium_key(MASTER)  # the gateway granted it as that key
 
 
-async def test_a_call_outside_the_routing_is_untagged_with_the_master_key() -> None:
+async def test_a_call_outside_the_routing_is_untagged_with_lauriums_own_key() -> None:
     service = FakeLauriumService(_gateway())
     adapter = _adapter(service)
     await adapter.extract(_request())
     await adapter.aclose()
     token, body = service.received[-1]
-    assert token == MASTER
+    assert token == laurium_key(MASTER)
     assert body.get("tag") is None
+
+
+@pytest.mark.parametrize("engine", [None, "local", "gemini"])
+async def test_no_call_from_the_adapter_carries_the_master_key(engine: str | None) -> None:
+    """ADR-135 Amendment 6 decision 8: the master key is admin on the gateway and never crosses into
+    Laurium's container. Read off every byte the adapter sends (each header and the body), as sent,
+    for each kind of call: outside the routing, the deployment's own models, a hosted engine."""
+    import httpx
+
+    gateway = _gateway()
+    _store_engine(gateway, "gemini", "openai/gpt-x", "sk-provider")
+    _virtual_key(gateway, engine_key(MASTER, "gemini"))
+    service = FakeLauriumService(gateway)
+    sent: list[bytes] = []
+
+    def _record(request: httpx.Request) -> httpx.Response:
+        sent.append(b"".join(k + b": " + v + b"\n" for k, v in request.headers.raw) + request.content)
+        return service.transport().handle_request(request)
+
+    adapter = ExtractLauriumAdapter(
+        LauriumConfig(base_url="http://laurium:8000", gateway_key=MASTER),
+        transport=httpx.MockTransport(_record),
+    )
+    model = "gemini" if engine == "gemini" else MODEL
+    if engine is None:
+        await adapter.extract(_request(model=model))
+    else:
+        with calling(engine, "extraction"):
+            await adapter.extract(_request(model=model))
+    await adapter.aclose()
+    assert len(sent) == 1
+    assert MASTER.encode() not in sent[0]
+
+
+async def test_lauriums_key_is_its_own_scoped_to_the_models_it_is_given() -> None:
+    """Made like an engine's key, on the gateway's own routes: its own label (never an engine's key,
+    even an engine named `laurium`), the models it is given alone, tagged as the service's, no
+    admin right."""
+    import httpx
+
+    gateway = StandInGateway(
+        master_key=MASTER, salt_key="salt", providers={}, config_models=frozenset({MODEL, "other"})
+    )
+    async with httpx.AsyncClient(transport=gateway.transport(), base_url="http://litellm:4000") as c:
+        key = await put_laurium_key(c, MASTER, [MODEL])
+        again = await put_laurium_key(c, MASTER, [MODEL])  # updated where held, never a second
+        assert key == again == laurium_key(MASTER)
+        assert key not in (MASTER, engine_key(MASTER, "laurium"))
+        held = gateway.virtual_key(key)
+        assert held is not None and held.models == [MODEL]
+        assert held.metadata == {"osprey_service": "laurium"}
+        auth = {"Authorization": f"Bearer {key}"}
+        granted = await c.post("/chat/completions", json={"model": MODEL}, headers=auth)
+        refused = await c.post("/chat/completions", json={"model": "other"}, headers=auth)
+        admin = await c.post("/key/generate", json={}, headers=auth)
+    assert (granted.status_code, refused.status_code, admin.status_code) == (200, 403, 401)
+    assert len(gateway.virtual_keys()) == 1
+    with pytest.raises(ValueError):
+        laurium_key("  ")
+    # An empty `models` is every model on the gateway (measured): refused before any request, so
+    # the key held keeps its one model. (Rule 15: a client with no base URL failed here for that.)
+    async with httpx.AsyncClient(transport=gateway.transport(), base_url="http://litellm:4000") as c:
+        with pytest.raises(ValueError, match="every model"):
+            await put_laurium_key(c, MASTER, [])
+    assert gateway.virtual_key(key).models == [MODEL]  # type: ignore[union-attr]
+
+
+async def test_an_empty_master_key_is_a_failure_before_any_call() -> None:
+    service = FakeLauriumService(_gateway())
+    adapter = ExtractLauriumAdapter(
+        LauriumConfig(base_url="http://laurium:8000", gateway_key=" "), transport=service.transport()
+    )
+    with pytest.raises(ExtractionFailedError, match="no gateway key"):
+        await adapter.extract(_request())
+    await adapter.aclose()
+    assert service.received == []
 
 
 async def test_an_engines_limit_is_model_limit_reached_in_our_words() -> None:
