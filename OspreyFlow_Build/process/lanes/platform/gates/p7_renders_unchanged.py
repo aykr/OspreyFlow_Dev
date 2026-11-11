@@ -157,7 +157,7 @@ def parsed(text: str) -> str:
     return json.dumps(docs, indent=1, sort_keys=True)
 
 
-def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
+def main(base: str, helm: bool = False, base_tar: str | None = None, full: bool = False) -> int:
     with tempfile.TemporaryDirectory() as folder:
         old = Path(folder) / "OspreyFlow_Core"
         old.mkdir()
@@ -186,7 +186,8 @@ def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
 
                 sys.stdout.writelines(
                     list(difflib.unified_diff(normalised(a or "").splitlines(True),
-                                              normalised(b or "").splitlines(True), n=1))[:40]
+                                              normalised(b or "").splitlines(True), n=1))
+                    [: None if full else 40]
                 )  # fmt: skip
     print(f"p7_renders_unchanged: {differ} artefact(s) differ from {base}")
     return 1 if differ else 0
@@ -194,6 +195,7 @@ def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
 
 if __name__ == "__main__":
     tars = [a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--base-tar=")]
-    args = [a for a in sys.argv[1:] if a != "--helm" and not a.startswith("--base-tar=")]
+    args = [a for a in sys.argv[1:] if a not in {"--helm", "--full"} and not a.startswith("--base-tar=")]
+    # --full: every changed line of each differing artefact, not its first 40 (the record).
     sys.exit(main(args[0] if args else "78bb4ae", helm="--helm" in sys.argv[1:],
-                  base_tar=tars[0] if tars else None))  # fmt: skip
+                  base_tar=tars[0] if tars else None, full="--full" in sys.argv[1:]))  # fmt: skip

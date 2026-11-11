@@ -1,0 +1,1329 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T201550Z/log: bash -c .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py ../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py ../OspreyFlow_Build/tests/cli/test_images_verb.py ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py 2>&1 | tail -1; .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py > /tmp/platform-p7b-reds.out 2>&1; echo "reds exit $?"; .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_renders_unchanged.py --helm --base-tar=../OspreyFlow_Build/p7b-base.tar d9beca2 > /tmp/platform-p7b-renders.out 2>&1; echo "renders exit $?"; echo ==== REDS; cat /tmp/platform-p7b-reds.out; echo ==== RENDERS; cat /tmp/platform-p7b-renders.out; echo ==== MAKE TEST; (cd ../OspreyFlow_Build && make test 2>&1 | grep -E '^(FAILED|ERROR)|passed|failed' | tail -15); echo ==== MAKE CI; (cd ../OspreyFlow_Build && make -k ci 2>&1 | grep -E '^make.*Error|Error [0-9]|FAILED|violations' | tail -30)
+563 passed, 6 skipped, 1 warning in 334.08s (0:05:34)
+reds exit 0
+renders exit 1
+==== REDS
+RED      decommission: an object labelled ours passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 2.22s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[labelled]
+      E   AssertionError: assert [] == ['ConfigMap/ospreyflow-env']
+      E     
+      E     Right contains one more item: 'ConfigMap/ospreyflow-env'
+      E     Use -v to get more diff
+RED      decommission: our Secret and the kept claims, by name, pass  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    3 failed in 2.22s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[our-secret]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[kept-shared-claim]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[kept-ingest-claim]
+      E   AssertionError: assert [] == ['Secret/ospreyflow-secrets']
+      E     
+      E     Right contains one more item: 'Secret/ospreyflow-secrets'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['PersistentV...yflow-shared']
+      E     
+      E     Right contains one more item: 'PersistentVolumeClaim/ospreyflow-shared'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['PersistentV...yflow-ingest']
+      E     
+      E     Right contains one more item: 'PersistentVolumeClaim/ospreyflow-ingest'
+      E     Use -v to get more diff
+RED      decommission: the Terraform-made Secrets not named ours (review item 1a)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    3 failed in 1.38s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[rds-secret]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[redis-secret]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[s3-secret]
+      E   AssertionError: assert [] == ['Secret/rds-...tance-output']
+      E     
+      E     Right contains one more item: 'Secret/rds-postgresql-instance-output'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['Secret/elasticache-redis']
+      E     
+      E     Right contains one more item: 'Secret/elasticache-redis'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['Secret/s3-bucket-output']
+      E     
+      E     Right contains one more item: 'Secret/s3-bucket-output'
+      E     Use -v to get more diff
+RED      decommission: the bucket role's service account not named ours (review item 1a)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.44s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[bucket-role-account]
+      E   AssertionError: assert [] == ['ServiceAccount/ospreyflow']
+      E     
+      E     Right contains one more item: 'ServiceAccount/ospreyflow'
+      E     Use -v to get more diff
+RED      decommission: Helm's release record passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.35s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[helm-release]
+      E   AssertionError: assert [] == ['Secret/sh.h...spreyflow.v3']
+      E     
+      E     Right contains one more item: 'Secret/sh.helm.release.v1.ospreyflow.v3'
+      E     Use -v to get more diff
+RED      decommission: an object Helm annotates as the release's passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.21s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[helm-annotated]
+      E   AssertionError: assert [] == ['ServiceAcco...eyflow-extra']
+      E     
+      E     Right contains one more item: 'ServiceAccount/ospreyflow-extra'
+      E     Use -v to get more diff
+RED      decommission: a StatefulSet's claim (the selector's labels alone) passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.25s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_leftover_in_the_namespace_is_named[statefulset-claim]
+      E   AssertionError: assert [] == ['PersistentV...clickhouse-0']
+      E     
+      E     Right contains one more item: 'PersistentVolumeClaim/data-clickhouse-0'
+      E     Use -v to get more diff
+RED      decommission: a Calico policy's removal without its API group  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.29s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_calico_policy_s_removal_names_its_api_group
+      E   AssertionError: assert 'kubectl -n o...-allow-egress' == 'kubectl -n o...-allow-egress'
+      E     
+      E     Skipping 36 identical leading characters in diff, use -v to show
+      E     - workpolicy.projectcalico.org default.ospreyflow-allow-egress
+      E     ?           ------------------
+      E     + workpolicy default.ospreyflow-allow-egress
+RED      decommission: a disk kept after our claim passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.26s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_disk_kept_after_its_claim_is_named
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      decommission: a disk of the namespace's not ours counted ours (by its tag alone)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.33s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_namespace_holding_only_the_platform_s_own_passes
+      E   AssertionError: assert [Leftover(wha...l-0platform')] == []
+      E     
+      E     Left contains one more item: Leftover(what='disk/vol-0platform', why='the disk of claim platform-team-scratch is kept: aws ec2 delete-volume --region eu-west-2 --volume-id vol-0platform')
+      E     Use -v to get more diff
+RED      decommission: a disks listing with no Volumes reads as none (review item 1b)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.39s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_disks_listing_it_cannot_vouch_for_is_refused[no-volumes]
+      E   KeyError: 'Volumes'
+RED      decommission: a disks listing of another region accepted (review item 1b)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.34s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_disks_listing_it_cannot_vouch_for_is_refused[other-region]
+      E   Failed: DID NOT RAISE ListingRefused
+RED      decommission: a disks listing of another account accepted (review item 1b)  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    2 failed in 1.37s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_disks_listing_it_cannot_vouch_for_is_refused[other-account]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_disks_listing_it_cannot_vouch_for_is_refused[no-account]
+      E   Failed: DID NOT RAISE ListingRefused
+      E   Failed: DID NOT RAISE ListingRefused
+RED      decommission: a volume object kept after our claim passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.34s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_volume_object_kept_after_its_claim_is_named_where_it_may_be_listed
+      E   AssertionError: assert [] == ['PersistentV...pvc-0a1b2c3d']
+      E     
+      E     Right contains one more item: 'PersistentVolume/pvc-0a1b2c3d'
+      E     Use -v to get more diff
+RED      decommission: the platform's own Terraform resources called ours  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.27s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_namespace_holding_only_the_platform_s_own_passes
+      E   AssertionError: assert [Leftover(wha...moval again')] == []
+      E     
+      E     Left contains one more item: Leftover(what='terraform/aws_iam_role.platform_team_reader', why='an IAM role or policy, which outlives the namespace: apply the removal again')
+      E     Use -v to get more diff
+RED      decommission: any module's resource of our type and name called ours  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    2 failed, 4 passed in 1.52s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_only_the_deployment_s_place_in_the_state_is_its_own[module.ospreyflow.aws_iam_role.service-None-False]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_only_the_deployment_s_place_in_the_state_is_its_own[module.ospreyflow.module.inner.aws_iam_role.service-ospreyflow-False]
+      E   AssertionError: assert ['terraform/m...role.service'] == []
+      E     
+      E     Left contains one more item: 'terraform/module.ospreyflow.aws_iam_role.service'
+      E     Use -v to get more diff
+      E   AssertionError: assert ['terraform/m...role.service'] == []
+      E     
+      E     Left contains one more item: 'terraform/module.ospreyflow.module.inner.aws_iam_role.service'
+      E     Use -v to get more diff
+RED      decommission: the Terraform state not read  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    6 failed in 1.51s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_role.service]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_policy.buckets]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_role_policy_attachment.buckets]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_s3_bucket.store["media"]]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_db_instance.postgres]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[kubernetes_service_account.service]
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+      E   ValueError: not enough values to unpack (expected 1, got 0)
+RED      decommission: an IAM role or policy not named as such  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    2 failed in 1.34s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_role.service]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_resource_the_render_declares_left_in_the_state_is_named[aws_iam_policy.buckets]
+      E   assert 'IAM' in "still in the namespace's Terraform state: apply the removal again"
+      E    +  where "still in the namespace's Terraform state: apply the removal again" = Leftover(what='terraform/aws_iam_role.service', why="still in the namespace's Terraform state: apply the removal again").why
+      E   assert 'IAM' in "still in the namespace's Terraform state: apply the removal again"
+      E    +  where "still in the namespace's Terraform state: apply the removal again" = Leftover(what='terraform/aws_iam_policy.buckets', why="still in the namespace's Terraform state: apply the removal again").why
+RED      decommission: a KMS key alias not named as such  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.36s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_kms_key_alias_is_named_as_such_when_the_render_makes_one
+      E   assert ('terraform/aw...s_alias.store' == 'terraform/aw...s_alias.store'
+      E     
+      E       terraform/aws_kms_alias.store and 'KMS key alias' in "still in the namespace's Terraform state: apply the removal again")
+      E    +  where "still in the namespace's Terraform state: apply the removal again" = Leftover(what='terraform/aws_kms_alias.store', why="still in the namespace's Terraform state: apply the removal again").why
+RED      decommission: a bucket of ours passes  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.29s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_a_bucket_of_this_deployment_s_is_named
+      E   AssertionError: assert [] == ['bucket/ospr...2b3c4d-media']
+      E     
+      E     Right contains one more item: 'bucket/ospreyflow-poc-1a2b3c4d-media'
+      E     Use -v to get more diff
+RED      decommission: main exits 0 with a leftover  [OspreyFlow_Core/harness/cloud_platform/decommission_check.py]
+    1 failed in 1.52s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::test_main_exits_1_on_a_leftover_and_0_on_none
+      E   AssertionError: assert 0 == 1
+      E    +  where 0 = main(['--values', '/tmp/pytest-of-root/pytest-4021/test_main_exits_1_on_a_leftove0/values.yaml', '--objects', '/tmp/pytest-...e0/objects-0.json', '--objects', '/tmp/pytest-of-root/pytest-4021/test_main_exits_1_on_a_leftove0/objects-1.json', ...])
+RED      runbooks: a cluster-wide listing of the volumes  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.18s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_no_command_needs_more_than_a_namespace_s_rights
+      E   AssertionError: DECOMMISSION.md
+      E   assert not <re.Match object; span=(4815, 4829), match='kubectl get pv'>
+      E    +  where <re.Match object; span=(4815, 4829), match='kubectl get pv'> = <function search at 0x7ea88adf49a0>('kubectl (get|delete) (pv|persistentvolume)s?\\b', 'export NS=ospreyflow-poc RELEASE=ospreyflow FOLDER=deploy/generated/cloud-platform CHART=deploy/helm/ospreyflow REGIO...} --state "$WORK/state.txt" --terraform "$WORK/terraform"    --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"\n')
+      E    +    where <function search at 0x7ea88adf49a0> = re.search
+RED      runbooks: an AWS call with no region (review item 3)  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.26s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_no_command_needs_more_than_a_namespace_s_rights
+      E   AssertionError: ('DECOMMISSION.md', 'ec2 describe-volumes --filters "Name=tag:kubernetes.io/created-for/pvc/namespace,Values=$NS" --output json > "$WORK/disks-listed.json"')
+      E   assert '--region "$REGION"' in 'ec2 describe-volumes --filters "Name=tag:kubernetes.io/created-for/pvc/namespace,Values=$NS" --output json > "$WORK/disks-listed.json"'
+RED      runbooks: no pinned render between the push and the install  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.11s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_signs_in_to_the_registry_and_pins_before_it_installs
+      E   ValueError: substring not found
+RED      runbooks: no registry sign-in before the push  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.07s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_signs_in_to_the_registry_and_pins_before_it_installs
+      E   ValueError: substring not found
+RED      aws: the delete markers not sliced (--max-items counts the versions alone)  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.63s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_every_version_and_every_delete_marker_go_in_calls_under_a_thousand_keys
+      E   AssertionError: deleting from ospreyflow-poc-1a2b3c4d-media failed: stopped
+      E     An error occurred (MalformedXML) when calling the DeleteObjects operation
+      E     
+      E   assert 1 == 0
+RED      aws: a delete's per-key Errors passed over  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.39s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_a_refused_delete_or_listing_stops_the_step[per-key-errors]
+      E   AssertionError: ospreyflow-poc-1a2b3c4d-media's Versions are the same after a delete: stopped
+      E     
+      E   assert (1 != 0 and 'key(s) refused: stopped' in "ospreyflow-poc-1a2b3c4d-media's Versions are the same after a delete: stopped\n")
+RED      aws: a listing that fails passed over  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.71s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_a_refused_delete_or_listing_stops_the_step[listing-fails]
+      E   AssertionError: An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     An error occurred (InternalError) when calling list-object-versions
+      E     
+      E   assert (0 != 0)
+RED      aws: a delete that fails passed over  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.67s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_a_refused_delete_or_listing_stops_the_step[delete-fails]
+      E   AssertionError: An error occurred (InternalError) when calling delete-objects
+      E     
+      E   assert (0 != 0)
+RED      aws: a listing the same after a delete looped on  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 61.43s (0:01:01)
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_a_refused_delete_or_listing_stops_the_step[nothing-deleted]
+      E   subprocess.TimeoutExpired: Command '['bash', '-c', 'failed=\nfor b in media staging site-images tile-cache; do\n  for kind in Versions DeleteMarkers; do\n    : > "$WORK/versions.last.json"\n    while :; do\n      if ! aws s3api list-object-versions --region "$REGION" --bucket "$PREFIX$b" --max-items 500 --output json \\\n          --query "{Objects: $kind[:500].{Key: Key, VersionId: VersionId}}" > "$WORK/versions.json"; then\n        echo "listing $PREFIX$b\'s $kind failed: stopped"; failed=1; break 3\n      fi\n      grep -q \'"Key"\' "$WORK/versions.json" || break\n      if false; then\n        echo "$PREFIX$b\'s $kind are the same after a delete: stopped"; failed=1; break 3\n      fi\n      cp "$WORK/versions.json" "$WORK/versions.last.json"\n      if ! errors=$(aws s3api delete-objects --region "$REGION" --bucket "$PREFIX$b" --delete "file://$WORK/versions.json" \\\n          --query \'length(Errors || `[]`)\' --output text); then\n        echo "deleting from $PREFIX$b failed: stopped"; failed=1; break 3\n      fi\n      [ "$errors" = "0" ] || { echo "deleting from $PREFIX$b: $errors key(s) refused: stopped"; failed=1; break 3; }\n    done\n  done\ndone\ntest -z "$failed"\n']' timed out after 60 seconds
+RED      aws: the untagged images before the indexes that hold them  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.66s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_buildx_s_indexes_go_before_the_images_they_hold
+      E   AssertionError: deleting ospreyflow/api's images: 1 refused: stopped
+      E     
+      E   assert 1 == 0
+RED      aws: an image's failures passed over  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.45s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_an_image_refused_stops_the_step
+      E   AssertionError: ospreyflow/api's images are the same after a delete: stopped
+      E     
+      E   assert (1 != 0 and 'refused: stopped' in "ospreyflow/api's images are the same after a delete: stopped\n")
+RED      aws: a bucket that cannot be seen read as not there  [OspreyFlow_Core/harness/cloud_platform/runbooks.py]
+    1 failed in 1.78s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::test_a_bucket_not_there_is_not_listed_and_one_that_cannot_be_seen_stops
+      E   AssertionError: 
+      E   assert (0 != 0)
+RED      cp-policy-check: an Allow beyond DNS for every pod passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    3 failed in 7.37s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_one_allow_for_every_pod_is_refused[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_one_allow_for_every_pod_is_refused[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_one_allow_for_every_pod_is_refused[poc]
+      E   AssertionError: assert {('allow-port...llow-egress')} == {('allow-port...llow-egress')}
+      E     
+      E     Extra items in the right set:
+      E     ('wide-egress', 'NetworkPolicy/default.ospreyflow-allow-egress')
+      E     Use -v to get more diff
+      E   AssertionError: assert {('allow-port...llow-egress')} == {('allow-port...llow-egress')}
+      E     
+      E     Extra items in the right set:
+      E     ('wide-egress', 'NetworkPolicy/default.ospreyflow-allow-egress')
+      E     Use -v to get more diff
+      E   AssertionError: assert {('allow-port...llow-egress')} == {('allow-port...llow-egress')}
+      E     
+      E     Extra items in the right set:
+      E     ('wide-egress', 'NetworkPolicy/default.ospreyflow-allow-egress')
+      E     Use -v to get more diff
+RED      cp-policy-check: ingress from every pod of ours passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    3 failed in 7.48s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_ingress_from_every_pod_of_ours_is_refused[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_ingress_from_every_pod_of_ours_is_refused[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_ingress_from_every_pod_of_ours_is_refused[poc]
+      E   AssertionError: assert [] == [('wide-ingre...ow-internal')]
+      E     
+      E     Right contains one more item: ('wide-ingress', 'NetworkPolicy/ospreyflow-internal')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('wide-ingre...ow-internal')]
+      E     
+      E     Right contains one more item: ('wide-ingress', 'NetworkPolicy/ospreyflow-internal')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('wide-ingre...ow-internal')]
+      E     
+      E     Right contains one more item: ('wide-ingress', 'NetworkPolicy/ospreyflow-internal')
+      E     Use -v to get more diff
+RED      cp-policy-check: our Secret whole to a pod that reads none passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    7 failed, 2 skipped in 8.27s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[development-workspace]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[development-ner]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[production-workspace]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[production-ner]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[production-superset]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[poc-workspace]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_the_whole_secret_to_a_pod_that_reads_none_is_refused[poc-ner]
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads ospreyflow-secrets whole')
+      E     Use -v to get more diff
+RED      cp-policy-check: a store's password named to superset passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed, 2 skipped in 7.70s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_a_store_s_password_named_to_superset_is_refused[production]
+      E   assert [] == [('whole-secr...OT_PASSWORD')]
+      E     
+      E     Right contains one more item: ('whole-secret', "is given ospreyflow-secrets's ARCADEDB_ROOT_PASSWORD")
+      E     Use -v to get more diff
+RED      render: the managed stores' networks to every workload  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    6 failed in 8.65s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_workload_reaches_only_what_its_rows_give_it[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_workload_reaches_only_what_its_rows_give_it[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_workload_reaches_only_what_its_rows_give_it[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[poc]
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = <built-in method get of dict object at 0x706b4a2fc6c0>('managed', False)
+      E    +    where <built-in method get of dict object at 0x706b4a2fc6c0> = {'name': 'workspace', 'ports': [8080], 'toPods': [{'name': 'api', 'ports': [8000]}], 'managed': True}.get
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = <built-in method get of dict object at 0x706b49e4fbc0>('managed', False)
+      E    +    where <built-in method get of dict object at 0x706b49e4fbc0> = {'name': 'workspace', 'ports': [8080], 'toPods': [{'name': 'api', 'ports': [8000]}], 'managed': True}.get
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = <built-in method get of dict object at 0x706b49ef6680>('managed', False)
+      E    +    where <built-in method get of dict object at 0x706b49ef6680> = {'name': 'workspace', 'ports': [8080], 'toPods': [{'name': 'api', 'ports': [8000]}], 'managed': True}.get
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe... {'tier': 'default', 'order': 100, 'selector': "app.kubernetes.io/name == 'arcadedb'", 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'ip': '172.20.0.1', 'port': 5432})
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe... {'tier': 'default', 'order': 100, 'selector': "app.kubernetes.io/name == 'arcadedb'", 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'ip': '172.20.0.1', 'port': 5432})
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe... {'tier': 'default', 'order': 100, 'selector': "app.kubernetes.io/name == 'arcadedb'", 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...adWriteOnce', 'sharedSize': '200Gi', ...}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'ip': '172.20.0.1', 'port': 5432})
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+RED      render: every host to every workload  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    4 failed in 2.96s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_workload_reaches_only_what_its_rows_give_it[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_workload_reaches_only_what_its_rows_give_it[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_workload_reaches_only_what_its_rows_give_it[poc]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_model_engine_s_host_is_the_gateway_s_alone
+      E   AssertionError: workspace
+      E   assert not ({'s3.eu-west-2.amazonaws.com', 'sts.eu-west-2.amazonaws.com'} & {'s3.eu-west-2.amazonaws.com'})
+      E   AssertionError: workspace
+      E   assert not ({'api.openai.com', 's3.eu-west-2.amazonaws.com', 'sts.eu-west-2.amazonaws.com'} & {'s3.eu-west-2.amazonaws.com'})
+      E   AssertionError: workspace
+      E   assert not ({'s3.eu-west-2.amazonaws.com', 'sts.eu-west-2.amazonaws.com'} & {'s3.eu-west-2.amazonaws.com'})
+      E   AssertionError: assert not ['s3.eu-west-2.amazonaws.com']
+RED      render: no workload admits its callers (ingress not the paths turned round)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    6 failed in 8.95s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_ingress_is_the_paths_turned_round[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_ingress_is_the_paths_turned_round[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_ingress_is_the_paths_turned_round[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[poc]
+      E   AssertionError: api
+      E   assert [] == ['workspace']
+      E     
+      E     Right contains one more item: 'workspace'
+      E     Use -v to get more diff
+      E   AssertionError: api
+      E   assert [] == ['report-sync', 'workspace']
+      E     
+      E     Right contains 2 more items, first extra item: 'report-sync'
+      E     Use -v to get more diff
+      E   AssertionError: api
+      E   assert [] == ['workspace']
+      E     
+      E     Right contains one more item: 'workspace'
+      E     Use -v to get more diff
+      E   AssertionError: ('workspace', 'api')
+      E   assert False == ('api' in ['api'])
+      E    +  where False = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe... {'tier': 'default', 'order': 100, 'selector': "app.kubernetes.io/name == 'keycloak'", 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'labels': {'app.kubernetes.io/name': 'api', 'app.kubernetes.io/part-of': 'ospreyflow', 'app.kubernetes.io/instance': 'ospreyflow', 'app.kubernetes.io/managed-by': 'Helm', ...}, 'port': 8000})
+      E    +  and   ['api'] = <built-in method get of dict object at 0x7e4a6cbcdfc0>('workspace', [])
+      E    +    where <built-in method get of dict object at 0x7e4a6cbcdfc0> = {'workspace': ['api'], 'api': ['arcadedb', 'clickhouse', 'keycloak', 'litellm', 'ner', 'superset'], 'worker': ['arcadedb', 'clickhouse', 'keycloak', 'ner'], 'report-sync': ['api', 'keycloak'], ...}.get
+      E    +      where {'workspace': ['api'], 'api': ['arcadedb', 'clickhouse', 'keycloak', 'litellm', 'ner', 'superset'], 'worker': ['arcadedb', 'clickhouse', 'keycloak', 'ner'], 'report-sync': ['api', 'keycloak'], ...} = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).paths
+      E   AssertionError: ('workspace', 'api')
+      E   assert False == ('api' in ['api'])
+      E    +  where False = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe... {'tier': 'default', 'order': 100, 'selector': "app.kubernetes.io/name == 'keycloak'", 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'labels': {'app.kubernetes.io/name': 'api', 'app.kubernetes.io/part-of': 'ospreyflow', 'app.kubernetes.io/instance': 'ospreyflow', 'app.kubernetes.io/managed-by': 'Helm', ...}, 'port': 8000})
+      E    +  and   ['api'] = <built-in method get of dict object at 0x7e4a6b51b4c0>('workspace', [])
+      E    +    where <built-in method get of dict object at 0x7e4a6b51b4c0> = {'workspace': ['api'], 'api': ['arcadedb', 'clickhouse', 'keycloak', 'litellm', 'ner', 'superset'], 'worker': ['arcadedb', 'clickhouse', 'keycloak', 'ner'], 'report-sync': ['api', 'keycloak'], ...}.get
+      E    +      where {'workspace': ['api'], 'api': ['arcadedb', 'clickhouse', 'keycloak', 'litellm', 'ner', 'superset'], 'worker': ['arcadedb', 'clickhouse', 'keycloak', 'ner'], 'report-sync': ['api', 'keycloak'], ...} = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).paths
+      E   AssertionError: ('workspace', 'api')
+      E   assert False == ('api' in ['api'])
+      E    +  where False = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe... {'tier': 'default', 'order': 100, 'selector': "app.kubernetes.io/name == 'keycloak'", 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...adWriteOnce', 'sharedSize': '200Gi', ...}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'labels': {'app.kubernetes.io/name': 'api', 'app.kubernetes.io/part-of': 'ospreyflow', 'app.kubernetes.io/instance': 'ospreyflow', 'app.kubernetes.io/managed-by': 'Helm', ...}, 'port': 8000})
+      E    +  and   ['api'] = <built-in method get of dict object at 0x7e4a6b54b640>('workspace', [])
+      E    +    where <built-in method get of dict object at 0x7e4a6b54b640> = {'workspace': ['api'], 'api': ['arcadedb', 'clickhouse', 'keycloak', 'litellm', 'ner', 'superset'], 'worker': ['arcadedb', 'clickhouse', 'keycloak', 'ner'], 'report-sync': ['api', 'keycloak'], ...}.get
+      E    +      where {'workspace': ['api'], 'api': ['arcadedb', 'clickhouse', 'keycloak', 'litellm', 'ner', 'superset'], 'worker': ['arcadedb', 'clickhouse', 'keycloak', 'ner'], 'report-sync': ['api', 'keycloak'], ...} = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).paths
+RED      render: the Glass and the recogniser given our Secret whole  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    3 failed in 2.38s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_the_glass_and_the_recogniser_hold_no_secret_and_superset_its_own_alone[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_the_glass_and_the_recogniser_hold_no_secret_and_superset_its_own_alone[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_the_glass_and_the_recogniser_hold_no_secret_and_superset_its_own_alone[poc]
+      E   AssertionError: workspace
+      E   assert None
+      E    +  where None = <built-in method get of dict object at 0x715b28dd6f80>('noSecret')
+      E    +    where <built-in method get of dict object at 0x715b28dd6f80> = {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:c5d05a14f9f5e80d2e08...7430b1@sha256:e0728474a76e93971d94624e70f86be6bd92b4d5bdd2d54c5e64527ff4d4861b', 'egress': False, 'envFrom': True, ...}.get
+      E   AssertionError: workspace
+      E   assert None
+      E    +  where None = <built-in method get of dict object at 0x715b28a0b980>('noSecret')
+      E    +    where <built-in method get of dict object at 0x715b28a0b980> = {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:c5d05a14f9f5e80d2e08...ield': 'metadata.namespace'}, {'name': 'OSPREY_CONDUIT_HOST', 'value': 'api.$(POD_NAMESPACE).svc.cluster.local'}], ...}.get
+      E   AssertionError: workspace
+      E   assert None
+      E    +  where None = <built-in method get of dict object at 0x715b28846a40>('noSecret')
+      E    +    where <built-in method get of dict object at 0x715b28846a40> = {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:c5d05a14f9f5e80d2e08...7430b1@sha256:e0728474a76e93971d94624e70f86be6bd92b4d5bdd2d54c5e64527ff4d4861b', 'egress': False, 'envFrom': True, ...}.get
+RED      chart: a workload's egress policy selecting every pod  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/networkpolicies.yaml]
+    6 failed in 7.64s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_case_b_s_cases[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_case_b_s_cases[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_who_reaches_whom_is_the_rows_and_nothing_more[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_case_b_s_cases[poc]
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe.../managed-by': 'Helm'}}, 'spec': {'tier': 'default', 'order': 100, 'selector': 'all()', 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'ip': '172.20.0.1', 'port': 5432})
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: assert not True
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe.../managed-by': 'Helm'}}, 'spec': {'tier': 'default', 'order': 100, 'selector': 'all()', 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'ner', {'ip': '198.18.0.1', 'port': 443})
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe.../managed-by': 'Helm'}}, 'spec': {'tier': 'default', 'order': 100, 'selector': 'all()', 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'ip': '172.20.0.1', 'port': 5432})
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: assert not True
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe.../managed-by': 'Helm'}}, 'spec': {'tier': 'default', 'order': 100, 'selector': 'all()', 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...: 'ReadWriteOnce', 'sharedSize': '200Gi'}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'ner', {'ip': '198.18.0.1', 'port': 443})
+      E   AssertionError: workspace
+      E   assert True == ('workspace' in ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'])
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe.../managed-by': 'Helm'}}, 'spec': {'tier': 'default', 'order': 100, 'selector': 'all()', 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...adWriteOnce', 'sharedSize': '200Gi', ...}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'workspace', {'ip': '172.20.0.1', 'port': 5432})
+      E    +  and   ['api', 'worker', 'report-sync', 'superset', 'keycloak', 'litellm'] = EgressHosts(always=['s3.{region}.amazonaws.com', 'sts.{region}.amazonaws.com'], engine_hosts={'openai': 'api.openai.co...eper': ['clickhouse-keeper'], 'backup': ['arcadedb', 'clickhouse'], 'restore': ['kube-api', 'arcadedb', 'clickhouse']}).managed
+      E   AssertionError: assert not True
+      E    +  where True = _reaches([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe.../managed-by': 'Helm'}}, 'spec': {'tier': 'default', 'order': 100, 'selector': 'all()', 'types': ['Egress'], ...}}, ...], {'secrets': {'name': 'ospreyflow-secrets', 'keys': ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHA...adWriteOnce', 'sharedSize': '200Gi', ...}, 'imagePullSecrets': [], 'podSecurity': {'user': 10001, 'group': 10001}, ...}, 'ner', {'ip': '198.18.0.1', 'port': 443})
+RED      render: a restore not given the cluster's API (P9 round 2)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    6 failed in 7.61s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[poc]
+      E   AssertionError: restore
+      E   assert False == ('restore' == 'restore'
+      E    +  where False = <built-in method get of dict object at 0x71739830f380>('toKubeApi', False)
+      E    +    where <built-in method get of dict object at 0x71739830f380> = {'name': 'restore', 'toPods': [{'name': 'arcadedb', 'ports': [2480, 2434]}, {'name': 'clickhouse', 'ports': [8123, 9000, 9009]}], 'hosts': ['s3.eu-west-2.amazonaws.com', 'sts.eu-west-2.amazonaws.com']}.get
+      E     
+      E       restore)
+      E   AssertionError: restore
+      E   assert False == ('restore' == 'restore'
+      E    +  where False = <built-in method get of dict object at 0x717397f42c40>('toKubeApi', False)
+      E    +    where <built-in method get of dict object at 0x717397f42c40> = {'name': 'restore', 'toPods': [{'name': 'arcadedb', 'ports': [2480, 2434]}, {'name': 'clickhouse', 'ports': [8123, 9000, 9009]}], 'hosts': ['s3.eu-west-2.amazonaws.com', 'sts.eu-west-2.amazonaws.com']}.get
+      E     
+      E       restore)
+      E   AssertionError: restore
+      E   assert False == ('restore' == 'restore'
+      E    +  where False = <built-in method get of dict object at 0x71739951b8c0>('toKubeApi', False)
+      E    +    where <built-in method get of dict object at 0x71739951b8c0> = {'name': 'restore', 'toPods': [{'name': 'arcadedb', 'ports': [2480, 2434]}, {'name': 'clickhouse', 'ports': [8123, 9000, 9009]}], 'hosts': ['s3.eu-west-2.amazonaws.com', 'sts.eu-west-2.amazonaws.com']}.get
+      E     
+      E       restore)
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+RED      chart: the API's rule not rendered  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/networkpolicies.yaml]
+    3 failed in 4.62s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[poc]
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+RED      render: P9's pods given no rows (the render's others= left off)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    9 failed in 6.40s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_every_rendered_workload_has_its_row[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_every_rendered_workload_has_its_row[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_every_rendered_workload_has_its_row[poc]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[poc]
+      E   AssertionError: assert {'api', 'arca...litellm', ...} == {'api', 'arca...-keeper', ...}
+      E     
+      E     Extra items in the right set:
+      E     'restore'
+      E     'backup'
+      E     'restore-claims'
+      E     'backup-claims'
+      E     Use -v to get more diff
+      E   KeyError: 'backup'
+      E   AssertionError: assert {'api', 'arca...litellm', ...} == {'api', 'arca...-keeper', ...}
+      E     
+      E     Extra items in the right set:
+      E     'restore'
+      E     'backup'
+      E     'restore-claims'
+      E     'backup-claims'
+      E     Use -v to get more diff
+      E   KeyError: 'backup'
+      E   AssertionError: assert {'api', 'arca...', 'ner', ...} == {'api', 'arca...eycloak', ...}
+      E     
+      E     Extra items in the right set:
+      E     'restore'
+      E     'backup'
+      E     'restore-claims'
+      E     'backup-claims'
+      E     Use -v to get more diff
+      E   KeyError: 'backup'
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == ['restore']
+      E     
+      E     Right contains one more item: 'restore'
+      E     Use -v to get more diff
+RED      profile: a claims run given the stores (a claim is a mount, not a path)  [OspreyFlow_Core/harness/cloud_platform/profile.yaml]
+    6 failed in 6.15s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api[poc]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more[poc]
+      E   AssertionError: backup-claims
+      E   assert {'arcadedb', 'clickhouse'} == set()
+      E     
+      E     Extra items in the left set:
+      E     'clickhouse'
+      E     'arcadedb'
+      E     Use -v to get more diff
+      E   AssertionError: backup-claims
+      E   assert {'arcadedb', 'clickhouse'} == set()
+      E     
+      E     Extra items in the left set:
+      E     'clickhouse'
+      E     'arcadedb'
+      E     Use -v to get more diff
+      E   AssertionError: backup-claims
+      E   assert {'arcadedb', 'clickhouse'} == set()
+      E     
+      E     Extra items in the left set:
+      E     'clickhouse'
+      E     'arcadedb'
+      E     Use -v to get more diff
+      E   AssertionError: backup-claims
+      E   assert True == False
+      E    +  where True = <function test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more.<locals>.reaches at 0x7f4dc41658a0>('backup-claims', {'labels': {'app.kubernetes.io/name': 'arcadedb', 'app.kubernetes.io/part-of': 'ospreyflow', 'app.kubernetes.io/instance': 'ospreyflow', 'app.kubernetes.io/managed-by': 'Helm'}, 'port': 2480})
+      E   AssertionError: backup-claims
+      E   assert True == False
+      E    +  where True = <function test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more.<locals>.reaches at 0x7f4dc4165620>('backup-claims', {'labels': {'app.kubernetes.io/name': 'arcadedb', 'app.kubernetes.io/part-of': 'ospreyflow', 'app.kubernetes.io/instance': 'ospreyflow', 'app.kubernetes.io/managed-by': 'Helm'}, 'port': 2480})
+      E   AssertionError: backup-claims
+      E   assert True == False
+      E    +  where True = <function test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more.<locals>.reaches at 0x7f4dc41656c0>('backup-claims', {'labels': {'app.kubernetes.io/name': 'arcadedb', 'app.kubernetes.io/part-of': 'ospreyflow', 'app.kubernetes.io/instance': 'ospreyflow', 'app.kubernetes.io/managed-by': 'Helm'}, 'port': 2480})
+RED      cp-policy-check: a Secret of its own refused as if ours  [OspreyFlow_Build/tools/cp_policy_check.py]
+    3 failed in 4.26s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_a_secret_of_its_own_for_clickhouse_and_p9_s_pods_passes[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_a_secret_of_its_own_for_clickhouse_and_p9_s_pods_passes[production]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::test_a_secret_of_its_own_for_clickhouse_and_p9_s_pods_passes[poc]
+      E   AssertionError: assert not [Violation(rule='whole-secret', where='StatefulSet/clickhouse/clickhouse', detail='reads ospreyflow-secrets whole')]
+      E   AssertionError: assert not [Violation(rule='whole-secret', where='StatefulSet/clickhouse/clickhouse', detail='reads ospreyflow-secrets whole')]
+      E   AssertionError: assert not [Violation(rule='whole-secret', where='StatefulSet/clickhouse/clickhouse', detail='reads ospreyflow-secrets whole')]
+RED      cp-policy-check: an unlisted workload given a key of ours passes (default-allow)  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 2.78s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_new_workload_given_one_key_of_ours_is_refused[development]
+      E   assert [] == [('Deployment...DB_PASSWORD')]
+      E     
+      E     Right contains one more item: ('Deployment/newcomer/newcomer', "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD")
+      E     Use -v to get more diff
+RED      cp-policy-check: this deployment's engine's key refused to the gateway  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.85s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_iam_role_engine_s_held_key_is_refused_to_the_gateway
+      E   assert [('Deployment..._KEY_OPENAI')] == []
+      E     
+      E     Left contains one more item: ('Deployment/litellm/litellm', "is given ospreyflow-secrets's OSPREY_MODEL_KEY_OPENAI")
+      E     Use -v to get more diff
+RED      cp-policy-check: an engine's key by its prefix (an IAM-role engine's held key passes)  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 5.06s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_iam_role_engine_s_held_key_is_refused_to_the_gateway
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[development]
+      E   assert [] == [('Deployment...KEY_BEDROCK')]
+      E     
+      E     Right contains one more item: ('Deployment/litellm/litellm', "is given ospreyflow-secrets's OSPREY_MODEL_KEY_BEDROCK")
+      E     Use -v to get more diff
+      E   assert [('Deployment...DB_PASSWORD')] == [('Deployment...DB_PASSWORD')]
+      E     
+      E     At index 0 diff: ('Deployment/litellm/litellm', "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD") != ('Deployment/litellm/litellm', "is given ospreyflow-secrets's OSPREY_MODEL_KEY_ANTHROPIC")
+      E     Right contains one more item: ('Deployment/litellm/litellm', "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD")
+      E     Use -v to get more diff
+RED      chart: the internal policy rendered on a shared platform (every pod to every pod)  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/networkpolicies.yaml]
+    1 failed in 1.72s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_internal_policy_is_not_rendered_on_a_shared_platform[development]
+      E   AssertionError: assert not [{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-internal', 'labels':...s', 'Egress'], 'ingress': [{'from': [{...}]}], 'egress': [{'to': [{...}]}, {'to': [{...}], 'ports': [{...}, {...}]}]}}]
+RED      cp-policy-check: a deny after the Kubernetes policies counted  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 2.76s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_deny_that_runs_after_the_kubernetes_policies_is_refused[development-no-order]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_deny_that_runs_after_the_kubernetes_policies_is_refused[development-at-1000]
+      E   AssertionError: assert {'deny-order'} == {'deny-order'...-deny-egress'}
+      E     
+      E     Extra items in the right set:
+      E     'no-deny-egress'
+      E     Use -v to get more diff
+      E   AssertionError: assert {'deny-order'} == {'deny-order'...-deny-egress'}
+      E     
+      E     Extra items in the right set:
+      E     'no-deny-egress'
+      E     Use -v to get more diff
+RED      cp-policy-check: our Secret as a secret volume passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 2.84s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_our_secret_by_volume_is_refused[development-secret]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_our_secret_by_volume_is_refused[development-secret-items]
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'mounts ospreyflow-secrets whole')
+      E     Use -v to get more diff
+      E   assert [] == [('whole-secr...DB_PASSWORD')]
+      E     
+      E     Right contains one more item: ('whole-secret', "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD")
+      E     Use -v to get more diff
+RED      cp-policy-check: our Secret as a projected volume's source passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.91s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_our_secret_by_volume_is_refused[development-projected]
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'mounts ospreyflow-secrets whole')
+      E     Use -v to get more diff
+RED      cp-policy-check: the Secret's name not read from the values  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.69s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_secret_s_name_is_the_values
+      E   AssertionError: assert [] == [('whole-secr...crets whole')]
+      E     
+      E     Right contains one more item: ('whole-secret', 'reads tenant-app-secrets whole')
+      E     Use -v to get more diff
+RED      cp-policy-check: an empty selector read as no pod  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.73s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_empty_selector_selects_every_pod_and_is_refused[development]
+      E   assert ([])
+RED      cp-policy-check: selectors not read  [OspreyFlow_Build/tools/cp_policy_check.py]
+    3 failed in 3.21s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_selector_this_check_cannot_narrow_is_refused[development-policy-has]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_selector_this_check_cannot_narrow_is_refused[development-rule-all]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_selector_this_check_cannot_narrow_is_refused[development-rule-empty]
+      E   AssertionError: assert 'unreadable-selector' in set()
+      E   AssertionError: assert 'unreadable-selector' in set()
+      E   AssertionError: assert 'unreadable-selector' in set()
+RED      cp-policy-check: a DNS rule to any namespace counted as DNS  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 2.47s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_dns_rule_to_another_namespace_is_not_dns[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_dns_rule_to_every_namespace_is_refused[development]
+      E   AssertionError: assert set() == {'unreadable-...'wide-egress'}
+      E     
+      E     Extra items in the right set:
+      E     'wide-egress'
+      E     'unreadable-selector'
+      E     Use -v to get more diff
+      E   AssertionError: assert set() == {'unreadable-...'wide-egress'}
+      E     
+      E     Extra items in the right set:
+      E     'wide-egress'
+      E     'unreadable-selector'
+      E     Use -v to get more diff
+RED      cp-policy-check: an ingress peer it cannot name passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 2.46s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_peer_this_check_cannot_name_is_refused[development-exists]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_an_ingress_peer_this_check_cannot_name_is_refused[development-instance]
+      E   AssertionError: assert set() == {'wide-ingress'}
+      E     
+      E     Extra items in the right set:
+      E     'wide-ingress'
+      E     Use -v to get more diff
+      E   AssertionError: assert set() == {'wide-ingress'}
+      E     
+      E     Extra items in the right set:
+      E     'wide-ingress'
+      E     Use -v to get more diff
+RED      cp-policy-check: an Allow without ports passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.73s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_every_allow_names_its_protocol_and_ports[development]
+      E   AssertionError: assert [] == ['allow-ports']
+      E     
+      E     Right contains one more item: 'allow-ports'
+      E     Use -v to get more diff
+RED      cp-policy-check: any Service's rule excepted, not the API server's alone  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.67s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_every_allow_names_its_protocol_and_ports[development]
+      E   AssertionError: assert [] == ['allow-ports']
+      E     
+      E     Right contains one more item: 'allow-ports'
+      E     Use -v to get more diff
+RED      chart: the managed stores' ports not rendered  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/networkpolicies.yaml]
+    1 failed in 1.61s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+      E   assert [Violation(ru....0.0/16']}}")] == []
+      E     
+      E     Left contains 4 more items, first extra item: Violation(rule='allow-ports', where='NetworkPolicy/default.ospreyflow-egress-api', detail="an Allow without its protocol and ports: {'action': 'Allow', 'protocol': 'TCP', 'destination': {'nets': ['172.20.0.0/16']}}")
+      E     Use -v to get more diff
+RED      chart: a host's ports not rendered  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/networkpolicies.yaml]
+    1 failed in 1.59s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+      E   assert [Violation(ru...24']}}"), ...] == []
+      E     
+      E     Left contains 15 more items, first extra item: Violation(rule='allow-ports', where='NetworkPolicy/default.ospreyflow-egress-api', detail="an Allow without its protocol and ports: {'action': 'Allow', 'protocol': 'TCP', 'destination': {'nets': ['198.18.0.0/24']}}")
+      E     Use -v to get more diff
+RED      render: the mail server on 443, not its own port  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.93s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_each_host_is_reached_on_its_own_ports
+      E   assert [443] == [2525]
+      E     
+      E     At index 0 diff: 443 != 2525
+      E     Use -v to get more diff
+RED      render: a connector host on 443 whatever its port  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.96s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_each_host_is_reached_on_its_own_ports
+      E   assert [443] == [1433, 5432]
+      E     
+      E     At index 0 diff: 443 != 1433
+      E     Right contains one more item: 5432
+      E     Use -v to get more diff
+RED      schemas: a connector host's port not checked  [OspreyFlow_Core/packages/schemas/deployment.py]
+    2 failed in 0.64s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_connector_host_s_port_that_is_not_a_port_is_refused[db.example.org:0]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_a_connector_host_s_port_that_is_not_a_port_is_refused[db.example.org:65536]
+      E   Failed: DID NOT RAISE ValueError
+      E   Failed: DID NOT RAISE ValueError
+RED      render: the Conduit and the workers not told the ceiling  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 1.68s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_conduit_and_the_workers_are_told_the_ceiling[development]
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+RED      render: every pod's token mounted  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    2 failed in 2.18s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::test_only_a_pod_with_an_account_of_its_own_mounts_its_token[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+      E   AssertionError: workspace
+      E   assert True is False
+      E    +  where False = bool(None)
+      E    +    where None = <built-in method get of dict object at 0x748e918fa080>('serviceAccountName')
+      E    +      where <built-in method get of dict object at 0x748e918fa080> = {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:c5d05a14f9f5e80d2e08...7430b1@sha256:e0728474a76e93971d94624e70f86be6bd92b4d5bdd2d54c5e64527ff4d4861b', 'egress': False, 'envFrom': True, ...}.get
+      E   assert [Violation(ru... token"), ...] == []
+      E     
+      E     Left contains 7 more items, first extra item: Violation(rule='token', where='Deployment/workspace', detail="mounts its service account's token")
+      E     Use -v to get more diff
+RED      chart: the token's setting not written (Kubernetes' default, mounted)  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/_helpers.tpl]
+    2 failed in 2.49s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_render_passes[development]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_irsa_pods_mount_their_tokens_and_pass[development]
+      E   assert [Violation(ru... token"), ...] == []
+      E     
+      E     Left contains 7 more items, first extra item: Violation(rule='token', where='Deployment/workspace', detail="mounts its service account's token")
+      E     Use -v to get more diff
+      E   KeyError: 'automountServiceAccountToken'
+RED      cp-policy-check: a mounted token passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 3.21s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_token_mounted_where_no_kubernetes_api_is_called_is_refused[development-workspace]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[development]
+      E   AssertionError: assert [] == [('token', 'workspace')]
+      E     
+      E     Right contains one more item: ('token', 'workspace')
+      E     Use -v to get more diff
+      E   AssertionError: assert [] == [('token', 'Job')]
+      E     
+      E     Right contains one more item: ('token', 'Job')
+      E     Use -v to get more diff
+RED      cp-policy-check: a token under the namespace's default account passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    2 failed in 4.11s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[development-named]
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[development-none]
+      E   assert [] == [('token', "m...unt's token")]
+      E     
+      E     Right contains one more item: ('token', "mounts the namespace's default account's token")
+      E     Use -v to get more diff
+      E   assert [] == [('token', "m...unt's token")]
+      E     
+      E     Right contains one more item: ('token', "mounts the namespace's default account's token")
+      E     Use -v to get more diff
+RED      cp-policy-check: the bucket role's account on the gateway or the dashboards passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 2.55s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_never_runs_as_the_bucket_role
+      E   AssertionError: assert [('token', 'D...ent/litellm')] == [('token', 'D...ent/litellm')]
+      E     
+      E     Right contains one more item: ('token', 'Deployment/litellm')
+      E     Use -v to get more diff
+RED      identity: our Secret alone, not the settings with it  [OspreyFlow_Core/harness/cloud_platform/identity.py]
+    1 failed in 1.01s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::test_identity_is_given_the_settings_and_our_secret_together
+      E   KeyError: 'OSPREY_PROFILE'
+RED      identity: a refused first administrator passes  [OspreyFlow_Core/harness/cloud_platform/identity.py]
+    1 failed in 0.90s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::test_a_refused_administrator_fails_the_step
+      E   AssertionError: assert 0 == 1
+      E    +  where 0 = <function main at 0x769481e82160>(['/tmp/pytest-of-root/pytest-4152/test_a_refused_administrator_f0/values.yaml'], kube=<tests.harness.test_cloud_platform_identity.Kube object at 0x769481948ec0>)
+      E    +    where <function main at 0x769481e82160> = identity.main
+RED      poc: the Keeper StatefulSet still rendered  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.95s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_one_arcadedb_one_clickhouse_and_no_keeper_of_its_own
+      E   AssertionError: assert 'clickhouse-keeper' not in {'workspace': {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:c5d05a...rList=arcadedb-0.arcadedb-headless:2434:2480 -Darcadedb.ha.clusterToken=$(OSPREY_ARCADEDB_CLUSTER_TOKEN)'}], ...}, ...}
+RED      poc: the server's own Keeper not configured  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.93s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_clickhouse_server_runs_its_own_keeper
+      E   AssertionError: <clickhouse>
+      E       <macros><shard>01</shard><replica from_env="POD_NAME"/></macros>
+      E       <interserver_http_host from_env="POD_ADDRESS"/>
+      E       <zookeeper>
+      E         <node><host>clickhouse-keeper-0.clickhouse-keeper-headless</host><port>9181</port></node>
+      E       </zookeeper>
+      E       <remote_servers>
+      E         <osprey>
+      E           <shard>
+      E             <internal_replication>true</internal_replication>
+      E             <replica><host>clickhouse-0.clickhouse-headless</host><port>9000</port><user>osprey</user><password from_env="CLICKHOUSE_PASSWORD"/></replica>
+      E           </shard>
+      E         </osprey>
+      E       </remote_servers>
+      E       <distributed_ddl><path>/clickhouse/task_queue/ddl</path></distributed_ddl>
+      E     </clickhouse>
+      E     
+      E   assert None
+RED      poc: disruption budgets rendered  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.93s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_no_disruption_budgets
+      E   AssertionError: assert not ['arcadedb', 'keycloak', 'clickhouse']
+RED      poc: the Ingest root left on the shared claim  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.94s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_ingest_root_is_on_a_claim_of_its_own
+      E   AssertionError: assert ([{'subPath': 'ingest', 'mountPath': '/var/lib/osprey/ingest', 'readOnly': True}, {'subPath': 'ingest/uploaded', 'mountPath': '/var/lib/osprey/ingest/uploaded', 'readOnly': False}] and False)
+      E    +  where False = all(<generator object test_the_ingest_root_is_on_a_claim_of_its_own.<locals>.<genexpr> at 0x71d0701b92f0>)
+RED      poc: a poc naming OpenSearch rendered (review: the fixture's search)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.84s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_a_poc_naming_opensearch_is_refused_in_words
+      E   Failed: DID NOT RAISE CloudPlatformNotRenderable
+RED      poc: no CPU limit named  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.90s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_every_poc_container_names_a_cpu_limit_at_or_above_its_request
+      E   AssertionError: workspace
+      E   assert 'cpu' in {'memory': '256Mi'}
+RED      poc: a CPU limit below its request accepted  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.82s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_a_cpu_limit_below_its_request_is_refused_in_words
+      E   Failed: DID NOT RAISE CloudPlatformNotRenderable
+RED      poc: the Keeper named in the lock  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.83s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_lock_names_only_the_images_a_poc_pod_runs
+      E   AssertionError: assert ('clickhouse-keeper' not in {'api', 'arcadedb', 'clickhouse', 'clickhouse-keeper', 'keycloak', 'keycloak-db', ...})
+RED      standard: the default shape written into the configuration's copy (a restart on upgrade)  [OspreyFlow_Core/harness/cloud_platform/__init__.py]
+    1 failed in 0.93s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_standard_shape_leaves_the_configuration_s_copy_as_it_was
+      E   AssertionError: development
+      E   assert 'shape' not in {'platform': 'client', 'namespace': 'ospreyflow-dev', 'environment': 'development', 'shape': 'standard', ...}
+RED      schema: poc accepted in production  [OspreyFlow_Core/packages/schemas/deployment.py]
+    1 failed in 0.61s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_poc_shape_is_refused_in_production
+      E   Failed: DID NOT RAISE ValidationError
+RED      chart: a claim's mount named the shared volume  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/_helpers.tpl]
+    1 failed in 1.59s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_poc_shape_s_own_claim_is_rendered_and_mounted
+      E   AssertionError: assert 'shared' == 'claim-ingest'
+      E     
+      E     - claim-ingest
+      E     + shared
+RED      chart: the own claims not rendered  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/storage.yaml]
+    1 failed in 1.55s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_the_poc_shape_s_own_claim_is_rendered_and_mounted
+      E   StopIteration
+RED      cp-policy-check: a poc container with no CPU limit passes  [OspreyFlow_Build/tools/cp_policy_check.py]
+    1 failed in 1.88s
+    FAILED ../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::test_a_poc_container_without_a_cpu_limit_is_refused
+      E   AssertionError: assert [] == [('no-cpu-lim...ent/api/api')]
+      E     
+      E     Right contains one more item: ('no-cpu-limit', 'Deployment/api/api')
+      E     Use -v to get more diff
+RED      ceiling: the profile's own default not read (the scheme's highest kept)  [OspreyFlow_Core/harness/site.py]
+    4 failed in 1.56s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own[development]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own[production]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own[poc]
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_has_one_source_and_it_is_checked_against_the_scheme
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+      E   AssertionError: assert 'SECRET' == 'OFFICIAL-SENSITIVE'
+      E     
+      E     - OFFICIAL-SENSITIVE
+      E     + SECRET
+RED      ceiling: a profile default the scheme does not hold accepted  [OspreyFlow_Core/harness/site.py]
+    1 failed in 0.63s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_ceiling_has_one_source_and_it_is_checked_against_the_scheme
+      E   Failed: DID NOT RAISE ValueError
+RED      render: an artefact's own folder not made (terraform/)  [OspreyFlow_Core/harness/render.py]
+    1 failed in 0.90s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_first_render_into_an_empty_folder_writes_every_artefact
+      E   FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-root/pytest-4168/test_a_first_render_into_an_em0/new/cloud-platform/terraform/ecr.tf'
+RED      render: a file the last render wrote and this one does not kept (review item 6)  [OspreyFlow_Core/harness/render.py]
+    1 failed in 1.07s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not
+      E   AssertionError: assert not True
+      E    +  where True = exists()
+      E    +    where exists = ((PosixPath('/tmp/pytest-of-root/pytest-4169/test_a_render_removes_what_its0/cloud-platform') / 'terraform') / 'opensearch.tf').exists
+RED      render: the plan's digests not carried forward (each tag resolved afresh)  [OspreyFlow_Core/harness/cloud_platform/carry.py]
+    1 failed in 1.15s
+    FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copied
+      E   AssertionError: {'123456789012.dkr.ecr.eu-west-2.amazonaws.com/arcadedata/arcadedb:26.10.1@sha256:222222222222222222222222222222222222...c5d05a14f9f5e80d2e08896f4bd78eae507430b1@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', ...}
+      E   assert not ['123456789012.dkr.ecr.eu-west-2.amazonaws.com/postgres:16.4@sha256:22222222222222222222222222222222222222222222222222...t-2.amazonaws.com/arcadedata/arcadedb:26.10.1@sha256:2222222222222222222222222222222222222222222222222222222222222222']
+RED      images: a third-party image copied by its tag alone  [OspreyFlow_Core/cli/ospreyflow/images.py]
+    1 failed in 0.68s
+    FAILED ../OspreyFlow_Build/tests/cli/test_images_verb.py::test_a_third_party_image_named_by_tag_alone_is_never_copied
+      E   AssertionError: assert 0 != 0
+      E    +  where 0 = Rig(product=PosixPath('/tmp/pytest-of-root/pytest-4171/test_a_third_party_image_named0/ospreyflow'), runner=<tests.cli...image_named0/home'}, capture_envs=[], tags_at_head='', responses={}, captured=[], secret_prompts=[], secret_replies=[])('images', 'push', '--registry', '123456789012.dkr.ecr.eu-west-2.amazonaws.com')
+RED      images: the refusal names a render command missing the packages  [OspreyFlow_Core/cli/ospreyflow/images.py]
+    1 failed in 0.48s
+    FAILED ../OspreyFlow_Build/tests/cli/test_images_verb.py::test_no_plan_is_refused_with_a_command_that_renders_it
+      E   AssertionError: Traceback (most recent call last):
+      E       File "<frozen runpy>", line 198, in _run_module_as_main
+      E       File "<frozen runpy>", line 88, in _run_code
+      E       File "/root/osprey-runs/platform/OspreyFlow_Core/harness/render.py", line 67, in <module>
+      E         from harness.realm import CONDUIT_CLIENT_ID
+      E       File "/root/osprey-runs/platform/OspreyFlow_Core/harness/realm.py", line 44, in <module>
+      E         from schemas.deployment import OspreyConfig
+      E     ModuleNotFoundError: No module named 'schemas'
+      E     
+      E   assert 1 == 0
+      E    +  where 1 = CompletedProcess(args=['.venv/bin/python', '-m', 'harness.render', '--help'], returncode=1, stdout='', stderr='Traceba... 44, in <module>\n    from schemas.deployment import OspreyConfig\nModuleNotFoundError: No module named \'schemas\'\n').returncode
+
+94 plants, 94 red, 0 not red
+==== RENDERS
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+same  cluster-aws  helm template
+same  cluster-aws  helm template, parsed
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+same  cluster-azure  helm template
+same  cluster-azure  helm template, parsed
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+DIFFERS  cloud-platform-development  helm template
+--- 
++++ 
+@@ -30,41 +30,4 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
+-# and nothing else; anything from outside reaches nothing but the proxy.
+-apiVersion: networking.k8s.io/v1
+-kind: NetworkPolicy
+-metadata:
+-  name: ospreyflow-internal
+-  labels:
+-    app.kubernetes.io/name: internal
+-    app.kubernetes.io/part-of: ospreyflow
+-    app.kubernetes.io/instance: ospreyflow
+-    app.kubernetes.io/managed-by: Helm
+-spec:
+-  podSelector:
+-    matchLabels:
+-      app.kubernetes.io/part-of: ospreyflow
+-  policyTypes: ["Ingress", "Egress"]
+-  ingress:
+-    - from:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-  egress:
+-    - to:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-    - to:
+-        - namespaceSelector: {}
+-          podSelector:
+-            matchLabels:
+-              k8s-app: kube-dns
+-      ports:
+-        - { protocol: UDP, port: 53 }
+-        - { protocol: TCP, port: 53 }
+----
+-# Source: ospreyflow/templates/networkpolicies.yaml
+DIFFERS  cloud-platform-development  helm template, parsed
+--- 
++++ 
+@@ -51,74 +51,2 @@
+  {
+-  "apiVersion": "networking.k8s.io/v1",
+-  "kind": "NetworkPolicy",
+-  "metadata": {
+-   "labels": {
+-    "app.kubernetes.io/instance": "ospreyflow",
+-    "app.kubernetes.io/managed-by": "Helm",
+-    "app.kubernetes.io/name": "internal",
+-    "app.kubernetes.io/part-of": "ospreyflow"
+-   },
+-   "name": "ospreyflow-internal"
+-  },
+-  "spec": {
+-   "egress": [
+-    {
+-     "to": [
+-      {
+-       "podSelector": {
+-        "matchLabels": {
+-         "app.kubernetes.io/part-of": "ospreyflow"
+-        }
+-       }
+-      }
+-     ]
+-    },
+-    {
+-     "ports": [
+-      {
+-       "port": 53,
+-       "protocol": "UDP"
+-      },
+-      {
+-       "port": 53,
+-       "protocol": "TCP"
+-      }
+-     ],
+-     "to": [
+same  cloud-platform-development  images.yaml
+same  cloud-platform-development  terraform/ecr.tf
+same  cloud-platform-development  terraform/elasticache.tf
+same  cloud-platform-development  terraform/irsa.tf
+same  cloud-platform-development  terraform/opensearch.tf
+same  cloud-platform-development  terraform/rds.tf
+same  cloud-platform-development  terraform/s3.tf
+same  cloud-platform-development  terraform/secrets.tf
+same  cloud-platform-development  terraform/variables.tf
+DIFFERS  cloud-platform-development  values.yaml
+--- 
++++ 
+@@ -42,2 +42,6 @@
+   - 172.20.0.0/16
++  managedPorts:
++  - 443
++  - 5432
++  - 6379
+   hosts:
+@@ -46,2 +50,4 @@
+     - 198.18.0.0/24
++    ports:
++    - 443
+   - host: sts.eu-west-2.amazonaws.com
+@@ -49,2 +55,141 @@
+     - 198.18.1.0/24
++    ports:
++    - 443
++  workloads:
++  - name: workspace
++    ports:
++    - 8080
++    toPods:
++    - name: api
++      ports: &id001
++      - 8000
++  - name: api
++    ports: *id001
++    fromPods:
++    - workspace
++    toPods:
++    - name: arcadedb
++      ports: &id003
++      - 2480
++      - 2434
++    - name: clickhouse
++      ports: &id006
++      - 8123
++      - 9000
++      - 9009
+same  cloud-platform-development  versions.lock
+DIFFERS  cloud-platform-production  helm template
+--- 
++++ 
+@@ -32,41 +32,4 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
+-# and nothing else; anything from outside reaches nothing but the proxy.
+-apiVersion: networking.k8s.io/v1
+-kind: NetworkPolicy
+-metadata:
+-  name: ospreyflow-internal
+-  labels:
+-    app.kubernetes.io/name: internal
+-    app.kubernetes.io/part-of: ospreyflow
+-    app.kubernetes.io/instance: ospreyflow
+-    app.kubernetes.io/managed-by: Helm
+-spec:
+-  podSelector:
+-    matchLabels:
+-      app.kubernetes.io/part-of: ospreyflow
+-  policyTypes: ["Ingress", "Egress"]
+-  ingress:
+-    - from:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-  egress:
+-    - to:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-    - to:
+-        - namespaceSelector: {}
+-          podSelector:
+-            matchLabels:
+-              k8s-app: kube-dns
+-      ports:
+-        - { protocol: UDP, port: 53 }
+-        - { protocol: TCP, port: 53 }
+----
+-# Source: ospreyflow/templates/networkpolicies.yaml
+DIFFERS  cloud-platform-production  helm template, parsed
+--- 
++++ 
+@@ -56,74 +56,2 @@
+  {
+-  "apiVersion": "networking.k8s.io/v1",
+-  "kind": "NetworkPolicy",
+-  "metadata": {
+-   "labels": {
+-    "app.kubernetes.io/instance": "ospreyflow",
+-    "app.kubernetes.io/managed-by": "Helm",
+-    "app.kubernetes.io/name": "internal",
+-    "app.kubernetes.io/part-of": "ospreyflow"
+-   },
+-   "name": "ospreyflow-internal"
+-  },
+-  "spec": {
+-   "egress": [
+-    {
+-     "to": [
+-      {
+-       "podSelector": {
+-        "matchLabels": {
+-         "app.kubernetes.io/part-of": "ospreyflow"
+-        }
+-       }
+-      }
+-     ]
+-    },
+-    {
+-     "ports": [
+-      {
+-       "port": 53,
+-       "protocol": "UDP"
+-      },
+-      {
+-       "port": 53,
+-       "protocol": "TCP"
+-      }
+-     ],
+-     "to": [
+same  cloud-platform-production  images.yaml
+same  cloud-platform-production  terraform/ecr.tf
+same  cloud-platform-production  terraform/elasticache.tf
+same  cloud-platform-production  terraform/irsa.tf
+same  cloud-platform-production  terraform/opensearch.tf
+same  cloud-platform-production  terraform/rds.tf
+same  cloud-platform-production  terraform/s3.tf
+same  cloud-platform-production  terraform/secrets.tf
+same  cloud-platform-production  terraform/variables.tf
+DIFFERS  cloud-platform-production  values.yaml
+--- 
++++ 
+@@ -51,2 +51,6 @@
+   - 172.20.0.0/16
++  managedPorts:
++  - 443
++  - 5432
++  - 6379
+   hosts:
+@@ -55,2 +59,4 @@
+     - 203.0.113.0/24
++    ports:
++    - 443
+   - host: s3.eu-west-2.amazonaws.com
+@@ -58,2 +64,4 @@
+     - 198.18.0.0/24
++    ports:
++    - 443
+   - host: sts.eu-west-2.amazonaws.com
+@@ -61,2 +69,166 @@
+     - 198.18.1.0/24
++    ports:
++    - 443
++  workloads:
++  - name: workspace
++    ports:
++    - 8080
++    toPods:
++    - name: api
++      ports: &id001
++      - 8000
++  - name: api
++    ports: *id001
++    fromPods:
++    - report-sync
++    - workspace
++    toPods:
++    - name: arcadedb
++      ports: &id003
++      - 2480
+same  cloud-platform-production  versions.lock
+p7_renders_unchanged: 6 artefact(s) differ from d9beca2
+==== MAKE TEST
+24.27s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[administration-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_lanes_launch.py::test_open_refuses_when_a_session_is_running_in_the_worktree
+===== 4 failed, 12146 passed, 33 skipped, 91 warnings in 502.78s (0:08:22) =====
+==== MAKE CI
+  ✓   5 a11y/a11y.spec.ts:37:5 › dark theme Models screen has no automated wcag2aa violations (785ms)
+  ✓   6 a11y/install-page.spec.ts:58:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (876ms)
+  ✓   7 a11y/a11y.spec.ts:37:5 › dark theme Governance screen has no automated wcag2aa violations (824ms)
+  ✓   8 a11y/install-page.spec.ts:58:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (846ms)
+  ✓   9 a11y/a11y.spec.ts:37:5 › dark theme Geospatial screen has no automated wcag2aa violations (776ms)
+  ✓  10 a11y/install-page.spec.ts:58:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (928ms)
+  ✓  11 a11y/a11y.spec.ts:37:5 › dark theme Preflight screen has no automated wcag2aa violations (810ms)
+  ✓  12 a11y/install-page.spec.ts:58:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (825ms)
+  ✓  13 a11y/a11y.spec.ts:37:5 › light theme Profile screen has no automated wcag2aa violations (774ms)
+  ✓  14 a11y/install-page.spec.ts:58:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (938ms)
+  ✓  15 a11y/a11y.spec.ts:37:5 › light theme Components screen has no automated wcag2aa violations (810ms)
+  ✓  17 a11y/a11y.spec.ts:37:5 › light theme Models screen has no automated wcag2aa violations (751ms)
+  ✓  16 a11y/install-page.spec.ts:58:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (886ms)
+  ✓  18 a11y/a11y.spec.ts:37:5 › light theme Governance screen has no automated wcag2aa violations (822ms)
+  ✓  19 a11y/install-page.spec.ts:58:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (850ms)
+  ✓  20 a11y/a11y.spec.ts:37:5 › light theme Geospatial screen has no automated wcag2aa violations (811ms)
+  ✓  21 a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (839ms)
+  ✓  22 a11y/a11y.spec.ts:37:5 › light theme Preflight screen has no automated wcag2aa violations (848ms)
+  ✓  23 a11y/install-page.spec.ts:75:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (884ms)
+  ✓  24 a11y/install-page.spec.ts:58:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (893ms)
+  ✓  25 a11y/install-page.spec.ts:58:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (905ms)
+  ✓  26 a11y/install-page.spec.ts:58:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (896ms)
+  ✓  27 a11y/install-page.spec.ts:58:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (886ms)
+  ✓  28 a11y/install-page.spec.ts:58:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (856ms)
+  ✓  29 a11y/install-page.spec.ts:58:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (892ms)
+  ✓  30 a11y/install-page.spec.ts:58:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (888ms)
+  ✓  31 a11y/install-page.spec.ts:58:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (903ms)
+  ✓  32 a11y/install-page.spec.ts:58:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (856ms)
+  ✓  33 a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (857ms)
+  ✓  34 a11y/install-page.spec.ts:75:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (828ms)
+Wall time: 2120 s, exit 0 (no stack, no lease; set-up before it 25 s)

@@ -1,0 +1,17 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T193723Z/log: bash -c make harness-a11y 2>&1 | grep -vE '✓' | tail -15
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/harness/src/screens/ProfileScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/harness/src/screens/ReviewScreen.tsx'
+
+Running 34 tests using 2 workers
+
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/theme/theme.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/design/tokens.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/design/primitives.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/welcome/statement.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/brand/brand.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/theme/ThemeToggle.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/package.json'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/platform/OspreyFlow_Core/apps/workspace/src/design/primitives/IconButton.tsx'
+
+  34 passed (23.9s)
+Wall time: 24 s, exit 0 (no stack, no lease; set-up before it 11 s)

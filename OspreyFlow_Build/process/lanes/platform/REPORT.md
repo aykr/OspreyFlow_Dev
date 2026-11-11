@@ -1,36 +1,51 @@
-# Platform lane · P7b · report (11 November 2026, the Mac; after the orchestrator's review; the kind run waits for P11/P12 part 2)
+# Platform lane · P7b · report (11 November 2026, the Mac; after the orchestrator's final review and its second pass; the kind run waits for P11/P12 part 2)
 
-**Ready to merge at `f353827bcbed6b580ff2ec19cdbc7d1ef97c852b`** (tree `dfef4603`), on main ff0e07d, the three schemas
-commits at its head; the commit above it holds this report, the server log and the gates' outputs alone. Every run went
-through `stack_lease.sh offline platform` (no stack, no lease; `OSPREY_PORTS_SLOT=6`). Nothing running; nothing pushed.
+**Ready to merge at `2833a66fdf0ec6f0a057c27a70d606d86d45edd1`** (tree `d934d463777f`), on main fe22804. The
+`connector_hosts` schemas commit sits before the render commit that imports it, so every commit builds; the other three
+schemas commits are at the head. The commit above it holds this report, the server log, the gates' outputs and the
+guide's diff alone. Every run went through `stack_lease.sh offline platform` (no stack, no lease). Nothing running;
+nothing pushed. Merge order (the orchestrator's): P7b first, then P9, then case's `P9_decommission.diff`, then P12 part 2
+with its `laurium` row.
 
 | Exit criterion | State | Proof |
 | --- | --- | --- |
-| `cp-policy-check` green on both shapes | Met: development, production, poc, 0 violations | `gates/f353827b.ci.txt` |
-| …red on each planted fault in the poc render | Met: 47 plants, 47 red (the check, the runbooks, the shape, the ceiling, the render folder) | `gates/f353827b.reds-renders-guide.txt` |
-| Decommission leaves nothing behind, red first | Check built: Terraform-made Secrets and roles named ours, disks by account, region, namespace and claim, the tenant's kinds; the backups kept by P9's diff at merge (Am 5 point 20) | `test_cp_decommission_check.py` |
+| `cp-policy-check` green | Met: development 57 manifests, poc 49, production-bedrock 64, production 64, each 0 violation(s); `make -k ci` exit 0 | `gates/2833a66f.gates.txt` (the gate's lines unfiltered) |
+| …red on each planted fault | Met: 106 plants, 106 red, each in Helm's own output or at its call site | same |
+| Each workload's own egress, ingress, secrets and token (Am 5 points 21-24) | Met: the evaluator applies Calico's order to Helm's output, every pod to every pod, host (on its own ports and no other), network, the internet and DNS | `test_cp_egress_order.py` |
+| The final review's items, both passes | Met, each red first (Am 5 points 21-24 say each) | `test_cp_policy_check.py`, `test_cloud_platform_egress.py` |
+| Decommission leaves nothing behind, red first | Check built; the backups kept by P9's diff at merge (Am 5 point 20) | `test_cp_decommission_check.py` |
 | Runbooks end to end on kind; acceptance on kind | **Not yet**: after P11/P12 part 2; until then syntax, order and rights only | Am 5 "Left" |
-| Other renders and the standard shape unchanged | Met: 0 differences from ff0e07d beyond the ceiling | same |
+| The other profiles' renders unchanged | Met: against fe22804 local-lite, small and cluster are byte for byte | `gates/2833a66f.renders-full.txt` |
+| The cloud-platform renders' standard shape unchanged (P7b's brief) | **Superseded by the orchestrator's rulings** (Am 5 points 21-24): the two cloud-platform configurations differ by the ruled rework, every changed line recorded | `gates/2833a66f.renders-full.txt` |
 
-**Gates at f353827b.** `make test`: 4 failed, 11629 passed. Each is a known cause:
-- the GPU preflight case (the server has a GPU);
-- `test_admin_guide`'s appendix, which `P7b_admin_guide.diff` makes green (61 passed);
-- `test_render_memory`'s OpenSearch case, main's own (in CARRIES);
-- `test_lanes_heartbeat`'s timing, which passed 5 of 5 alone earlier.
-
-`make -k ci`: one failure, `harness-a11y`, two screens timing out under a load average of 15. Rerun alone it passed 34 of 34
-(`gates/f353827b.harness-a11y.txt`), and this branch changes no screen.
-
-**Reviews.** My own lane-reviewer: 9 must-fixes; the orchestrator's: 8 must-fixes and minors. All are fixed or carried
-(ADR-148 Am 5, points 13-20; friction row).
+**Gates at 2833a66f.**
+- The cp suite, the cloud-platform harness tests, the images verb and the model-engine tests: 587 passed.
+- `make -k ci`: exit 0; its cp-policy-check lines are recorded unfiltered.
+- `make test`: 3 failed, 12171 passed, each known: the GPU preflight case (the server has a GPU); `test_admin_guide`'s
+  appendix, which `P7b_admin_guide.diff` makes green (rebuilt against main's docs); `test_render_memory`'s OpenSearch
+  case, main's own (in CARRIES).
+- Corrected earlier (the final review's item 8): at a5d580a0 `make -k ci` failed two targets, `harness-a11y` and
+  `cp-policy-check`, not `harness-a11y` alone.
 
 **Decisions taken:**
 - "A scratch volume for Ingest" is the Ingest root's own claim (agreed).
-- The kept backups come through case's `P9_decommission.diff` at merge, in place of this branch's flags (agreed: P9,
-  then P7b, then the diff; its 66 tests pass on these files). `backup/platform-p7b-with-kept-hooks` is kept until then.
+- The kept backups come through case's `P9_decommission.diff` at merge (agreed). `backup/platform-p7b-with-kept-hooks`
+  is kept until then.
+- Keycloak holds no token (agreed).
+- A host's ports: 443 for the AWS services and the engine kinds' hosts, an address's own or its scheme's, `mail.port`,
+  and `connector_hosts`' `host:port`, a bare host on 443 and named in words at the head of `values.yaml` (and in the poc
+  shape's INSTALL.md); an IPv6 literal is refused. A host given twice with two ports is one row with both ports.
 
-**Carried:** the standard shape's OpenSearch domain; the Admin-added engine's gateway (P11 part 2); the seeds' ceiling
-(CARRIES, studio-b); the identity step against a real Keycloak; the kind rehearsal's stand-ins for the platform's blocks.
+**For the lanes after this one:** P9's four pods set their own `serviceAccountName` (never the bucket role's or the
+gateway's) and `automountServiceAccountToken: true`, and need no edit at `egress_policy`. P12 part 2 adds
+`paths.laurium: [litellm]` and `laurium` to `paths.api` alone; Laurium holds no key of ours unless listed in
+`NAMED_SECRET_ALLOWED`. A new Calico rule names its protocol and single ports and selects by workload name.
 
-**Requests:** apply `P7b_admin_guide.diff` at merge with docs' version row; mark Am 5 written. P9's module stays beside
-`harness/cloud_platform/`, on five conditions I check at its "built". No questions for the owner.
+**Carried** (seven new CARRIES rows): the operator docs (D2c); Admin › Connections' port warning; IRSA's webhook and the
+API token; identity by label; the renders comparison as a lane script; the ingest ceiling's unset reading; which pods
+read the platform's own Terraform-made Secrets (a question for the platform team). Also still: the standard shape's
+OpenSearch domain; the seeds' ceiling (studio-b); the identity step against a real Keycloak; the kind rehearsal's
+stand-ins for the platform's blocks.
+
+**Requests:** apply `P7b_admin_guide.diff` at merge (admin guide 1.82 redone); mark Am 5 written (points 1-24); ratify the
+four `packages/schemas` commits (the friction row). No questions for the owner.

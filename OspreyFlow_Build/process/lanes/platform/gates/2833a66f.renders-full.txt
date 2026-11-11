@@ -1,0 +1,5789 @@
+==== RENDERS
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+same  cluster-aws  helm template
+same  cluster-aws  helm template, parsed
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+same  cluster-azure  helm template
+same  cluster-azure  helm template, parsed
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+DIFFERS  cloud-platform-development  helm template
+--- 
++++ 
+@@ -30,41 +30,4 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
+-# and nothing else; anything from outside reaches nothing but the proxy.
+-apiVersion: networking.k8s.io/v1
+-kind: NetworkPolicy
+-metadata:
+-  name: ospreyflow-internal
+-  labels:
+-    app.kubernetes.io/name: internal
+-    app.kubernetes.io/part-of: ospreyflow
+-    app.kubernetes.io/instance: ospreyflow
+-    app.kubernetes.io/managed-by: Helm
+-spec:
+-  podSelector:
+-    matchLabels:
+-      app.kubernetes.io/part-of: ospreyflow
+-  policyTypes: ["Ingress", "Egress"]
+-  ingress:
+-    - from:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-  egress:
+-    - to:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-    - to:
+-        - namespaceSelector: {}
+-          podSelector:
+-            matchLabels:
+-              k8s-app: kube-dns
+-      ports:
+-        - { protocol: UDP, port: 53 }
+-        - { protocol: TCP, port: 53 }
+----
+-# Source: ospreyflow/templates/networkpolicies.yaml
+-# ADR-148 decision 7: what may leave the namespace, evaluated before the deny below: the cluster's
+-# DNS, the namespace's own pods, the platform's managed stores, and each host an enabled feature
+-# reaches (Admin's settings, ADR-135 Amendment 2 and ADR-147), by its networks.
++# ADR-148 decision 7 and Amendment 5 point 21: DNS, every pod's, evaluated before the deny below.
++# The one policy that selects every pod, and it allows nothing but DNS (`make cp-policy-check`).
+ apiVersion: projectcalico.org/v3
+@@ -73,5 +36,5 @@
+   # Named with its tier, as Calico (3.28 and later, with tiers) stores it, so an upgrade can patch it.
+-  name: default.ospreyflow-allow-egress
+-  labels:
+-    app.kubernetes.io/name: allow-egress
++  name: default.ospreyflow-allow-dns
++  labels:
++    app.kubernetes.io/name: allow-dns
+     app.kubernetes.io/part-of: ospreyflow
+@@ -95,16 +58,755 @@
+         ports: [53]
+-    - action: Allow
+-      destination:
+-        selector: all()
+-    - action: Allow
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What workspace alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-workspace
++  labels:
++    app.kubernetes.io/name: egress-workspace
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'workspace'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'api'"
++        ports: [8000]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What api alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-api
++  labels:
++    app.kubernetes.io/name: egress-api
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'api'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'litellm'"
++        ports: [4000]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'ner'"
++        ports: [8000]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["172.20.0.0/16"]
+-    # s3.eu-west-2.amazonaws.com
+-    - action: Allow
++        ports: [443,5432,6379]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["198.18.0.0/24"]
+-    # sts.eu-west-2.amazonaws.com
+-    - action: Allow
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What arcadedb alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-arcadedb
++  labels:
++    app.kubernetes.io/name: egress-arcadedb
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'arcadedb'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What keycloak alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-keycloak
++  labels:
++    app.kubernetes.io/name: egress-keycloak
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'keycloak'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What litellm alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-litellm
++  labels:
++    app.kubernetes.io/name: egress-litellm
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'litellm'"
++  types: ["Egress"]
++  egress:
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What clickhouse alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-clickhouse
++  labels:
++    app.kubernetes.io/name: egress-clickhouse
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'clickhouse'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse-keeper'"
++        ports: [9181,9234]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What worker alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-worker
++  labels:
++    app.kubernetes.io/name: egress-worker
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'worker'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'ner'"
++        ports: [8000]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What clickhouse-keeper alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-clickhouse-keeper
++  labels:
++    app.kubernetes.io/name: egress-clickhouse-keeper
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'clickhouse-keeper'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse-keeper'"
++        ports: [9181,9234]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What backup alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-backup
++  labels:
++    app.kubernetes.io/name: egress-backup
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'backup'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What backup-claims alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-backup-claims
++  labels:
++    app.kubernetes.io/name: egress-backup-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'backup-claims'"
++  types: ["Egress"]
++  egress:
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What restore alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-restore
++  labels:
++    app.kubernetes.io/name: egress-restore
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'restore'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    # The cluster's API server, by its Service (a restore asks whether the writers have stopped).
++    - action: Allow
++      protocol: TCP
++      destination:
++        services:
++          name: kubernetes
++          namespace: default
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What restore-claims alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-restore-claims
++  labels:
++    app.kubernetes.io/name: egress-restore-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'restore-claims'"
++  types: ["Egress"]
++  egress:
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach workspace (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-workspace
++  labels:
++    app.kubernetes.io/name: ingress-workspace
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: workspace
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach api (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-api
++  labels:
++    app.kubernetes.io/name: ingress-api
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: api
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["workspace"]
++      ports:
++        - { protocol: TCP, port: 8000 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach ner (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-ner
++  labels:
++    app.kubernetes.io/name: ingress-ner
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: ner
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","worker"]
++      ports:
++        - { protocol: TCP, port: 8000 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach arcadedb (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-arcadedb
++  labels:
++    app.kubernetes.io/name: ingress-arcadedb
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: arcadedb
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","arcadedb","backup","restore","worker"]
++      ports:
++        - { protocol: TCP, port: 2480 }
++        - { protocol: TCP, port: 2434 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach keycloak (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-keycloak
++  labels:
++    app.kubernetes.io/name: ingress-keycloak
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: keycloak
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","keycloak","worker"]
++      ports:
++        - { protocol: TCP, port: 8080 }
++        - { protocol: TCP, port: 9000 }
++        - { protocol: TCP, port: 7800 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach litellm (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-litellm
++  labels:
++    app.kubernetes.io/name: ingress-litellm
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: litellm
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api"]
++      ports:
++        - { protocol: TCP, port: 4000 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach clickhouse (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-clickhouse
++  labels:
++    app.kubernetes.io/name: ingress-clickhouse
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: clickhouse
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","backup","clickhouse","restore","worker"]
++      ports:
++        - { protocol: TCP, port: 8123 }
++        - { protocol: TCP, port: 9000 }
++        - { protocol: TCP, port: 9009 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach worker (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-worker
++  labels:
++    app.kubernetes.io/name: ingress-worker
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: worker
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach clickhouse-keeper (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-clickhouse-keeper
++  labels:
++    app.kubernetes.io/name: ingress-clickhouse-keeper
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: clickhouse-keeper
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["clickhouse","clickhouse-keeper"]
++      ports:
++        - { protocol: TCP, port: 9181 }
++        - { protocol: TCP, port: 9234 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach backup (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-backup
++  labels:
++    app.kubernetes.io/name: ingress-backup
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: backup
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach backup-claims (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-backup-claims
++  labels:
++    app.kubernetes.io/name: ingress-backup-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: backup-claims
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach restore (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-restore
++  labels:
++    app.kubernetes.io/name: ingress-restore
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: restore
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach restore-claims (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-restore-claims
++  labels:
++    app.kubernetes.io/name: ingress-restore-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: restore-claims
++  policyTypes: ["Ingress"]
++  ingress: []
+ ---
+@@ -645,2 +1347,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       # Until P8 (ADR-148 decision 6): the shared folders are one ReadWriteOnce claim, so every pod that
+@@ -660,11 +1363,3 @@
+                 name: ospreyflow-env
+-            - secretRef:
+-                name: ospreyflow-secrets
+           env:
+-            - name: "OSPREY_LITELLM_SALT_SECRET"
+-              value: ""
+-            - name: "OSPREY_LITELLM_DB_PASSWORD"
+-              value: ""
+-            - name: "OSPREY_LITELLM_MASTER_SECRET"
+-              value: ""
+             - name: "POD_NAMESPACE"
+@@ -748,2 +1443,3 @@
+       serviceAccountName: ospreyflow
++      automountServiceAccountToken: true
+       # Until P8 (ADR-148 decision 6): the shared folders are one ReadWriteOnce claim, so every pod that
+@@ -959,2 +1655,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       containers:
+@@ -965,11 +1662,2 @@
+                 name: ospreyflow-env
+-            - secretRef:
+-                name: ospreyflow-secrets
+-          env:
+-            - name: "OSPREY_LITELLM_SALT_SECRET"
+-              value: ""
+-            - name: "OSPREY_LITELLM_DB_PASSWORD"
+-              value: ""
+-            - name: "OSPREY_LITELLM_MASTER_SECRET"
+-              value: ""
+           # ADR-148 decision 3: no privilege, and none to gain.
+@@ -1035,2 +1723,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       initContainers:
+@@ -1180,2 +1869,3 @@
+       serviceAccountName: ospreyflow
++      automountServiceAccountToken: true
+       containers:
+@@ -1323,2 +2013,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       terminationGracePeriodSeconds: 120
+@@ -1449,2 +2140,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       initContainers:
+@@ -1626,2 +2318,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       terminationGracePeriodSeconds: 60
+@@ -1738,2 +2431,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       terminationGracePeriodSeconds: 30
+DIFFERS  cloud-platform-development  helm template, parsed
+--- 
++++ 
+@@ -51,74 +51,2 @@
+  {
+-  "apiVersion": "networking.k8s.io/v1",
+-  "kind": "NetworkPolicy",
+-  "metadata": {
+-   "labels": {
+-    "app.kubernetes.io/instance": "ospreyflow",
+-    "app.kubernetes.io/managed-by": "Helm",
+-    "app.kubernetes.io/name": "internal",
+-    "app.kubernetes.io/part-of": "ospreyflow"
+-   },
+-   "name": "ospreyflow-internal"
+-  },
+-  "spec": {
+-   "egress": [
+-    {
+-     "to": [
+-      {
+-       "podSelector": {
+-        "matchLabels": {
+-         "app.kubernetes.io/part-of": "ospreyflow"
+-        }
+-       }
+-      }
+-     ]
+-    },
+-    {
+-     "ports": [
+-      {
+-       "port": 53,
+-       "protocol": "UDP"
+-      },
+-      {
+-       "port": 53,
+-       "protocol": "TCP"
+-      }
+-     ],
+-     "to": [
+-      {
+-       "namespaceSelector": {},
+-       "podSelector": {
+-        "matchLabels": {
+-         "k8s-app": "kube-dns"
+-        }
+-       }
+-      }
+-     ]
+-    }
+-   ],
+-   "ingress": [
+-    {
+-     "from": [
+-      {
+-       "podSelector": {
+-        "matchLabels": {
+-         "app.kubernetes.io/part-of": "ospreyflow"
+-        }
+-       }
+-      }
+-     ]
+-    }
+-   ],
+-   "podSelector": {
+-    "matchLabels": {
+-     "app.kubernetes.io/part-of": "ospreyflow"
+-    }
+-   },
+-   "policyTypes": [
+-    "Ingress",
+-    "Egress"
+-   ]
+-  }
+- },
+- {
+   "apiVersion": "projectcalico.org/v3",
+@@ -129,6 +57,6 @@
+     "app.kubernetes.io/managed-by": "Helm",
+-    "app.kubernetes.io/name": "allow-egress",
+-    "app.kubernetes.io/part-of": "ospreyflow"
+-   },
+-   "name": "default.ospreyflow-allow-egress"
++    "app.kubernetes.io/name": "allow-dns",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-allow-dns"
+   },
+@@ -155,32 +83,2 @@
+      "protocol": "TCP"
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "selector": "all()"
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "172.20.0.0/16"
+-      ]
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "198.18.0.0/24"
+-      ]
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "198.18.1.0/24"
+-      ]
+-     }
+     }
+@@ -192,2 +90,1253 @@
+     "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-workspace",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-workspace"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'api'"
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'workspace'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-api",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-api"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       4000
++      ],
++      "selector": "app.kubernetes.io/name == 'litellm'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'ner'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'api'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-arcadedb",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-arcadedb"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'arcadedb'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-keycloak",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-keycloak"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'keycloak'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-litellm",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-litellm"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'litellm'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-clickhouse",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-clickhouse"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       9181,
++       9234
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse-keeper'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'clickhouse'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-worker",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-worker"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'ner'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'worker'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-clickhouse-keeper",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-clickhouse-keeper"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       9181,
++       9234
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse-keeper'"
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'clickhouse-keeper'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-backup",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-backup"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'backup'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-backup-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-backup-claims"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'backup-claims'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-restore",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-restore"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "services": {
++       "name": "kubernetes",
++       "namespace": "default"
++      }
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'restore'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-restore-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-restore-claims"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'restore-claims'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-workspace",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-workspace"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "workspace"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-api",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-api"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "workspace"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8000,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "api"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-ner",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-ner"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8000,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "ner"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-arcadedb",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-arcadedb"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "arcadedb",
++           "backup",
++           "restore",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 2480,
++       "protocol": "TCP"
++      },
++      {
++       "port": 2434,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "arcadedb"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-keycloak",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-keycloak"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "keycloak",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8080,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9000,
++       "protocol": "TCP"
++      },
++      {
++       "port": 7800,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "keycloak"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-litellm",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-litellm"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 4000,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "litellm"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-clickhouse",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-clickhouse"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "backup",
++           "clickhouse",
++           "restore",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8123,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9000,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9009,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "clickhouse"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-worker",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-worker"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "worker"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-clickhouse-keeper",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-clickhouse-keeper"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "clickhouse",
++           "clickhouse-keeper"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 9181,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9234,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "clickhouse-keeper"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-backup",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-backup"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "backup"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-backup-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-backup-claims"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "backup-claims"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-restore",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-restore"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "restore"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-restore-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-restore-claims"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "restore-claims"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
+    ]
+@@ -862,2 +2011,3 @@
+      },
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -865,14 +2015,2 @@
+        "env": [
+-        {
+-         "name": "OSPREY_LITELLM_SALT_SECRET",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_DB_PASSWORD",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_MASTER_SECRET",
+-         "value": ""
+-        },
+         {
+@@ -894,7 +2032,2 @@
+           "name": "ospreyflow-env"
+-         }
+-        },
+-        {
+-         "secretRef": {
+-          "name": "ospreyflow-secrets"
+          }
+@@ -1022,2 +2155,3 @@
+      },
++     "automountServiceAccountToken": true,
+      "containers": [
+@@ -1340,18 +2474,5 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+       {
+-       "env": [
+-        {
+-         "name": "OSPREY_LITELLM_SALT_SECRET",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_DB_PASSWORD",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_MASTER_SECRET",
+-         "value": ""
+-        }
+-       ],
+        "envFrom": [
+@@ -1360,7 +2481,2 @@
+           "name": "ospreyflow-env"
+-         }
+-        },
+-        {
+-         "secretRef": {
+-          "name": "ospreyflow-secrets"
+          }
+@@ -1457,2 +2573,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -1695,2 +2812,3 @@
+     "spec": {
++     "automountServiceAccountToken": true,
+      "containers": [
+@@ -1905,2 +3023,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -2109,2 +3228,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -2429,2 +3549,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -2609,2 +3730,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+same  cloud-platform-development  images.yaml
+same  cloud-platform-development  terraform/ecr.tf
+same  cloud-platform-development  terraform/elasticache.tf
+same  cloud-platform-development  terraform/irsa.tf
+same  cloud-platform-development  terraform/opensearch.tf
+same  cloud-platform-development  terraform/rds.tf
+same  cloud-platform-development  terraform/s3.tf
+same  cloud-platform-development  terraform/secrets.tf
+same  cloud-platform-development  terraform/variables.tf
+DIFFERS  cloud-platform-development  values.yaml
+--- 
++++ 
+@@ -42,2 +42,6 @@
+   - 172.20.0.0/16
++  managedPorts:
++  - 443
++  - 5432
++  - 6379
+   hosts:
+@@ -46,2 +50,4 @@
+     - 198.18.0.0/24
++    ports:
++    - 443
+   - host: sts.eu-west-2.amazonaws.com
+@@ -49,2 +55,141 @@
+     - 198.18.1.0/24
++    ports:
++    - 443
++  workloads:
++  - name: workspace
++    ports:
++    - 8080
++    toPods:
++    - name: api
++      ports: &id001
++      - 8000
++  - name: api
++    ports: *id001
++    fromPods:
++    - workspace
++    toPods:
++    - name: arcadedb
++      ports: &id003
++      - 2480
++      - 2434
++    - name: clickhouse
++      ports: &id006
++      - 8123
++      - 9000
++      - 9009
++    - name: keycloak
++      ports: &id004
++      - 8080
++      - 9000
++      - 7800
++    - name: litellm
++      ports: &id005
++      - 4000
++    - name: ner
++      ports: &id002
++      - 8000
++    managed: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: ner
++    ports: *id002
++    fromPods:
++    - api
++    - worker
++  - name: arcadedb
++    ports: *id003
++    fromPods:
++    - api
++    - arcadedb
++    - backup
++    - restore
++    - worker
++    toPods:
++    - name: arcadedb
++      ports: *id003
++  - name: keycloak
++    ports: *id004
++    fromPods:
++    - api
++    - keycloak
++    - worker
++    toPods:
++    - name: keycloak
++      ports: *id004
++    managed: true
++  - name: litellm
++    ports: *id005
++    fromPods:
++    - api
++    managed: true
++    hosts:
++    - sts.eu-west-2.amazonaws.com
++  - name: clickhouse
++    ports: *id006
++    fromPods:
++    - api
++    - backup
++    - clickhouse
++    - restore
++    - worker
++    toPods:
++    - name: clickhouse
++      ports: *id006
++    - name: clickhouse-keeper
++      ports: &id007
++      - 9181
++      - 9234
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: worker
++    toPods:
++    - name: arcadedb
++      ports: *id003
++    - name: clickhouse
++      ports: *id006
++    - name: keycloak
++      ports: *id004
++    - name: ner
++      ports: *id002
++    managed: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: clickhouse-keeper
++    ports: *id007
++    fromPods:
++    - clickhouse
++    - clickhouse-keeper
++    toPods:
++    - name: clickhouse-keeper
++      ports: *id007
++  - name: backup
++    toPods:
++    - name: arcadedb
++      ports: *id003
++    - name: clickhouse
++      ports: *id006
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: backup-claims
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: restore
++    toPods:
++    - name: arcadedb
++      ports: *id003
++    - name: clickhouse
++      ports: *id006
++    toKubeApi: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: restore-claims
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
+ ingress:
+@@ -193,11 +338,2 @@
+   env:
+-  - &id001
+-    name: OSPREY_LITELLM_SALT_SECRET
+-    value: ''
+-  - &id002
+-    name: OSPREY_LITELLM_DB_PASSWORD
+-    value: ''
+-  - &id003
+-    name: OSPREY_LITELLM_MASTER_SECRET
+-    value: ''
+   - name: POD_NAMESPACE
+@@ -213,2 +349,4 @@
+   sharedAffinity: true
++  automountToken: false
++  noSecret: true
+ - name: api
+@@ -281,4 +419,8 @@
+     value: http://ner:8000
+-  - *id001
+-  - *id002
++  - &id008
++    name: OSPREY_LITELLM_SALT_SECRET
++    value: ''
++  - &id009
++    name: OSPREY_LITELLM_DB_PASSWORD
++    value: ''
+   envFrom: true
+@@ -324,2 +466,3 @@
+   serviceAccountName: ospreyflow
++  automountToken: true
+ - name: ner
+@@ -342,6 +485,2 @@
+     target: 8000
+-  env:
+-  - *id001
+-  - *id002
+-  - *id003
+   resources:
+@@ -352,2 +491,4 @@
+       memory: 2Gi
++  automountToken: false
++  noSecret: true
+ - name: arcadedb
+@@ -400,2 +541,3 @@
+   terminationGracePeriodSeconds: 120
++  automountToken: false
+   disruptionBudget:
+@@ -529,2 +671,3 @@
+   - 0
++  automountToken: false
+   disruptionBudget:
+@@ -623,2 +766,3 @@
+       memory: 1Gi
++  automountToken: false
+ - name: clickhouse
+@@ -672,2 +816,3 @@
+   terminationGracePeriodSeconds: 60
++  automountToken: false
+   disruptionBudget:
+@@ -729,5 +874,6 @@
+       key: bucket_prefix
+-  - *id001
+-  - *id002
+-  - *id003
++  - *id008
++  - *id009
++  - name: OSPREY_LITELLM_MASTER_SECRET
++    value: ''
+   resources:
+@@ -739,2 +885,3 @@
+   serviceAccountName: ospreyflow
++  automountToken: true
+ - name: clickhouse-keeper
+@@ -782,2 +929,3 @@
+   terminationGracePeriodSeconds: 30
++  automountToken: false
+   disruptionBudget:
+same  cloud-platform-development  versions.lock
+DIFFERS  cloud-platform-production  helm template
+--- 
++++ 
+@@ -32,41 +32,4 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
+-# and nothing else; anything from outside reaches nothing but the proxy.
+-apiVersion: networking.k8s.io/v1
+-kind: NetworkPolicy
+-metadata:
+-  name: ospreyflow-internal
+-  labels:
+-    app.kubernetes.io/name: internal
+-    app.kubernetes.io/part-of: ospreyflow
+-    app.kubernetes.io/instance: ospreyflow
+-    app.kubernetes.io/managed-by: Helm
+-spec:
+-  podSelector:
+-    matchLabels:
+-      app.kubernetes.io/part-of: ospreyflow
+-  policyTypes: ["Ingress", "Egress"]
+-  ingress:
+-    - from:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-  egress:
+-    - to:
+-        - podSelector:
+-            matchLabels:
+-              app.kubernetes.io/part-of: ospreyflow
+-    - to:
+-        - namespaceSelector: {}
+-          podSelector:
+-            matchLabels:
+-              k8s-app: kube-dns
+-      ports:
+-        - { protocol: UDP, port: 53 }
+-        - { protocol: TCP, port: 53 }
+----
+-# Source: ospreyflow/templates/networkpolicies.yaml
+-# ADR-148 decision 7: what may leave the namespace, evaluated before the deny below: the cluster's
+-# DNS, the namespace's own pods, the platform's managed stores, and each host an enabled feature
+-# reaches (Admin's settings, ADR-135 Amendment 2 and ADR-147), by its networks.
++# ADR-148 decision 7 and Amendment 5 point 21: DNS, every pod's, evaluated before the deny below.
++# The one policy that selects every pod, and it allows nothing but DNS (`make cp-policy-check`).
+ apiVersion: projectcalico.org/v3
+@@ -75,5 +38,5 @@
+   # Named with its tier, as Calico (3.28 and later, with tiers) stores it, so an upgrade can patch it.
+-  name: default.ospreyflow-allow-egress
+-  labels:
+-    app.kubernetes.io/name: allow-egress
++  name: default.ospreyflow-allow-dns
++  labels:
++    app.kubernetes.io/name: allow-dns
+     app.kubernetes.io/part-of: ospreyflow
+@@ -97,20 +60,889 @@
+         ports: [53]
+-    - action: Allow
+-      destination:
+-        selector: all()
+-    - action: Allow
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What workspace alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-workspace
++  labels:
++    app.kubernetes.io/name: egress-workspace
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'workspace'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'api'"
++        ports: [8000]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What api alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-api
++  labels:
++    app.kubernetes.io/name: egress-api
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'api'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'litellm'"
++        ports: [4000]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'ner'"
++        ports: [8000]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'superset'"
++        ports: [8088]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["172.20.0.0/16"]
+-    # api.openai.com
+-    - action: Allow
++        ports: [443,5432,6379]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What arcadedb alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-arcadedb
++  labels:
++    app.kubernetes.io/name: egress-arcadedb
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'arcadedb'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What keycloak alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-keycloak
++  labels:
++    app.kubernetes.io/name: egress-keycloak
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'keycloak'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What litellm alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-litellm
++  labels:
++    app.kubernetes.io/name: egress-litellm
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'litellm'"
++  types: ["Egress"]
++  egress:
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++    # api.openai.com, on its own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["203.0.113.0/24"]
+-    # s3.eu-west-2.amazonaws.com
+-    - action: Allow
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What clickhouse alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-clickhouse
++  labels:
++    app.kubernetes.io/name: egress-clickhouse
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'clickhouse'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse-keeper'"
++        ports: [9181,9234]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["198.18.0.0/24"]
+-    # sts.eu-west-2.amazonaws.com
+-    - action: Allow
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
+       destination:
+         nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What report-sync alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-report-sync
++  labels:
++    app.kubernetes.io/name: egress-report-sync
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'report-sync'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'api'"
++        ports: [8000]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What superset alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-superset
++  labels:
++    app.kubernetes.io/name: egress-superset
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'superset'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What worker alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-worker
++  labels:
++    app.kubernetes.io/name: egress-worker
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'worker'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'keycloak'"
++        ports: [8080,9000,7800]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'ner'"
++        ports: [8000]
++    # The managed stores, on their own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["172.20.0.0/16"]
++        ports: [443,5432,6379]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What clickhouse-keeper alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-clickhouse-keeper
++  labels:
++    app.kubernetes.io/name: egress-clickhouse-keeper
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'clickhouse-keeper'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse-keeper'"
++        ports: [9181,9234]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What backup alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-backup
++  labels:
++    app.kubernetes.io/name: egress-backup
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'backup'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What backup-claims alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-backup-claims
++  labels:
++    app.kubernetes.io/name: egress-backup-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'backup-claims'"
++  types: ["Egress"]
++  egress:
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What restore alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-restore
++  labels:
++    app.kubernetes.io/name: egress-restore
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'restore'"
++  types: ["Egress"]
++  egress:
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'arcadedb'"
++        ports: [2480,2434]
++    - action: Allow
++      protocol: TCP
++      destination:
++        selector: "app.kubernetes.io/name == 'clickhouse'"
++        ports: [8123,9000,9009]
++    # The cluster's API server, by its Service (a restore asks whether the writers have stopped).
++    - action: Allow
++      protocol: TCP
++      destination:
++        services:
++          name: kubernetes
++          namespace: default
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# What restore-claims alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
++# the networks of the hosts it is given; nothing else, by the deny below.
++apiVersion: projectcalico.org/v3
++kind: NetworkPolicy
++metadata:
++  name: default.ospreyflow-egress-restore-claims
++  labels:
++    app.kubernetes.io/name: egress-restore-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  tier: default
++  order: 100
++  selector: "app.kubernetes.io/name == 'restore-claims'"
++  types: ["Egress"]
++  egress:
++    # s3.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.0.0/24"]
++        ports: [443]
++    # sts.eu-west-2.amazonaws.com, on its own ports.
++    - action: Allow
++      protocol: TCP
++      destination:
++        nets: ["198.18.1.0/24"]
++        ports: [443]
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach workspace (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-workspace
++  labels:
++    app.kubernetes.io/name: ingress-workspace
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: workspace
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach api (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-api
++  labels:
++    app.kubernetes.io/name: ingress-api
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: api
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["report-sync","workspace"]
++      ports:
++        - { protocol: TCP, port: 8000 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach ner (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-ner
++  labels:
++    app.kubernetes.io/name: ingress-ner
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: ner
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","worker"]
++      ports:
++        - { protocol: TCP, port: 8000 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach arcadedb (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-arcadedb
++  labels:
++    app.kubernetes.io/name: ingress-arcadedb
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: arcadedb
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","arcadedb","backup","restore","worker"]
++      ports:
++        - { protocol: TCP, port: 2480 }
++        - { protocol: TCP, port: 2434 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach keycloak (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-keycloak
++  labels:
++    app.kubernetes.io/name: ingress-keycloak
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: keycloak
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","keycloak","report-sync","superset","worker"]
++      ports:
++        - { protocol: TCP, port: 8080 }
++        - { protocol: TCP, port: 9000 }
++        - { protocol: TCP, port: 7800 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach litellm (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-litellm
++  labels:
++    app.kubernetes.io/name: ingress-litellm
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: litellm
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api"]
++      ports:
++        - { protocol: TCP, port: 4000 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach clickhouse (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-clickhouse
++  labels:
++    app.kubernetes.io/name: ingress-clickhouse
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: clickhouse
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api","backup","clickhouse","restore","worker"]
++      ports:
++        - { protocol: TCP, port: 8123 }
++        - { protocol: TCP, port: 9000 }
++        - { protocol: TCP, port: 9009 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach report-sync (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-report-sync
++  labels:
++    app.kubernetes.io/name: ingress-report-sync
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: report-sync
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach superset (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-superset
++  labels:
++    app.kubernetes.io/name: ingress-superset
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: superset
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["api"]
++      ports:
++        - { protocol: TCP, port: 8088 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach worker (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-worker
++  labels:
++    app.kubernetes.io/name: ingress-worker
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: worker
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach clickhouse-keeper (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-clickhouse-keeper
++  labels:
++    app.kubernetes.io/name: ingress-clickhouse-keeper
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: clickhouse-keeper
++  policyTypes: ["Ingress"]
++  ingress:
++    - from:
++        - podSelector:
++            matchExpressions:
++              - key: app.kubernetes.io/name
++                operator: In
++                values: ["clickhouse","clickhouse-keeper"]
++      ports:
++        - { protocol: TCP, port: 9181 }
++        - { protocol: TCP, port: 9234 }
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach backup (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-backup
++  labels:
++    app.kubernetes.io/name: ingress-backup
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: backup
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach backup-claims (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-backup-claims
++  labels:
++    app.kubernetes.io/name: ingress-backup-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: backup-claims
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach restore (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-restore
++  labels:
++    app.kubernetes.io/name: ingress-restore
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: restore
++  policyTypes: ["Ingress"]
++  ingress: []
++---
++# Source: ospreyflow/templates/networkpolicies.yaml
++# Who in the namespace may reach restore-claims (Amendment 5 point 23): the workloads whose paths name
++# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
++apiVersion: networking.k8s.io/v1
++kind: NetworkPolicy
++metadata:
++  name: ospreyflow-ingress-restore-claims
++  labels:
++    app.kubernetes.io/name: ingress-restore-claims
++    app.kubernetes.io/part-of: ospreyflow
++    app.kubernetes.io/instance: ospreyflow
++    app.kubernetes.io/managed-by: Helm
++spec:
++  podSelector:
++    matchLabels:
++      app.kubernetes.io/name: restore-claims
++  policyTypes: ["Ingress"]
++  ingress: []
+ ---
+@@ -685,2 +1517,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       # Until P8 (ADR-148 decision 6): the shared folders are one ReadWriteOnce claim, so every pod that
+@@ -700,13 +1533,3 @@
+                 name: ospreyflow-env
+-            - secretRef:
+-                name: ospreyflow-secrets
+           env:
+-            - name: "OSPREY_MODEL_PROVIDER_KEY"
+-              value: ""
+-            - name: "OSPREY_LITELLM_SALT_SECRET"
+-              value: ""
+-            - name: "OSPREY_LITELLM_DB_PASSWORD"
+-              value: ""
+-            - name: "OSPREY_LITELLM_MASTER_SECRET"
+-              value: ""
+             - name: "POD_NAMESPACE"
+@@ -790,2 +1613,3 @@
+       serviceAccountName: ospreyflow
++      automountServiceAccountToken: true
+       # Until P8 (ADR-148 decision 6): the shared folders are one ReadWriteOnce claim, so every pod that
+@@ -1005,2 +1829,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       containers:
+@@ -1011,13 +1836,2 @@
+                 name: ospreyflow-env
+-            - secretRef:
+-                name: ospreyflow-secrets
+-          env:
+-            - name: "OSPREY_MODEL_PROVIDER_KEY"
+-              value: ""
+-            - name: "OSPREY_LITELLM_SALT_SECRET"
+-              value: ""
+-            - name: "OSPREY_LITELLM_DB_PASSWORD"
+-              value: ""
+-            - name: "OSPREY_LITELLM_MASTER_SECRET"
+-              value: ""
+           # ADR-148 decision 3: no privilege, and none to gain.
+@@ -1084,2 +1898,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       initContainers:
+@@ -1234,2 +2049,3 @@
+       serviceAccountName: ospreyflow
++      automountServiceAccountToken: true
+       containers:
+@@ -1383,2 +2199,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       containers:
+@@ -1389,4 +2206,2 @@
+                 name: ospreyflow-env
+-            - secretRef:
+-                name: ospreyflow-secrets
+           env:
+@@ -1464,10 +2279,27 @@
+                   key: bucket_prefix
+-            - name: "OSPREY_MODEL_PROVIDER_KEY"
+-              value: ""
+-            - name: "OSPREY_LITELLM_SALT_SECRET"
+-              value: ""
+-            - name: "OSPREY_LITELLM_DB_PASSWORD"
+-              value: ""
+-            - name: "OSPREY_LITELLM_MASTER_SECRET"
+-              value: ""
++            - name: "SUPERSET_SECRET_KEY"
++              valueFrom:
++                secretKeyRef:
++                  name: ospreyflow-secrets
++                  key: SUPERSET_SECRET_KEY
++            - name: "SUPERSET_OIDC_CLIENT_SECRET"
++              valueFrom:
++                secretKeyRef:
++                  name: ospreyflow-secrets
++                  key: SUPERSET_OIDC_CLIENT_SECRET
++            - name: "SUPERSET_GUEST_TOKEN_SECRET"
++              valueFrom:
++                secretKeyRef:
++                  name: ospreyflow-secrets
++                  key: SUPERSET_GUEST_TOKEN_SECRET
++            - name: "SUPERSET_EMBEDDER_PASSWORD"
++              valueFrom:
++                secretKeyRef:
++                  name: ospreyflow-secrets
++                  key: SUPERSET_EMBEDDER_PASSWORD
++            - name: "REPORT_MART_READER_PASSWORD"
++              valueFrom:
++                secretKeyRef:
++                  name: ospreyflow-secrets
++                  key: REPORT_MART_READER_PASSWORD
+           # ADR-148 decision 3: no privilege, and none to gain.
+@@ -1535,2 +2367,3 @@
+       serviceAccountName: ospreyflow
++      automountServiceAccountToken: true
+       containers:
+@@ -1680,2 +2513,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       terminationGracePeriodSeconds: 120
+@@ -1806,2 +2640,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       initContainers:
+@@ -1983,2 +2818,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       terminationGracePeriodSeconds: 60
+@@ -2095,2 +2931,3 @@
+           type: RuntimeDefault
++      automountServiceAccountToken: false
+       terminationGracePeriodSeconds: 30
+DIFFERS  cloud-platform-production  helm template, parsed
+--- 
++++ 
+@@ -56,74 +56,2 @@
+  {
+-  "apiVersion": "networking.k8s.io/v1",
+-  "kind": "NetworkPolicy",
+-  "metadata": {
+-   "labels": {
+-    "app.kubernetes.io/instance": "ospreyflow",
+-    "app.kubernetes.io/managed-by": "Helm",
+-    "app.kubernetes.io/name": "internal",
+-    "app.kubernetes.io/part-of": "ospreyflow"
+-   },
+-   "name": "ospreyflow-internal"
+-  },
+-  "spec": {
+-   "egress": [
+-    {
+-     "to": [
+-      {
+-       "podSelector": {
+-        "matchLabels": {
+-         "app.kubernetes.io/part-of": "ospreyflow"
+-        }
+-       }
+-      }
+-     ]
+-    },
+-    {
+-     "ports": [
+-      {
+-       "port": 53,
+-       "protocol": "UDP"
+-      },
+-      {
+-       "port": 53,
+-       "protocol": "TCP"
+-      }
+-     ],
+-     "to": [
+-      {
+-       "namespaceSelector": {},
+-       "podSelector": {
+-        "matchLabels": {
+-         "k8s-app": "kube-dns"
+-        }
+-       }
+-      }
+-     ]
+-    }
+-   ],
+-   "ingress": [
+-    {
+-     "from": [
+-      {
+-       "podSelector": {
+-        "matchLabels": {
+-         "app.kubernetes.io/part-of": "ospreyflow"
+-        }
+-       }
+-      }
+-     ]
+-    }
+-   ],
+-   "podSelector": {
+-    "matchLabels": {
+-     "app.kubernetes.io/part-of": "ospreyflow"
+-    }
+-   },
+-   "policyTypes": [
+-    "Ingress",
+-    "Egress"
+-   ]
+-  }
+- },
+- {
+   "apiVersion": "projectcalico.org/v3",
+@@ -134,6 +62,6 @@
+     "app.kubernetes.io/managed-by": "Helm",
+-    "app.kubernetes.io/name": "allow-egress",
+-    "app.kubernetes.io/part-of": "ospreyflow"
+-   },
+-   "name": "default.ospreyflow-allow-egress"
++    "app.kubernetes.io/name": "allow-dns",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-allow-dns"
+   },
+@@ -160,40 +88,2 @@
+      "protocol": "TCP"
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "selector": "all()"
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "172.20.0.0/16"
+-      ]
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "203.0.113.0/24"
+-      ]
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "198.18.0.0/24"
+-      ]
+-     }
+-    },
+-    {
+-     "action": "Allow",
+-     "destination": {
+-      "nets": [
+-       "198.18.1.0/24"
+-      ]
+-     }
+     }
+@@ -205,2 +95,1482 @@
+     "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-workspace",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-workspace"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'api'"
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'workspace'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-api",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-api"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       4000
++      ],
++      "selector": "app.kubernetes.io/name == 'litellm'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'ner'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8088
++      ],
++      "selector": "app.kubernetes.io/name == 'superset'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'api'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-arcadedb",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-arcadedb"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'arcadedb'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-keycloak",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-keycloak"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'keycloak'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-litellm",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-litellm"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "203.0.113.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'litellm'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-clickhouse",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-clickhouse"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       9181,
++       9234
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse-keeper'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'clickhouse'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-report-sync",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-report-sync"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'api'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'report-sync'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-superset",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-superset"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'superset'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-worker",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-worker"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8080,
++       9000,
++       7800
++      ],
++      "selector": "app.kubernetes.io/name == 'keycloak'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8000
++      ],
++      "selector": "app.kubernetes.io/name == 'ner'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "172.20.0.0/16"
++      ],
++      "ports": [
++       443,
++       5432,
++       6379
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'worker'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-clickhouse-keeper",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-clickhouse-keeper"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       9181,
++       9234
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse-keeper'"
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'clickhouse-keeper'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-backup",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-backup"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'backup'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-backup-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-backup-claims"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'backup-claims'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-restore",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-restore"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       2480,
++       2434
++      ],
++      "selector": "app.kubernetes.io/name == 'arcadedb'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "ports": [
++       8123,
++       9000,
++       9009
++      ],
++      "selector": "app.kubernetes.io/name == 'clickhouse'"
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "services": {
++       "name": "kubernetes",
++       "namespace": "default"
++      }
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'restore'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "projectcalico.org/v3",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "egress-restore-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "default.ospreyflow-egress-restore-claims"
++  },
++  "spec": {
++   "egress": [
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.0.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    },
++    {
++     "action": "Allow",
++     "destination": {
++      "nets": [
++       "198.18.1.0/24"
++      ],
++      "ports": [
++       443
++      ]
++     },
++     "protocol": "TCP"
++    }
++   ],
++   "order": 100,
++   "selector": "app.kubernetes.io/name == 'restore-claims'",
++   "tier": "default",
++   "types": [
++    "Egress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-workspace",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-workspace"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "workspace"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-api",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-api"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "report-sync",
++           "workspace"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8000,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "api"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-ner",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-ner"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8000,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "ner"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-arcadedb",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-arcadedb"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "arcadedb",
++           "backup",
++           "restore",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 2480,
++       "protocol": "TCP"
++      },
++      {
++       "port": 2434,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "arcadedb"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-keycloak",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-keycloak"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "keycloak",
++           "report-sync",
++           "superset",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8080,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9000,
++       "protocol": "TCP"
++      },
++      {
++       "port": 7800,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "keycloak"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-litellm",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-litellm"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 4000,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "litellm"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-clickhouse",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-clickhouse"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api",
++           "backup",
++           "clickhouse",
++           "restore",
++           "worker"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8123,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9000,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9009,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "clickhouse"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-report-sync",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-report-sync"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "report-sync"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-superset",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-superset"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "api"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 8088,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "superset"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-worker",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-worker"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "worker"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-clickhouse-keeper",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-clickhouse-keeper"
++  },
++  "spec": {
++   "ingress": [
++    {
++     "from": [
++      {
++       "podSelector": {
++        "matchExpressions": [
++         {
++          "key": "app.kubernetes.io/name",
++          "operator": "In",
++          "values": [
++           "clickhouse",
++           "clickhouse-keeper"
++          ]
++         }
++        ]
++       }
++      }
++     ],
++     "ports": [
++      {
++       "port": 9181,
++       "protocol": "TCP"
++      },
++      {
++       "port": 9234,
++       "protocol": "TCP"
++      }
++     ]
++    }
++   ],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "clickhouse-keeper"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-backup",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-backup"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "backup"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-backup-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-backup-claims"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "backup-claims"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-restore",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-restore"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "restore"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
++   ]
++  }
++ },
++ {
++  "apiVersion": "networking.k8s.io/v1",
++  "kind": "NetworkPolicy",
++  "metadata": {
++   "labels": {
++    "app.kubernetes.io/instance": "ospreyflow",
++    "app.kubernetes.io/managed-by": "Helm",
++    "app.kubernetes.io/name": "ingress-restore-claims",
++    "app.kubernetes.io/part-of": "ospreyflow"
++   },
++   "name": "ospreyflow-ingress-restore-claims"
++  },
++  "spec": {
++   "ingress": [],
++   "podSelector": {
++    "matchLabels": {
++     "app.kubernetes.io/name": "restore-claims"
++    }
++   },
++   "policyTypes": [
++    "Ingress"
+    ]
+@@ -915,2 +2285,3 @@
+      },
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -918,18 +2289,2 @@
+        "env": [
+-        {
+-         "name": "OSPREY_MODEL_PROVIDER_KEY",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_SALT_SECRET",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_DB_PASSWORD",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_MASTER_SECRET",
+-         "value": ""
+-        },
+         {
+@@ -951,7 +2306,2 @@
+           "name": "ospreyflow-env"
+-         }
+-        },
+-        {
+-         "secretRef": {
+-          "name": "ospreyflow-secrets"
+          }
+@@ -1079,2 +2429,3 @@
+      },
++     "automountServiceAccountToken": true,
+      "containers": [
+@@ -1405,22 +2756,5 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+       {
+-       "env": [
+-        {
+-         "name": "OSPREY_MODEL_PROVIDER_KEY",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_SALT_SECRET",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_DB_PASSWORD",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_MASTER_SECRET",
+-         "value": ""
+-        }
+-       ],
+        "envFrom": [
+@@ -1429,7 +2763,2 @@
+           "name": "ospreyflow-env"
+-         }
+-        },
+-        {
+-         "secretRef": {
+-          "name": "ospreyflow-secrets"
+          }
+@@ -1527,2 +2856,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -1774,2 +3104,3 @@
+     "spec": {
++     "automountServiceAccountToken": true,
+      "containers": [
+@@ -2001,2 +3332,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -2113,16 +3445,45 @@
+         {
+-         "name": "OSPREY_MODEL_PROVIDER_KEY",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_SALT_SECRET",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_DB_PASSWORD",
+-         "value": ""
+-        },
+-        {
+-         "name": "OSPREY_LITELLM_MASTER_SECRET",
+-         "value": ""
++         "name": "SUPERSET_SECRET_KEY",
++         "valueFrom": {
++          "secretKeyRef": {
++           "key": "SUPERSET_SECRET_KEY",
++           "name": "ospreyflow-secrets"
++          }
++         }
++        },
++        {
++         "name": "SUPERSET_OIDC_CLIENT_SECRET",
++         "valueFrom": {
++          "secretKeyRef": {
++           "key": "SUPERSET_OIDC_CLIENT_SECRET",
++           "name": "ospreyflow-secrets"
++          }
++         }
++        },
++        {
++         "name": "SUPERSET_GUEST_TOKEN_SECRET",
++         "valueFrom": {
++          "secretKeyRef": {
++           "key": "SUPERSET_GUEST_TOKEN_SECRET",
++           "name": "ospreyflow-secrets"
++          }
++         }
++        },
++        {
++         "name": "SUPERSET_EMBEDDER_PASSWORD",
++         "valueFrom": {
++          "secretKeyRef": {
++           "key": "SUPERSET_EMBEDDER_PASSWORD",
++           "name": "ospreyflow-secrets"
++          }
++         }
++        },
++        {
++         "name": "REPORT_MART_READER_PASSWORD",
++         "valueFrom": {
++          "secretKeyRef": {
++           "key": "REPORT_MART_READER_PASSWORD",
++           "name": "ospreyflow-secrets"
++          }
++         }
+         }
+@@ -2133,7 +3494,2 @@
+           "name": "ospreyflow-env"
+-         }
+-        },
+-        {
+-         "secretRef": {
+-          "name": "ospreyflow-secrets"
+          }
+@@ -2231,2 +3587,3 @@
+     "spec": {
++     "automountServiceAccountToken": true,
+      "containers": [
+@@ -2445,2 +3802,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -2649,2 +4007,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -2969,2 +4328,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+@@ -3149,2 +4509,3 @@
+     "spec": {
++     "automountServiceAccountToken": false,
+      "containers": [
+same  cloud-platform-production  images.yaml
+same  cloud-platform-production  terraform/ecr.tf
+same  cloud-platform-production  terraform/elasticache.tf
+same  cloud-platform-production  terraform/irsa.tf
+same  cloud-platform-production  terraform/opensearch.tf
+same  cloud-platform-production  terraform/rds.tf
+same  cloud-platform-production  terraform/s3.tf
+same  cloud-platform-production  terraform/secrets.tf
+same  cloud-platform-production  terraform/variables.tf
+DIFFERS  cloud-platform-production  values.yaml
+--- 
++++ 
+@@ -51,2 +51,6 @@
+   - 172.20.0.0/16
++  managedPorts:
++  - 443
++  - 5432
++  - 6379
+   hosts:
+@@ -55,2 +59,4 @@
+     - 203.0.113.0/24
++    ports:
++    - 443
+   - host: s3.eu-west-2.amazonaws.com
+@@ -58,2 +64,4 @@
+     - 198.18.0.0/24
++    ports:
++    - 443
+   - host: sts.eu-west-2.amazonaws.com
+@@ -61,2 +69,166 @@
+     - 198.18.1.0/24
++    ports:
++    - 443
++  workloads:
++  - name: workspace
++    ports:
++    - 8080
++    toPods:
++    - name: api
++      ports: &id001
++      - 8000
++  - name: api
++    ports: *id001
++    fromPods:
++    - report-sync
++    - workspace
++    toPods:
++    - name: arcadedb
++      ports: &id003
++      - 2480
++      - 2434
++    - name: clickhouse
++      ports: &id006
++      - 8123
++      - 9000
++      - 9009
++    - name: keycloak
++      ports: &id004
++      - 8080
++      - 9000
++      - 7800
++    - name: litellm
++      ports: &id005
++      - 4000
++    - name: ner
++      ports: &id002
++      - 8000
++    - name: superset
++      ports: &id007
++      - 8088
++    managed: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: ner
++    ports: *id002
++    fromPods:
++    - api
++    - worker
++  - name: arcadedb
++    ports: *id003
++    fromPods:
++    - api
++    - arcadedb
++    - backup
++    - restore
++    - worker
++    toPods:
++    - name: arcadedb
++      ports: *id003
++  - name: keycloak
++    ports: *id004
++    fromPods:
++    - api
++    - keycloak
++    - report-sync
++    - superset
++    - worker
++    toPods:
++    - name: keycloak
++      ports: *id004
++    managed: true
++  - name: litellm
++    ports: *id005
++    fromPods:
++    - api
++    managed: true
++    hosts:
++    - api.openai.com
++    - sts.eu-west-2.amazonaws.com
++  - name: clickhouse
++    ports: *id006
++    fromPods:
++    - api
++    - backup
++    - clickhouse
++    - restore
++    - worker
++    toPods:
++    - name: clickhouse
++      ports: *id006
++    - name: clickhouse-keeper
++      ports: &id008
++      - 9181
++      - 9234
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: report-sync
++    toPods:
++    - name: api
++      ports: *id001
++    - name: keycloak
++      ports: *id004
++    managed: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: superset
++    ports: *id007
++    fromPods:
++    - api
++    toPods:
++    - name: keycloak
++      ports: *id004
++    managed: true
++  - name: worker
++    toPods:
++    - name: arcadedb
++      ports: *id003
++    - name: clickhouse
++      ports: *id006
++    - name: keycloak
++      ports: *id004
++    - name: ner
++      ports: *id002
++    managed: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: clickhouse-keeper
++    ports: *id008
++    fromPods:
++    - clickhouse
++    - clickhouse-keeper
++    toPods:
++    - name: clickhouse-keeper
++      ports: *id008
++  - name: backup
++    toPods:
++    - name: arcadedb
++      ports: *id003
++    - name: clickhouse
++      ports: *id006
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: backup-claims
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: restore
++    toPods:
++    - name: arcadedb
++      ports: *id003
++    - name: clickhouse
++      ports: *id006
++    toKubeApi: true
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
++  - name: restore-claims
++    hosts:
++    - s3.eu-west-2.amazonaws.com
++    - sts.eu-west-2.amazonaws.com
+ ingress:
+@@ -212,13 +384,2 @@
+   env:
+-  - name: OSPREY_MODEL_PROVIDER_KEY
+-    value: ''
+-  - &id001
+-    name: OSPREY_LITELLM_SALT_SECRET
+-    value: ''
+-  - &id002
+-    name: OSPREY_LITELLM_DB_PASSWORD
+-    value: ''
+-  - &id003
+-    name: OSPREY_LITELLM_MASTER_SECRET
+-    value: ''
+   - name: POD_NAMESPACE
+@@ -247,2 +408,4 @@
+   sharedAffinity: true
++  automountToken: false
++  noSecret: true
+ - name: api
+@@ -319,4 +482,8 @@
+     value: 'yes'
+-  - *id001
+-  - *id002
++  - &id009
++    name: OSPREY_LITELLM_SALT_SECRET
++    value: ''
++  - &id010
++    name: OSPREY_LITELLM_DB_PASSWORD
++    value: ''
+   envFrom: true
+@@ -362,2 +529,3 @@
+   serviceAccountName: ospreyflow
++  automountToken: true
+ - name: ner
+@@ -365,8 +533,2 @@
+   egress: false
+-  env:
+-  - name: OSPREY_MODEL_PROVIDER_KEY
+-    value: ''
+-  - *id001
+-  - *id002
+-  - *id003
+   envFrom: true
+@@ -392,2 +554,4 @@
+       memory: 2Gi
++  automountToken: false
++  noSecret: true
+ - name: arcadedb
+@@ -440,2 +604,3 @@
+   terminationGracePeriodSeconds: 120
++  automountToken: false
+   disruptionBudget:
+@@ -569,2 +734,3 @@
+   - 0
++  automountToken: false
+   disruptionBudget:
+@@ -665,2 +831,3 @@
+       memory: 1Gi
++  automountToken: false
+ - name: clickhouse
+@@ -714,2 +881,3 @@
+   terminationGracePeriodSeconds: 60
++  automountToken: false
+   disruptionBudget:
+@@ -770,5 +938,7 @@
+     value: ''
+-  - *id001
+-  - *id002
+-  - *id003
++  - *id009
++  - *id010
++  - &id011
++    name: OSPREY_LITELLM_MASTER_SECRET
++    value: ''
+   envFrom: true
+@@ -793,2 +963,3 @@
+   serviceAccountName: ospreyflow
++  automountToken: true
+ - name: superset
+@@ -845,7 +1016,12 @@
+       key: bucket_prefix
+-  - name: OSPREY_MODEL_PROVIDER_KEY
+-    value: ''
+-  - *id001
+-  - *id002
+-  - *id003
++  - name: SUPERSET_SECRET_KEY
++    secret: SUPERSET_SECRET_KEY
++  - name: SUPERSET_OIDC_CLIENT_SECRET
++    secret: SUPERSET_OIDC_CLIENT_SECRET
++  - name: SUPERSET_GUEST_TOKEN_SECRET
++    secret: SUPERSET_GUEST_TOKEN_SECRET
++  - name: SUPERSET_EMBEDDER_PASSWORD
++    secret: SUPERSET_EMBEDDER_PASSWORD
++  - name: REPORT_MART_READER_PASSWORD
++    secret: REPORT_MART_READER_PASSWORD
+   envFrom: true
+@@ -871,2 +1047,4 @@
+       memory: 2Gi
++  automountToken: false
++  noSecret: true
+ - name: worker
+@@ -928,5 +1106,5 @@
+     value: ''
+-  - *id001
+-  - *id002
+-  - *id003
++  - *id009
++  - *id010
++  - *id011
+   resources:
+@@ -938,2 +1116,3 @@
+   serviceAccountName: ospreyflow
++  automountToken: true
+ - name: clickhouse-keeper
+@@ -981,2 +1160,3 @@
+   terminationGracePeriodSeconds: 30
++  automountToken: false
+   disruptionBudget:
+same  cloud-platform-production  versions.lock
+p7_renders_unchanged: 6 artefact(s) differ from fe22804

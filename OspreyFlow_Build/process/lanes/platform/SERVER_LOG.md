@@ -166,3 +166,25 @@ the orchestrator fetches this clone.
   At f353827b: 47/47 red, renders 0 differences, the guide 61 passed with the diff, make test 4 known, make -k ci's
   harness-a11y timing out under load average 15, then 34/34 alone. All in `gates/`.
   **P7b ready to merge at `f353827bcbed6b580ff2ec19cdbc7d1ef97c852b`** (tree `dfef4603d04c9c5b8ef77050f6dafde43f700d56`).
+- The orchestrator's rulings (egress, secrets and ingress each workload's own; P9's rows with case's corrections; the
+  token; default-deny named keys), rebased onto 76980f2, 9272444, f78b307 and ff269b0 (the decision log's end the one
+  conflict, Amendment 5 before 6). Two runs stopped from the Mac kept running on the server; each was this lane's own,
+  on superseded code, and was ended there by its process group (no Helm containers left). One run at a time otherwise.
+- At 82958008: the cp suite 348 passed, 69/70 red (the API's plant moved to the rule itself, then 70/70 at f0406852),
+  make -k ci green, make test 4 failed (two known, `test_layout` from my own outputs at the copy's root, P11's
+  model-key test, fixed). At a5d580a0: make test 12 failed (9 mine, fixed; 3 known); make -k ci failed two
+  targets, harness-a11y and cp-policy-check (the same 9 tests), not harness-a11y alone as first written.
+  At 4db69ed7: the cp, egress and model-engine tests 360 passed, 76/76 red, harness-a11y 34/34 alone. All in `gates/`.
+  **P7b ready to merge at `4db69ed7631381ea6736cf8042fbfb254cab66d7`** (tree `22090e73`).
+- After the orchestrator's final review (items 1-8): rebased onto ff269b0's successors to 621e14f (CARRIES.md's end the one
+  conflict, both kept). At becb266f: tests/cp_policy_check, the cloud-platform harness tests, the CLI's images verb and the
+  model-engine tests 563 passed; 94/94 red; renders against d9beca2 (621e14f and a process commit) differ for the two
+  cloud-platform configurations alone; make -k ci green; make test 4 failed: three known, and `test_lanes_launch`'s
+  running-session case, 28/28 three times alone (`gates/becb266f.lanes-launch.txt`). All in `gates/`.
+  **P7b ready to merge at `becb266f89493e43a4bb82ca0b83d628777385a0`** (tree `099964277d4d`).
+- The final review's second pass (items 1-10), rebased onto fe22804 (process files alone since 621e14f). At 2833a66f:
+  the cp suite, the cloud-platform harness tests, the images verb and the model-engine tests 587 passed; 106/106 red;
+  renders against fe22804 differ for the two cloud-platform configurations alone, every changed line recorded
+  (`gates/2833a66f.renders-full.txt`, the script's new `--full`); `make -k ci` exit 0, its cp-policy-check lines
+  unfiltered (four fixtures and the total, 0 violation(s)); make test 3 failed, the three known. All in `gates/`.
+  **P7b ready to merge at `2833a66fdf0ec6f0a057c27a70d606d86d45edd1`** (tree `d934d463777f`).
