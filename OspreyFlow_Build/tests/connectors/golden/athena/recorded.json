@@ -1,0 +1,76 @@
+{
+  "_about": "Athena's answers, in the shapes AWS's API reference gives for the JSON 1.1 protocol (AmazonAthena.*), for the recorded fixture in athena_fixture.py (L1.9 part 1; rule 15's second worked example). Not captured from a live Athena: no account is reachable from this build. The live test marked for the client's platform (test_athena_connector_live.py) is what confirms them. Every value synthetic (rule 9).",
+  "errors": {
+    "access_denied": {
+      "status": 400,
+      "body": {
+        "__type": "AccessDeniedException",
+        "Message": "User: arn:aws:sts::000000000000:assumed-role/synthetic-other-role/session is not authorized to perform: {action} on resource: arn:aws:athena:eu-west-2:000000000000:workgroup/{workgroup} because no identity-based policy allows the {action} action"
+      }
+    },
+    "unrecognised_client": {
+      "status": 400,
+      "body": {"__type": "UnrecognizedClientException", "message": "The security token included in the request is invalid."}
+    },
+    "workgroup_not_found": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "WorkGroup {workgroup} is not found."}
+    },
+    "no_output_location": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "No output location provided. An output location is required either through the Workgroup result configuration setting or as an API input."}
+    },
+    "max_results": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "1 validation error detected: Value '{value}' at 'maxResults' failed to satisfy constraint: Member must have value less than or equal to 1000"}
+    },
+    "bad_next_token": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "Invalid NextToken provided."}
+    },
+    "not_finished": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "Query has not yet finished. Current state: {state}"}
+    },
+    "named_query_not_found": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "NamedQuery {id} was not found"}
+    },
+    "execution_not_found": {
+      "status": 400,
+      "body": {"__type": "InvalidRequestException", "AthenaErrorCode": "INVALID_INPUT", "Message": "QueryExecution {id} was not found"}
+    }
+  },
+  "failures": {
+    "syntax": {
+      "StateChangeReason": "line 1:8: mismatched input 'FROM'. Expecting: '*', 'ALL', 'DISTINCT', <expression>",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1300, "Retryable": false, "ErrorMessage": "line 1:8: mismatched input 'FROM'. Expecting: '*', 'ALL', 'DISTINCT', <expression>"}
+    },
+    "syntax_eof": {
+      "_about": "A statement that ends where Athena expects more (a dangling WHERE). The column is the statement's length plus one. Whether Athena reports a syntax error as a FAILED execution (modelled here) or as an InvalidRequestException at StartQueryExecution is unconfirmed until part 2 (test_athena_connector_live.py's unparseable-query case).",
+      "StateChangeReason": "line 1:{column}: mismatched input '<EOF>'. Expecting: <expression>",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1300, "Retryable": false, "ErrorMessage": "line 1:{column}: mismatched input '<EOF>'. Expecting: <expression>"}
+    },
+    "catalog_not_found": {
+      "_about": "A catalog Athena does not hold, in QueryExecutionContext.Catalog or in a three-part name (the orchestrator's review of L1.9, round 1, item 7). Its words and whether it fails as an execution are Trino's error name, unconfirmed until part 2.",
+      "StateChangeReason": "CATALOG_NOT_FOUND: Catalog '{catalog}' does not exist",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "CATALOG_NOT_FOUND: Catalog '{catalog}' does not exist"}
+    },
+    "schema_not_found": {
+      "StateChangeReason": "SCHEMA_NOT_FOUND: line 1:15: Schema '{schema}' does not exist",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "SCHEMA_NOT_FOUND: line 1:15: Schema '{schema}' does not exist"}
+    },
+    "table_not_found": {
+      "StateChangeReason": "TABLE_NOT_FOUND: line 1:15: Table '{table}' does not exist",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "TABLE_NOT_FOUND: line 1:15: Table '{table}' does not exist"}
+    },
+    "lake_formation_denied": {
+      "StateChangeReason": "Insufficient Lake Formation permission(s): User: arn:aws:sts::000000000000:assumed-role/synthetic-namespace-role/botocore-session-1 is not authorized to perform: glue:GetTable on resource: arn:aws:glue:eu-west-2:000000000000:table/visits/lake_formation_locked",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Insufficient Lake Formation permission(s) on lake_formation_locked"}
+    },
+    "s3_access_denied": {
+      "StateChangeReason": "Access denied when writing output to url: s3://synthetic-athena-results/out/{id}.csv . Please ensure you are allowed to access the S3 bucket.",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Access denied when writing output to url: s3://synthetic-athena-results/out/{id}.csv"}
+    }
+  }
+}

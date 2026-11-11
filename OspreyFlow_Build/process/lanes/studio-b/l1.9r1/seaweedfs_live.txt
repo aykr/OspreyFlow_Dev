@@ -1,0 +1,19 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-srv/studio-b/OspreyFlow_Core/.venv/bin/python
+cachedir: .pytest_cache
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-srv/studio-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 7 items
+
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_the_stand_in_s_objects_land_as_the_golden_files[visits/2026/-csv-s3_visits.csv] PASSED [ 14%]
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_the_stand_in_s_objects_land_as_the_golden_files[calls/-parquet-s3_parquet.csv] PASSED [ 28%]
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_a_principal_the_bucket_does_not_grant_is_refused_as_access_denied PASSED [ 42%]
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_a_bucket_that_does_not_exist_is_refused_in_words PASSED [ 57%]
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_test_connection_lists_as_the_granted_role_and_is_refused_as_another PASSED [ 71%]
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_the_byte_cap_refuses_a_real_listing_whole PASSED [ 85%]
+../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py::test_a_real_listing_stops_at_the_object_cap_and_one PASSED [100%]
+
+============================== 7 passed in 2.00s ===============================

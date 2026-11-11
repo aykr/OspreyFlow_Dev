@@ -204,6 +204,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     // The lane review of L1.6: the wizard's read step for each kind of connection.
     "view=wizard&serve=1&connection=c-sql&step=1", "view=wizard&serve=1&connection=c-api&step=1",
     "view=wizard&serve=1&connection=c-json&step=1",
+    // L1.9 (ADR-148): the read step over an S3 bucket and over Athena.
+    "view=wizard&serve=1&connection=c-s3&step=1", "view=wizard&serve=1&connection=c-athena&step=1",
     // ADR-145 Amendment 4 decision 12 (L1.8): the lists and a source's page to someone holding no Studio
     // right, each action described by why and who can.
     "serve=1&rights=none", "view=source&serve=1&rights=none",
@@ -278,6 +280,9 @@ const EXTRA_STATES: Record<string, string[]> = {
     // listed and the form's SQL fields drawn.
     "rights=administer_system&serve=policies&open=Grading%20scheme",
     "rights=administer_system&serve=connections&open=Connections&show=sql",
+    // L1.9 (ADR-148): the S3 and Athena forms, their cloud role's words, and their rows in the table.
+    "rights=administer_system&serve=connections&open=Connections&show=s3",
+    "rights=administer_system&serve=connections&open=Connections&show=athena",
   ],
 };
 

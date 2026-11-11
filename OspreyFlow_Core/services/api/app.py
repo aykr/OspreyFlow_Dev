@@ -85,7 +85,7 @@ from services.extract.writer import (
 from services.ingest.ceiling import AboveTheDeploymentCeiling, DeploymentCeiling
 from services.ingest.connectors import reads as connector_reads_module
 from services.ingest.connectors.geo.site_grid import site_grid_rows
-from services.ingest.connectors.reads import ConnectorRefused
+from services.ingest.connectors.reads import ConnectorRefused, ReadOverCap
 from services.ingest.engine import RowKeyDefinitionChanged, RowKeyRunInProgress, run_recipe
 from services.ingest.pipeline import (
     expert_steps_changed,
@@ -11606,6 +11606,12 @@ READ_REFUSED_FOR_AUTHORS = (
 )
 
 
+READ_OVER_CAP_FOR_AUTHORS = (
+    "The read was refused whole: it holds more than one read may take (500,000 rows, 256 MiB, or "
+    "1,000 pages or objects). Nothing was written, and nothing was cut short."
+)
+
+
 def _no_such_connection() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -11614,8 +11620,16 @@ def _no_such_connection() -> HTTPException:
 
 
 def _connector_refused(refused: ConnectorRefused, principal: Principal) -> HTTPException:
-    """A refused connector read: its own words for an administrator, fixed words for anyone else."""
+    """A refused connector read: its own words for an administrator, fixed words for anyone else.
+    A read past a cap has its own type, `read_over_cap` (rule 2's typed refusal; L1.9), and words
+    that say so, the caps being the deployment's, not the connection's settings."""
     administrator = Right.ADMINISTER_SYSTEM in rights_for(principal.roles)
+    if isinstance(refused, ReadOverCap):
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "read_over_cap",
+                    "detail": str(refused) if administrator else READ_OVER_CAP_FOR_AUTHORS},
+        )  # fmt: skip
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail={"error": "read_refused",

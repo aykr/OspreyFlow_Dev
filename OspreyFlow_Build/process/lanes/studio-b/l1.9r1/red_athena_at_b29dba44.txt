@@ -1,0 +1,31 @@
+..................FFFFF.F.F....F.FFF.F..FFFFF.FFF....................... [ 67%]
+.....................FF.....FFFFF.                                       [100%]
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (SELECT 1) t, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN visits.visit_bookings, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON true, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1]) AS t(n), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many TABLESAMPLE BERNOULLI (50), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many, LATERAL (SELECT 1) l, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (visits.many m JOIN visits.visit_bookings b ON true), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (VALUES (1), (2)) AS v(n), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many INTERSECT SELECT * FROM (SELECT 1) t, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b USING (booking_id), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON (m.notes = b.notes), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o), finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many FOR TIMESTAMP AS OF current_timestamp, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many "where", finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '--', booking_id FROM finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '/*' AS a FROM finance.ledger WHERE '*/' = '*/']
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m foo, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m JOIN visits.visit_bookings b, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many WHERE booking_id = 'x' finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many, (finance.ledger)]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '--' AS a FROM visits.many; DROP TABLE visits.visit_bookings]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '/*' AS a FROM visits.many; DROP TABLE visits.visit_bookings; SELECT '*/']
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_result_naming_a_column_twice_is_refused_never_one_value_written_in_both
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_row_with_more_values_than_columns_is_refused_never_cut
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_catalog_athena_does_not_hold_is_refused_in_words
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_join_to_a_table_athena_does_not_hold_is_refused_in_words
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_an_unqualified_table_is_read_from_the_query_s_own_database
+27 failed, 79 passed in 6.48s

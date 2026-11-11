@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DeploymentList, SubscribableList } from "../../../../../packages/schemas/generated";
-import { fileNameOf, readOf, RegisterSourceWizard } from "./RegisterSourceWizard";
+import { EMPTY_READ, fileNameOf, readOf, RegisterSourceWizard } from "./RegisterSourceWizard";
 import { ImportListForm, ScreeningLists } from "./ScreeningLists";
 
 afterEach(() => {
@@ -51,11 +51,30 @@ describe("a source's read", () => {
   });
 
   it("is built from the fields its connection's kind takes, or not at all", () => {
-    const f = { table: "nomis.visit_bookings", columns: "booking_id, prisoner,", path: "", recordsAt: "", pattern: "" };
+    const f = { ...EMPTY_READ, table: "nomis.visit_bookings", columns: "booking_id, prisoner," };
     expect(readOf("sql", f)).toEqual({ kind: "sql", table: "nomis.visit_bookings", columns: ["booking_id", "prisoner"] });
     expect(readOf("api", f)).toBeNull();
     expect(readOf("api", { ...f, path: "/v1/n", recordsAt: "data.items" })).toEqual({ kind: "api", path: "/v1/n", records_at: "data.items" });
     expect(readOf("json", { ...f, pattern: "b-*.json" })).toEqual({ kind: "json", pattern: "b-*.json", records_at: null });
+  });
+
+  // L1.9: an S3 folder (made a folder if typed without its '/') and format; Athena's table or named
+  // query, one of the two, never both and never a query typed here.
+  it("is an S3 folder and format, or an Athena table or named query", () => {
+    expect(readOf("s3", { ...EMPTY_READ, folder: "visits/2026", format: "parquet" })).toEqual({
+      kind: "s3",
+      folder: "visits/2026/",
+      format: "parquet",
+    });
+    expect(readOf("s3", EMPTY_READ)).toEqual({ kind: "s3", folder: "", format: "csv" });
+    expect(readOf("athena", EMPTY_READ)).toBeNull();
+    expect(readOf("athena", { ...EMPTY_READ, table: "visits.visit_bookings" })).toEqual({
+      kind: "athena",
+      table: "visits.visit_bookings",
+      named_query: null,
+    });
+    const named = { ...EMPTY_READ, table: "visits.visit_bookings", athena: "named_query" as const, namedQuery: "0F3C6A7E-1B2D-4C5E-8F90-A1B2C3D4E5F6" };
+    expect(readOf("athena", named)).toEqual({ kind: "athena", table: null, named_query: "0f3c6a7e-1b2d-4c5e-8f90-a1b2c3d4e5f6" });
   });
 
   it("registers a SQL source by its read, never a file", async () => {

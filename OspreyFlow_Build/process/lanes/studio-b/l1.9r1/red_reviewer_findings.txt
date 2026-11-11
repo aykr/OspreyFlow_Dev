@@ -1,0 +1,24 @@
+............................................FFF......................... [ 54%]
+...........................F.........FFF....................             [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-srv/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_host_off_the_egress_allow_list_is_never_reached[athena]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[s3]
+tests/services/api/test_cloud_connector_access.py::test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_nothing[athena]
+  /root/osprey-srv/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:11688: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise _connector_refused(refused, principal) from refused
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many --\rUNION ALL SELECT * FROM finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many --\r, finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many --\rCROSS JOIN finance.ledger]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_named_query_that_is_not_one_select_is_never_sent[SELECT 1 FROM visits.many --\r; DROP TABLE visits.visit_bookings]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_athena_does_not_hold_after_a_comma_is_refused_in_words
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_the_fixture_reads_what_athena_reads[SELECT extract(year FROM booked_for) AS y FROM visits.visit_bookings]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_the_fixture_reads_what_athena_reads[SELECT booking_id IS DISTINCT FROM notes AS d FROM visits.visit_bookings]
+7 failed, 125 passed, 5 warnings in 10.39s

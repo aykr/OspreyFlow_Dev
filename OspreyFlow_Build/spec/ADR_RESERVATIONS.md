@@ -116,7 +116,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-142 Amendment 8 | The client chain sooner: P7 merged in two parts (P7a, its kind acceptance, after); P10, P9, P11, P12, L1.9 side by side once P7 merges, by template file; P9 cut (P9b after the install); P8 deferred; merges without the owner except access, credential and data-model steps (the owner's word, 11 November) | orchestrator | 2026-11-11 | written |
 | ADR-148 Amendment 5 | The cloud-platform profile's proof-of-concept shape (`shape: poc`): one ArcadeDB and one ClickHouse with its Keeper inside the server, no PodDisruptionBudgets, a scratch volume for Ingest, a manual-install runbook and a decommission runbook (P7b) | platform | 2026-11-11 | reserved |
 | ADR-148 Amendment 6 | Sign-in claims from Entra ID as built (P10 part 1): clearance, unit and handling codes mapped by settings from a named claim or a group table, one construction path, the tenant and issuer pinned, a principal keyed by `oid` within its tenant | admin | 2026-11-11 | reserved |
-| ADR-140 Amendment 20 | L1.9: the S3 and Athena connectors in Studio › Sources, read-only, by the namespace's IAM role, the host allowed only while the source is enabled (studio-b's draft L1.9_ADR-140_amendment_draft.md) | studio-b | 2026-11-11 | reserved |
+| ADR-140 Amendment 20 | L1.9 part 1 as built: the S3 and Athena connectors (read-only, by the namespace's IAM role; the named query's relations checked, failing closed). The host allowed only while the source is enabled is part 2's (ADR-148 decision 7) | studio-b | 2026-11-11 | written |
 
 ## Baseline
 

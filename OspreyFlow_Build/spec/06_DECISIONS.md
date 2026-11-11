@@ -33608,3 +33608,78 @@ the notice without the error, the log with it); `::test_a_fault_acting_as_the_ow
 **Still carried** (`CARRIES.md`): the identity provider's refusals and its not answering are not logged; an
 outage the resolver classifies as a refusal counts toward the pause; a fault elsewhere in acting as the owner
 writes no ledger row; the refusal half of the offline test checks only the planted shape.
+
+### ADR-140, Amendment 20 (11 November 2026) — L1.9 part 1 as built: the S3 and Athena connectors
+
+Status: built by studio-b at L1.9 part 1 on the test server, 11 November 2026, under Prompt L, and corrected after
+the orchestrator's independent review, round 1 of 2 (an access step, reviewed twice). The
+decisions the brief left open were taken as recommended and are listed in `process/lanes/studio-b/SERVER_LOG.md`
+for the owner to overrule.
+
+1. **Two connection kinds, `s3` and `athena`**, named in *Admin › Connections* and bound to datasets as
+   Amendment 13's are; each read lands as the source's one file, so everything after is unchanged.
+2. **No credential, anywhere.** Neither kind's settings can hold a key or a secret's name; each read signs in as
+   the deployment's own cloud identity (ADR-148: the namespace's IAM role, wired in part 2). A test stands its
+   stand-in's credentials in through `connector_reads.Readers`, never through settings.
+3. **No typed host.** The host is made from the region (and bucket) and checked against the egress allow-list
+   before any read or test (ADR-148 decision 7). Dotted bucket names are refused. Every client is built with the
+   endpoint named, never from the environment. The botocore clients (Athena's, and S3's listing) **refuse to send
+   any request to another host** than the one the egress check names (`connector_reads.only_to`), so a region
+   redirect or an endpoint resolver cannot take them elsewhere; pyarrow's S3 filesystem, which opens objects, is
+   held to that host by its arguments alone (its requests are made in its C++ SDK), and whether it follows a
+   region redirect is checked in part 2.
+4. **S3 reads a folder under the connection's**, CSV or Parquet, every object in key order, hidden objects never.
+   **An empty listing is checked against the bucket**, and a missing bucket told so; the bucket is asked for only
+   then, never first, since asking needs `s3:ListBucket` on all of it, which a role limited to a prefix may not
+   hold. A bucket in another region is told so in fixed words, never followed. **Athena reads a table** (a
+   statement built from two checked names) **or a named query** that is one SELECT, in the connection's workgroup
+   and databases, checked before it is sent (point 8).
+5. **Rule 2.** Sizes summed before any object is opened; **the listing stops at 1,001 objects** (botocore's
+   paged `ListObjectsV2`, each page asking for no more than are still wanted; pyarrow's listing, which has no
+   limit, is no longer used for the listing; a folder marker counts as an object), and more than 1,000 objects is
+   refused; a listing S3 cuts short without a token to go on from is refused, never looped on; Parquet rows from the
+   footer; Athena's rows, bytes and pages counted as they come; each refused whole. **A result naming a column
+   twice (`SELECT a.id, b.id`), or a row with more or fewer values than its columns, is refused**: kept by column
+   name, the second value would have been written in both cells, and a surplus value dropped. A query past 300
+   seconds is stopped.
+6. **Rule 15.** S3 against SeaweedFS (the build's own pinned image), whose first green was not a result (a missing
+   bucket read as an empty folder, fixed), and the deployment's own listing client against a recorded S3 that
+   honours `MaxKeys` and refuses what S3 refuses. Athena against a recorded fixture behind botocore's real client
+   that refuses what Athena refuses: **a catalog it does not hold** (in `QueryExecutionContext.Catalog` or a
+   three-part name), **a missing database or table anywhere after FROM or JOIN**, not only at the first, and an
+   unqualified table resolved against the execution's database. Its answers follow AWS's API reference; **two are
+   unconfirmed until part 2**, on the client's platform (`test_athena_connector_live.py`): whether Athena reports
+   a query that does not parse, and a catalog it does not hold, as a FAILED execution (modelled) or as an
+   `InvalidRequestException` at `StartQueryExecution`. The reader refuses both in words either way. Likewise S3's
+   region refusals (`PermanentRedirect`, `AuthorizationHeaderMalformed`), which SeaweedFS, having no regions,
+   never gives.
+7. **Dependency:** `botocore` (Apache-2.0) and `jmespath` (MIT), in `00_ARCHITECTURE.md` §7's register, and in
+   `uv.lock` as the `ospreyflow` project's own dependency (until this step only through the optional
+   `extraction` extra, so an image's `uv sync --frozen` would have lacked it and the Conduit not started). The
+   lock is regenerated again at merge.
+8. **A named query reads only the connection's databases, and the check fails closed.** A recursive-descent
+   reading of the statement checks every relation in every FROM list at every depth (each WITH, subquery,
+   LATERAL, UNNEST, set operation and join, and each relation after a comma whatever came before it): it must be
+   unqualified (the query's own checked database), `database.table` or `catalog.database.table` within the
+   connection's. A table function is refused. **A shape the checker does not follow is refused**, never passed
+   over: a comma it cannot attribute, a word after a relation it does not know, a join with no condition, a
+   quote never closed. The scan this replaces went back to looking for FROM or JOIN after a subquery, a join, an
+   UNNEST or a TABLESAMPLE, so a later `, db.table` in the same list was never checked (the review, round 1,
+   item 1: five shapes, each reading a database the administrator did not name, each passing). Comments and
+   strings are read in one pass, so a comment's marker inside a string value cannot hide a second statement or a
+   table; a `--` comment ends at a carriage return as at a newline, as Trino's lexer ends it (read to the newline
+   alone, `--\r` hid the rest of a line from the check and not from Athena: found by the lane's own reviewer);
+   and a quoted name is never a keyword. Failing closed may refuse a legitimate query, which the client
+   saves more plainly; failing open would read a database the administrator did not name (rule 3). The role's
+   IAM policy is the second line, not the first.
+9. **A cap has its own type**, `read_over_cap` (`ReadOverCap`), with fixed words for an author; every other
+   refusal stays `read_refused`. Athena's own words lose any ARN or access key id before they are audited.
+10. **S3's endpoint is named**, `s3.<region>.amazonaws.com`, virtual-hosted, never taken from the environment;
+    unlike SQL and API, its addresses are not pinned, the name being AWS's own, made from checked parts.
+
+**The test that would fail.** `tests/connectors/test_athena_connector.py` (the five shapes of point 8 and their
+siblings; the cases the checker cannot follow; a column named twice; a row's surplus values; a missing catalog, a
+join to a missing table, an unqualified table), `test_cloud_clients.py` (the clients a deployment builds: their
+host, addressing and no key; a request bound elsewhere never sent; the listing stopped at 1,001; S3's refusals),
+`test_s3_connector.py`, `test_s3_connector_live.py`, `tests/services/api/test_cloud_connector_access.py`; red
+records in `process/lanes/studio-b/L1.9_RED_RECORD.md` and `l1.9r1/plants.txt`.

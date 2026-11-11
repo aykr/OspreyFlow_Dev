@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace } from "../AdminPlace";
-import { SECRET_TIP } from "./Connections";
+import { CLOUD_ROLE_TIP, SECRET_TIP } from "./Connections";
 
 afterEach(() => {
   cleanup();
@@ -115,6 +115,55 @@ describe("Connections", () => {
     fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Choose the datasets whose sources may read through it.");
     expect(posts).toEqual([]);
+  });
+
+  // L1.9 (ADR-148): an S3 bucket and Athena are read as the deployment's own cloud role. Red if either
+  // form offers a field a key or secret could be typed into, or sends one; if a dotted bucket (which
+  // cannot be reached by its own name over verified TLS) is sent; or if the role's words are missing.
+  it("names an S3 bucket and Athena with no field for a key or a secret, and sends none", async () => {
+    const posts = serve();
+    open();
+    await screen.findByText("Files: the ingest root");
+    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "s3" } });
+    expect(screen.queryByLabelText(/secret|key|password|token/i)).toBeNull();
+    expect(document.getElementById(screen.getByLabelText("Region").getAttribute("aria-describedby")!)?.textContent).toBe(
+      CLOUD_ROLE_TIP,
+    );
+    type("Connection name", "Client exports (synthetic)");
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Prison records" }));
+    type("Bucket", "client.exports");
+    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/with no dot/);
+    expect(posts).toEqual([]);
+    type("Bucket", "synthetic-exports");
+    type("Folder sources may read under (empty for the whole bucket)", "client-a/");
+    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]!.body).toEqual({
+      kind: "s3", name: "Client exports (synthetic)", datasets: ["ds-a"],
+      settings: { kind: "s3", region: "eu-west-2", bucket: "synthetic-exports", prefix: "client-a/" },
+    }); // prettier-ignore
+
+    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "athena" } });
+    expect(screen.queryByLabelText(/secret|key|password|token/i)).toBeNull();
+    type("Connection name", "Client Athena (synthetic)");
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Prison records" }));
+    type("Databases a source may read (comma-separated)", "visits, calls");
+    // The catalog (09 §2; the orchestrator's review of L1.9, round 1, item 8): Athena's own by default,
+    // a client's own when named, and a name Athena would not take refused before it is sent.
+    expect((screen.getByLabelText("Catalog") as HTMLInputElement).value).toBe("AwsDataCatalog");
+    type("Catalog", "client catalog");
+    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/catalog's name/);
+    expect(posts).toHaveLength(1);
+    type("Catalog", "client_catalog");
+    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
+    await waitFor(() => expect(posts).toHaveLength(2));
+    expect(posts[1]!.body).toEqual({
+      kind: "athena", name: "Client Athena (synthetic)", datasets: ["ds-a"],
+      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", catalog: "client_catalog",
+                  databases: ["visits", "calls"] },
+    }); // prettier-ignore
   });
 
   it("lists what a connection reads, its secret's name, its datasets by name, and tests it", async () => {

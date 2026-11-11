@@ -560,6 +560,50 @@ test("a SQL and a JSON connection are named with their fields by keyboard", asyn
   registerCovered(REGISTRY, "name-a-json-connection-by-keyboard");
 });
 
+// L1.9 (ADR-148; rule 13): an Amazon S3 bucket and Amazon Athena named with their fields by keyboard,
+// the cloud role's words read with the region, and no field a key or a secret could be typed into.
+test("an S3 and an Athena connection are named with their fields by keyboard", async ({ page }) => {
+  await serve(page);
+  const sent = sentTo(page, "POST", "/v1/admin/connections");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Connections");
+  const type = async (name: string, text: string, clear = false) => {
+    await page.getByRole("textbox", { name, exact: true }).focus();
+    if (clear) await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type(text);
+  };
+  await page.getByLabel("Kind").selectOption("s3");
+  await expect(page.getByRole("textbox", { name: /secret|key|password|token/i })).toHaveCount(0);
+  await type("Connection name", "Client exports (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("textbox", { name: "Region", exact: true })).toHaveAccessibleDescription(/never with a key/);
+  await type("Bucket", "synthetic-exports");
+  await type("Folder sources may read under (empty for the whole bucket)", "client-a/");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Client exports (synthetic).")).toBeVisible();
+  registerCovered(REGISTRY, "name-an-s3-connection-by-keyboard");
+  await page.getByLabel("Kind").selectOption("athena");
+  await expect(page.getByRole("textbox", { name: /secret|key|password|token/i })).toHaveCount(0);
+  await type("Connection name", "Client Athena (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  await type("Databases a source may read (comma-separated)", "visits");
+  // The catalog, by keyboard too (09 §2; the orchestrator's review of L1.9, round 1, item 8).
+  await expect(page.getByRole("textbox", { name: "Catalog", exact: true })).toHaveValue("AwsDataCatalog");
+  await type("Catalog", "client_catalog", true);
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Client Athena (synthetic).")).toBeVisible();
+  expect(sent).toEqual([
+    { kind: "s3", name: "Client exports (synthetic)", datasets: ["enron"],
+      settings: { kind: "s3", region: "eu-west-2", bucket: "synthetic-exports", prefix: "client-a/" } },
+    { kind: "athena", name: "Client Athena (synthetic)", datasets: ["enron"],
+      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", catalog: "client_catalog",
+                  databases: ["visits"] } },
+  ]); // prettier-ignore
+  registerCovered(REGISTRY, "name-an-athena-connection-by-keyboard");
+});
+
 // L2.7 (ADR-145 decision 12, ADR-143 Amendment 6; rule 13): the grading scheme read, and its change
 // command, the dry run's, copied by keyboard; nothing on the page changes the scheme.
 test("the grading scheme is read and its change command copied by keyboard", async ({ page, context }) => {

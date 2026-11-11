@@ -49,6 +49,11 @@ class ConnectorRefused(Exception):
     """A read refused in words; nothing was written. Never names a secret's value."""
 
 
+class ReadOverCap(ConnectorRefused):
+    """A read refused whole because it passed a cap (rows, bytes, pages or objects): rule 2's typed
+    refusal, answered as `read_over_cap`, never a silent cut (L1.9; the lane review)."""
+
+
 @dataclass
 class ReadRows:
     columns: list[str]
@@ -89,7 +94,7 @@ def _at(document: Any, path: str | None, where: str) -> list[Any]:
 def tabulate(records: Sequence[Any], where: str) -> ReadRows:
     """Records (each an object) as rows, their columns in first-seen order."""
     if len(records) > MAX_ROWS:
-        raise ConnectorRefused(
+        raise ReadOverCap(
             f"{where} holds more than {MAX_ROWS} rows, more than one read may hold; nothing was "
             "written (rule 2)"
         )
@@ -113,7 +118,7 @@ def read_json(files: Sequence[tuple[str, bytes]], read: JsonRead) -> ReadRows:
     """The records of each JSON file, in the order given, at the source's records path."""
     records: list[Any] = []
     if sum(len(c) for _n, c in files) > MAX_BYTES:
-        raise ConnectorRefused(
+        raise ReadOverCap(
             f"the JSON files come to more than {MAX_BYTES} bytes, more than one read may take; "
             "nothing was written (rule 2)"
         )
@@ -199,7 +204,7 @@ async def read_api(
             )
             taken += size
             if taken > MAX_BYTES:
-                raise ConnectorRefused(
+                raise ReadOverCap(
                     f"the API's answers came to more than {MAX_BYTES} bytes, more than one read "
                     "may take; nothing was written (rule 2)"
                 )
@@ -226,7 +231,7 @@ async def read_api(
             else:
                 break
         else:
-            raise ConnectorRefused(
+            raise ReadOverCap(
                 f"the API gave more than {MAX_PAGES} pages, more than one read may follow; nothing "
                 "was written (rule 2)"
             )
@@ -331,7 +336,7 @@ async def _get_at(
             async for chunk in response.aiter_bytes():
                 body += chunk
                 if len(body) > room:
-                    raise ConnectorRefused(
+                    raise ReadOverCap(
                         f"the API's answers came to more than {MAX_BYTES} bytes, more than one "
                         "read may take; nothing was written (rule 2)"
                     )
@@ -397,11 +402,11 @@ def write_snapshot(rows: ReadRows, folder: Path, name: str, *, keep_earlier: boo
     for row in rows.rows:
         writer.writerow(["" if row.get(c) is None else row[c] for c in rows.columns])
     if len(buffer.getvalue().encode("utf-8")) > MAX_BYTES:
-        raise ConnectorRefused(
+        raise ReadOverCap(
             f"the source's file would be more than {MAX_BYTES} bytes; nothing was written (rule 2)"
         )
     if len(earlier) + len(rows.rows) > MAX_ROWS:
-        raise ConnectorRefused(
+        raise ReadOverCap(
             f"the source's file would hold more than {MAX_ROWS} rows; nothing was written (rule 2)"
         )
     handle, temporary = tempfile.mkstemp(prefix=".read-", suffix=".tmp", dir=folder)

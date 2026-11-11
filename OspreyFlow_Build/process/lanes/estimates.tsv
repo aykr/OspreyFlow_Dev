@@ -1,10 +1,10 @@
-# as of 2026-11-11T13:05Z
+# as of 2026-11-11T13:15Z
 platform	P7	round 2: every round-1 item fixed; five small must-fixes (two untested check branches, the reds recorded, the uploads claim) on the Mac now, then gates; merges without you (Am 8)	11 Nov, ~17:00	B
 admin	P10	round 2: every code item fixed; gates at 5ef24c6 running on the server (the orchestrator); access step, listed for you after	11 Nov, ~16:00	B
 case	P9	cut: encrypted S3 backup, one timed restore; briefed when P7 merges (a fresh session)	12 Nov	B
 platform-b	P11	round 2: every round-1 item fixed; rebase onto P7 once it merges, the JWT-shaped key check, then gates; credential step, listed for you	12 Nov, morning	B
 case-b	P12	round 2: code fixed; the leased live run against the real gateway (its blocker) and the scoped key's admin refusals, on the Mac now; credential step	11 Nov, evening	B
-studio-b	L1.9	part 1 passed both rounds; merge prepared (c6135b6), its gates on the merged tree running; part 2 after P7	part 1 11 Nov, ~14:30	B
+studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P7b	shape: poc and both runbooks; its kind run is the install's acceptance; from P7's merge	12–13 Nov	B
 docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands	13 Nov	B

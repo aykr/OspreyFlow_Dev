@@ -938,6 +938,16 @@ jobs:
         with: { node-version: "22" }
       - run: uv sync
       - run: npm ci
+      # L1.9 (ADR-148; rule 15): the S3 connector's stand-in, SeaweedFS at the build's own pinned image,
+      # with the synthetic identities its live test reads as (`test_s3_connector_live.py`, which this
+      # job collects and which skips without `OSPREY_S3_STANDIN`). Not a `services:` entry: a service
+      # container takes no command, and this one needs its identities file.
+      - run: >-
+          docker run -d --name s3-standin -p 127.0.0.1:58333:8333
+          -v ${{ github.workspace }}/OspreyFlow_Build/tests/connectors/golden/seaweedfs_s3.json:/etc/seaweedfs/s3.json:ro
+          chrislusf/seaweedfs:4.48 server -s3 -dir=/data -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+          -volume.max=10 -master.volumeSizeLimitMB=64 -master.volumePreallocate=false
+          && (for i in $(seq 1 30); do curl -fs http://127.0.0.1:58333/healthz && exit 0; sleep 2; done; exit 1)
       # Everything the `conformance`/`conformance-model` jobs above already cover against a live
       # store or a live model runs here instead against nothing — every other test runs here.
       # **What is actually still excluded, current as of the reconciliation below, not the
@@ -956,7 +966,9 @@ jobs:
       # combination neither this job nor `conformance`/`conformance-model` individually provides.
       # See `conformance-model`'s own comment above for the outcome of extending that job to cover
       # it (attempted the same session).
-      - run: >-
+      - env:
+          OSPREY_S3_STANDIN: 127.0.0.1:58333
+        run: >-
           uv run pytest -c ../OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/test_worker_isolation_live.py
           --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py
           --ignore=../OspreyFlow_Build/tests/test_media_blob.py
