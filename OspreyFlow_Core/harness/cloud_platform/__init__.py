@@ -558,10 +558,27 @@ def egress_policy(
         "dnsNamespace": platform.egress.dns_namespace,
         "managedNets": list(platform.egress.managed_nets),
         "managedPorts": _managed_ports(config, profile),
-        "hosts": [{"host": host, "nets": list(given[host]), "ports": ports[host]}
-                  for host in hosts],  # fmt: skip
+        "hosts": [
+            {"host": host, "nets": list(given[host]), "ports": ports[host]} for host in hosts
+        ],  # fmt: skip
         "workloads": _egress_by_workload(by_kind, profile, rows),
     }
+
+
+def _bare_connector_hosts_note(config: OspreyConfig) -> str:
+    """The render's warning, in words, at the head of `values.yaml` on either shape (the poc's
+    INSTALL.md says it too): a connector host named without a port is reached on 443 alone."""
+    import textwrap
+
+    bare = [e for e in _cp(config).connector_hosts if ":" not in e]
+    if not bare:
+        return ""
+    words = (
+        f"Connector hosts reached on 443 only: {', '.join(bare)}, named in "
+        "cloud_platform.connector_hosts without a port. A SQL connection to one times out until "
+        f"its port is named there ({bare[0]}:5432) and the deployment is rendered again."
+    )
+    return "".join(f"# {line}\n" for line in textwrap.wrap(words, 96))
 
 
 def _managed_ports(config: OspreyConfig, profile: ProfileSettings) -> list[int]:
@@ -1025,6 +1042,7 @@ def render_cloud_platform(
     }
     artefacts = {
         "values.yaml": _BANNER
+        + _bare_connector_hosts_note(config)
         + yaml.safe_dump(out, sort_keys=False, default_flow_style=False, width=4096),
         "versions.lock": _without(
             rendered["versions.lock"], {"clickhouse-keeper"} if poc else set()

@@ -223,3 +223,65 @@ def test_the_managed_stores_are_reached_on_their_own_ports() -> None:
 def test_a_connector_host_s_port_that_is_not_a_port_is_refused(entry: str) -> None:
     with pytest.raises(ValueError, match="host:port with a port from 1 to 65535"):
         _with(connector_hosts=[entry], nets={"db.example.org": "198.18.5.0/24"})
+
+
+def test_an_engine_s_own_port_and_a_map_source_s_scheme_are_their_hosts_ports() -> None:
+    """The final review's second pass, item 3: an address's own port (an engine at
+    `https://…:8443`), and its scheme's when it names none (a proxied `http://` map source, 80)."""
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw["models"] = {"local_only": False, "providers": [
+        {"name": "azure", "roles": {"extraction": "gpt-4o-mini"},
+         "api_base": "https://llm.example.org:8443/openai"}]}  # fmt: skip
+    tiles = {**raw["map"]["providers"][0], "id": "tiles-http", "kind": "raster",
+             "source": "http://tiles.example.org/{z}/{x}/{y}.png", "proxy": "required",
+             "style": None}  # fmt: skip
+    raw["map"]["providers"].append({k: v for k, v in tiles.items() if v is not None})
+    nets = raw["cloud_platform"]["egress_nets"]
+    nets["llm.example.org"] = ["198.18.7.0/24"]
+    nets["tiles.example.org"] = ["198.18.8.0/24"]
+    hosts = _hosts(OspreyConfig.model_validate(raw))
+    assert hosts["llm.example.org"] == [8443]
+    assert hosts["tiles.example.org"] == [80]
+
+
+@pytest.mark.parametrize("entry", ["[2001:db8::1]:5432", "2001:db8::1", "[2001:db8::1]"])
+def test_a_connector_host_given_as_an_ipv6_literal_is_refused_in_its_own_words(entry: str) -> None:
+    with pytest.raises(ValueError, match="an IPv6 address is not taken; name the host by its name"):
+        _with(connector_hosts=[entry])
+
+
+def test_install_md_warns_of_each_bare_connector_host() -> None:
+    """A connector host named without a port is reached on 443 alone: the render says so, in
+    words, for each, at the head of `values.yaml` (and in the poc shape's INSTALL.md); a host with
+    its port is not named there."""
+    config = _with(
+        connector_hosts=["api.example.org", "db.example.org:5432"],
+        nets={"api.example.org": "198.18.6.0/24", "db.example.org": "198.18.5.0/24"},
+    )
+    values = render(config, resolver=_resolver).artefacts["values.yaml"]
+    head = values[: values.index("secrets:")]
+    assert "# Connector hosts reached on 443 only: api.example.org, named in" in head
+    assert "db.example.org" not in head
+    assert (
+        "Connector hosts reached on 443 only"
+        not in render(_with(), resolver=_resolver).artefacts["values.yaml"]
+    )
+    # The poc shape's INSTALL.md says it too.
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["connector_hosts"] = ["api.example.org"]
+    raw["cloud_platform"]["egress_nets"]["api.example.org"] = ["198.18.6.0/24"]
+    install = render(OspreyConfig.model_validate(raw), resolver=_resolver).artefacts["INSTALL.md"]
+    assert "**Connector hosts reached on 443 only.** `api.example.org` is named in" in install
+
+
+@pytest.mark.parametrize("name", ["development", "production", "poc", "production-bedrock"])
+def test_the_ceiling_is_in_no_key_of_our_secret(name: str) -> None:
+    """The final review's second pass, item 7: OSPREY_HIGHEST_MARKING is the ConfigMap's alone,
+    in no key of our Secret (its keys, its defaults or its copies), so the Secret, read whole by
+    the Conduit and the workers, cannot say otherwise."""
+    values = _values(name)
+    assert values["environment"]["OSPREY_HIGHEST_MARKING"] == "OFFICIAL-SENSITIVE"
+    secrets = values["secrets"]
+    assert "OSPREY_HIGHEST_MARKING" not in secrets["keys"]
+    assert "OSPREY_HIGHEST_MARKING" not in secrets.get("defaults", {})
+    assert "OSPREY_HIGHEST_MARKING" not in secrets.get("copies", {})

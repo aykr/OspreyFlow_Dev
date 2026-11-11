@@ -56,6 +56,22 @@ test "$(kubectl config view --minify -o jsonpath='{{..namespace}}')" = "$NS" \\
 """
 
 
+def _bare_connector_hosts(entries: list[str]) -> str:
+    """The render's warning, in words, for each connector host named without a port (ADR-148
+    Amendment 5 point 21): it is reached on 443 alone."""
+    bare = [e for e in entries if ":" not in e]
+    if not bare:
+        return ""
+    named = ", ".join(f"`{e}`" for e in bare)
+    verb, them = ("is", "it") if len(bare) == 1 else ("are", "them")
+    return f"""
+**Connector hosts reached on 443 only.** {named} {verb} named in `cloud_platform.connector_hosts`
+without a port, so the namespace reaches {them} on 443 alone. An API connection over HTTPS needs
+nothing more; a SQL connection to one times out until its port is named there (`{bare[0]}:5432`)
+and the deployment is rendered again.
+"""
+
+
 def render_install(config: OspreyConfig, platform: PlatformSettings, values: dict[str, Any]) -> str:
     cp = config.cloud_platform
     assert cp is not None and cp.namespace is not None and cp.registry is not None
@@ -82,7 +98,7 @@ own install of it), and the deployment's `osprey.yaml` (or `CONFIG` naming it). 
 pointed at the namespace, `helm` 3.16 or later, Docker with `buildx`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder. If a command fails, stop there: put right what it says, then run its block again.
-
+{_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 
 {_settings(config, platform)}
