@@ -447,6 +447,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       gateway route (lease b, 18:01:21Z), the 0.5B failing 3 of 3 as the control. So P12 part 2's exit holds on the
       product's own extraction model, which eases the preset question above; the client's own engine is proven at their
       install (20 November), recorded as P12's last open item.
+    - **P9 rulings from my round 2 (about 19:00), yours to overrule:** ClickHouse is never dropped before its restore
+      is proven (restored beside the live database, then swapped); the agreed retention is the total (current versions
+      expire at it, an overwritten version is kept 7 days for recovery, not a second retention); the restore refuses
+      the production shape until P9b. P9 slips to 13 November morning, so P7b lands either before Friday's quiet
+      window (12:00 UK) or on 14 November.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
