@@ -1,0 +1,88 @@
+# The heartbeat's two groups for each progress.tsv row (the owner, 11 November 2026): lane, step, feature, deployment.
+# Tab-separated. Every progress.tsv row has exactly one feature and one deployment; Housekeeping in both for neither.
+# Feature: Ingest Studio | Four places, the Glass and Admin | Cases and drawing boards | Rules and alerting | Models and maps | Laurium | Housekeeping
+# Deployment: Local-lite | Small | Client install | After the client's install | Housekeeping
+studio	L1.1	Housekeeping	Housekeeping
+studio	L1.2	Ingest Studio	Small
+studio	L1.2a	Ingest Studio	Small
+studio	L1.2c	Ingest Studio	Small
+studio	L1.2d	Ingest Studio	Small
+studio	L1.2b	Ingest Studio	Small
+studio	L1.3	Ingest Studio	Small
+studio	L1.4	Ingest Studio	Small
+studio	L1.5	Ingest Studio	Small
+studio-b	L1.6	Ingest Studio	Small
+studio	L1.7	Ingest Studio	Small
+studio-b	L1.8	Ingest Studio	Small
+studio-b	L1.9	Ingest Studio	Client install
+studio-b	L1.10	Ingest Studio	Client install
+glass	L2.1	Rules and alerting	Small
+glass	L2.2	Four places, the Glass and Admin	Small
+glass	L2.3	Four places, the Glass and Admin	Small
+glass	L2.4	Four places, the Glass and Admin	Small
+admin	L2.4p2	Four places, the Glass and Admin	Small
+admin	L2.5	Four places, the Glass and Admin	Small
+admin	L2.5b	Four places, the Glass and Admin	Small
+admin	L2.6	Four places, the Glass and Admin	Small
+admin	L2.7	Four places, the Glass and Admin	Small
+glass	L2.8	Rules and alerting	Small
+glass	L2.8b	Rules and alerting	Small
+rules	L2.8c	Rules and alerting	Small
+rules	L2.8d	Rules and alerting	Small
+rules	L2.9	Rules and alerting	Small
+rules	L2.10	Rules and alerting	Small
+rules	L2.11	Rules and alerting	Small
+rules-b	L2.12	Rules and alerting	Small
+case	L3.1	Cases and drawing boards	Small
+case	L3.1b	Cases and drawing boards	Small
+case	L3.2	Cases and drawing boards	Small
+case	L3.2b	Cases and drawing boards	Small
+case	L3.3	Cases and drawing boards	Small
+case	L3.4	Cases and drawing boards	Small
+case-b	L3.5	Cases and drawing boards	Small
+case	L3.6	Rules and alerting	Small
+case-b	L3.7	Cases and drawing boards	Small
+case-b	L3.8	Four places, the Glass and Admin	Small
+case	L3.9	Cases and drawing boards	Small
+platform	P1	Models and maps	Small
+platform	P2	Models and maps	Small
+platform	P3	Models and maps	Small
+platform	P4	Models and maps	Small
+platform	P5	Models and maps	Small
+platform	P7	Housekeeping	Client install
+platform	P8	Housekeeping	After the client's install
+case	P9	Housekeeping	Client install
+admin	P10	Four places, the Glass and Admin	Client install
+platform-b	P11	Models and maps	Client install
+case-b	P12	Laurium	Client install
+platform-b	P6	Models and maps	Small
+docs	D1	Housekeeping	Housekeeping
+docs	D2a	Housekeeping	Housekeeping
+docs	D2c	Housekeeping	Client install
+platform-b	P5b	Housekeeping	Small
+studio-b	L1.7a	Ingest Studio	Small
+admin	L2.5c	Four places, the Glass and Admin	Small
+rules-b	L2.11a	Rules and alerting	Small
+admin	T1	Housekeeping	Housekeeping
+platform-b	preflight	Housekeeping	Local-lite
+platform-b	ADR-147 Am 3	Models and maps	Small
+docs	P5b rows	Housekeeping	Small
+studio-b	tips	Ingest Studio	Small
+case	L3.H1	Cases and drawing boards	Small
+platform-b	P5b proof	Housekeeping	Small
+case	L3.H2	Cases and drawing boards	Client install
+studio-b	L1.10b	Ingest Studio	Client install
+platform-b	T2	Housekeeping	Housekeeping
+rules-b	T3	Housekeeping	Housekeeping
+rules	UPG	Housekeeping	Small
+platform-b	UPG-fix	Housekeeping	Small
+rules	UPG-check	Housekeeping	Small
+rules	hyg	Rules and alerting	Small
+rules	lists	Rules and alerting	Small
+rules-b	T3b	Housekeeping	Housekeeping
+platform-b	carries	Housekeeping	Small
+studio	carries	Ingest Studio	Small
+docs	D2d	Housekeeping	Housekeeping
+platform	P7a	Housekeeping	After the client's install
+platform	P7b	Housekeeping	Client install
+platform	P9b	Housekeeping	After the client's install

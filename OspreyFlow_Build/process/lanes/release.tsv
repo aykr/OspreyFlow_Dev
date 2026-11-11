@@ -1,0 +1,7 @@
+# The heartbeat's Release section, kept by the orchestrator: key, value (tab-separated).
+last	v0.5.0
+published	2026-11-11 06:35 UTC
+cut	4b8de6c
+repository	aykr/OspreyFlow
+next	v0.5.1: the client-install chain merged (P9, P10, P11, P12, L1.9, P7b, D2c), then a rehearsed upgrade from v0.5.0
+chain	14 Nov
