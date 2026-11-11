@@ -12,7 +12,8 @@ outcome it must have, read off pytest's own summary line for that case:
 2. the stand-in answering a conforming finding: **FAILED**, as a strict XPASS;
 3. a gateway refusal planted at the adapter's call site (its token one the gateway does not hold,
    answered 401): **FAILED**, not XFAIL;
-4. the same plant under the round-2 mark (`raises=ExtractionFailedError`), restored for the run: **XFAIL**,
+4. the same plant under round 2's mark (`raises=ExtractionFailedError`) and its plain call, restored
+   for the run: **XFAIL**,
    which is the hole the round-3 mark closes.
 
 Each plant is put back after its run, and no bytecode is written while one is in.
@@ -42,6 +43,19 @@ UNKNOWN_TOKEN = (
     '            token = "sk-planted-not-held-by-the-gateway"\n',
 )
 OLD_MARK = ("    raises=LauriumCouldNotRead,\n", "    raises=ExtractionFailedError,\n")
+#: Round 2's call, as it was: no reading of the refusal's words (found running this: restoring the
+#: mark alone left round 3's except clause turning the 401 into an AssertionError, so run 4 proved
+#: nothing about round 2's mark).
+ROUND_2_CALL = (
+    """        try:
+            result = await adapter.extract(req)
+        except ExtractionFailedError as exc:
+            if factory.label == "extract_laurium" and UNPARSEABLE in str(exc):
+                raise LauriumCouldNotRead(str(exc)) from exc
+            raise AssertionError(f"extract failed for another reason: {exc}") from exc
+""",
+    "        result = await adapter.extract(req)\n",
+)
 
 
 def run(answer: str) -> str:
@@ -87,7 +101,7 @@ def main() -> int:
         ("3. a gateway refusal (401) planted at the adapter", "FAILED",
          planted([(ADAPTER, UNKNOWN_TOKEN)], conforming)),
         ("4. the same refusal under round 2's mark", "XFAIL",
-         planted([(ADAPTER, UNKNOWN_TOKEN), (SUITE, OLD_MARK)], conforming)),
+         planted([(ADAPTER, UNKNOWN_TOKEN), (SUITE, OLD_MARK), (SUITE, ROUND_2_CALL)], conforming)),
     ]  # fmt: skip
     bad = 0
     for name, want, got in results:
