@@ -245,7 +245,7 @@ without waiting for P7. Each part 2 wires it into the profile after P7 merges.
 
 | Step | Part 1 (now, on the test server) | Part 2 (after P7) |
 | --- | --- | --- |
-| P12, case-b | Laurium's service and the thin adapter, on local-lite through the gateway's stand-in: the conformance suite on both adapters, findings inferred, another host refused, no langchain without the extra | The service in the profile, its egress line, the pack's preset; the extraction-engine setting in Admin › Models after P11 part 1 |
+| P12, case-b | Laurium's service and the thin adapter, on local-lite through the gateway's stand-in: the conformance suite on both adapters, findings inferred, another host refused, no langchain without the extra | The service in the profile, its egress line, the pack's preset; the extraction-engine setting in Admin › Models after P11 part 1; **exit (11 Nov, the orchestrator's ruling): a leased live case of Laurium reading a conforming answer from the client's own engine (the gateway or Bedrock route P11 part 2 renders), since Laurium could not read the pinned 0.5B model's answer** |
 | L1.9, studio-b | S3 and Athena against SeaweedFS and a recorded fixture: golden files, another dataset's source refused, the byte cap, keyboard and axe | The namespace's IAM role, the egress allow list |
 | P11, platform-b | The two engine kinds in Admin › Models (the client's gateway; Bedrock by IAM role, no stored key), with the access and key tests on recorded fixtures; ahead of its carries | The gateway rendered by default; the model host allowed only while an engine is enabled |
 
