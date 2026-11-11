@@ -105,6 +105,30 @@ def laurium_service(gateway: StandInGateway, *, base: str = BASE) -> Iterator[Ru
         yield Running(httpx.ASGITransport(app=app.app), refused, paths)
 
 
+async def _holds_lauriums_key(gateway: httpx.AsyncClient, master: str) -> bool:
+    """Whether the gateway holds Laurium's key, by its SHA-256 in `/key/list` (every page); an
+    answer that cannot be read counts as held, so nothing is written to a gateway that would not
+    say."""
+    import hashlib
+
+    wanted = hashlib.sha256(laurium_key(master).encode()).hexdigest()
+    page, pages = 1, 1
+    while page <= pages:
+        resp = await gateway.get(
+            "/key/list",
+            params={"return_full_object": "true", "page": page, "size": 100},
+            headers={"Authorization": f"Bearer {master}"},
+        )
+        if resp.status_code != 200:
+            return True
+        body = resp.json()
+        pages = int(body.get("total_pages") or 1)
+        if any(str(dict(k).get("token")) == wanted for k in body.get("keys") or []):
+            return True
+        page += 1
+    return False
+
+
 @asynccontextmanager
 async def laurium_live_adapter(model: str) -> AsyncIterator[ExtractLauriumAdapter]:
     """The Laurium adapter over the real service in-process, every call to the stack's real LiteLLM
@@ -120,15 +144,12 @@ async def laurium_live_adapter(model: str) -> AsyncIterator[ExtractLauriumAdapte
 
     config = LiteLLMConfig.from_env()
     async with httpx.AsyncClient(base_url=config.base_url, timeout=30) as gateway:
-        held = await gateway.get(
-            "/key/info",
-            params={"key": laurium_key(config.api_key)},
-            headers={"Authorization": f"Bearer {config.api_key}"},
-        )
-        if held.status_code != 404:
+        # Looked for by its hash in the gateway's list, never by the key in an address (httpx logs
+        # every address; the reviewer's item 4).
+        if await _holds_lauriums_key(gateway, config.api_key):
             raise AssertionError(
                 "This gateway already holds Laurium's key (or would not say): it is a "
-                f"deployment's, not a test gateway (HTTP {held.status_code}). Nothing was written."
+                "deployment's, not a test gateway. Nothing was written."
             )
         await put_laurium_key(gateway, config.api_key, [model])
         try:
