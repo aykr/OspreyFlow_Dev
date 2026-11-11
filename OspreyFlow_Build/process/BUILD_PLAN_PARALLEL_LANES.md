@@ -223,7 +223,7 @@ environment in one go, Laurium included; the client's environment is due on 20 N
 
 | Lane | Step | Notes |
 | --- | --- | --- |
-| admin | P10 | Entra ID claims (`packages/principal_auth/`, the profile's claim settings); an access step, two rounds; after T1 part 5 |
+| admin | P10 | Entra ID claims (`packages/principal_auth/`, the profile's claim settings); an access step, two rounds; its first part (the mapping and access tests, which need no P7) from 11 November 07:08 on the test server, ahead of T1 part 5 (the owner's swap); the profile wiring after P7 merges |
 | platform | P9, then P7a, then P7b | P9 cut to backup and one timed restore (P9b later); P7b the `shape: poc` profile (ADR-148 Am 5) |
 | platform-b | P11 | The model route, after its carries |
 | case-b | P12 | Laurium as its own Python 3.13 service (BRIEF_P12, p12/LICENCE_CHECK.md) |

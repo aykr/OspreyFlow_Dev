@@ -258,7 +258,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       admin, platform-b and case-b.
     - **P7** restarts on the test server at 07:08.
     - **The rest** (P10, P9, P11, P12, L1.9, D2c) are briefed when P7 merges this afternoon.
-    - **Estimate:** the whole client chain merged around 15 November, and D2c complete by 16 November.
+    - **Estimate:** the whole client chain merged around 14 November, and D2c complete by 15 November. This is
+      after your swap (about 06:25): admin's server session builds P10's mapping and its access tests now, ahead
+      of T1 part 5, which slips about a day.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
