@@ -13,6 +13,7 @@ import {
   ratioOf,
   readFindings,
   shadowCoverage,
+  shadowCoverageRange,
   type Layer,
   type Rgba,
   type Sample,
@@ -421,6 +422,41 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
     const many = judge(sample({ shadows: [Array.from({ length: 6 }, () => at("rgba(0, 0, 0, 0.1)", [-10, -10, 10, 10], 0))] }));
     expect(many.ratio).toBeNull();
     expect(many.why).toBe("not measurable: more than 5 shadows at one point");
+  });
+});
+
+describe("a shadow's alpha bracketed (the orchestrator's review of 9697ad3, minor 1)", () => {
+  // Chromium's blur paints a little over the Gaussian of half the blur and a little under it, so a
+  // shadow's alpha at a point is known only between a least and a most. Contrast is monotone in it
+  // only until what lies under the words passes the words' own lightness: a single "most" can step
+  // over that 1:1 crossing, so both ends are measured and a swap between them is 1:1.
+  const at = (edges: [number, number, number, number], blur: number, x: number, y: number, radius = 0) =>
+    ({ colour: "rgba(0, 0, 0, 1)", edges, blur, radius, x, y });
+
+  it("fails 1:1 where the words and the shadowed page swap lightness inside the bracket", () => {
+    // On a long blurred edge the most is 0.515 (Φ(0) and the 0.015 margin); the least is at most 0.5.
+    // Grey words at the page's shade for 0.5075, between them: lighter than the page at one end,
+    // darker at the other, and equal somewhere between. Measured at the most alone it read 1.02:1.
+    const grey = 255 * (1 - 0.5075);
+    const crossing = judge(
+      sample({
+        color: `rgb(${grey}, ${grey}, ${grey})`,
+        shadows: [[at([0, -1000, 1000, 1000], 24, 0, 0)]],
+      }),
+    );
+    expect(crossing.ratio).toBe(1);
+  });
+
+  it("takes the least as nothing near a rounded corner, and the Gaussian less the measured shortfall elsewhere", () => {
+    const [cornerLow, cornerHigh] = shadowCoverageRange(at([0, 0, 100, 100], 8, -2, -2, 16));
+    expect(cornerLow).toBe(0);
+    expect(cornerHigh).toBeGreaterThan(0);
+    const [squareLow, squareHigh] = shadowCoverageRange(at([0, 0, 100, 100], 8, -2, -2));
+    expect(squareLow).toBeGreaterThan(0);
+    expect(squareHigh).toBe(cornerHigh);
+    // Mid-edge of a rounded shape is no corner: the bracket is the straight edge's.
+    expect(shadowCoverageRange(at([0, -1000, 1000, 1000], 24, 0, 0, 16))[0]).toBeGreaterThan(0);
+    expect(shadowCoverageRange(at([0, -1000, 1000, 1000], 24, -40, 0))).toEqual([0, 0]);
   });
 });
 

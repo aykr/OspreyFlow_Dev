@@ -33,8 +33,7 @@ export interface ShadowAt {
   colour: string;
   edges: [number, number, number, number];
   blur: number;
-  /** The shadowed element's largest corner radius grown by the spread (0 for square corners); read,
-   * not yet used (T3b's rounded-corner bracket, in hand). */
+  /** The shadowed element's largest corner radius grown by the spread (0 for square corners). */
   radius?: number;
   x: number;
   y: number;
@@ -269,13 +268,14 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
   for (let p = 0; p < points; p += 1) {
     if (sample.hidden?.[p]) continue;
     shown += 1;
-    // Each shadow at the point, as the colour it lays there (its alpha times its coverage).
-    const cast: Rgba[] = [];
+    // Each shadow at the point, as the colour it lays there between the least and the most Chromium
+    // may paint (its alpha times its coverage, `shadowCoverageRange`).
+    const cast: { rgb: [number, number, number]; alphas: [number, number] }[] = [];
     for (const shadow of sample.shadows?.[p] ?? []) {
       const colour = parseColour(shadow.colour);
       if (!colour) return `an unread shadow colour ${shadow.colour}`;
-      const alpha = colour[3] * shadowCoverage(shadow);
-      if (alpha > 0) cast.push([colour[0], colour[1], colour[2], alpha]);
+      const [low, high] = shadowCoverageRange(shadow);
+      if (high > 0) cast.push({ rgb: [colour[0], colour[1], colour[2]], alphas: [colour[3] * low, colour[3] * high] });
     }
     if (cast.length > MAX_SHADOWS) return `more than ${MAX_SHADOWS} shadows at one point`;
     // Where each lies is not read, so each is laid in turn at every place it could be: away (none),
@@ -294,16 +294,28 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
     const indices = [0, ...sample.chain.map((_, i) => i + 1).filter((j) => !bare(j - 1))];
     const places = indices.length + 2;
     if (places ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
+    // Each placement is measured at each shadow's least and most paint. Between them every colour
+    // moves one way, so the words' figure there is the worse end's, unless the words and what lies
+    // under them change places in lightness on the way: then somewhere between they are equal, 1:1.
+    if (places ** cast.length * 2 ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
     for (let combination = 0; combination < places ** cast.length; combination += 1) {
       const place = cast.map((_, i) => Math.floor(combination / places ** i) % places);
-      const laid = new Map<number, Rgba[]>();
-      cast.forEach((shadow, i) => {
-        const at = indices[(place[i] ?? 0) - 2];
-        if (at !== undefined) laid.set(at, [...(laid.get(at) ?? []), shadow]);
-      });
-      const measured = atPoint(sample, fg, page, p, laid, cast.filter((_, i) => place[i] === 1));
-      if (typeof measured === "string") return measured;
-      worst = Math.min(worst, measured);
+      const signs = new Map<number, Set<number>>();
+      for (let ends = 0; ends < 2 ** cast.length; ends += 1) {
+        const tinted = cast.map(({ rgb, alphas }, i): Rgba => [...rgb, alphas[Math.floor(ends / 2 ** i) % 2] as number]);
+        const laid = new Map<number, Rgba[]>();
+        tinted.forEach((shadow, i) => {
+          const at = indices[(place[i] ?? 0) - 2];
+          if (at !== undefined) laid.set(at, [...(laid.get(at) ?? []), shadow]);
+        });
+        const measured = atPoint(sample, fg, page, p, laid, tinted.filter((_, i) => place[i] === 1));
+        if (typeof measured === "string") return measured;
+        measured.forEach(([ratio, sign], k) => {
+          worst = Math.min(worst, ratio);
+          signs.set(k, (signs.get(k) ?? new Set()).add(sign));
+        });
+      }
+      if ([...signs.values()].some((seen) => seen.has(1) && seen.has(-1))) worst = Math.min(worst, 1);
     }
   }
   if (shown === 0) return null;
@@ -328,7 +340,8 @@ function normalCdf(z: number): number {
  * The share of a shadow's colour painted at its point, 0 to 1. CSS Backgrounds 3 blurs the shadow's
  * shape by a Gaussian whose standard deviation is half the blur radius; over a rectangle that is the
  * product of one CDF difference per axis, with `shadowMargin` laid on for what Chromium paints past it.
- * The shape's rounded corners are taken square, which can only overstate the paint near a corner.
+ * The shape's rounded corners are taken square, which overstates the paint near a corner; the least
+ * there is taken as nothing (`shadowCoverageRange`).
  */
 export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }: ShadowAt): number {
   if (!(blur > 0)) return x >= left && x <= right && y >= top && y <= bottom ? 1 : 0;
@@ -340,6 +353,29 @@ export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }
   const past = Math.max(left - x, x - right, top - y, y - bottom, 0) / sigma;
   return Math.min(1, Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom)) + shadowMargin(past));
 }
+
+/**
+ * The least and the most of a shadow's colour Chromium may paint at its point: the Gaussian less
+ * `SHADOW_SHORT`, and `shadowCoverage`. Near a rounded corner of the shape, which the Gaussian takes
+ * square, the least is nothing.
+ */
+export function shadowCoverageRange(shadow: ShadowAt): [number, number] {
+  const high = shadowCoverage(shadow);
+  if (high === 0) return [0, 0];
+  const { edges: [left, top, right, bottom], x, y } = shadow;
+  const r = (shadow.radius ?? 0) + 1.5 * shadow.blur;
+  const nearCorner = (shadow.radius ?? 0) > 0 && (x < left + r || x > right - r) && (y < top + r || y > bottom - r);
+  if (nearCorner || !(shadow.blur > 0)) return [nearCorner ? 0 : high, high];
+  return [Math.max(0, high - shadowMargin(Math.max(left - x, x - right, top - y, y - bottom, 0) / (shadow.blur / 2)) - SHADOW_SHORT), high];
+}
+
+/**
+ * The most Chromium's blur paints under the Gaussian of half the blur, away from a rounded corner:
+ * measured on the test server (slot 13, run 20261111T151731Z, `a11y/plants/shadow-paint.plant.ts`) at
+ * 0.0148 of the colour at most (a straight edge, blur 40, within σ inside the shape's edge; 0.0139 at
+ * blur 24, 0.0128 offset, 0.0120 beside a rounded corner's reach), with an 8-bit step's rounding on top.
+ */
+const SHADOW_SHORT = 0.0175;
 
 /**
  * Laid on a blurred shadow's coverage `past` standard deviations beyond its shape, for what Chromium's
@@ -356,8 +392,8 @@ function shadowMargin(past: number): number {
 /** The text's worst ratio at point `p` on its own surfaces, with each shadow in `laid` at index j laid
  * under the chain's first j elements (straight on the page past the last), and `above` over everything
  * there. */
-function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, laid: Map<number, Rgba[]>, above: Rgba[]): number | string {
-  let worst = Infinity;
+function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, laid: Map<number, Rgba[]>, above: Rgba[]): [number, number][] | string {
+  const out: [number, number][] = [];
   {
     let pairs: [Rgba, Rgba][] = [[fg, [0, 0, 0, 0]]];
     const lay = (surfaces: Rgba[]): string | null => {
@@ -405,10 +441,10 @@ function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, laid: Map<numb
     for (const [ink, bg] of pairs) {
       let [seenInk, seenBg] = [over(ink, page), over(bg, page)];
       for (const shadow of above) [seenInk, seenBg] = [over(shadow, seenInk), over(shadow, seenBg)];
-      worst = Math.min(worst, ratioOf(seenInk, seenBg));
+      out.push([ratioOf(seenInk, seenBg), Math.sign(luminance(seenInk) - luminance(seenBg))]);
     }
   }
-  return worst;
+  return out;
 }
 
 /**
