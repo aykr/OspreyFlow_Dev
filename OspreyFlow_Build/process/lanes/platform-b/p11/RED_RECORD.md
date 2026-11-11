@@ -108,3 +108,18 @@ and 9 label checks over the nine *Models* states, the two new ones at `cloud=1`,
 
 The none-declared case of the static-AWS-key test was dropped on the real profile: P7 renders no gateway without
 an engine, so there is nothing to inspect (the report's finding 6).
+
+## My own lane review of round 2, and the orchestrator's ruling on it (11 November 2026, the Mac, offline)
+
+Output: `red-3-round-2-at-rebase.txt` (the branch alone, with `cloud-platform-P11.diff` applied, and the
+OSPREY_PROFILE plant). Each case below red first, or by a plant at its call site, restored after (`grep -c PLANT` 0).
+
+| Case | Red |
+|---|---|
+| `…tells_the_conduit_its_profile[*]` | with `environment["OSPREY_PROFILE"] = …` planted out of the render: all three (its own reason, at last) |
+| `…bedrock_engine_s_host_is_an_egress_host_by_its_region` | with the host row read by the engine's name: `claude_london` "names no api_base" |
+| `…refused_and_never_echoed[path-hex, label-words-and-token, label-padded-jwt, label-jwe]` | each taken with 200 |
+| `…engines_as_context_frees_only_a_cluster_translation[local-lite, small]` | "DID NOT RAISE": the context freed any profile |
+| `…planted_token_appears_in_no_response_log_audit_file_or_gateway_row` | the five new `PASTED` shapes taken |
+| the render, key and install cases (`_declared`) | moved onto P7's real configuration and its render's environment; green there |
+| four cases needing the gateway's own identity | the stand-in now gives the gateway a role only as the real render does (none): `key_refused`. Strict expected failures named `NO_GATEWAY_IDENTITY`, carried to P11 part 2 |

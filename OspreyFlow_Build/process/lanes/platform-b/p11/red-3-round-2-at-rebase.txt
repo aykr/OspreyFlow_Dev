@@ -1,0 +1,30 @@
+P11 round 2 at the rebase onto main 5a554e3, on the Mac, offline (closed ports 59991-59994, no lane), 2026-11-11T14:12:40Z.
+Command: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfEx ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py (from OspreyFlow_Core)
+
+== 1. the branch alone (p11/cloud-platform-P11.diff not applied): the eight cases that need it
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_render_tells_the_conduit_each_engine_s_kind_and_how_it_signs_in
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_has_no_key_variable_and_is_offered_with_none
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_bedrock_engine_s_host_is_an_egress_host_by_its_region
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_render_tells_the_conduit_its_profile[bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_render_tells_the_conduit_its_profile[bedrock-and-gateway]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_s_held_key_is_blanked_in_every_cloud_platform_workload
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_workload_carries_no_static_aws_key[bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_workload_carries_no_static_aws_key[bedrock-and-gateway]
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_answers_through_the_gateway_pod_s_role_in_london - carried to P11 part 2: the cloud-platform render gives the gate
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_file - carried to P11 part 2: the cloud-platform rende
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_keyed_engine_declared_beside_bedrock_is_made_at_start_and_answers_once_its_key_moves - carried to P11 part 2: the cloud-
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key - carried to P11 part 2: the cloud-platform render giv
+8 failed, 92 passed, 4 xfailed, 1 warning in 15.68s
+
+== 2. with p11/cloud-platform-P11.diff applied (as at merge)
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_answers_through_the_gateway_pod_s_role_in_london - carried to P11 part 2: the cloud-platform render gives the gate
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_file - carried to P11 part 2: the cloud-platform rende
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_keyed_engine_declared_beside_bedrock_is_made_at_start_and_answers_once_its_key_moves - carried to P11 part 2: the cloud-
+XFAIL ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key - carried to P11 part 2: the cloud-platform render giv
+185 passed, 4 xfailed, 1 warning in 25.69s
+
+== 3. with the diff applied and OSPREY_PROFILE's line planted out of _cloud_platform's render
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_render_tells_the_conduit_its_profile[bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_render_tells_the_conduit_its_profile[bedrock-and-gateway]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_render_tells_the_conduit_its_profile[none]
+3 failed, 101 deselected, 1 warning in 2.23s

@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-index 6974d018..a9d28b0a 100644
+index e154904..863eae6 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 +++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-@@ -1742,6 +1742,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -1783,6 +1783,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
  | `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
  | `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
@@ -12,7 +12,7 @@ index 6974d018..a9d28b0a 100644
  | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
  | `models.providers.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
  | `models.providers.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
-@@ -1749,6 +1752,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -1790,6 +1793,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
  | `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
  | `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
@@ -23,10 +23,10 @@ index 6974d018..a9d28b0a 100644
  | `models.extraction` | `qwen2.5:7b-instruct` \| `qwen2.5:14b-instruct` | `qwen2.5:7b-instruct` | The local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with; with resources.gpu: nvidia and this not named, qwen2.5:14b-instruct. |
  | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index f5ad9017..5cb45335 100644
+index 6d262dc..8b623ae 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
-@@ -2003,6 +2003,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -2047,6 +2047,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
  | `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
  | `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
@@ -36,7 +36,7 @@ index f5ad9017..5cb45335 100644
  | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
  | `models.providers.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
  | `models.providers.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
-@@ -2010,6 +2013,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -2054,6 +2057,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
  | `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
  | `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |

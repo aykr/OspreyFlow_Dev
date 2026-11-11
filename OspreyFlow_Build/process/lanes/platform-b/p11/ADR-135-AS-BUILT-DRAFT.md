@@ -1,12 +1,12 @@
 # Draft, for `spec/06_DECISIONS.md` at merge (rule 11): ADR-135 Amendment 7, reserved for platform-b
 
-Written on the test server, 11 November 2026. The number is the orchestrator's reservation (on the owner's main,
-354bbec, which this server does not have). It stays here, in `p11/`, until the branch merges.
+Written on the test server and finished on the Mac after the rebase onto P7 (main 5a554e3), 11 November 2026. The
+number is the orchestrator's reservation (main 354bbec). It stays here, in `p11/`, until the branch merges.
 
 ### ADR-135, Amendment 7 (11 November 2026) — Amendment 4 as built in *Admin › Models* (P11 part 1): on the `cloud-platform` profile alone, the client's own gateway at its address by a token and Bedrock in London by the IAM role and a model's own id, no key stored for an IAM-role engine
 
 Status: as built by the platform-b lane (P11 part 1), after its own lane reviewer's round and the orchestrator's
-review round 1 (11 November), whose rulings decisions 1, 2 and 3 record. Amendment 4 is unchanged except where this
+review rounds 1 and 2 (11 November), whose rulings decisions 1, 2, 3 and 7 record. Amendment 4 is unchanged except where this
 settles it. Decision 2's ruling is recorded **for the owner to overrule**.
 
 1. **Amendment 4's engine kinds and their rules are the `cloud-platform` profile's alone** (the orchestrator's
@@ -20,9 +20,9 @@ settles it. Decision 2's ruling is recorded **for the owner to overrule**.
    (`schemas.deployment.engine_refusal(engine, profile)`), and **every reader of an engine calls it with the
    deployment's profile**: `osprey.yaml` (`OspreyConfig`), the Conduit's start (`Installed.from_env`), the models file
    (`ModelSettingsFile.load`) and each change in *Admin › Models* (`ModelAdmin._validated`). The Conduit reads its
-   profile from `OSPREY_PROFILE`, which the render writes into `deployment.env` for every profile; the
-   `cloud-platform` render (P7) must carry it to the Conduit as the cluster's does, or no engine of the two kinds
-   loads there (it fails closed, refused in words at start). On `cloud-platform`, the rules as before:
+   profile from `OSPREY_PROFILE`, which the render writes into `deployment.env` for every profile, and the
+   `cloud-platform` render (P7) into the Conduit's environment as `cloud-platform` (held by
+   `test_the_cloud_platform_render_tells_the_conduit_its_profile`, red with that line planted out). On `cloud-platform`, the rules as before:
    - `kind` is `provider`, `gateway` (the client's own OpenAI-compatible AI gateway, its `api_base` required, through
      LiteLLM's `openai/` route) or `bedrock` (LiteLLM's `bedrock/` route, no `api_base`); `auth` is `key` (a key, or
      the gateway's token, by Amendment 2's write-only path) or `iam_role`; `region` is Bedrock's alone and only
@@ -55,8 +55,16 @@ settles it. Decision 2's ruling is recorded **for the owner to overrule**.
    shaped like a key (`https://host/v1/<token>`: a key prefix, a JWT, or 24 or more characters mixing upper case,
    lower case and digits; a deployment's lower-case name such as `my-deployment-2024-08-06` is taken) is refused, and
    so is a label shaped like a key (the contract reference already was, on every profile, by ADR-136). **A JWT**
-   (`eyJ….eyJ….…`, the shape most gateways issue tokens in) is a key's shape in the label and the reference, which
-   the unbroken-run check missed for its dots. A key pasted
+   (`eyJ….…`, the shape most gateways issue tokens in, padded, encrypted as a JWE or with its dots percent-encoded)
+   is a key's shape in the label and the reference, which the unbroken-run check missed for its dots; **the
+   reference's check is every profile's** (ADR-136), so a reference holding a JWT is now refused on Lite, Small and
+   cluster too, and a models file holding one fails at the Conduit's start. On `cloud-platform` a label is also
+   checked word by word, so a token among words is refused. A path segment of 24 or more unhyphenated lower-case
+   letters and digits (a hex subscription key) is refused; a deployment's name of 24 or more characters mixing
+   case and digits (`GPT4oMiniProdDeployment2024`) is refused too, a false refusal its operator renames past. **The
+   refusals never quote the value in *Admin › Models***; the set-up console (`harness/webapp.py`'s 422, which returns
+   pydantic's errors with their input) and `str(ValidationError)` on the command line still show it, which is the
+   console's and the command's own (not this step's files), carried. A key pasted
    there would be kept in the models file, the gateway's entries and the audit, and shown in *Admin › Models*. Held to
    `cloud-platform` by decision 1's ruling; **recommended for the owner**: the same refusals on every profile, which
    would change how other profiles take an address (a separate decision).
@@ -99,7 +107,7 @@ settles it. Decision 2's ruling is recorded **for the owner to overrule**.
    every call. How a client's gateway takes the namespace's identity (AWS SigV4, or the pod's web-identity token as a
    bearer) is the client's to say; nothing here guesses.
 7. **No key is stored for an IAM-role engine**, anywhere: its gateway entries name no credential and carry no key of
-   any kind (Bedrock's carry `aws_region_name: eu-west-2` alone; the gateway pod's own identity signs); the models
+   any kind (Bedrock's carry `aws_region_name: eu-west-2` alone); the models
    file holds no key record; its key state is `iam_role` ("IAM role: no key kept"); `PUT` and `DELETE …/key` are
    refused (409) and audited; `ospreyflow models` lists it as keeping none, and `models key`/`remove-key` refuse it
    before any key is read — **also when the Conduit does not answer**, for an engine `osprey.yaml` declares so and
@@ -111,6 +119,15 @@ settles it. Decision 2's ruling is recorded **for the owner to overrule**.
    to the pod's identity, whether Bedrock is declared at install or added later. Declared in `osprey.yaml`, an
    IAM-role engine's gateway entries and its own gateway key are made at the Conduit's start, with no models file,
    with every other declared engine's (a keyed one's name its credential and answer once its key moves in).
+   **Who signs Bedrock's calls is P11 part 2's** (the orchestrator's ruling on round 2, recorded for the owner): the
+   gateway's pod must hold an IAM identity of its own, and **the cloud-platform render gives it none today** (the
+   namespace's IRSA account is the Conduit's, the workers' and the report sync's, and its role grants S3 alone). So
+   **until part 2, a Bedrock engine on `cloud-platform` has no credentials**, and *Test the connection* says so.
+   Part 2 renders, least privilege, only while a Bedrock engine is enabled: a separate gateway service account and
+   IAM role, trusted through the cluster's OIDC provider by that account alone, granting `bedrock:InvokeModel` and
+   `bedrock:InvokeModelWithResponseStream` on `arn:aws:bedrock:eu-west-2::foundation-model/*` and nothing else (no
+   S3, no other region, which IAM then enforces). The stand-in's gateway holds a role only as the real render gives
+   one, so the four cases that need the identity are strict expected failures named for part 2.
 
 **Fixtures (rule 15).** The stand-in gateway's client gateway and Bedrock are **recorded, not measured**: no client
 gateway and no AWS account is reachable from the build. Each refusal is shown by
@@ -128,6 +145,16 @@ test_stand_in_engine_kinds.py`; `tests/cli/test_models_verb_iam_role.py`; `tests
 (main's own, unchanged: a plain provider's line as before); `Models.test.tsx`; `keyboard/admin-models.spec.ts` (two
 cases, rule 13, each asserting the request's body); axe on two new *Models* states in the three themes.
 
+**At the rebase onto P7, on the real profile.** Two render fixes, in P7's `harness/cloud_platform/` (platform's
+files, so sent as `p11/cloud-platform-P11.diff` and applied at merge): the cluster translation is validated with its
+engines held to cloud-platform's rules (`ENGINES_AS` in the validation's context, honoured only for that profile on
+a cluster configuration), and a Bedrock engine's egress host is a row of `profile.yaml` by its kind
+(`engine_kind_hosts: bedrock: bedrock-runtime.{region}.amazonaws.com`, ADR-148 Amendment 1 item 11's "a row, not an
+edit to the render"), allowed by its networks or refused in words. Eight cases on this branch need the diff and pass
+with it. **Carried to P7b:** a cloud-platform render runs the gateway only with an engine enabled at install, so an
+engine first added in *Admin › Models* there has no gateway until the deployment is rendered again with it.
+
 **Cost.** P2's limits are shown applied to each kind's own gateway key, not enforced on a call to either kind. The
 administration guide's settings appendix (generated from the schema) is the docs lane's file: its change is sent as
-`p11/docs-admin-guide-P11.diff`, and `tests/test_admin_guide.py` fails twice on this branch until it is applied.
+`p11/docs-admin-guide-P11.diff` (regenerated against the 1.73 guide), and `tests/test_admin_guide.py` fails twice on
+this branch until it is applied.

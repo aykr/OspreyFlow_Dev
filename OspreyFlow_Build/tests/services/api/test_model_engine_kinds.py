@@ -87,7 +87,7 @@ ROLE = "arn:aws:iam::000000000000:role/osprey-gateway"
 CLAUDE = "anthropic.claude-3-haiku-20240307-v1:0"
 GEMINI_KEY = "g-key-for-the-stand-in-0001"
 CLOUD = "cloud-platform"
-#: Every profile but `cloud-platform` (P7's member of `Profile` is not on this branch).
+#: Every profile but `cloud-platform`.
 OTHER_PROFILES = ["local-lite", "small", "cluster"]
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="u", roles=["osprey-admin"])

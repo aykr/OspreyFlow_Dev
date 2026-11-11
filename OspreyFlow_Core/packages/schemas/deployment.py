@@ -293,8 +293,9 @@ def _looks_like_a_key(text: str) -> bool:
 #: Amazon Bedrock in the client's London region.
 EngineKind = Literal["provider", "gateway", "bedrock"]
 #: How an engine signs in: `key`, a key (a gateway's token) entered write-only in *Admin › Models*
-#: and kept by the model gateway alone; `iam_role`, the namespace's IAM role, held by the gateway's
-#: pod through its service account, so **no key is stored anywhere**.
+#: and kept by the model gateway alone; `iam_role`, an IAM role held by the gateway's pod through
+#: its service account, so **no key is stored anywhere**. (The cloud-platform render gives the
+#: gateway's pod its own account and role in P11 part 2; until then it has none.)
 EngineAuth = Literal["key", "iam_role"]
 #: ADR-135 Amendment 4 (b): Bedrock in the client's London region, and nowhere else.
 BEDROCK_REGION = "eu-west-2"
