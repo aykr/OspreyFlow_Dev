@@ -34609,6 +34609,18 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       egress and the Kubernetes policies to ingress, over Helm's own output. It checks every
       workload against every other workload, the managed network, each host, the internet and DNS,
       both ways, against the rows.
+24. **A token only where the API is called** (the orchestrator's ruling from case-b's P12 part 2).
+    Kubernetes mounts a pod's service-account token by default. On this profile every pod and Job
+    says whether to mount it: only a pod given an account of its own does. Today that is IRSA's
+    pods (the Conduit, the workers, the report sync, for their web identity) and, with Bedrock,
+    the gateway. P9's backup and restore pods have accounts of their own; a restore also asks the
+    API whether the writers have stopped. Every other pod has `automountServiceAccountToken:
+    false`: the Glass, the recogniser, the dashboards, Keycloak, the stores and their Keeper, the
+    gateway without Bedrock, the Jobs, and case-b's Laurium when it lands.
+    - `make cp-policy-check` refuses a mounted token (`token`) on any pod not in its own list, held
+      in the check and not read from the render, and on a listed pod with no account of its own.
+    - The other profiles' renders are unchanged: the chart writes the setting only when the render
+      gives it.
 
 **Open question for the client's platform team**, added to Amendment 1's list: the storage class's
 volume binding. The poc shape's Conduit mounts two ReadWriteOnce claims, the shared one and the
