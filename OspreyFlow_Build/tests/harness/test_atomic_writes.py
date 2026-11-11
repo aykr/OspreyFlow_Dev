@@ -67,8 +67,12 @@ def test_under_sudo_the_old_file_s_owner_is_kept(
     path.write_bytes(OLD)
     given: list[tuple[int, int]] = []
     monkeypatch.setattr(atomic, "_as_root", lambda: True)
-    # The old file is the operator's (4242), not the runner's (root, or this test's own user).
-    monkeypatch.setattr(atomic, "_owner_of", lambda _target: (4242, 4343))
+    # The old file alone is the operator's (4242); any other path (the staged file, the folder) is
+    # the runner's, root's under sudo (0), so a version that took another path's owner fails.
+    old_target = path.resolve()
+    monkeypatch.setattr(
+        atomic, "_owner_of", lambda p: (4242, 4343) if Path(p).resolve() == old_target else (0, 0)
+    )
     monkeypatch.setattr(atomic.os, "fchown", lambda _fd, uid, gid: given.append((uid, gid)))
     atomic.replace_whole(path, NEW, mode=0o600)
     assert given == [(4242, 4343)]

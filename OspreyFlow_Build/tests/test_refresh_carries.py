@@ -77,12 +77,16 @@ def test_a_file_moved_into_place_keeps_its_owner(
     deployment: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Under sudo a rename leaves the file root's: each file renamed into place first takes the
-    owner of the one it replaces. The old files are given an owner the runner is not (4242), so a
-    version that took the runner's or the staged file's owner fails."""
+    owner of the one it replaces. The deployment's old files alone are given an owner the runner is
+    not (4242); any other path (a staged file, the stage) answers root's (0), so a version that took
+    the runner's or the staged file's owner fails (the orchestrator's review of c5209b1, item 4)."""
     _after_the_gateway_database(deployment)
+    old_files = {p.resolve() for p in deployment.iterdir() if p.is_file()}
     given: list[tuple[int, int]] = []
     monkeypatch.setattr(atomic, "_as_root", lambda: True)
-    monkeypatch.setattr(atomic, "_owner_of", lambda _target: (4242, 4343))
+    monkeypatch.setattr(
+        atomic, "_owner_of", lambda p: (4242, 4343) if Path(p).resolve() in old_files else (0, 0)
+    )
     monkeypatch.setattr(atomic.os, "fchown", lambda _fd, uid, gid: given.append((uid, gid)))
     refresh.files_up_to_date(_checkout(deployment))
     assert given, "nothing was given an owner"
