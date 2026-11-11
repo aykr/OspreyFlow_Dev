@@ -5599,6 +5599,8 @@ async def run_extraction_route(
         extraction_model=body.model,
         # ADR-136: text extracted in a case is of the case's datasets.
         datasets=principal.datasets,
+        # ADR-135 Amendment 9: the review queue's extraction, the one call Laurium serves.
+        laurium_may_read=True,
     )
     await audit.record(
         principal=principal,

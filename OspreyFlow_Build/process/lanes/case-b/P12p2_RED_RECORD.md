@@ -179,3 +179,13 @@ of its own, and cp-policy-check's `token` rule refuses a token anywhere else; La
 for the field's absence (`--runxfail`, 2 failed); **with P7b's line put into the render for one run, the strict mark
 fails both** (XPASS), so the mark comes off when P7b merges. `test_laurium_cp_policy.py` runs the `token` rule itself
 once P7b's check is on main.
+
+## Round 1 of the orchestrator's review (4fa28e8): not mergeable — each item
+
+1. **Blocker: the marker set inside `run_extraction` reached email extraction and a document's content too** (both
+   call `run_extraction`), against the ruling and Amendment 9. Now `run_extraction(laurium_may_read=False)` by default,
+   passed `True` by the review queue's route alone (`run_extraction_route`). `test_laurium_call_sites.py`, written first:
+   **3 failed** on the round-1 code (email and document asked Laurium; the route passed nothing), then green; in their
+   real call shape (each service's own `extract(using="model")`, built as its own tests build it). **Plants:** the
+   marker back inside `run_extraction`, 2 failed (email, document); the route not passing it, 1 failed. The review-queue
+   test now passes the flag as the route does and asserts with `assert_queued_pending`.

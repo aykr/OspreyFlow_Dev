@@ -18,7 +18,12 @@ from typing import Any
 
 from adapters.extract_laurium.composed import LauriumExtracts, laurium_reads
 from schemas.model import ExtractionRequest, ExtractionResult
-from tests.adapters.extract_laurium.review_queue import ANSWER, MODEL, extract_into_queue
+from tests.adapters.extract_laurium.review_queue import (
+    ANSWER,
+    MODEL,
+    assert_queued_pending,
+    extract_into_queue,
+)
 
 
 class _Engine:
@@ -49,9 +54,10 @@ def _model() -> tuple[LauriumExtracts, _Engine, _Engine]:
 
 async def test_the_review_queues_extraction_goes_to_laurium() -> None:
     model, deep_read, laurium = _model()
-    stored, _ = await extract_into_queue(model)  # type: ignore[arg-type]
+    # As the review queue's route calls it (`laurium_may_read=True`, its alone).
+    stored, rows = await extract_into_queue(model, laurium_may_read=True)  # type: ignore[arg-type]
     assert laurium.asked and not deep_read.asked
-    assert stored, "nothing reached the review queue"
+    assert_queued_pending(stored, rows)
 
 
 async def test_every_other_caller_stays_with_deep_read() -> None:
