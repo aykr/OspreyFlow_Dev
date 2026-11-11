@@ -252,3 +252,7 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
    on qwen2.5 7B under a lease needs the gateway pair again: **carried**.
 8. **No screen reaches Laurium:** said plainly in Amendment 9 point 2 (the flagged route has no Glass caller; the
    Glass's model extraction is a document's content and email, both Deep read). The preset is unchanged.
+3. **`release_local.py` builds what the release builds:** each entry has its context, Laurium's its own folder;
+   `tests/test_release_local_matrix.py` reads `release.yml`'s matrix and holds `SERVICES` to it. With `P12p2_CI.diff`
+   applied (as at merge) 2 passed; without it, 1 failed (the release's matrix has no Laurium yet), so the two land
+   together.
