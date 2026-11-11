@@ -12,10 +12,10 @@ and never a pass on anything it cannot read:
   `uv.lock` name no LangChain, LangSmith, Laurium or spaCy model package (spaCy itself is in the
   lock only as ADR-108's optional `extraction` extra, which no image installs, so the image leg
   refuses it where the lock may not); and no Dockerfile but Laurium's installs any of them;
-- **the image leg** (`--image <ref>`, after CI builds each image): the distributions installed in
+- **the image leg** (`--image <ref>`, for after each image's build; carried: no CI step runs it yet): the distributions installed in
   the built image, read by `IMAGE_SCRIPT` with the image's own Python (`docker run`), must include
   no LangChain, LangSmith, Laurium, spaCy or spaCy model. With `--image` the image leg runs alone:
-  CI's image steps run this with the runner's own Python, and the source leg is its own job.
+  an image step would run this with the runner's own Python, and the source leg is its own job.
 
 Each refusal shown red in `tests/test_no_langchain_check.py` (rule 15), on the shape each leg reads.
 """

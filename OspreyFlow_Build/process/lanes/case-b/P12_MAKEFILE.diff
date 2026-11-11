@@ -16,7 +16,7 @@ index 35a1a6f3..406e3390 100644
  	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_no_branches_check.py
 
 +# ADR-135 Amendment 6: no LangChain, spaCy or Laurium outside Laurium's own image. The source leg here,
-+# offline; the image leg runs in CI after each image is built (`--image`). Each refusal shown red
++# offline; the image leg (`--image`) is carried: no CI step runs it yet. Each refusal shown red
 +# (tests/test_no_langchain_check.py; process/lanes/case-b/P12_RED_RECORD.md).
 +no-langchain-check:
 +	$(IN_CORE) $(TOOLS) $(PY) -m tools.no_langchain_check

@@ -4,7 +4,7 @@ deployment without Laurium carries no LangChain, spaCy or Laurium.
 Two legs, each shown red here on a plant of the shape it really reads (rule 15):
 
 - **the image leg** reads the distributions installed in a built image, as the JSON its in-image
-  script prints (`IMAGE_SCRIPT`, run by `docker run` in CI's image jobs): a planted LangChain,
+  script prints (`IMAGE_SCRIPT`, run by `docker run`; carried: no CI step runs it yet): a planted LangChain,
   Laurium or spaCy among real-looking rows is named;
 - **the source leg** reads the tree a Conduit or worker image is built from: Laurium's folder left
   out of the Conduit's build context (`.dockerignore`), and no LangChain or Laurium in the Conduit's
@@ -183,8 +183,8 @@ def test_a_pattern_leaving_part_of_laurium_in_is_named(tmp_path: Path) -> None:
 
 
 def test_the_image_leg_alone_runs_with_image(monkeypatch: pytest.MonkeyPatch) -> None:
-    """CI's image steps run this with the runner's own Python, which has no `pathspec`: `--image`
-    reads the image alone (the source leg is its own job)."""
+    """An image step (carried: none in CI yet) would run this with the runner's own Python, which has
+    no `pathspec`: `--image` reads the image alone (the source leg is its own job)."""
 
     def _no(*_: object) -> list[str]:
         raise AssertionError("the source leg ran in an image step")
