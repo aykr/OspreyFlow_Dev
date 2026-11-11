@@ -1,0 +1,752 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T200235Z/log: make -C ../OspreyFlow_Core test-js
+make: Entering directory '/root/osprey-runs/case-b/OspreyFlow_Core'
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/color/textContrast.test.ts [2m([22m[2m41 tests[22m[2m)[22m[32m 224[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeAttributes.test.ts [2m([22m[2m57 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m src/questions/QuestionsPanel.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 775[2mms[22m[39m
+ [32m✓[39m src/reader/DocumentReader.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 1233[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.handling.test.tsx [2m([22m[2m47 tests[22m[2m)[22m[33m 1240[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseBrief.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 1526[2mms[22m[39m
+ [32m✓[39m src/investigation/CasePicker.test.tsx [2m([22m[2m27 tests[22m[2m)[22m[33m 1580[2mms[22m[39m
+ [32m✓[39m src/inspector/Inspector.test.tsx [2m([22m[2m23 tests[22m[2m)[22m[33m 1905[2mms[22m[39m
+   [32m✓[39m Inspector — a selected link [2m(5)[22m
+     [33m[2m✓[22m[39m shows the link's details and a Notes section for that link[33m 410[2mms[22m[39m
+ [32m✓[39m src/alerts/RulesPlaceQueue.test.tsx [2m([22m[2m19 tests[22m[2m)[22m[33m 2443[2mms[22m[39m
+   [32m✓[39m Rules and Monitoring [2m(10)[22m
+     [33m[2m✓[22m[39m filters Mine, Team, Unassigned and Older than N days on the server, All holding the suppressed (ADR-146)[33m 314[2mms[22m[39m
+     [33m[2m✓[22m[39m gives a case alert to a member, by name, and a shared one only to be claimed[33m 439[2mms[22m[39m
+ [32m✓[39m src/explore/ExplorePanel.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 3628[2mms[22m[39m
+ [32m✓[39m src/alerts/StageD.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 2877[2mms[22m[39m
+   [32m✓[39m a rule on a schedule (decision 1) [2m(4)[22m
+     [33m[2m✓[22m[39m offers the schedule's blanks in the builder and deploys them[33m 376[2mms[22m[39m
+     [33m[2m✓[22m[39m says when a scheduled rule runs, and its runs and why one did not[33m 425[2mms[22m[39m
+   [32m✓[39m maker–checker on a whole-deployment rule (decision 7) [2m(5)[22m
+     [33m[2m✓[22m[39m offers Approve and Reject to a second administrator-author, and sends each[33m 362[2mms[22m[39m
+     [33m[2m✓[22m[39m offers the person who proposed it no Approve, and a non-administrator neither[33m 307[2mms[22m[39m
+   [32m✓[39m closing a high-severity alert (decision 7) [2m(7)[22m
+     [33m[2m✓[22m[39m lets a second member approve or send back, and the proposer only withdraw[33m 329[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenMarking.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 3851[2mms[22m[39m
+   [32m✓[39m Connect: classification is optional and blank means PUBLIC [2m(5)[22m
+     [33m[2m✓[22m[39m lists PUBLIC among the classifications the scheme offers[33m 304[2mms[22m[39m
+   [32m✓[39m Connect: the units a source's rows may name [2m(5)[22m
+     [33m[2m✓[22m[39m adds a unit, trimmed, and sends it with the marking[33m 321[2mms[22m[39m
+     [33m[2m✓[22m[39m does not add a blank name or one already listed[33m 395[2mms[22m[39m
+     [33m[2m✓[22m[39m removes a unit[33m 311[2mms[22m[39m
+ [32m✓[39m src/admin/adminWords.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 3055[2mms[22m[39m
+   [32m✓[39m Admin's words: roles by name, never people or ids [2m(22)[22m
+     [33m[2m✓[22m[39m in People: each role's box, each person's levels and their grants[33m 591[2mms[22m[39m
+     [33m[2m✓[22m[39m in Connections: its fields' tips and a refusal by the roles that hold the right[33m 343[2mms[22m[39m
+ [32m✓[39m src/ingest/studio/rightsGate.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 2119[2mms[22m[39m
+   [32m✓[39m a Studio action the person can't take [2m(14)[22m
+     [33m[2m✓[22m[39m says why and who can, and does nothing when pressed[33m 329[2mms[22m[39m
+ [32m✓[39m src/canvas/layoutModes.test.ts [2m([22m[2m53 tests[22m[2m)[22m[32m 257[2mms[22m[39m
+ [32m✓[39m src/patterns/QueryBuilderPanel.test.tsx [2m([22m[2m27 tests[22m[2m)[22m[33m 5212[2mms[22m[39m
+   [32m✓[39m QueryBuilderPanel parts [2m(2)[22m
+     [33m[2m✓[22m[39m opens on the pattern, with Preview and Run, and folds adding, saving and loading[33m 329[2mms[22m[39m
+   [32m✓[39m QueryBuilderPanel ask to search over a pattern already there [2m(7)[22m
+     [33m[2m✓[22m[39m starts a new unsaved pattern: Save then writes a new one, never a version of the loaded pattern[33m 386[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps the replaced pattern, and one press of Restore the previous pattern brings it back with its identity[33m 352[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps an unsaved pattern the analyst drew, and restores it[33m 304[2mms[22m[39m
+     [33m[2m✓[22m[39m does not apply a proposal that arrives after the pattern was edited meanwhile, and says so[33m 492[2mms[22m[39m
+     [33m[2m✓[22m[39m does not apply a proposal that arrives after the pattern was renamed meanwhile[33m 328[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/PipelineStudio.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 3751[2mms[22m[39m
+   [32m✓[39m PipelineStudio [2m(16)[22m
+     [33m[2m✓[22m[39m lists the pipelines and opens one onto the canvas[33m 635[2mms[22m[39m
+     [33m[2m✓[22m[39m the extract panel declares library, media and where findings go[33m 320[2mms[22m[39m
+     [33m[2m✓[22m[39m opens Test, Deploy and the Connect gate in the drawer, with the pipeline still in view[33m 538[2mms[22m[39m
+ [32m✓[39m src/admin/AdminPlace.test.tsx [2m([22m[2m39 tests[22m[2m)[22m[33m 4937[2mms[22m[39m
+   [32m✓[39m the Admin area [2m(5)[22m
+     [33m[2m✓[22m[39m shows only the sections the account holds a right for[33m 461[2mms[22m[39m
+   [32m✓[39m people: invite, access, disable, enable, reset sign-in [2m(5)[22m
+     [33m[2m✓[22m[39m disables a person only once it is confirmed, and enables them again[33m 403[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkChange.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 1274[2mms[22m[39m
+ [32m✓[39m src/admin/PeopleAndRoles.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 2915[2mms[22m[39m
+   [32m✓[39m Admin › People's row (R3) [2m(2)[22m
+     [33m[2m✓[22m[39m gives the Super user preset as its three roles, and keeps a custom role[33m 515[2mms[22m[39m
+   [32m✓[39m Admin › People's Disable… with L3.8's items (L2.5b, ADR-145 Amendment 8) [2m(3)[22m
+     [33m[2m✓[22m[39m offers a transfer for each of L3.8's items (a view and a watch here), and sends each by its kind[33m 323[2mms[22m[39m
+   [32m✓[39m Admin › Roles (R2) [2m(3)[22m
+     [33m[2m✓[22m[39m copies a built-in role into a new one and shows the Conduit's refusal in its words[33m 412[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/drawnMerge.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1410[2mms[22m[39m
+   [32m✓[39m Merge into a dataset… [2m(6)[22m
+     [33m[2m✓[22m[39m maps, matches, runs the dry run first, and merges what the dry run showed[33m 602[2mms[22m[39m
+     [33m[2m✓[22m[39m maps a drawn type onto another of the target's types, each property placed, and sends it as chosen[33m 425[2mms[22m[39m
+ [32m✓[39m src/ingest/sources/sources.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1396[2mms[22m[39m
+   [32m✓[39m the register wizard [2m(2)[22m
+     [33m[2m✓[22m[39m goes Connection, File, Governance, refuses to register until governance is complete, and sends what was chosen[33m 696[2mms[22m[39m
+ [32m✓[39m src/reports/TrendsTab.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 3405[2mms[22m[39m
+   [32m✓[39m the trend builder and the case's domain models [2m(4)[22m
+     [33m[2m✓[22m[39m marks a saved trend that uses link types outside the case's domain models, and only that one[33m 570[2mms[22m[39m
+   [32m✓[39m the trend builder [2m(9)[22m
+     [33m[2m✓[22m[39m previews the definition the form says and draws one bar per period and every series[33m 344[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenDeduplicate.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 4484[2mms[22m[39m
+   [32m✓[39m Connect: the deduplicate control [2m(18)[22m
+     [33m[2m✓[22m[39m reads an existing draft's key back in its own order, with its transform[33m 572[2mms[22m[39m
+     [33m[2m✓[22m[39m adds a column, in the order added, and saves it through the PATCH as deduplicate.key[33m 430[2mms[22m[39m
+     [33m[2m✓[22m[39m does not add a blank column, and says so for a repeated one instead of ignoring it[33m 326[2mms[22m[39m
+     [33m[2m✓[22m[39m moves a column up and down, and the saved key follows the order shown[33m 358[2mms[22m[39m
+     [33m[2m✓[22m[39m shows the server's refusal as it was said, and keeps the author's key on screen[33m 308[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Models.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 2128[2mms[22m[39m
+   [32m✓[39m Models [2m(12)[22m
+     [33m[2m✓[22m[39m marks an engine the render did not make, in the Conduit's words (ADR-135 Amendment 8)[33m 398[2mms[22m[39m
+     [33m[2m✓[22m[39m sends the key once, clears the field, and never shows it again[33m 369[2mms[22m[39m
+     [33m[2m✓[22m[39m adds an engine with its models and contract, and saves each job's default[33m 319[2mms[22m[39m
+ [32m✓[39m src/inspector/linkChangeForm.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/export/ExportPanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 766[2mms[22m[39m
+   [32m✓[39m test_the_named_blocker_list_renders_the_specific_item_not_a_generic_message [2m(2)[22m
+     [33m[2m✓[22m[39m a consult_originator block renders the item's own label, not a generic export-failed message[33m 361[2mms[22m[39m
+ [32m✓[39m src/alerts/SentenceBuilder.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1933[2mms[22m[39m
+   [32m✓[39m the sentence builder [2m(8)[22m
+     [33m[2m✓[22m[39m previews the rule on the last 90 days: the count, up to five examples, and that nothing was written[33m 660[2mms[22m[39m
+     [33m[2m✓[22m[39m shows the sentence's drawn pattern, its advanced view[33m 375[2mms[22m[39m
+     [33m[2m✓[22m[39m deploys a rule just for its author, and offers no other scope, an administrator's included (ADR-146 Amendment 6)[33m 325[2mms[22m[39m
+ [32m✓[39m src/design/designContract.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/home/homeData.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+ [32m✓[39m src/auth/tokenRenewal.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m src/alerts/OneQueue.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1272[2mms[22m[39m
+   [32m✓[39m an alert's detail [2m(3)[22m
+     [33m[2m✓[22m[39m offers the lead's tools to the team's lead alone, and suppresses with a reason and a day[33m 320[2mms[22m[39m
+ [32m✓[39m src/canvas/CanvasLegend.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 842[2mms[22m[39m
+   [32m✓[39m CanvasLegend [2m(7)[22m
+     [33m[2m✓[22m[39m lists each type in view with its count, most first[33m 340[2mms[22m[39m
+ [32m✓[39m src/reports/PacksTab.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 3343[2mms[22m[39m
+   [32m✓[39m the pack list [2m(2)[22m
+     [33m[2m✓[22m[39m says which packs are drafts and which are published[33m 530[2mms[22m[39m
+   [32m✓[39m publishing and withdrawing [2m(5)[22m
+     [33m[2m✓[22m[39m offers Export PDF only with the right and a live version[33m 386[2mms[22m[39m
+ [32m✓[39m src/workingset/ViewOverCapDialog.test.tsx [2m([22m[2m19 tests[22m[2m)[22m[33m 1454[2mms[22m[39m
+   [32m✓[39m the dialog [2m(6)[22m
+     [33m[2m✓[22m[39m says the reader's own figure in the canvas limit's words, and no other number[33m 342[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/PublishScreen.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 963[2mms[22m[39m
+   [32m✓[39m PublishScreen [2m(7)[22m
+     [33m[2m✓[22m[39m renders a pipeline run per branch and per stage, refusals in words[33m 375[2mms[22m[39m
+ [32m✓[39m src/matrix/MatrixView.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 6754[2mms[22m[39m
+   [32m✓[39m MatrixView — the tables [2m(8)[22m
+     [33m[2m✓[22m[39m is two real tables, each with a caption, column headers and a row header per row[33m 595[2mms[22m[39m
+     [33m[2m✓[22m[39m pages a long view and says plainly which rows are shown (rule 2)[33m 3395[2mms[22m[39m
+   [32m✓[39m MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) [2m(3)[22m
+     [33m[2m✓[22m[39m PageDown and PageUp turn the page[33m 1179[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.content.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 531[2mms[22m[39m
+ [32m✓[39m src/workingset/store.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m src/home/HomePage.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 1566[2mms[22m[39m
+   [32m✓[39m Home [2m(17)[22m
+     [33m[2m✓[22m[39m greets the person by name and says who they are signed in as[33m 349[2mms[22m[39m
+ [32m✓[39m src/reports/ReportsView.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 1872[2mms[22m[39m
+   [32m✓[39m the Reports view [2m(12)[22m
+     [33m[2m✓[22m[39m says the figures in words, by typology, age, outcome and KYC[33m 395[2mms[22m[39m
+ [32m✓[39m src/connections/FindConnectionsPanel.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1827[2mms[22m[39m
+   [32m✓[39m choosing the two ends [2m(3)[22m
+     [33m[2m✓[22m[39m takes each end from a search, and asks for the fewest degrees with no degree given[33m 529[2mms[22m[39m
+   [32m✓[39m the routes, widened one degree at a time [2m(4)[22m
+     [33m[2m✓[22m[39m widens by one degree, keeping the shorter routes in their own group, up to eight[33m 379[2mms[22m[39m
+ [32m✓[39m src/map/MapControls.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 724[2mms[22m[39m
+   [32m✓[39m PlaceSearch [2m(2)[22m
+     [33m[2m✓[22m[39m says no place matched only when the answer was complete[33m 317[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkEvents.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1151[2mms[22m[39m
+   [32m✓[39m LinkEvents [2m(6)[22m
+     [33m[2m✓[22m[39m lists the emails as the server orders them, with the total in the heading[33m 388[2mms[22m[39m
+ [32m✓[39m src/map/style.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m src/auth/SignInScreen.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 2676[2mms[22m[39m
+   [32m✓[39m the signed-out page's marking [2m(2)[22m
+     [33m[2m✓[22m[39m is the deployment's[33m 374[2mms[22m[39m
+   [32m✓[39m the welcome page [2m(11)[22m
+     [33m[2m✓[22m[39m says what the product is, with its five capabilities[33m 342[2mms[22m[39m
+     [33m[2m✓[22m[39m with organisation sign-in, offers it first and an OspreyFlow account second[33m 337[2mms[22m[39m
+ [32m✓[39m src/layout/SidePanelStack.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 1308[2mms[22m[39m
+ [32m✓[39m src/canvas/communities.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearch.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 886[2mms[22m[39m
+   [32m✓[39m GlobalSearch as the analyst types [2m(13)[22m
+     [33m[2m✓[22m[39m asks nothing until two characters are typed, and says so rather than staying silent[33m 354[2mms[22m[39m
+ [32m✓[39m src/patterns/store.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/shell/places.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 617[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/promotions.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1124[2mms[22m[39m
+   [32m✓[39m Analyst promotions [2m(10)[22m
+     [33m[2m✓[22m[39m lists each promotion, and an approver reviews and approves one[33m 462[2mms[22m[39m
+ [32m✓[39m src/alerts/RulesPlace.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1765[2mms[22m[39m
+   [32m✓[39m the Alerts place [2m(8)[22m
+     [33m[2m✓[22m[39m lists the queue by name and explains an alert with its transactions[33m 638[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkNotes.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 1058[2mms[22m[39m
+   [32m✓[39m LinkNotes [2m(16)[22m
+     [33m[2m✓[22m[39m lists the notes with who wrote them, newest first as the server gives them[33m 350[2mms[22m[39m
+ [32m✓[39m src/alerts/RuleEditor.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1827[2mms[22m[39m
+   [32m✓[39m the rule editor (ADR-146 decision 3) [2m(10)[22m
+     [33m[2m✓[22m[39m asks for the dataset first and offers only the case's[33m 325[2mms[22m[39m
+     [33m[2m✓[22m[39m shows the saved draft as BPMN, drawn from the files saved beside it (ADR-146 Amendment 5)[33m 340[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Datasets.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1426[2mms[22m[39m
+   [32m✓[39m Datasets [2m(6)[22m
+     [33m[2m✓[22m[39m shows a dataset's kind, policy, Authors and linked cases as counts, and only removed cases' dry runs[33m 723[2mms[22m[39m
+ [32m✓[39m src/strength/clientParity.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 748[2mms[22m[39m
+   [32m✓[39m the Monitoring tab's composition controls [2m(3)[22m
+     [33m[2m✓[22m[39m lets the case's Author switch the case to client parity, sent with the override[33m 361[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Audit.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1054[2mms[22m[39m
+   [32m✓[39m Admin › Audit [2m(7)[22m
+     [33m[2m✓[22m[39m shows what the Conduit sent, its words withheld where it withheld them, and the total[33m 340[2mms[22m[39m
+ [32m✓[39m src/auth/unauthorised.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m src/admin/Schedules.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1479[2mms[22m[39m
+   [32m✓[39m Schedules and runs [2m(8)[22m
+     [33m[2m✓[22m[39m is a tab only for an account holding operate_schedules[33m 473[2mms[22m[39m
+ [32m✓[39m src/ingest/sources/connectors.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1017[2mms[22m[39m
+   [32m✓[39m a source's read [2m(4)[22m
+     [33m[2m✓[22m[39m registers a SQL source by its read, never a file[33m 417[2mms[22m[39m
+   [32m✓[39m the screening lists [2m(3)[22m
+     [33m[2m✓[22m[39m sends a blank list's column picks, and a format's template without any[33m 397[2mms[22m[39m
+ [32m✓[39m src/layout/PanelFrames.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 571[2mms[22m[39m
+ [32m✓[39m src/investigation/cases.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+[90mstderr[2m | src/admin/sections/Connections.test.tsx[2m > [22m[2mConnections[2m > [22m[2mnames an S3 bucket and Athena with no field for a key or a secret, and sends none
+[22m[39mEncountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+ [32m✓[39m src/admin/sections/Connections.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 2196[2mms[22m[39m
+   [32m✓[39m Connections [2m(6)[22m
+     [33m[2m✓[22m[39m is a tab for administer_system alone, lists the built-in Files, and names a new one[33m 757[2mms[22m[39m
+     [33m[2m✓[22m[39m names a SQL connection with its datasets and its secret by name, and nothing else[33m 483[2mms[22m[39m
+     [33m[2m✓[22m[39m names an S3 bucket and Athena with no field for a key or a secret, and sends none[33m 429[2mms[22m[39m
+ [32m✓[39m src/admin/needsYou/NeedsYou.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 756[2mms[22m[39m
+   [32m✓[39m Needs you [2m(11)[22m
+     [33m[2m✓[22m[39m counts the overdue promotions and the proposals to decide, and lists only what the Conduit served[33m 341[2mms[22m[39m
+ [32m✓[39m src/alerts/ListsPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 531[2mms[22m[39m
+ [32m✓[39m src/patterns/api.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/search/addFromListApi.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m src/canvas/labelChoices.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/strength/StrengthPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1026[2mms[22m[39m
+ [32m✓[39m src/linktypes/ModelProposals.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 825[2mms[22m[39m
+   [32m✓[39m ModelProposals [2m(8)[22m
+     [33m[2m✓[22m[39m lists the dataset's proposals with what each means and who proposed it, and names no case[33m 354[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseDatasets.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 804[2mms[22m[39m
+   [32m✓[39m a new case's data [2m(4)[22m
+     [33m[2m✓[22m[39m asks for the one dataset chosen[33m 466[2mms[22m[39m
+ [32m✓[39m src/ingest/IngestStudio.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1079[2mms[22m[39m
+   [32m✓[39m IngestStudio: four places [2m(8)[22m
+     [33m[2m✓[22m[39m offers 1 Model, 2 Sources, 3 Pipelines, 4 Runs and 5 Releases, Pipelines first[33m 326[2mms[22m[39m
+     [33m[2m✓[22m[39m reads the registered sources again for the strip when the Sources tab edits one[33m 346[2mms[22m[39m
+ [32m✓[39m src/admin/sections/Maps.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 1424[2mms[22m[39m
+   [32m✓[39m Maps [2m(7)[22m
+     [33m[2m✓[22m[39m shows each provider's tier, attribution and state[33m 359[2mms[22m[39m
+     [33m[2m✓[22m[39m sends the key once, clears the field, and never shows it again[33m 371[2mms[22m[39m
+ [32m✓[39m src/matrix/matrixRows.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.links.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 2003[2mms[22m[39m
+   [32m✓[39m Map: the links are reachable without a pointer [2m(5)[22m
+     [33m[2m✓[22m[39m lists the template's link beside the canvas[33m 365[2mms[22m[39m
+ [32m✓[39m src/crossfilter/store.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/reports/AlertMonitoringBoard.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1180[2mms[22m[39m
+   [32m✓[39m the Alert monitoring board [2m(5)[22m
+     [33m[2m✓[22m[39m is the first board on the Dashboards, drawn by the Glass with no Superset token asked for it[33m 535[2mms[22m[39m
+ [32m✓[39m src/App.chrome.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 2474[2mms[22m[39m
+   [32m✓[39m the case screen's chrome, variant B (ADR-145 Amendment 2) [2m(4)[22m
+     [33m[2m✓[22m[39m 24 controls stand before the canvas, in this order[33m 783[2mms[22m[39m
+     [33m[2m✓[22m[39m the banner's Boards opens the case's drawing boards and is the current section (ADR-143, L3.3)[33m 355[2mms[22m[39m
+     [33m[2m✓[22m[39m the column opens with the Inspector only, the other panels folded in their order[33m 485[2mms[22m[39m
+ [32m✓[39m src/App.test.tsx [2m([22m[2m37 tests[22m[2m)[22m[33m 17015[2mms[22m[39m
+   [32m✓[39m 06_DECISIONS.md ADR-050 — the sign-in gate [2m(2)[22m
+     [33m[2m✓[22m[39m an unauthenticated load shows the sign-in screen and issues no /v1 call[33m 569[2mms[22m[39m
+   [32m✓[39m the tab the launcher asked for is the tab the Glass opens on [2m(19)[22m
+     [33m[2m✓[22m[39m neither the rail nor the banner holds Monitoring: Rules and Monitoring is a place of the switcher[33m 320[2mms[22m[39m
+     [33m[2m✓[22m[39m after a reload in the Studio, Back returns to the Glass's last view on the open case[33m 462[2mms[22m[39m
+     [33m[2m✓[22m[39m the switcher and the cross-link move between the places, and coming back returns to the view that was open[33m 409[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence, then Back to the alert, returns to the same alert, still open[33m 748[2mms[22m[39m
+     [33m[2m✓[22m[39m Open the evidence says so on the alert when the view cannot be opened[33m 580[2mms[22m[39m
+   [32m✓[39m windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) [2m(6)[22m
+     [33m[2m✓[22m[39m a token near expiry is renewed in the background, with no navigation, and the next call carries it[33m 838[2mms[22m[39m
+     [33m[2m✓[22m[39m an unattended window lets its token lapse: no renewal, and nothing asked[33m 2565[2mms[22m[39m
+ [32m✓[39m src/search/AddFromList.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1099[2mms[22m[39m
+ [32m✓[39m src/canvas/iconChoices.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/reports/packExport.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/canvas/SelectionBar.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 608[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkDetails.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/ScheduleEditor.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1390[2mms[22m[39m
+   [32m✓[39m the structured schedule [2m(9)[22m
+     [33m[2m✓[22m[39m explains a chosen schedule in words with its next five runs, then saves it with its zone[33m 568[2mms[22m[39m
+     [33m[2m✓[22m[39m says, in the Conduit's words, a schedule it could not keep[33m 362[2mms[22m[39m
+ [32m✓[39m src/metrics/MetricsPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1180[2mms[22m[39m
+   [32m✓[39m MetricsPanel ranking rows [2m(1)[22m
+     [33m[2m✓[22m[39m names each node as the canvas labels it, not by its id[33m 395[2mms[22m[39m
+ [32m✓[39m keyboard/registryCoverage.test.ts [2m([22m[2m68 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/ingest/map/rowTemplate.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/ingest/map/LinkList.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 1302[2mms[22m[39m
+   [32m✓[39m LinkList: the links of the row template [2m(6)[22m
+     [33m[2m✓[22m[39m lists every link however many there are, in a region that scrolls[33m 713[2mms[22m[39m
+ [32m✓[39m src/reports/packAlert.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 402[2mms[22m[39m
+   [32m✓[39m an alert item on the screen [2m(1)[22m
+     [33m[2m✓[22m[39m shows its explanation, its entity, its evidence, its status and its match[33m 332[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenUpload.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1851[2mms[22m[39m
+   [32m✓[39m Connect: choose a file from your computer [2m(10)[22m
+     [33m[2m✓[22m[39m offers a Choose file button even when the ingest folder is empty[33m 475[2mms[22m[39m
+ [32m✓[39m src/ownership/OwnershipPlace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1372[2mms[22m[39m
+   [32m✓[39m the Ownership place [2m(6)[22m
+     [33m[2m✓[22m[39m shows a customer's due diligence, every factor in words[33m 480[2mms[22m[39m
+     [33m[2m✓[22m[39m lists a party's chains in words, share by share[33m 310[2mms[22m[39m
+ [32m✓[39m src/assessment/JudgementsPanel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 491[2mms[22m[39m
+ [32m✓[39m src/canvas/linkMenu.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/investigation/NewCaseForm.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 1227[2mms[22m[39m
+   [32m✓[39m NewCaseForm [2m(10)[22m
+     [33m[2m✓[22m[39m leads with the choice, Make a new dataset the default, and the datasets hidden[33m 329[2mms[22m[39m
+ [32m✓[39m src/search/searchOptions.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/reports/AlertsPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 557[2mms[22m[39m
+ [32m✓[39m src/design/topBarStyle.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+ [32m✓[39m keyboard/playwrightPorts.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 1378[2mms[22m[39m
+   [32m✓[39m each lane's Playwright runs use ports of their own [2m(18)[22m
+     [33m[2m✓[22m[39m ../a11y/playwright.config.ts: two slots never share a port[33m 847[2mms[22m[39m
+ [32m✓[39m src/timeline/Timeline.cells.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1269[2mms[22m[39m
+   [32m✓[39m the weekly view's Choose cells control [2m(7)[22m
+     [33m[2m✓[22m[39m is in the options menu in the weekly view and not in the density view[33m 521[2mms[22m[39m
+ [32m✓[39m src/rights/visibility.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m src/canvas/IconsMenu.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1050[2mms[22m[39m
+   [32m✓[39m IconsMenu and icons chosen by value (ADR-128 Decision 4) [2m(1)[22m
+     [33m[2m✓[22m[39m says, for a type whose icon depends on a value, that a choice here replaces those icons[33m 374[2mms[22m[39m
+ [32m✓[39m src/map/gazetteers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 70[2mms[22m[39m
+ [32m✓[39m src/export/reportExport.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 86[2mms[22m[39m
+ [32m✓[39m src/linktypes/ProposedTypes.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 962[2mms[22m[39m
+   [32m✓[39m ProposedTypes [2m(6)[22m
+     [33m[2m✓[22m[39m lists the unit's proposals with what each would be and why it was proposed[33m 362[2mms[22m[39m
+ [32m✓[39m src/map/geometries.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/shell/shell.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 628[2mms[22m[39m
+ [32m✓[39m src/admin/AdminSections.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 986[2mms[22m[39m
+ [32m✓[39m src/connections/connectionsApi.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 107[2mms[22m[39m
+ [32m✓[39m src/ingest/checks/ChecksScreen.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 485[2mms[22m[39m
+   [32m✓[39m the step [2m(2)[22m
+     [33m[2m✓[22m[39m attaches a rule, holds on a hit, and cannot leave off a whole-deployment rule[33m 328[2mms[22m[39m
+ [32m✓[39m src/theme/theme.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/theme/themeCookieSnippet.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m src/App.matrix.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 3744[2mms[22m[39m
+   [33m[2m✓[22m[39m the view switch offers the Graph and the Map, and the Matrix one click away under More views[33m 1235[2mms[22m[39m
+   [33m[2m✓[22m[39m a selection made on the canvas is the Matrix's selection, and the Matrix's goes back to the canvas[33m 729[2mms[22m[39m
+   [33m[2m✓[22m[39m Expand and Show on a row go to the Graph and use the canvas's own Expand and centring[33m 1125[2mms[22m[39m
+ [32m✓[39m src/ingest/releases/ReleasesTab.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 917[2mms[22m[39m
+   [32m✓[39m Export [2m(3)[22m
+     [33m[2m✓[22m[39m sends the release's name and version and lists the files, saying what was left out[33m 475[2mms[22m[39m
+ [32m✓[39m src/views/ViewsPanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 768[2mms[22m[39m
+   [32m✓[39m ViewsPanel [2m(8)[22m
+     [33m[2m✓[22m[39m shows another member nothing of a private view, and no share or delete on a shared one[33m 316[2mms[22m[39m
+ [32m✓[39m src/home/answersFor.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 489[2mms[22m[39m
+   [32m✓[39m the Home section [2m(4)[22m
+     [33m[2m✓[22m[39m opens a case, a dataset's Model tab and Operations from what waits, each with its why[33m 347[2mms[22m[39m
+ [32m✓[39m src/design/primitives/RadialMenu.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 732[2mms[22m[39m
+   [32m✓[39m what a menu entry says about its count [2m(4)[22m
+     [33m[2m✓[22m[39m shows a number when the preview answered[33m 314[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/ExternalOrchestration.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+   [32m✓[39m ExternalOrchestration [2m(7)[22m
+     [33m[2m✓[22m[39m draws today's runs against the dataset's quota[33m 322[2mms[22m[39m
+ [32m✓[39m src/canvas/labelStyle.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+ [32m✓[39m src/canvas/linksAmong.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/NodePreview.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 723[2mms[22m[39m
+   [32m✓[39m Preview on a node [2m(6)[22m
+     [33m[2m✓[22m[39m reads a source's rows from row 0 until the last, with the person's own token, and nothing else[33m 517[2mms[22m[39m
+ [32m✓[39m src/admin/needsYou/StudioNeedsYou.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 745[2mms[22m[39m
+   [32m✓[39m the Studio's proposals count [2m(6)[22m
+     [33m[2m✓[22m[39m names this dataset's count on the Model tab, never another's[33m 435[2mms[22m[39m
+ [32m✓[39m src/auth/oidcConfig.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m src/crossfilter/lit.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m src/reports/EmbeddedDashboards.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 728[2mms[22m[39m
+   [32m✓[39m Superset dashboards in the Glass [2m(7)[22m
+     [33m[2m✓[22m[39m opens another board when it is chosen[33m 334[2mms[22m[39m
+ [32m✓[39m src/auth/launcherHandoff.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/inspector/Inspector.rawIdentifiers.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 618[2mms[22m[39m
+   [32m✓[39m the Inspector shows no raw identifier (build order step 30) [2m(5)[22m
+     [33m[2m✓[22m[39m a Location: no store id, no site_ref, no geometry reference, no server path[33m 327[2mms[22m[39m
+ [32m✓[39m src/color/tokens.test.ts [2m([22m[2m37 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearchFilters.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1422[2mms[22m[39m
+   [32m✓[39m the Filters button [2m(2)[22m
+     [33m[2m✓[22m[39m is there, with the panel closed until it is pressed[33m 457[2mms[22m[39m
+ [32m✓[39m src/alerts/drawnWatchAlert.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 667[2mms[22m[39m
+   [32m✓[39m a drawn watch's alert [2m(4)[22m
+     [33m[2m✓[22m[39m opens the board its drawn item names, from the alert's detail[33m 365[2mms[22m[39m
+ [32m✓[39m src/views/viewsApi.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 67[2mms[22m[39m
+ [32m✓[39m src/admin/OperationsFigures.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 759[2mms[22m[39m
+   [32m✓[39m OperationsFigures [2m(4)[22m
+     [33m[2m✓[22m[39m rolls the runs up, withholding a count it may not show, never drawing it as a number[33m 350[2mms[22m[39m
+ [32m✓[39m src/workingset/ViewOverCapGate.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 389[2mms[22m[39m
+ [32m✓[39m src/admin/sections/ModelsUsage.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1147[2mms[22m[39m
+   [32m✓[39m limits [2m(3)[22m
+     [33m[2m✓[22m[39m sends whole numbers, blank as no limit, and shows the limits in words[33m 886[2mms[22m[39m
+ [32m✓[39m src/workingset/deltaClient.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/canvas/valueIconsInNode.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/site/bilinear.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/color/nodeVisualIcon.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/RunsTab.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1537[2mms[22m[39m
+   [32m✓[39m the Runs tab [2m(6)[22m
+     [33m[2m✓[22m[39m draws one row per deployed pipeline and a cell per day, in words[33m 683[2mms[22m[39m
+     [33m[2m✓[22m[39m shows the revert as the operator's command to a holder of revert_loads, and to no one else[33m 369[2mms[22m[39m
+ [32m✓[39m src/layout/layoutSizes.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m src/linktypes/linkTypesApi.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/help/roles.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.handling.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1089[2mms[22m[39m
+   [32m✓[39m Map and the columns Connect declared [2m(4)[22m
+     [33m[2m✓[22m[39m tells the analyst a declared part the new element does not bind, then stops once it does[33m 324[2mms[22m[39m
+ [32m✓[39m src/alerts/ruleStandards/ShowAsBpmn.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 569[2mms[22m[39m
+   [32m✓[39m ShowAsBpmn [2m(4)[22m
+     [33m[2m✓[22m[39m draws the three elements the file names, read-only[33m 386[2mms[22m[39m
+ [32m✓[39m src/brand/brand.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 680[2mms[22m[39m
+ [32m✓[39m src/metrics/filters.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/canvas/forceLayout.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 159[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.rename.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 553[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/runNowWait.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 638[2mms[22m[39m
+   [32m✓[39m the capture kit's wait for a run it started [2m(3)[22m
+     [33m[2m✓[22m[39m is the run-now request alone: the screen shows an older Succeeded while the new run is going[33m 631[2mms[22m[39m
+ [32m✓[39m src/canvas/entityPictures.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/boards/boardModel.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/PublishScreen.deduplicate.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 608[2mms[22m[39m
+ [32m✓[39m src/design/radialMenuStyle.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.rawIdentifiers.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 594[2mms[22m[39m
+   [32m✓[39m the Studio map shows no link-type key (build order step 30) [2m(3)[22m
+     [33m[2m✓[22m[39m the list, the form and the inspector name the type; none shows its key[33m 554[2mms[22m[39m
+ [32m✓[39m src/inspector/linkChangeApi.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/canvas/LabelsMenu.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 673[2mms[22m[39m
+   [32m✓[39m LabelsMenu [2m(8)[22m
+     [33m[2m✓[22m[39m is closed until the button is pressed, and says it is open[33m 351[2mms[22m[39m
+ [32m✓[39m src/questions/graphFacts.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/layout/panelOrder.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/timeline/Timeline.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 710[2mms[22m[39m
+   [32m✓[39m Timeline's Select what is lit [2m(3)[22m
+     [33m[2m✓[22m[39m offers the action with a window set, and runs it when chosen[33m 304[2mms[22m[39m
+ [32m✓[39m src/welcome/WorkspaceWelcome.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 541[2mms[22m[39m
+ [32m✓[39m src/boards/PromoteSheet.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 578[2mms[22m[39m
+   [32m✓[39m PromoteSheet [2m(4)[22m
+     [33m[2m✓[22m[39m ticks what may go, says why the rest cannot, and lists what was left out[33m 436[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseAccessPanel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 862[2mms[22m[39m
+   [32m✓[39m who can open a case [2m(7)[22m
+     [33m[2m✓[22m[39m shows the Author everyone with access, by name where there is one and by id where not[33m 426[2mms[22m[39m
+ [32m✓[39m src/timeline/cyclicalOption.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/canvas/communityLinks.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 240[2mms[22m[39m
+ [32m✓[39m src/timeline/math.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/export/api.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/ingest/map/MapEditor.source.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 523[2mms[22m[39m
+   [32m✓[39m Map's left pane and the registered source [2m(4)[22m
+     [33m[2m✓[22m[39m names the registered source and its version, and shows the pipeline's own profile[33m 321[2mms[22m[39m
+ [32m✓[39m src/alerts/address.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 261[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.names.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 191[2mms[22m[39m
+ [32m✓[39m src/inspector/StrengthExplained.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 403[2mms[22m[39m
+   [32m✓[39m StrengthExplained [2m(2)[22m
+     [33m[2m✓[22m[39m explains the link's strength and ranks what its ends share, rarest first[33m 352[2mms[22m[39m
+ [32m✓[39m src/map/pmtilesAuth.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 79[2mms[22m[39m
+ [32m✓[39m src/playback/math.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/inspector/SharedContacts.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 476[2mms[22m[39m
+ [32m✓[39m src/content/AddFiles.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 436[2mms[22m[39m
+   [32m✓[39m AddFiles [2m(3)[22m
+     [33m[2m✓[22m[39m uploads each file with its marking, legal basis and holder, and draws the Documents[33m 357[2mms[22m[39m
+ [32m✓[39m src/resolution/explainView.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/statusbar/StatusBar.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 408[2mms[22m[39m
+ [32m✓[39m src/help/rightNames.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m src/layout/Sash.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+ [32m✓[39m src/ingest/verify/VerifyScreen.deduplicate.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 479[2mms[22m[39m
+   [32m✓[39m Verify: a dry run into a case that already holds rows [2m(5)[22m
+     [33m[2m✓[22m[39m says how many rows the case already holds, as a run would skip them[33m 304[2mms[22m[39m
+ [32m✓[39m src/reports/PublishedTab.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 853[2mms[22m[39m
+   [32m✓[39m the Published tab [2m(6)[22m
+     [33m[2m✓[22m[39m lists the published packs by title, version and date[33m 383[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseList.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 457[2mms[22m[39m
+ [32m✓[39m src/alerts/amlTemplates.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/crossfilter/selectLit.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/resolution/ThresholdControl.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 279[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/ingest/ConnectScreenPinned.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 639[2mms[22m[39m
+   [32m✓[39m ConnectScreen pinned to a pipeline's draft [2m(3)[22m
+     [33m[2m✓[22m[39m shows that draft's form without the Sources sidebar, and saves as an update[33m 417[2mms[22m[39m
+ [32m✓[39m src/canvas/expansionPreview.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.names.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+ [32m✓[39m src/color/nodeVisual.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/canvas/LargeExpansionPrompt.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 440[2mms[22m[39m
+ [32m✓[39m src/strength/words.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/alerts/ScreeningAlert.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 507[2mms[22m[39m
+   [32m✓[39m a screening alert's detail [2m(1)[22m
+     [33m[2m✓[22m[39m names the customer once, and the list's entry for the listed party as the list's[33m 505[2mms[22m[39m
+ [32m✓[39m src/home/homeKey.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/stagingSteps.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/theme/ThemeToggle.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 497[2mms[22m[39m
+ [32m✓[39m src/design/primitives/DropdownPanel.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 680[2mms[22m[39m
+   [32m✓[39m DropdownPanel [2m(8)[22m
+     [33m[2m✓[22m[39m shows only its button until it is opened[33m 347[2mms[22m[39m
+ [32m✓[39m src/reports/DataFeedsTab.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 328[2mms[22m[39m
+ [32m✓[39m src/canvas/JudgementBadgeOverlay.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 141[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/pipelineGraphEdit.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/canvas/chunkedTextureRefresh.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeLabel.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/canvas/valueIcons.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/assessment/api.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/PublishScreen.drawnWatch.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 507[2mms[22m[39m
+ [32m✓[39m src/auth/callbackFrame.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/history/HistoryPanel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 516[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseDomains.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 338[2mms[22m[39m
+ [32m✓[39m src/admin/sections/GradingScheme.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 794[2mms[22m[39m
+   [32m✓[39m Grading scheme [2m(4)[22m
+     [33m[2m✓[22m[39m is a section for administer_system alone[33m 373[2mms[22m[39m
+ [32m✓[39m src/ingest/map/mapGraphSync.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/canvas/crowding.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/auth/AccountMenu.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 538[2mms[22m[39m
+ [32m✓[39m src/ingest/map/EntityList.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1385[2mms[22m[39m
+   [32m✓[39m EntityList: the entities of the row template [2m(6)[22m
+     [33m[2m✓[22m[39m lists every entity however many there are, in a region that scrolls[33m 908[2mms[22m[39m
+ [32m✓[39m src/alerts/HeldRowsPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 427[2mms[22m[39m
+ [32m✓[39m src/inspector/emailDocuments.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/canvas/CommunityBoxOverlay.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 405[2mms[22m[39m
+ [32m✓[39m src/brand/BrandFrame.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 446[2mms[22m[39m
+ [32m✓[39m src/map/basemapAvailability.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+ [32m✓[39m src/search/SearchFilters.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 730[2mms[22m[39m
+   [32m✓[39m SearchFilters [2m(8)[22m
+     [33m[2m✓[22m[39m offers an ignore-case tick box and reports the change[33m 359[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/PipelineCanvas.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 458[2mms[22m[39m
+   [32m✓[39m PipelineCanvas [2m(2)[22m
+     [33m[2m✓[22m[39m draws every node as a focusable button named by stage and label, and the edges[33m 386[2mms[22m[39m
+ [32m✓[39m src/canvas/edgeSelection.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+[90mstderr[2m | src/App.crossfilter.test.tsx[2m > [22m[2ma filter's dimming reaches the status bar when the sign-in completes after the Glass opened
+[22m[39m[ECharts] Can't get DOM width or height. Please check dom.clientWidth and dom.clientHeight. They should not be 0.For example, you may need to call this in the callback of window.onload.
+
+ [32m✓[39m src/canvas/nodeIcons.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/App.crossfilter.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 2400[2mms[22m[39m
+   [33m[2m✓[22m[39m a filter's dimming reaches the status bar when the sign-in completes after the Glass opened[33m 713[2mms[22m[39m
+ [32m✓[39m src/export/pngMark.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/canvas/ViewActions.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 373[2mms[22m[39m
+ [32m✓[39m src/inspector/linkEventsApi.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/canvas/valueIconShown.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/color/nodeGlyphs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m src/canvas/expansionOutcome.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/color/oklab.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/reports/ExportControl.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 366[2mms[22m[39m
+ [32m✓[39m src/crossfilter/mapBins.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m src/canvas/edgeTypeMenu.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseSwitcher.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 364[2mms[22m[39m
+ [32m✓[39m src/ontology/schema.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/export/subgraphExport.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/export/chartExport.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/investigation/CaseSettings.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 337[2mms[22m[39m
+ [32m✓[39m src/canvas/zoomBands.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/canvas/CommunitiesControls.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 443[2mms[22m[39m
+   [32m✓[39m CommunitiesControls [2m(7)[22m
+     [33m[2m✓[22m[39m is one button until switched on, and says whether it is on[33m 301[2mms[22m[39m
+ [32m✓[39m src/inspector/describeChange.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/canvas/LayoutMenu.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 578[2mms[22m[39m
+   [32m✓[39m LayoutMenu [2m(6)[22m
+     [33m[2m✓[22m[39m offers all seven layouts[33m 387[2mms[22m[39m
+ [32m✓[39m src/boards/BoardAlerts.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 409[2mms[22m[39m
+   [32m✓[39m the boards' Alerts panel [2m(2)[22m
+     [33m[2m✓[22m[39m shows the case's open alerts as the Conduit counts them, as words with nothing to open[33m 392[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.valuemap.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 419[2mms[22m[39m
+ [32m✓[39m src/reader/pendingSpans.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m src/views/SaveViewForm.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 518[2mms[22m[39m
+ [32m✓[39m src/linktypes/defineType.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/admin/updateNotice.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/watches/HotlistPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 186[2mms[22m[39m
+ [32m✓[39m src/ingest/map/SourceFieldsPanel.ignore.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 611[2mms[22m[39m
+   [33m[2m✓[22m[39m keeps the note typed beside the field when Ignore is pressed[33m 435[2mms[22m[39m
+ [32m✓[39m src/ingest/draftSave.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeAttributesTheme.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/canvas/removeNodes.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m compute-tier1/communities.test.mjs [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/metrics/hulls.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/design/shellSizes.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/alerts/strengthSentence.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/design/primitives/Popover.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+ [32m✓[39m src/inspector/NeighbourhoodRisk.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 334[2mms[22m[39m
+ [32m✓[39m src/investigation/openAttachment.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m src/design/primitives/Drawer.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 370[2mms[22m[39m
+ [32m✓[39m src/canvas/ReasonPrompt.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 476[2mms[22m[39m
+ [32m✓[39m src/reports/ReportsPlace.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 587[2mms[22m[39m
+   [32m✓[39m ReportsPlace's starting tab [2m(3)[22m
+     [33m[2m✓[22m[39m opens on Trends when asked to[33m 378[2mms[22m[39m
+ [32m✓[39m src/ingest/runs/runsGrid.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/reports/packText.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/reader/designation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/admin/refusals.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 450[2mms[22m[39m
+   [32m✓[39m Admin's refusals say why and which roles can [2m(2)[22m
+     [33m[2m✓[22m[39m a right the Conduit asks for, by the roles that hold it[33m 437[2mms[22m[39m
+ [32m✓[39m src/explore/exploreApi.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 81[2mms[22m[39m
+ [32m✓[39m src/crossfilter/emergence.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/reports/journey.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m src/inspector/linkHandling.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/map/providers.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/shell/router.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m src/canvas/communityAssigner.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/design/canvasOverlays.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/inspector/LinkHistory.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 292[2mms[22m[39m
+ [32m✓[39m src/ingest/studio/datasets.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/map/conduitRequest.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+[90mstderr[2m | src/map/HotspotHistogram.stale.test.tsx[2m > [22m[2mHotspotHistogram, answers out of order[2m > [22m[2mdrops an older answer that arrives after a newer one
+[22m[39mThe current testing environment is not configured to support act(...)
+
+ [32m✓[39m src/map/HotspotHistogram.stale.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 122[2mms[22m[39m
+ [32m✓[39m src/reports/TrendChart.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 308[2mms[22m[39m
+ [32m✓[39m src/search/drawSearchResult.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m src/welcome/figure.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/dossier/Dossier.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 131[2mms[22m[39m
+ [32m✓[39m src/ingest/map/ElementInspector.identifiers.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 126[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearchLayout.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 446[2mms[22m[39m
+ [32m✓[39m src/ingest/verify/VerifyScreen.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 274[2mms[22m[39m
+ [32m✓[39m src/canvas/ZoomControls.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 337[2mms[22m[39m
+ [32m✓[39m src/map/places.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m src/map/HotspotHistogram.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/testing/slowestReporter.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/inspector/EntityPicture.clears.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 309[2mms[22m[39m
+   [33m[2m✓[22m[39m after Set picture succeeds, the file control no longer names the file sent[33m 307[2mms[22m[39m
+ [32m✓[39m src/canvas/linkLabel.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/shell/brandButton.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 300[2mms[22m[39m
+ [32m✓[39m src/design/radiusTokens.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeGestures.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/GovukFooter.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 316[2mms[22m[39m
+ [32m✓[39m src/ingest/publish/scheduleChoice.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/timeline/Timeline.elsewhere.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 200[2mms[22m[39m
+ [32m✓[39m src/canvas/iconImage.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+[90mstderr[2m | src/timeline/TimelineStrip.test.tsx[2m > [22m[2mthe folded timeline's strip[2m > [22m[2mdraws one bar a bucket, the tallest full height, and names the range in mono
+[22m[39mThe current testing environment is not configured to support act(...)
+
+[90mstderr[2m | src/timeline/TimelineStrip.test.tsx[2m > [22m[2mthe folded timeline's strip[2m > [22m[2msays nothing it has not been given, and ignores the cyclical week
+[22m[39mThe current testing environment is not configured to support act(...)
+
+ [32m✓[39m src/timeline/TimelineStrip.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m src/investigation/investigationId.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/inspector/sourceLocator.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/design/fonts.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/canvas/expansionGate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/canvas/linkCollapse.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/ingest/map/mapCanvasColours.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/design/canvasGrid.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/assessment/ReviewFlagChip.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m src/analytics/eventsElsewhere.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/design/undefinedTokens.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m src/canvas/DegreeMarkOverlay.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 73[2mms[22m[39m
+ [32m✓[39m src/inspector/SelectionList.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 395[2mms[22m[39m
+   [32m✓[39m SelectionList [2m(3)[22m
+     [33m[2m✓[22m[39m lists each selected node by name, with how many in the heading[33m 303[2mms[22m[39m
+ [32m✓[39m src/views/ViewLensBanner.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 390[2mms[22m[39m
+   [32m✓[39m the view's notes from the drawing [2m(2)[22m
+     [33m[2m✓[22m[39m are not offered on a view that has none[33m 335[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeDrag.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/design/brassUse.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/welcome/WelcomeAbout.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 356[2mms[22m[39m
+   [32m✓[39m WelcomeAbout [2m(3)[22m
+     [33m[2m✓[22m[39m names the four places as the help page names them, claiming nothing not built[33m 303[2mms[22m[39m
+ [32m✓[39m src/canvas/cameraMoves.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/analytics/api.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/search/GlobalSearchAddMany.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 393[2mms[22m[39m
+ [32m✓[39m src/canvas/linkHover.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/canvas/nodeHitArea.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/ingest/verify/VerifyScreen.rows.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 368[2mms[22m[39m
+   [32m✓[39m Verify: rejected rows [2m(1)[22m
+     [33m[2m✓[22m[39m reads the first data row as row 1[33m 366[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.bind.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 389[2mms[22m[39m
+   [32m✓[39m the keyboard bind [2m(2)[22m
+     [33m[2m✓[22m[39m binds the chosen column to this binding and lets the column go[33m 371[2mms[22m[39m
+ [32m✓[39m src/ingest/map/FieldBindingEditor.parts.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 116[2mms[22m[39m
+ [32m✓[39m src/strength/useOnReturn.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+ [32m✓[39m src/views/lensHandoff.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/explore/ExplorePanelAddMany.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 452[2mms[22m[39m
+   [32m✓[39m Where to start's add-many fold [2m(2)[22m
+     [33m[2m✓[22m[39m is offered, folded, when there is a canvas to draw on[33m 424[2mms[22m[39m
+ [32m✓[39m src/design/primitives/ContextMenu.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 195[2mms[22m[39m
+ [32m✓[39m src/explore/exploreOverlayPlace.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/canvas/settledAnchor.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 383[2mms[22m[39m
+   [32m✓[39m settledAnchors: where an arriving node starts [2m(3)[22m
+     [33m[2m✓[22m[39m is linear in the links: the perf fixture's 50,000 nodes and 250,000 links take well under a second[33m 375[2mms[22m[39m
+ [32m✓[39m src/canvas/singleFlight.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/syncGovukAssets.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/design/accordionStyle.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m keyboard/mapMeaning.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/shell/startScreen.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 406[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/GovukHeader.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 236[2mms[22m[39m
+ [32m✓[39m src/assessment/judgementCounts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/ingest/rowTemplateSave.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/inspector/intervalText.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/shell/topBarWidths.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/watches/StatusBadge.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/alerts/templates.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/reports/alertBadges.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/ingest/fileSize.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m src/reader/readerApi.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/workingset/deltaOps.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/map/mapStart.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/map/contrast.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/ingest/percent.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/map/geometry.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/canvas/focusAnnouncement.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m src/canvas/dottedEdgePatterns.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/history/lastChange.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/site/api.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/govukChrome.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/time/utcStamp.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/inspector/sourcesWithheld.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/auth/signInArgs.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/ingest/dag/studioMode.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/design/primitives/Toast.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 128[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/PhaseBanner.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 148[2mms[22m[39m
+ [32m✓[39m src/shell/StartPage.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 165[2mms[22m[39m
+ [32m✓[39m src/help/RolesHelpPage.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 386[2mms[22m[39m
+   [32m✓[39m the help page [2m(1)[22m
+     [33m[2m✓[22m[39m draws every right's words from roles.ts, and its way back has focus[33m 384[2mms[22m[39m
+ [32m✓[39m src/brand/govuk/SkipLink.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 133[2mms[22m[39m
+ [31m❯[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 7838[2mms[22m[39m
+   [31m❯[39m MatrixView at 50,000 nodes and 250,000 links [2m(1)[22m
+[31m     [31m×[31m opens inside §5's first-frame budget, drawing one page of each table and saying so[39m[33m 7836[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/matrix/MatrixView.budget.test.tsx[2m > [22mMatrixView at 50,000 nodes and 250,000 links[2m > [22mopens inside §5's first-frame budget, drawing one page of each table and saying so
+[31m[1mAssertionError[22m: opened in 4362 ms: expected 4361.971372999999 to be less than 2500[39m
+[36m [2m❯[22m src/matrix/MatrixView.budget.test.tsx:[2m50:60[22m[39m
+    [90m 48|[39m     expect(entities.querySelector("caption")?.textContent).toContain("…
+    [90m 49|[39m     expect(links.querySelector("caption")?.textContent).toContain("Row…
+    [90m 50|[39m     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+    [90m   |[39m                                                            [31m^[39m
+    [90m 51|[39m   }, 60_000);
+    [90m 52|[39m });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m364 passed[39m[22m[90m (365)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m3096 passed[39m[22m[90m (3097)[39m
+[2m   Start at [22m 20:02:36
+[2m   Duration [22m 45.05s[2m (environment 46%, tests 38%, import 9%, transform 6%, setup 1%)[22m
+
+[2m    Isolate [22m [33m365 workers spawned[39m[2m · ~914ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~21.32s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
+
+Slowest 30 of 3097 tests:
+  7836 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+  3395 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+  2565 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  1235 ms  src/App.matrix.test.tsx > the view switch offers the Graph and the Map, and the Matrix one click away under More views
+  1179 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+  1125 ms  src/App.matrix.test.tsx > Expand and Show on a row go to the Graph and use the canvas's own Expand and centring
+   908 ms  src/ingest/map/EntityList.test.tsx > EntityList: the entities of the row template > lists every entity however many there are, in a region that scrolls
+   886 ms  src/admin/sections/ModelsUsage.test.tsx > limits > sends whole numbers, blank as no limit, and shows the limits in words
+   847 ms  keyboard/playwrightPorts.test.ts > each lane's Playwright runs use ports of their own > ../a11y/playwright.config.ts: two slots never share a port
+   838 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   783 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order
+   757 ms  src/admin/sections/Connections.test.tsx > Connections > is a tab for administer_system alone, lists the built-in Files, and names a new one
+   748 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+   729 ms  src/App.matrix.test.tsx > a selection made on the canvas is the Matrix's selection, and the Matrix's goes back to the canvas
+   723 ms  src/admin/sections/Datasets.test.tsx > Datasets > shows a dataset's kind, policy, Authors and linked cases as counts, and only removed cases' dry runs
+   713 ms  src/ingest/map/LinkList.test.tsx > LinkList: the links of the row template > lists every link however many there are, in a region that scrolls
+   713 ms  src/App.crossfilter.test.tsx > a filter's dimming reaches the status bar when the sign-in completes after the Glass opened
+   696 ms  src/ingest/sources/sources.test.tsx > the register wizard > goes Connection, File, Governance, refuses to register until governance is complete, and sends what was chosen
+   683 ms  src/ingest/runs/RunsTab.test.tsx > the Runs tab > draws one row per deployed pipeline and a cell per day, in words
+   660 ms  src/alerts/SentenceBuilder.test.tsx > the sentence builder > previews the rule on the last 90 days: the count, up to five examples, and that nothing was written
+   638 ms  src/alerts/RulesPlace.test.tsx > the Alerts place > lists the queue by name and explains an alert with its transactions
+   635 ms  src/ingest/dag/PipelineStudio.test.tsx > PipelineStudio > lists the pipelines and opens one onto the canvas
+   631 ms  src/ingest/publish/runNowWait.test.tsx > the capture kit's wait for a run it started > is the run-now request alone: the screen shows an older Succeeded while the new run is going
+   602 ms  src/ingest/runs/drawnMerge.test.tsx > Merge into a dataset… > maps, matches, runs the dry run first, and merges what the dry run showed
+   595 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > is two real tables, each with a caption, column headers and a row header per row
+   591 ms  src/admin/adminWords.test.tsx > Admin's words: roles by name, never people or ids > in People: each role's box, each person's levels and their grants
+   580 ms  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+   572 ms  src/ingest/ConnectScreenDeduplicate.test.tsx > Connect: the deduplicate control > reads an existing draft's key back in its own order, with its transform
+   570 ms  src/reports/TrendsTab.test.tsx > the trend builder and the case's domain models > marks a saved trend that uses link types outside the case's domain models, and only that one
+   569 ms  src/App.test.tsx > 06_DECISIONS.md ADR-050 — the sign-in gate > an unauthenticated load shows the sign-in screen and issues no /v1 call
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make: *** [Makefile:24: test-js] Error 1
+make: Leaving directory '/root/osprey-runs/case-b/OspreyFlow_Core'
+Wall time: 46 s, exit 2 (no stack, no lease; set-up before it 11 s)
+rc=2
