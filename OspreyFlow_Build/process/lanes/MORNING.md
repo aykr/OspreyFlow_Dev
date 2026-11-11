@@ -225,6 +225,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
      - the prison script v5.3, Appendix E item 8: main has no Delete for a board;
      - AE slide 11 and the prison editor slide's subtitle are the tightest fits.
 
+31. **Laurium's licence check is done, and you ruled at about 06:00 (all four recommendations).** Laurium is MIT
+   (Ministry of Justice), and no copyleft licence appears anywhere in its tree. Your four rulings:
+   - Laurium runs as its own Python 3.13 service, because Laurium needs Python 3.13 (ADR-135 Amendment 6, reserved for platform).
+   - Recorded licence entries for `laurium`, `arrow-pd-parser` and `tiktoken`.
+   - The spaCy model is accepted, from its pinned GitHub release.
+   - The `encoder` extra (proprietary CUDA) is never installed.
+   The record is `process/lanes/platform/p12/LICENCE_CHECK.md`, and P12 has no further stop for the licence.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin

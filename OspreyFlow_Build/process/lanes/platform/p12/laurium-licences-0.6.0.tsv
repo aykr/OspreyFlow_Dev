@@ -1,0 +1,169 @@
+accelerate	1.15.0		Apache	Apache Software License	https://github.com/huggingface/accelerate
+aiohappyeyeballs	2.7.1		PSF-2.0	Python Software Foundation License	https://github.com/aio-libs/aiohappyeyeballs/issues
+aiohttp	3.14.5	Apache-2.0 AND MIT			https://github.com/aio-libs/aiohttp/actions?query=workflow%3ACI
+aiosignal	1.4.0		Apache 2.0	Apache Software License	https://github.com/aio-libs/aiosignal/actions
+alembic	1.20.1	MIT			https://github.com/sqlalchemy/alembic/issues/
+annotated-doc	0.0.6	MIT			https://github.com/fastapi/annotated-doc/release-notes.md
+annotated-types	0.8.0	MIT		MIT License	https://github.com/annotated-types/annotated-types/releases
+anthropic	2.8.0		Apache-2.0	Apache Software License	https://github.com/anthropics/anthropic-sdk-python
+anyio	4.16.0	MIT			https://github.com/agronholm/anyio/issues
+arrow-pd-parser	2.2.0				https://github.com/moj-analytical-services/mojap-arrow-pd-parser
+attrs	26.1.0	MIT			https://github.com/sponsors/hynek
+awswrangler	3.18.0	Apache-2.0			https://github.com/aws/aws-sdk-pandas
+blis	1.3.4		BSD	BSD License	https://github.com/explosion/cython-blis
+boto3	1.44.0		Apache-2.0		https://github.com/boto/boto3
+botocore	1.44.0		Apache-2.0		https://github.com/boto/botocore
+catalogue	2.0.10		MIT	MIT License	https://github.com/explosion/catalogue
+certifi	2026.10.23		MPL-2.0	Mozilla Public License 2.0 (MPL 2.0)	https://github.com/certifi/python-certifi
+charset-normalizer	3.5.2		MIT		https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md
+click	8.5.1	BSD-3-Clause			https://github.com/pallets/click/
+cloudpathlib	0.26.0			MIT License	https://github.com/drivendataorg/cloudpathlib/issues
+cloudpickle	3.1.2		BSD-3-Clause	BSD License	https://github.com/cloudpipe/cloudpickle
+colorlog	6.12.0		MIT License	MIT License	https://github.com/borntyping/python-colorlog
+confection	1.3.4		MIT	MIT License	https://github.com/explosion/confection
+cuda-bindings	13.5.0	Apache-2.0			https://nvidia.github.io/cuda-python/
+cuda-pathfinder	1.8.6	Apache-2.0			https://nvidia.github.io/cuda-python/
+cuda-toolkit	13.2.2				
+cymem	2.0.16		MIT	MIT License	https://github.com/explosion/cymem
+dataengineeringutils3	1.4.3		MIT	MIT License	https://github.com/moj-analytical-services/dataengineeringutils3
+datasets	5.0.1		Apache 2.0	Apache Software License	https://github.com/huggingface/datasets/tags
+datasets	5.2.0		Apache 2.0	Apache Software License	https://github.com/huggingface/datasets/tags
+deprecated	1.3.1		MIT	MIT License	https://github.com/laurent-laporte-pro/deprecated/issues
+dill	0.4.1		BSD-3-Clause	BSD License	https://github.com/uqfoundation/dill/issues
+distro	1.9.0		Apache License, Version 2.0	Apache Software License	https://github.com/python-distro/distro
+docstring-parser	0.18.0		MIT	MIT License	https://github.com/rr-/docstring_parser/blob/master/CHANGELOG.md
+evaluate	0.4.6		Apache 2.0	Apache Software License	https://github.com/huggingface/evaluate/tags
+faker	40.54.0		MIT License	MIT License	https://github.com/joke2k/faker/issues
+filelock	4.2.10	MIT			https://github.com/tox-dev/filelock
+frozenlist	1.8.0		Apache-2.0		https://github.com/aio-libs/frozenlist/actions
+fsspec	2026.6.0	BSD-3-Clause			https://github.com/fsspec/filesystem_spec
+fsspec	2026.9.0	BSD-3-Clause			https://github.com/fsspec/filesystem_spec
+h11	0.16.0		MIT	MIT License	https://github.com/python-hyper/h11
+hf-xet	1.8.0	Apache-2.0		Apache Software License	https://github.com/huggingface/xet-core
+httpcore	1.0.9	BSD-3-Clause		BSD License	https://github.com/encode/httpcore
+httpcore2	2.16.0	BSD-3-Clause		BSD License	https://github.com/pydantic/httpx2/blob/main/src/httpcore2/CHANGELOG.md
+httpx	0.28.1		BSD-3-Clause	BSD License	https://github.com/encode/httpx/blob/master/CHANGELOG.md
+httpx-sse	0.4.3		MIT		https://github.com/florimondmanca/httpx-sse
+httpx2	2.16.0	BSD-3-Clause		BSD License	https://github.com/pydantic/httpx2/blob/main/src/httpx2/CHANGELOG.md
+huggingface-hub	0.36.2		Apache	Apache Software License	https://github.com/huggingface/huggingface_hub
+huggingface-hub	2.4.0		Apache-2.0	Apache Software License	https://github.com/huggingface/huggingface_hub
+idna	3.20	BSD-3-Clause			https://github.com/kjd/idna/blob/master/HISTORY.md
+jinja2	3.1.6			BSD License	https://github.com/pallets/jinja/
+jiter	0.19.0	MIT			https://github.com/pydantic/jiter/
+jmespath	1.1.0		MIT	MIT License	https://github.com/jmespath/jmespath.py
+joblib	1.6.0	BSD-3-Clause			https://github.com/joblib/joblib
+jsonpatch	1.46	BSD-3-Clause			https://github.com/stefankoegl/python-json-patch
+jsonpointer	3.11		Modified BSD License	BSD License	https://github.com/stefankoegl/python-json-pointer
+jsonschema	4.26.0	MIT			https://github.com/python-jsonschema/jsonschema/blob/main/CHANGELOG.rst
+jsonschema-specifications	2025.9.1	MIT			https://github.com/sponsors/Julian
+langchain-anthropic	1.7.10		MIT	MIT License	https://github.com/langchain-ai/langchain/releases?q=%22langchain-anthropic%22
+langchain-aws	1.9.3		MIT		https://github.com/langchain-ai/langchain-aws
+langchain-classic	1.0.8		MIT	MIT License	https://github.com/langchain-ai/langchain/releases?q=tag%3A%22langchain-classic%3D%3D1%22
+langchain-community	0.4.2		MIT		https://github.com/langchain-ai/langchain-community/tree/main/libs/community
+langchain-core	1.7.7		MIT	MIT License	https://github.com/langchain-ai/langchain/releases?q=%22langchain-core%3D%3D1%22
+langchain-ollama	1.1.0		MIT	MIT License	https://github.com/langchain-ai/langchain/releases?q=%22langchain-ollama%22
+langchain-openai	1.7.4		MIT	MIT License	https://github.com/langchain-ai/langchain/releases?q=%22langchain-openai%22
+langchain-protocol	0.0.21		MIT	MIT License	https://github.com/langchain-ai/agent-protocol/tree/main/streaming
+langchain-text-splitters	1.1.3		MIT	MIT License	https://github.com/langchain-ai/langchain/releases?q=%22langchain-text-splitters%22
+langsmith	0.14.17		MIT	MIT License	https://github.com/langchain-ai/langsmith-python
+lightning-utilities	0.15.3		Apache-2.0		https://github.com/Lightning-AI/utilities/issues
+mako	1.4.3	MIT			https://github.com/sqlalchemy/mako
+markdown-it-py	4.3.0			MIT License	https://github.com/executablebooks/markdown-it-py
+markupsafe	3.0.4	BSD-3-Clause			https://github.com/pallets/markupsafe/
+mdurl	0.1.2			MIT License	https://github.com/executablebooks/mdurl
+mojap-metadata	1.16.0		MIT	MIT License	
+mpmath	1.3.0		BSD	BSD License	https://github.com/fredrik-johansson/mpmath
+multidict	7.2.1	Apache-2.0			https://github.com/aio-libs/multidict/actions
+multiprocess	0.70.19		BSD-3-Clause	BSD License	https://github.com/uqfoundation/multiprocess/issues
+murmurhash	1.0.16		MIT	MIT License	https://github.com/explosion/murmurhash
+narwhals	2.28.0	MIT			https://github.com/narwhals-dev/narwhals/issues
+networkx	3.7	BSD-3-Clause			https://github.com/networkx/networkx/issues
+numpy	2.5.4	BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0			https://github.com/numpy/numpy
+nvidia-cublas	13.4.1.3				https://developer.nvidia.com/cuda-zone
+nvidia-cuda-cccl	13.3.5.0.6	LicenseRef-NVIDIA-Proprietary			https://developer.nvidia.com/cuda-zone
+nvidia-cuda-cupti	13.2.86				https://developer.nvidia.com/cuda-zone
+nvidia-cuda-nvrtc	13.2.86				https://developer.nvidia.com/cuda-zone
+nvidia-cuda-runtime	13.2.86				https://developer.nvidia.com/cuda-zone
+nvidia-cudnn-cu13	9.26.0.51				https://developer.nvidia.com/cuda-zone
+nvidia-cufft	12.2.0.57				https://developer.nvidia.com/cuda-zone
+nvidia-cufile	1.17.1.22				https://developer.nvidia.com/cuda-zone
+nvidia-cusolver	12.2.0.11				https://developer.nvidia.com/cuda-zone
+nvidia-cusparse	12.7.10.12				https://developer.nvidia.com/cuda-zone
+nvidia-cusparselt-cu13	0.8.1		NVIDIA Proprietary Software		https://developer.nvidia.com/cusparselt
+nvidia-nccl-cu13	2.30.7				https://developer.nvidia.com/cuda-zone
+nvidia-nvjitlink	13.5.37	LicenseRef-NVIDIA-Proprietary			https://developer.nvidia.com/cuda-zone
+nvidia-nvshmem-cu13	3.7.2				https://developer.nvidia.com/cuda-zone
+nvidia-nvtx	13.2.86				https://developer.nvidia.com/cuda-zone
+ollama	0.6.3	MIT			https://github.com/ollama/ollama-python/issues
+openai	3.49.0	Apache-2.0		Apache Software License	https://github.com/openai/openai-python
+opentelemetry-api	1.45.2	Apache-2.0			https://github.com/open-telemetry/opentelemetry-python/tree/main/opentelemetry-api
+optuna	5.0.0			MIT License	https://github.com/optuna/optuna/issues
+orjson	3.13.0	MPL-2.0 AND (Apache-2.0 OR MIT)		Apache Software License; MIT License; Mozilla Public License 2.0 (MPL 2.0)	https://github.com/ijl/orjson/blob/master/CHANGELOG.md
+packaging	26.3	Apache-2.0 OR BSD-2-Clause			https://github.com/pypa/packaging
+pandas	3.1.1	BSD-3-Clause			https://github.com/pandas-dev/pandas/issues
+parameterized	0.7.5		FreeBSD	BSD License	https://github.com/wolever/parameterized
+peft	0.21.2		Apache	Apache Software License	https://github.com/huggingface/peft
+preshed	3.0.15		MIT	MIT License	https://github.com/explosion/preshed
+propcache	0.5.4		Apache-2.0		https://github.com/aio-libs/propcache/actions?query=branch:master
+protobuf	7.36.2		3-Clause BSD License		https://developers.google.com/protocol-buffers/
+psutil	7.2.2		BSD-3-Clause		https://github.com/giampaolo/psutil
+pyarrow	26.0.1	Apache-2.0			https://github.com/apache/arrow/issues
+pydantic	2.14.3	MIT			https://github.com/sponsors/samuelcolvin
+pydantic-core	2.50.4	MIT			https://github.com/sponsors/samuelcolvin
+pydantic-settings	2.16.2	MIT		MIT License	https://github.com/pydantic/pydantic-settings/releases
+pydbtools	5.9.1		MIT		
+pygments	2.21.0	BSD-2-Clause			https://github.com/pygments/pygments/issues
+python-dateutil	2.9.0.post0		Dual License	Apache Software License; BSD License	https://github.com/dateutil/dateutil
+python-dotenv	1.2.4		BSD-3-Clause		https://github.com/theskumar/python-dotenv
+pytorch-lightning	2.6.1		Apache-2.0	Apache Software License	https://github.com/Lightning-AI/pytorch-lightning/issues
+pyyaml	6.0.3		MIT	MIT License	https://github.com/yaml/pyyaml/issues
+referencing	0.37.0	MIT			https://github.com/sponsors/Julian
+regex	2026.11.9	Apache-2.0 AND CNRI-Python			https://github.com/mrabarnett/mrab-regex
+requests	2.34.2		Apache-2.0	Apache Software License	https://github.com/psf/requests
+requests-toolbelt	1.0.0		Apache 2.0	Apache Software License	https://github.com/requests/toolbelt/blob/master/HISTORY.rst
+rich	15.0.0		MIT	MIT License	https://github.com/Textualize/rich
+rpds-py	2026.9.1	MIT			https://github.com/sponsors/Julian
+s3transfer	0.19.3		Apache License 2.0	Apache Software License	https://github.com/boto/s3transfer
+safetensors	0.8.0			Apache Software License	https://github.com/huggingface/safetensors
+scikit-learn	1.9.1	BSD-3-Clause			https://github.com/scikit-learn/scikit-learn
+scipy	1.18.1		Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Develope...[long text]	BSD License	https://github.com/scipy/scipy/releases
+sentence-transformers	5.7.0	Apache-2.0			https://github.com/huggingface/sentence-transformers/
+setfit	1.2.0		Apache 2.0	Apache Software License	https://github.com/huggingface/setfit/tags
+setuptools	84.2.1	MIT			https://github.com/pypa/setuptools
+shellingham	1.5.4		ISC License	ISC License (ISCL)	https://github.com/sarugaku/shellingham
+six	1.17.0		MIT	MIT License	https://github.com/benjaminp/six
+smart-open	5.2.1		MIT	MIT License	https://github.com/piskvorky/smart_open
+sniffio	1.3.1		MIT OR Apache-2.0	Apache Software License; MIT License	https://github.com/python-trio/sniffio
+spacy	3.8.13		MIT	MIT License	https://github.com/explosion/spaCy/releases
+spacy-legacy	3.0.12		MIT	MIT License	https://spacy.io
+spacy-loggers	1.0.5		MIT		https://github.com/explosion/spacy-loggers
+sql-metadata	3.0.1		MIT	MIT License	https://github.com/macbre/sql-metadata
+sqlalchemy	2.1.8	MIT			https://github.com/sqlalchemy/sqlalchemy/discussions
+sqlglot	30.31.0	MIT			https://github.com/tobymao/sqlglot/issues
+sqlparse	0.6.1			BSD License	https://github.com/andialbrecht/sqlparse
+srsly	2.5.6		MIT	MIT License	https://github.com/explosion/srsly
+sympy	1.14.0		BSD	BSD License	https://github.com/sympy/sympy
+tenacity	9.2.1	Apache-2.0			https://github.com/jd/tenacity
+thinc	8.3.14		MIT	MIT License	https://github.com/explosion/thinc
+threadpoolctl	3.8.0	BSD-3-Clause			https://github.com/joblib/threadpoolctl
+tiktoken	0.14.0		MIT License                  Copyright (c) 2022 OpenAI, Shan...[long text]		https://github.com/openai/tiktoken/blob/main/CHANGELOG.md
+tokenizers	0.22.2			Apache Software License	https://github.com/huggingface/tokenizers
+torch	2.10.0		BSD-3-Clause		https://github.com/pytorch/pytorch/issues
+torch	2.15.0	Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib			https://github.com/pytorch/pytorch/issues
+torchmetrics	1.9.0		Apache-2.0	Apache Software License	https://github.com/Lightning-AI/torchmetrics/issues
+tqdm	4.70.1		MPL-2.0 AND MIT		https://tqdm.github.io/releases
+transformers	4.57.6		Apache 2.0 License	Apache Software License	https://github.com/huggingface/transformers
+triton	3.9.0		MIT		https://github.com/triton-lang/triton/
+truststore	0.10.5	MIT			https://github.com/sethmlarson/truststore
+typer	0.29.0	MIT			https://github.com/fastapi/typer
+typing-extensions	4.16.0	PSF-2.0			https://github.com/python/typing_extensions/issues
+typing-inspection	0.4.5	MIT			https://github.com/pydantic/typing-inspection/blob/main/HISTORY.md
+urllib3	2.8.0	MIT			https://github.com/urllib3/urllib3/blob/main/CHANGES.rst
+uuid-utils	0.19.0	BSD-3-Clause			https://github.com/aminalaee/uuid-utils
+wasabi	1.1.3		MIT		https://github.com/explosion/wasabi
+weasel	1.0.1		MIT	MIT License	https://github.com/explosion/weasel/
+websockets	17.4	BSD-3-Clause			https://github.com/python-websockets/websockets
+wrapt	2.5.2	BSD-2-Clause			https://github.com/GrahamDumpleton/wrapt/issues/
+xxhash	4.1.0		BSD-2-Clause		https://github.com/ifduyue/python-xxhash
+yarl	1.25.1		Apache-2.0		https://github.com/aio-libs/yarl/actions?query=branch:master
+zstandard	0.25.0	BSD-3-Clause			https://github.com/indygreg/python-zstandard

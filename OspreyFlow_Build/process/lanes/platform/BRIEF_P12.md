@@ -26,3 +26,5 @@ on both adapters; a Laurium configuration naming another host refused (planted);
 *inferred* with their document, accepted and rejected in the reader as Deep read's (keyboard and axe in three
 themes); an image built without the extra contains no `langchain` (checked in CI); access test: no `manage_models`,
 no change; a friction row.
+
+**The licence check is done, and the owner has ruled (11 November).** Read `p12/LICENCE_CHECK.md` first: Laurium runs as its own Python 3.13 service (ADR-135 Amendment 6, reserved for you, written before the code), the three recorded licence entries, the spaCy model from its pinned GitHub release, and never the `encoder` extra. No further stop for the licence.
