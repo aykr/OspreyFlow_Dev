@@ -1324,11 +1324,13 @@ class DeploymentConfig(BaseModel):
     )
 
     #: ADR-148 decision 10: the highest marking this deployment may hold. Checked against the
-    #: handling scheme the Conduit loads at render (`harness.site.highest_marking`).
+    #: handling scheme the Conduit loads at render (`harness.site.highest_marking`, which holds
+    #: each profile's own default, `PROFILE_CEILINGS`).
     highest_marking: str | None = Field(
         default=None,
         description=(
-            "Default: the handling scheme's highest. The highest marking this deployment may hold: "
+            "Default: OFFICIAL-SENSITIVE on the cloud-platform profile, else the handling "
+            "scheme's highest. The highest marking this deployment may hold: "
             "a load or an import marked above it is refused before anything is written, in words "
             "that say this limit and never the item's content. A demo pack that declares no "
             "highest marking is judged as the scheme's highest, so under a lower setting it is "
