@@ -326,8 +326,25 @@ def test_pods_it_cannot_list_refuse_the_restore(run: Any) -> None:
     def refused(_: str) -> list[dict[str, Any]]:
         raise urllib.error.URLError("forbidden")
 
-    with pytest.raises(pb.BackupRefused, match="could not be listed"):
+    with pytest.raises(pb.BackupRefused, match="cannot confirm the writers are stopped") as said:
         pb.writers_stopped(guarded, refused)
+    assert "nothing was touched" in said.value.reason
+
+
+def test_a_restore_whose_writers_cannot_be_seen_touches_nothing(run: Any) -> None:
+    """Fails closed (the orchestrator's ruling): the API unreachable, the restore refuses in words and
+    sends ClickHouse nothing."""
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    guarded = pb.Settings(**{**settings.__dict__, "writers": ("api",)})
+
+    def unreachable(_: str) -> list[dict[str, Any]]:
+        raise urllib.error.URLError("timed out")
+
+    sent = len(fake.statements)
+    with pytest.raises(pb.BackupRefused, match="cannot confirm the writers are stopped"):
+        pb.restore_analytics(guarded, bucket, stores, manifest["set"], pods=unreachable)
+    assert fake.statements[sent:] == []
 
 
 def test_an_sts_refusal_is_named_as_sts_s() -> None:

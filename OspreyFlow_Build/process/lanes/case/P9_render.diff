@@ -13,13 +13,30 @@ platform's own render test, which must now expect ClickHouse's pod to run as its
    `tests/cloud_platform_backup`'s policy case green on development and production. On P7b's tree (d7d60d2) with P9
    applied, the poc, development and production renders break one rule only: `ingress-isolation` for
    `CronJob/ospreyflow-backup` (and `ospreyflow-backup-claims` in poc), since P7b's per-workload ingress rows do not yet
-   name P9's pods. The rows to add, by `app.kubernetes.io/name` (stable from here on):
-   - `backup` (the CronJob's runner) and `restore` (the stores' restore Job): no ingress; egress to ArcadeDB (2480),
-     ClickHouse (8123), S3, STS and KMS in the region; `restore` also to the cluster's API (the writers check; P9's
-     own Calico policy, `default.ospreyflow-restore-to-the-api`, admits that on main today);
-   - `backup-claims` and `restore-claims` (the poc shape's claims): no ingress; egress to S3, STS and KMS; and
-     `restore-claims` to the cluster's API;
-   - `clickhouse` (unchanged name): egress to S3 and STS in the region added to its row.
+   name P9's pods. P9 renders no Calico policy of its own (the orchestrator's ruling: every path is a row of
+   profile.yaml's `egress`). The rows, by `app.kubernetes.io/name` (stable from here on), as P7b's profile.yaml at
+   8ccb533 already holds them but one:
+   - `backup`, `backup-claims`, `restore`, `restore-claims`: S3 and STS in the region (`egress.reach.always`, there);
+     no KMS row, since none of them calls KMS (S3 asks it, SSE-KMS);
+   - `backup` and `restore` to ArcadeDB and ClickHouse (`egress.paths`, there); the claims' runs to none of the
+     namespace's own workloads;
+   - `clickhouse`: S3 and STS (`egress.reach.always`, there);
+   - **to add: `restore` and `restore-claims` to the cluster's API**, a target platform defines. Until it lands, the
+     restore's writers check cannot list the pods on this profile and **fails closed**: every restore is refused,
+     "cannot confirm the writers are stopped", nothing touched. As a diff against P7b's profile.yaml (8ccb533):
+
+    @@ -60,6 +60,10 @@
+         maps: [api]
+         mail: [keycloak]
+         connectors: [api, worker]
+    +    # The cluster's own API (a target platform defines): the restore's writers check lists the
+    +    # namespace's pods before anything is replaced, and fails closed without it (ADR-148 Amendment 7,
+    +    # P9). The backup runs never ask it.
+    +    kube-api: [restore, restore-claims]
+       # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
+       managed: [api, worker, report-sync, superset, keycloak, litellm]
+       # Which of the namespace's own workloads each one calls, from the addresses its environment names
+
 4. Renders unchanged: `p7_renders_unchanged.py --helm` against this branch's base (afcaa39): every local-lite, small
    and cluster artefact the same; the two cluster Helm templates differ as text only in the checksum annotations that
    follow the image's commit, their parsed manifests the same (`gates/p9_platform_conditions.r2.log`).

@@ -810,8 +810,13 @@ def writers_stopped(
     try:
         found = pods(selector)
     except Exception as error:  # noqa: BLE001 - reported in words
+        # Fails closed: until the namespace's egress lets the restore reach the cluster's API (P7b's
+        # per-workload rows), no restore proceeds on this profile, never one that guessed.
         raise BackupRefused(
-            "restore", "see what runs", f"the pods could not be listed: {error}"
+            "restore",
+            "see what runs",
+            f"cannot confirm the writers are stopped (the pods could not be listed: {error}); "
+            "nothing was touched",
         ) from error
     finished = ("Succeeded", "Failed")
     running = sorted(

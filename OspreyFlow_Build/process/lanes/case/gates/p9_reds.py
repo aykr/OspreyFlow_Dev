@@ -157,6 +157,10 @@ runner.PLANTS = [
      [TS + "test_without_kms_generate_data_key_a_write_is_refused_naming_the_key"]),
     ("the stand-in takes a signature for any region", STANDIN, "        if region != self.region:\n",
      "        if False:\n", [TS + "test_a_request_signed_for_another_region_is_refused"]),
+    ("the writers check passing when it cannot list the pods", RUN,
+     "    except Exception as error:  # noqa: BLE001 - reported in words\n        # Fails closed:",
+     "    except Exception:  # noqa: BLE001\n        return\n    except BaseException as error:  # noqa: BLE001\n        # Fails closed:",
+     [TP + "test_pods_it_cannot_list_refuse_the_restore", TP + "test_a_restore_whose_writers_cannot_be_seen_touches_nothing"]),
     # ---- the restore's guards ---------------------------------------------------------------------------------------
     ("the restore runs beside a writer", RUN, "    writers_stopped(settings, pods)\n    manifest = verify_set(bucket, set_id)",
      "    manifest = verify_set(bucket, set_id)",
@@ -176,8 +180,6 @@ runner.PLANTS = [
     ("a slot run again over its finished set", RUN, '        raise BackupRefused("backup", f"take set {set_id}", "that set is already finished")',
      "        pass", [TP + "test_a_finished_slot_is_never_taken_again"]),
     # ---- the chart, round 2 (Helm, on the server) --------------------------------------------------------------------
-    ("the restore's API policy ordered after the deny", CHART, "  order: 150\n", "  order: 250\n",
-     [TH + "test_the_restore_alone_may_reach_the_clusters_api_before_the_egress_deny"]),
     ("the backups' Role given more than get and list", CHART, '    verbs: ["get", "list"]', '    verbs: ["get", "list", "delete"]',
      [TH + "test_the_backups_account_may_see_pods_and_nothing_else"]),
 ]

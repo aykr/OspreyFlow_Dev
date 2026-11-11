@@ -33836,8 +33836,12 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
 8. **The restore verifies, then refuses while anything writes, then replaces** (the orchestrator's rulings 3 and 4).
    It is rendered only for a named set and applied by hand, never by `helm upgrade`. Both of its Jobs (the stores',
    the claims') begin with `verify`: the restore's own account lists the namespace's pods (a Role: get and list pods,
-   nothing else; a Calico policy lets the restore's pods alone reach the cluster's API before the deny) and refuses
-   while ArcadeDB, the Conduit, the workers or the report sync run, **in every shape**; then every part is checked,
+   nothing else) and refuses while ArcadeDB, the Conduit, the workers or the report sync run, **in every shape**;
+   **it fails closed**: pods it cannot list refuse the restore ("cannot confirm the writers are stopped"), nothing
+   touched. The restore's pods reach the cluster's API by a row of the profile's per-workload egress (P7b, sent as a
+   diff in P9_render.diff's note); until that lands, every restore on this profile is refused so. The kind runs
+   below gave the restore's pods that path by a Calico policy of P9's own, since withdrawn (the orchestrator's
+   ruling: no lane renders its own); then every part is checked,
    ArcadeDB's zip and each claim by size and SHA-256 and ClickHouse's files by name, size and ETag. A part missing,
    expired or changed refuses the restore with nothing touched; ClickHouse is dropped only for a set it can be
    restored from. Then ArcadeDB's own `restore.sh` into the databases claim, ClickHouse's `RESTORE … FROM S3` by its
@@ -33885,7 +33889,8 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
 - `P9_render.diff` (platform's): one hook, `add_backups`, in `render_cloud_platform`, and `values.yaml`'s `backups: {}`;
   platform's five conditions, checked, in its note. ArcadeDB's third claim template cannot change in place: an
   existing StatefulSet is orphaned and `arcadedb-0` restarted once (the recovery runbook).
-- The restore's pods reach the cluster's API, by their own Calico policy. ClickHouse's own egress is the platform's
+- The restore's pods reach the cluster's API only once P7b's per-workload egress gives them that row; until then
+  every restore on this profile is refused, in words, touching nothing. ClickHouse's own egress is the platform's
   policy (measured: no outside address reached).
 - The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
   (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).

@@ -217,8 +217,10 @@ kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True
 ```
 
 **A restore** of set `<set>` (it replaces what ArcadeDB, ClickHouse and the claims hold). It refuses,
-touching nothing, while anything that writes still runs, or while any part of the set is missing or not
-the one the set wrote:
+touching nothing, while anything that writes still runs, while it cannot see what runs, or while any part
+of the set is missing or not the one the set wrote. **It needs the profile's egress row giving the restore's
+pods the cluster's API** (P7b's per-workload egress); without it every restore refuses, "cannot confirm the
+writers are stopped":
 
 ```bash
 # 1. Stop everything that writes, in every shape: ArcadeDB, the Conduit, the workers, the report sync.
@@ -281,6 +283,9 @@ upgrade, above).
 
 - **`restore: see what runs: … still running`**: stop ArcadeDB, the Conduit, the workers and the report
   sync first; nothing was touched.
+- **`restore: see what runs: cannot confirm the writers are stopped`**: the restore's pods could not ask the
+  cluster's API which pods run (the namespace's egress lacks the restore's row to it, or the Role is
+  missing); nothing was touched. It never proceeds unconfirmed.
 - **`restore: verify set …: … is missing` or `is not the file the set wrote`**: a part of that set has
   expired or changed; restore another set. Nothing was touched.
 - **`Backup S3 requires 1 or 3 arguments`**: a statement handing ClickHouse a session token. ClickHouse
