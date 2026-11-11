@@ -158,7 +158,9 @@ def test_arcadedb_reporting_no_file_is_refused_in_words(run: Any) -> None:
     fake.arcadedb_answer = b'{"result": [{"backupFile": "elsewhere.zip"}]}'
     with pytest.raises(pb.BackupRefused, match="is not in the mounted backups folder"):
         pb.take(settings, bucket, stores)
-    fake.arcadedb_answer = b'{"result": [{"backupFile": "../../etc/passwd"}]}'
+    # A name reaching outside the database's folder, to a file that is there: only the guard refuses it.
+    (settings.arcadedb_folder / "escape.zip").write_bytes(b"not the database's backup")
+    fake.arcadedb_answer = b'{"result": [{"backupFile": "../escape.zip"}]}'
     with pytest.raises(pb.BackupRefused, match="an unexpected backup file name"):
         pb.take(settings, bucket, stores)
 

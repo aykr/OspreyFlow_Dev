@@ -283,3 +283,14 @@ def test_a_file_that_shrinks_while_read_refuses_the_part_never_padded() -> None:
     reader = pb._AtMost(io.BytesIO(b"abc"), 5, "ingest/drop/x.csv")
     with pytest.raises(pb.FileShrank, match="ingest/drop/x.csv grew shorter"):
         reader.read()
+
+
+def test_the_sets_verify_refuses_a_changed_claim_before_anything(
+    aws: Running, run: Any, claims: Path, tmp_path: Path
+) -> None:
+    """The Jobs' first step checks each claim's part by its SHA-256, before either Job replaces anything
+    (the claims' own step re-checks it as it reads it)."""
+    _, bucket, set_id = _finished_with_claims(run, claims)
+    aws.stand_in.put(BUCKET, f"sets/{set_id}/claims/ingest.tar.gz", b"\x1f\x8b not the set's", KEY_ARN)
+    with pytest.raises(pb.BackupRefused, match="the claim ingest .* the manifest says"):
+        pb.verify_set(bucket, set_id, claims=("ingest",))

@@ -173,7 +173,8 @@ last, only once every part is there. A set without it is unfinished and is never
 object is encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`). Two roles write it,
 each to its own prefix (ClickHouse's own, for its part; the runner's, for the rest), and no key is stored
 anywhere. Neither role can erase a set: the bucket is versioned, so an object overwritten keeps its
-previous version, and sets expire by the bucket's lifecycle rule after 35 days.
+previous version for 7 days, and a set's objects expire by the bucket's lifecycle rule 35 days after
+they were written (the retention is the total, 35 days).
 
 **Is last night's backup there?** A backup Job that completed wrote a finished set (the manifest is its
 last write), and its log names the set:
@@ -184,8 +185,14 @@ kubectl -n <namespace> logs job/<the newest> | grep 'backup: set'
 ```
 
 A failed run is a failed Job, its log naming the store, the step and the refusing service's own words;
-the alert on it is P9b's. Only the backup roles can list the bucket (its policy); the runner lists every
-set, finished or not, with `python -m services.api.platform_backup sets` from a Job of the CronJob's.
+the alert on it is P9b's. Every set, finished or not, as the runner sees them:
+
+```bash
+kubectl -n <namespace> create job "backup-sets-$(date +%s)" --from=cronjob/ospreyflow-backup --dry-run=client -o json \
+  | python3 -c 'import json, sys; j = json.load(sys.stdin); j["spec"]["template"]["spec"]["containers"][0]["command"][-1] = "sets"; print(json.dumps(j))' \
+  | kubectl -n <namespace> create -f -
+kubectl -n <namespace> logs -f job/<that job>
+```
 
 **A backup now** (before an upgrade, or the decommission's last backup): both runs for one slot, each
 Job named as the CronJob names it (`<cronjob>-<minute since 1970>`), since that names the set.
@@ -207,42 +214,65 @@ without that placement (the claim is free once they are stopped):
 
 ```bash
 kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
+kubectl -n <namespace> wait --for=delete pod -l 'app.kubernetes.io/name in (api,worker,report-sync)' --timeout=10m
 S=$(( $(date +%s) / 60 ))
 kubectl -n <namespace> create job "ospreyflow-backup-$S" --from=cronjob/ospreyflow-backup
-kubectl -n <namespace> create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims \
-  --dry-run=client -o json \
-  | python3 -c 'import json, sys; j = json.load(sys.stdin); j["spec"]["template"]["spec"].pop("affinity", None); print(json.dumps(j))' \
-  | kubectl -n <namespace> create -f -
+if kubectl -n <namespace> get cronjob ospreyflow-backup-claims >/dev/null 2>&1; then
+  kubectl -n <namespace> create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims \
+    --dry-run=client -o json \
+    | python3 -c 'import json, sys; j = json.load(sys.stdin); j["spec"]["template"]["spec"].pop("affinity", None); print(json.dumps(j))' \
+    | kubectl -n <namespace> create -f -
+fi
 kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "job/ospreyflow-backup-$S" --timeout=6h
+kubectl -n <namespace> get job "ospreyflow-backup-$S" -o jsonpath='{.status.succeeded}' | grep -qx 1 \
+  || echo "the backup did not finish: read its log before upgrading"
+# The upgrade itself (the install's runbook), then the Conduit, the workers and the report sync start
+# with it; if there is no upgrade after all, start them again:
+kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=1
 ```
 
-**A restore** of set `<set>` (it replaces what ArcadeDB, ClickHouse and the claims hold). It refuses,
-touching nothing, while anything that writes still runs, while it cannot see what runs, or while any part
-of the set is missing or not the one the set wrote. **It needs the profile's egress row giving the restore's
-pods the cluster's API** (P7b's per-workload egress); without it every restore refuses, "cannot confirm the
-writers are stopped":
+**A restore** of set `<set>` (it replaces what ArcadeDB, ClickHouse and the claims hold), **for one copy of
+each store only**: the render refuses it in the production shape (P9b). It refuses, touching nothing,
+while anything that writes still runs, while it cannot see what runs, or while any part of the set is
+missing, changed or another set's. **It needs the profile's egress row giving the restore's pods the
+cluster's API** (P7b's per-workload egress); without it every restore refuses, "cannot confirm the writers
+are stopped". It reads ArcadeDB's zip and each claim twice (the first step checks every part, the next
+checks its own as it reads it): a large set's restore takes that much longer.
 
 ```bash
-# 1. Stop everything that writes, in every shape: ArcadeDB, the Conduit, the workers, the report sync.
+# 1. Note each copy count, then stop everything that writes and wait for it to be gone.
+kubectl -n <namespace> get statefulset/arcadedb deployment/api deployment/worker deployment/report-sync \
+  -o custom-columns=NAME:.metadata.name,COPIES:.spec.replicas
 kubectl -n <namespace> scale statefulset/arcadedb --replicas=0
 kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
-# 2. The restore's Jobs, rendered for the set (never by `helm upgrade`, which would start ArcadeDB).
+kubectl -n <namespace> wait --for=delete pod -l 'app.kubernetes.io/name in (arcadedb,api,worker,report-sync)' --timeout=10m
+# 2. The restore's Jobs, rendered for the set (never by `helm upgrade`, which would start ArcadeDB);
+#    a Job of the same name from an earlier attempt removed first.
+kubectl -n <namespace> delete job -l 'app.kubernetes.io/name in (restore,restore-claims)' --ignore-not-found --wait
 helm template ospreyflow deploy/helm/ospreyflow -n <namespace> -f <render>/values.yaml \
   --set backups.restore.set=<set> --show-only templates/backups.yaml \
   | kubectl -n <namespace> apply -f - --selector='app.kubernetes.io/name in (restore,restore-claims)'
 for j in $(kubectl -n <namespace> get jobs -l 'app.kubernetes.io/name in (restore,restore-claims)' -o name); do
   kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "$j" --timeout=6h
   kubectl -n <namespace> logs "$j" --all-containers | tail -3     # each step says what it did, or why not
+  kubectl -n <namespace> get "$j" -o jsonpath='{.status.succeeded}' | grep -qx 1 \
+    || { echo "$j did not finish: start nothing; read its log (a refused verify touched nothing)"; break; }
 done
-# 3. Start them again.
+# 3. Only when every Job finished: start them again, each at the copy count noted in step 1.
 kubectl -n <namespace> scale statefulset/arcadedb --replicas=1
 kubectl -n <namespace> rollout status statefulset/arcadedb
-kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=1
+kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=<as noted>
 ```
 
-**An upgrade that brings the backups in.** The render gives ArcadeDB's StatefulSet a third claim template
-(`backups`), which Kubernetes refuses to change in place. Before the `helm upgrade` that brings it, the
-StatefulSet is orphaned and its pods restarted one at a time:
+If a Job did not finish after its `verify` passed (ArcadeDB's `restore.sh` failing, say), ArcadeDB's
+database may already be removed: restore another set, or the same one again, before starting ArcadeDB.
+ClickHouse is never left without its database: its restore is swapped in only once complete.
+
+**An upgrade that brings the backups in.** First the namespace's Terraform, with `backups.tf`, is applied
+(the platform team's pull request): ClickHouse cannot start without its backup role's service account and
+the `ospreyflow-clickhouse-backup` Secret it makes. Then: the render gives ArcadeDB's StatefulSet a third
+claim template (`backups`), which Kubernetes refuses to change in place, so before the `helm upgrade` that
+brings it the StatefulSet is orphaned and its pods restarted one at a time:
 
 ```bash
 kubectl -n <namespace> delete statefulset arcadedb --cascade=orphan
@@ -284,8 +314,8 @@ upgrade, above).
 - **`restore: see what runs: … still running`**: stop ArcadeDB, the Conduit, the workers and the report
   sync first; nothing was touched.
 - **`restore: see what runs: cannot confirm the writers are stopped`**: the restore's pods could not ask the
-  cluster's API which pods run (the namespace's egress lacks the restore's row to it, or the Role is
-  missing); nothing was touched. It never proceeds unconfirmed.
+  cluster's API which pods run (on this profile, until P7b's restore row lands, always), or no writers were
+  named; nothing was touched. It never proceeds unconfirmed.
 - **`restore: verify set …: … is missing` or `is not the file the set wrote`**: a part of that set has
   expired or changed; restore another set. Nothing was touched.
 - **`Backup S3 requires 1 or 3 arguments`**: a statement handing ClickHouse a session token. ClickHouse
