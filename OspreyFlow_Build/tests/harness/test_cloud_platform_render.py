@@ -87,8 +87,12 @@ def test_none_of_the_stores_the_platform_manages_and_no_caddy_or_local_model(
     assert "Caddyfile" not in values["files"]
 
 
-def test_the_gateway_only_with_an_engine_enabled() -> None:
-    assert "litellm" not in _by_name(_values(_config("development")))
+def test_the_gateway_is_rendered_whether_or_not_an_engine_is_enabled() -> None:
+    """P11 part 2 (the brief's item 1): the gateway always, so an engine first added in Admin ›
+    Models has one without a re-render; it was rendered only with an engine enabled at install. The
+    namespace still reaches a model host only while an engine is enabled
+    (`test_cloud_platform_gateway.py`)."""
+    assert "litellm" in _by_name(_values(_config("development")))
     assert "litellm" in _by_name(_values(_config("production")))
 
 
@@ -327,6 +331,20 @@ def test_the_conduit_ingest_and_workers_run_as_the_bucket_s_service_account(
     account = load_platform("client").secrets.irsa.service_account
     for pod in _pods(values):
         expected = account if pod["name"] in ("api", "worker", "report-sync") else None
+        assert pod.get("serviceAccountName") == expected, pod["name"]
+
+
+def test_with_bedrock_enabled_the_gateway_runs_as_its_own_account() -> None:
+    """P11 part 2 (the orchestrator's ruling, option A): with a Bedrock engine enabled, `litellm`
+    runs as the gateway's own account (`secrets.irsa.gateway_service_account`), every other pod as
+    before; its role is `test_cloud_platform_gateway.py`'s."""
+    from tests.harness.test_cloud_platform_gateway import BEDROCK, _engines
+
+    irsa = load_platform("client").secrets.irsa
+    namespace_pods = ("api", "worker", "report-sync")
+    for pod in _pods(_values(_engines(BEDROCK))):
+        default = irsa.service_account if pod["name"] in namespace_pods else None
+        expected = {"litellm": irsa.gateway_service_account}.get(pod["name"], default)
         assert pod.get("serviceAccountName") == expected, pod["name"]
 
 
