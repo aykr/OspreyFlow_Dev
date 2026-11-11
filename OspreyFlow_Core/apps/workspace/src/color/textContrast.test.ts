@@ -9,7 +9,11 @@ import {
   judge,
   needFor,
   parseColour,
+  over,
   ratioOf,
+  readFindings,
+  shadowCoverage,
+  shadowCoverageRange,
   type Layer,
   type Rgba,
   type Sample,
@@ -99,7 +103,9 @@ describe("the colours Chrome writes", () => {
   });
 
   it("reads a channel out of its range as unread, not as a colour", () => {
-    for (const css of ["rgb(-1000 0 0)", "rgb(0 0 900)", "rgba(0, 0, 0, 2)", "color(srgb 4 0 0)", "oklab(3 0 0)"]) {
+    // Chrome clamps an rgb() it computes, so its out-of-range shape is `color(srgb …)` (a color-mix or
+    // relative colour past the gamut); rgb() and oklab() out of range stay refused as a second line.
+    for (const css of ["color(srgb 4 0 0)", "color(srgb 0 -2 0 / 0.5)", "rgb(0 0 900)", "rgba(0, 0, 0, 2)", "oklab(3 0 0)"]) {
       expect(parseColour(css), css).toBeNull();
     }
     expect(parseColour("color(srgb 1.0001 -0.0001 0.5)")).toEqual([255, 0, 127.5, 1]);
@@ -166,20 +172,71 @@ describe("gradients", () => {
 
   it("skips a `none` layer among gradients, and fails a spread too large to measure", () => {
     expect(gradientSurfaces("none, linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))", [255, 255, 255, 1])).not.toBeNull();
-    const many = Array.from({ length: 4 }, () => "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255), rgb(0, 0, 0))").join(", ");
-    expect(gradientSurfaces(many, [255, 255, 255, 1])).toBeNull();
+    // Eight layers of 18 samples each: refused, named as the spread, not as an unread gradient. (A count
+    // after each product would refuse it too, by the fourth layer: the count before only bounds what is
+    // built, and no result tells the two apart.)
+    const many = Array.from({ length: 8 }, () => "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255), rgb(0, 0, 0))").join(", ");
+    expect(gradientSurfaces(many, [255, 255, 255, 1])).toBe("more than 20000 possible backgrounds");
+    const spread = judge(sample({ chain: [layer({ backgroundColor: WHITE, backgroundImage: many })] }));
+    expect(spread.why).toMatch(/not measurable: more than 20000 possible backgrounds on <div>/);
+  });
+
+  it("refuses a spread across the tree's layers before building it, too", () => {
+    // Three elements up the tree, each with two crossing gradient layers (100 backgrounds each), are
+    // 10^6 together: past the cap, though each is under it.
+    const grid = "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255)), linear-gradient(rgb(255, 255, 255), rgb(0, 0, 0))";
+    const deep = judge(
+      sample({ chain: [1, 2, 3].map(() => layer({ backgroundColor: WHITE, backgroundImage: grid })) }),
+    );
+    expect(deep.ratio).toBeNull();
+    expect(deep.why).toBe("not measurable: more than 20000 possible backgrounds");
   });
 
   it("fails a stop it cannot read, and a picture, rather than dropping them", () => {
-    expect(gradientSurfaces("linear-gradient(lab(50 0 0), transparent)", [255, 255, 255, 1])).toBeNull();
-    expect(gradientSurfaces('url("tile.png")', [255, 255, 255, 1])).toBeNull();
+    expect(gradientSurfaces("linear-gradient(lab(50 0 0), transparent)", [255, 255, 255, 1])).toBe("an unread gradient");
+    expect(gradientSurfaces('url("tile.png")', [255, 255, 255, 1])).toBe("a background picture");
     const pictured = judge(sample({ chain: [layer({ backgroundColor: WHITE, backgroundImage: "url(a.png)" })] }));
     expect(pictured.ratio).toBeNull();
-    expect(pictured.why).toMatch(/picture or unread gradient/);
+    expect(pictured.why).toBe("not measurable: a background picture on <div>");
   });
 });
 
 describe("what lies under the text", () => {
+  it("measures an SVG label's words on the shape under them, point by point", () => {
+    // Show as BPMN's task: words in fill rgb(232, 236, 237) on a task box filled rgb(40, 44, 46) that
+    // shares the <svg> (chain[1]) with them, in a white dialog; the second point is past the box.
+    const label = (under: { fill: string; at: number }[][]) =>
+      judge(sample({ color: "rgb(232, 236, 237)", chain: [layer({ name: "text" }), layer({ name: "svg" }), layer({ backgroundColor: WHITE })], under }));
+    expect(label([[{ fill: "rgb(40, 44, 46)", at: 1 }]]).why).toBe("");
+    expect(label([[{ fill: "rgb(40, 44, 46)", at: 1 }], []]).why).toMatch(/< 4\.5:1/);
+    expect(label([[{ fill: "rgb(225, 229, 230)", at: 1 }]]).why).toMatch(/^1\.\d\d:1/);
+    expect(label([[{ fill: "url(#hatch)", at: 1 }]]).why).toMatch(/unread shape fill/);
+  });
+
+  it("lays a shape under the words' own ancestors, so the words' opacity fades the words alone", () => {
+    // A black dialog; <rect fill="#fff"> and <text fill="#000" opacity=".5"> in one <svg>: the rect is
+    // under the text's own ancestors, so the half opacity greys the words over white: 3.98:1, a fail. Laid
+    // under the text element itself, the opacity would fade both, and the words would pass at 5.28:1.
+    const faded = judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer({ name: "text", opacity: "0.5" }), layer({ name: "svg" }), layer({ backgroundColor: "rgb(0, 0, 0)" })],
+        under: [[{ fill: "rgb(255, 255, 255)", at: 1 }]],
+      }),
+    );
+    expect(faded.ratio as number).toBeCloseTo(3.98, 2);
+    expect(faded.why).toMatch(/^3\.98:1 < 4\.5:1/);
+  });
+
+  it("lays everything on the browser's own canvas, not on white", () => {
+    const dark = "rgb(18, 18, 18)";
+    // Light grey text on nothing but the canvas: fine on a dark canvas, 1.4:1 on white.
+    const onCanvas = (page?: string) => judge(sample({ color: "rgb(220, 220, 220)", chain: [layer()], page }));
+    expect(onCanvas(dark).why).toBe("");
+    expect(onCanvas().why).toMatch(/< 4\.5:1/);
+    expect(onCanvas("rgba(0, 0, 0, 0)").why).toMatch(/unread page colour/);
+  });
+
   it("composites an alpha stack: 50% black over white under 50% white text", () => {
     const stacked = judge(
       sample({
@@ -264,6 +321,222 @@ describe("what lies under the text", () => {
   });
 });
 
+describe("a shadow at the words, measured (T3b's server round)", () => {
+  // A shadow is measured by what it paints at each point, not failed by how far it reaches, so the
+  // words a few pixels nearer it on one platform's font than another's are judged the same (the
+  // merger's server run 20261111T093929Z: Show as BPMN's shadow at "Expires" on Linux Chromium only).
+  const at = (colour: string, edges: [number, number, number, number], blur: number) => ({ colour, edges, blur, x: 0, y: 0 });
+
+  it("paints the colour's full alpha inside a sharp shadow, half at a blurred edge, and nothing far past it", () => {
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [-10, -10, 10, 10], 0))).toBeCloseTo(1, 6);
+    // On one edge of a long blurred shadow: half of the Gaussian lies inside, and 0.015 is laid on for
+    // what Chromium's own blur paints past the Gaussian (measured from its pixels).
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [0, -1000, 1000, 1000], 24))).toBeCloseTo(0.515, 5);
+    // σ is half the blur radius (CSS Backgrounds 3): a blur of 24 is σ 12, so 12px out is Φ(−1).
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [12, -1000, 1000, 1000], 24))).toBeCloseTo(0.158655 + 0.015, 4);
+    // From 2σ the margin falls to 0.0025 at 3σ, the most Chromium paints over the Gaussian there; past
+    // 3σ (36px), where Chromium paints nothing, nothing. 30px out is 2.5σ: Φ(−2.5) + 0.00875.
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [30, -1000, 1000, 1000], 24))).toBeCloseTo(0.00621 + 0.00875, 4);
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [37, -1000, 1000, 1000], 24))).toBe(0);
+    // No cliff: a pixel either side of 3σ changes the paint laid by under 0.005.
+    const near = shadowCoverage(at("rgba(0, 0, 0, 0.7)", [35.9, -1000, 1000, 1000], 24));
+    expect(near).toBeGreaterThan(0);
+    expect(near).toBeLessThan(0.005);
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [1, -10, 10, 10], 0))).toBe(0);
+  });
+
+  it("fails dark words with a ratio where a shadow darkens the page under them", () => {
+    // 7:1 grey on white, under a sharp 0.7 black shadow: the background is rgb(76.5), well under 4.5:1.
+    const shaded = judge(sample({ shadows: [[at("rgba(0, 0, 0, 0.7)", [-10, -10, 10, 10], 0)]] }));
+    expect(shaded.ratio).not.toBeNull();
+    expect(shaded.why).toMatch(/< 4\.5:1$/);
+    expect(judge(sample({ shadows: [[]] })).why).toBe("");
+  });
+
+  it("takes the worst of the shadow under the words, over them and away", () => {
+    // Light words on black at an edge of a blurred white shadow (its most there, over the pixel round the
+    // point and with the measured margin, about 0.53): under, the page lightens and the words lose;
+    // over, both lighten; the worst counts.
+    const most = shadowCoverageRange(at("rgba(255, 255, 255, 1)", [0, -1000, 1000, 1000], 24))[1];
+    expect(most).toBeGreaterThan(0.515);
+    const ink: Rgba = [200, 200, 200, 1];
+    const shadow: Rgba = [255, 255, 255, most];
+    const black: Rgba = [0, 0, 0, 1];
+    const under = ratioOf(over(ink, over(shadow, black)), over(shadow, black));
+    const above = ratioOf(over(shadow, ink), over(shadow, black));
+    const none = ratioOf(ink, black);
+    const j = judge(
+      sample({
+        color: "rgb(200, 200, 200)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)" })],
+        shadows: [[at("rgba(255, 255, 255, 1)", [0, -1000, 1000, 1000], 24)]],
+      }),
+    );
+    expect(j.ratio as number).toBeCloseTo(Math.min(under, above, none), 4);
+    // A black shadow on that black page: laid under the words it changes nothing, so only the shadow
+    // laid over them, darkening the words alone, finds their worst.
+    const dark: Rgba = [0, 0, 0, most];
+    const darkened = judge(
+      sample({
+        color: "rgb(200, 200, 200)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)" })],
+        shadows: [[at("rgba(0, 0, 0, 1)", [0, -1000, 1000, 1000], 24)]],
+      }),
+    );
+    expect(darkened.ratio as number).toBeCloseTo(ratioOf(over(dark, ink), black), 4);
+    expect(darkened.ratio as number).toBeLessThan(none - 1);
+  });
+
+  it("lays a shadow between the words' own layers too, where neither under nor over them is the worst", () => {
+    // Found by a search over random colours (the lane-reviewer's finding 4): blue words, a 22% pale
+    // layer over a pink panel, a sharp 75% blue shadow. Laid between the layer and the panel it gives
+    // 1.04:1; straight under the words 1.30:1, over everything 1.13:1, away 2.00:1.
+    const W: Rgba = [9, 80, 239, 1];
+    const L: Rgba = [154, 195, 246, 0.22];
+    const P: Rgba = [221, 95, 161, 1];
+    const S: Rgba = [32, 40, 187, 0.75];
+    const between = ratioOf(W, over(L, over(S, P)));
+    const above = ratioOf(over(S, W), over(S, over(L, P)));
+    const j = judge(
+      sample({
+        color: "rgb(9, 80, 239)",
+        chain: [layer({ name: "span" }), layer({ backgroundColor: "rgba(154, 195, 246, 0.22)" }), layer({ backgroundColor: "rgb(221, 95, 161)" })],
+        shadows: [[at("rgba(32, 40, 187, 0.75)", [-10, -10, 10, 10], 0)]],
+      }),
+    );
+    expect(between).toBeLessThan(above - 0.05);
+    expect(j.ratio as number).toBeCloseTo(between, 4);
+  });
+
+  it("lays shadows only where a layer paints, so a deep tree of clear wrappers stays measurable", () => {
+    // 25 clear wrappers over a white page under three faint shadows: one place per painting layer, not
+    // 28 to the third (the lane-reviewer's second pass).
+    const wrappers = Array.from({ length: 25 }, () => layer());
+    const faint = at("rgba(0, 0, 0, 0.05)", [-10, -10, 10, 10], 0);
+    const j = judge(sample({ chain: [...wrappers, layer({ backgroundColor: WHITE })], shadows: [[faint, faint, faint]] }));
+    expect(j.ratio).not.toBeNull();
+    expect(j.why).toBe("");
+  });
+
+  it("fails a shadow colour it cannot read, and more shadows at a point than it will combine", () => {
+    const unread = judge(sample({ shadows: [[at("lab(50 0 0)", [-10, -10, 10, 10], 0)]] }));
+    expect(unread.ratio).toBeNull();
+    expect(unread.why).toBe("not measurable: an unread shadow colour lab(50 0 0)");
+    const many = judge(sample({ shadows: [Array.from({ length: 6 }, () => at("rgba(0, 0, 0, 0.1)", [-10, -10, 10, 10], 0))] }));
+    expect(many.ratio).toBeNull();
+    expect(many.why).toBe("not measurable: more than 5 shadows at one point");
+  });
+});
+
+describe("a shadow's alpha bracketed (the orchestrator's review of 9697ad3, minor 1)", () => {
+  // Chromium's blur paints a little over the Gaussian of half the blur and a little under it, so a
+  // shadow's alpha at a point is known only between a least and a most. Contrast is monotone in it
+  // only until what lies under the words passes the words' own lightness: a single "most" can step
+  // over that 1:1 crossing, so both ends are measured and a swap between them is 1:1.
+  const at = (edges: [number, number, number, number], blur: number, x: number, y: number, radius = 0) =>
+    ({ colour: "rgba(0, 0, 0, 1)", edges, blur, radius, x, y });
+
+  it("fails 1:1 where the words and the shadowed page swap lightness inside the bracket", () => {
+    // On a long blurred edge the most is 0.515 (Φ(0) and the 0.015 margin); the least is at most 0.5.
+    // Grey words at the page's shade for 0.5075, between them: lighter than the page at one end,
+    // darker at the other, and equal somewhere between. Measured at the most alone it read 1.02:1.
+    const grey = 255 * (1 - 0.5075);
+    const crossing = judge(
+      sample({
+        color: `rgb(${grey}, ${grey}, ${grey})`,
+        shadows: [[at([0, -1000, 1000, 1000], 24, 0, 0)]],
+      }),
+    );
+    expect(crossing.ratio).toBe(1);
+  });
+
+  it("fails the reviewer's coloured dip, which every placement together already finds at an end", () => {
+    // The lane-reviewer's counter-example to "the worse end": black words on red, a cyan shadow under
+    // them near a rounded corner, where the bracket is [0, about 0.49]. Laid under the words, red
+    // falls as green and blue rise, so the page's luminance dips inside the bracket (5.25:1 at none,
+    // 5.17:1 at the most, about 4.0:1 at a quarter). Laid over everything at the most, the shadow is
+    // worse still, so the words fail as they should. A search of random colours over every placement
+    // found no case worse inside the bracket than at an end or a swap (the red record).
+    const dip = judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer(), layer({ name: "body", backgroundColor: "rgb(255, 0, 0)" })],
+        shadows: [[{ colour: "rgba(0, 255, 255, 1)", edges: [0, 0, 100, 100], blur: 8, radius: 16, x: 2, y: 2 }]],
+      }),
+    );
+    expect(dip.ratio).toBeLessThan(4.2);
+    expect(dip.why).toMatch(/< 4\.5:1$/);
+  });
+
+  it("takes in the whole pixel round a point, so a sharp shadow's edge within half a pixel may paint anything", () => {
+    // Chromium paints the pixel the point falls in, anti-aliased at a fractional edge: a sharp shadow
+    // whose edge lies 0.3px from the point is between none and all of its colour there.
+    expect(shadowCoverageRange(at([10, -1000, 1000, 1000], 0, 9.7, 0))).toEqual([0, 1]);
+    expect(shadowCoverageRange(at([10, -1000, 1000, 1000], 0, 12, 0))).toEqual([1, 1]);
+    expect(shadowCoverageRange(at([10, -1000, 1000, 1000], 0, 8, 0))).toEqual([0, 0]);
+  });
+
+  it("takes the least as nothing near a rounded corner, and the Gaussian less the measured shortfall elsewhere", () => {
+    const [cornerLow, cornerHigh] = shadowCoverageRange(at([0, 0, 100, 100], 8, -2, -2, 16));
+    expect(cornerLow).toBe(0);
+    expect(cornerHigh).toBeGreaterThan(0);
+    const [squareLow, squareHigh] = shadowCoverageRange(at([0, 0, 100, 100], 8, -2, -2));
+    expect(squareLow).toBeGreaterThan(0);
+    expect(squareHigh).toBe(cornerHigh);
+    // Mid-edge of a rounded shape is no corner: the bracket is the straight edge's.
+    expect(shadowCoverageRange(at([0, -1000, 1000, 1000], 24, 0, 0, 16))[0]).toBeGreaterThan(0);
+    expect(shadowCoverageRange(at([0, -1000, 1000, 1000], 24, -40, 0))).toEqual([0, 0]);
+  });
+});
+
+describe("words hidden at a point (T3b's server round)", () => {
+  // Under an opaque element laid over them, or clipped by a scrolling box, the words are not shown
+  // there, so there is no contrast to judge at that point; the rest of them still is, and words with
+  // no point left are unmeasurable.
+  const twoPoints = (hidden?: boolean[]) =>
+    judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)", covers: [false, true] }), layer({ backgroundColor: WHITE, covers: [true, true] })],
+        hidden,
+      }),
+    );
+
+  it("judges only the points where the words are shown", () => {
+    // Black words: on white at the first point, on black at the second.
+    expect(twoPoints().why).toMatch(/^1\.00:1/);
+    expect(twoPoints([false, true]).why).toBe("");
+    expect(twoPoints([true, false]).why).toMatch(/^1\.00:1/);
+  });
+
+  it("fails words hidden at every point as unmeasurable, never a silent pass", () => {
+    const gone = twoPoints([true, true]);
+    expect(gone.ratio).toBeNull();
+    expect(gone.why).toBe("not measurable: hidden at every point, under an opaque element over the words or clipped");
+  });
+
+  it("pins words hidden at every point to their own surfaces at every point, so a listing never excuses unconditionally", () => {
+    // The orchestrator's review of 9697ad3, item 3: with `ownRatio` null, a listing's `own: null`
+    // held whatever the words' colours became. Hidden at every point, they are still read on their own
+    // surfaces with the hiding left aside: black words on black at the second point, 1:1.
+    const gone = twoPoints([true, true]);
+    expect(gone.ownRatio).toBeCloseTo(1, 2);
+    const listed = {
+      text: "Words",
+      ratio: "unmeasurable" as const,
+      reason: "hidden at every point, under an opaque element over the words or clipped",
+      own: 1,
+      owner: "shell",
+    };
+    expect(excuses(listed, gone)).toBe(true);
+    // A pin above what they give now fails, and so does `own: null`: a listing must name a floor.
+    expect(excuses({ ...listed, own: 1.5 }, gone)).toBe(false);
+    expect(excuses({ ...listed, own: null }, gone)).toBe(false);
+    // And the findings file refuses such a listing outright.
+    expect(() => readFindings({ look: { ".x": { ...listed, own: null } } })).toThrow(/hidden at every point.*a floor/);
+  });
+});
+
 describe("a listed finding", () => {
   const found = judge(sample({ color: greyAt(2.85) }));
 
@@ -292,5 +565,34 @@ describe("a listed finding", () => {
     expect(excuses(listed, judge(sample({ overlappedBy: "canvas.other" })))).toBe(false);
     expect(excuses(listed, judge(sample({ chain: [layer({ filter: "blur(1px)" })] })))).toBe(false);
     expect(excuses(listed, found)).toBe(false);
+  });
+});
+
+describe("the findings file", () => {
+  const good = {
+    "a.html (dark)": {
+      ".x": { text: "Words", ratio: 3.2, owner: "case" },
+      ".y": { text: "More", ratio: "unmeasurable", reason: "over or under div", own: 7.1, owner: "shell" },
+    },
+  };
+
+  it("reads a well-formed file as it is", () => {
+    expect(readFindings(good)).toEqual(good);
+  });
+
+  it("refuses a malformed entry, naming it", () => {
+    const broken = (entry: unknown) => ({ "a.html (dark)": { ".x": entry } });
+    const cases: [unknown, RegExp][] = [
+      [[], /the file: not an object of looks/],
+      [{ "a.html (dark)": [] }, /a\.html \(dark\): not an object of selectors/],
+      [broken({ text: "W", ratio: "unmeasurable", own: 2, owner: "o" }), /› \.x: unexpected fields/],
+      [broken({ text: "W", ratio: "unmeasurable", reason: "", own: 2, owner: "o" }), /no reason/],
+      [broken({ text: "W", ratio: 3, owner: "o", own: 2 }), /unexpected fields/],
+      [broken({ text: "W", ratio: 40, owner: "o" }), /ratio out of range/],
+      [broken({ text: "W", ratio: "bad", owner: "o" }), /neither a number/],
+      [broken({ ratio: 3, owner: "o" }), /no text or owner/],
+      [broken({ text: "W", ratio: "unmeasurable", reason: "r", own: "7", owner: "o" }), /own ratio out of range/],
+    ];
+    for (const [json, why] of cases) expect(() => readFindings(json), String(why)).toThrow(why);
   });
 });

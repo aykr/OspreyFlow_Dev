@@ -23,6 +23,22 @@ export interface Layer {
   covers: boolean[];
 }
 
+/**
+ * One outer box-shadow near a probed point: its colour as computed, the shape it is cast from (the
+ * element's box moved by the offset and grown by the spread: left, top, right, bottom), its blur
+ * radius, and the point. The element's own box is never under it (an outer shadow is not painted
+ * there, and the element itself is seen at the point instead).
+ */
+export interface ShadowAt {
+  colour: string;
+  edges: [number, number, number, number];
+  blur: number;
+  /** The shadowed element's largest corner radius grown by the spread (0 for square corners). */
+  radius?: number;
+  x: number;
+  y: number;
+}
+
 /** What the browser read of one undecided node. */
 export interface Sample {
   selector: string;
@@ -36,6 +52,20 @@ export interface Sample {
   chain: Layer[];
   /** A painted element under or over the text that is not the node nor an ancestor, or null. */
   overlappedBy: string | null;
+  /** For each probed point, the plain SVG shapes lying under an SVG label's words there (its box),
+   * nearest first: each shape's fill as a colour (the opacities on its own side of the tree folded
+   * in) and `at`, the index in `chain` of the ancestor it shares with the words. It lies under the
+   * words' own line of ancestors (`chain[0 … at-1]`) and over that ancestor. Absent or shorter than the points means none. */
+  under?: { fill: string; at: number }[][];
+  /** The browser's canvas under everything, as computed (`Canvas`); white when absent. */
+  page?: string;
+  /** For each probed point, the outer box-shadows of other elements near it (`ShadowAt`), each
+   * measured by what it paints there. Absent or shorter than the points means none. */
+  shadows?: ShadowAt[][];
+  /** For each probed point, whether the words are hidden there: under an opaque element laid over
+   * them, or clipped by a scrolling box. A hidden point is not judged; hidden at every point, the
+   * words are unmeasurable. Absent means none. */
+  hidden?: boolean[];
   /** axe's own reason for leaving it undecided (`messageKey`), kept for the message. */
   axeReason: string | null;
 }
@@ -167,17 +197,18 @@ function layersOf(image: string): string[] {
 /**
  * Every colour a gradient may lay over its element's own `base`: each layer's stops and the colours
  * between them, every layer composited over the ones beneath it (the canvas grid's lines cross), or
- * null when any part cannot be read (a picture, a stop in an unknown form, a `none` component).
+ * why it cannot be measured: a picture, a stop in an unknown form or with a `none` component, or more
+ * possible backgrounds than `MAX_SURFACES`.
  */
-export function gradientSurfaces(image: string, base: Rgba): Rgba[] | null {
+export function gradientSurfaces(image: string, base: Rgba): Rgba[] | string {
   if (image === "none") return [base];
   let surfaces: Rgba[] = [base];
   // Painted bottom first: the last layer lies lowest.
   for (const layer of layersOf(image).reverse()) {
     if (layer === "none") continue;
-    if (!/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return null;
+    if (!/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return "a background picture";
     const stops = (layer.match(COLOUR) ?? []).map(parseColour);
-    if (!stops.length || stops.some((c) => c === null)) return null;
+    if (!stops.length || stops.some((c) => c === null)) return "an unread gradient";
     const read = stops as Rgba[];
     // A layer may leave part of the box unpainted (its size, position or repeat), so the colour
     // beneath it is a sample too.
@@ -185,8 +216,9 @@ export function gradientSurfaces(image: string, base: Rgba): Rgba[] | null {
     for (let i = 0; i + 1 < read.length; i += 1) {
       for (let k = 1; k < STEPS; k += 1) samples.push(lerp(read[i] as Rgba, read[i + 1] as Rgba, k / STEPS));
     }
+    // Counted before the product is built, so a spread past the cap is refused, never built.
+    if (surfaces.length * samples.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
     surfaces = surfaces.flatMap((under) => samples.map((top) => over(top, under)));
-    if (surfaces.length > MAX_SURFACES) return null;
   }
   return surfaces;
 }
@@ -227,12 +259,175 @@ export function needFor(fontSize: string, fontWeight: string): number {
  * through the elements whose box is under that point, each gradient's every colour, and each
  * ancestor's opacity on its whole group. A string when that walk cannot be read (why).
  */
-function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
-  const points = Math.max(1, ...sample.chain.map((l) => l.covers.length));
+function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
+  const points = Math.max(1, ...sample.chain.map((l) => l.covers.length), sample.under?.length ?? 0);
+  const page: Rgba | null = sample.page === undefined ? [255, 255, 255, 1] : parseColour(sample.page);
+  if (!page || page[3] < 1) return `an unread page colour ${sample.page}`;
   let worst = Infinity;
+  let shown = 0;
   for (let p = 0; p < points; p += 1) {
+    if (sample.hidden?.[p]) continue;
+    shown += 1;
+    // Each shadow at the point, as the colour it lays there between the least and the most Chromium
+    // may paint (its alpha times its coverage, `shadowCoverageRange`).
+    const cast: { rgb: [number, number, number]; alphas: [number, number] }[] = [];
+    for (const shadow of sample.shadows?.[p] ?? []) {
+      const colour = parseColour(shadow.colour);
+      if (!colour) return `an unread shadow colour ${shadow.colour}`;
+      const [low, high] = shadowCoverageRange(shadow);
+      if (high > 0) cast.push({ rgb: [colour[0], colour[1], colour[2]], alphas: [colour[3] * low, colour[3] * high] });
+    }
+    if (cast.length > MAX_SHADOWS) return `more than ${MAX_SHADOWS} shadows at one point`;
+    // Where each lies is not read, so each is laid in turn at every place it could be: away (none),
+    // over everything there, or under the words' first j elements and over the rest (j from 0, straight
+    // under the words, to the chain's length, straight on the page). Every combination is measured and
+    // the worst counts.
+    // Two places either side of an element that lays nothing at the point (a clear background, full
+    // opacity, no shape under it) give one figure, so only the first of each run is laid.
+    const bare = (i: number) => {
+      const l = sample.chain[i];
+      if (!l || parseFloat(l.opacity) !== 1 || (sample.under?.[p] ?? []).some((u) => u.at === i)) return false;
+      if (!(l.covers[p] ?? true)) return true;
+      const c = parseColour(l.backgroundColor);
+      return c !== null && c[3] === 0 && l.backgroundImage === "none";
+    };
+    const indices = [0, ...sample.chain.map((_, i) => i + 1).filter((j) => !bare(j - 1))];
+    const places = indices.length + 2;
+    // Each placement is measured at each shadow's least and most paint, and where the words and what
+    // lies under them change places in lightness between those ends, somewhere between they are equal:
+    // 1:1. Each channel moves one way across the bracket, but luminance need not (a coloured shadow
+    // over a coloured surface), so the worst of one placement may lie inside it; a search of random
+    // colours over every placement together found no case worse inside than at an end or a swap
+    // (rules-b's T3b red record, the review fixes), which is what this rests on.
+    if (places ** cast.length * 2 ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
+    for (let combination = 0; combination < places ** cast.length; combination += 1) {
+      const place = cast.map((_, i) => Math.floor(combination / places ** i) % places);
+      const signs = new Map<number, Set<number>>();
+      for (let ends = 0; ends < 2 ** cast.length; ends += 1) {
+        const tinted = cast.map(({ rgb, alphas }, i): Rgba => [...rgb, alphas[Math.floor(ends / 2 ** i) % 2] as number]);
+        const laid = new Map<number, Rgba[]>();
+        tinted.forEach((shadow, i) => {
+          const at = indices[(place[i] ?? 0) - 2];
+          if (at !== undefined) laid.set(at, [...(laid.get(at) ?? []), shadow]);
+        });
+        const measured = atPoint(sample, fg, page, p, laid, tinted.filter((_, i) => place[i] === 1));
+        if (typeof measured === "string") return measured;
+        measured.forEach(([ratio, sign], k) => {
+          worst = Math.min(worst, ratio);
+          signs.set(k, (signs.get(k) ?? new Set()).add(sign));
+        });
+      }
+      if ([...signs.values()].some((seen) => seen.has(1) && seen.has(-1))) worst = Math.min(worst, 1);
+    }
+  }
+  if (shown === 0) return null;
+  // Unreachable while `parseColour` refuses non-finite parts; kept as a second line.
+  return Number.isFinite(worst) ? worst : `a measure that came out ${worst}`;
+}
+
+/** Past this many shadows at one point their placements are not combined. */
+const MAX_SHADOWS = 5;
+/** Past this many combinations of shadow placements at one point, the words are not measured. */
+const MAX_PLACEMENTS = 20_000;
+
+/** The standard normal distribution's CDF (Abramowitz and Stegun 7.1.26, error under 1.5e-7). */
+function normalCdf(z: number): number {
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const erf = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return z >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
+}
+
+/**
+ * The share of a shadow's colour painted at its point, 0 to 1. CSS Backgrounds 3 blurs the shadow's
+ * shape by a Gaussian whose standard deviation is half the blur radius; over a rectangle that is the
+ * product of one CDF difference per axis, with `shadowMargin` laid on for what Chromium paints past it.
+ * The shape's rounded corners are taken square, which overstates the paint near a corner; the least
+ * there is taken as nothing (`shadowCoverageRange`).
+ */
+export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }: ShadowAt): number {
+  if (!(blur > 0)) return x >= left && x <= right && y >= top && y <= bottom ? 1 : 0;
+  const sigma = blur / 2;
+  // Past three standard deviations from the shape the browser half sends nothing, and nothing is laid.
+  const far = 3 * sigma;
+  if (x < left - far || x > right + far || y < top - far || y > bottom + far) return 0;
+  const past = Math.max(left - x, x - right, top - y, y - bottom, 0) / sigma;
+  return Math.min(1, gaussianCoverage({ edges: [left, top, right, bottom], blur, x, y }) + shadowMargin(past));
+}
+
+/** The Gaussian of half the blur over the shadow's shape at its point, with nothing laid on. */
+function gaussianCoverage({ edges: [left, top, right, bottom], blur, x, y }: Pick<ShadowAt, "edges" | "blur" | "x" | "y">): number {
+  const sigma = blur / 2;
+  const across = (v: number, lo: number, hi: number) => normalCdf((hi - v) / sigma) - normalCdf((lo - v) / sigma);
+  return Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom));
+}
+
+/**
+ * The least and the most of a shadow's colour Chromium may paint at its point. Chromium paints the
+ * whole pixel the point falls in, so both are taken over that pixel (the point and the four corners
+ * of the square a pixel wide round it): the most is `shadowCoverage`'s largest there, the least the
+ * Gaussian's smallest less `SHADOW_SHORT` (a sharp shadow's smallest, which is nothing where its edge
+ * crosses the pixel). Near a rounded corner of the shape, which the Gaussian takes square, the least
+ * is nothing.
+ */
+export function shadowCoverageRange(shadow: ShadowAt): [number, number] {
+  const { edges: [left, top, right, bottom], x, y } = shadow;
+  const round: [number, number][] = [[x, y], [x - 0.5, y - 0.5], [x + 0.5, y - 0.5], [x - 0.5, y + 0.5], [x + 0.5, y + 0.5]];
+  const high = Math.max(...round.map(([px, py]) => shadowCoverage({ ...shadow, x: px, y: py })));
+  if (high === 0) return [0, 0];
+  const r = (shadow.radius ?? 0) + 1.5 * shadow.blur;
+  const nearCorner = (shadow.radius ?? 0) > 0 && (x < left + r || x > right - r) && (y < top + r || y > bottom - r);
+  if (nearCorner) return [0, high];
+  if (!(shadow.blur > 0)) return [Math.min(...round.map(([px, py]) => shadowCoverage({ ...shadow, x: px, y: py }))), high];
+  const least = Math.min(...round.map(([px, py]) => gaussianCoverage({ ...shadow, x: px, y: py })));
+  return [Math.max(0, least - SHADOW_SHORT), high];
+}
+
+/**
+ * The most Chromium's blur paints under the Gaussian of half the blur, away from a rounded corner:
+ * measured on the test server (slot 13, run 20261111T151731Z, `a11y/plants/shadow-paint.plant.ts`) at
+ * 0.0148 of the colour at most (a straight edge, blur 40, within σ inside the shape's edge; 0.0139 at
+ * blur 24, 0.0128 offset, 0.0120 beside a rounded corner's reach), with an 8-bit step's rounding on top.
+ */
+const SHADOW_SHORT = 0.0175;
+
+/**
+ * Laid on a blurred shadow's coverage `past` standard deviations beyond its shape, for what Chromium's
+ * own blur paints over the Gaussian of half the blur. Read from its pixels on the test server (rules-b's
+ * T3b red record, the review rounds), it is at most 0.0136 of the colour up to 2σ and 0.0025 from 2σ to
+ * 3σ, and it paints nothing from 3σ on. The margin is 0.015 to 2σ, then falls straight to 0.0025 at 3σ,
+ * so a few pixels either way change the paint laid by no more than the renderer's own does.
+ */
+function shadowMargin(past: number): number {
+  if (past < 2) return 0.015;
+  return 0.0025 + (0.015 - 0.0025) * Math.max(0, 3 - past);
+}
+
+/** The text's worst ratio at point `p` on its own surfaces, with each shadow in `laid` at index j laid
+ * under the chain's first j elements (straight on the page past the last), and `above` over everything
+ * there. */
+function atPoint(sample: Sample, fg: Rgba, page: Rgba, p: number, laid: Map<number, Rgba[]>, above: Rgba[]): [number, number][] | string {
+  const out: [number, number][] = [];
+  {
     let pairs: [Rgba, Rgba][] = [[fg, [0, 0, 0, 0]]];
-    for (const layer of sample.chain) {
+    const lay = (surfaces: Rgba[]): string | null => {
+      // Counted before the product is built.
+      if (pairs.length * surfaces.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
+      pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
+      return null;
+    };
+    for (const [i, layer] of sample.chain.entries()) {
+      for (const shadow of laid.get(i) ?? []) {
+        const refused = lay([shadow]);
+        if (refused) return refused;
+      }
+      // A label's shapes lie under its own line of ancestors and over the ancestor they share with it.
+      for (const shape of (sample.under?.[p] ?? []).filter((u) => u.at === i)) {
+        const colour = parseColour(shape.fill);
+        if (!colour) return `an unread shape fill ${shape.fill}`;
+        const refused = lay([colour]);
+        if (refused) return refused;
+      }
       if (layer.filter !== "none" || layer.backdropFilter !== "none" || layer.mixBlendMode !== "normal") {
         return `a filter or blend on <${layer.name}>`;
       }
@@ -240,13 +435,12 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
       const colour = parseColour(layer.backgroundColor);
       if (!colour) return `an unread background colour ${layer.backgroundColor} on <${layer.name}>`;
       const painted = gradientSurfaces(layer.backgroundImage, colour);
-      if (!painted) return `a background picture or unread gradient on <${layer.name}>`;
+      if (typeof painted === "string") return `${painted} on <${layer.name}>`;
       const opacity = parseFloat(layer.opacity);
       if (!(opacity >= 0 && opacity <= 1)) return `an unread opacity ${layer.opacity} on <${layer.name}>`;
       // An element whose box is not under this point lays nothing under the text there.
-      const surfaces: Rgba[] = (layer.covers[p] ?? true) ? painted : [[0, 0, 0, 0]];
-      pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
-      if (pairs.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
+      const refused = lay((layer.covers[p] ?? true) ? painted : [[0, 0, 0, 0]]);
+      if (refused) return refused;
       if (opacity < 1) {
         pairs = pairs.map(([ink, bg]) => [
           [ink[0], ink[1], ink[2], ink[3] * opacity],
@@ -254,10 +448,17 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
         ]);
       }
     }
-    const page: Rgba = [255, 255, 255, 1];
-    for (const [ink, bg] of pairs) worst = Math.min(worst, ratioOf(over(ink, page), over(bg, page)));
+    for (const shadow of laid.get(sample.chain.length) ?? []) {
+      const refused = lay([shadow]);
+      if (refused) return refused;
+    }
+    for (const [ink, bg] of pairs) {
+      let [seenInk, seenBg] = [over(ink, page), over(bg, page)];
+      for (const shadow of above) [seenInk, seenBg] = [over(shadow, seenInk), over(shadow, seenBg)];
+      out.push([ratioOf(seenInk, seenBg), Math.sign(luminance(seenInk) - luminance(seenBg))]);
+    }
   }
-  return Number.isFinite(worst) ? worst : `a measure that came out ${worst}`;
+  return out;
 }
 
 /**
@@ -270,13 +471,20 @@ export function judge(sample: Sample): Judgement {
   const axe = sample.axeReason ? ` (axe: ${sample.axeReason})` : "";
   const fg = sample.unreadable ? null : parseColour(sample.color);
   const own = fg ? onOwnSurfaces(sample, fg) : null;
-  const ownRatio = typeof own === "number" ? own : null;
+  // Hidden at every point, the words are still read on their own surfaces with the hiding left aside,
+  // so a listing of them is pinned to that, never excused whatever their colours become (the
+  // orchestrator's review of 9697ad3, item 3).
+  const unhidden = own === null && fg ? onOwnSurfaces({ ...sample, hidden: undefined }, fg) : own;
+  const ownRatio = typeof unhidden === "number" ? unhidden : null;
   const fail = (why: string): Judgement => ({ ...base, ratio: null, ownRatio, why: `not measurable: ${why}${axe}` });
   if (sample.unreadable) return fail(sample.unreadable);
   if (sample.overlappedBy) return fail(`over or under ${sample.overlappedBy}`);
   if (!fg) return fail(`an unread colour ${sample.color}`);
   if (typeof own === "string") return fail(own);
-  const ratio = own as number;
+  // Hidden at every point (under an opaque element over them, or clipped): never a silent pass, as a
+  // probe that excluded every point has measured nothing (the orchestrator's condition on T3b).
+  if (own === null) return fail("hidden at every point, under an opaque element over the words or clipped");
+  const ratio = own;
   const why = ratio < need ? `${ratio.toFixed(2)}:1 < ${need}:1${axe}` : "";
   return { ...base, ratio, ownRatio: null, why };
 }
@@ -307,4 +515,42 @@ export function excuses(listed: ListedFinding | undefined, finding: Judgement): 
     return finding.ownRatio !== null && finding.ownRatio >= listed.own - FLOOR;
   }
   return finding.ratio !== null && finding.ratio >= listed.ratio - FLOOR;
+}
+
+/**
+ * The listed findings, read from their JSON file and checked for shape, so a mistyped field or a
+ * missing reason fails the run naming the entry, never excuses by accident.
+ */
+export function readFindings(json: unknown): Record<string, Record<string, ListedFinding>> {
+  const bad = (where: string, what: string): never => {
+    throw new Error(`contrast findings: ${where}: ${what}`);
+  };
+  if (typeof json !== "object" || json === null || Array.isArray(json)) bad("the file", "not an object of looks");
+  const out: Record<string, Record<string, ListedFinding>> = {};
+  for (const [title, nodes] of Object.entries(json as Record<string, unknown>)) {
+    if (typeof nodes !== "object" || nodes === null || Array.isArray(nodes)) bad(title, "not an object of selectors");
+    out[title] = {};
+    for (const [selector, entry] of Object.entries(nodes as Record<string, unknown>)) {
+      const where = `${title} › ${selector}`;
+      const e = entry as Record<string, unknown>;
+      if (typeof e !== "object" || e === null) bad(where, "not an object");
+      const keys = Object.keys(e).sort().join(",");
+      if (typeof e.text !== "string" || typeof e.owner !== "string" || !e.owner) bad(where, "no text or owner");
+      if (typeof e.ratio === "number") {
+        if (keys !== "owner,ratio,text") bad(where, `unexpected fields ${keys}`);
+        if (!(e.ratio > 0 && e.ratio <= 21)) bad(where, `a ratio out of range ${e.ratio}`);
+      } else if (e.ratio === "unmeasurable") {
+        if (keys !== "own,owner,ratio,reason,text") bad(where, `unexpected fields ${keys}`);
+        if (typeof e.reason !== "string" || !e.reason) bad(where, "no reason");
+        if (e.own !== null && !(typeof e.own === "number" && e.own > 0 && e.own <= 21)) bad(where, `an own ratio out of range ${String(e.own)}`);
+        // Words hidden at every point are always read on their own surfaces (`judge`), so their listing
+        // names that floor; with none it would excuse them whatever their colours became.
+        if (e.own === null && typeof e.reason === "string" && e.reason.startsWith("hidden at every point")) bad(where, "hidden at every point with no own ratio: a listing of it must name a floor");
+      } else {
+        bad(where, `a ratio that is neither a number nor "unmeasurable": ${String(e.ratio)}`);
+      }
+      (out[title] as Record<string, ListedFinding>)[selector] = e as unknown as ListedFinding;
+    }
+  }
+  return out;
 }

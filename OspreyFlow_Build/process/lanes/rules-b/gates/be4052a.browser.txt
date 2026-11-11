@@ -1,0 +1,123 @@
+Running on ospreyflow-test (stack offline, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261111T135522Z/log: bash -c cd OspreyFlow_Core/apps/workspace && export OSPREY_PORTS_SLOT=13; echo "== vitest src/color"; npx vitest run src/color 2>&1 | tail -6; echo vitest_rc=${PIPESTATUS[0]}; echo "== workspace a11y"; npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts a11y/a11y.spec.ts a11y/canvas-focus.spec.ts --reporter=line 2>&1 | grep -vE "^\[[0-9]+/[0-9]+\]" | grep -vE "WebServer" | tail -400; echo pw_rc=${PIPESTATUS[0]}; echo "== harness a11y"; cd ../harness && npx playwright test --config a11y/playwright.config.ts --reporter=line 2>&1 | grep -vE "^\[[0-9]+/[0-9]+\]" | tail -15; echo hpw_rc=${PIPESTATUS[0]}
+== vitest src/color
+     1 ms  src/color/tokens.test.ts > the dark palette is the constants already here > is unchanged
+     1 ms  src/color/nodeVisual.test.ts > renderNodeSvg > declares explicit width/height matching the viewBox for square (regression)
+     1 ms  src/color/textContrast.test.ts > what lies under the text > fails an overlapped node, a painted pseudo-element, a filter and a blend as unmeasurable
+     1 ms  src/color/textContrast.test.ts > what lies under the text > measures an SVG label's words on the shape under them, point by point
+     1 ms  src/color/oklab.test.ts > mixOklab > 32% (dimmed) sits closer to the surface than 12% (filtered out) does
+     1 ms  src/color/tokens.test.ts > the light palette matches tokens.css ([data-theme=light]) > the neutrals and the accent
+vitest_rc=0
+== workspace a11y
+
+Running 979 tests using 3 workers
+
+  1) a11y/canvas-focus.spec.ts:10:1 › the focused node is announced in a polite status region, and the page passes axe 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('application', { name: 'Network canvas' })
+
+
+      12 |   await page.goto("/keyboard/harness.html");
+      13 |   const canvas = page.getByRole("application", { name: "Network canvas" });
+    > 14 |   await canvas.focus();
+         |                ^
+      15 |   await page.keyboard.press("ArrowRight");
+      16 |
+      17 |   const region = page.getByRole("status").filter({ hasText: /^n1, Person, \d+ links?$/ });
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/canvas-focus.spec.ts:14:16
+
+    Error Context: test-results/canvas-focus-the-focused-n-3e179-ion-and-the-page-passes-axe/error-context.md
+
+
+  2) a11y/a11y.spec.ts:65:3 › dark theme canvas screen has no automated wcag2aa violations ─────────
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByRole('application', { name: 'Network canvas' }) to be visible
+
+
+      69 |       await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      70 |     }
+    > 71 |     await page.getByRole("application", { name: "Network canvas" }).waitFor();
+         |                                                                     ^
+      72 |     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+      73 |     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      74 |     const contrast = await checkUndecidedContrast(page, results);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/a11y.spec.ts:71:69
+
+    Error Context: test-results/a11y-dark-theme-canvas-scr-2adf7-utomated-wcag2aa-violations/error-context.md
+
+
+  3) a11y/every-harness.spec.ts:355:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('html')
+    Expected: "govuk"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('html') with timeout 5000ms
+      - waiting for locator('html')
+        14 × locator resolved to <html lang="en" data-theme="dark">…</html>
+           - unexpected value "null"
+
+
+      362 |         }
+      363 |         if (variant === "govuk") {
+    > 364 |           await expect(page.locator("html")).toHaveAttribute("data-brand", "govuk");
+          |                                              ^
+      365 |         }
+      366 |         let builder = new AxeBuilder({ page }).withTags(WCAG_TAGS);
+      367 |         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:364:46
+
+    Error Context: test-results/every-harness-places-harne-45583-WCAG-2-2-A-or-AA-violations/error-context.md
+
+
+  3 failed
+    a11y/a11y.spec.ts:65:3 › dark theme canvas screen has no automated wcag2aa violations ──────────
+    a11y/canvas-focus.spec.ts:10:1 › the focused node is announced in a polite status region, and the page passes axe 
+    a11y/every-harness.spec.ts:355:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations 
+  976 passed (20.1m)
+pw_rc=1
+== harness a11y
+      50 |       // stale previous one mid-transition.
+    > 51 |       await page.getByRole("heading", { name: screen, level: 2 }).waitFor();
+         |                                                                   ^
+      52 |
+      53 |       // `wcag2a` and `wcag2aa`, both — axe-core's own rule tags are not hierarchical: a rule
+      54 |       // tagged `wcag2a` (e.g. `button-name`, `image-alt`) is not also returned by `wcag2aa` alone,
+        at /root/osprey-runs/rules-b/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:51:67
+
+    Error Context: test-results/a11y-dark-theme-Profile-sc-a79c7-utomated-wcag2aa-violations/error-context.md
+
+
+  2 failed
+    a11y/a11y.spec.ts:37:5 › dark theme Profile screen has no automated wcag2aa violations ─────────
+    a11y/install-page.spec.ts:58:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations 
+  32 passed (1.4m)
+hpw_rc=1
+Wall time: 1295 s, exit 0 (no stack, no lease; set-up before it 14 s)
+
+== retakes, run 20261111T141740Z (slot 13): the 3 workspace and 2 harness failures above
+  1) a11y/a11y.spec.ts:65:3 › dark theme canvas screen has no automated wcag2aa violations ─────────
+    Error: locator.waitFor: Test timeout of 60000ms exceeded.
+    Error Context: test-results/a11y-dark-theme-canvas-scr-2adf7-utomated-wcag2aa-violations/error-context.md
+  2) a11y/canvas-focus.spec.ts:10:1 › the focused node is announced in a polite status region, and the page passes axe 
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Error Context: test-results/canvas-focus-the-focused-n-3e179-ion-and-the-page-passes-axe/error-context.md
+  2 failed
+  1 passed (1.0m)
+  2 passed (10.9s)
+Wall time: 77 s, exit 0 (no stack, no lease; set-up before it 14 s)
+
+== retake, run 20261111T142957Z (slot 13), load average 37: canvas-focus.spec.ts and a11y.spec.ts whole
+  13 passed (36.7s)
+Wall time: 38 s, exit 0 (no stack, no lease; set-up before it 16 s)

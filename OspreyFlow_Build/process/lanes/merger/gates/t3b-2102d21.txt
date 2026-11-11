@@ -1,0 +1,10 @@
+T3b (2102d21) merged; browser set on the merged tree ceda77f (main 77784af + T3b), slot 13, 11 Nov 2026
+Running on ospreyflow-test (stack offline, osprey-runs/merge/), logged at osprey-runs/merge.meta/runs/20261111T180446Z/log: bash -c cd /root/osprey-runs/merge/OspreyFlow_Core/apps/workspace && export OSPREY_PORTS_SLOT=13; uptime; npx vitest run src/color 2>&1 | tail -3; npx playwright test --config a11y/playwright.config.ts --reporter=line > /tmp/t3b-full.txt 2>&1; echo "pw_rc=$?"; grep -vE "^\[[0-9]+/[0-9]+\]" /tmp/t3b-full.txt | tail -60
+ 18:04:46 up 16 days,  2:42,  5 users,  load average: 3.55, 3.40, 4.00
+pw_rc=1
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Error: expect(locator).toHaveAttribute(expected) failed
+  4 failed
+  1004 passed (24.5m)
+- the four: three GOV.UK data-brand waits and one map-view attribution (CARRIES rows d, e); no contrast finding
+- the earlier full run at d76e745: 1008 passed, 0 failed

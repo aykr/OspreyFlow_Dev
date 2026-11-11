@@ -82,6 +82,13 @@
    "reason": "over or under span.board-item__label",
    "own": 6.44,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing (light)": {
@@ -97,6 +104,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
    "owner": "case"
   }
  },
@@ -114,6 +128,13 @@
    "reason": "over or under span.board-item__label",
    "own": 5.17,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Declare%20a%20Location (dark)": {
@@ -129,6 +150,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
    "owner": "case"
   }
  },
@@ -146,6 +174,13 @@
    "reason": "over or under span.board-item__label",
    "own": 5.41,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Declare%20a%20Location (govuk)": {
@@ -161,6 +196,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
    "owner": "case"
   }
  },
@@ -247,6 +289,13 @@
    "reason": "over or under span.board-item__label",
    "own": 6.44,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6 (light)": {
@@ -262,6 +311,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
    "owner": "case"
   }
  },
@@ -302,6 +358,13 @@
    "reason": "over or under span.board-item__label",
    "own": 6.44,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (light)": {
@@ -317,6 +380,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
    "owner": "case"
   }
  },
@@ -334,6 +404,13 @@
    "reason": "over or under span.board-item__label",
    "own": 5.17,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (dark)": {
@@ -349,6 +426,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
    "owner": "case"
   }
  },
@@ -366,6 +450,13 @@
    "reason": "over or under span.board-item__label",
    "own": 5.41,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (govuk)": {
@@ -381,6 +472,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
    "owner": "case"
   }
  },
@@ -467,6 +565,13 @@
    "reason": "over or under span.board-item__label",
    "own": 6.44,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&press=Promote%E2%80%A6 (light)": {
@@ -482,6 +587,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
    "owner": "case"
   }
  },
@@ -499,6 +611,13 @@
    "reason": "over or under span.board-item__label",
    "own": 5.17,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review (dark)": {
@@ -514,6 +633,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
    "owner": "case"
   }
  },
@@ -531,6 +657,13 @@
    "reason": "over or under span.board-item__label",
    "own": 5.41,
    "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
+   "owner": "case"
   }
  },
  "boards-harness.html board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review (govuk)": {
@@ -546,6 +679,13 @@
    "ratio": "unmeasurable",
    "reason": "over or under span.board-item__label",
    "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
    "owner": "case"
   }
  },
@@ -900,123 +1040,20 @@
    "owner": "platform"
   }
  },
- "monitoring-harness.html tab=rules&editor=bpmn (dark)": {
-  "tspan[dy=\"0\"]": {
-   "text": "If a Person meets",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 13.17,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  },
-  "tspan[dy=\"16\"]": {
-   "text": "the conditions",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 13.17,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  }
- },
- "monitoring-harness.html tab=rules&editor=bpmn (light)": {
-  "tspan[dy=\"0\"]": {
-   "text": "If a Person meets",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 14.53,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  },
-  "tspan[dy=\"16\"]": {
-   "text": "the conditions",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 14.53,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  }
- },
- "monitoring-harness.html tab=rules&editor=bpmn (govuk)": {
-  "tspan[dy=\"0\"]": {
-   "text": "If a Person meets",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 18.34,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  },
-  "tspan[dy=\"16\"]": {
-   "text": "the conditions",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 18.34,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  }
- },
  "places-harness.html open=views (govuk)": {
-  ".govuk-notification-banner__content > .btn": {
-   "text": "Case: Kestrel",
-   "ratio": "unmeasurable",
-   "reason": "over or under div.menu-panel",
-   "own": 18.34,
-   "owner": "shell"
-  },
   ".context-banner__sep[aria-hidden=\"true\"]:nth-child(4)": {
    "text": "·",
    "ratio": "unmeasurable",
-   "reason": "over or under div.menu-panel",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
    "own": 19.59,
    "owner": "shell"
   },
   "span:nth-child(5)": {
    "text": "reads Prison intel",
    "ratio": "unmeasurable",
-   "reason": "over or under div.menu-panel",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
    "own": 19.59,
    "owner": "shell"
-  }
- },
- "rule-standards-harness.html open=1 (dark)": {
-  "tspan[dy=\"0\"]": {
-   "text": "If a Person meets",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 13.17,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  },
-  "tspan[dy=\"16\"]": {
-   "text": "the conditions",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 13.17,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  }
- },
- "rule-standards-harness.html open=1 (light)": {
-  "tspan[dy=\"0\"]": {
-   "text": "If a Person meets",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 14.53,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  },
-  "tspan[dy=\"16\"]": {
-   "text": "the conditions",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 14.53,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  }
- },
- "rule-standards-harness.html open=1 (govuk)": {
-  "tspan[dy=\"0\"]": {
-   "text": "If a Person meets",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 18.34,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
-  },
-  "tspan[dy=\"16\"]": {
-   "text": "the conditions",
-   "ratio": "unmeasurable",
-   "reason": "over or under rect.show-as-bpmn__task",
-   "own": 18.34,
-   "owner": "rules-b (Show as BPMN, L2.11a)"
   }
  }
 }

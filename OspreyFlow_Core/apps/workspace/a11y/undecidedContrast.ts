@@ -6,15 +6,26 @@
 // `../harness/a11y/*.spec.ts`, which import this file by path).
 //
 // This half reads, in the page, what the judgement needs: each node's computed styles up to `<html>`,
-// which of those elements lie under each probed point of its text, a painted `::before`/`::after`
-// laid over it, and what `elementsFromPoint` finds under and over the text. `src/color/textContrast.ts`
-// judges it, in Node, unit-tested at every boundary. It fails closed: an element painted under or over
-// the text that is neither the node nor an ancestor (map tiles under a chip, an overlay, a drawn line),
-// a filter or blend, a colour it cannot read, a node in a frame or shadow root are offenders, never
-// passes. Text axe calls partly covered is measured when the probe finds nothing foreign at its points
-// (rules-b's T3 report, decision 3). Its limit: the probe samples points (the left, middle and right of
-// up to five line boxes, the first, middle and last among them), not every pixel; a cover lying wholly
-// between them is carried to T3b.
+// which of those elements lie under each probed point of its own words, a painted `::before`/`::after`
+// laid over it, the SVG shapes under an SVG label's words, the browser's own canvas colour, and what
+// `elementsFromPoint` finds at each point, with every element taking pointer events and none inert for
+// the probe. `src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
+// closed: an element painted under or over the words that is neither the node nor an ancestor (map
+// tiles under a chip, a translucent overlay, a drawn line, a descendant's background), a filter or
+// blend, a colour it cannot read, a node in a frame or shadow root are offenders, never passes. Text
+// axe calls partly covered is measured when the probe finds nothing foreign at its points (rules-b's T3
+// report, decision 3). Its limit: points every 8px along the words (three rows where axe says partly
+// covered; more than 600 points is unmeasurable), so a cover narrower than that between two of them
+// passes.
+//
+// Judged alike on every platform (T3b's server round, 11 November 2026: the merger's Linux Chromium run
+// found what the Mac's had not, because the UI font falls back to the system's and moves the words a
+// few pixels). Another element's outer shadow is measured by what it paints at each point, not failed
+// by how far it reaches. A point where the words are hidden is not judged: under an opaque element the
+// browser's hit test finds over them (never one of their own descendants), or clipped by a scrolling
+// box; hidden at every point, the words are unmeasurable, never passed. Each node is scrolled to the
+// middle of its boxes at once and every scroll put back after it, so neither the order of the nodes
+// nor where the viewport's edge falls on the words changes its result.
 import type { Page } from "@playwright/test";
 
 import {
@@ -45,41 +56,103 @@ interface Asked {
 async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
   return page.evaluate((nodes) => {
     const REPLACED = new Set(["CANVAS", "IMG", "SVG", "VIDEO", "IFRAME", "PICTURE", "OBJECT", "EMBED"]);
+    // SVG's drawn parts: its shapes paint, its root's empty box does not (a board's link layer).
+    const SHAPES = new Set(["LINE", "PATH", "RECT", "CIRCLE", "ELLIPSE", "POLYLINE", "POLYGON", "TEXT", "TSPAN", "IMAGE", "USE"]);
+    const SVG_TEXT = new Set(["TEXT", "TSPAN", "TEXTPATH"]);
     const name = (e: Element) =>
       `${e.tagName.toLowerCase()}${e.classList.length ? `.${e.classList[0]}` : ""}`;
     const transparent = (css: string) => /^rgba\(0, 0, 0, 0\)$|^transparent$/.test(css);
+    const within = (x: number, y: number, r: { left: number; right: number; top: number; bottom: number }) =>
+      x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    const bordered = (s: CSSStyleDeclaration) =>
+      ["top", "right", "bottom", "left"].some(
+        (side) => s.getPropertyValue(`border-${side}-style`) !== "none" && parseFloat(s.getPropertyValue(`border-${side}-width`)) > 0,
+      );
+    // A `::before`/`::after` that paints: a background, a border, or words of its own (`content: "…"`).
     const pseudoPaints = (e: Element, pseudo: string) => {
       const p = getComputedStyle(e, pseudo);
-      const shows = p.content !== "none" && p.content !== "normal";
-      return shows && (!transparent(p.backgroundColor) || p.backgroundImage !== "none");
+      if (p.content === "none" || p.content === "normal") return false;
+      const words = /^["'].*\S.*["']$/.test(p.content);
+      return words || !transparent(p.backgroundColor) || p.backgroundImage !== "none" || bordered(p);
     };
-    // SVG's drawn parts: its shapes paint, its root's empty box does not (a board's link layer).
-    const SHAPES = new Set(["LINE", "PATH", "RECT", "CIRCLE", "ELLIPSE", "POLYLINE", "POLYGON", "TEXT", "TSPAN", "IMAGE", "USE"]);
+    // A colour as an `rgba()` string with `alpha` folded in, read through the browser's own parser;
+    // a fill it cannot turn into a colour (`url(#…)`, `none`) comes back as written, for the judgement
+    // to refuse.
+    const probeColour = document.createElement("i");
+    probeColour.style.display = "none";
+    document.documentElement.append(probeColour);
+    const withAlpha = (css: string, alpha: number): string => {
+      probeColour.style.color = "";
+      probeColour.style.color = css;
+      if (!probeColour.style.color) return css;
+      const got = getComputedStyle(probeColour).color;
+      if (alpha >= 1) return got;
+      const m = got.match(/^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/);
+      return m ? `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${(m[4] === undefined ? 1 : +m[4]) * alpha})` : `${got} with opacity ${alpha}`;
+    };
+    // The canvas the browser draws under everything, by the page's own colour scheme.
+    const canvas = document.createElement("i");
+    canvas.style.cssText = "display:none; background-color: Canvas";
+    document.documentElement.append(canvas);
+    const pageColour = getComputedStyle(canvas).backgroundColor;
+    canvas.remove();
+    // Every element with an outer box-shadow: each shadow's colour as computed (or the whole shadow as
+    // written when no colour is found, for the judgement to refuse), offset, blur and spread. Where each
+    // lies is taken per node, after scrolling, and what it paints at each point is measured in Node
+    // (`shadowCoverage`), so the words a few pixels nearer it on one platform's font than another's are
+    // judged alike, not failed by a reach they cross on one platform only.
+    type Part = { colour: string; dx: number; dy: number; blur: number; spread: number; radius: number };
+    const shadowed: { e: Element; parts: Part[] }[] = [];
+    for (const e of document.querySelectorAll("*")) {
+      const shadow = getComputedStyle(e).boxShadow;
+      if (shadow === "none") continue;
+      const parts: Part[] = [];
+      for (const one of shadow.split(/,(?![^(]*\))/)) {
+        if (/inset/.test(one)) continue;
+        const colour = one.match(/\b(?:rgba?|color|oklab|oklch|lab|lch|hsla?|hwb)\([^()]*\)|\b(?:transparent|currentcolor)\b/i)?.[0] ?? one.trim();
+        const lengths = (one.replace(/\b[a-z-]+\([^()]*\)/gi, "").match(/-?[\d.]+(?:e[-+]?\d+)?px/gi) ?? []).map(parseFloat);
+        const [dx = 0, dy = 0, blur = 0, spread = 0] = lengths;
+        // The largest corner radius, grown by the spread, for the judgement's rounded-corner bracket.
+        const cs = getComputedStyle(e);
+        const corner = Math.max(...["top-left", "top-right", "bottom-left", "bottom-right"].flatMap((c) =>
+          cs.getPropertyValue(`border-${c}-radius`).split(/\s+/).map((v) => (v.endsWith("%") ? Infinity : parseFloat(v) || 0))));
+        parts.push({ colour, dx, dy, blur, spread, radius: corner > 0 ? corner + Math.max(0, spread) : 0 });
+      }
+      if (parts.length) shadowed.push({ e, parts });
+    }
+    // The shape a shadow is cast from (the box moved by its offset and grown by its spread), and how far
+    // past it the blur is taken: three standard deviations (1.5 blur radii), beyond which a shadow lays
+    // under 0.14% of its colour, less than one step of an 8-bit channel.
+    const castOf = (r: DOMRect, { dx, dy, spread }: Part): [number, number, number, number] =>
+      [r.left + dx - spread, r.top + dy - spread, r.right + dx + spread, r.bottom + dy + spread];
     // A foreign element that changes what is seen at the point (x, y): a replaced element or an SVG
-    // shape, a background, a painted `::before`/`::after`, a filter or blend, an inset shadow, a border
-    // under the point, or words of its own.
+    // shape, a background, a filter or blend, a shadow, a painted pseudo-element, a border under the
+    // point, or words of its own there.
     const painted = (e: Element, x: number, y: number) => {
       const s = getComputedStyle(e);
       const tag = e.tagName.toUpperCase();
-      if (tag === "SVG") return !transparent(s.backgroundColor) || s.backgroundImage !== "none";
-      if (REPLACED.has(tag) || SHAPES.has(tag)) return true;
-      if (!transparent(s.backgroundColor) || s.backgroundImage !== "none") return true;
       if (s.filter !== "none" || s.backdropFilter !== "none" || s.mixBlendMode !== "normal") return true;
       if (/inset/.test(s.boxShadow)) return true;
+      if (!transparent(s.backgroundColor) || s.backgroundImage !== "none") return true;
       if (pseudoPaints(e, "::before") || pseudoPaints(e, "::after")) return true;
       const r = e.getBoundingClientRect();
       const w = (side: string) => (s.getPropertyValue(`border-${side}-style`) === "none" ? 0 : parseFloat(s.getPropertyValue(`border-${side}-width`)) || 0);
       if (x < r.left + w("left") || x > r.right - w("right") || y < r.top + w("top") || y > r.bottom - w("bottom")) return true;
+      if (tag !== "SVG" && (REPLACED.has(tag) || SHAPES.has(tag))) return true;
       return [...e.childNodes].some((n) => {
         if (n.nodeType !== Node.TEXT_NODE || (n.textContent ?? "").trim() === "") return false;
         const words = document.createRange();
         words.selectNodeContents(n);
-        return [...words.getClientRects()].some((t) => x >= t.left && x <= t.right && y >= t.top && y <= t.bottom);
+        return [...words.getClientRects()].some((t) => within(x, y, t));
       });
     };
     // An ancestor hides what lies beneath it only when its own background is opaque and neither it
-    // nor anything above it is translucent (an opacity lets the group's underlay through).
+    // nor anything above it is translucent (an opacity lets the group's underlay through). An SVG
+    // element other than the outermost `<svg>` (a nested `<svg>` included) paints no CSS background,
+    // whatever its computed one says.
+    const outermostSvg = (e: Element) => e instanceof SVGSVGElement && e.ownerSVGElement === null;
     const opaque = (e: Element) => {
+      if (e instanceof SVGElement && !outermostSvg(e)) return false;
       const bg = getComputedStyle(e).backgroundColor;
       if (!(/^rgb\(/.test(bg) || /^color\(srgb [^/]*\)$/.test(bg))) return false;
       for (let at: Element | null = e; at; at = at.parentElement) {
@@ -87,42 +160,133 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       }
       return true;
     };
+    // An element over the words that hides them at (x, y), which the browser's own hit test has found
+    // there: its own background an opaque colour painted to its border box, nothing translucent from it
+    // up, no filter, blend, mask or clip on it or any ancestor (the hit test ignores a mask), and the
+    // point inside its box (to within the pixel the browser snaps its paint and its hit test to) clear
+    // of every rounded corner (each corner's largest radius taken, so the box is only ever read as
+    // smaller than it is).
+    const hides = (e: Element, x: number, y: number) => {
+      const s = getComputedStyle(e);
+      if (!opaque(e) || s.backgroundClip !== "border-box") return false;
+      // A painted ::before or ::after is hit as its element and may lie elsewhere in the paint order.
+      if (pseudoPaints(e, "::before") || pseudoPaints(e, "::after")) return false;
+      for (let up: Element | null = e; up; up = up.parentElement) {
+        const u = getComputedStyle(up);
+        if (u.filter !== "none" || u.backdropFilter !== "none" || u.mixBlendMode !== "normal") return false;
+        if (u.maskImage !== "none" || u.getPropertyValue("-webkit-mask-image") !== "none" || u.clipPath !== "none") return false;
+        const border = [u.getPropertyValue("mask-border-source"), u.getPropertyValue("-webkit-mask-box-image-source"), u.getPropertyValue("-webkit-mask-box-image")];
+        if (border.some((v) => v !== "" && v !== "none")) return false;
+      }
+      const box = e.getBoundingClientRect();
+      const r = { left: box.left - 1, top: box.top - 1, right: box.right + 1, bottom: box.bottom + 1, width: box.width + 2, height: box.height + 2 };
+      if (!within(x, y, r)) return false;
+      const radius = (corner: string) => {
+        const values = s.getPropertyValue(`border-${corner}-radius`).split(/\s+/);
+        return Math.max(...values.map((v) => (v.endsWith("%") ? (parseFloat(v) / 100) * Math.max(r.width, r.height) : parseFloat(v) || 0)));
+      };
+      const corners: [string, number, number, number, number][] = [
+        ["top-left", r.left, r.top, 1, 1],
+        ["top-right", r.right, r.top, -1, 1],
+        ["bottom-left", r.left, r.bottom, 1, -1],
+        ["bottom-right", r.right, r.bottom, -1, -1],
+      ];
+      return corners.every(([corner, cx, cy, sx, sy]) => {
+        const k = radius(corner);
+        const [ox, oy] = [cx + sx * k, cy + sy * k];
+        const inCorner = sx * (x - ox) < 0 && sy * (y - oy) < 0;
+        return !inCorner || Math.hypot(x - ox, y - oy) <= k;
+      });
+    };
+    // An SVG shape under an SVG label's words that is a plain surface there: a rect, circle, ellipse,
+    // polygon or path whose fill (a colour, not a pattern or gradient) covers the point and whose
+    // stroke does not, with no filter, mask or blend from it up to the ancestor it shares with the
+    // words. It is laid at that ancestor's place under the words, with every opacity on its own side of the tree.
+    // Anything else under the words is a cover. `chainOf` is the words' node, then its ancestors.
+    const PLAIN = new Set(["RECT", "CIRCLE", "ELLIPSE", "POLYGON", "PATH"]);
+    let chainOf: Element[] = [];
+    const underShape = (e: Element, x: number, y: number): { fill: string; at: number } | null => {
+      if (!PLAIN.has(e.tagName.toUpperCase()) || !(e instanceof SVGGeometryElement)) return null;
+      const ctm = e.getScreenCTM();
+      if (!ctm) return null;
+      const pt = new DOMPoint(x, y).matrixTransform(ctm.inverse());
+      const f = getComputedStyle(e);
+      if (!e.isPointInFill(pt)) return null;
+      if (f.stroke !== "none" && parseFloat(f.strokeWidth) > 0 && e.isPointInStroke(pt)) return null;
+      const at = chainOf.findIndex((a) => a.contains(e));
+      if (at < 1) return null;
+      const shared = chainOf[at] as Element;
+      let alpha = parseFloat(f.fillOpacity);
+      for (let up: Element | null = e; up && up !== shared; up = up.parentElement) {
+        const u = getComputedStyle(up);
+        if (u.filter !== "none" || u.mask !== "none" || u.mixBlendMode !== "normal") return null;
+        alpha *= parseFloat(u.opacity);
+      }
+      if (!/^(rgb|color|oklab|oklch)/.test(f.fill)) return null;
+      return { fill: withAlpha(f.fill, alpha), at };
+    };
     const blank = (unreadable: string, selector: string, axeReason: string | null) => ({
       selector, unreadable, text: "", color: "", fontSize: "", fontWeight: "", chain: [],
-      overlappedBy: null, axeReason,
+      overlappedBy: null, axeReason, page: pageColour,
     });
+    // Each node is scrolled to the middle of its scrolling boxes and the viewport (instantly), and every
+    // scroll position is put back after it, so a node is measured the same whatever came before it and
+    // whether or not its words cross the viewport's edge on this platform's font.
+    const scrollers = () => {
+      const all: [Element, number, number][] = [];
+      for (const e of document.querySelectorAll("*")) {
+        if (e.scrollTop || e.scrollLeft) all.push([e, e.scrollTop, e.scrollLeft]);
+      }
+      return all;
+    };
+    const MAX_POINTS = 600;
+    try {
     return nodes.map(({ selector, unreadable, axeReason }) => {
       if (unreadable || !selector) return blank(unreadable ?? "no selector", selector ?? "?", axeReason);
-      let el: HTMLElement | null = null;
+      let el: Element | null = null;
       try {
-        el = document.querySelector<HTMLElement>(selector);
+        el = document.querySelector(selector);
       } catch {
         // An invalid selector: unreadable below.
       }
       if (!el) return blank("not found to measure", selector, axeReason);
-      // The text's own boxes, scrolled into view, and points across each: its left, middle and right
-      // at mid-height, for up to five line boxes.
-      const range = document.createRange();
-      range.selectNodeContents(el);
+      const node = el;
+      const svgText = node instanceof SVGElement && SVG_TEXT.has(node.tagName.toUpperCase());
+      // The node's own words: its direct text nodes' boxes (a descendant's words are its own node),
+      // or all its contents when it holds none directly.
+      const ownText = [...node.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").trim() !== "");
       const boxes = () => {
-        const found = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
-        return found.length ? found : [el.getBoundingClientRect()];
+        const found = (ownText.length ? ownText : [node]).flatMap((n) => {
+          const r = document.createRange();
+          r.selectNodeContents(n);
+          return [...r.getClientRects()];
+        }).filter((r) => r.width > 0 && r.height > 0);
+        return found.length ? found : [node.getBoundingClientRect()];
       };
-      let rects = boxes();
-      const inView = (r: DOMRect) => r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
-      if (!rects.every(inView)) {
-        el.scrollIntoView({ block: "center", inline: "center" });
-        rects = boxes();
-      }
-      // The left, middle and right of up to five line boxes, spread from the first to the last.
-      const picks = rects.length <= 5 ? rects : [0, 1, 2, 3, 4].map((k) => rects[Math.round((k * (rects.length - 1)) / 4)] as DOMRect);
-      const points = picks.flatMap((r) => {
+      const [pageX, pageY, scrolled] = [scrollX, scrollY, scrollers()];
+      try {
+      node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      const rects = boxes();
+      // Points along every box: every 8px across, at mid-height, or at a fifth, a half and four fifths
+      // where axe saw part of the text covered. Past MAX_POINTS the words are unmeasurable, never
+      // sampled more thinly.
+      const partly = axeReason === "elmPartiallyObscured" || axeReason === "elmPartiallyObscuring";
+      const rows = partly ? [0.2, 0.5, 0.8] : [0.5];
+      const step = 8;
+      const needed = rects.reduce((sum, r) => sum + (Math.floor(Math.max(0, r.width - 4) / step) + 1) * rows.length, 0);
+      if (needed > MAX_POINTS) return blank(`more than ${MAX_POINTS} probe points (${needed})`, selector, axeReason);
+      const points: [number, number][] = [];
+      for (const r of rects) {
         const inset = Math.min(2, r.width / 4);
-        const y = r.top + r.height / 2;
-        return [[r.left + inset, y], [r.left + r.width / 2, y], [r.right - inset, y]] as const;
-      });
+        const across = Math.max(1, Math.floor((r.width - 2 * inset) / step));
+        for (const v of rows) {
+          for (let k = 0; k <= across; k += 1) {
+            points.push([r.left + inset + ((r.width - 2 * inset) * k) / across, r.top + r.height * v]);
+          }
+        }
+      }
       const chain = [];
-      for (let at: Element | null = el; at; at = at.parentElement) {
+      for (let at: Element | null = node; at; at = at.parentElement) {
         const s = getComputedStyle(at);
         let paintedPseudo: string | null = null;
         for (const pseudo of ["::before", "::after"]) {
@@ -133,50 +297,145 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
           }
         }
         const box = at.getBoundingClientRect();
-        const covers = points.map(([x, y]) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
+        // An SVG element's own box paints nothing; its shapes are read at each point below.
+        const surface = !(at instanceof SVGElement) || outermostSvg(at);
         chain.push({
-          name: name(at), backgroundColor: s.backgroundColor, backgroundImage: s.backgroundImage,
+          name: name(at), backgroundColor: surface ? s.backgroundColor : "rgba(0, 0, 0, 0)",
+          backgroundImage: surface ? s.backgroundImage : "none",
           opacity: s.opacity, filter: s.filter, backdropFilter: s.backdropFilter,
-          mixBlendMode: s.mixBlendMode, paintedPseudo, covers,
+          mixBlendMode: s.mixBlendMode, paintedPseudo, covers: points.map(([x, y]) => within(x, y, box)),
         });
       }
+      chainOf = [];
+      for (let at: Element | null = node; at; at = at.parentElement) chainOf.push(at);
       if (axeReason === "pseudoContent" && !chain.some((l) => l.paintedPseudo) && chain[0]) {
         chain[0].paintedPseudo = "::before or ::after (axe: pseudoContent)";
       }
       // Under and over the text: at each point, from the top of the stack, every element until an
-      // opaque ancestor; anything painted that is neither the node, inside it, nor an ancestor is a
-      // surface the walk up the tree cannot see. `elementsFromPoint` leaves out whatever has
-      // `pointer-events: none` (the map's chip, an overlay laid over the page), so for the probe every
-      // element takes pointer events, by a style sheet removed straight after.
+      // opaque ancestor; anything painted that is neither the node nor an ancestor is a surface the
+      // walk up the tree cannot see, except an SVG shape under SVG words in the same drawing, whose
+      // fill is laid under them there. `elementsFromPoint` leaves out whatever has `pointer-events:
+      // none` or is inert, so for the probe every element takes pointer events (a style sheet) and
+      // loses `inert`, both put back straight after.
       let overlappedBy: string | null = null;
+      const under: { fill: string; at: number }[][] = points.map(() => []);
+      const shadows: { colour: string; edges: [number, number, number, number]; blur: number; radius: number; x: number; y: number }[][] = points.map(() => []);
+      const hidden: boolean[] = points.map(() => false);
       const lift = document.createElement("style");
       lift.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
       document.head.append(lift);
+      const inert = [...document.querySelectorAll("[inert]")].map((e) => [e, e.getAttribute("inert") ?? ""] as const);
+      for (const [e] of inert) e.removeAttribute("inert");
       try {
-        for (const [x, y] of points) {
-          if (overlappedBy) break;
-          for (const e of document.elementsFromPoint(x, y)) {
-            if (e === el || e.contains(el)) {
+        points.forEach(([x, y], p) => {
+          if (overlappedBy) return;
+          let below = false;
+          const stack = document.elementsFromPoint(x, y);
+          // Clipped: the innermost of the words' own boxes holding the point is not hit there, so a
+          // scrolling box (or a clip) hides the words at it.
+          const holder = chainOf.find((a) => within(x, y, a.getBoundingClientRect()));
+          // Nothing hit at all: a point outside the viewport, which nothing here can judge.
+          if (!stack.length) {
+            overlappedBy = "nothing the browser hit-tests (a point outside the viewport)";
+            return;
+          }
+          // Clipped only where the hit test misses the words' own box there and an ancestor that clips
+          // its overflow has the point outside its padding box too; a miss for any other reason (a
+          // modal's inertness, a rotation, pointer events kept off) is a cover, never hidden. An ancestor
+          // counts only while nothing between it and the words is positioned out of its flow (absolute
+          // or fixed, whose containing block may lie beyond it) and only as a block box (an inline one's
+          // client box is empty); past either, every ancestor is left out, so the miss is a cover.
+          if (holder && !stack.includes(holder)) {
+            let flowing = true;
+            const clipped = chainOf.slice(1).some((a, i) => {
+              const below = chainOf[i] as Element;
+              if (/absolute|fixed/.test(getComputedStyle(below).position)) flowing = false;
+              const c = getComputedStyle(a);
+              if (!flowing || /^inline/.test(c.display) || c.display === "contents") return false;
+              if (c.overflowX === "visible" && c.overflowY === "visible") return false;
+              const b = a.getBoundingClientRect();
+              const left = b.left + a.clientLeft;
+              const top = b.top + a.clientTop;
+              return !within(x, y, { left, top, right: left + a.clientWidth, bottom: top + a.clientHeight });
+            });
+            if (!clipped) {
+              overlappedBy = `${name(holder)} missed by the browser's hit test`;
+              return;
+            }
+            hidden[p] = true;
+            return;
+          }
+          // Over the words and opaque there: nothing beneath it, the words included, is seen, whatever
+          // lies over it in turn (a menu's items over its panel). A descendant of the words' own element
+          // is never taken as hiding them (it stays a cover).
+          const at = stack.indexOf(node);
+          if (stack.slice(0, at < 0 ? 0 : at).some((e) => !e.contains(node) && !node.contains(e) && hides(e, x, y))) {
+            hidden[p] = true;
+            return;
+          }
+          for (const e of stack) {
+            if (e === node) {
+              below = true;
               if (opaque(e)) break;
               continue;
             }
-            if (el.contains(e)) continue;
+            if (e.contains(node)) {
+              if (opaque(e)) break;
+              continue;
+            }
+            if (svgText && below && e instanceof SVGElement &&
+                (e as SVGGraphicsElement).ownerSVGElement === (node as SVGGraphicsElement).ownerSVGElement) {
+              const laid = underShape(e, x, y);
+              if (laid) {
+                under[p]?.push(laid);
+                continue;
+              }
+              overlappedBy = name(e);
+              return;
+            }
             if (painted(e, x, y)) {
               overlappedBy = name(e);
-              break;
+              return;
             }
           }
-        }
+          for (const { e, parts } of shadowed) {
+            if (e === node || e.contains(node) || node.contains(e)) continue;
+            const box = e.getBoundingClientRect();
+            if (within(x, y, box)) continue;
+            for (const part of parts) {
+              const edges = castOf(box, part);
+              const far = 1.5 * part.blur;
+              const [left, top, right, bottom] = edges;
+              if (within(x, y, { left: left - far, top: top - far, right: right + far, bottom: bottom + far })) {
+                shadows[p]?.push({ colour: part.colour, edges, blur: part.blur, radius: part.radius, x, y });
+              }
+            }
+          }
+        });
       } finally {
         lift.remove();
+        for (const [e, value] of inert) e.setAttribute("inert", value);
       }
-      const style = getComputedStyle(el);
+      const style = getComputedStyle(node);
+      // The ink: an SVG label's `fill` (its opacity folded in), else what the text is painted with,
+      // `-webkit-text-fill-color` where it is set apart from `color`.
+      const ink = svgText
+        ? withAlpha(style.fill, parseFloat(style.fillOpacity))
+        : style.getPropertyValue("-webkit-text-fill-color") || style.color;
       return {
-        selector, unreadable: null, axeReason, chain, overlappedBy,
-        text: (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40),
-        color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight,
+        selector, unreadable: null, axeReason, chain, overlappedBy, under, shadows, hidden, page: pageColour,
+        text: (node.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40),
+        color: ink, fontSize: style.fontSize, fontWeight: style.fontWeight,
       };
+      } finally {
+        for (const [e] of scrollers()) e.scrollTo({ left: 0, top: 0, behavior: "instant" });
+        for (const [e, top, left] of scrolled) e.scrollTo({ left, top, behavior: "instant" });
+        scrollTo({ left: pageX, top: pageY, behavior: "instant" });
+      }
     });
+    } finally {
+      probeColour.remove();
+    }
   }, asked);
 }
 

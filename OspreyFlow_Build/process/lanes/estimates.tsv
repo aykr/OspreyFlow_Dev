@@ -9,6 +9,5 @@ docs	D2c	part 1 merged (admin guide 1.76 §6a); part 2 from P10's merge; resumin
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 4 landed (9de435c); part 5 built (9cbb4575), its review next	12 Nov	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
-rules-b	T3b	the probe made platform-independent, then the server's browser gate; on the Mac now	11 Nov, evening	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
 orchestrator	demo	osprey-demo, v0.5.0 in the GOV.UK look with the synthetic demo packs, beside osprey-small: built and backed up today; frozen until you say; checked Thursday 12 Nov by 12:00 UK; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 12:00 (the check)	A
