@@ -491,6 +491,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       `.github/`, which only you apply). A test on main reads that file, so the patch must land with P12 part 2's
       merge. I will give you the exact `git apply` line when it is merged.
 
+38. **Overnight, 11–12 November (your word, about 21:10: carry on, the Mac stays on).** I'll fill this in as the
+    night goes. For you in the morning:
+    - the push (none since 10:20);
+    - the `release.yml` patch for P12 part 2;
+    - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
