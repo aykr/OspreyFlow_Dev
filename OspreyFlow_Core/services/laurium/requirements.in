@@ -3,7 +3,8 @@
 # version string unchanged), and never with the `encoder` extra (16 NVIDIA CUDA wheels, proprietary or
 # unlicensed: process/lanes/platform/p12/LICENCE_CHECK.md). `requirements.txt` is compiled from this
 # with hashes (`uv pip compile --python-version 3.13 --generate-hashes`) and installed with
-# `--require-hashes`; the spaCy model, which is not on PyPI, is pinned in `Dockerfile` by its own hash.
+# `--require-hashes`; the spaCy model, which is not on PyPI, is named below by its release URL and pinned
+# in `requirements.txt` by its own hash.
 laurium==0.6.0
 # Laurium's one dependency not on PyPI: spaCy's small English model, from Explosion's pinned GitHub
 # release (the owner's ruling 3, 11 November 2026: the one source beyond the public package index).

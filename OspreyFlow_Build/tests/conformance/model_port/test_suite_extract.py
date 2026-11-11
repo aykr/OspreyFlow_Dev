@@ -98,6 +98,18 @@ async def test_extract_never_returns_an_answer_that_does_not_fit_the_schema(
             await adapter.extract(_request())
 
 
+async def test_extract_checks_the_answer_against_every_constraint_of_the_schema(
+    factory: ExtractAdapterFactory,
+) -> None:
+    """A string the model gives that breaks `minLength`: Laurium's parser takes the type alone, so
+    this reaches the adapter's own check of the answer against the request's schema."""
+    gateway = _gateway('{"name": "Owen Wilson"}')
+    schema = {**SCHEMA, "properties": {"name": {"type": "string", "minLength": 50}}}
+    async with factory.context(gateway) as adapter:
+        with pytest.raises(ExtractionFailedError):
+            await adapter.extract(_request(json_schema=schema))
+
+
 async def test_extract_through_a_gateway_that_refuses_its_token_is_a_failure(
     factory: ExtractAdapterFactory,
 ) -> None:

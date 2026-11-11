@@ -5,9 +5,13 @@
 per entity type, `services/extract/profile.build_schema`) or any caller's. Laurium takes a schema as
 `{field: type}` (its `make_dynamic_example_model` and `create_prompt`), so this maps the JSON Schema
 to Pydantic types: an object's declared properties (a nested model that forbids any other), arrays,
-string enums as `Literal`, strings, integers, numbers and booleans. Anything outside that subset
-(`oneOf`, `$ref`, a list of types, an object or array with no declared shape) is
-`UnsupportedSchema`, refused before any model call, rather than approximated.
+string enums as `Literal`, strings, integers, numbers and booleans. A shape outside that subset
+(`oneOf`, `anyOf`, `allOf`, `not` or `$ref`, alone or beside a type; a list of types; an object or
+array with no declared shape) is `UnsupportedSchema`, refused before any model call. A constraint
+on a value within a type (`minLength`, `pattern`, `format`, bounds, `minItems`) is not given to
+Laurium's model: Laurium's types cannot carry it. Nothing is trusted on that account, since the
+adapter checks every answer against the request's whole schema before anything reads it
+(`adapters/extract_laurium`).
 
 **Every top-level property must be required**, as Laurium's own model makes every field required;
 within an item, a property the schema does not require may be left out, and is left out of the
@@ -80,6 +84,9 @@ def _properties(schema: dict[str, Any], where: str) -> dict[str, Any]:
 def _type(prop: Any, name: str) -> Any:
     if not isinstance(prop, dict):
         raise UnsupportedSchema(f"{name!r} is not a schema")
+    combined = sorted({"oneOf", "anyOf", "allOf", "not", "$ref"} & set(prop))
+    if combined:
+        raise UnsupportedSchema(f"{name!r} uses {', '.join(combined)}, which Laurium is not given")
     kind = prop.get("type")
     if not isinstance(kind, str):
         raise UnsupportedSchema(

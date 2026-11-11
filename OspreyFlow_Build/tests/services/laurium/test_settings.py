@@ -96,6 +96,34 @@ def test_langsmith_tracing_off_is_accepted(value: str) -> None:
     assert Settings.from_env({**GOOD, "LANGSMITH_TRACING": value})
 
 
+@pytest.mark.parametrize(
+    "env",
+    [
+        # Two spellings of one name: the libraries read either (urllib prefers the lower case), so
+        # one set to anything is refused whatever the other says.
+        {"OPENAI_PROXY": "http://evil.example:3128", "openai_proxy": ""},
+        {"https_proxy": "http://evil.example:3128", "HTTPS_PROXY": ""},
+        {"LANGSMITH_TRACING": "true", "langsmith_tracing": "false"},
+    ],
+)
+def test_one_spelling_set_is_refused_whatever_the_other_says(env: dict[str, str]) -> None:
+    _refusal({**GOOD, **env})
+
+
+@pytest.mark.parametrize("name", ["LOCALDOMAIN", "RES_OPTIONS", "HOSTALIASES"])
+def test_a_setting_that_changes_what_litellm_resolves_to_is_refused(name: str) -> None:
+    """The gateway is the single-label name `litellm`; these make the resolver look it up
+    elsewhere."""
+    assert name in _refusal({**GOOD, name: "evil.example"})
+
+
+@pytest.mark.parametrize("name", ["OPENAI_LOG", "LANGCHAIN_VERBOSE", "LANGCHAIN_DEBUG"])
+def test_a_setting_that_logs_what_is_sent_is_refused(name: str) -> None:
+    """The OpenAI client's and LangChain's debug logs write each request, a document's text
+    with it; nothing of a document is logged (app.py)."""
+    assert name in _refusal({**GOOD, name: "debug"})
+
+
 def test_an_unknown_laurium_setting_is_refused() -> None:
     """A setting the service does not read is refused rather than ignored: a mistyped or invented
     `OSPREY_LAURIUM_LLM_PLATFORM=bedrock` must not look as if it took effect."""

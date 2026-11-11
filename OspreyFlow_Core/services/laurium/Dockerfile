@@ -22,11 +22,11 @@ RUN pip install --require-hashes --only-binary :all: --no-deps -r requirements.t
 # The licence register (00_ARCHITECTURE.md §7) for this image's own packages, which
 # `make licence-check` does not see: fails the build on any GPL licence, any it cannot read but the
 # three recorded entries, and any package of the `encoder` extra.
-COPY licence_gate.py ./licence_gate.py
-RUN pip install pip-licenses==5.5.5 \
+COPY licence_gate.py licence-gate.txt ./
+RUN pip install --require-hashes --only-binary :all: --no-deps -r licence-gate.txt \
  && python licence_gate.py \
  && pip uninstall -y pip-licenses prettytable wcwidth \
- && rm licence_gate.py
+ && rm licence_gate.py licence-gate.txt
 
 COPY __init__.py app.py app_contract.py schema_map.py settings.py ./laurium_service/
 COPY NOTICE ./NOTICE

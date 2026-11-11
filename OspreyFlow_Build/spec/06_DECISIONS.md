@@ -34047,7 +34047,8 @@ licences are proprietary or absent.
    --only-binary :all: --generate-hashes` and installed with `--require-hashes`. An image or deployment without
    Laurium carries no LangChain, spaCy or Laurium: the Conduit's build context leaves `services/laurium/` out
    (`.dockerignore`), and `tools/no_langchain_check.py` fails on any such distribution installed in an image built
-   without it (checked in CI, shown red on a planted image).
+   without it (checked in CI after each image's build; its reader shown red on its own script's output, and its
+   source leg, offline in `make ci`, on planted Dockerfiles, requirements files, lock and build context).
 2. **Pinned from PyPI's 0.6.0 artefacts by hash, never from the repository's main**, which has moved past 0.6.0
    with the version string unchanged. **`en-core-web-sm` 3.8.0 comes from Explosion's pinned GitHub release**
    (`explosion/spacy-models`, `en_core_web_sm-3.8.0`), by its SHA-256: the one source beyond the public package
@@ -34066,8 +34067,10 @@ licences are proprietary or absent.
    host. **At start the service refuses, in words, and does not serve:** a gateway URL whose host is not the
    deployment's gateway (`litellm`); any setting of Laurium's libraries that names a host (`OPENAI_BASE_URL`,
    `OPENAI_API_BASE`, `OLLAMA_HOST`, `ANTHROPIC_BASE_URL`, `AWS_ENDPOINT_URL*`, LangSmith's endpoint, a proxy);
-   LangSmith tracing turned on, which would send every prompt to LangSmith's own host; and any `OSPREY_LAURIUM_*`
-   setting it does not know. The adapter passes the call's engine and job (Amendment 3), so the call carries its
+   the resolver's own settings that could point `litellm` elsewhere (`LOCALDOMAIN`, `RES_OPTIONS`, `HOSTALIASES`);
+   LangSmith tracing turned on, which would send every prompt to LangSmith's own host; a library's debug log of each
+   request (`OPENAI_LOG`); and any `OSPREY_LAURIUM_*` setting it does not know. Every spelling of a name is read,
+   since the libraries read either case. The OpenAI client's own retries are off: a refused call is answered once. The adapter passes the call's engine and job (Amendment 3), so the call carries its
    tag and goes with the engine's own gateway key, and per-dataset egress, limits, usage and audit apply exactly as
    for Deep read.
 5. **Laurium's failures arrive as failures.** Laurium's `BatchExtractor` catches a row's failure (a refused key,
@@ -34076,8 +34079,10 @@ licences are proprietary or absent.
    parser and chain) and awaits its `chain` for the one document, so a refusal reaches the adapter as itself.
 6. **The domain model mapped to Laurium's schema, and back.** The request's JSON Schema (from the extraction
    profile, `services/extract/profile.build_schema`) is mapped to Laurium's `{field: type}` schema with Pydantic
-   types (an object's properties, arrays, enums as `Literal`, strings, integers, numbers, booleans); a schema
-   outside that subset is refused before any model call. Laurium's output comes back as `ExtractionResult.data` in
+   types (an object's properties, arrays, enums as `Literal`, strings, integers, numbers, booleans); a shape
+   outside that subset (a combinator, a reference, a list of types) is refused before any model call. A constraint
+   within a type (`minLength`, `pattern`, bounds) is not given to Laurium's model, which its types cannot carry; the
+   adapter checks every answer against the whole schema (decision 3). Laurium's output comes back as `ExtractionResult.data` in
    the request's own shape, so `services/extract/candidates.py` locates each finding's span in the document and
    queues it `pending` exactly as Deep read's: *inferred* until a person accepts it (rule 5), traced to its
    document and to the span the text gives; Laurium itself reports no span.
@@ -34085,8 +34090,9 @@ licences are proprietary or absent.
    `arrow-pd-parser` 2.2.0 and `tiktoken` 0.14.0 as MIT on the evidence of the licence check, each pinned to its
    version, and `en-core-web-sm` 3.8.0 as MIT from its release; the licence gate's recorded entries
    (`tools/licence_check.RECORDED_LICENCE_EVIDENCE`, and the copy in the service's own image gate,
-   `services/laurium/licence_gate.py`) admit exactly those packages at exactly those versions and nothing else they
-   might declare. The deployment's notices carry the Ministry of Justice's copyright notices for `laurium` and
+   `services/laurium/licence_gate.py`) admit exactly those packages at exactly those versions, and only while each
+   declares what its evidence was for (no readable licence, or MIT's own text): a release declaring a GPL, an LGPL
+   or anything else is judged afresh. The deployment's notices carry the Ministry of Justice's copyright notices for `laurium` and
    `arrow-pd-parser`.
 
 **Consequences.** `ModelPort.extract`'s conformance suite runs on both adapters

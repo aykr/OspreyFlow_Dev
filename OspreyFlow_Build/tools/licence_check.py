@@ -101,10 +101,17 @@ def _normalised(name: str) -> str:
 
 
 def recorded(package: dict[str, str]) -> bool:
-    """A package admitted by its recorded evidence: its name and version an entry's, and no GPL in
-    what it declares."""
+    """A package admitted by its recorded evidence: its name and version an entry's, and what it
+    declares is what the evidence was for, nothing readable (`UNKNOWN`) or MIT's own text, with no
+    GPL or LGPL term in it."""
     key = (_normalised(package.get("Name", "")), package.get("Version", ""))
-    return key in RECORDED_LICENCE_EVIDENCE and not _GPL.search(package.get("License", "").lower())
+    declared = package.get("License", "").strip().lower()
+    return (
+        key in RECORDED_LICENCE_EVIDENCE
+        and (declared in ("", "unknown") or bool(_word("mit").search(declared)))
+        and not _GPL.search(declared)
+        and not _LGPL.search(declared)
+    )
 
 
 #: ADR-114 Amendment 1 decision 5: a share-alike data licence is acceptable only for a pack

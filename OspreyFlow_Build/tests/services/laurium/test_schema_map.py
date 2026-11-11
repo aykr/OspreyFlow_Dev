@@ -146,6 +146,12 @@ def test_a_required_property_left_out_is_refused() -> None:
         {"type": "array", "items": {"type": "string"}},
         {"type": "object", "properties": {"a": {"oneOf": [{"type": "string"}]}}},
         {"type": "object", "properties": {"a": {"$ref": "#/$defs/x"}}},
+        # A combinator beside a type: Laurium would be given the type alone.
+        {
+            "type": "object",
+            "properties": {"a": {"type": "string", "oneOf": [{"maxLength": 3}]}},
+            "required": ["a"],
+        },
         {"type": "object", "properties": {"a": {"type": ["string", "null"]}}},
         {"type": "object", "properties": {"a": {"type": "object"}}},
         {"type": "object", "properties": {"a": {"type": "array"}}},

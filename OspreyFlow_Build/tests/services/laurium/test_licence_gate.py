@@ -36,6 +36,8 @@ def test_the_allowlist_and_exceptions_are_the_repositorys() -> None:
         _row("arrow_pd_parser", "UNKNOWN", "2.2.0"),
         _row("tiktoken", "MIT License\n\nCopyright (c) 2022 OpenAI, and/or others", "0.14.0"),
         _row("laurium", "GPL-3.0", "0.6.0"),
+        _row("laurium", "LGPL-3.0", "0.6.0"),
+        _row("laurium", "Proprietary", "0.6.0"),
         _row("laurium", "UNKNOWN", "0.7.0"),
         _row("udapi", "UNKNOWN"),
         _row("mixed", "MIT AND GPL-3.0-or-later"),
@@ -65,5 +67,21 @@ def test_the_gates_own_tooling_is_not_judged() -> None:
 
 def test_the_dockerfile_runs_this_gate() -> None:
     dockerfile = (CORE / "services/laurium/Dockerfile").read_text(encoding="utf-8")
-    assert "COPY licence_gate.py" in dockerfile
+    assert "COPY licence_gate.py licence-gate.txt" in dockerfile
     assert "python licence_gate.py" in dockerfile
+
+
+def test_every_pip_install_in_the_image_is_by_hash() -> None:
+    """ADR-135 Amendment 6 decision 2: everything the image installs, the gate's own tool too."""
+    from tools.licence_check import _instructions
+
+    dockerfile = (CORE / "services/laurium/Dockerfile").read_text(encoding="utf-8")
+    installs = [
+        part
+        for instruction in _instructions(dockerfile)
+        for part in instruction.split("&&")
+        if "pip install" in part
+    ]
+    assert installs
+    for part in installs:
+        assert "--require-hashes" in part and "-r " in part, part

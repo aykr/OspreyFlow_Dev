@@ -99,6 +99,11 @@ async def extract(ask: ExtractAsk, request: Request) -> ExtractAnswer | JSONResp
         openai_api_base=SETTINGS.gateway_url,
         temperature=0.0,
     )
+    # Laurium's `create_llm` does not pass `max_retries`, and the OpenAI client retries a 429 or a
+    # 5xx twice by default: each refused limit would spend three of the engine's requests. The
+    # service asks once and answers the refusal; `ATTEMPTS` below is for unparseable answers only.
+    llm.client = llm.root_client.with_options(max_retries=0).chat.completions
+    llm.async_client = llm.root_async_client.with_options(max_retries=0).chat.completions
     call: dict[str, Any] = {"timeout": SETTINGS.timeout_seconds}
     if ask.tag:
         # ADR-135 Amendment 3: the gateway records the call's usage under its tag.
@@ -119,9 +124,11 @@ async def extract(ask: ExtractAsk, request: Request) -> ExtractAnswer | JSONResp
             refusal: dict[str, Any] = {"gateway_status": exc.status_code}
             if exc.status_code == 429:
                 try:
-                    refusal["gateway_error"] = exc.response.json().get("error")
+                    said = exc.response.json()
                 except ValueError:
-                    pass
+                    said = None
+                if isinstance(said, dict) and isinstance(said.get("error"), dict):
+                    refusal["gateway_error"] = said["error"]
             return _refused(502, "gateway", **refusal)
         except (openai.APIConnectionError, openai.APITimeoutError):
             return _refused(504, "gateway_unreachable")

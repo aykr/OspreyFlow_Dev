@@ -33,6 +33,7 @@ from adapters.model_litellm.stand_in import StandInGateway, StandInProvider  # n
 from schemas.model import ExtractionRequest  # noqa: E402
 
 from .laurium_in_process import MASTER, MODEL, import_app, laurium_service, stand_in  # noqa: E402
+from .stand_in_http import resolve_litellm_here, serve  # noqa: E402
 
 SCHEMA = {
     "type": "object",
@@ -152,6 +153,9 @@ async def test_an_engines_limit_is_model_limit_reached_and_its_tag_and_key_reach
         with pytest.raises(ModelLimitReached) as caught:
             await _extract(gateway, _request(model="gemini"))
     assert caught.value.kind == "requests"
+    # One call each: the OpenAI client inside LangChain retries a 429 or a 5xx twice by default,
+    # which would spend the engine's requests on refusals and wait out each retry.
+    assert len(gateway.received) == 2  # every chat request as it arrived, refused or not
     token, body = gateway.received[0]
     assert token == key
     assert usage_tag("gemini", "extraction") in body["metadata"]["tags"]
@@ -166,14 +170,37 @@ async def test_a_schema_laurium_is_not_given_is_refused_before_the_gateway() -> 
 
 
 async def test_the_gateway_unreachable_is_a_failure() -> None:
-    with laurium_service(stand_in()) as transport:
-        pass  # the stand-in is gone; the app module keeps its settings for the port it had
-    adapter = ExtractLauriumAdapter(
-        LauriumConfig(base_url="http://laurium", gateway_key=MASTER), transport=transport
-    )
-    with pytest.raises(ExtractionFailedError, match="could not be reached"):
-        await adapter.extract(_request())
-    await adapter.aclose()
+    """`litellm` still resolves here; only its port is closed, so this is the gateway not
+    answering, never a name lookup that failed."""
+    with resolve_litellm_here():
+        with serve(stand_in()) as port:
+            app = import_app({"OSPREY_LAURIUM_GATEWAY_URL": f"http://litellm:{port}"})
+        # The stand-in is shut down; the app keeps the port it was given.
+        adapter = ExtractLauriumAdapter(
+            LauriumConfig(base_url="http://laurium", gateway_key=MASTER),
+            transport=httpx.ASGITransport(app=app.app),
+        )
+        with pytest.raises(ExtractionFailedError, match="could not be reached"):
+            await adapter.extract(_request())
+        await adapter.aclose()
+
+
+async def test_the_real_service_refuses_a_call_without_the_gateways_token() -> None:
+    gateway = stand_in()
+    with laurium_service(gateway) as transport:
+        async with httpx.AsyncClient(transport=transport, base_url="http://laurium") as client:
+            resp = await client.post("/v1/extract", json=_request().model_dump(mode="json"))
+    assert (resp.status_code, resp.json()) == (401, {"refusal": "no_gateway_token"})
+    assert gateway.asked == []
+
+
+async def test_the_real_service_refuses_a_text_over_its_limit_never_reading_part() -> None:
+    from services.laurium.app_contract import MAX_CHARS
+
+    gateway = stand_in()
+    with pytest.raises(ExtractionFailedError, match="too long"):
+        await _extract(gateway, _request(text="a" * (MAX_CHARS + 1)))
+    assert gateway.asked == []
 
 
 def _admin(gateway: StandInGateway, path: str, body: dict[str, Any]) -> None:

@@ -231,6 +231,47 @@ async def test_the_service_unreachable_is_a_failure() -> None:
     await adapter.aclose()
 
 
+def _answering(status: int, content: bytes) -> ExtractLauriumAdapter:
+    import httpx
+
+    return ExtractLauriumAdapter(
+        LauriumConfig(base_url="http://laurium:8000", gateway_key=MASTER),
+        transport=httpx.MockTransport(lambda _: httpx.Response(status, content=content)),
+    )
+
+
+async def test_a_429_that_is_not_a_limit_never_repeats_the_gateways_words() -> None:
+    """The one refusal whose gateway error the service forwards (`app.py`, for a 429), in its exact
+    shape: a 429 the measured reader does not take for a limit, its words carrying part of a key.
+    The adapter answers in its own words alone."""
+    forwarded = {
+        "refusal": "gateway",
+        "gateway_status": 429,
+        "gateway_error": {
+            "type": "internal_server_error",
+            "message": "No deployments available. Received API Key = sk-...WXYZ",
+        },
+    }
+    adapter = _answering(502, json.dumps(forwarded).encode())
+    with pytest.raises(ExtractionFailedError) as caught:
+        await adapter.extract(_request())
+    await adapter.aclose()
+    assert not isinstance(caught.value, ModelLimitReached)
+    assert "WXYZ" not in str(caught.value) and "deployments" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("status", "content"),
+    [(200, b"not json"), (200, b"[1, 2]"), (200, b'{"data": [1]}'), (502, b"not json"),
+     (502, b"[1, 2]")],  # fmt: skip
+)
+async def test_an_answer_of_another_shape_is_a_typed_failure(status: int, content: bytes) -> None:
+    adapter = _answering(status, content)
+    with pytest.raises(ExtractionFailedError):
+        await adapter.extract(_request())
+    await adapter.aclose()
+
+
 # --- the stand-in gateway's own set-up, through its admin routes ---------------------------------
 
 

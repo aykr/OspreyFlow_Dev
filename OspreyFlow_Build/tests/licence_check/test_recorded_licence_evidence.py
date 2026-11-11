@@ -65,9 +65,22 @@ def test_a_package_of_another_name_with_the_same_licence_text_fails() -> None:
     assert licence_check.find_offenders([planted]) == [planted]
 
 
-def test_a_recorded_package_now_declaring_the_gpl_fails() -> None:
-    """The entry stands for its evidence of MIT; a release that says GPL is not that release."""
-    planted = _row("laurium", "0.6.0", "GPL-3.0-or-later")
+@pytest.mark.parametrize(
+    "declared",
+    [
+        "GPL-3.0-or-later",
+        "LGPL-3.0",
+        "GNU Lesser General Public License v3",
+        "Proprietary",
+        # MIT's name beside another licence: the GPL and LGPL rules are what refuse these.
+        "MIT AND GPL-3.0-or-later",
+        "MIT AND LGPL-3.0",
+    ],
+)
+def test_a_recorded_package_declaring_something_else_fails(declared: str) -> None:
+    """The entry stands for its evidence of MIT where the metadata says nothing readable; a
+    release that declares another licence is not the release the evidence was for."""
+    planted = _row("laurium", "0.6.0", declared)
     assert licence_check.find_offenders([planted]) == [planted]
 
 

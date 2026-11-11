@@ -90,6 +90,35 @@ extraction engine, as its own Python 3.13 service (ADR-142 Amendment 8; `platfor
    LangChain was not checked. If it does, Amendment 6's "no image without Laurium carries LangChain" needs its
    exception named.
 
+## The lane-reviewer's round (about 08:10 UTC)
+
+Run on the branch against the brief and rules 1–15. Verdict: do not merge. Every finding fixed, each refusal's test
+written first and each fix planted red (`P12_RED_RECORD.md`: 45 offline, 9 in Laurium's environment, all red):
+
+1. *"The lane's agent is still writing in the worktree"* — that was this session, writing the red record and this
+   log while the review read; both committed in the commit after ef2f219f. No other agent works here (rule 14).
+2. **The start check could be bypassed**: two spellings of one name (the last read hid the first; the libraries read
+   either), the resolver's `LOCALDOMAIN`/`RES_OPTIONS`/`HOSTALIASES`, and `OPENAI_LOG` (a debug log of each request,
+   a document's text with it). Fixed: every spelling read; those settings refused.
+3. **The OpenAI client's own two retries** spent three of an engine's requests on one refused limit. Off now
+   (`with_options(max_retries=0)` on Laurium's model's clients); the live test counts the gateway's requests.
+4. **The image gate's tool was installed without hashes.** Now `licence-gate.txt`, compiled with hashes.
+5. **`no_langchain_check` missed shapes**: a continued line, a build argument, requirements files, a `!` negation in
+   `.dockerignore`. Now every non-Laurium Dockerfile instruction and requirements file is read for the names,
+   whatever installs them; negations refused. (The Superset image: still held, question 3.)
+6. **Tests that could not fail for their reason**: the adapter's words (now the exact forwarded 429 shape), Laurium's
+   own folder (now its requirements copied in), an answer breaking `minLength` (now in the suite, reaching the
+   adapter's own check).
+7. **The real service's 401 and 413** are now sent to the real app, and planted.
+8. **Answers of another shape** escaping untyped: now `ExtractionFailedError`, tested.
+9. **The ADR and comments overstated**: decision 1 (what was shown red), decision 6 (constraints within a type are not
+   given to Laurium's model; the adapter checks the whole schema; combinators beside a type now refused), decision
+   7 (recorded entries now admit only "no readable licence, or MIT's text", never an LGPL or anything else), and
+   `requirements.in`'s comment.
+10. **Weak tests**: the unreachable-gateway case now closes the port with `litellm` still resolving; the findings
+    test's store is a stand-in by design, said in the record.
+11. **`pyproject.toml`**: a mypy override only. **Request to the orchestrator**: accept it, or move it at merge.
+
 ## Built
 
 (see the end of this file)

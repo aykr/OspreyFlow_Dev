@@ -107,8 +107,11 @@ class ExtractLauriumAdapter:
         if resp.status_code != 200:
             raise _refusal(resp, req.model)
 
-        answer = resp.json()
-        data = answer.get("data")
+        try:
+            answer = resp.json()
+        except ValueError:
+            answer = None
+        data = answer.get("data") if isinstance(answer, dict) else None
         if not isinstance(data, dict):
             raise ExtractionFailedError("Laurium's service answered without a finding.")
         try:
@@ -124,9 +127,10 @@ class ExtractLauriumAdapter:
 def _refusal(resp: httpx.Response, model: str) -> Exception:
     """The service's refusal as `ModelPort`'s typed error, in our words."""
     try:
-        said: dict[str, Any] = dict(resp.json())
+        body = resp.json()
     except ValueError:
-        said = {}
+        body = None
+    said: dict[str, Any] = body if isinstance(body, dict) else {}
     kind = said.get("refusal")
     if kind == "unsupported_schema":
         return InvalidExtractionSchemaError(

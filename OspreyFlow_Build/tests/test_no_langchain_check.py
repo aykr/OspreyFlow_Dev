@@ -118,7 +118,48 @@ def test_another_dockerfile_installing_langchain_is_named(tmp_path: Path) -> Non
     assert any("services/worker/Dockerfile" in p for p in problems)
 
 
-def test_laurium_s_own_dockerfile_may_install_it(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "added",
+    [
+        # A package on the install's continued line.
+        "\nRUN pip install --no-cache-dir \\\n    langchain-core==1.7.7\n",
+        # Named through a build argument.
+        "\nARG EXTRA=langchain-openai\nRUN pip install $EXTRA\n",
+        # Through uv.
+        "\nRUN uv pip install laurium==0.6.0\n",
+    ],
+    ids=["continued-line", "build-arg", "uv"],
+)
+def test_langchain_named_by_another_dockerfile_in_any_shape_is_named(
+    tmp_path: Path, added: str
+) -> None:
     root = _tree(tmp_path)
-    assert (root / "services/laurium/Dockerfile").is_file()
-    assert not any("services/laurium/Dockerfile" in p for p in check.source_problems(root))
+    worker = root / "services/worker/Dockerfile"
+    worker.write_text(worker.read_text() + added)
+    assert any("services/worker/Dockerfile" in p for p in check.source_problems(root))
+
+
+def test_langchain_in_another_images_requirements_file_is_named(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    shutil.copy(CORE / "services/ner/requirements.txt", root / "services/ner/requirements.txt")
+    assert check.source_problems(root) == []
+    requirements = root / "services/ner/requirements.txt"
+    requirements.write_text(requirements.read_text() + "langchain-core==1.7.7\n")
+    assert any("services/ner/requirements.txt" in p for p in check.source_problems(root))
+
+
+def test_laurium_put_back_into_the_conduits_context_by_a_negation_is_named(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    ignore = root / ".dockerignore"
+    ignore.write_text(ignore.read_text() + "!services/laurium/app.py\n")
+    assert any(".dockerignore" in p for p in check.source_problems(root))
+
+
+def test_laurium_s_own_folder_alone_may_carry_it(tmp_path: Path) -> None:
+    """Laurium's Dockerfile and its requirements (which name LangChain and Laurium) are copied in:
+    its own folder is passed, and the same requirements anywhere else are named."""
+    root = _tree(tmp_path)
+    shutil.copy(CORE / "services/laurium/requirements.txt", root / "services/laurium/requirements.txt")
+    assert check.source_problems(root) == []
+    shutil.copy(CORE / "services/laurium/requirements.txt", root / "services/worker/requirements.txt")
+    assert any("services/worker/requirements.txt" in p for p in check.source_problems(root))

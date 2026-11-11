@@ -158,7 +158,13 @@ def is_allowed(license_text: str, package: str | None = None) -> bool:
 
 def recorded(package: dict[str, str]) -> bool:
     key = (_normalised(package["Name"]), package["Version"])
-    return key in RECORDED_LICENCE_EVIDENCE and not _GPL.search(package["License"].lower())
+    declared = package["License"].strip().lower()
+    return (
+        key in RECORDED_LICENCE_EVIDENCE
+        and (declared in ("", "unknown") or bool(_word("mit").search(declared)))
+        and not _GPL.search(declared)
+        and not _LGPL.search(declared)
+    )
 
 
 def encoder(package: dict[str, str]) -> bool:

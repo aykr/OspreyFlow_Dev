@@ -45,7 +45,13 @@ _HOST_SETTINGS = (
     "HTTP_PROXY",
     "HTTPS_PROXY",
     "ALL_PROXY",
+    # The resolver's own: each can make the single-label name `litellm` resolve elsewhere.
+    "LOCALDOMAIN",
+    "RES_OPTIONS",
+    "HOSTALIASES",
 )
+#: Debug logs that write each request, a document's text with it: refused whenever set.
+_LOGGING_SETTINGS = ("OPENAI_LOG", "LANGCHAIN_VERBOSE", "LANGCHAIN_DEBUG")
 #: AWS's per-service endpoints (`AWS_ENDPOINT_URL_BEDROCK_RUNTIME`, …), Bedrock's among them.
 _AWS_ENDPOINT = re.compile(r"^AWS_ENDPOINT_URL(_[A-Z0-9_]+)?$")
 #: LangSmith's tracing, which sends every prompt and answer to LangSmith's own host.
@@ -72,25 +78,25 @@ class Settings:
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
         reasons: list[str] = []
-        upper = {name.upper(): (name, value) for name, value in env.items()}
-
-        for name in _HOST_SETTINGS:
-            if name in upper and upper[name][1].strip():
+        # Every spelling is read, never only the last: the libraries read either case of a name
+        # (urllib prefers the lower), so one spelling set is enough to refuse.
+        for name, value in sorted(env.items()):
+            key = name.upper()
+            if key in _HOST_SETTINGS or _AWS_ENDPOINT.match(key):
+                if value.strip():
+                    reasons.append(
+                        f"{name} is set: it names a host, and Laurium's calls go to the "
+                        "deployment's gateway alone"
+                    )
+            elif key in _LOGGING_SETTINGS:
+                if value.strip():
+                    reasons.append(
+                        f"{name} is set: it logs each request, and nothing of a document is logged"
+                    )
+            elif key in _TRACING and value.strip().lower() not in _OFF:
                 reasons.append(
-                    f"{upper[name][0]} is set: it names a host, and Laurium's calls go to the "
-                    "deployment's gateway alone"
-                )
-        for name in sorted(upper):
-            if _AWS_ENDPOINT.match(name) and upper[name][1].strip():
-                reasons.append(
-                    f"{upper[name][0]} is set: it names a host, and Laurium's calls go to the "
-                    "deployment's gateway alone"
-                )
-        for name in _TRACING:
-            if name in upper and upper[name][1].strip().lower() not in _OFF:
-                reasons.append(
-                    f"{upper[name][0]} turns LangSmith tracing on, which sends every prompt to "
-                    "LangSmith's host"
+                    f"{name} turns LangSmith tracing on, which sends every prompt to LangSmith's "
+                    "host"
                 )
         for name in sorted(env):
             if name.startswith(_OURS) and name not in _KNOWN:

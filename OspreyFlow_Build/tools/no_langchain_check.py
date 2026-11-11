@@ -28,11 +28,18 @@ from pathlib import Path
 
 from tools.layout import CORE
 
+
+def _instructions(text: str) -> list[str]:
+    """A Dockerfile's instructions, each whole: continued lines joined, comments left out. The same
+    reading as `tools.licence_check._instructions`, kept here so CI's image step runs this with the
+    runner's own Python and nothing else installed."""
+    joined = re.sub(r"\\\r?\n", " ", text)
+    return [line.strip() for line in joined.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
 #: Distributions that come with Laurium and nothing else, by normalised name.
 _FORBIDDEN = re.compile(r"^(langchain(-[a-z0-9-]+)?|langsmith|laurium|spacy(-[a-z0-9-]+)?|en-core-web-[a-z]+)$")
 #: In the Conduit's lock and project, spaCy is allowed as ADR-108's optional extra; the rest never.
 _FORBIDDEN_IN_SOURCE = re.compile(r"^(langchain(-[a-z0-9-]+)?|langsmith|laurium|en-core-web-[a-z]+)$")
-_LAURIUM_DOCKERFILE = "services/laurium/Dockerfile"
 
 #: Run inside an image by its own Python: every installed distribution's name and version, as JSON.
 IMAGE_SCRIPT = (
@@ -74,14 +81,23 @@ def _named_packages(text: str) -> set[str]:
     return {_normalised(n) for n in names}
 
 
+def _outside_laurium(core: Path, path: Path) -> bool:
+    parts = path.relative_to(core).parts
+    return parts[:2] != ("services", "laurium") and not {"node_modules", ".venv"} & set(parts)
+
+
 def source_problems(core: Path = CORE) -> list[str]:
     problems: list[str] = []
     ignore = core / ".dockerignore"
-    lines = ignore.read_text(encoding="utf-8").splitlines() if ignore.is_file() else []
-    if not any(line.strip().rstrip("/") == "services/laurium" for line in lines):
+    lines = [line.strip() for line in ignore.read_text(encoding="utf-8").splitlines()] if (
+        ignore.is_file()
+    ) else []  # fmt: skip
+    if not any(line.rstrip("/") == "services/laurium" for line in lines):
         problems.append(
             ".dockerignore does not leave services/laurium out of the Conduit's build context"
         )
+    if any(line.startswith("!") and "laurium" in line for line in lines):
+        problems.append(".dockerignore puts part of services/laurium back into the build context")
     for name in ("pyproject.toml", "uv.lock"):
         path = core / name
         if not path.is_file():
@@ -90,17 +106,26 @@ def source_problems(core: Path = CORE) -> list[str]:
         bad = sorted(n for n in _named_packages(path.read_text(encoding="utf-8")) if _FORBIDDEN_IN_SOURCE.match(n))
         if bad:
             problems.append(f"{name} names {', '.join(bad)}, which only Laurium's image may carry")
-    for dockerfile in sorted(core.rglob("Dockerfile*")):
-        relative = dockerfile.relative_to(core).as_posix()
-        if relative == _LAURIUM_DOCKERFILE or {"node_modules", ".venv"} & set(dockerfile.parts):
-            continue
-        for line in dockerfile.read_text(encoding="utf-8").splitlines():
-            if line.lstrip().startswith("#"):
-                continue
-            words = re.findall(r"[A-Za-z0-9][A-Za-z0-9._-]*", line)
-            bad = sorted({w for w in words if _FORBIDDEN.match(_normalised(re.split(r"[=<>]", w)[0]))})
-            if bad and re.search(r"\b(pip|uv|install|add)\b", line):
-                problems.append(f"{relative} installs {', '.join(bad)}, which only Laurium's image may carry")
+    # Every other Dockerfile, read as instructions (continued lines joined, comments left out), and
+    # every other requirements file: a forbidden name anywhere in them is refused, whatever installs
+    # it (a continued line, a build argument, uv or pip).
+    files = [p for p in sorted(core.rglob("Dockerfile*")) if _outside_laurium(core, p)]
+    files += [
+        p
+        for pattern in ("*requirements*.txt", "*requirements*.in")
+        for p in sorted(core.rglob(pattern))
+        if _outside_laurium(core, p)
+    ]
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        lines = _instructions(text) if path.name.startswith("Dockerfile") else [
+            line.split("#", 1)[0] for line in text.splitlines()
+        ]  # fmt: skip
+        words = {w for line in lines for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9._-]*", line)}
+        bad = sorted({w for w in words if _FORBIDDEN.match(_normalised(re.split(r"[=<>]", w)[0]))})
+        if bad:
+            relative = path.relative_to(core).as_posix()
+            problems.append(f"{relative} names {', '.join(bad)}, which only Laurium's image may carry")
     return problems
 
 
