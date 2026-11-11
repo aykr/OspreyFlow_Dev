@@ -193,7 +193,7 @@ runner.PLANTS = [
      [T_EG + "test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api",
       T_EO + "test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more"]),
     ("chart: the API's rule not rendered", C + "deploy/helm/ospreyflow/templates/networkpolicies.yaml",
-     "{{- if or .toPods .toKubeApi .managed .hosts }}", "{{- if or .toPods .managed .hosts }}",
+     "    {{- if .toKubeApi }}\n", "    {{- if false }}\n",
      [T_EO + "test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more"]),
     ("render: P9's pods given no rows (the render's others= left off)", INIT,
      ", others=profile.egress.others)", ")",
