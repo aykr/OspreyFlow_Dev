@@ -23,6 +23,8 @@ B, C = "OspreyFlow_Build/", "OspreyFlow_Core/"
 T_D = "../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py::"
 T_CP = "../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py::"
 T_POC = "../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::"
+T_R = "../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::"
+T_IMG = "../OspreyFlow_Build/tests/cli/test_images_verb.py::"
 CHECK = C + "harness/cloud_platform/decommission_check.py"
 INIT = C + "harness/cloud_platform/__init__.py"
 
@@ -81,6 +83,14 @@ runner.PLANTS = [
     ("chart: the own claims not rendered", C + "deploy/helm/ospreyflow/templates/storage.yaml",
      "{{- range .Values.storage.claims }}\n", "{{- range list }}\n",
      [T_CP + "test_the_poc_shape_s_own_claim_is_rendered_and_mounted"]),
+    # ---- the orchestrator's findings of 11 November, folded in --------------------------------------------
+    ("ceiling: the scheme's highest kept on the profile", INIT,
+     '        environment["OSPREY_HIGHEST_MARKING"] = DEFAULT_CEILING\n', "        pass\n",
+     [T_R + "test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own"]),
+    ("images: the refusal names a render command missing the packages", C + "cli/ospreyflow/images.py",
+     '"OspreyFlow_Core: PYTHONPATH=.:packages .venv/bin/python -m harness.render"',
+     '"OspreyFlow_Core: PYTHONPATH=. .venv/bin/python -m harness.render"',
+     [T_IMG + "test_no_plan_is_refused_with_a_command_that_renders_it"]),
 ]
 
 if __name__ == "__main__":
