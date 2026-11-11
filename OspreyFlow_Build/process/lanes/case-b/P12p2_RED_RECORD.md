@@ -148,3 +148,14 @@ the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model s
   keys, two pages of 100) and `test_a_refused_list_or_delete_is_said_and_raised` (list, delete): regression guards,
   green on the code; **plants**: deleting while reading, 2 failed (the 150 keys and the refused delete); a refused
   delete passed over, 1 failed.
+- **Item 7, words claiming more than was built:** `harness/laurium.py` (no template holds Laurium's traffic yet; the
+  cluster drops `depends_on`, the Conduit's key wait covers it), `keys.py` (the key at start is built),
+  `test_laurium_render.py`, `test_laurium_network_policy.py` and `test_extraction_engine_setting.py`'s translation
+  case, each said truly.
+- **Item 8, a strict xfail that could never pass:** its plant is now Laurium's own row **widened** to every pod (a
+  missing row denies under P7b's default deny, so taking it out proved nothing); it asserts the widened row lets Laurium
+  reach ArcadeDB and the row as rendered does not. The evaluator now **refuses** Calico fields it does not read
+  (`notNets`, `notSelector`, `notPorts`, `serviceAccounts`, …) and a GlobalNetworkPolicy, rather than ignoring them:
+  `test_the_evaluator_refuses_a_field_it_cannot_read`, 4 offline passed.
+- **Item 12, workers given Laurium:** no worker holds a model; the Conduit alone reaches Laurium (the ingress case and
+  `P12p2_egress_paths.md`'s rows).

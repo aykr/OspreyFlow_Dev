@@ -10,7 +10,6 @@ egress:
   paths:
     laurium: [litellm]          # the gateway alone; DNS is allow-dns's
     api: [..., laurium]         # appended to platform's own list
-    worker: [..., laurium]      # appended to platform's own list
 ```
 
 Rendered only when Laurium is a workload (`models.extraction_engine: laurium`): a path naming a workload not
@@ -19,5 +18,5 @@ rendered must render nothing (asked of platform: the row's own guard, or the ren
 `tests/harness/test_laurium_network_policy.py` reads Helm's output in Calico's order: Laurium reaches litellm on
 4000 and DNS, and nothing else, not ArcadeDB, ClickHouse, a managed store or an outside host. Strict-xfailed until
 P7b and these rows land (it fails today: `allow-egress` admits Laurium to everything), so it fails the day it
-passes and the mark is taken off. **Ingress** (only api and worker reach Laurium) is not in P7b's design as
-relayed; that case is in the same file and asked of the orchestrator.
+passes and the mark is taken off. **Ingress** (only api reaches Laurium: no worker holds a model) is P7b's, derived from the same rows
+(the orchestrator's ruling).

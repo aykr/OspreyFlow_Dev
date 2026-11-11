@@ -122,8 +122,8 @@ def test_laurium_is_refused_on_every_other_profile_in_words(profile: str) -> Non
 
 
 def test_a_cloud_platform_cluster_translation_carries_laurium() -> None:
-    """`harness.cloud_platform._as_cluster` validates its translation as `profile: cluster` with
-    `ENGINES_AS`: Laurium, held to cloud-platform's rules already, is carried, not refused."""
+    """A translation validated as `profile: cluster` with `ENGINES_AS` takes Laurium named, as
+    `_as_cluster`'s does, instead of refusing it (the real translation: the test above)."""
     raw = _with_engine(_raw("cluster"), "laurium")
     assert (
         OspreyConfig.model_validate(raw, context={ENGINES_AS: CLOUD}).extraction_engine == "laurium"

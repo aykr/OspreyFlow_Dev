@@ -1,8 +1,9 @@
 """Laurium in the `cloud-platform` render (`06_DECISIONS.md` ADR-135 Amendments 5 and 6, P12 part 2;
 the orchestrator's rulings of 11 November).
 
-- **Not chosen** (`models.extraction_engine: deep_read`, the default and the pack's preset): nothing
-  of Laurium in any artefact: no workload, no image to push, no policy.
+- **Not chosen** (`models.extraction_engine: deep_read`, named, as platform's two fixtures name it;
+  left unset on cloud-platform, its preset is Laurium, Amendment 9): nothing of Laurium in any
+  artefact: no workload, no image to push.
 - **Chosen**: its own workload from its own image (`services/laurium/Dockerfile`, pushed by
   `ospreyflow images push` from `images.yaml`), and the gateway rendered with it, since every call
   Laurium makes goes through the gateway.
@@ -11,8 +12,9 @@ the orchestrator's rulings of 11 November).
   it. Its environment is its gateway's address alone, the gateway's in-namespace name and port.
 - **No way out of the namespace**: Laurium's pod carries no egress label.
 
-The policies that hold its traffic to the gateway are read from Helm's own output in
-`tests/harness/test_laurium_network_policy.py` (it needs Docker).
+Where its traffic may go is read from Helm's own output in `tests/harness/test_laurium_network_policy.py`
+(it needs Docker), strict-xfailed until P7b's per-workload egress and Laurium's row land: no policy
+holds it to the gateway yet.
 """
 
 from __future__ import annotations

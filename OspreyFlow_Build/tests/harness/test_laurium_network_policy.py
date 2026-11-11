@@ -19,10 +19,11 @@ off. The evaluator itself is proven now on hand-written manifests in P7b's annou
 
 Laurium's pod, once P7b lands: **the gateway on 4000 and DNS, allowed; the gateway on another port,
 ArcadeDB, ClickHouse, a managed store's network, an allowed outside host, denied.** Into it: the
-Conduit and the workers, allowed; any other pod, denied (ingress is not in P7b's design as relayed:
-asked of the orchestrator). Controls show the evaluator still lets the Conduit reach a store and the
-managed stores, so a denial means something; and the manifests with Laurium's own egress policy
-taken out (the shape Helm emits, less that document) show Laurium reaching all of it, red.
+Conduit alone (no worker holds a model; the lane-reviewer's item 12), allowed; any other pod, denied
+(P7b derives ingress from the same rows, the orchestrator's ruling). Controls show the evaluator still
+lets the Conduit reach a store and the managed stores, so a denial means something; and the plant, in
+the shape Helm emits, widens Laurium's own row to every pod (removing it would not do: under P7b's
+default deny a missing row denies), which must let Laurium reach a store.
 
 Needs Docker (Helm's pinned image, `tools.helm_chart`): run on the test server, never on the Mac.
 """
@@ -187,10 +188,22 @@ def _k8s_rule_holds(rule: dict[str, Any], peer: Endpoint, direction: str) -> boo
     return False
 
 
+#: Calico's fields this evaluator does not read: met, it refuses instead of guessing.
+_UNREAD = {"notNets", "notSelector", "notPorts", "serviceAccounts", "notProtocol", "http", "icmp"}
+
+
+def _refuse_unread(rule: dict[str, Any]) -> None:
+    for part in (rule, rule.get("source") or {}, rule.get("destination") or {}):
+        if found := _UNREAD & set(part):
+            raise AssertionError(f"a Calico rule this test cannot read: {sorted(found)}")
+
+
 def decide(docs: list[dict[str, Any]], subject: Endpoint, peer: Endpoint, direction: str) -> str:
     """Calico's answer for `subject`'s traffic to (Egress) or from (Ingress) `peer`."""
     ordered: list[tuple[float, str, dict[str, Any]]] = []
     for doc in docs:
+        if doc.get("kind") in ("GlobalNetworkPolicy", "StagedNetworkPolicy"):
+            raise AssertionError(f"a {doc['kind']} this test cannot read")
         if doc.get("kind") != "NetworkPolicy":
             continue
         spec = doc.get("spec") or {}
@@ -207,6 +220,8 @@ def decide(docs: list[dict[str, Any]], subject: Endpoint, peer: Endpoint, direct
     for _, kind, spec in ordered:
         rules = spec.get("egress" if direction == "Egress" else "ingress") or []
         for rule in rules:
+            if kind == "calico":
+                _refuse_unread(rule)
             if kind == "calico" and _calico_rule_holds(rule, peer, direction):
                 return str(rule["action"])
             if kind == "k8s" and _k8s_rule_holds(rule, peer, direction):
@@ -294,7 +309,7 @@ def test_only_the_conduit_and_the_workers_reach_laurium(name: str) -> None:
     }
     assert into == {
         "api": "Allow",
-        "worker": "Allow",
+        "worker": "Deny",
         "workspace": "Deny",
         "arcadedb": "Deny",
         "litellm": "Deny",
@@ -314,17 +329,19 @@ def test_the_evaluator_still_lets_the_conduit_through(name: str) -> None:
 
 @UNTIL_P7B
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
-def test_without_lauriums_own_policy_it_reaches_everything(name: str) -> None:
-    """Red first, in the shape Helm emits: the same manifests less Laurium's own Calico policy, and
-    the namespace's allow-egress lets Laurium reach the stores, the managed stores and the outside.
-    This is what the test above would fail on."""
-    docs, values = _manifests(name)
-    managed, host = _outside(values)
-    without = [d for d in docs if (d.get("metadata") or {}).get("name") != LAURIUM_EGRESS]
-    assert len(without) == len(docs) - 1, "Laurium's egress policy was not rendered"
-    assert decide(without, LAURIUM, pod("arcadedb", 2480), "Egress") == "Allow"
-    assert decide(without, LAURIUM, managed, "Egress") == "Allow"
-    assert decide(without, LAURIUM, host, "Egress") == "Allow"
+def test_lauriums_row_widened_lets_it_reach_a_store(name: str) -> None:
+    """Red first, in the shape Helm emits: Laurium's own egress policy with an Allow to every pod
+    added, as a wider row would render it, lets Laurium reach ArcadeDB. (Taking the row out would
+    not do: under P7b's default deny a missing row denies, and this would stay xfailed for the
+    wrong reason; the lane-reviewer's item 8.)"""
+    docs, _ = _manifests(name)
+    ours = [d for d in docs if (d.get("metadata") or {}).get("name") == LAURIUM_EGRESS]
+    assert len(ours) == 1, "Laurium's egress policy was not rendered"
+    wider = [{"action": "Allow", "destination": {"selector": "all()"}}, *ours[0]["spec"]["egress"]]
+    widened = {**ours[0], "spec": {**ours[0]["spec"], "egress": wider}}
+    planted = [widened if d is ours[0] else d for d in docs]
+    assert decide(planted, LAURIUM, pod("arcadedb", 2480), "Egress") == "Allow"
+    assert decide(docs, LAURIUM, pod("arcadedb", 2480), "Egress") == "Deny"
 
 
 def test_nothing_of_lauriums_policy_without_laurium() -> None:
@@ -399,3 +416,11 @@ def test_the_evaluator_lets_an_all_selector_through_as_today() -> None:
 def test_the_evaluator_refuses_a_selector_it_cannot_read() -> None:
     with pytest.raises(AssertionError, match="cannot read"):
         calico_selects("has(app.kubernetes.io/name)", {})
+
+
+def test_the_evaluator_refuses_a_field_it_cannot_read() -> None:
+    rules = [{"action": "Allow", "destination": {"notNets": ["10.0.0.0/8"]}}]
+    with pytest.raises(AssertionError, match="cannot read"):
+        decide([_calico("x", 100, "all()", rules)], LAURIUM, pod("arcadedb", 2480), "Egress")
+    with pytest.raises(AssertionError, match="cannot read"):
+        decide([{"kind": "GlobalNetworkPolicy", "spec": {}}], LAURIUM, pod("x"), "Egress")

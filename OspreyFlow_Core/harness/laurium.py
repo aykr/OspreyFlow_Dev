@@ -11,11 +11,15 @@ What it holds to:
   `envFrom` of the deployment's Secret, which holds the gateway's master key and every store's
   password. Its environment is its gateway's address alone, the gateway inside the deployment by
   its service name; the adapter sends a scoped key with each call;
-- **the gateway rendered with it** (every call Laurium makes goes through the gateway), and it
-  starts after the gateway is healthy.
+- **the gateway rendered with it** (every call Laurium makes goes through the gateway). On compose
+  it starts after the gateway is healthy; a cluster translation drops `depends_on`, so on the
+  cloud-platform profile the Conduit's own wait for Laurium's key covers it
+  (`services.api.laurium_start`).
 
-Where it may reach is its network policies' (the chart's `templates/laurium-policy.yaml`): the
-gateway's port and DNS, nothing else.
+**Where it may reach is not yet held here:** today the namespace's `allow-egress` admits every pod
+to everything it allows. Its row in P7b's per-workload egress (`laurium: [litellm]`, platform's,
+ADR-148 Amendment 5) will hold it to the gateway and DNS;
+`tests/harness/test_laurium_network_policy.py` is strict-xfailed until then.
 """
 
 from __future__ import annotations
