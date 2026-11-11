@@ -278,6 +278,18 @@ def _looks_like_a_key(text: str) -> bool:
     )
 
 
+#: ADR-135 Amendment 4: what an engine is. `provider`, a hosted provider LiteLLM knows by name (as
+#: before); `gateway`, the client's own OpenAI-compatible AI gateway at its address; `bedrock`,
+#: Amazon Bedrock in the client's London region.
+EngineKind = Literal["provider", "gateway", "bedrock"]
+#: How an engine signs in: `key`, a key (a gateway's token) entered write-only in *Admin › Models*
+#: and kept by the model gateway alone; `iam_role`, the namespace's IAM role, held by the gateway's
+#: pod through its service account, so **no key is stored anywhere**.
+EngineAuth = Literal["key", "iam_role"]
+#: ADR-135 Amendment 4 (b): Bedrock in the client's London region, and nowhere else.
+BEDROCK_REGION = "eu-west-2"
+
+
 class ModelProviderConfig(BaseModel):
     """A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached
     through the deployment's LiteLLM gateway, for material whose handling code is in
@@ -313,6 +325,22 @@ class ModelProviderConfig(BaseModel):
         default=None,
         description="ADR-136: the agreement's reference, in words (for example DPA 2026/07); "
         "never a secret. Shown beside the mark.",
+    )
+    kind: EngineKind = Field(
+        default="provider",
+        description="ADR-135 Amendment 4: provider (a hosted provider LiteLLM knows by name), "
+        "gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon "
+        "Bedrock in London). Default: provider.",
+    )
+    auth: EngineAuth | None = Field(
+        default=None,
+        description="ADR-135 Amendment 4: key (entered in Admin › Models, kept by the model "
+        "gateway alone) or iam_role (the namespace's IAM role: no key is stored). Default: "
+        "iam_role for bedrock, else key.",
+    )
+    region: str | None = Field(
+        default=None,
+        description="Bedrock's region: eu-west-2 (London) only, and the default for bedrock.",
     )
 
     @field_validator("name")
@@ -384,6 +412,69 @@ class ModelProviderConfig(BaseModel):
             self.label = PROVIDER_LABELS.get(self.name, self.name.replace("_", " ").title())
         return self
 
+    @model_validator(mode="after")
+    def _signs_in_as_its_kind_allows(self) -> ModelProviderConfig:
+        """ADR-135 Amendment 4: Bedrock by the namespace's IAM role in London, with no stored key
+        and no address of its own; the client's gateway at its address, by a token or the role; any
+        other provider by its key. Each refusal names the field, never a value."""
+        if self.auth is None:
+            self.auth = "iam_role" if self.kind == "bedrock" else "key"
+        if self.kind == "bedrock":
+            if self.auth != "iam_role":
+                raise ValueError(
+                    "Bedrock is reached by the namespace's IAM role, so no key is kept for it; "
+                    "choose the IAM role"
+                )
+            if self.api_base is not None:
+                raise ValueError(
+                    "Bedrock is reached at its own London address; an engine of this kind takes "
+                    "no address"
+                )
+            if self.region is None:
+                self.region = BEDROCK_REGION
+            if self.region != BEDROCK_REGION:
+                raise ValueError(
+                    f"Bedrock is used in London only ({BEDROCK_REGION}); no other region is allowed"
+                )
+            return self
+        if self.name == "bedrock":
+            # LiteLLM routes a provider by its name, so a `bedrock` provider would reach Bedrock by
+            # a stored key and in no fixed region: Bedrock is reached only as its own kind.
+            raise ValueError(
+                "bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; "
+                "choose that kind of engine"
+            )
+        if self.region is not None:
+            raise ValueError("only a Bedrock engine takes a region")
+        if self.kind == "gateway" and self.api_base is None:
+            raise ValueError("your organisation's AI gateway needs its address (https://…)")
+        if self.kind == "gateway" and self.auth == "iam_role":
+            # Held (platform-b server log, Q1): LiteLLM's OpenAI-compatible route sends no request
+            # without a token, and how the client's gateway takes the namespace's identity is not
+            # yet known. Refused rather than offered to analysts and failing every call.
+            raise ValueError(
+                "your organisation's AI gateway signs in by a token for now: signing in by the "
+                "namespace's IAM role waits for your gateway's owners to say how it accepts the "
+                "role"
+            )
+        if self.kind == "provider" and self.auth == "iam_role":
+            raise ValueError(
+                "only your organisation's AI gateway or Bedrock sign in by the namespace's IAM "
+                "role; a provider signs in by its key"
+            )
+        return self
+
+    @property
+    def keyless(self) -> bool:
+        """True where the engine signs in by the namespace's IAM role: no key is stored for it."""
+        return self.auth == "iam_role"
+
+    def route(self, model: str) -> str:
+        """LiteLLM's `model` for one of this engine's models: the client's gateway through the
+        OpenAI-compatible route, Bedrock through its own, any other provider by its name."""
+        prefix = {"gateway": "openai", "bedrock": "bedrock"}.get(self.kind, self.name)
+        return f"{prefix}/{model}"
+
 
 def provider_key_variable(provider: str, *, single: bool = False) -> str:
     """`OSPREY_MODEL_KEY_<NAME>`; `OSPREY_MODEL_PROVIDER_KEY` for the single `models.provider`."""
@@ -451,6 +542,12 @@ class ModelsConfig(BaseModel):
         """ADR-135: every enabled provider — `providers`, or the single `provider` as a one-entry
         list."""
         return [self.provider] if self.provider is not None else list(self.providers)
+
+    @property
+    def keyed_providers(self) -> list[ModelProviderConfig]:
+        """The enabled providers that sign in by a key: an engine signed in by the namespace's IAM
+        role (ADR-135 Amendment 4) has no key variable, is asked for no key and keeps none."""
+        return [p for p in self.enabled_providers if not p.keyless]
 
     def key_variable(self, provider: str) -> str:
         """Where a provider's key is kept in `deployment.env` (ADR-135 decision 2):
