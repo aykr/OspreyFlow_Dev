@@ -138,3 +138,14 @@ the orchestrator fetches this clone.
   schemas commit at its head, on main 9bcadc6. The commit above it holds this log, REPORT.md and the gates' outputs
   alone. **Stopped here** for round 2 of both reviews. Nothing of this session is running; no kind cluster; the
   image `osprey-p7-api-nojava:check` is kept for the record; nothing was pushed.
+
+## 11 November 2026, round 2, from the Mac (lane/platform-p7, through `stack_lease.sh offline platform`; no stack, no lease)
+
+- The server worktree `~/osprey-p7/wt` was stale and not used; every run went to `~/osprey-runs/platform` as a fresh copy.
+- Runs, one at a time: the red record at 20550ea6 (36/36) and at 0f17781b (37/37); the renders against a7bb34a and
+  the no-Java Conduit and `test_admin_guide` with `P7_admin_guide.diff` at 668c8939 (since rewritten as 6d57930);
+  `make test`, then `test_lanes_heartbeat.py` alone ×5 (all green), then `make -k ci`, then cp-policy-check and the
+  default Conduit's Java, all at 0f17781b; then a fresh build of the head for its labels. Each output is in `gates/`.
+- Torn down: `osprey-p7-api-nojava:check` and `osprey-p7-api-included:check` removed; 0 `osprey-p7-*` containers or
+  images left. `ospreyflow/api:ci` was retagged by another run on the shared daemon during this one (REPORT.md).
+- **P7 ready to merge at `0f17781bffdb968de2b6ac379a2d265da19c7ba3`** (tree `64582b9033c755906e07546aa92fd962cd5dcaf9`).

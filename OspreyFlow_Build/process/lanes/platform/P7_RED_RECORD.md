@@ -131,3 +131,23 @@ leading-0 string holding an 8 or 9 as text, so the unquoted template passed. The
 
 **A defect found by its own test before any plant**: `upload_cap_bytes` took its source file as a default argument,
 bound at import, so it would not follow the source (`'512m' == '2048m'`); the plant above restores that shape.
+
+## Round 2 of the orchestrator's two reviews, and P7's own lane-reviewer (11 November 2026, the Mac and the test server)
+
+The same script, `gates/p7_round1_reds.py`, now holds round 1's 32 plants and round 2's five, and counts a plant RED
+only when **every** test it lists fails (it counted any failure before). Each failure's own text is printed in full.
+Its whole output at the gated head: **`gates/p7_reds.0f177819.log`, 37 plants, 37 red** (an earlier run at 20550ea6,
+36 plants, is `gates/p7_reds.20550ea6.log`). After rebasing onto main a7bb34a, round 1's 32 are all still red.
+
+| Item | Plant (file) | Red: the tests that failed, and why |
+| --- | --- | --- |
+| R2 1 | the Kubernetes egress `ipBlock.cidr` branch off (`tools/cp_policy_check.py`) | `test_a_kubernetes_egress_address_block_that_opens_egress_is_refused` ×4 (`0.0.0.0/0`, `::/0`, a /8, a /32): no violation at all ("expected 1, got 0"), so no other branch sees it |
+| R2 1 | the Calico ingress Allow-beyond-a-selector branch off (same) | `test_a_calico_ingress_allow_beyond_a_selector_is_refused` ×3 (another namespace, nets, no source): no violation at all |
+| self 2 | a Calico policy with no `types` read as no ingress policy (same) | `test_a_calico_ingress_allow_in_a_policy_with_no_types_is_refused`: no violation at all |
+| R2 minor | the deployment's upload cap read as a bare `int` (`harness/cloud_platform/__init__.py`) | `test_the_ingress_reads_the_upload_cap_as_the_conduit_does` ×3 (`0`, `-1`, `lots`: `0 == 536870912` fails), `test_an_unset_or_empty_upload_cap_is_the_conduit_s_default` (a `None` traceback) |
+| R2 5 | the Debian upgrade after the code, as `USER root` then `USER 10001:10001` (the shape at dd0233e1) (`services/api/Dockerfile`) | `test_the_final_stage_upgrades_before_the_code_and_as_root`: the final stage's first instruction is `RUN useradd`, not the upgrade |
+
+The two plants of item 1 take the shapes Helm emits (a `to` rule in `ospreyflow-internal`'s egress; Calico's
+`types` and an `ingress` rule on the allow policy, or a new Calico policy with ingress rules and no `types`), and each
+test asserts exactly one violation, by the branch's own words. With the branch off, the check finds nothing, so the
+red is that branch's alone. The edge each passes is its own green test (a /16 block, a selector-only source).

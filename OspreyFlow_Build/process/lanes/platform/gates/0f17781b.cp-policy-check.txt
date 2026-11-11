@@ -1,0 +1,25 @@
+# cp-policy-check (P7_ci_makefile.diff's two lines) and the default Conduit's Java, at 0f17781b (tree 64582b90), test server through stack_lease.sh offline platform (no stack, no lease), 11 November 2026.
+# The labels printed under 'the default Conduit' are of ospreyflow/api:ci as another run on the shared daemon had retagged it (created 12:32, before this branch's make -k ci built it at 13:05); a fresh build of this head, inspected at once, follows the run.
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T131153Z/log: bash -c echo "== cp-policy-check (P7_ci_makefile.diff's two lines)"; PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check; echo "exit $?"; .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py 2>&1 | tail -2; echo "== the default Conduit (make -k ci's ospreyflow/api:ci, CONDUIT_JAVA=included)"; docker image inspect --format "{{json .Config.Labels}}" ospreyflow/api:ci | tr , "\n" | grep java; docker run --rm --entrypoint sh ospreyflow/api:ci -c "id; command -v java; java -version 2>&1 | head -1; echo JAVA_HOME=\$JAVA_HOME"; echo "== teardown"; docker image rm osprey-p7-api-nojava:check >/dev/null && echo removed osprey-p7-api-nojava:check; docker ps -a --format "{{.Names}}" | grep -c "^osprey-p7-" ; docker images --format "{{.Repository}}" | grep -c "^osprey-p7-"
+== cp-policy-check (P7_ci_makefile.diff's two lines)
+development.yaml: 31 manifests, 0 violation(s)
+production.yaml: 36 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+exit 0
+0.69s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_stateful_set_s_read_write_many_claim_template_is_refused
+152 passed in 119.02s (0:01:59)
+== the default Conduit (make -k ci's ospreyflow/api:ci, CONDUIT_JAVA=included)
+{"org.ospreyflow.runtime.java.licence":"GPL-2.0-only WITH Classpath-exception-2.0"
+"org.ospreyflow.runtime.java.version":"21.0.13+9"}
+uid=10001(osprey) gid=10001(osprey) groups=10001(osprey)
+/opt/java/bin/java
+openjdk version "21.0.13" 2026-10-20 LTS
+JAVA_HOME=/opt/java
+== teardown
+removed osprey-p7-api-nojava:check
+0
+0
+Wall time: 124 s, exit 1 (no stack, no lease; set-up before it 12 s)
+
+== a fresh build of this head (CONDUIT_JAVA=included), its labels, then removed
+{"org.ospreyflow.runtime.java.included":"included","org.ospreyflow.runtime.java.licence":"GPL-2.0-only WITH Classpath-exception-2.0","org.ospreyflow.runtime.java.version":"21.0.13+9"}
