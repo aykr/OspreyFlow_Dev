@@ -80,7 +80,7 @@ The orchestrator withdrew its ruling (b) on case-b's stop (an accepted owner dec
 (in `P12p2_platform.diff`) so its tests keep their meaning; P7b's poc fixture leaves it unset, so it renders Laurium.
 
 - Written first: `test_left_unset_it_is_the_profiles_preset`, `test_a_cluster_translation_keeps_what_cloud_platform_chose`
-  — **2 failed** against the deep_read default; green after (17 of 17), and
+  — **2 failed** against the deep_read default; green after (16 of 16 at that commit, as the lane-reviewer counted), and
   `test_left_unset_cloud_platform_renders_laurium_its_preset` (the render) green.
 - Found running it: `test_any_other_value_is_refused[None]` turned red (DID NOT RAISE). Correct under the new rule:
   null written out is the field left unset, so the preset. Taken out of the refused values, with that said.
@@ -159,3 +159,13 @@ the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model s
   `test_the_evaluator_refuses_a_field_it_cannot_read`, 4 offline passed.
 - **Item 12, workers given Laurium:** no worker holds a model; the Conduit alone reaches Laurium (the ingress case and
   `P12p2_egress_paths.md`'s rows).
+- **Item 13, the Glass's words:** shown on the cloud-platform profile alone (the one offering Laurium, and the gateway
+  kind), with Amendment 8's words for it: "change it in osprey.yaml, re-render, and have the platform team apply it"
+  (not `ospreyflow start`, which that profile is not run with). `Models.test.tsx`: 3 red, then 15 passed.
+- **Item 16, the no-write-route test reading names alone:** it now reads each write route's body model from its own code
+  (`_model_admin_body(request, <Input>)` or `<Input>.model_validate_json`), every model inside it, and names a route
+  whose body it cannot read. Found building it: its first version read FastAPI's body parameters, which these routes
+  have none of, and passed under the plant. **Plant** (`DefaultsInput` given an `extraction_engine`): 1 failed.
+- **Item 10, cp-policy-check with Laurium on all three shapes:** `tests/harness/test_laurium_cp_policy.py`
+  (development, production and production-bedrock, each with Laurium chosen and its Deployment asserted present); run
+  on the server with the gates.

@@ -80,3 +80,42 @@ def test_no_route_writes_the_extraction_engine() -> None:
 def test_the_view_is_manage_models_alone(world: World) -> None:
     app.dependency_overrides[get_principal] = lambda: ANALYST
     assert TestClient(app).get("/v1/admin/models").status_code == 403
+
+
+def _fields(annotation: object) -> set[str]:
+    fields = getattr(annotation, "model_fields", None)
+    if not isinstance(fields, dict):
+        return set()
+    names = set(fields)
+    for field in fields.values():
+        names |= _fields(field.annotation)
+    return names
+
+
+def test_no_write_routes_body_takes_the_extraction_engine() -> None:
+    """The lane-reviewer's item 16: not only no route by name, but no write route under
+    `/v1/admin/models` whose body model (or any model inside it) has an `extraction_engine` field.
+    These routes read their bodies themselves (`_model_admin_body(request, <Input>)`, or
+    `<Input>.model_validate_json`), so the input
+    model is read from each route's own code; a route reading none is named, never passed over."""
+    import inspect
+    import re
+
+    import schemas.model_admin as inputs
+
+    taking, unread = [], []
+    for r in app.routes:
+        if not (isinstance(r, APIRoute) and r.path.startswith("/v1/admin/models")):
+            continue
+        if not set(r.methods) - {"GET", "HEAD"}:
+            continue
+        source = inspect.getsource(r.endpoint)
+        names = re.findall(r"_model_admin_body\(request, (\w+)\)", source)
+        names += re.findall(r"(\w+)\.model_validate_json\(", source)
+        if not names and r.methods != {"DELETE"} and not r.path.endswith("/test"):
+            unread.append(r.path)
+        for name in names:
+            if "extraction_engine" in _fields(getattr(inputs, name)):
+                taking.append((sorted(r.methods), r.path, name))
+    assert taking == []
+    assert unread == [], f"a write route whose body this test cannot read: {unread}"
