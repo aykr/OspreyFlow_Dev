@@ -34,7 +34,7 @@ MISSING_GROUP = (
     '            f"token is missing required claim: no group grants the {what}"\n'
     "        )\n"
 )
-TENANT_CHECK = '    if mapping.is_entra and claims.get("tid") != mapping.tenant_id:\n'
+TENANT_CHECK = '        if claims.get("tid") != mapping.tenant_id:\n'
 VERIFY_ISS = '"verify_iss": self._config.oidc_issuer is not None,'
 
 # (name, [(old text, new text), ...], test ids that must go red)
@@ -98,9 +98,9 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         [f"{E}[other-tenant]", f"{E}[no-tid]"],
     ),
     (
-        "oid and exp not required of an Entra token",
-        [('return ["sub", "exp", "oid"] if self.is_entra else ["sub"]', 'return ["sub"]')],
-        [f"{E}[no-oid]", f"{E}[no-exp]"],
+        "exp not required of an Entra token",
+        [('return ["sub", "exp"] if self.is_entra else ["sub"]', 'return ["sub"]')],
+        [f"{E}[no-exp]"],
     ),
     (
         "the issuer not checked",
@@ -134,44 +134,38 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
     ),
     (
         "an Entra token's app roles read as OspreyFlow roles",
-        [("roles=[] if mapping.is_entra else _roles(claims),", "roles=_roles(claims),")],
+        [
+            (
+                'roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),',
+                'roles=_string_list(claims, CLAIM_ROLES, "roles"),',
+            )
+        ],
         [
             "test_an_entra_app_role_grants_no_ospreyflow_role",
             "test_extension_attributes_build_the_principal",
         ],
     ),
     (
-        "a single-valued handling code split into its letters",
-        [("            return [value] if value else []\n", "            return list(value)\n")],
+        "one handling code or role, given as a string, split into its letters",
+        [("        return [value] if value else []\n", "        return list(value)\n")],
         [
             "test_a_single_valued_handling_code_attribute_is_one_code_not_its_letters",
             "test_the_default_mapping_reads_one_code_or_role_as_one_not_its_letters",
         ],
     ),
     (
-        "a role given as a string split into its letters",
-        [("\n        return [value] if value else []\n", "\n        return list(value)\n")],
-        ["test_the_default_mapping_reads_one_code_or_role_as_one_not_its_letters"],
-    ),
-    (
-        "handling codes of the wrong type passed through",
+        "handling codes or roles of the wrong type passed through",
         [
             (
-                "        if not isinstance(value, list) or not all(isinstance(c, str) for c in value):\n",  # noqa: E501
-                "        if False:\n",
-            )
-        ],
-        ["test_handling_codes_of_the_wrong_type_are_refused", f"{WRONG_TYPE}[object-codes]"],
-    ),
-    (
-        "roles of the wrong type passed through",
-        [
-            (
-                "    if not isinstance(value, list) or not all(isinstance(r, str) for r in value):\n",  # noqa: E501
+                "    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):\n",  # noqa: E501
                 "    if False:\n",
             )
         ],
-        [f"{WRONG_TYPE}[numeric-roles]"],
+        [
+            "test_handling_codes_of_the_wrong_type_are_refused",
+            f"{WRONG_TYPE}[object-codes]",
+            f"{WRONG_TYPE}[numeric-roles]",
+        ],
     ),
     (
         "a list, number or empty clearance accepted as a value (str()-ed)",
@@ -192,6 +186,38 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         ],
     ),
     (
+        "an oid that is not an Entra object id accepted",
+        [
+            (
+                '        if not isinstance(claims.get("oid"), str) or not _GUID.match(claims["oid"]):\n',  # noqa: E501
+                "        if False:\n",
+            )
+        ],
+        ["test_an_oid_that_is_not_an_object_id_is_refused", f"{E}[no-oid]"],
+    ),
+    (
+        "an app-only token accepted as a person",
+        [
+            (
+                '        if claims.get("idtyp") == "app" or not isinstance(scope, str) or not scope:\n',  # noqa: E501
+                "        if False:\n",
+            )
+        ],
+        [
+            "test_an_app_only_token_is_no_person[app-token]",
+            "test_an_app_only_token_is_no_person[no-scp]",
+            "test_an_app_only_token_is_no_person[idtyp-app]",
+        ],
+    ),
+    (
+        "both a missing claim and a missing group defaulted (the mixed mapping)",
+        [
+            (MISSING_CLAIM, '            return "OFFICIAL-SENSITIVE"\n'),
+            (MISSING_GROUP, '        return "unit-1"\n'),
+        ],
+        ["test_both_missing_is_refused_never_defaulted_to_cleared[mixed]"],
+    ),
+    (
         "a source naming both a claim and a group table, or neither",
         [("        if (self.claim is None) == (groups is None):\n", "        if False:\n")],
         [f"{ONE}[neither]", f"{ONE}[both]"],
@@ -208,15 +234,35 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
     ),
     (
         "a group table entry granting an empty value accepted",
+        [("                if not values or not all(values):\n", "                if False:\n")],
+        ["test_a_group_table_entry_must_grant_a_value[empty-value]"],
+    ),
+    (
+        "a group table key that is not a group id accepted",
+        [("                if not _GUID.match(group):\n", "                if False:\n")],
+        [
+            "test_a_group_table_key_must_be_a_group_id",
+            "test_a_group_table_entry_must_grant_a_value[empty-group]",
+        ],
+    ),
+    (
+        "an unnamed groups claim accepted",
+        [("        if not self.groups_claim:\n", "        if False:\n")],
+        ["test_the_groups_claim_must_be_named"],
+    ),
+    (
+        "the resolver trusts a mapping that skipped its validators",
         [
             (
-                "                if not group or not values or not all(values):\n",
-                "                if False:\n",
+                "        mapping = ClaimMapping.model_validate(\n"
+                '            (claim_mapping or DEFAULT_CLAIM_MAPPING).model_dump(mode="python")\n'
+                "        )\n",
+                "        mapping = claim_mapping or DEFAULT_CLAIM_MAPPING\n",
             )
         ],
         [
-            "test_a_group_table_entry_must_grant_a_value[empty-value]",
-            "test_a_group_table_entry_must_grant_a_value[empty-group]",
+            "test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver[copy]",
+            "test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver[construct]",
         ],
     ),
     (
@@ -254,7 +300,7 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         ["test_the_default_mapping_is_the_fixed_claim_names"],
     ),
     (
-        "the exchange path builds its principal by a second path (fixed names)",
+        "the exchange path maps by the fixed names, not the deployment's mapping",
         [
             (
                 "            return self.resolve(exchanged_token)\n",

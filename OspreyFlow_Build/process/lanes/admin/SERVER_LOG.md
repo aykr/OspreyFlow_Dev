@@ -51,10 +51,36 @@ Not changed:
   not Entra behaviour; Entra has no such exchange, and how the scheduler resolves owners on Entra is P10
   part 2's question below.
 
-**Built** at `1d82a727`: 54 cases plus `test_auth.py`'s 11, and 30 plants with 51 case runs, all red
-(`P10_P1_RED_RECORD.md`, `gates/p10_plants_1d82a72.txt`). `ruff check`, `ruff format --check` and `mypy`
-are clean on the branch's diff (mypy also over `services/api/auth.py` and `harness/verify.py`). The gates
-follow below.
+At `1d82a727`: 54 cases and 30 plants. The gates were started at `a30de18` and stopped when round 2 came
+back, because its fixes changed the files under them. They gave no result, and their partial outputs were
+deleted.
+
+**Lane-reviewer, round 2 on `a30de18`: do not merge until items 1 to 5 are fixed.**
+- (1) `model_copy` and `model_construct` skipped the validators, so a copy of the default mapping with a
+  group source was handled as Keycloak. Fixed: `PrincipalResolver` validates the mapping again from plain
+  data, which also detaches it from later changes to the inner dicts. Tested for both shapes and planted.
+- (2) An Entra deployment can send the fixed claim names, and without `tenant_id` it is handled as
+  Keycloak. Carried to part 2 with its test named (below); the profile is P7's file.
+- (3) Not in `spec/`: still waits for a reserved number (below).
+- (4) No gate result at the head yet: the gates run below, at the final head.
+- (5) "Mapped by settings" is only half done: recorded as carried items with named tests (below).
+
+Minor items, all done except one:
+- (6) An app-only token (no `scp`, or `idtyp: app`) is now refused as no person.
+- (7) The test docstring says the token shapes are documented, not measured.
+- (8) `oid` must be an object id; `sub`'s type is PyJWT's own check (shown by the plants).
+- (9) The exchange and default-name plants now fail for their stated reasons.
+- (10) The construction check now sees a qualified call, `model_validate`, `model_construct` and a call at
+  module level, and is shown red on each.
+- (11) `[mixed]` is planted.
+- (12) Group-table keys must be group ids, and `groups_claim` must be named.
+- (13) Codes and roles share one list reader.
+- (14) Not changed here: carried to part 2.
+
+**Built** at `72d87192`: 66 cases plus `test_auth.py`'s 11 (unchanged, green); 34 plants with 59 case
+runs, all red, none missed (`P10_P1_RED_RECORD.md`, `gates/p10_plants_72d8719.txt`). `ruff check`,
+`ruff format --check` and `mypy` are clean on the branch's diff (mypy also over `services/api/auth.py` and
+`harness/verify.py`). The gates follow below.
 
 **Decisions taken** (the owner may overrule):
 1. *Groups granting more than one clearance: the lowest, or refused?* `spec/` is silent. **Refused** (and the
@@ -94,7 +120,27 @@ follow below.
   have no reserved number, so the text is drafted in `P10_ADR148_AMENDMENT_DRAFT.md`. **Request:** reserve
   ADR-148 Amendment 6 (or the next free number) for P10.
 
-**Left for after P7 merges** (P7's files): the `cloud-platform` profile's claim settings and their render
-into the Conduit's environment (`harness/` profile and `render.py`'s profile entry, platform's, by diff),
-`services/api/config.py` reading them into `ApiConfig` and `run_resources.py` passing the mapping to
-`PrincipalResolver`; and "Keycloak not rendered on this profile".
+8. *App-only tokens.* In Entra mode a token with no delegated `scp`, or with `idtyp: app`, is refused. A
+   daemon's client-credentials token is no person. If the profile's Glass sends ID tokens rather than
+   access tokens, part 2 revisits this (ID tokens carry no `scp`).
+
+**P10 part 2 · carried items, each with the test that must fail first** (left for after P7 merges, because
+the files are P7's or need its profile). Until these land, P10 is not done: today no production caller
+passes a mapping, so every deployment runs the fixed names.
+1. **The profile's claim settings.** The `cloud-platform` profile's settings carry a `claims:` block
+   (`ClaimMapping`'s fields), **with `tenant_id` required**, rendered into the Conduit's environment. This
+   needs `harness/` profile and `render.py`'s profile entry, which are platform's, so it goes as a diff.
+   Test: `test_the_cloud_platform_profile_refuses_to_render_without_a_tenant` (red with the tenant removed).
+   This closes review round 2's item 2: an Entra deployment can never run under the Keycloak handling.
+2. **`ApiConfig` gains `oidc_claim_mapping`**, read from that environment and validated at start (a bad
+   mapping stops the Conduit; it is never silently defaulted). `run_resources.py:302` and
+   `harness/verify.py:65` pass it to `PrincipalResolver`. Test:
+   `test_a_rendered_claim_mapping_reaches_the_resolver`: a settings value in, an Entra token through
+   `app.state.principal_resolver`, red with the pass-through removed.
+3. **Keycloak not rendered on this profile.** Test: the rendered profile holds no Keycloak workload,
+   and no `OIDC_*` value points at one.
+4. **Roles on Entra, and the scheduler's owner resolution.** See the access question above.
+   `harness/oidc.py:254` also reads `roles` straight from the ID token, outside `principal_auth` (review
+   round 2, item 14). It must come under the same rule, or be shown not to run on this profile.
+5. **A real token.** Once the client's development tenant exists, one real token is put through
+   `principal_auth`, so the assumed shapes are measured (rule 15).
