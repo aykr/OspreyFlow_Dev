@@ -17,10 +17,14 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
    `write_private`, `apply`'s move into place (which copied it with `copytree`), `store_volumes`'
    put-back, refresh's move into place (made `600`, as every other writer makes it), and since the
    orchestrator's review `register_sign_in` (every `start --build`, restore and apply), restore's
-   carried values (`SUPERSET_SECRET_KEY` among them) and `update`'s rollback put-back. A scan of every
-   module under `harness/`, `scripts/` and `cli/ospreyflow/` fails for any other raw write naming an
-   env file or copying a folder's files by name; the fresh copies into a new stage or rollback point,
-   and refresh's own edits of its private stage, are listed with their reasons. A file a container
+   carried values (`SUPERSET_SECRET_KEY` among them) and `update`'s rollback put-back, **each held by
+   a hard-link witness at its own call site**. A scan of every module under `harness/`, `scripts/`
+   and `cli/ospreyflow/` fails for a new raw write **whose destination's text** names an env file or
+   copies a folder's files by name (the fresh copies into a new stage or rollback point, and
+   refresh's own edits of its private stage, listed with their reasons); it does not follow a value,
+   so a write through a name that says nothing of an env file (`path.write_bytes` in put-back) is the
+   witnesses' to catch, not the scan's (a data-flow check carried). The rollback point is `700`
+   before the secrets are copied in. A file a container
    mounts on its own is still written in place (it must keep its inode) and holds no secret. A
    symlinked file is held, and put back after a refused stores' move, through its link.
 2. **One refresh or update of a deployment at a time, for the whole of it** (`harness.update`'s
@@ -60,14 +64,15 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
    refresh, which refuses it in its own words, now shown. The words say "which this shell sets
    empty" for a value the file holds, never that the file lacks it.
 6a. **The operator sees refresh's and update's refusals**: the CLI's redactor hides a line naming
-   `password|secret|token`, and these name the variables Compose requires. A line in our own words
-   (`refresh: …`, `ospreyflow: …`) has its variable names passed **only inside our two fixed
-   phrases**: "A, B, which deployment.env does not hold" and "A, which this shell sets empty
-   (Compose reads the shell before deployment.env: unset A first)", the names upper case alone. A
-   name anywhere else in the line, and any other line naming a secret, stays hidden, so a child's
-   text update embeds (its last line) is shown only when it holds no secret word outside those
-   phrases. The gateway refusal says "keeps every value deployment.env holds", no longer "every
-   secret".
+   `password|secret|token`, and these name the variables Compose requires. Such a line is shown **only
+   as one of refresh's own sentences in full**, as its `main` prints them (`refresh: …`) and as
+   `update` reports its files step's (`ospreyflow: the update to … failed at '…': refresh: …`):
+   the unset-variable refusal and the gateway refusal, anchored at both ends, the variables' names
+   alone (each with an underscore) and the deployment's name (lower case, digits, hyphens) as the only
+   parts that vary, nothing after. A value after our words, an upper-case value among the names, or
+   any other line naming a secret stays hidden; a deployment called `secret-lab` still sees its
+   refusal. The redactor's copy of the gateway sentence is held to refresh's own words by a test.
+   The gateway refusal says "keeps every value deployment.env holds", no longer "every secret".
 7. **The chart's values-derived keys are quoted** — platform's under P7 at the orchestrator's
    ruling: P7 (main c73e4f1) quotes the `checksum/*` annotations; the ConfigMap data keys and a
    file's `subPath` (a key reading as a number, bool or null broke the render), with the chart

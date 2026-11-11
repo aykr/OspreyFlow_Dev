@@ -147,3 +147,14 @@ the lockout case on purpose: it hands to refresh, whose own refusal O2 holds.
 | L7 | the lock's creation unguarded | `test_a_lock_this_account_cannot_make_is_said_in_words`: PermissionError |
 | L8 | update's arguments matched as whole tokens | `test_an_update_that_asks_no_compose_is_not_refused[--make-bundle=b.tar]`: refused |
 
+
+### Carries, after the orchestrator's review of ad4bef7 (11 November 2026, on the Mac, offline)
+
+| Plant | Fault | Red |
+|---|---|---|
+| A1 | the redactor's phrase rule (as at ad4bef7) | three still-hidden shapes shown: a value after our phrase, an upper-case value among the names, a value after our whole sentence; and `secret-lab`'s and `token-test-2`'s refusals hidden |
+| A1b | the gateway sentence's copy drifted (` (drift)` planted) | `…variable_is_shown[secret-lab, token-test-2]`: the copy is held to refresh's own words |
+| A2 | `_inherited`'s flock half planted out | `test_a_stale_open_of_the_lock_itself_holds_nothing`, the only case that sees it |
+| A4 | put-back's own `deployment.env` branch planted out | the writer scan **stays green**; `test_put_back_replaces_deployment_env_rather_than_rewriting_it` goes red: the scan's limit, now in its docstring |
+| M1 | the rollback point made with the umask's mode (as at ad4bef7) | `…rollback_point_is_private…`: not 700 |
+| M2 | `state/` another account's (as at ad4bef7) | `…state_folder_this_account_cannot_write…`: PermissionError |
