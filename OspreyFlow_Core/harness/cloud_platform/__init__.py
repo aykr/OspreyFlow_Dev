@@ -45,8 +45,8 @@ from harness.cloud_platform.settings import (
 )
 from harness.images import DigestResolver, ServiceImage
 from schemas.deployment import (
-    AnalyticsEngine,
     ENGINES_AS,
+    AnalyticsEngine,
     CloudPlatformConfig,
     GraphStore,
     OspreyConfig,

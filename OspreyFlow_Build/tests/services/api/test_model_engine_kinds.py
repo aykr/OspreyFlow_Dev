@@ -258,10 +258,18 @@ def test_the_conduit_starts_off_the_cloud_platform_profile_on_a_declared_bedrock
     # `OSPREY_MODEL_ENGINES` as the render wrote it before Amendment 4.
     environ = {
         "OSPREY_PROFILE": profile,
-        "OSPREY_MODEL_ENGINES": json.dumps([{
-            "name": "bedrock", "label": "Bedrock", "roles": {"extraction": f"bedrock/{CLAUDE}"},
-            "privacy_contract": False, "contract_reference": None, "api_base": None,
-        }]),  # fmt: skip
+        "OSPREY_MODEL_ENGINES": json.dumps(
+            [
+                {
+                    "name": "bedrock",
+                    "label": "Bedrock",
+                    "roles": {"extraction": f"bedrock/{CLAUDE}"},
+                    "privacy_contract": False,
+                    "contract_reference": None,
+                    "api_base": None,
+                }
+            ]
+        ),  # fmt: skip
         "OSPREY_MODEL_KEY_PRESENT_BEDROCK": "yes",
     }
     installed = Installed.from_env(LOCALS, environ)
@@ -837,9 +845,7 @@ def _cloud_config(*providers: dict[str, Any]) -> OspreyConfig:
     """A real `profile: cloud-platform` deployment (P7's own fixture), with these engines: the
     cases below ran on a widened profile set before P7 merged, which hid that the render refused
     the very engines it was rendering (the orchestrator's round 2, item a)."""
-    from tests.harness.test_cloud_platform_render import _config
-
-    from tests.harness.test_cloud_platform_render import AWS
+    from tests.harness.test_cloud_platform_render import AWS, _config
 
     models = {"local_only": not providers, "sendable_handling_codes": ["P"] if providers else [],
               "providers": list(providers)}  # fmt: skip
@@ -858,6 +864,7 @@ def test_a_bedrock_engine_s_host_is_an_egress_host_by_its_region() -> None:
     provider's name alone, so it refused Bedrock as "names no api_base" (P11 at the rebase onto
     P7). Its host is its region's runtime, allowed by its networks, or refused in words."""
     from harness.cloud_platform import CloudPlatformNotRenderable
+
     from tests.harness.test_cloud_platform_render import _artefacts, _config, _hosts
 
     hosts = _hosts(_cloud_values(BEDROCK))
