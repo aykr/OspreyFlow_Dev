@@ -186,6 +186,7 @@ from schemas.admin import (
     RolesInput,
     ScheduleRunView,
     SignInDelivery,
+    SignInKind,
     SystemStatus,
     Team,
     TeamCoverInput,
@@ -16771,6 +16772,13 @@ async def invite_person_route(
                                        "org_unit": body.org_unit, "delivery": made.delivery},
                        result_cardinality=1)  # fmt: skip
     return made
+
+
+@app.get("/v1/admin/sign-in", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
+async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
+    """ADR-148 Amendment 8: how people sign in here, so Admin › People offers invite (Keycloak) or
+    add by object id (Entra ID). Behind `manage_people`, as People is."""
+    return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
 
 
 @app.post(

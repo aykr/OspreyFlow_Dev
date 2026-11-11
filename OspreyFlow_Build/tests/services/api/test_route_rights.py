@@ -432,6 +432,7 @@ ROUTE_RIGHTS = {
     "invite_person_route": "manage_people",
     # ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
     "add_person_by_object_id_route": "manage_people",
+    "sign_in_kind_route": "manage_people",
     "set_person_access_route": "manage_people",
     "disable_person_route": "manage_people",
     "enable_person_route": "manage_people",

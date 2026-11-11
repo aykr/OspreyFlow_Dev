@@ -253,6 +253,16 @@ def test_what_entra_holds_is_refused_in_words(
     assert ENTRA_HOLDS_ACCOUNTS in response.json()["detail"]
 
 
+def test_people_is_told_the_deployment_signs_in_with_entra(client: Any) -> None:
+    _as(ADMIN)
+    assert client.get("/v1/admin/sign-in").json() == {"kind": "entra"}
+
+
+def test_the_sign_in_kind_needs_manage_people(client: Any) -> None:
+    _as(ANALYST)
+    assert client.get("/v1/admin/sign-in").status_code == 403
+
+
 # --- GET /v1/me through the real get_principal (rule 4; rule 7) ---
 
 
