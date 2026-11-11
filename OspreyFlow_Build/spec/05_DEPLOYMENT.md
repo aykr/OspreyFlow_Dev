@@ -1026,24 +1026,24 @@ that would fail if it were broken:
 
 - every container runs as 10001:10001 (user, group and `fsGroup`) with `runAsNonRoot`, no
   privilege escalation and every capability dropped, and no supplementary group but group 0 for
-  Keycloak alone (its image is built for group 0; until P10); no hostPath, no port below 1024, no `ReadWriteMany` claim, every image from
-  the deployment's registry, and the deny-egress policy over every pod: `make cp-policy-check`
-  (`tools/cp_policy_check.py`, red record `process/lanes/platform/P7_RED_RECORD.md`);
+  Keycloak alone (its image is built for group 0; until P10); no hostPath, no port below 1024, no
+  `ReadWriteMany` claim, every image from the deployment's registry, and the deny-egress policy over
+  every pod: `make cp-policy-check` (`tools/cp_policy_check.py`), each rule red on its own planted
+  fault in its tests;
 - a managed store's detail reaches only a container that reads it, from the platform's secrets,
   and no secret is in a rendered file: `tests/harness/test_cloud_platform_render.py`;
 - egress is allowed by network to the hosts the settings name (S3, STS, the mail server, enabled
   model engines, proxied map sources, connector hosts) and nowhere else: the same file;
-- `local-lite`, `small` and `cluster` render as before: shown once, at P7's merge, by
-  `process/lanes/platform/gates/p7_renders_unchanged.py` against `main` (a lane script, in no gate);
-  after it, each profile's own render tests hold it (`test_cluster_render.py`, `test_helm_chart.py`),
+- `local-lite`, `small` and `cluster` render as before: shown once, at P7's merge, by a comparison
+  against `main` in the build record (a script in no gate); after it, each profile's own render
+  tests hold it (`test_cluster_render.py`, `test_helm_chart.py`),
   and the profile's settings are refused at every other profile
   (`tests/harness/test_cloud_platform_render.py::test_the_settings_belong_to_the_profile_alone`).
 
 It is **not yet** proven on a cluster: the acceptance run on a kind cluster set up to the platform's
-rules (`process/lanes/platform/gates/p7_kind.sh accept`) is the build plan's step P7a, and live on the
-platform is recorded once the client's namespaces exist. What P7 did show on kind (the stores, the
-Conduit and the workers running as 10001, the Calico policies applied) is in
-`process/lanes/platform/gates/p7_kind_check.677d473.log`.
+rules is the build plan's step P7a, and live on the platform is recorded once the client's
+namespaces exist. What P7 did show on kind (the stores, the Conduit and the workers running as
+10001, the Calico policies applied) is in the build record.
 
 ## 4. Moving up a profile
 
