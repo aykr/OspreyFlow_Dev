@@ -1,0 +1,23 @@
+{
+  "before the fix (11 Nov, run 20261111T163806Z, as osprey)": [
+    "ACCEPTED read a set's manifest -> 4",
+    "ACCEPTED read ArcadeDB's zip -> 87479",
+    "ACCEPTED write over a set -> ",
+    "ACCEPTED url() elsewhere -> 1"
+  ],
+  "after the fix": {
+    "osprey_sources": [
+      "user: osprey",
+      "REFUSED read a set's manifest -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+      "REFUSED read ArcadeDB's zip -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+      "REFUSED write over a set -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant WRITE ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+      "REFUSED url() to another host -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON URL. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\""
+    ],
+    "clickhouse_egress_to_1.1.1.1": "REFUSED",
+    "at": "2026-11-11T17:17:21+00:00",
+    "host": "gpu-1",
+    "lease": {
+      "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+    }
+  }
+}

@@ -235,7 +235,9 @@ def test_the_sets_expire_by_the_buckets_lifecycle_rule() -> None:
     rule = re.search(r'id\s*=\s*"expire-sets"(.*?)\n  \}', text, re.DOTALL)
     assert rule is not None, text
     assert re.search(r'prefix\s*=\s*"sets/"', rule.group(1))
-    assert re.search(rf"days\s*=\s*{backups.EXPIRE_DAYS}\b", rule.group(1))
+    # The current versions' own expiry, not the noncurrent one's `noncurrent_days` (which this once
+    # matched alone, so the rule's expiry could go and the test stay green).
+    assert re.search(rf"expiration \{{\s*days\s*=\s*{backups.EXPIRE_DAYS}\s*\}}", rule.group(1))
     assert re.search(rf"noncurrent_days\s*=\s*{backups.EXPIRE_DAYS}\b", rule.group(1))
     assert backups.EXPIRE_DAYS >= 30, "a month of failed runs before the last good set expires"
 

@@ -180,6 +180,22 @@ def test_another_encryption_or_another_key_is_refused_by_the_bucket_policy(aws: 
     assert _code(refused) == "AccessDenied"
 
 
+def test_another_key_the_role_may_use_is_refused_by_the_bucket_policy_alone(aws: Running) -> None:
+    """`ItsOwnKey` shown by itself (the lane-reviewer's finding): with the role given KMS on every key,
+    a write under another key passes KMS and is refused by the bucket's policy, in its own words."""
+    found = aws.stand_in.roles[ROLE_ARN]
+    policy = role_policy()
+    for statement in policy["Statement"]:
+        if statement["Action"][0].startswith("kms:"):
+            statement["Resource"] = ["*"]
+    found.policies = [policy]
+    with pytest.raises(ClientError) as refused:
+        aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x", ServerSideEncryption="aws:kms",
+                            SSEKMSKeyId=KEY_ARN.replace("1234abcd", "ffffffff"))  # fmt: skip
+    assert _code(refused) == "AccessDenied"
+    assert "kms:" not in refused.value.response["Error"]["Message"], "refused by the bucket, not by KMS"
+
+
 def test_the_conduits_role_is_refused_the_backups_bucket(aws: Running) -> None:
     """Its own policy allows every S3 action; the bucket's denies it all the same."""
     aws.token = (mint_token(ISSUER_SECRET, sub="system:serviceaccount:ospreyflow-dev:ospreyflow"))

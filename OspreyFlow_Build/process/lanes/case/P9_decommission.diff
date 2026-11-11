@@ -1,19 +1,23 @@
-P9 (case) for the platform lane, by the orchestrator's ruling of 11 November 2026: the backups bucket and its KMS key
-are the decommission's one named exception. Against lane/platform-p7b at e1cd1d5; apply after P7b and P9
-have merged (it imports harness.cloud_platform_backups' BUCKET_SUFFIX and KEPT_AT_DECOMMISSION). Shown on that tree:
-the eight new cases red on its own decommission_check.py and runbooks.py, 66 passed with the diff
-(test_cp_decommission_check.py, test_cloud_platform_poc.py).
+P9 (case) for the platform lane, by the orchestrator's rulings of 11 November 2026: the backups bucket and its KMS key
+are the decommission's one named exception. Against lane/platform-p7b at d7d60d2; apply after P7b and P9 have merged
+(it imports harness.cloud_platform_backups' BUCKET_SUFFIX and KEPT_AT_DECOMMISSION). Shown on that tree with P9's
+module: 68 passed with the diff (test_cp_decommission_check.py, test_cloud_platform_poc.py, whose region rule caught
+one command of section 9 first); its nine new cases red on P7b's own decommission_check.py and runbooks.py.
 
-- decommission_check: the bucket and each kept resource reported as "kept: the backups (retention)", never left
-  behind; anything else of ours (the backup role among it) still fails the check.
-- DECOMMISSION.md: step 2 takes the last backup into the backups bucket by the deployment's own runs; step 7 takes
-  the kept resources out of the state before the removal (prevent_destroy holds only while their file is there);
-  step 8 lists the backups bucket; section 9 removes them when the retention ends: the bucket's policy, its
-  objects, the bucket, then the key's scheduled deletion.
+- decommission_check: the bucket and each kept resource (the bucket, its versioning, settings, lifecycle and policy;
+  the key and its alias) reported as "kept: the backups (retention)", never left behind; the two backup roles,
+  their service accounts and the Secret are named ours and still fail the check if they stay.
+- DECOMMISSION.md: step 2 takes the last backup into the backups bucket by the deployment's own two runs (the
+  slot's name computed by the release's Python, no GNU date), refusing a run that did not finish; step 7 first sets
+  the client's retention on the kept bucket (BACKUP_RETENTION_DAYS, so the deployment's 35-day rule never expires
+  what is kept), then takes the kept resources out of the state before the removal (prevent_destroy holds only
+  while their file is there); step 8 lists the backups bucket; section 9 removes them when the retention ends: the
+  bucket's policy, every version, the bucket, then the key's own policy replaced before its scheduled deletion;
+  section 10 says how a kept set is restored into a new deployment, and that the account's administrators alone may.
 
 diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py
---- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py	2026-11-11 16:04:32
-+++ b/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py	2026-11-11 16:06:28
+--- a2/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py	2026-11-11 17:10:42
++++ b2/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py	2026-11-11 17:10:57
 @@ -26,6 +26,7 @@
      declared_resources,
      main,
@@ -22,10 +26,10 @@ diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.p
  from harness.render import render
  from tools.cp_policy_check import FIXTURES, _resolver
  
-@@ -361,3 +362,39 @@
-     given["module"] = module
-     found = _check(values, terraform, given)
-     assert [i.what for i in found.items] == ([f"terraform/{address}"] if ours else [])
+@@ -372,3 +373,48 @@
+     [item] = _check(values, terraform, given).items
+     assert "step 6" in item.why
+     assert f"aws s3api delete-bucket --region {REGION} --bucket {PREFIX}media" in item.why
 +
 +
 +@pytest.mark.parametrize("address", list(KEPT_AT_DECOMMISSION))
@@ -34,17 +38,18 @@ diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.p
 +) -> None:
 +    """ADR-148 Amendment 7: the decommission's one named exception. Each, in the state or among the
 +    buckets, is reported as kept and the check still passes; anything else of ours still fails it."""
-+    with_backups = {**terraform, "backups.tf": _BACKUPS_TF}
++    with_backups = {**terraform, "backups.tf": _backups_tf()}
 +    given = _clean()
 +    given["state"] += f"{address}\n"
 +    given["buckets"] += f"{PREFIX}{BUCKET_SUFFIX}\n"
 +    found = _check(values, with_backups, given)
 +    assert found.items == []
 +    assert f"terraform/{address}" in found.kept and f"bucket/{PREFIX}{BUCKET_SUFFIX}" in found.kept
-+    given["state"] += "aws_iam_role.backup\n"
++    given["state"] += "aws_iam_role.backup\naws_iam_role.backup_clickhouse\n"
 +    given["buckets"] += f"{PREFIX}media\n"
 +    found = _check(values, with_backups, given)
-+    assert [i.what for i in found.items] == ["terraform/aws_iam_role.backup", f"bucket/{PREFIX}media"]
++    assert [i.what for i in found.items] == ["terraform/aws_iam_role.backup",
++                                             "terraform/aws_iam_role.backup_clickhouse", f"bucket/{PREFIX}media"]
 +
 +
 +def test_the_runbook_keeps_the_backups_and_says_how_to_remove_them(rendered: dict[str, str]) -> None:
@@ -53,28 +58,40 @@ diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.p
 +    assert f"s3://$PREFIX{BUCKET_SUFFIX}/sets/" in text
 +    for kept in KEPT_AT_DECOMMISSION:
 +        assert kept in text
-+    removal = text.split("## 9.", 1)[1]
-+    assert removal.index("delete-bucket-policy") < removal.index("s3 rm") < removal.index("schedule-key-deletion")
++    removal = text.split("## 9.", 1)[1].split("## 10.", 1)[0]
++    order = ["delete-bucket-policy", "delete-objects", "delete-bucket ", "put-key-policy", "schedule-key-deletion"]
++    assert [removal.index(step) for step in order] == sorted(removal.index(step) for step in order)
++    retention = text.split("## 7.", 1)[1].split("## 8.", 1)[0]
++    assert retention.index("put-bucket-lifecycle-configuration") < retention.index("tofu state rm")
++    assert "## 10. Restoring a kept set" in text and "BackupRolesOnly" in text
 +
 +
-+#: backups.tf's resources as `harness.cloud_platform_backups.backups_terraform` declares them (the
-+#: render writes the file once P9_render.diff is applied; the poc fixture's render here does not).
-+_BACKUPS_TF = "".join(f'resource "{k.split(".")[0]}" "{k.split(".")[1]}" {{\n}}\n' for k in KEPT_AT_DECOMMISSION) + (
-+    'resource "aws_iam_role" "backup" {\n}\n'
-+)
++def _backups_tf() -> str:
++    """backups.tf as `harness.cloud_platform_backups.backups_terraform` writes it for the poc fixture,
++    so a resource it gains is checked here too."""
++    from harness.cloud_platform.settings import load_platform
++    from harness.cloud_platform_backups import backups_terraform
++
++    config = OspreyConfig.model_validate(yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8")))
++    assert config.cloud_platform is not None
++    return backups_terraform(config, load_platform(config.cloud_platform.platform))
 diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/OspreyFlow_Core/harness/cloud_platform/decommission_check.py
---- a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py	2026-11-11 16:04:32
-+++ b/OspreyFlow_Core/harness/cloud_platform/decommission_check.py	2026-11-11 16:06:28
-@@ -37,6 +37,8 @@
+--- a2/OspreyFlow_Core/harness/cloud_platform/decommission_check.py	2026-11-11 17:10:42
++++ b2/OspreyFlow_Core/harness/cloud_platform/decommission_check.py	2026-11-11 17:10:42
+@@ -34,9 +34,12 @@
+ 
+ import yaml
+ 
++from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
++
  RELEASE = "ospreyflow"
  PART_OF = "app.kubernetes.io/part-of"
  #: The EBS CSI driver's tag on each volume it makes for a claim: the claim's namespace.
-+from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
 +
  DISK_NAMESPACE_TAG = "kubernetes.io/created-for/pvc/namespace"
  DISK_CLAIM_TAG = "kubernetes.io/created-for/pvc/name"
  
-@@ -65,6 +67,9 @@
+@@ -65,6 +68,9 @@
  class Leftovers:
      items: list[Leftover] = field(default_factory=list)
      not_ours: list[str] = field(default_factory=list)
@@ -84,7 +101,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
  
  
  def _claim_patterns(values: dict[str, Any]) -> list[re.Pattern[str]]:
-@@ -246,12 +251,16 @@
+@@ -246,12 +252,16 @@
          if not address:
              continue
          resource = _ours_in_state(address, ours, module)
@@ -102,8 +119,8 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
 +        elif bucket and bucket.startswith(bucket_prefix):
              found.items.append(
                  Leftover(
-                     f"bucket/{bucket}", f"empty it, then delete it: aws s3 rb s3://{bucket} --force"
-@@ -284,6 +293,8 @@
+                     f"bucket/{bucket}",
+@@ -286,6 +296,8 @@
          return 2
      for name in sorted(found.not_ours):
          print(f"left alone (not the deployment's): {name}")
@@ -113,16 +130,16 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
          print(f"LEFT BEHIND  {item.what}: {item.why}")
      print(f"decommission check: {len(found.items)} thing(s) left behind")
 diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
---- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py	2026-11-11 16:04:32
-+++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py	2026-11-11 16:06:28
-@@ -22,6 +22,7 @@
- from typing import Any
- 
+--- a2/OspreyFlow_Core/harness/cloud_platform/runbooks.py	2026-11-11 17:10:42
++++ b2/OspreyFlow_Core/harness/cloud_platform/runbooks.py	2026-11-11 17:11:14
+@@ -24,6 +24,7 @@
  from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
-+from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
  from harness.cloud_platform.settings import PlatformSettings
  from harness.cloud_platform.terraform import BUCKETS, ecr_repositories
++from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
  from schemas.deployment import OspreyConfig, generated_folder
+ 
+ RELEASE = "ospreyflow"
 @@ -183,6 +184,10 @@
  data for good**: step 2 takes the last backup first. The namespace itself, and every other resource
  in it, is the platform team's and stays.
@@ -134,7 +151,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
  **What it needs.** The release's `OspreyFlow_Core` folder with its environment (`.venv`) and this
  deployment's rendered folder, `kubectl` pointed at the namespace, `helm`, the AWS command line (v2)
  signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
-@@ -199,13 +204,19 @@
+@@ -199,13 +204,21 @@
  
  ## 2. The last backup
  
@@ -153,31 +170,41 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
 +if kubectl -n "$NS" get cronjob ospreyflow-backup-claims >/dev/null 2>&1; then
 +  kubectl -n "$NS" create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims
 +fi
-+kubectl -n "$NS" wait --for=condition=complete "job/ospreyflow-backup-$S" --timeout=6h
-+export LAST_BACKUP="s3://$PREFIX{BUCKET_SUFFIX}/sets/$(date -u -d "@$(( S * 60 ))" +%Y%m%dT%H%M%SZ)/"
++kubectl -n "$NS" wait --for=jsonpath='{{.status.conditions[0].status}}'=True "job/ospreyflow-backup-$S" --timeout=6h
++kubectl -n "$NS" get job "ospreyflow-backup-$S" -o jsonpath='{{.status.succeeded}}' | grep -qx 1 \\
++  || {{ echo "the last backup did not finish: read its log (kubectl -n $NS logs job/ospreyflow-backup-$S)"; false; }}
++export LAST_BACKUP="s3://$PREFIX{BUCKET_SUFFIX}/sets/$("$PY" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]) * 60, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))' "$S")/"
 +case "$LAST_BACKUP" in "s3://$PREFIX{BUCKET_SUFFIX}/sets/"*) echo "the last backup: $LAST_BACKUP";; *) false;; esac
  ```
  
  ## 3. The workloads
-@@ -270,11 +281,15 @@
+@@ -294,11 +307,23 @@
  
  ## 7. The namespace's resources (the platform team's pull request)
  
 -Remove the deployment's resources (the files from `$FOLDER/terraform/`) from the namespace's folder
 -in the environments repository and raise the pull request; the folder's other resources are the
-+First, in the namespace's folder, the backups bucket and its key are taken out of the state, so the
-+removal keeps them (`prevent_destroy` holds only while their file is there). Then remove the
++First the kept bucket's lifecycle rule is set to the retention you agree, so the deployment's own
++35-day rule cannot expire the sets this decommission keeps; then, in the namespace's folder, the
++backups bucket and its key are taken out of the state, so the removal keeps them (`prevent_destroy`
++holds only while their file is there). Give the retention, in days, as `BACKUP_RETENTION_DAYS`. Then remove the
 +deployment's resources (the files from `$FOLDER/terraform/`) from the namespace's folder in the
 +environments repository and raise the pull request; the folder's other resources are the
  platform's and stay.
  
  ```bash platform
++: "${{BACKUP_RETENTION_DAYS:?the retention you agree for the kept backups, in days}}"
++printf '{{"Rules": [{{"ID": "abort-unfinished-uploads", "Status": "Enabled", "Filter": {{"Prefix": ""}}, "AbortIncompleteMultipartUpload": {{"DaysAfterInitiation": 7}}}}, {{"ID": "retained-sets", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"Days": %d}}, "NoncurrentVersionExpiration": {{"NoncurrentDays": %d}}}}]}}' \\
++  "$BACKUP_RETENTION_DAYS" "$BACKUP_RETENTION_DAYS" > "$WORK/retention.json"
++aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}" \\
++  --lifecycle-configuration "file://$WORK/retention.json"
++aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}" | grep -q retained-sets
 +for kept in {" ".join(KEPT_AT_DECOMMISSION)}; do tofu state rm "$kept" || true; done
 +tofu state list | grep -E '^({"|".join(re.escape(k) for k in KEPT_AT_DECOMMISSION)})$' && {{ echo "a kept resource is still in the state: stop"; false; }}
  echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
  ```
  
-@@ -295,7 +310,7 @@
+@@ -320,7 +345,7 @@
  : "${{STATE:?the output of tofu state list in the namespace folder, saved to a file}}"
  cp "$STATE" "$WORK/state.txt"
  : > "$WORK/buckets.txt" && failed=
@@ -186,27 +213,50 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
    if out=$(aws s3api head-bucket --region "$REGION" --bucket "$PREFIX$b" 2>&1); then echo "$PREFIX$b" >> "$WORK/buckets.txt"
    elif echo "$out" | grep -q -e '404' -e 'Not Found'; then :
    else echo "$PREFIX$b could not be checked: $out"; failed=1; fi
-@@ -327,5 +342,23 @@
- "$PY" -m harness.cloud_platform.decommission_check --values "$WORK/values.yaml" "${{objects[@]}}" "${{seen[@]}}" \\
+@@ -356,4 +381,46 @@
    ${{TF_MODULE:+--module "$TF_MODULE"}} --state "$WORK/state.txt" --terraform "$WORK/terraform" \\
    --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"
-+```
+ ```
 +
 +The check names the backups bucket and its key as kept (`kept: the backups (retention)`), never as
 +left behind, and fails on anything else.
 +
 +## 9. When the retention ends: the backups bucket, then its key
 +
-+Your decision, when the retention you agreed ends. The bucket's policy lets only the deployment's
-+backup role (removed in step 7) touch its objects, so the policy goes first; then the bucket is
-+emptied and removed, and only then the key is scheduled for deletion (thirty days, cancellable),
-+since a key deleted first leaves every set in the bucket unreadable.
++Your decision, when the retention you agreed ends; the account's administrators run it. The bucket's
++policy lets only the deployment's backup roles (removed in step 7) touch its objects, so the policy
++goes first; every version of every object is removed (the bucket is versioned), then the bucket.
++Only then the key: its own policy refuses everyone its deletion, so that policy is replaced first,
++by one keeping the account's administration, and the deletion scheduled (thirty days, cancellable).
++A key deleted while the bucket still held a set would leave that set unreadable.
 +
 +```bash platform
-+aws s3api delete-bucket-policy --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}"
-+aws s3 rm --region "$REGION" "s3://$PREFIX{BUCKET_SUFFIX}" --recursive
-+aws s3api delete-bucket --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}"
++B="$PREFIX{BUCKET_SUFFIX}"
++aws s3api delete-bucket-policy --region "$REGION" --bucket "$B"
++while :; do
++  aws s3api list-object-versions --region "$REGION" --bucket "$B" --max-items 500 --output json \\
++    --query '{{Objects: [Versions, DeleteMarkers][][].{{Key: Key, VersionId: VersionId}}}}' > "$WORK/versions.json"
++  grep -q '"Key"' "$WORK/versions.json" || break
++  aws s3api delete-objects --region "$REGION" --bucket "$B" --delete "file://$WORK/versions.json" >/dev/null
++done
++aws s3api delete-bucket --region "$REGION" --bucket "$B"
++ACCOUNT=$(aws sts get-caller-identity --region "$REGION" --query Account --output text)
++printf '{{"Version": "2012-10-17", "Statement": [{{"Sid": "Administer", "Effect": "Allow", "Principal": {{"AWS": "arn:aws:iam::%s:root"}}, "Action": "kms:*", "Resource": "*"}}]}}' "$ACCOUNT" > "$WORK/key-policy.json"
++aws kms put-key-policy --region "$REGION" --key-id "alias/{cp.namespace}-backups" --policy-name default --policy "file://$WORK/key-policy.json"
 +aws kms schedule-key-deletion --region "$REGION" --key-id "alias/{cp.namespace}-backups" --pending-window-in-days 30
 +aws kms delete-alias --region "$REGION" --alias-name "alias/{cp.namespace}-backups"
- ```
++```
++
++## 10. Restoring a kept set, after the decommission
++
++The kept sets can be restored into a new deployment of this profile (its own namespace and roles),
++by the account's administrators, who alone may change the kept bucket's and key's policies:
++
++1. Install the new deployment as INSTALL.md says; its Terraform makes its two backup roles.
++2. Name them in the kept bucket's policy (its `BackupRolesOnly` statement's `aws:PrincipalArn`) and
++   in the key's policy (its `UseThroughS3` statement's principals), and give each role this bucket
++   and key in its own policy, as `backups.tf` writes them:
++   `aws s3api put-bucket-policy --bucket "$PREFIX{BUCKET_SUFFIX}" --policy file://…`,
++   `aws kms put-key-policy --key-id alias/{cp.namespace}-backups --policy-name default --policy file://…`.
++3. Restore the set by the recovery runbook's cloud-platform section, its bucket the kept one.
  """

@@ -161,91 +161,135 @@ On the client's platform the stores are not containers on one machine and there 
 the managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning, and **this section covers what the deployment runs
 itself**: ArcadeDB, ClickHouse and, in the proof-of-concept shape, the Ingest root's claim
-(`ospreyflow-ingest`: uploads and the drop folder).
+(`ospreyflow-ingest`: uploads and the drop folder). **The restore below is proven for the single-replica
+shapes** (development, and the poc shape); the production shape's (three ArcadeDB copies, ClickHouse ON
+CLUSTER with two replicas) is P9b's, and until then is not attempted.
 
 **The schedule.** Two CronJobs, daily at 02:15 UTC: `ospreyflow-backup` (ArcadeDB's `BACKUP DATABASE`,
-then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims` (each claim of
-its own, read-only, beside the pods that mount it). Both write one set,
-`s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by their schedule slot; `manifest.json` is
-written last, only once every part is there. A set without it is unfinished and is never restored
-from. Every write is encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`), by
-the backup role (no stored key anywhere; ClickHouse writes as that role by its own pod). The role
-cannot delete a set; sets expire by the bucket's lifecycle rule after 35 days.
+then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims` (each claim of its
+own, read-only, beside the pods that mount it). Both write one set,
+`s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by their schedule slot; `manifest.json` is written
+last, only once every part is there. A set without it is unfinished and is never restored from. Every
+object is encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`). Two roles write it,
+each to its own prefix (ClickHouse's own, for its part; the runner's, for the rest), and no key is stored
+anywhere. Neither role can erase a set: the bucket is versioned, so an object overwritten keeps its
+previous version, and sets expire by the bucket's lifecycle rule after 35 days.
 
-**Is last night's backup there?** A backup Job that completed wrote a finished set (the manifest is
-its last write), and its log names the set:
+**Is last night's backup there?** A backup Job that completed wrote a finished set (the manifest is its
+last write), and its log names the set:
 
 ```bash
 kubectl -n <namespace> get jobs -l app.kubernetes.io/name=backup --sort-by=.metadata.creationTimestamp
 kubectl -n <namespace> logs job/<the newest> | grep 'backup: set'
 ```
 
-A failed run is a failed Job, its log naming the store, the step and S3's own words; the alert on it
-is P9b's. Only the backup role can list the bucket (its policy), so nobody reads it by hand.
+A failed run is a failed Job, its log naming the store, the step and the refusing service's own words;
+the alert on it is P9b's. Only the backup roles can list the bucket (its policy); the runner lists every
+set, finished or not, with `python -m services.api.platform_backup sets` from a Job of the CronJob's.
 
-**A backup now** (before an upgrade, or the decommission's last backup): both runs for one slot.
+**A backup now** (before an upgrade, or the decommission's last backup): both runs for one slot, each
+Job named as the CronJob names it (`<cronjob>-<minute since 1970>`), since that names the set.
 
 ```bash
 S=$(( $(date +%s) / 60 ))
 kubectl -n <namespace> create job "ospreyflow-backup-$S" --from=cronjob/ospreyflow-backup
-kubectl -n <namespace> create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims  # poc shape
-kubectl -n <namespace> wait --for=condition=complete "job/ospreyflow-backup-$S" --timeout=6h
+if kubectl -n <namespace> get cronjob ospreyflow-backup-claims >/dev/null 2>&1; then
+  kubectl -n <namespace> create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims
+fi
+# Complete or Failed, whichever comes first (a failed Job is never waited on for hours):
+kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "job/ospreyflow-backup-$S" --timeout=6h
+kubectl -n <namespace> get job "ospreyflow-backup-$S" -o jsonpath='{.status.succeeded}'   # 1: the set is finished
 ```
 
-**A restore** of set `<set>` (it replaces what ArcadeDB, ClickHouse and the claims hold):
+**Before an upgrade, with the Conduit stopped** (so the parts agree; see *Consistency*). In the poc shape
+the claims run is placed beside the shared folders' pods, which are then stopped, so its Job is made
+without that placement (the claim is free once they are stopped):
 
 ```bash
-# 1. Stop what writes: ArcadeDB, and the pods that mount the claims.
+kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
+S=$(( $(date +%s) / 60 ))
+kubectl -n <namespace> create job "ospreyflow-backup-$S" --from=cronjob/ospreyflow-backup
+kubectl -n <namespace> create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims \
+  --dry-run=client -o json \
+  | python3 -c 'import json, sys; j = json.load(sys.stdin); j["spec"]["template"]["spec"].pop("affinity", None); print(json.dumps(j))' \
+  | kubectl -n <namespace> create -f -
+kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "job/ospreyflow-backup-$S" --timeout=6h
+```
+
+**A restore** of set `<set>` (it replaces what ArcadeDB, ClickHouse and the claims hold). It refuses,
+touching nothing, while anything that writes still runs, or while any part of the set is missing or not
+the one the set wrote:
+
+```bash
+# 1. Stop everything that writes, in every shape: ArcadeDB, the Conduit, the workers, the report sync.
 kubectl -n <namespace> scale statefulset/arcadedb --replicas=0
 kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
 # 2. The restore's Jobs, rendered for the set (never by `helm upgrade`, which would start ArcadeDB).
 helm template ospreyflow deploy/helm/ospreyflow -n <namespace> -f <render>/values.yaml \
   --set backups.restore.set=<set> --show-only templates/backups.yaml \
   | kubectl -n <namespace> apply -f - --selector='app.kubernetes.io/name in (restore,restore-claims)'
-kubectl -n <namespace> wait --for=condition=complete job -l 'app.kubernetes.io/name in (restore,restore-claims)' --timeout=6h
+for j in $(kubectl -n <namespace> get jobs -l 'app.kubernetes.io/name in (restore,restore-claims)' -o name); do
+  kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "$j" --timeout=6h
+  kubectl -n <namespace> logs "$j" --all-containers | tail -3     # each step says what it did, or why not
+done
 # 3. Start them again.
 kubectl -n <namespace> scale statefulset/arcadedb --replicas=1
 kubectl -n <namespace> rollout status statefulset/arcadedb
 kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=1
 ```
 
-The restore checks each part against the manifest before it writes anything; a part that does not
-match is refused and nothing is replaced.
+**An upgrade that brings the backups in.** The render gives ArcadeDB's StatefulSet a third claim template
+(`backups`), which Kubernetes refuses to change in place. Before the `helm upgrade` that brings it, the
+StatefulSet is orphaned and its pods restarted one at a time:
+
+```bash
+kubectl -n <namespace> delete statefulset arcadedb --cascade=orphan
+helm upgrade …   # as the install's runbook says
+kubectl -n <namespace> delete pod arcadedb-0      # in production, then arcadedb-1 and arcadedb-2, each once ready
+```
 
 ### Measured
 
 Measured on kind (`osprey-p9`, two nodes at 4 GB each, Calico, `gp2-expand` by local-path) on 11 November
-2026, against the S3 stand-in, **under lease c** (held by the case lane for this run, no stack started; the
-server's load average 10.2 at the start). The seed is synthetic: 5,000 vertices and 1,000 edges, 200,000
-ClickHouse rows, and 301 files (7.7 MB) on the Ingest claim; the set was 9.6 MB in 17 objects. They are what
-that cluster did, not a service level: the platform's disks, network and S3 differ, and a real database is
-larger. The record is `OspreyFlow_Build/process/lanes/case/gates/p9_kind_roundtrip.916c95b.json`.
+2026, against the S3 stand-in, **under the case lane's lease on test stack b** (taken for this run alone, no stack
+started; its lease file is in the record). The server was shared with other lanes' work (its load average 10 to
+15). The seed is synthetic: 5,000 vertices and 1,000 edges, 200,000 ClickHouse rows, and 301 files (7.7 MB) on the
+Ingest claim; the set was 9.6 MB in 17 objects. These are what that cluster did, not a service level: the
+platform's disks, network and S3 differ, and a real database is larger. The record is
+`OspreyFlow_Build/process/lanes/case/gates/p9_kind_roundtrip.r2.json`.
 
 | Path | Measured | What dominates it |
 | --- | --- | --- |
-| **Backup** (both runs of one slot) | **6.9 s** | the Jobs' start; ArcadeDB's and ClickHouse's own work took about 1 s |
-| Stopping ArcadeDB and the claims' pods | 31.4 s | ArcadeDB's graceful stop |
-| **The restore's two Jobs** (in parallel) | **9.4 s** | the pods' start; the restore itself under a second |
-| Starting ArcadeDB and the claims' pods again | 23.8 s | ArcadeDB's start and readiness |
-| **End to end, destroyed → restored and compared** | **64.6 s** | stopping and starting, not data |
+| **Backup** (both runs of one slot) | **7.4 s** | the Jobs' start; ArcadeDB's and ClickHouse's own work took about 1.4 s |
+| Stopping ArcadeDB and the claims' pod | 31.6 s | ArcadeDB's graceful stop |
+| **The restore's two Jobs** (in parallel, `verify` first in each) | **14.9 s** | the pods' start and the verify; the restore itself under a second |
+| Starting ArcadeDB and the claims' pod again | 23.7 s | ArcadeDB's start and readiness |
+| **End to end, destroyed → restored and compared** | **70.2 s** | stopping and starting, not data |
 
-At this size the data is negligible and the restore is the stores' stop and start. A real restore's time
-grows with the set: measure it again on the client's development namespace (decision 13's rehearsal)
-before production holds real data.
+**What the 70.2 s leaves out.** On kind one pod stood for the Conduit and the workers; the real Conduit,
+workers and report sync are stopped and started around the restore too, and their start (the Conduit's
+above all) adds to it. At this size the data is negligible and the restore is the stores' stop and start;
+a real restore's time grows with the set. Measure it again on the client's development namespace
+(decision 13's rehearsal) before production holds real data.
 
-**Consistency.** The CronJob does not stop the Conduit: ArcadeDB's backup is consistent within the
-graph and ClickHouse's within each table, but the three parts are taken minutes apart. A load running
-across 02:15 can be in one part and not another. Take a backup now, with the Conduit stopped, where
-that matters (before an upgrade).
+**Consistency.** The CronJob does not stop the Conduit: ArcadeDB's backup is consistent within the graph
+and ClickHouse's within each table, but the parts are taken minutes apart. A load running across 02:15
+can be in one part and not another. Take a backup with the Conduit stopped where that matters (before an
+upgrade, above).
 
 ### If it fails
 
+- **`restore: see what runs: … still running`**: stop ArcadeDB, the Conduit, the workers and the report
+  sync first; nothing was touched.
+- **`restore: verify set …: … is missing` or `is not the file the set wrote`**: a part of that set has
+  expired or changed; restore another set. Nothing was touched.
 - **`Backup S3 requires 1 or 3 arguments`**: a statement handing ClickHouse a session token. ClickHouse
-  25.8 takes none; it writes as the role by its own pod (its service account `ospreyflow-backup`).
+  25.8 takes none; it writes as its own role by its own pod (`ospreyflow-backup-clickhouse`).
 - **ClickHouse `Access Denied` at once, its log showing `sts.us-east-1`**: its pod lacks
-  `AWS_DEFAULT_REGION`, so its web identity client asked the wrong region's STS, outside the
-  namespace's egress, and wrote anonymously.
+  `AWS_DEFAULT_REGION`, so its web identity client asked the wrong region's STS, outside the namespace's
+  egress, and wrote anonymously.
 - **`claims: wait for set …'s claims part: none after … s`**: the claims run for that slot failed or
   never ran; the set is unfinished. Read `ospreyflow-backup-claims-<slot>`'s log.
-- **A Job pending, `didn't match pod affinity rules`**: the backup runs beside `arcadedb-0` (its
-  backups claim) and the claims run beside the shared pods; neither starts while those are down.
+- **A Job pending, `didn't match pod affinity rules`**: the backup runs beside `arcadedb-0` (its backups
+  claim) and the claims run beside the shared pods; neither starts while those are down (above, for the
+  claims run when they are stopped on purpose).

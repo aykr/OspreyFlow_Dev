@@ -1,88 +1,86 @@
-P9 (case) for the platform lane: the two calls that put the backups into the cloud-platform render and its
-Terraform (ADR-142 Amendment 8 decision 3), and values.yaml's `backups: {}`. Apply with `git apply` from the
-repository root; with it, tests/cloud_platform_backup/test_backups_render.py's
-test_the_render_carries_the_backups_itself runs instead of skipping.
+P9 (case) for the platform lane (ADR-142 Amendment 8 decision 3; ADR-148 Amendment 7). Apply with `git apply` from the
+repository root, after P9 merges. Three files: `render_cloud_platform`'s one hook, `values.yaml`'s `backups: {}`, and
+platform's own render test, which must now expect ClickHouse's pod to run as its backup role's service account.
 
-Note for an upgrade: the render gives ArcadeDB's StatefulSet a third volumeClaimTemplate (`backups`). Kubernetes
-refuses a change to a StatefulSet's volumeClaimTemplates in place, so an existing deployment's ArcadeDB
-StatefulSet is deleted with `--cascade=orphan` (its pod and claims kept) before the `helm upgrade` that adds it;
-the new StatefulSet adopts the running pod and its two claims, and arcadedb-0, deleted once, starts again with the
-third. A fresh install is unaffected.
+**Platform's five conditions (the orchestrator's message of 11 November), checked with this diff applied:**
+1. One hook: `render_cloud_platform` calls `harness.cloud_platform_backups.add_backups` once, with the values it is
+   about to write; it adds to them and returns `terraform/backups.tf`, which the hook adds to the artefacts. No other
+   line of `__init__.py` changes; `terraform.py` is untouched. (This diff.)
+2. Imports one way: `harness/cloud_platform_backups.py` imports `harness.cloud_platform.settings` and, inside
+   `backups_terraform`, `harness.cloud_platform.terraform`'s `_file`, `_q` and `_secret`. Platform imports it only at
+   this hook and in the decommission check's kept rule (P9_decommission.diff).
+3. `make cp-policy-check` green with the diff on this branch's tree: 152 passed (`gates/p9_platform_conditions.r2.log`);
+   `tests/cloud_platform_backup`'s policy case green on development and production. On P7b's tree (d7d60d2) with P9
+   applied, the poc, development and production renders break one rule only: `ingress-isolation` for
+   `CronJob/ospreyflow-backup` (and `ospreyflow-backup-claims` in poc), since P7b's per-workload ingress rows do not yet
+   name P9's pods. The rows to add, by `app.kubernetes.io/name` (stable from here on):
+   - `backup` (the CronJob's runner) and `restore` (the stores' restore Job): no ingress; egress to ArcadeDB (2480),
+     ClickHouse (8123), S3, STS and KMS in the region; `restore` also to the cluster's API (the writers check; P9's
+     own Calico policy, `default.ospreyflow-restore-to-the-api`, admits that on main today);
+   - `backup-claims` and `restore-claims` (the poc shape's claims): no ingress; egress to S3, STS and KMS; and
+     `restore-claims` to the cluster's API;
+   - `clickhouse` (unchanged name): egress to S3 and STS in the region added to its row.
+4. Renders unchanged: `p7_renders_unchanged.py --helm` against this branch's base (afcaa39): every local-lite, small
+   and cluster artefact the same; the two cluster Helm templates differ as text only in the checksum annotations that
+   follow the image's commit, their parsed manifests the same (`gates/p9_platform_conditions.r2.log`).
+5. Not kept at decommission: the two backup roles (`<namespace>-backup`, `<namespace>-backup-clickhouse`), their service
+   accounts and the Secret are declared by backups.tf and named ours, so the check fails if they stay
+   (`KEPT_AT_DECOMMISSION` holds the bucket, its settings and the key alone; tested both sides).
 
-For DECOMMISSION.md step 2 ("the last backup"), the command and where the set lands:
+**An upgrade that brings the backups in:** the render gives ArcadeDB's StatefulSet a third claim template, which
+Kubernetes refuses to change in place; the recovery runbook's cloud-platform section has the steps (orphan the
+StatefulSet, upgrade, restart each ArcadeDB pod once). DECOMMISSION's last backup and the kept bucket and key are in
+P9_decommission.diff.
 
-    S=$(( $(date +%s) / 60 ))   # the slot: both runs name the set by it
-    kubectl -n "$NAMESPACE" create job "ospreyflow-backup-$S" --from=cronjob/ospreyflow-backup
-    kubectl -n "$NAMESPACE" create job "ospreyflow-backup-claims-$S" --from=cronjob/ospreyflow-backup-claims  # poc shape
-    kubectl -n "$NAMESPACE" wait --for=condition=complete "job/ospreyflow-backup-$S" --timeout=6h
-    LAST_BACKUP="s3://${PREFIX}backups/sets/$(date -u -d "@$(( S * 60 ))" +%Y%m%dT%H%M%SZ)/"
-
-The set is in the backups bucket (`<prefix>backups`), under the namespace's backups key (`alias/<namespace>-backups`),
-finished when its `manifest.json` is there. Its bucket policy lets only the backup role read it, so nobody copies it
-elsewhere by hand. **Proposed for the platform lane** (it changes step 2 and step 6): the backups bucket and its key
-are the decommission's one exception. backups.tf keeps both from a destroy (`prevent_destroy`, spec 05 §6.1), so
-step 6 leaves `<prefix>backups` unemptied and runs `terraform state rm` on backups.tf's resources before its
-destroy, and step 2 accepts a LAST_BACKUP in that bucket. The client's team removes the bucket and the key when
-the retention they agree ends.
-
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py	2026-11-11 17:28:46
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py	2026-11-11 17:28:46
+@@ -325,8 +325,13 @@
+     values: dict[str, Any],
+ ) -> None:
+     account = load_platform("client").secrets.irsa.service_account
++    # ClickHouse writes its backups as its own backup role, by its own pod (ADR-148 Amendment 7).
++    from harness.cloud_platform_backups import CLICKHOUSE_SERVICE_ACCOUNT
++
+     for pod in _pods(values):
+         expected = account if pod["name"] in ("api", "worker", "report-sync") else None
++        if pod["name"] == "clickhouse":
++            expected = CLICKHOUSE_SERVICE_ACCOUNT
+         assert pod.get("serviceAccountName") == expected, pod["name"]
+ 
+ 
 diff --git a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
-index 5d53b1c..a7a4300 100644
 --- a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
 +++ b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
-@@ -48,6 +48,11 @@ networkPolicy:
+@@ -48,6 +48,11 @@
  # nets}`) before the deny; empty: neither is rendered.
  egress: {}
  
-+# ADR-148 decision 13 (Amendment 7): the scheduled backup of ArcadeDB and ClickHouse to the
-+# backups bucket by its own role, and a restore when `restore.set` names a set
-+# (templates/backups.yaml has the shape). Empty: neither is rendered.
++# ADR-148 decision 13 (Amendment 7): the scheduled backups of ArcadeDB and ClickHouse (and the
++# claims of their own) to the backups bucket by their own roles, and a restore when `restore.set`
++# names a set (templates/backups.yaml has the shape). Empty: none of it is rendered.
 +backups: {}
 +
  # The platform's Ingress in place of Caddy: `className`, `annotations`, `rules` (each `{host,
  # service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
  ingress:
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index b1f979c..d79d95e 100644
---- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
-+++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-@@ -612,6 +612,7 @@ def render_cloud_platform(
- ) -> dict[str, str]:
-     """`values.yaml`, `versions.lock` and `terraform/*.tf`."""
-     from harness.cloud_platform.terraform import render_terraform
-+    from harness.cloud_platform_backups import backups_values
-     from harness.cluster import render_cluster
-     from harness.render import service_images
- 
-@@ -697,6 +698,8 @@ def render_cloud_platform(
-     if _cp(config).connector_hosts:
-         # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
-         environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(_cp(config).connector_hosts))
-+    # Decision 13 (ADR-148 Amendment 7, P9): the backups, and ArcadeDB's claim they are read from.
-+    backups = backups_values(config, platform, workloads, environment)
-     secrets = values["secrets"]
-     secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
-     secrets["defaults"] = {
-@@ -730,6 +733,7 @@ def render_cloud_platform(
-         },
+--- a/OspreyFlow_Core/harness/cloud_platform/__init__.py	2026-11-11 17:09:16
++++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py	2026-11-11 17:09:16
+@@ -731,6 +731,10 @@
          "workloads": workloads,
          "jobs": jobs,
-+        **({"backups": backups} if backups else {}),
      }
++    # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and their Terraform.
++    from harness.cloud_platform_backups import add_backups
++
++    backups_terraform = add_backups(config, platform, out)
      artefacts = {
          "values.yaml": _BANNER
-diff --git a/OspreyFlow_Core/harness/cloud_platform/terraform.py b/OspreyFlow_Core/harness/cloud_platform/terraform.py
-index 25313a3..a80edac 100644
---- a/OspreyFlow_Core/harness/cloud_platform/terraform.py
-+++ b/OspreyFlow_Core/harness/cloud_platform/terraform.py
-@@ -413,6 +413,11 @@ def render_terraform(
-             ),
-         ],  # fmt: skip
+         + yaml.safe_dump(out, sort_keys=False, default_flow_style=False, width=4096),
+@@ -747,4 +751,5 @@
+             for name, text in render_terraform(config, platform, out).items()
+         }
      )
-+    if values.get("backups"):
-+        from harness.cloud_platform_backups import backups_terraform
-+
-+        # Decision 13 (ADR-148 Amendment 7, P9): the backups' bucket, key and role.
-+        files["backups.tf"] = backups_terraform(config, platform)
-     account = secrets.irsa.service_account
-     files["irsa.tf"] = _file(
-         "Decision 4: the service account the Conduit, the workers and the report sync run as,\n"
++    artefacts.update(backups_terraform)
+     return artefacts

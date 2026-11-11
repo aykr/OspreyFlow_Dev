@@ -1,5 +1,10 @@
 # P9 (cut) plan — backups on the cloud-platform profile, and one timed restore
 
+**Superseded as to the design by ADR-148 Amendment 7 (as built).** This plan was written before kind: ClickHouse is
+not handed the role's credentials in the statement (25.8 refuses a token), it writes as a role of its own by its own
+pod; two roles each to its own prefix; a versioned bucket; the claims part; the restore's verify and writers check.
+Kept as the plan it was.
+
 From: ADR-148 decisions 5, 13; Amendment 1 (items 4, 5, 9); BRIEF_P9.md; rules 1, 4, 12, 15.
 
 **Shape.**
