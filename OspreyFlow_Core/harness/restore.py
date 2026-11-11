@@ -89,6 +89,7 @@ from harness.render import (
     DEFAULT_OUT_ROOT,
     RECIPE_REPO_DIRNAME,
     load_config,
+    write_private,
 )
 from harness.site import (
     answer_localhost_with_loopback,
@@ -485,7 +486,8 @@ def _set_env_line(env_path: Path, name: str, value: str) -> None:
         for line in env_path.read_text(encoding="utf-8").splitlines()
         if not line.startswith(f"{name}=")
     ]
-    env_path.write_text("\n".join([*lines, f"{name}={value}"]) + "\n", encoding="utf-8")
+    # Whole or not at all, 600, through a link to its target (every writer of deployment.env).
+    write_private(env_path, "\n".join([*lines, f"{name}={value}"]) + "\n")
 
 
 def restart_identity_provider(compose_file: Path) -> None:

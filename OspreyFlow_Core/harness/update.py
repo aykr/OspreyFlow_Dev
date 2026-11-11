@@ -37,6 +37,7 @@ from typing import Any
 import yaml
 
 from harness import ingest_uploads, model_downloads, store_volumes
+from harness.atomic import replace_whole
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
     GITHUB_API,
@@ -298,6 +299,10 @@ def _put_back(directory: Path, point: Path) -> None:
         if item.is_dir():
             shutil.rmtree(directory / item.name, ignore_errors=True)
             shutil.copytree(item, directory / item.name)
+        elif item.name.endswith(".env"):
+            # The secrets back whole or not at all, a symlink kept a link (every writer of
+            # deployment.env goes through harness.atomic).
+            replace_whole(directory / item.name, item.read_bytes(), mode=0o600)
         else:
             shutil.copy2(item, directory / item.name)
 

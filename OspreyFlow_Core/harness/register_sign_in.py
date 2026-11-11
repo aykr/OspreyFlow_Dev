@@ -46,7 +46,7 @@ from harness.realm import (
     sign_in_rules,
     superset_client,
 )
-from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
+from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config, write_private
 from harness.site import (
     answer_localhost_with_loopback,
     answer_the_deployment_here,
@@ -102,7 +102,8 @@ def _write_env_value(env_path: Path, key: str, value: str) -> None:
             replaced = True
     if not replaced:
         lines.append(f"{key}={value}")
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Whole or not at all, 600, through a link to its target (every writer of deployment.env).
+    write_private(env_path, "\n".join(lines) + "\n")
 
 
 def register(*, issuer: str, realm: str, env_path: Path, config: OspreyConfig) -> list[str]:
