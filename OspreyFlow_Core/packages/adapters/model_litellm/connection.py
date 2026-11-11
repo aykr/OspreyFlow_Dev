@@ -16,8 +16,13 @@ The outcomes, as the LiteLLM proxy answers them:
 - `gateway_token`: 401 naming the proxy's own token: the Conduit and the gateway disagree on the
   gateway's key, a deployment fault, not the provider's;
 - `key_refused`: any other 401 or 403, or the 500 a missing key gives ("AuthenticationError"): the
-  provider refused the key, or there was none;
-- `model_not_offered`: 404: the provider does not offer that model to this key;
+  provider refused the key, or there was none; for an engine signed in by the namespace's IAM role
+  (ADR-135 Amendment 4), also botocore's "Unable to locate credentials" (no identity on the
+  gateway's pod), STS refusing `AssumeRoleWithWebIdentity` (the role does not trust the gateway's
+  service account), and the role's own refusal (403);
+- `model_not_offered`: 404, or Bedrock's 400 "The provided model identifier is invalid" or
+  "on-demand throughput isn't supported" (the model is offered only through an inference
+  profile, whose id is the model to name): the provider does not offer that model so;
 - `cooling_down`: 429 naming a cooldown: the gateway holds an engine back for about a minute after a
   failed call, even once a good key is set (measured), so it says "try again in a minute";
 - `rate_limited`: any other 429: the provider answered but is limiting this key;
@@ -93,6 +98,14 @@ def classify(status: int, body: str) -> Outcome:
         return "ok"
     if status == 400 and "Invalid model name" in body:
         return "not_routed"
+    if status == 400 and (
+        "model identifier is invalid" in body or "on-demand throughput isn" in body
+    ):
+        # Bedrock's `ValidationException` for a model it does not offer (ADR-135 Amendment 4).
+        return "model_not_offered"
+    if "Unable to locate credentials" in body or "AssumeRoleWithWebIdentity" in body:
+        # Bedrock with no identity on the gateway's pod (botocore's words): the role is missing.
+        return "key_refused"
     if status == 401 and "proxy server token" in body:
         return "gateway_token"
     if status in (401, 403):
