@@ -1043,6 +1043,14 @@ carry optional compiled extensions (cp312 among them), under the same licence. T
 `git` was admitted by the image gate's AWAITING_OWNER entry, never by `make licence-check`'s package lists,
 which hold Python and Node packages; that entry goes with the binary.
 
+**L1.9 addition (11 November 2026; ADR-148, the Studio's Athena connector):** `botocore` 1.43.114
+(Apache-2.0), AWS's own client, signs and sends a source's Athena requests from inside the Conduit as
+the deployment's own cloud identity; its new dependency is `jmespath` 1.1.0 (MIT), its others
+(`python-dateutil`, `urllib3`) already in the set. It was already in `uv.lock` only through the optional
+`extraction` extra (cloudpathlib's S3 support), so the lock must be re-made at merge for the Conduit's
+image (`uv sync --frozen`) to carry it. S3 reads go through pyarrow's own S3 filesystem (Apache-2.0,
+already in the set): nothing more.
+
 **ADR-114 decision 13 addition (13 October 2026, Amendment 8):** cosign 2.4.1 (Apache-2.0, Sigstore)
 signs the released images keyless in the user repository's `release.yml` and verifies them before
 `ospreyflow update` changes anything; on the host it runs from its image

@@ -50,6 +50,10 @@
       "StateChangeReason": "TABLE_NOT_FOUND: line 1:15: Table '{table}' does not exist",
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1301, "Retryable": false, "ErrorMessage": "TABLE_NOT_FOUND: line 1:15: Table '{table}' does not exist"}
     },
+    "lake_formation_denied": {
+      "StateChangeReason": "Insufficient Lake Formation permission(s): User: arn:aws:sts::000000000000:assumed-role/synthetic-namespace-role/botocore-session-1 is not authorized to perform: glue:GetTable on resource: arn:aws:glue:eu-west-2:000000000000:table/visits/lake_formation_locked",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Insufficient Lake Formation permission(s) on lake_formation_locked"}
+    },
     "s3_access_denied": {
       "StateChangeReason": "Access denied when writing output to url: s3://synthetic-athena-results/out/{id}.csv . Please ensure you are allowed to access the S3 bucket.",
       "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Access denied when writing output to url: s3://synthetic-athena-results/out/{id}.csv"}

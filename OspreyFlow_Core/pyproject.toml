@@ -59,9 +59,11 @@ dependencies = [
     "dulwich>=1.2.21",
     # The Studio's Athena connector (L1.9; ADR-148): AWS's own client for Athena's API, its
     # request signing and its credential chain (on the `cloud-platform` profile, the namespace's
-    # IAM role for service accounts), so nothing signs a request by hand. Apache-2.0; already in
-    # uv.lock at 1.43.114 through cloudpathlib's extra; its own dependencies are jmespath (MIT),
-    # python-dateutil and urllib3 (already here). S3 reads go through pyarrow's own filesystem.
+    # IAM role for service accounts), so nothing signs a request by hand. Apache-2.0. Until now in
+    # uv.lock only through the optional `extraction` extra (cloudpathlib's S3), so the lock is
+    # re-made at merge, or the Conduit's image (`uv sync --frozen`) would lack it. Its own
+    # dependencies: jmespath (MIT), python-dateutil and urllib3 (already here). S3 reads go through
+    # pyarrow's own filesystem.
     "botocore>=1.43.114",
 ]
 

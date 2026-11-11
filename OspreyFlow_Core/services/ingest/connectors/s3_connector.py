@@ -21,6 +21,7 @@ import csv
 import datetime as dt
 import io
 import json
+import re
 from decimal import Decimal
 from typing import Any, Protocol
 
@@ -30,7 +31,7 @@ import pyarrow.parquet as pq
 from schemas.sources import S3ConnectionSettings, S3Read
 
 from . import reads
-from .reads import ConnectorRefused, ReadRows
+from .reads import ConnectorRefused, ReadOverCap, ReadRows
 
 
 class ObjectStore(Protocol):
@@ -49,43 +50,69 @@ _FORMAT_WORDS = {"csv": "CSV", "parquet": "Parquet"}
 
 
 def refused_by_store(error: OSError) -> ConnectorRefused:
-    """What S3 said, in fixed words: never the store's own message, which names hosts and keys."""
-    said = str(error).upper()
-    if "ACCESS_DENIED" in said or "ACCESSDENIED" in said or "FORBIDDEN" in said:
+    """What S3 said, in fixed words: never the store's own message, which names hosts and keys.
+    Judged by the AWS error code pyarrow quotes (`AWS Error ACCESS_DENIED during …`) alone, never by
+    words anywhere in the message, which also holds the bucket and key (a folder named
+    `forbidden/` is no refusal; the lane review of L1.9)."""
+    found = re.search(r"AWS Error ([A-Z_]+)", str(error))
+    code = found.group(1) if found else ""
+    if code in {"ACCESS_DENIED", "INVALID_ACCESS_KEY_ID", "SIGNATURE_DOES_NOT_MATCH"}:
         return ConnectorRefused(
             "the bucket refused the read (access denied): the deployment's cloud role may not read "
             "it; nothing was read"
         )
-    if "NO_SUCH_BUCKET" in said or "NOSUCHBUCKET" in said or "BUCKET DOES NOT EXIST" in said:
-        return ConnectorRefused("the bucket does not exist; nothing was read")
+    if code in {"NO_SUCH_BUCKET", "RESOURCE_NOT_FOUND"}:
+        return ConnectorRefused(MISSING_BUCKET)
     return ConnectorRefused(
         f"the bucket could not be read ({type(error).__name__}); nothing was read"
     )
+
+
+MISSING_BUCKET = "the bucket does not exist; nothing was read"
+
+
+def list_folder(fs: ObjectStore, bucket: str, base: str, *, recursive: bool) -> list[Any]:
+    """The folder's listing, refused in words. An empty one is checked against the bucket: a listing
+    answers a bucket that does not exist as empty (found on SeaweedFS, L1.9). The bucket is asked
+    for only then, since asking needs `s3:ListBucket` on the whole bucket, which a role limited to
+    a prefix may not hold (the lane review): such a role's empty folder stays an empty folder."""
+    try:
+        found = list(
+            fs.get_file_info(pa_fs.FileSelector(base, recursive=recursive, allow_not_found=True))
+        )
+    except OSError as error:
+        raise refused_by_store(error) from error
+    if not found:
+        try:
+            missing = fs.get_file_info(bucket).type == pa_fs.FileType.NotFound
+        except OSError:
+            missing = False  # not ours to ask: the folder is empty, as far as this role can see
+        if missing:
+            raise ConnectorRefused(MISSING_BUCKET)
+    return found
+
+
+def _hidden(part: str) -> bool:
+    """A `.`- or `_`-name: a part-file, a sync tool's, or a job's (`_temporary/`, `_SUCCESS`)."""
+    return part.startswith((".", "_"))
 
 
 def _objects(
     fs: ObjectStore, settings: S3ConnectionSettings, read: S3Read
 ) -> tuple[str, list[pa_fs.FileInfo]]:
     """The objects to read, in key order, and the folder's name for the words: every object of the
-    read's format under the folder, a hidden one (a part-file, a `.`-name anywhere in its key
-    below the folder) never."""
+    read's format under the folder, a hidden one (a `.`- or `_`-name anywhere in its key below the
+    folder) never."""
     folder = f"{settings.prefix}{read.folder}"
     base = f"{settings.bucket}/{folder}".rstrip("/")
-    try:
-        # The bucket asked for first: a folder's listing answers a bucket that does not exist as
-        # empty (found on SeaweedFS, L1.9), which would be told as "no object" rather than why.
-        if fs.get_file_info(settings.bucket).type == pa_fs.FileType.NotFound:
-            raise ConnectorRefused("the bucket does not exist; nothing was read")
-        found = fs.get_file_info(pa_fs.FileSelector(base, recursive=True, allow_not_found=True))
-    except OSError as error:
-        raise refused_by_store(error) from error
+    found = list_folder(fs, settings.bucket, base, recursive=True)
     suffixes = _SUFFIXES[read.format]
     chosen = [
         info
         for info in found
         if info.type == pa_fs.FileType.File
         and info.path.startswith(base + "/")
-        and not any(p.startswith(".") for p in info.path[len(base) + 1 :].split("/"))
+        and not any(_hidden(p) for p in info.path[len(base) + 1 :].split("/"))
         and info.base_name.lower().endswith(suffixes)
     ]
     chosen.sort(key=lambda i: i.path)
@@ -95,7 +122,7 @@ def _objects(
             f"there is no {_FORMAT_WORDS[read.format]} object under {where}; nothing was written"
         )
     if len(chosen) > MAX_OBJECTS:
-        raise ConnectorRefused(
+        raise ReadOverCap(
             f"{where} holds more than {MAX_OBJECTS} objects, more than one read may take; nothing "
             "was written (rule 2)"
         )
@@ -103,14 +130,14 @@ def _objects(
 
 
 def _over_bytes(where: str) -> ConnectorRefused:
-    return ConnectorRefused(
+    return ReadOverCap(
         f"the objects under {where} come to more than {reads.MAX_BYTES} bytes, more than one read "
         "may take; nothing was written (rule 2)"
     )
 
 
 def _over_rows(where: str) -> ConnectorRefused:
-    return ConnectorRefused(
+    return ReadOverCap(
         f"the objects under {where} hold more than {reads.MAX_ROWS} rows, more than one read may "
         "hold; nothing was written (rule 2)"
     )
@@ -171,18 +198,36 @@ def cell(value: Any) -> Any:
     return value
 
 
-def _parquet_rows(body: bytes, key: str) -> list[dict[str, Any]]:
+def _parquet_rows(body: bytes, key: str, room: int, where: str) -> tuple[list[dict[str, Any]], int]:
+    """The object's rows, and how many bytes they take decoded. Read a row group at a time, each
+    measured decoded before any becomes a row: a small file whose values repeat (dictionary
+    encoded, then compressed) can unpack to far more than the byte cap (the lane review, finding
+    11), so the read stops at the row group that passes it, never holding the whole."""
     try:
-        table = pq.read_table(io.BytesIO(body))
+        parquet = pq.ParquetFile(io.BytesIO(body))
+        groups = []
+        for group in range(parquet.num_row_groups):
+            table = parquet.read_row_group(group)
+            room -= table.nbytes
+            if room < 0:
+                raise _over_bytes(where)
+            groups.append(table)
+    except ConnectorRefused:
+        raise
     except Exception as exc:  # pyarrow's own errors, of several kinds
         raise ConnectorRefused(f"{key} is not a Parquet file pyarrow can read; nothing was "
                                "written") from exc  # fmt: skip
-    return [{k: cell(v) for k, v in row.items()} for row in table.to_pylist()]
+    rows = [{k: cell(v) for k, v in row.items()} for t in groups for row in t.to_pylist()]
+    return rows, sum(t.nbytes for t in groups)
 
 
-def _parquet_count(body: bytes, key: str) -> int:
+def _parquet_count(body: bytes, key: str) -> tuple[int, int]:
+    """A Parquet object's rows and its uncompressed size, from its footer, before any row is read:
+    a small, well-compressed file can unpack to far more than the byte cap (the lane review)."""
     try:
-        return int(pq.ParquetFile(io.BytesIO(body)).metadata.num_rows)
+        meta = pq.ParquetFile(io.BytesIO(body)).metadata
+        size = sum(meta.row_group(g).total_byte_size for g in range(meta.num_row_groups))
+        return int(meta.num_rows), int(size)
     except Exception as exc:
         raise ConnectorRefused(f"{key} is not a Parquet file pyarrow can read; nothing was "
                                "written") from exc  # fmt: skip
@@ -201,10 +246,16 @@ def read_s3(fs: ObjectStore, settings: S3ConnectionSettings, read: S3Read) -> Re
         bodies.append((info.path.split("/", 1)[1], body))
     records: list[dict[str, Any]] = []
     if read.format == "parquet":
-        if sum(_parquet_count(body, key) for key, body in bodies) > reads.MAX_ROWS:
+        counts = [_parquet_count(body, key) for key, body in bodies]
+        if sum(rows for rows, _size in counts) > reads.MAX_ROWS:
             raise _over_rows(where)
+        if sum(size for _rows, size in counts) > reads.MAX_BYTES:
+            raise _over_bytes(where)
+        decoded = reads.MAX_BYTES
         for key, body in bodies:
-            records += _parquet_rows(body, key)
+            found, used = _parquet_rows(body, key, decoded, where)
+            decoded -= used
+            records += found
     else:
         for key, body in bodies:
             records += _csv_records(body, key)

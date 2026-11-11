@@ -120,15 +120,20 @@ def test_test_connection_lists_as_the_granted_role_and_is_refused_as_another() -
                             created_at=datetime(2026, 11, 11, tzinfo=UTC), settings=_settings(),
                             datasets=["ds-a"])  # fmt: skip
 
-    def tested(identity: str) -> Any:
+    def tested(identity: str, of: Connection = connection) -> Any:
         # The stand-in is on this machine, which the deployment's own check never admits: a
         # fixture's check stands in for it, named here (as the SQL live tests do).
         readers = Readers(s3_store=lambda _s: _as(identity), host_check=lambda *_a: None)
-        return asyncio.run(check_connection(connection, readers))
+        return asyncio.run(check_connection(of, readers))
 
     assert tested("reader").ok is True
     refused = tested("other")
     assert refused.ok is False and refused.words.startswith("the bucket refused the read")
+    # The lane review, finding 3: a missing bucket is told so at Test, as at a read.
+    nowhere = connection.model_copy(update={"settings": S3ConnectionSettings(
+        region="eu-west-2", bucket="synthetic-nowhere")})  # fmt: skip
+    missing = tested("setup", nowhere)
+    assert (missing.ok, missing.words) == (False, "the bucket does not exist; nothing was read")
 
 
 @pytest.mark.usefixtures("bucket")

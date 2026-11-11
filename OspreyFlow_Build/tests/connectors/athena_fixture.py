@@ -157,7 +157,9 @@ class RecordedAthena:
             match = _SELECT_ALL.match(query) or _FROM.search(query)
             if match:
                 db, table = match.group(1).lower(), match.group(2).lower()
-                if table not in self.tables.get(db, {}):
+                if table == "lake_formation_locked":
+                    execution.outcome = "lake_formation_denied"  # a FAILED reason naming the role
+                elif table not in self.tables.get(db, {}):
                     execution.outcome = "table_not_found"
                     execution.fill = {"table": f"awsdatacatalog.{db}.{table}"}
                 else:

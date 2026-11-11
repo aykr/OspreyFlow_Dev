@@ -32,7 +32,7 @@ import asyncpg
 from schemas.sources import SQL_COLUMN, ConnectionTest, SqlConnectionSettings, SqlRead
 
 from . import reads
-from .reads import ConnectorRefused, ReadRows, as_text
+from .reads import ConnectorRefused, ReadOverCap, ReadRows, as_text
 
 Connect = Callable[..., Awaitable[Any]]
 #: How long one statement may run on the client's database, in milliseconds.
@@ -291,7 +291,7 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
     if watermark is not None:
         sql += f" ORDER BY s.{_quoted(watermark)}, s.{_TAKEN}"
     sql += f" LIMIT {reads.MAX_ROWS + 1}"
-    over_bytes = ConnectorRefused(
+    over_bytes = ReadOverCap(
         f"the table's rows come to more than {cap} bytes, more than one read may take; nothing "
         "was written (rule 2)"
     )
@@ -308,7 +308,7 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
         if taken > cap:
             raise over_bytes
         if len(rows) == reads.MAX_ROWS:
-            raise ConnectorRefused(
+            raise ReadOverCap(
                 f"the table holds more than {reads.MAX_ROWS} rows to read, more than one read "
                 "may hold; nothing was written (rule 2)"
             )

@@ -39,7 +39,7 @@ import pyarrow.parquet as pq
 import pytest
 from pydantic import ValidationError
 from services.ingest.connectors import reads, s3_connector
-from services.ingest.connectors.reads import ConnectorRefused, write_snapshot
+from services.ingest.connectors.reads import ConnectorRefused, ReadOverCap, write_snapshot
 from services.ingest.connectors.s3_connector import read_s3
 
 from schemas.sources import (
@@ -139,9 +139,12 @@ class _Watched:
     every object (as an object rewritten larger after it was listed would look)."""
 
     def __init__(self, inner: pa_fs.FileSystem, listed_size: int | None = None) -> None:
-        self.inner, self.listed_size, self.opened = inner, listed_size, []
+        self.inner, self.listed_size = inner, listed_size
+        self.opened: list[str] = []
+        self.infos: list[str] = []
 
     def get_file_info(self, selector: Any) -> Any:
+        self.infos.append("selector" if isinstance(selector, pa_fs.FileSelector) else selector)
         found = self.inner.get_file_info(selector)
         if self.listed_size is None or not isinstance(selector, pa_fs.FileSelector):
             return found
@@ -194,10 +197,63 @@ def test_parquet_rows_past_the_cap_are_refused_from_the_footer(
     _put_parquet(bucket, "client-a/calls/part-0.parquet", _calls())
     monkeypatch.setattr(reads, "MAX_ROWS", 2)
     read_rows: list[object] = []
-    monkeypatch.setattr(s3_connector, "_parquet_rows", lambda *a: read_rows.append(a) or [])
+    monkeypatch.setattr(s3_connector, "_parquet_rows", lambda *a: read_rows.append(a) or ([], 0))
     with pytest.raises(ConnectorRefused, match=r"more than 2 rows.*rule 2"):
         read_s3(bucket, _settings(), S3Read(folder="calls/", format="parquet"))
     assert read_rows == []  # refused from the footer's count, before a row was read
+
+
+def test_a_job_s_underscore_files_are_never_read(bucket: pa_fs.FileSystem) -> None:
+    """A Spark job's `_temporary/…/part-*.csv` (the lane review of L1.9, finding 16)."""
+    rows = read_s3(bucket, _settings(), S3Read(folder="visits/2026/", format="csv"))
+    assert "V-TEMP" not in {r["visit_id"] for r in rows.rows}
+
+
+def test_a_missing_bucket_is_told_so_not_read_as_an_empty_folder(bucket: pa_fs.FileSystem) -> None:
+    missing = S3ConnectionSettings(region="eu-west-2", bucket="synthetic-nowhere")
+    with pytest.raises(ConnectorRefused, match="^the bucket does not exist; nothing was read$"):
+        read_s3(bucket, missing, S3Read(folder="", format="csv"))
+
+
+def test_the_bucket_is_asked_for_only_when_the_folder_is_empty(bucket: pa_fs.FileSystem) -> None:
+    """Asking for the bucket needs ListBucket on all of it, which a role limited to a prefix may not
+    hold (the lane review, finding 5): a folder with objects never asks."""
+    watched = _Watched(bucket)
+    read_s3(watched, _settings(), S3Read(folder="visits/2026/", format="csv"))
+    assert watched.infos == ["selector"]
+
+
+@pytest.mark.parametrize(
+    ("message", "words"),
+    [
+        ("When listing objects under key 'forbidden/' in bucket 'b': AWS Error NETWORK_CONNECTION "
+         "during ListObjectsV2 operation", "the bucket could not be read"),
+        ("When listing objects under key 'nosuchbucket/': AWS Error ACCESS_DENIED during "
+         "ListObjectsV2 operation: Access Denied.", "the bucket refused the read (access denied)"),
+        ("When reading information for key '' in bucket 'b': AWS Error NO_SUCH_BUCKET during "
+         "HeadBucket operation", "the bucket does not exist"),
+    ],
+)  # fmt: skip
+def test_a_store_s_refusal_is_judged_by_its_code_not_by_a_key_s_words(
+    message: str, words: str
+) -> None:
+    assert str(s3_connector.refused_by_store(OSError(message))).startswith(words)
+
+
+def test_parquet_past_the_byte_cap_decoded_is_refused_before_its_rows_are_made(
+    bucket: pa_fs.FileSystem, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A small file whose values repeat unpacks to far more than the cap (finding 11): refused at
+    the row group that passes it, decoded, before any Python row is made."""
+    many = pa.table({"note": ["the same synthetic words, again and again"] * 20_000})
+    _put_parquet(bucket, "client-a/calls/part-0.parquet", many)
+    compressed = bucket.get_file_info(f"{BUCKET}/client-a/calls/part-0.parquet").size
+    monkeypatch.setattr(reads, "MAX_BYTES", compressed * 4)
+    made: list[object] = []
+    monkeypatch.setattr(s3_connector, "cell", lambda v: made.append(v) or v)
+    with pytest.raises(ReadOverCap, match="rule 2"):
+        read_s3(bucket, _settings(), S3Read(folder="calls/", format="parquet"))
+    assert made == []
 
 
 def test_an_empty_folder_is_refused_in_words(bucket: pa_fs.FileSystem) -> None:

@@ -32,7 +32,7 @@ import pyarrow.fs as pa_fs
 import pytest
 from fastapi.testclient import TestClient
 from services.api import connector_reads
-from services.api.app import READ_REFUSED_FOR_AUTHORS, app
+from services.api.app import READ_OVER_CAP_FOR_AUTHORS, READ_REFUSED_FOR_AUTHORS, app
 from services.api.connector_reads import Readers
 from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.sources import InMemorySourceStore
@@ -294,9 +294,26 @@ def test_a_read_past_the_byte_cap_is_refused_with_its_typed_error_and_writes_not
     monkeypatch.setattr(reads, "MAX_BYTES", 100)
     refused = _register(world, "ds-a", connection_id, "author_a", kind)
     assert refused.status_code == 422
-    assert refused.json()["detail"]["error"] == "read_refused"
+    # Its own type, rule 2's, and words that say so to an author (never the settings).
+    assert refused.json()["detail"] == {"error": "read_over_cap",
+                                        "detail": READ_OVER_CAP_FOR_AUTHORS}  # fmt: skip
     assert list((world.root / "uploaded" / "ds-a").iterdir()) == []
     assert world.sources._sources == {}
     why = [e["resolved_query"]["why"] for e in world.audit.entries
            if e["action"] == "connector_read_refused"]  # fmt: skip
     assert len(why) == 1 and "more than 100 bytes" in why[0] and "rule 2" in why[0]
+    # A refusal that is not a cap keeps the general type: the two are told apart.
+    monkeypatch.setattr(reads, "MAX_BYTES", 256 * 1024 * 1024)
+    world.readers.allowed_hosts = []
+    other = _register(world, "ds-a", connection_id, "author_a", kind)
+    assert other.json()["detail"]["error"] == "read_refused"
+
+
+def test_test_connection_tells_a_missing_bucket(world: SimpleNamespace) -> None:
+    """The lane review, finding 3: the read's missing-bucket fix had not reached Test connection."""
+    body = {"kind": "s3", "name": "Nowhere", "datasets": ["ds-a"],
+            "settings": {**SETTINGS["s3"], "bucket": "synthetic-nowhere"}}  # fmt: skip
+    made = world.client.post("/v1/admin/connections", json=body, headers=_as("admin")).json()
+    world.readers.allowed_hosts = ["synthetic-nowhere.s3.eu-west-2.amazonaws.com"]
+    tested = world.client.post(f"/v1/admin/connections/{made['id']}/test", headers=_as("admin"))
+    assert tested.json() == {"ok": False, "words": "the bucket does not exist; nothing was read"}

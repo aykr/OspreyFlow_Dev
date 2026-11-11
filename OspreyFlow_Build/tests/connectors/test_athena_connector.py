@@ -88,11 +88,70 @@ def test_every_page_is_read_at_1000_rows_a_page() -> None:
     assert athena.page_sizes == [1000, 1000, 1000]
 
 
-def test_a_named_query_is_read() -> None:
+def test_a_named_query_lands_as_the_golden_file(tmp_path: Path) -> None:
     athena = _athena()
+    athena.named_queries[SELECT_NQ]["QueryString"] = "SELECT * FROM visits.visit_bookings"
     rows = _read(athena, AthenaRead(named_query=SELECT_NQ))
-    assert athena.sent == [athena.named_queries[SELECT_NQ]["QueryString"]]
-    assert len(rows.rows) == 3
+    assert athena.sent == ["SELECT * FROM visits.visit_bookings"]
+    landed = write_snapshot(rows, tmp_path, "bookings").read_text(encoding="utf-8")
+    assert landed == (GOLDEN / "athena_visit_bookings.csv").read_text(encoding="utf-8")
+
+
+# The lane review of L1.9, finding 2: the saved query's own Database was checked, but its text could
+# name another database or catalog, and read any table the role could reach.
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT * FROM finance.ledger",
+        'SELECT * FROM "finance"."ledger"',
+        'SELECT * FROM "othercatalog"."visits"."many"',
+        "SELECT * FROM visits.many m JOIN finance.ledger l ON true",
+        "SELECT * FROM visits.many m LEFT OUTER JOIN finance.ledger l ON true",
+        "SELECT * FROM visits.many, finance.ledger",
+        "SELECT * FROM visits.many AS m, finance.ledger AS l",
+        "SELECT * FROM (SELECT * FROM finance.ledger) t",
+        "WITH x AS (SELECT * FROM finance.ledger) SELECT * FROM x",
+        "SELECT * FROM visits.many WHERE booking_id IN (SELECT entry FROM finance.ledger)",
+        "SELECT coalesce((SELECT max(entry) FROM finance.ledger), 'x') FROM visits.many",
+        "SELECT * FROM information_schema.tables",
+        "SELECT * FROM TABLE(system.query(query => 'SELECT 1'))",
+        "SELECT * FROM visits.many UNION ALL SELECT * FROM finance.ledger",
+        "SELECT * FROM -- a comment\n finance.ledger",
+    ],
+)
+def test_a_named_query_naming_a_table_outside_the_connection_is_never_sent(statement: str) -> None:
+    athena = _athena()
+    athena.named_queries[SELECT_NQ]["QueryString"] = statement
+    with pytest.raises(ConnectorRefused, match="reads a table outside the databases"):
+        _read(athena, AthenaRead(named_query=SELECT_NQ))
+    assert athena.sent == []
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT * FROM visits.visit_bookings",
+        "SELECT * FROM visit_bookings",
+        'SELECT * FROM "AwsDataCatalog"."visits"."many"',
+        "SELECT extract(year FROM b.booked_for) AS y FROM visits.visit_bookings b",
+        "SELECT 'FROM finance.ledger' AS words FROM visits.visit_bookings",
+        "SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1, 2]) AS t(n)",
+        "WITH x AS (SELECT * FROM visits.many) SELECT * FROM x JOIN visits.visit_bookings b ON true",
+    ],
+)
+def test_a_named_query_reading_only_the_connection_s_databases_is_allowed(statement: str) -> None:
+    athena_connector.refuse_relations_outside(statement, _settings())
+
+
+def test_athena_s_own_words_never_carry_an_arn() -> None:
+    """A Lake Formation refusal fails the execution with a reason naming the role it refused."""
+    athena = _athena()
+    with pytest.raises(ConnectorRefused) as refused:
+        _read(athena, AthenaRead(table="visits.lake_formation_locked"))
+    words = str(refused.value)
+    assert words.startswith("Athena could not run the query: Insufficient Lake Formation")
+    assert "arn:" not in words and "synthetic-namespace-role" not in words
+    assert "000000000000" not in words
 
 
 @pytest.mark.parametrize(

@@ -15,7 +15,7 @@ index 47fc94c7..0e41d344 100644
 +          -v ${{ github.workspace }}/OspreyFlow_Build/tests/connectors/golden/seaweedfs_s3.json:/etc/seaweedfs/s3.json:ro
 +          chrislusf/seaweedfs:4.48 server -s3 -dir=/data -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
 +          -volume.max=10 -master.volumeSizeLimitMB=64 -master.volumePreallocate=false
-+          && for i in $(seq 1 30); do curl -fs http://127.0.0.1:58333/healthz && break; sleep 2; done
++          && (for i in $(seq 1 30); do curl -fs http://127.0.0.1:58333/healthz && exit 0; sleep 2; done; exit 1)
        # Everything the `conformance`/`conformance-model` jobs above already cover against a live
        # store or a live model runs here instead against nothing — every other test runs here.
        # **What is actually still excluded, current as of the reconciliation below, not the

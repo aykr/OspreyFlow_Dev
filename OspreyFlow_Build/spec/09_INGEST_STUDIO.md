@@ -330,23 +330,34 @@ are, each read **read-only** and landing as the source's one file exactly as abo
   verified over TLS).
 - **S3**: a connection names its region, bucket and the folder its sources may read under; a source names
   a folder under that and a format, CSV or Parquet, and reads every object of that format there and in
-  the folders below, in key order, a hidden object (a `.`-name, a part-file) never. A folder is a name,
-  never a pattern: it cannot climb out of the connection's. The bucket is asked for first, so a missing
-  bucket is told so rather than read as an empty folder. Rows of several objects are put together by
+  the folders below, in key order, a hidden object (a `.`- or `_`-name anywhere below the folder: a
+  part-file, a job's `_temporary/` or `_SUCCESS`) never. A folder is a name, never a pattern: it cannot
+  climb out of the connection's. A listing answers a missing bucket as empty, so an empty folder is
+  checked against the bucket and a missing one told so, at a read and at *Test connection* alike; the
+  bucket is asked for only then, since asking needs `s3:ListBucket` on all of it, which a role limited
+  to a prefix may not hold. A store's refusal is judged by its AWS error code, never by words in a key.
+  The endpoint is named (`s3.<region>.amazonaws.com`, virtual-hosted), never taken from the environment. Rows of several objects are put together by
   column name; a header naming a column twice is refused. A Parquet date or time is written in ISO 8601,
   a decimal as written, a list as compact JSON; a binary column is refused.
 - **Athena**: a connection names its region, workgroup, catalog, the databases its sources may read and,
   for a workgroup that names none, where Athena writes results. A source reads **a table**
   (`database.table`, made into `SELECT * FROM "database"."table"` from the two checked names: never an
   expression, rule 8) or **a named query** saved in Athena, run only if it is saved in the connection's
-  workgroup, against one of its databases, and is one SELECT (or WITH … SELECT); anything else, a second
-  statement included, is refused **before it is sent**. Results are paged a thousand rows at a time; a
-  query running past 300 seconds is stopped and refused. A query that does not parse or names a missing
-  table, and a role Athena does not grant, are refused in words, never read as no rows.
+  workgroup, against one of its databases, and is one SELECT (or WITH … SELECT), **reading only the
+  connection's databases**: every table after FROM or JOIN, and in a FROM's comma list, unqualified (the
+  query's own database), `database.table` or `catalog.database.table` within the connection's. Anything
+  else, a second statement, a table function or a table of another database or catalog, is refused
+  **before it is sent**; what the checker does not understand is refused too (the role's IAM policy is
+  the second line, not the first). Results are paged a thousand rows at a time; a query running past 300
+  seconds is stopped and refused. A query that does not parse or names a missing table, and a role
+  Athena or Lake Formation does not grant, are refused in words, never read as no rows; Athena's own
+  words lose any ARN or access key id before they are audited or shown to an administrator.
 - **The caps are the same and refused whole** (rule 2): S3's objects are listed and their sizes summed
   before any is opened, more than 1,000 objects is refused, a Parquet object's rows are counted from its
-  footer before any is read, and each object is read only as far as the room left; Athena's rows, bytes
-  and pages are counted as they come and paging stops at the cap.
+  footer before any is read and its values measured decoded, a row group at a time, before any becomes a
+  row, and each object is read only as far as the room left; Athena's rows, bytes and pages are counted
+  as they come and paging stops at the cap. A read past any cap is answered with its own type,
+  `read_over_cap`, and fixed words for a source author; other refusals stay `read_refused`.
 - **Test connection** lists the S3 folder one level (nothing opened) or asks Athena for the workgroup.
 - **Proved against stand-ins** (part 1): SeaweedFS for S3 (`tests/connectors/test_s3_connector_live.py`,
   the same golden files, and the server's own access-denied and missing-bucket answers), and for Athena a

@@ -39,6 +39,7 @@ from services.ingest.connectors.athena_connector import read_athena
 from services.ingest.connectors.athena_connector import refused_request as athena_refused
 from services.ingest.connectors.reads import (
     ConnectorRefused,
+    ReadOverCap,
     ReadRows,
     check_egress,
     egress_allow_list,
@@ -46,7 +47,7 @@ from services.ingest.connectors.reads import (
     read_json,
     write_snapshot,
 )
-from services.ingest.connectors.s3_connector import ObjectStore, read_s3, refused_by_store
+from services.ingest.connectors.s3_connector import ObjectStore, list_folder, read_s3
 from services.ingest.connectors.sql_connector import (
     Connect,
     Reach,
@@ -119,10 +120,14 @@ def cloud_s3_store(settings: S3ConnectionSettings) -> ObjectStore:
     """The bucket, through pyarrow's S3 filesystem signed in as the deployment's own cloud identity
     (L1.9; ADR-148): given no key, the SDK's own chain finds it (on the `cloud-platform` profile,
     the namespace's IAM role for service accounts). Never given one: no connection holds a key.
-    Virtual-hosted, so the one host it reaches is `settings.host()`, the one the egress check
-    names."""
+    The endpoint is named, never taken from the environment (`AWS_ENDPOINT_URL`), and addressed
+    virtual-hosted, so the one host it reaches is `settings.host()`, the one the egress check
+    names (the lane review of L1.9). Unlike SQL and API, the checked addresses are not pinned: the
+    SDK resolves the name itself, and the name is AWS's own, made from a checked region and bucket,
+    never typed, so no one but AWS answers for it."""
     store: ObjectStore = pa_fs.S3FileSystem(
         region=settings.region, scheme="https", access_key=None, secret_key=None,
+        endpoint_override=f"s3.{settings.region}.amazonaws.com", force_virtual_addressing=True,
         allow_bucket_creation=False, allow_bucket_deletion=False,
         connect_timeout=10, request_timeout=30,
     )  # fmt: skip
@@ -395,7 +400,7 @@ def _json_files(dataset_id: str, pattern: str, root: Path) -> list[tuple[str, by
                 and candidate.is_file()
             ):
                 matched.append((candidate.name, candidate))
-    over = ConnectorRefused(
+    over = ReadOverCap(
         f"the JSON files come to more than {reads.MAX_BYTES} bytes, more than one read may "
         "take; nothing was read (rule 2)"
     )
@@ -474,7 +479,7 @@ async def read_rows(
         return await asyncio.to_thread(read_s3, readers.s3_store(settings), settings, read)
     if isinstance(settings, AthenaConnectionSettings) and isinstance(read, AthenaRead):
         await asyncio.to_thread(readers.check, "athena", settings.host())
-        client = readers.athena_client(settings)
+        client = await asyncio.to_thread(readers.athena_client, settings)  # loads its model
         return await asyncio.to_thread(read_athena, client, settings, read)
     raise ConnectorRefused(
         f"the source's read is not one a {connection.kind} connection takes; nothing was read"
@@ -572,13 +577,10 @@ def _check_cloud(
     """*Test connection* for S3 (the prefix listed, one level, nothing opened) and Athena (the
     workgroup asked for), signed in as the deployment's own identity (L1.9)."""
     if isinstance(settings, S3ConnectionSettings):
+        # The read's own listing, so a missing bucket is told here as at a read (the lane review:
+        # the sibling path that did not have the read's fix).
         base = f"{settings.bucket}/{settings.prefix}".rstrip("/")
-        try:
-            readers.s3_store(settings).get_file_info(
-                pa_fs.FileSelector(base, recursive=False, allow_not_found=True)
-            )
-        except OSError as error:
-            raise refused_by_store(error) from error
+        list_folder(readers.s3_store(settings), settings.bucket, base, recursive=False)
         return ConnectionTest(ok=True, words="The bucket answered, and its folder can be listed.")
     try:
         readers.athena_client(settings).get_work_group(WorkGroup=settings.workgroup)
