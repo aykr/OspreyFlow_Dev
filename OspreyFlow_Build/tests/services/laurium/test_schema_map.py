@@ -36,7 +36,7 @@ CONFORMANCE_SCHEMA = {
 
 def _profile_schema() -> dict[str, Any]:
     ontology = load_default_ontology()
-    names = [t.name for t in ontology.entity_types][:4]
+    names = [t.name for t in ontology.entity_types]
     return build_schema(ExtractionProfile(names), ontology)
 
 
@@ -140,38 +140,99 @@ def test_a_required_property_left_out_is_refused() -> None:
         _model(CONFORMANCE_SCHEMA).model_validate({})  # type: ignore[attr-defined]
 
 
+def _one(prop: dict[str, Any]) -> dict[str, Any]:
+    """A schema whose one top-level property `a` is `prop`, required, so the top level is well
+    formed and `prop` reaches its own refusal (rule 15's second clause: without `required` each was
+    refused at the top level before its own check ran)."""
+    return {
+        "type": "object",
+        "properties": {"a": prop},
+        "required": ["a"],
+        "additionalProperties": False,
+    }
+
+
 @pytest.mark.parametrize(
-    "schema",
+    ("schema", "words"),
     [
-        {"type": "array", "items": {"type": "string"}},
-        {"type": "object", "properties": {"a": {"oneOf": [{"type": "string"}]}}},
-        {"type": "object", "properties": {"a": {"$ref": "#/$defs/x"}}},
+        ({"type": "array", "items": {"type": "string"}}, "top level must be an object"),
+        (_one({"oneOf": [{"type": "string"}]}), "'a' uses oneOf"),
+        (_one({"$ref": "#/$defs/x"}), r"'a' uses \$ref"),
         # A combinator beside a type: Laurium would be given the type alone.
-        {
-            "type": "object",
-            "properties": {"a": {"type": "string", "oneOf": [{"maxLength": 3}]}},
-            "required": ["a"],
-        },
-        {"type": "object", "properties": {"a": {"type": ["string", "null"]}}},
-        {"type": "object", "properties": {"a": {"type": "object"}}},
-        {"type": "object", "properties": {"a": {"type": "array"}}},
-        {"type": "object", "properties": {"a": {"type": "string", "enum": [1, 2]}}},
-        {"type": "object", "properties": {}},
+        (_one({"type": "string", "oneOf": [{"maxLength": 3}]}), "'a' uses oneOf"),
+        (_one({"type": ["string", "null"]}), "'a' has no single type"),
+        (_one({"type": "object"}), "'a' is an object with no declared properties"),
+        (_one({"type": "array"}), "'a' is an array with no declared items"),
+        (_one({"type": "string", "enum": [1, 2]}), "'a': only an enum of strings"),
+        (_one({"type": "integer", "enum": [1, 2]}), "'a': only an enum of strings"),
+        (_one({"type": "string", "enum": []}), "'a': only an enum of strings"),
+        ({"type": "object", "properties": {}}, "the schema is an object with no declared"),
         # Undeclared properties allowed in so many words; otherwise well formed. (Left unsaid, they
         # are not refused: Laurium's model forbids them in the answer, stricter than the schema.)
-        {
-            "type": "object",
-            "properties": {"a": {"type": "string"}},
-            "required": ["a"],
-            "additionalProperties": True,
-        },
+        (
+            {**_one({"type": "string"}), "additionalProperties": True},
+            "allows properties it does not declare",
+        ),
         # A top-level property not required: Laurium makes every field required.
-        {"type": "object", "properties": {"a": {"type": "string"}}, "required": []},
+        (
+            {"type": "object", "properties": {"a": {"type": "string"}}, "required": []},
+            "every top-level property must be required",
+        ),
     ],
 )
-def test_a_schema_outside_the_subset_is_refused(schema: dict[str, Any]) -> None:
-    with pytest.raises(UnsupportedSchema):
+def test_a_schema_outside_the_subset_is_refused_for_its_own_reason(
+    schema: dict[str, Any], words: str
+) -> None:
+    """Each refusal is matched by its own words, so a case refused by another rule fails here."""
+    Draft202012Validator.check_schema(schema)  # a valid JSON Schema: only the subset refuses it
+    with pytest.raises(UnsupportedSchema, match=words):
         laurium_schema(schema)
+
+
+# --- every entity type of the default ontology and of the fibo and niem packs ---------------------
+
+
+def _ontologies() -> list[tuple[str, Any]]:
+    from ontology.packs import compose_with_packs
+
+    base = load_default_ontology()
+    return [
+        ("default", base),
+        ("fibo", compose_with_packs(base, ["fibo"])),
+        ("niem", compose_with_packs(base, ["niem"])),
+    ]
+
+
+def _every_type() -> list[tuple[str, str]]:
+    return [(label, t.name) for label, onto in _ontologies() for t in onto.entity_types]
+
+
+@pytest.mark.parametrize(("label", "name"), _every_type(), ids=lambda v: str(v))
+def test_every_entity_type_maps_and_round_trips(label: str, name: str) -> None:
+    """Not a sample: each entity type of the default ontology and of each pack, alone, as the
+    extraction profile builds its schema, maps to Laurium's and a filled finding round-trips."""
+    onto = dict(_ontologies())[label]
+    schema = build_schema(ExtractionProfile([name]), onto)
+    _round_trip(schema)
+
+
+@pytest.mark.parametrize("label", ["default", "fibo", "niem"])
+def test_every_entity_type_together_maps(label: str) -> None:
+    onto = dict(_ontologies())[label]
+    schema = build_schema(ExtractionProfile([t.name for t in onto.entity_types]), onto)
+    assert set(laurium_schema(schema)) == {t.name for t in onto.entity_types}
+
+
+def _round_trip(schema: dict[str, Any]) -> None:
+    model = _model(schema)
+    instance = {
+        name: [{key: _sample(sub) for key, sub in prop["items"]["properties"].items()}]
+        for name, prop in schema["properties"].items()
+    }
+    Draft202012Validator(schema).validate(instance)
+    back = output_for(model.model_validate(instance), schema)  # type: ignore[attr-defined]
+    Draft202012Validator(schema).validate(back)
+    assert back == instance
 
 
 def test_each_field_is_described_with_its_own_schema() -> None:
