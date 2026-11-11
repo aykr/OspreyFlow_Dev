@@ -3,10 +3,15 @@ engine kinds is trusted against them (`06_DECISIONS.md` ADR-135 Amendment 4; `CL
 second worked example: a fixture models the dependency's refusals, not only its grants).
 
 - **The client's own AI gateway** (OpenAI-compatible, reached through LiteLLM's `openai/` route at
-  its address): no token, a wrong token, a model it does not offer.
+  its address, with or without a trailing slash): no token, a wrong token, a model it does not
+  offer, a model its policy refuses (403), its own rate limit (429), and a refusal in a shape that
+  is not OpenAI's from whatever stands in front of it.
 - **Bedrock in London**, signed by the gateway pod's own identity (the namespace's IAM role): no
-  identity at all, a role the account does not allow, a region other than London, a model not
-  offered, throttling.
+  identity at all, a role the account does not allow, the role not trusting the service account,
+  the role's credentials expired, a model not granted to the account, a model not offered or
+  offered only through an inference profile, throttling. No other region: `engine_refusal` holds
+  every Bedrock engine to London before an entry is made (`test_model_engine_kinds.py`), so a call
+  elsewhere cannot be asked for, and the stand-in models none.
 
 Each request is the shape `GatewayAdmin.add_entry` writes and `check_connection` sends; each
 refusal is the status and words LiteLLM gives back, so `connection.classify` sees what it would.
@@ -115,6 +120,55 @@ async def test_the_client_gateway_refuses_a_model_it_does_not_offer() -> None:
     assert classify(refused.status_code, refused.text) == "model_not_offered"
 
 
+async def _token_at(
+    gateway: StandInGateway, base: str, model: str = "gpt-4o-mini"
+) -> httpx.Response:
+    async with _client(gateway) as client:
+        await _add(client, f"acme/{model}",
+                   {"model": f"openai/{model}", "api_base": base, "api_key": TOKEN})  # fmt: skip
+        return await _chat(client, f"acme/{model}")
+
+
+async def test_the_client_gateway_answers_at_its_address_with_or_without_a_trailing_slash() -> None:
+    for base in (BASE, f"{BASE}/"):
+        gateway = _gateway()
+        assert (await _token_at(gateway, base)).status_code == 200
+        assert gateway.sent == [(base, TOKEN)]
+
+
+async def test_the_client_gateway_refuses_a_model_its_policy_does_not_allow() -> None:
+    gateway = _gateway()
+    gateway.client_gateways[BASE].refused_by_policy = frozenset({"gpt-4o-mini"})
+    refused = await _token_at(gateway, BASE)
+    assert refused.status_code == 403 and "policy" in refused.text
+    assert classify(refused.status_code, refused.text) == "key_refused"
+
+
+async def test_the_client_gateway_s_own_rate_limit_is_a_rate_limit() -> None:
+    gateway = _gateway()
+    gateway.client_gateways[BASE].rate_limited = True
+    refused = await _token_at(gateway, BASE)
+    assert refused.status_code == 429
+    assert classify(refused.status_code, refused.text) == "rate_limited"
+
+
+async def test_the_client_gateway_refuses_in_a_shape_that_is_not_openai_s() -> None:
+    # Something in front of it (an API manager, a firewall) refuses in its own shape; the OpenAI
+    # client keeps the status. The classifier reads a 403 as refused and a 400 as nothing it knows
+    # (`unreachable`), which *Admin › Models* says as refused for this kind
+    # (`test_model_engine_kinds.py`).
+    for status, body, read in (
+        (403, "<html><title>403 Forbidden</title></html>", "key_refused"),
+        (400, '{"fault":{"faultstring":"Request rejected"}}', "unreachable"),
+    ):
+        gateway = _gateway()
+        gateway.client_gateways[BASE].refusal = (status, body)
+        refused = await _token_at(gateway, BASE)
+        assert refused.status_code == status
+        assert ("403 Forbidden" if status == 403 else "Request rejected") in refused.text
+        assert classify(refused.status_code, refused.text) == read
+
+
 async def test_an_address_with_no_gateway_behind_it_is_not_reachable() -> None:
     gateway = _gateway()
     async with _client(gateway) as client:
@@ -155,10 +209,37 @@ async def test_bedrock_refuses_a_role_the_account_does_not_allow() -> None:
     assert classify(refused.status_code, refused.text) == "key_refused"
 
 
-async def test_bedrock_refuses_a_region_other_than_london() -> None:
-    refused = await _bedrock(_gateway(), region="us-east-1")
-    assert refused.status_code == 403 and "explicit deny" in refused.text
-    assert classify(refused.status_code, refused.text) == "key_refused"
+async def test_bedrock_refuses_a_model_the_account_has_not_been_granted_as_model_access() -> None:
+    # The role signed in (it is recorded as signed), but the model's access is not granted: not the
+    # role's permissions, so the classifier must not read it as the role refused.
+    gateway = _gateway()
+    assert gateway.bedrock is not None
+    gateway.bedrock.enabled_models = frozenset()
+    refused = await _bedrock(gateway)
+    assert refused.status_code == 403
+    assert "have access to the model with the specified model ID" in refused.text
+    assert classify(refused.status_code, refused.text) == "model_not_enabled"
+    assert gateway.signed == [(ROLE, "eu-west-2")]
+
+
+async def test_bedrock_refuses_the_role_s_expired_credentials() -> None:
+    gateway = _gateway()
+    assert gateway.bedrock is not None
+    gateway.bedrock.expired = True
+    refused = await _bedrock(gateway)
+    assert refused.status_code == 403
+    assert "security token included in the request is" in refused.text
+    assert classify(refused.status_code, refused.text) == "sign_in_expired"
+    assert gateway.signed == []
+
+
+def test_the_classifier_reads_aws_s_documented_expiry_wording_as_well() -> None:
+    # AWS's error reference (Bedrock CommonErrors) writes "has expired"; the wire's is "is expired".
+    documented = (
+        'litellm.PermissionDeniedError: BedrockException - {"message":"The security token '
+        'included in the request has expired. Request a new security token and try again."}'
+    )
+    assert classify(403, documented) == "sign_in_expired"
 
 
 async def test_bedrock_refuses_a_model_it_does_not_offer() -> None:

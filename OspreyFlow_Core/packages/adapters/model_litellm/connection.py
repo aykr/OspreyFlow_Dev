@@ -20,9 +20,24 @@ The outcomes, as the LiteLLM proxy answers them:
   (ADR-135 Amendment 4), also botocore's "Unable to locate credentials" (no identity on the
   gateway's pod), STS refusing `AssumeRoleWithWebIdentity` (the role does not trust the gateway's
   service account), and the role's own refusal (403);
+- `model_not_enabled`: Bedrock's 403 `AccessDeniedException` "You don't have access to the model
+  with the specified model ID": the role signed in, but the account has not been granted access to
+  that model (ADR-135 Amendment 7 decision 5) — the model's access, not the role's permissions;
+- `sign_in_expired`: AWS's 403 `ExpiredTokenException`, "The security token included in the
+  request is expired" (AWS's error reference writes "has expired"; both are read): the gateway's
+  pod did not renew the role's credentials;
 - `model_not_offered`: 404, or Bedrock's 400 "The provided model identifier is invalid" or
-  "on-demand throughput isn't supported" (the model is offered only through an inference
-  profile, whose id is the model to name): the provider does not offer that model so;
+  "on-demand throughput isn't supported": the provider does not offer that model so. Bedrock's
+  second answer means the model is offered only through an inference profile, which this
+  deployment does not use: an inference profile may send the call outside London (Amendment 7
+  decision 2), so the model to name is one Bedrock offers on demand in London;
+- `request_refused`: never given here, where it would change how every provider's answers read;
+  *Admin › Models* gives it for the client's own gateway alone, whose 4xx not in OpenAI's shape
+  this classifier calls `unreachable`;
+
+Which of Bedrock's words are AWS's documented ones and which are recorded only is said in ADR-135
+Amendment 7 (`process/lanes/platform-b/p11/ADR-135-AS-BUILT-DRAFT.md` until it merges): none of
+them has been measured against the real Bedrock in London (P11 part 2).
 - `cooling_down`: 429 naming a cooldown: the gateway holds an engine back for about a minute after a
   failed call, even once a good key is set (measured), so it says "try again in a minute";
 - `rate_limited`: any other 429: the provider answered but is limiting this key;
@@ -42,6 +57,9 @@ Outcome = Literal[
     "gateway_token",
     "key_refused",
     "model_not_offered",
+    "model_not_enabled",
+    "sign_in_expired",
+    "request_refused",
     "cooling_down",
     "rate_limited",
     "unreachable",
@@ -62,6 +80,18 @@ WORDS: dict[Outcome, str] = {
     ),
     "model_not_offered": (
         "The provider accepted the key but does not offer this model to it. Check the model name."
+    ),
+    "model_not_enabled": (
+        "The provider accepted the sign-in but has not enabled this model for the account. Ask "
+        "whoever runs the account to enable access to it."
+    ),
+    "sign_in_expired": (
+        "The provider refused the sign-in's credentials as expired. Ask whoever runs the account "
+        "to check how they are renewed."
+    ),
+    "request_refused": (
+        "The engine refused the request in a form OspreyFlow does not read. Check the address and "
+        "the model name."
     ),
     "cooling_down": (
         "The gateway is holding this engine back for about a minute after a failed call. This is "
@@ -103,6 +133,14 @@ def classify(status: int, body: str) -> Outcome:
     ):
         # Bedrock's `ValidationException` for a model it does not offer (ADR-135 Amendment 4).
         return "model_not_offered"
+    if "have access to the model with the specified model ID" in body:
+        # Bedrock's `AccessDeniedException` for a model the account has not been granted: the role
+        # signed in, so this is the model's access, not the role's permissions (Amendment 7).
+        return "model_not_enabled"
+    if "ExpiredToken" in body or (
+        "security token included in the request" in body and "expired" in body
+    ):
+        return "sign_in_expired"
     if "Unable to locate credentials" in body or "AssumeRoleWithWebIdentity" in body:
         # Bedrock with no identity on the gateway's pod (botocore's words): the role is missing.
         return "key_refused"
