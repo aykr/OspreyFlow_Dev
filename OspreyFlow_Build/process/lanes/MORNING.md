@@ -452,6 +452,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       expire at it, an overwritten version is kept 7 days for recovery, not a second retention); the restore refuses
       the production shape until P9b. P9 slips to 13 November morning, so P7b lands either before Friday's quiet
       window (12:00 UK) or on 14 November.
+    - **Merge order changed (about 20:00):** P12 part 2 merges after P7b, with Laurium's network row in the same merge,
+      so a default cloud-platform render (Laurium, your preset) never runs it with open egress. Order: P9, P7b, P9's
+      decommission diff, then P12 part 2. Corrected: only the Conduit (api), not the workers, calls Laurium.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
