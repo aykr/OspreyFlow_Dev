@@ -360,8 +360,8 @@ class ModelProviderConfig(BaseModel):
     auth: EngineAuth | None = Field(
         default=None,
         description="ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the "
-        "model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM "
-        "role: no key is stored). Default: iam_role for bedrock, else key.",
+        "model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own "
+        "IAM role: no key is stored). Default: iam_role for bedrock, else key.",
     )
     region: str | None = Field(
         default=None,
@@ -425,7 +425,7 @@ class ModelProviderConfig(BaseModel):
                 "the contract reference may hold letters, digits, spaces and . , ; : / ( ) & ' _ "
                 "+ - only"
             )
-        if _label_looks_like_a_key(cleaned):
+        if _looks_like_a_key(cleaned):
             raise ValueError(
                 "the contract reference looks like a key; it is shown to analysts, so give the "
                 "agreement's name or number in words, and the key with ospreyflow models key"
@@ -440,7 +440,7 @@ class ModelProviderConfig(BaseModel):
 
     @model_validator(mode="after")
     def _signs_in_as_its_kind_does(self) -> ModelProviderConfig:
-        """ADR-135 Amendment 4's defaults, on any profile: Bedrock signs in by the namespace's IAM
+        """ADR-135 Amendment 4's defaults, on any profile: Bedrock signs in by the gateway's own IAM
         role in London, any other kind by its key. **What each profile allows is not decided
         here** but by `engine_refusal`, which every reader of an engine calls with the
         deployment's profile (ADR-135 Amendment 7 decision 1)."""
@@ -458,7 +458,7 @@ class ModelProviderConfig(BaseModel):
 
     @property
     def keyless(self) -> bool:
-        """True where the engine signs in by the namespace's IAM role: no key is stored for it."""
+        """True where the engine signs in by the gateway's own IAM role: no key is stored for it."""
         return self.auth == "iam_role"
 
     def route(self, model: str) -> str:
@@ -501,7 +501,7 @@ def _address_refusal(address: str) -> str | None:
 def _label_looks_like_a_key(text: str) -> bool:
     """A label or contract reference shaped like a key, or holding one among its words: each word
     checked as a whole one is (my own lane review of round 2, item 6; the reference too since P11
-    part 2, carried from part 1's confirmation: `DPA 2026/07 <token>` was taken)."""
+    part 2, on cloud-platform alone, by `engine_refusal`)."""
     return _looks_like_a_key(text) or any(
         _looks_like_a_key(word.strip(".,;:()'\"")) for word in text.split()
     )
@@ -538,7 +538,7 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
 
     **Off `cloud-platform`**, an engine is a provider by its key, as before Amendment 4: an engine
     named `bedrock` is LiteLLM's Bedrock provider by its key there, as it always was (ADR-135
-    decision 1). **On `cloud-platform`**, Amendment 4's rules: Bedrock by the namespace's IAM role
+    decision 1). **On `cloud-platform`**, Amendment 4's rules: Bedrock by the gateway's own IAM role
     in London, by a model's own id; the client's gateway at its address alone, by a token; no
     engine named `bedrock` but Bedrock; no label shaped like a key."""
     if profile not in MODEL_ROUTE_PROFILES:
@@ -546,8 +546,16 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
             return None
         return (
             "your organisation's AI gateway, Amazon Bedrock in London and signing in by the "
-            f"namespace's IAM role are for profile: {MODEL_ROUTE_PROFILE} (ADR-135 Amendment 4); "
+            f"gateway's own IAM role are for profile: {MODEL_ROUTE_PROFILE} (ADR-135 Amendment 4); "
             "on this deployment an engine is a provider, reached by its name and its key"
+        )
+    if provider.contract_reference and _label_looks_like_a_key(provider.contract_reference):
+        # Word by word on this profile alone (the orchestrator's ruling on P11 part 2, round 1):
+        # every other profile reads a reference exactly as before Amendment 4.
+        return (
+            "the contract reference holds what looks like a key among its words; it is shown to "
+            "analysts, so give the agreement's name or number in words, and the key or token with "
+            "Enter key"
         )
     if provider.label and _label_looks_like_a_key(provider.label):
         return (
@@ -559,8 +567,8 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
     if provider.kind == "bedrock":
         if provider.auth != "iam_role":
             return (
-                "Bedrock is reached by the namespace's IAM role, so no key is kept for it; choose "
-                "the IAM role"
+                "Bedrock is reached by the gateway's own IAM role, so no key is kept for it; "
+                "choose the IAM role"
             )
         if provider.api_base is not None:
             return (
@@ -581,7 +589,7 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
         # LiteLLM routes a provider by its name, so a `bedrock` provider would reach Bedrock by a
         # stored key and in no fixed region: on this profile Bedrock is reached only as its kind.
         return (
-            "bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; "
+            "bedrock is reached only as Amazon Bedrock in London, by the gateway's own IAM role; "
             "choose that kind of engine"
         )
     if provider.region is not None:
@@ -593,13 +601,13 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
         # without a token, and how the client's gateway takes the namespace's identity is not yet
         # known. Refused rather than offered to analysts and failing every call.
         return (
-            "your organisation's AI gateway signs in by a token for now: signing in by the "
-            "namespace's IAM role waits for your gateway's owners to say how it accepts the role"
+            "your organisation's AI gateway signs in by a token for now: signing in by an IAM "
+            "role waits for your gateway's owners to say how it accepts one"
         )
     if provider.kind == "provider" and provider.auth == "iam_role":
         return (
-            "only your organisation's AI gateway or Bedrock sign in by the namespace's IAM role; a "
-            "provider signs in by its key"
+            "only Bedrock signs in by the gateway's own IAM role (your organisation's AI gateway, "
+            "by a token for now); a provider signs in by its key"
         )
     return None
 
@@ -673,7 +681,7 @@ class ModelsConfig(BaseModel):
 
     @property
     def keyed_providers(self) -> list[ModelProviderConfig]:
-        """The enabled providers that sign in by a key: an engine signed in by the namespace's IAM
+        """The enabled providers that sign in by a key: an engine signed in by the gateway's own IAM
         role (ADR-135 Amendment 4) has no key variable, is asked for no key and keeps none."""
         return [p for p in self.enabled_providers if not p.keyless]
 

@@ -113,7 +113,7 @@ describe("Models", () => {
     expect(JSON.parse(sent.find((s) => s.path === "/v1/admin/models/defaults")!.body)).toEqual({ defaults: { extraction: "gemini" } });
   });
 
-  // ADR-135 Amendment 4: the client's own AI gateway and Bedrock in London by the namespace's IAM role.
+  // ADR-135 Amendment 4: the client's own AI gateway and Bedrock in London by the gateway's own IAM role.
   const BEDROCK = { name: "bedrock", label: "Bedrock (London)", kind: "bedrock", auth: "iam_role", region: "eu-west-2", roles: { extraction: "anthropic.claude-3-haiku" }, api_base: null, privacy_contract: false, contract_reference: null };
   // ADR-135 Amendment 7 decision 1: the two kinds are the cloud-platform profile's alone, as the view says.
   const CLOUD = { ...VIEW, engine_kinds: ["provider", "gateway", "bedrock"] };
@@ -145,7 +145,7 @@ describe("Models", () => {
     expect(providers()).not.toContain("bedrock");
   });
 
-  it("adds Bedrock in London by the namespace's IAM role, with no address and no key asked for", async () => {
+  it("adds Bedrock in London by the gateway's own IAM role, with no address and no key asked for", async () => {
     const sent = stub((path, init) =>
       path === "/v1/admin/models/engines" && init?.method === "POST" ? { status: 200, body: BY_ROLE } : onCloud(path),
     );
@@ -153,10 +153,10 @@ describe("Models", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add an engine" }));
     fireEvent.change(screen.getByLabelText("Kind of engine"), { target: { value: "bedrock" } });
     expect(screen.queryByLabelText(/^Address/)).toBeNull();
-    expect(screen.getByText(/namespace's IAM role in London \(eu-west-2\); no key is kept/)).toBeTruthy();
+    expect(screen.getByText(/gateway's own IAM role in London \(eu-west-2\); no key is kept/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/Extraction and Ask: the provider/), { target: { value: "anthropic.claude-3-haiku" } });
     fireEvent.click(screen.getByRole("button", { name: "Add the engine" }));
-    await screen.findByText(/signs in by the namespace's IAM role: no key is needed/);
+    await screen.findByText(/signs in by the gateway's own IAM role: no key is needed/);
     const added = JSON.parse(sent.find((s) => s.method === "POST" && s.path === "/v1/admin/models/engines")!.body);
     expect(added.provider).toMatchObject({ name: "bedrock", kind: "bedrock", auth: "iam_role", api_base: null });
   });

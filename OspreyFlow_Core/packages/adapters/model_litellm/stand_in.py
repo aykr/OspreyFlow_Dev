@@ -131,9 +131,9 @@ class StandInClientGateway:
 
 @dataclass
 class StandInBedrock:
-    """Amazon Bedrock in London, signed by the gateway pod's own identity (the namespace's IAM role,
-    IRSA; ADR-135 Amendment 4 (b)). **Recorded from AWS's and botocore's documented refusals, not
-    measured** (no AWS account is reached from the build): no credentials on the pod, botocore's
+    """Amazon Bedrock in London, signed by the gateway pod's own identity (the gateway's own IAM
+    role, IRSA; ADR-135 Amendment 4 (b)). **Recorded from AWS's and botocore's documented refusals,
+    not measured** (no AWS account is reached from the build): no credentials on the pod, botocore's
     "Unable to locate credentials"; a role the account's policy does not allow, 403
     `AccessDeniedException` naming the assumed role; a model the account has not been granted, 403
     `AccessDeniedException` "You don't have access to the model with the specified model ID"; the

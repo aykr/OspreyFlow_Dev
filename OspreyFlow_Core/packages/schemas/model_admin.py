@@ -5,7 +5,7 @@ each engine's limits and the usage the gateway recorded.
 **No model here has a field that can hold a key** except `KeyInput`, which the Conduit reads as a
 `SecretStr` and never returns. A key's record is when and by whom it was set; its state is "set",
 "none" or "lost" (the gateway no longer holds it, ADR-135 Amendment 2 decision 9), or "iam_role" for
-an engine that signs in by the namespace's IAM role and keeps no key (ADR-135 Amendment 4).
+an engine that signs in by the gateway's own IAM role and keeps no key (ADR-135 Amendment 4).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from schemas.deployment import EngineKind, ModelProviderConfig
 
-#: `iam_role`: the engine signs in by the namespace's IAM role (ADR-135 Amendment 4), so it has no
+#: `iam_role`: the engine signs in by the gateway's own IAM role (ADR-135 Amendment 4), so it has no
 #: key to set, lose or remove.
 KeyState = Literal["set", "none", "lost", "iam_role"]
 ModelAdminAction = Literal[

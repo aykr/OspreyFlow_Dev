@@ -1,7 +1,7 @@
 """*Admin › Models*' two engine kinds for the `cloud-platform` profile (`06_DECISIONS.md` ADR-135
 Amendment 4, as built: Amendment 7, P11 part 1): **the client's own OpenAI-compatible AI gateway**
-(its address alone, and a token) and **Bedrock in London by the namespace's IAM role**, with no key
-stored for an IAM-role engine.
+(its address alone, and a token) and **Bedrock in London by the gateway's own IAM role**, with no
+key stored for an IAM-role engine.
 
 **On that profile alone** (Amendment 7 decision 1, the orchestrator's ruling of 11 November): on
 every other profile an engine is a provider by its name and key exactly as before Amendment 4, an
@@ -27,6 +27,7 @@ real services do (`tests/adapters/model_litellm/test_stand_in_engine_kinds.py`, 
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 from collections.abc import Callable, Iterator
@@ -49,6 +50,7 @@ from services.api.model_admin import (
     Installed,
     ModelAdmin,
     ModelSettingsFile,
+    RoutesMade,
 )
 from services.api.model_keys import move_keys
 from services.api.model_routing import routes_from_env
@@ -105,6 +107,8 @@ EVERY_OTHER_ADMIN_RIGHT = Principal(
 GATEWAY = {"name": "acme", "label": "Acme AI gateway", "kind": "gateway", "api_base": BASE,
            "roles": {"extraction": "gpt-4o-mini"}}  # fmt: skip
 GATEWAY_BY_ROLE = {**GATEWAY, "auth": "iam_role"}
+#: A second gateway engine on another host, declared so the render opens that host too.
+GATEWAY_TWO = {**GATEWAY, "name": "acme_two", "api_base": "https://ai-gateway-2.client.example/v1"}
 BEDROCK = {"name": "bedrock", "label": "Bedrock (London)", "kind": "bedrock",
            "roles": {"extraction": CLAUDE}}  # fmt: skip
 GEMINI = {"name": "gemini", "roles": {"extraction": "g-flash"}}
@@ -120,24 +124,40 @@ KEY_PARAMS = {"api_key", "litellm_credential_name", "aws_access_key_id", "aws_se
 STATIC_AWS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 
 
-def _gateway_role_as_rendered() -> str | None:
-    """The role the gateway's pod holds as the real cloud-platform render gives it: `ROLE` only if
-    its `litellm` workload runs under a service account. Rendered with a Bedrock engine, the only
-    one whose calls the gateway's own role signs: P11 part 2 gives it its own account then (rule
-    15's second example: the stand-in's gateway holds what the real one holds, no more)."""
-    values = _cloud_values(BEDROCK)
+#: What `osprey.yaml` declared when the deployment was rendered, by default one engine of each kind:
+#: the render then made their ways out and the gateway's own role, so Admin › Models may enable
+#: them.
+RENDERED_WITH = ("bedrock", "acme", "gemini")
+
+
+@functools.cache
+def _as_rendered(names: tuple[str, ...]) -> tuple[dict[str, str], str | None]:
+    """The Conduit's environment and the gateway's role as the real cloud-platform render gives them
+    for a deployment declaring `names` (the orchestrator's round 1 blocker, rule 15's second
+    example): `ROLE` only if `litellm` runs as the gateway's own account and the rendered
+    `gateway.tf` grants Bedrock's two invoke actions in London to that account alone."""
+    from tests.harness.test_cloud_platform_gateway import GATEWAY_ACCOUNT, policy_faults
+    from tests.harness.test_cloud_platform_render import _artefacts
+
+    engines = {"bedrock": BEDROCK, "acme": GATEWAY, "gemini": GEMINI, "acme_two": GATEWAY_TWO}
+    artefacts = _artefacts(_cloud_config(*(engines[n] for n in names)))
+    values = yaml.safe_load(artefacts["values.yaml"])
+    environment = {k: str(v) for k, v in values["environment"].items()}
     gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
-    return ROLE if gateway.get("serviceAccountName") else None
+    policy = artefacts.get("terraform/gateway.tf", "")
+    own = gateway.get("serviceAccountName") == GATEWAY_ACCOUNT
+    return environment, ROLE if own and policy and not policy_faults(policy) else None
 
 
 class World:
     def __init__(
         self, tmp_path: Path, *, role: str | None | object = "as-rendered",
         declared: list[ModelProviderConfig] | None = None, profile: str = CLOUD,
-        key_present: dict[str, bool] | None = None,
+        key_present: dict[str, bool] | None = None, rendered_with: tuple[str, ...] = RENDERED_WITH,
     ) -> None:  # fmt: skip
+        environment, rendered_role = _as_rendered(rendered_with) if profile == CLOUD else ({}, None)
         if role == "as-rendered":
-            role = _gateway_role_as_rendered()
+            role = rendered_role
         self.folder = tmp_path / "model-settings"
         self.client_gateway = StandInClientGateway(TOKEN, frozenset({"gpt-4o-mini"}))
         self.bedrock = StandInBedrock(frozenset({ROLE}), frozenset({CLAUDE}))
@@ -157,7 +177,7 @@ class World:
         self.audit = InMemoryModelAdminAudit()
         self.installed = Installed(
             providers=declared or [], defaults={}, key_present=key_present or {},
-            local_only=False, sendable=["O"],
+            local_only=False, sendable=["O"], made=RoutesMade.from_env(environment),
             locals={"extraction": "qwen2.5:7b-instruct", "vision": None, "transcription": None,
                     "embedding": "all-minilm:22m-l6-v2-fp16"},
         )  # fmt: skip
@@ -698,7 +718,7 @@ def test_bedrock_s_model_not_enabled_is_said_as_the_model_s_access_not_the_role_
     result = _tested(client, "bedrock")
     assert result["outcome"] == "model_not_enabled"
     assert "Model access" in result["words"] and "not the role's permissions" in result["words"]
-    assert "refused the namespace's IAM role" not in result["words"]
+    assert "refused the gateway's own IAM role" not in result["words"]
 
 
 def test_bedrock_s_expired_credentials_are_said_as_expired(
@@ -788,8 +808,11 @@ def test_an_engine_s_kind_is_fixed_once_added_so_its_contract_never_moves_to_ano
 
 
 def test_a_refused_reconcile_after_an_address_change_says_no_key_rather_than_key_set(
-    client: TestClient, world: World
+    tmp_path: Path, serve: Callable[[World], TestClient]
 ) -> None:
+    # The new address's host is one the render opened (a second engine declared on it).
+    world = World(tmp_path, rendered_with=(*RENDERED_WITH, "acme_two"))
+    client = serve(world)
     client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
     client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
     world.gateway.refuse_model_new = 500
@@ -936,6 +959,7 @@ def _cloud_config(*providers: dict[str, Any]) -> OspreyConfig:
               "providers": list(providers)}  # fmt: skip
     # Each engine's host is an egress host, which the render refuses without its networks.
     nets = {**AWS, BEDROCK_HOST: ["198.18.2.0/24"], "ai-gateway.client.example": ["203.0.113.0/24"],
+            "ai-gateway-2.client.example": ["203.0.115.0/24"],
             "generativelanguage.googleapis.com": ["203.0.114.0/24"]}  # fmt: skip
     return _config("development", models=models, cloud_platform={"egress_nets": nets})
 
@@ -1036,3 +1060,94 @@ def test_the_install_page_offers_no_key_field_for_an_iam_role_engine(tmp_path: P
 
 def yaml_dump(config: OspreyConfig) -> str:
     return yaml.safe_dump(config.model_dump(mode="json", exclude_none=True), sort_keys=False)
+
+
+# --- an engine the render did not make (the orchestrator's ruling on P11 part 2, round 1) ---------
+
+REDO = "Declare it in osprey.yaml, re-render, and have the platform team apply the Terraform"
+
+
+@pytest.mark.parametrize(
+    ("rendered_with", "body", "identity"),
+    [((), BEDROCK, True), (("gemini",), BEDROCK, True), (("acme",), BEDROCK, True),
+     ((), GATEWAY, False), (("gemini",), GATEWAY, False), (("bedrock",), GEMINI, False),
+     (("acme",), GATEWAY_TWO, False)],
+    ids=["bedrock-none-made", "bedrock-keyed-made", "bedrock-gateway-made", "gateway-none-made",
+         "gateway-keyed-made", "keyed-bedrock-made", "gateway-other-host"],
+)  # fmt: skip
+def test_an_engine_the_render_did_not_make_is_refused_in_words(
+    tmp_path: Path, serve: Callable[[World], TestClient],
+    rendered_with: tuple[str, ...], body: dict[str, Any], identity: bool,
+) -> None:  # fmt: skip
+    """On cloud-platform the namespace reaches an engine only where the render made its way out and,
+    for Bedrock, the gateway's own IAM role: an engine first added in Admin › Models otherwise has
+    neither until a re-render and the platform's Terraform apply, so it is refused, in words, before
+    the gateway is asked, never left to fail silently."""
+    world = World(tmp_path, rendered_with=rendered_with)
+    refused = serve(world).post("/v1/admin/models/engines", json={"provider": body})
+    assert refused.status_code == 422, refused.text
+    said = _refusal(refused)
+    assert REDO in said
+    assert ("the gateway's own IAM role" in said) is identity
+    model = next(iter(body["roles"].values()))
+    assert world.gateway.entry_for(f"{body['name']}/{model}") is None
+    assert world.models_file() == ""
+
+
+def test_an_address_moved_to_a_host_the_render_did_not_open_is_refused(
+    tmp_path: Path, serve: Callable[[World], TestClient]
+) -> None:
+    world = World(tmp_path, rendered_with=("acme",))
+    client = serve(world)
+    assert client.post("/v1/admin/models/engines", json={"provider": GATEWAY}).status_code == 200
+    moved = {**GATEWAY, "api_base": "https://ai-gateway-2.client.example/v1"}
+    refused = client.put("/v1/admin/models/engines/acme", json={"provider": moved})
+    assert refused.status_code == 422 and REDO in _refusal(refused)
+    assert "ai-gateway-2" not in world.models_file()
+
+
+def test_bedrock_with_none_declared_has_no_role_and_is_refused_not_signed(
+    tmp_path: Path, serve: Callable[[World], TestClient]
+) -> None:
+    """The render of a deployment that declared no Bedrock gives the gateway no identity, and the
+    stand-in none (rule 15): Bedrock is refused at Admin › Models, never answered by a role the real
+    gateway would not hold (my own lane review of part 2, item 1)."""
+    world = World(tmp_path, rendered_with=("gemini",))
+    assert world.gateway.workload_role is None
+    refused = serve(world).post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    assert refused.status_code == 422 and "the gateway's own IAM role" in _refusal(refused)
+
+
+#: A real-shaped contract reference: words around one long hyphenated number.
+LONG_REFERENCE = "Contract CCS-RM6098-ACME-2026-000123 signed 3 March"
+
+
+@pytest.mark.parametrize("profile", ["local-lite", "small"])
+def test_off_cloud_platform_a_long_reference_number_loads_as_before(
+    profile: str, tmp_path: Path
+) -> None:
+    """The reference's word-by-word key check is cloud-platform's alone (the orchestrator's ruling
+    on P11 part 2, round 1, item 8; Amendment 7 decision 1: every other profile exactly as before):
+    a long reference number among words loads in osprey.yaml and the models file there."""
+    engine = {**GEMINI, "privacy_contract": True, "contract_reference": LONG_REFERENCE}
+    raw = engines_config().model_dump(mode="json", exclude_none=True)
+    raw["profile"] = profile
+    raw["models"] = {"local_only": False, "sendable_handling_codes": ["P"], "providers": [engine]}
+    if profile == "local-lite":
+        raw.pop("origin", None)
+    loaded = OspreyConfig.model_validate(raw)
+    assert loaded.models.providers[0].contract_reference == LONG_REFERENCE
+    folder = tmp_path / "settings"
+    folder.mkdir()
+    (folder / "models.yaml").write_text(
+        yaml.safe_dump({"providers": [engine], "defaults": {}}), encoding="utf-8"
+    )
+    ModelSettingsFile(folder, profile=profile).load()
+
+
+def test_on_cloud_platform_a_token_among_a_reference_s_words_is_refused() -> None:
+    engine = ModelProviderConfig.model_validate(
+        {**GATEWAY, "privacy_contract": True, "contract_reference": f"DPA 2026/07 {PLANTED}"}
+    )
+    refused = deployment.engine_refusal(engine, CLOUD)
+    assert refused and "contract reference" in refused and "Q7Z4" not in refused

@@ -37,8 +37,8 @@ _STATE_WORDS = {
     "set": "yes",
     "none": "no",
     "lost": "lost: enter it again",
-    # ADR-135 Amendment 4: the engine signs in by the namespace's IAM role and keeps no key.
-    "iam_role": "none kept: signs in by the namespace's IAM role",
+    # ADR-135 Amendment 4: the engine signs in by the gateway's own IAM role and keeps no key.
+    "iam_role": "none kept: signs in by the gateway's own IAM role",
 }
 
 
@@ -127,7 +127,7 @@ def read_models(product: Path, deployment: Path) -> dict[str, Any]:
     return _models(_running_config(product, deployment))
 
 
-#: ADR-135 Amendment 7 decision 1: the profile whose engines may sign in by the namespace's IAM
+#: ADR-135 Amendment 7 decision 1: the profile whose engines may sign in by the gateway's own IAM
 #: role; `schemas.deployment.MODEL_ROUTE_PROFILE`, held to it by `test_models_verb_iam_role.py`
 #: (the command line imports nothing of the product's packages).
 MODEL_ROUTE_PROFILE = "cloud-platform"

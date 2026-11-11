@@ -388,7 +388,7 @@ def routes_from_env(local: DeploymentModels, environ: Mapping[str, str]) -> Mode
             name=name,
             label=str(raw.get("label") or name),
             models={r: m for r, m in models.items() if r in ROLES},
-            # ADR-135 Amendment 4: an engine signed in by the namespace's IAM role has no key.
+            # ADR-135 Amendment 4: an engine signed in by the gateway's own IAM role has no key.
             key_present=raw.get("auth") == "iam_role"
             or environ.get(f"OSPREY_MODEL_KEY_PRESENT_{name.upper()}", "") == "yes",
             # ADR-136: only a literal `true` marks a contract; anything else is none.

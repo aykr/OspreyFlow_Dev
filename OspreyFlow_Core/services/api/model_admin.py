@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
+from urllib.parse import urlsplit
 
 import asyncpg
 import httpx
@@ -49,6 +50,8 @@ from pydantic import BaseModel, Field, SecretStr, ValidationError
 from adapters.model_litellm.connection import WORDS, check_connection
 from adapters.model_litellm.usage import engine_key, usage_tag
 from schemas.deployment import (
+    BEDROCK_REGION,
+    MODEL_ROUTE_PROFILE,
     ModelProviderConfig,
     ModelsConfig,
     engine_kinds_offered,
@@ -180,6 +183,59 @@ class ModelSettingsFile:
             raise
 
 
+#: The words for an engine the cloud-platform render did not make a way out (or, for Bedrock, an
+#: identity) for (the orchestrator's ruling on P11 part 2, round 1).
+NOT_MADE = (
+    "On this deployment an engine is reached only once the render has made its way out of the "
+    "namespace{identity}, and it made none for this engine{name}. Declare it in osprey.yaml, "
+    "re-render, and have the platform team apply the Terraform; then it can be enabled here."
+)
+
+
+@dataclass(frozen=True)
+class RoutesMade:
+    """What the cloud-platform render made for the model route (`OSPREY_MODEL_ROUTES_MADE`): the
+    engine hosts the namespace may reach, the rules that place an engine's host, and whether the
+    gateway's own IAM role (Bedrock's) exists."""
+
+    hosts: frozenset[str]
+    provider_hosts: dict[str, str]
+    kind_hosts: dict[str, str]
+    gateway_identity: bool
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str]) -> RoutesMade | None:
+        text = environ.get("OSPREY_MODEL_ROUTES_MADE", "").strip()
+        if not text:
+            return None
+        raw = json.loads(text)
+        return cls(
+            hosts=frozenset(str(h) for h in raw.get("hosts") or []),
+            provider_hosts={str(k): str(v) for k, v in (raw.get("provider_hosts") or {}).items()},
+            kind_hosts={str(k): str(v) for k, v in (raw.get("kind_hosts") or {}).items()},
+            gateway_identity=raw.get("gateway_identity") is True,
+        )
+
+    def host_of(self, provider: ModelProviderConfig) -> str | None:
+        """The engine's one host, as the render places it (`harness.cloud_platform.engine_host`)."""
+        if provider.api_base:
+            return urlsplit(provider.api_base).hostname
+        if provider.kind in self.kind_hosts:
+            return self.kind_hosts[provider.kind].format(region=provider.region or BEDROCK_REGION)
+        return self.provider_hosts.get(provider.name)
+
+    def refusal(self, provider: ModelProviderConfig) -> str | None:
+        """Why `provider` cannot be enabled here, in words naming no value, or None."""
+        host = self.host_of(provider)
+        identity = provider.kind == "bedrock" and not self.gateway_identity
+        if host in self.hosts and not identity:
+            return None
+        return NOT_MADE.format(
+            identity=" (and, for Bedrock, the gateway's own IAM role)" if identity else "",
+            name=f" ({provider.name})" if re.fullmatch(r"[a-z0-9_]{1,40}", provider.name) else "",
+        )
+
+
 @dataclass(frozen=True)
 class Installed:
     """What `osprey.yaml` says, as the render told the Conduit: the starting engines and defaults,
@@ -193,6 +249,8 @@ class Installed:
     local_only: bool
     sendable: list[str]
     locals: dict[str, str | None]
+    #: What the cloud-platform render made (None on every other profile, which allows any host).
+    made: RoutesMade | None = None
 
     @classmethod
     def from_env(cls, local: DeploymentModels, environ: Mapping[str, str]) -> Installed:
@@ -234,6 +292,7 @@ class Installed:
                 for c in environ.get("OSPREY_SENDABLE_HANDLING_CODES", "").split(",")
                 if c.strip()
             ],
+            made=RoutesMade.from_env(environ),
             locals={
                 "extraction": local.extraction,
                 "vision": local.vision,
@@ -631,17 +690,19 @@ class _Exclusive:
 #: apart, so its words name both.
 KIND_WORDS: dict[tuple[str, str], str] = {
     ("bedrock", "key_refused"): (
-        "Bedrock refused the namespace's IAM role: the model gateway has no role, or the role "
-        "may not use this model in London. Ask your platform team to check the role's permissions."
+        "Bedrock refused the gateway's own IAM role: the model gateway runs under no such role, "
+        "or the role may not use this model in London. Ask your platform team to check the "
+        "gateway's role (terraform/gateway.tf) and its service account, not the namespace's "
+        "bucket role."
     ),
     ("bedrock", "model_not_enabled"): (
-        "Bedrock accepted the namespace's IAM role but has not enabled this model for the "
+        "Bedrock accepted the gateway's own IAM role but has not enabled this model for the "
         "account: access is granted model by model (Bedrock's Model access, in London, "
         "eu-west-2). Ask your platform team to enable it; this is the model's access, not the "
         "role's permissions."
     ),
     ("bedrock", "sign_in_expired"): (
-        "Bedrock refused the namespace's IAM role's credentials as expired: the model gateway's "
+        "Bedrock refused the gateway's own IAM role's credentials as expired: the model gateway's "
         "pod did not renew them. Ask your platform team to check the gateway's service account, "
         "then restart the gateway."
     ),
@@ -929,6 +990,20 @@ class ModelAdmin:
             raise ModelAdminRefused(redacted(refused, sent))
         return settings
 
+    def _made_by_the_render(self, provider: ModelProviderConfig) -> None:
+        """On `cloud-platform`, an engine is enabled only where the render made its way out of the
+        namespace and, for Bedrock, the gateway's own IAM role; anything else is refused in words
+        before the gateway is asked (the orchestrator's ruling on P11 part 2, round 1). Every other
+        profile reaches any host, as before."""
+        if self._file.profile != MODEL_ROUTE_PROFILE:
+            return
+        made = self._installed.made
+        refused = (
+            made.refusal(provider) if made is not None else NOT_MADE.format(identity="", name="")
+        )
+        if refused:
+            raise ModelAdminRefused(refused)
+
     def _save(self, settings: ModelSettings) -> None:
         self._file.save(settings)
         self._settings = settings
@@ -1004,6 +1079,7 @@ class ModelAdmin:
                 raise ModelAdminRefused(f"An engine named {provider.name} already exists.")
             proposed = self._validated(current.model_copy(
                 update={"providers": [*current.providers, provider]}, deep=True), sent)  # fmt: skip
+            self._made_by_the_render(provider)
             await self._reconcile(proposed)
             self._save(proposed)
 
@@ -1037,6 +1113,7 @@ class ModelAdmin:
             proposed = self._validated(current.model_copy(
                 update={"providers": [provider if p.name == name else p
                                       for p in current.providers]}, deep=True), sent)  # fmt: skip
+            self._made_by_the_render(provider)
             # Only the address decides where a key goes: the kind is fixed above, each kind has
             # one sign-in and Bedrock one region (ADR-135 Amendment 7 decision 4).
             if (before.api_base or None) != (provider.api_base or None):
@@ -1130,7 +1207,7 @@ class ModelAdmin:
             if any(p.name == name and p.keyless for p in current.providers):
                 # ADR-135 Amendment 4: no key is stored for an engine signed in by the role.
                 raise ModelAdminRefused(
-                    f"{name} signs in by the namespace's IAM role, so no key is kept for it; "
+                    f"{name} signs in by the gateway's own IAM role, so no key is kept for it; "
                     "nothing was changed.",
                     status=409,
                 )
@@ -1165,8 +1242,8 @@ class ModelAdmin:
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
             if any(p.name == name and p.keyless for p in current.providers):
                 raise ModelAdminRefused(
-                    f"{name} signs in by the namespace's IAM role and keeps no key; there is none "
-                    "to remove.",
+                    f"{name} signs in by the gateway's own IAM role and keeps no key; there is "
+                    "none to remove.",
                     status=409,
                 )
             await self._gateway.delete_credential(name)

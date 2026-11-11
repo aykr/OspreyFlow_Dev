@@ -1,4 +1,4 @@
-"""`ospreyflow models` and an engine signed in by the namespace's IAM role (`06_DECISIONS.md`
+"""`ospreyflow models` and an engine signed in by the gateway's own IAM role (`06_DECISIONS.md`
 ADR-135 Amendment 4; as built, Amendment 7, P11 part 1): it is listed as keeping no key, and `models
 key` and `models remove-key` refuse it before any key is read, so none is ever typed or handed over
 for it — **even when the Conduit does not answer `status`** (the review's item 8).
@@ -55,7 +55,7 @@ def test_an_iam_role_engine_is_listed_as_keeping_no_key(
     assert rig("models") == 0
     out = capsys.readouterr().out
     said = (
-        "bedrock (Bedrock (London)): key present: none kept: signs in by the namespace's IAM role"
+        "bedrock (Bedrock (London)): key present: none kept: signs in by the gateway's own IAM role"
     )
     assert said in out
 
