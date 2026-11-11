@@ -198,6 +198,7 @@ class Run:
         role_policy: dict[str, Any] | None = None,
         bucket_policy: dict[str, Any] | None = None,
         trusted_account: str | None = None,
+        key_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """The AWS side as the namespace's Terraform makes it: each role trusted by its own trust
         document as rendered (`backups.trust_policy`, the cluster's issuer for the provider's),
@@ -226,6 +227,9 @@ class Run:
                 "name": self.bucket(), "kms_key": KEY_ARN,
                 "policy": bucket_policy or backups.bucket_policy(arn, KEY_ARN, [ROLE_ARN, CLICKHOUSE_ROLE_ARN]),
             }],
+            # The key's own policy as backups.tf writes it; KMS judges by it (the stand-in as AWS).
+            "keys": [{"arn": KEY_ARN, "policy": key_policy or backups.key_policy(
+                f"arn:aws:iam::{ACCOUNT}:root", [ROLE_ARN, CLICKHOUSE_ROLE_ARN], REGION)}],
         }  # fmt: skip
 
     def standin(self) -> None:
@@ -447,6 +451,13 @@ class Run:
                 k: base64.b64decode(v).decode() for k, v in json.loads(existing)["data"].items()
             }
         encode = lambda d: {k: base64.b64encode(v.encode()).decode() for k, v in d.items()}  # noqa: E731
+        kept = kubectl(
+            "-n", self.ns, "get", "secret", backups.BACKUP_SECRET, "-o", "json", check=False
+        )
+        backup_password = (
+            base64.b64decode(json.loads(kept)["data"][backups.BACKUP_SECRET_KEY]).decode()
+            if kept.strip() else secrets.token_hex(16)
+        )  # fmt: skip
         apply(
             [
                 {
@@ -455,7 +466,14 @@ class Run:
                     "metadata": {"name": "ospreyflow-secrets", "namespace": self.ns},
                     "data": encode(data),
                 },
-                # What the namespace's backups.tf writes (OUTPUT_SECRET), and its service account.
+                # What the namespace's backups.tf writes: the backup user's password, a Secret of
+                # its own (never the shared one), the output Secret, and the service accounts.
+                {
+                    "apiVersion": "v1",
+                    "kind": "Secret",
+                    "metadata": {"name": backups.BACKUP_SECRET, "namespace": self.ns},
+                    "data": encode({backups.BACKUP_SECRET_KEY: backup_password}),
+                },
                 {
                     "apiVersion": "v1",
                     "kind": "Secret",
@@ -845,11 +863,37 @@ class Run:
             dt.datetime.fromtimestamp(slot * 60, dt.UTC).strftime("%Y%m%dT%H%M%SZ"),
         )
 
+    def restore_api_path(self, present: bool) -> None:
+        """Kind alone: the restore's pods' path to the cluster's API, as P7b's per-workload egress
+        row will give it (a Calico Allow to the `kubernetes` Service, before the deny). P9 renders
+        none of its own (the orchestrator's ruling); without it every restore refuses, closed."""
+        name = "default.p9-kind-restore-to-the-api"
+        if not present:
+            kubectl(
+                "-n",
+                self.ns,
+                "delete",
+                "networkpolicies.projectcalico.org",
+                name,
+                "--ignore-not-found",
+            )
+            return
+        apply({
+            "apiVersion": "projectcalico.org/v3", "kind": "NetworkPolicy",
+            "metadata": {"name": name, "namespace": self.ns},
+            "spec": {"tier": "default", "order": 150,
+                     "selector": "app.kubernetes.io/name in {'restore', 'restore-claims'}",
+                     "types": ["Egress"],
+                     "egress": [{"action": "Allow", "protocol": "TCP",
+                                 "destination": {"services": {"name": "kubernetes", "namespace": "default"}}}]},
+        })  # fmt: skip
+
     def restore(self, set_id: str) -> dict[str, float]:
         """ArcadeDB and the shared pods stopped, the restore's two Jobs (rendered as an operator
         does) run, then both started again: each phase timed."""
         assert self.helm_script
         times: dict[str, float] = {}
+        self.restore_api_path(True)
         start = time.monotonic()
         kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=0")
         self.stop_shared()
@@ -958,10 +1002,13 @@ class Run:
         Everything that writes is stopped first, as the runbook says, so only that can refuse it."""
         assert self.helm_script
         self.shared_pod()
-        if not self.finished_sets():  # the stand-in's objects go with its pod: a set of its own first
+        if (
+            not self.finished_sets()
+        ):  # the stand-in's objects go with its pod: a set of its own first
             self.seed()
             ok, _, _ = self.backup()
             assert ok, "the backup this check restores failed"
+        self.restore_api_path(False)
         before = self.counts()
         set_id = self.finished_sets()[-1]
         kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=0")
@@ -989,8 +1036,12 @@ class Run:
                 )
                 apply(job)
             for job in jobs:
-                ok, logs = self.wait_job(job["metadata"]["name"], timeout=600)
-                said += [line for line in logs.splitlines() if "refused" in line]
+                ok, _ = self.wait_job(job["metadata"]["name"], timeout=600)
+                # The refusal is the `verify` init container's: read it there.
+                for pod in kubectl("-n", self.ns, "get", "pods", "-l", f"job-name={job['metadata']['name']}",
+                                   "-o", "name").split():  # fmt: skip
+                    said += [line for line in kubectl("-n", self.ns, "logs", pod, "-c", "verify", check=False).splitlines()
+                             if "refused" in line]  # fmt: skip
                 assert not ok, (
                     f"{job['metadata']['name']} ran without confirming the writers were stopped"
                 )
@@ -1018,6 +1069,9 @@ class Run:
         overwritten, url() to another host) is refused; and ClickHouse's own pod reaches no outside
         address (its egress, platform's policy)."""
         base = f"https://{AWS_NAMES[0]}/{self.bucket()}"
+        finished = self.finished_sets()
+        assert finished, "a finished set first (the round trip), so RESTORE has a part to read"
+        restore_url = f"{base}/sets/{finished[-1]}/clickhouse/"
         out = self.probe(f"""
 print("user:", ch("SELECT currentUser()").strip())
 for name, q in [
@@ -1025,6 +1079,12 @@ for name, q in [
     ("read ArcadeDB's zip", "SELECT length(raw_blob) FROM s3('{base}/sets/*/arcadedb/ospreyflow.zip', 'RawBLOB') LIMIT 1"),
     ("write over a set", "INSERT INTO FUNCTION s3('{base}/sets/probe/arcadedb/ospreyflow.zip', 'RawBLOB') SELECT 'overwritten'"),
     ("url() to another host", "SELECT count() FROM url('https://{STANDIN_HOST}:{STANDIN_PORT}/', 'RawBLOB')"),
+    ("RESTORE a set's ClickHouse part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored FROM S3('{restore_url}')"),
+    ("the S3 table engine", "CREATE TABLE ospreyflow.p9_s3_engine (x String) ENGINE = S3('{base}/sets/probe/x', 'RawBLOB')"),
+    ("s3Cluster", "SELECT count() FROM s3Cluster('osprey', '{base}/sets/*/manifest.json', 'RawBLOB')"),
+    ("icebergS3", "SELECT count() FROM icebergS3('{base}/sets/probe/')"),
+    ("deltaLake", "SELECT count() FROM deltaLake('{base}/sets/probe/')"),
+    ("remote() to another server", "SELECT count() FROM remote('{STANDIN_HOST}:9000', system.one)"),
 ]:
     try:
         print("ACCEPTED", name, "->", ch(q).strip()[:120])
@@ -1040,13 +1100,18 @@ for name, q in [
         self.record["osprey_sources"] = lines
         self.record["clickhouse_egress_to_1.1.1.1"] = egress
         refused = [line for line in lines if line.startswith("REFUSED")]
+        accepted = [line for line in lines if line.startswith("ACCEPTED")]
+        self.probe("ch('DROP DATABASE IF EXISTS p9_osprey_restored SYNC')")
         self.save("osprey_sources")
-        if len(refused) != 4 or egress.endswith("REACHED"):
+        self.record["show_grants_osprey"] = (
+            self.probe("print(ch('SHOW GRANTS'))").strip().splitlines()
+        )
+        if accepted or not refused or egress.endswith("REACHED"):
             raise SystemExit(
                 "FAIL: the deployment's user, or ClickHouse's egress, still reaches what it must not"
             )
         print(
-            "PASS the deployment's user is refused all four; ClickHouse reaches no outside address"
+            f"PASS the deployment's user is refused all {len(refused)}; ClickHouse reaches no outside address"
         )
 
     def reds(self) -> None:
@@ -1108,15 +1173,18 @@ for name, q in [
                 bucket_policy=backups.bucket_policy(arn, KEY_ARN, [OTHER_ROLE_ARN])
             ),
         )
-        # 2. The role without kms:GenerateDataKey: S3 refuses the encrypted write, naming the action.
-        policy = backups.role_policies(arn, KEY_ARN, REGION)[backups.SERVICE_ACCOUNT]
-        for statement in policy["Statement"]:
-            statement["Action"] = [a for a in statement["Action"] if a != "kms:GenerateDataKey"]
+        # 2. The key's own policy without the runner's role (KMS as AWS judges it: the key's policy
+        # names the roles, so a role it leaves out is refused, whatever its IAM says), naming the
+        # action and the key.
         expect(
-            "kms-generate",
-            ("AccessDenied", "kms:GenerateDataKey"),
+            "kms-key-policy",
+            ("AccessDenied", "kms:GenerateDataKey", "resource-based"),
             main_only(),
-            self.standin_config(role_policy=policy),
+            self.standin_config(
+                key_policy=backups.key_policy(
+                    f"arn:aws:iam::{ACCOUNT}:root", [CLICKHOUSE_ROLE_ARN], REGION
+                )
+            ),
         )
         # 3a. Every session expired (an hour on the platform): measured, not a refusal. ClickHouse
         # and the runner each take a new one from STS by their pods' identity, and the set is
@@ -1217,6 +1285,39 @@ for name, q in [
         print(
             f"{'PASS' if results[-1]['as_expected'] else 'FAIL'} restore of {unfinished}: {results[-1]['words']}"
         )
+        # 5. A restore while a writer runs (the shared pod, standing for the Conduit, left running; the
+        # API path P7b's row will give, present): both Jobs' verify refuses, naming it, and nothing is
+        # touched.
+        self.restore_api_path(True)
+        self.shared_pod()
+        before = self.counts()
+        set_id = self.finished_sets()[-1]
+        documents = [
+            d for d in yaml.safe_load_all(sh("bash", self.helm_script, "restore-job", set_id)) if d
+        ]
+        said: list[str] = []
+        for job in (d for d in documents if d["kind"] == "Job"):
+            self.irsa(job["spec"]["template"]["spec"], self.values()["backups"]["image"])
+            job["metadata"]["namespace"] = self.ns
+            kubectl(
+                "-n",
+                self.ns,
+                "delete",
+                "job",
+                job["metadata"]["name"],
+                "--ignore-not-found",
+                "--wait=true",
+            )
+            apply(job)
+            ok, _ = self.wait_job(job["metadata"]["name"], timeout=600)
+            for pod in kubectl("-n", self.ns, "get", "pods", "-l", f"job-name={job['metadata']['name']}",
+                               "-o", "name").split():  # fmt: skip
+                said += [line for line in kubectl("-n", self.ns, "logs", pod, "-c", "verify", check=False).splitlines()
+                         if "refused" in line]  # fmt: skip
+        untouched = self.counts() == before
+        results.append({"red": "restore-beside-a-running-writer", "words": said, "untouched": untouched,
+                        "as_expected": bool(said) and all("still running" in w for w in said) and untouched})  # fmt: skip
+        print(f"{'PASS' if results[-1]['as_expected'] else 'FAIL'} restore beside a writer: {said}")
         self.record["reds"] = results
         self.save("reds")
         if not all(r["as_expected"] for r in results):
