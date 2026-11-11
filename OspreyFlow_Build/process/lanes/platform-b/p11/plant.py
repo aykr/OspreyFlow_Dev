@@ -297,12 +297,12 @@ PLANTS = [
           "translated = engines_as == MODEL_ROUTE_PROFILE", (K,), "engines_as_context"),
     Plant("R6", "_egress_hosts", "a no-address engine's host found by its name, not its kind",
           CLOUD,
-          "        if host is None and provider.kind in profile.egress.engine_kind_hosts:\n"
-          "            # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
-          "            host = profile.egress.engine_kind_hosts[provider.kind]",
-          "        if host is None and provider.name in profile.egress.engine_kind_hosts:\n"
-          "            # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
-          "            host = profile.egress.engine_kind_hosts[provider.name]",
+          "    if kind in profile.egress.engine_kind_hosts:\n"
+          "        # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
+          "        return profile.egress.engine_kind_hosts[kind]",
+          "    if name in profile.egress.engine_kind_hosts:\n"
+          "        # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
+          "        return profile.egress.engine_kind_hosts[name]",
           (K,), "egress_host"),
     # --- P11 part 2: the gateway by default, and its own identity ---------------------------------
     Plant("W1", "render_cloud_platform", "the gateway only with an engine enabled at install", CLOUD,
@@ -333,8 +333,8 @@ PLANTS = [
           '_q(f"arn:aws:bedrock:{r}::foundation-model/*")',
           '_q("arn:aws:bedrock:*::foundation-model/*")', (G,), "grants_bedrock"),
     Plant("W7", "render_terraform", "a gateway role made with no Bedrock engine", TERRAFORM,
-          '    if any(p.kind == "bedrock" for p in config.models.enabled_providers):',
-          "    if True:", (G,), "without_bedrock"),
+          "    if bedrock_enabled(config):\n        files",
+          "    if True:\n        files", (G,), "without_bedrock"),
     Plant("W8", "render_cloud_platform", "the gateway run as the namespace's own account", CLOUD,
           "            pod[\"serviceAccountName\"] = gateway_account(platform)",
           "            pod[\"serviceAccountName\"] = platform.secrets.irsa.service_account",
