@@ -1,0 +1,20 @@
+The carries' gates at 9bf27309cb921e4ef99440a60de742ac1cd0a80b (on main 5a554e3, after P7), offline on
+ospreyflow-test through `stack_lease.sh offline platform-b` (closed ports, no stack, no lease), 11 November 2026,
+run 20261111T150701Z. Raw output: carries-gates-9bf2730.raw.txt (colour codes removed, nothing else). This
+supersedes carries-gates-c3bde33.txt, a hand-written summary of the head before the review of ad4bef7.
+
+Command: make -k test; make live-collect; make -C OspreyFlow_Core test-js; make -k ci; then the chart diff applied
+in the run's copy (patch -p1), test_helm_chart.py run, and reverted (patch -R -p1).
+- make test: 1 failed / 11341 passed / 27 skipped. The failure is the server's GPU host case
+  (test_webapp_preflight::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass).
+- live-collect: exit 0.
+- test-js: 1 failed / 3067 passed: MatrixView.budget opened in 3804 ms against 2500 (at the run's load). This step
+  changes no JavaScript; the budget is carried to a run under a lease, contention not being a measurement.
+- make -k ci: exit 2 on harness-a11y alone: the first case of each spec timed out at 60 s (dark Profile; install
+  page Mode, dark), 32 passed. Every other target green, opentofu-check and trivy included, on this finished run.
+  Run 20261111T153008Z, harness-a11y alone at the lane's own slot 7 (lane_ports.tsv), the 10 November orphans' ports
+  now free (`ss -ltnp` lists none of 5893, 5894, 7919, 7920): 34 passed, exit 0.
+- The chart diff (carries/chart-quoting-for-platform.diff) applied on main's chart: test_helm_chart.py 21 passed;
+  reverted cleanly.
+A trial merge with main 6b57e95 (P11 merged): no conflict; cli, refresh, update, the writer scan and the lockout
+and engine-kind tests 736 passed, 1 skipped, 4 xfailed, on the Mac, offline.
