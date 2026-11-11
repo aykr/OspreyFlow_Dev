@@ -529,7 +529,11 @@ class Stores:
             except BackupRefused:
                 pass
             raise
-        self.clickhouse(f"RENAME DATABASE {database} TO {old}{on}", "set the live one aside")
+        # The live one set aside only if it is there: after a loss (the disaster the restore is
+        # for) it is not, and a RENAME of it is refused (Code 81, measured on kind in round 3).
+        live = self.clickhouse(f"EXISTS DATABASE {database}", "see whether the live one is there")
+        if live.strip() == "1":
+            self.clickhouse(f"RENAME DATABASE {database} TO {old}{on}", "set the live one aside")
         self.clickhouse(f"RENAME DATABASE {restoring} TO {database}{on}", "put the restored one in")
         self.clickhouse(f"DROP DATABASE IF EXISTS {old}{on} SYNC", "drop the old one")
 

@@ -197,6 +197,9 @@ class FakeStores:
         self.arcadedb_answer: bytes | None = None
         self.client: Any = None
         self.access_key: str | None = None
+        #: ClickHouse's databases, as its DDL changes them (round 3 on kind: a RENAME of a database
+        #: that is not there is refused, Code 81, which a fake answering every DDL with "" hid).
+        self.databases: set[str] = {"ospreyflow"}
 
     def _s3(self) -> Any:
         """ClickHouse's S3 client as **its own** role, by its pod's web identity (never the process's
@@ -234,6 +237,33 @@ class FakeStores:
             self.client = None  # renewed, as ClickHouse renews an expired session
             return act(self._s3())
 
+    def _ddl(self, request: urllib.request.Request, body: str) -> bytes:
+        """ClickHouse 25.8's own refusals, word for word (kind, round 3): a database that is not
+        there (Code 81, HTTP 404), or one that already is (Code 82)."""
+
+        def refuse(code: int, status: int, words: str) -> None:
+            text = f"Code: {code}. DB::Exception: {words}. (version 25.8.33.6 (official build))".encode()
+            raise urllib.error.HTTPError(request.full_url, status, "error", Message(), io.BytesIO(text))
+
+        names = _databases_named(body)
+        if body.startswith("DROP DATABASE"):
+            if names[0] not in self.databases and " IF EXISTS " not in body:
+                refuse(81, 404, f"Database {names[0]} does not exist. (UNKNOWN_DATABASE)")
+            self.databases.discard(names[0])
+        elif body.startswith("CREATE DATABASE"):
+            if names[0] in self.databases:
+                refuse(82, 500, f"Database {names[0]} already exists. (DATABASE_ALREADY_EXISTS)")
+            self.databases.add(names[0])
+        else:
+            source, target = names[:2]
+            if source not in self.databases:
+                refuse(81, 404, f"Database {source} does not exist. (UNKNOWN_DATABASE)")
+            if target in self.databases:
+                refuse(82, 500, f"Database {target} already exists. (DATABASE_ALREADY_EXISTS)")
+            self.databases.discard(source)
+            self.databases.add(target)
+        return b""
+
     def __call__(self, request: urllib.request.Request, timeout: float) -> bytes:
         url = request.full_url
         body = (request.data or b"").decode()  # type: ignore[union-attr]
@@ -261,8 +291,10 @@ class FakeStores:
                 text = (f"Code: 497. DB::Exception: backup: Not enough privileges. To execute this query, "
                         f"it's necessary to have the grant DROP DATABASE ON {database}.*. (ACCESS_DENIED)").encode()  # fmt: skip
                 raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        if body.startswith("EXISTS DATABASE"):
+            return b"1\n" if body.split()[2] in self.databases else b"0\n"
         if body.startswith(("DROP DATABASE", "CREATE DATABASE", "RENAME DATABASE")):
-            return b""
+            return self._ddl(request, body)
         match = re.search(r"S3\((.*)\)", body)
         assert match, body
         arguments = re.findall(r"'((?:[^'\\]|\\.)*)'", match.group(1))

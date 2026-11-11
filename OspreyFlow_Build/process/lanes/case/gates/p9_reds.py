@@ -251,6 +251,11 @@ runner.PLANTS = [
     ("the backup user's grant back to `ospreyflow.*` (kind, round 3: the restore refused its own temporary database)",
      RENDER, "        <query>GRANT ALL ON ospreyflow*.*</query>", "        <query>GRANT ALL ON ospreyflow.*</query>",
      [TP + "test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set"]),
+    ("the live ClickHouse database set aside though it is gone (kind, round 3: the disaster restore refused)", RUN,
+     '        if live.strip() == "1":', "        if True:",
+     [TP + "test_a_restore_into_a_deployment_whose_clickhouse_database_is_gone_puts_the_sets_in"]),
+    ("the live ClickHouse database never set aside", RUN, '        if live.strip() == "1":', "        if False:",
+     [TP + "test_a_restore_beside_the_live_clickhouse_database_swaps_it_and_drops_the_old"]),
 ]
 
 if __name__ == "__main__":

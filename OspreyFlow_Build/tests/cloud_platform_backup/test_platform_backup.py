@@ -196,6 +196,7 @@ def test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set(
         f"CREATE DATABASE {restoring}",
         f"RESTORE DATABASE ospreyflow AS {restoring} FROM S3('{REGIONAL}/{BUCKET}/sets/{manifest['set']}/clickhouse/') "
         "SETTINGS allow_different_database_def = true",
+        "EXISTS DATABASE ospreyflow",
         f"RENAME DATABASE ospreyflow TO {before}",
         f"RENAME DATABASE {restoring} TO ospreyflow",
         f"DROP DATABASE IF EXISTS {before} SYNC",
@@ -216,6 +217,25 @@ def test_clickhouse_refused_its_restore_leaves_the_live_database_as_it_was(aws: 
     assert not [s for s in after if s.startswith("RENAME") or s == "DROP DATABASE IF EXISTS ospreyflow SYNC"]
     assert after[-1].startswith("DROP DATABASE IF EXISTS ospreyflow_restoring_"), "the half removed"
 
+
+
+def test_a_restore_into_a_deployment_whose_clickhouse_database_is_gone_puts_the_sets_in(run: Any) -> None:
+    """The disaster the restore is for (kind, round 3): ClickHouse's database lost, the set's
+    restored and put in; nothing to set aside, so nothing is renamed away."""
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    fake.databases.discard("ospreyflow")
+    pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    assert fake.databases == {"ospreyflow"}
+    assert not [s for s in fake.statements if s.startswith("RENAME DATABASE ospreyflow TO")]
+
+
+def test_a_restore_beside_the_live_clickhouse_database_swaps_it_and_drops_the_old(run: Any) -> None:
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    assert fake.databases == {"ospreyflow"}
+    assert [s for s in fake.statements if s.startswith("RENAME DATABASE ospreyflow TO ospreyflow_before_")]
 
 def test_a_zip_that_does_not_match_its_manifest_is_never_restored(aws: Running, run: Any, tmp_path: Path) -> None:
     settings, bucket, stores, _ = run
