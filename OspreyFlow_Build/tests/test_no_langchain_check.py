@@ -152,7 +152,51 @@ def test_laurium_put_back_into_the_conduits_context_by_a_negation_is_named(tmp_p
     root = _tree(tmp_path)
     ignore = root / ".dockerignore"
     ignore.write_text(ignore.read_text() + "!services/laurium/app.py\n")
-    assert any(".dockerignore" in p for p in check.source_problems(root))
+    assert any(
+        ".dockerignore" in p and "services/laurium/app.py" in p for p in check.source_problems(root)
+    )
+
+
+@pytest.mark.parametrize("line", ["/services/laurium/", "services/laurium/**", "services/lauri*"])
+def test_another_spelling_that_leaves_laurium_out_passes(tmp_path: Path, line: str) -> None:
+    """Read with the repository's own `.dockerignore` matcher (`tests/test_dockerignore.py`'s), not
+    by the line's spelling: any pattern that leaves every file of the folder out passes."""
+    root = _tree(tmp_path)
+    ignore = root / ".dockerignore"
+    lines = ignore.read_text().splitlines()
+    ignore.write_text("\n".join(x if x.strip() != "services/laurium" else line for x in lines) + "\n")
+    assert check.source_problems(root) == []
+
+
+def test_a_pattern_leaving_part_of_laurium_in_is_named(tmp_path: Path) -> None:
+    """Only its Python left out: its Dockerfile and requirements (which name LangChain) reach the
+    Conduit's build context, and the file left in is named."""
+    root = _tree(tmp_path)
+    ignore = root / ".dockerignore"
+    lines = ignore.read_text().splitlines()
+    ignore.write_text(
+        "\n".join(x if x.strip() != "services/laurium" else "services/laurium/*.py" for x in lines)
+        + "\n"
+    )
+    problems = check.source_problems(root)
+    assert any(".dockerignore" in p and "services/laurium/Dockerfile" in p for p in problems)
+
+
+def test_the_image_leg_alone_runs_with_image(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI's image steps run this with the runner's own Python, which has no `pathspec`: `--image`
+    reads the image alone (the source leg is its own job)."""
+
+    def _no(*_: object) -> list[str]:
+        raise AssertionError("the source leg ran in an image step")
+
+    monkeypatch.setattr(check, "source_problems", _no)
+    monkeypatch.setattr(check, "_image_distributions", lambda image: _printed(REAL_ROWS))
+    assert check.main(["--image", "ospreyflow/api:ci"]) == 0
+    monkeypatch.setattr(
+        check, "_image_distributions",
+        lambda image: _printed([*REAL_ROWS, {"name": "langchain-core", "version": "1.0"}]),
+    )  # fmt: skip
+    assert check.main(["--image", "ospreyflow/api:ci"]) == 1
 
 
 def test_laurium_s_own_folder_alone_may_carry_it(tmp_path: Path) -> None:

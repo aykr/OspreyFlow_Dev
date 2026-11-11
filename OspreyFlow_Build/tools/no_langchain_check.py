@@ -5,14 +5,17 @@ Laurium runs in its own image (`services/laurium/`), built only when it is chose
 of the LangChain it brings, is in the Conduit's or any other image. Two legs, each a refusal in words
 and never a pass on anything it cannot read:
 
-- **the source leg** (no flag; offline, in `make ci`): the Conduit's build context leaves Laurium's
-  folder out (`.dockerignore` names `services/laurium`); the Conduit's `pyproject.toml` and
+- **the source leg** (no flag; offline, in `make ci`): the Conduit's build context leaves every file
+  of Laurium's folder out (read with the repository's own `.dockerignore` matcher,
+  `tests/test_dockerignore.py`'s, so any pattern that does so passes and one that leaves a file in is
+  named, a file a `!` negation puts back among them); the Conduit's `pyproject.toml` and
   `uv.lock` name no LangChain, LangSmith, Laurium or spaCy model package (spaCy itself is in the
   lock only as ADR-108's optional `extraction` extra, which no image installs, so the image leg
   refuses it where the lock may not); and no Dockerfile but Laurium's installs any of them;
 - **the image leg** (`--image <ref>`, after CI builds each image): the distributions installed in
   the built image, read by `IMAGE_SCRIPT` with the image's own Python (`docker run`), must include
-  no LangChain, LangSmith, Laurium, spaCy or spaCy model.
+  no LangChain, LangSmith, Laurium, spaCy or spaCy model. With `--image` the image leg runs alone:
+  CI's image steps run this with the runner's own Python, and the source leg is its own job.
 
 Each refusal shown red in `tests/test_no_langchain_check.py` (rule 15), on the shape each leg reads.
 """
@@ -28,13 +31,9 @@ from pathlib import Path
 
 from tools.layout import CORE
 
-
-def _instructions(text: str) -> list[str]:
-    """A Dockerfile's instructions, each whole: continued lines joined, comments left out. The same
-    reading as `tools.licence_check._instructions`, kept here so CI's image step runs this with the
-    runner's own Python and nothing else installed."""
-    joined = re.sub(r"\\\r?\n", " ", text)
-    return [line.strip() for line in joined.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+#: Files of Laurium's folder that name LangChain or Laurium, checked whether or not a copied tree
+#: carries them; every file the folder really holds is checked besides.
+_LAURIUM_FILES = ("Dockerfile", "requirements.txt", "requirements.in", "app.py")
 
 #: Distributions that come with Laurium and nothing else, by normalised name.
 _FORBIDDEN = re.compile(r"^(langchain(-[a-z0-9-]+)?|langsmith|laurium|spacy(-[a-z0-9-]+)?|en-core-web-[a-z]+)$")
@@ -86,18 +85,41 @@ def _outside_laurium(core: Path, path: Path) -> bool:
     return parts[:2] != ("services", "laurium") and not {"node_modules", ".venv"} & set(parts)
 
 
-def source_problems(core: Path = CORE) -> list[str]:
-    problems: list[str] = []
+def _laurium_files(core: Path) -> list[str]:
+    folder = core / "services" / "laurium"
+    found = {f"services/laurium/{name}" for name in _LAURIUM_FILES}
+    if folder.is_dir():
+        found |= {
+            p.relative_to(core).as_posix()
+            for p in folder.rglob("*")
+            if p.is_file() and not {".venv", "__pycache__"} & set(p.relative_to(folder).parts)
+        }
+    return sorted(found)
+
+
+def _context_problems(core: Path) -> list[str]:
+    """Laurium's folder out of the Conduit's build context, read as Docker reads `.dockerignore`
+    with the repository's own matcher (the same `pathspec` gitignore reading as
+    `tests/test_dockerignore.py`, imported from it so the two cannot part)."""
+    from tests.test_dockerignore import _spec
+
     ignore = core / ".dockerignore"
-    lines = [line.strip() for line in ignore.read_text(encoding="utf-8").splitlines()] if (
-        ignore.is_file()
-    ) else []  # fmt: skip
-    if not any(line.rstrip("/") == "services/laurium" for line in lines):
+    text = ignore.read_text(encoding="utf-8") if ignore.is_file() else ""
+    problems: list[str] = []
+    spec = _spec(text)
+    kept = [path for path in _laurium_files(core) if not spec.match_file(path)]
+    if kept:
         problems.append(
-            ".dockerignore does not leave services/laurium out of the Conduit's build context"
+            ".dockerignore leaves part of services/laurium in the Conduit's build context: "
+            + ", ".join(kept[:5])
         )
-    if any(line.startswith("!") and "laurium" in line for line in lines):
-        problems.append(".dockerignore puts part of services/laurium back into the build context")
+    return problems
+
+
+def source_problems(core: Path = CORE) -> list[str]:
+    from tools.licence_check import _instructions
+
+    problems = _context_problems(core)
     for name in ("pyproject.toml", "uv.lock"):
         path = core / name
         if not path.is_file():
@@ -148,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--image", action="append", default=[], help="a built image to read")
     args = parser.parse_args(argv)
-    problems = source_problems()
+    problems = [] if args.image else source_problems()
     for image in args.image:
         try:
             found = forbidden_in_image(_image_distributions(image))
@@ -162,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(
         "no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image "
-        f"(source{''.join(f', {i}' for i in args.image)})."
+        f"({', '.join(args.image) if args.image else 'source'})."
     )
     return 0
 
