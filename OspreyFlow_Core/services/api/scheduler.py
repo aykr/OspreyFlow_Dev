@@ -30,7 +30,11 @@ from valkey.asyncio import Valkey
 from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
-from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
+from principal_auth import (
+    PrincipalExchangeRefused,
+    PrincipalExchangeUnavailable,
+    PrincipalRevoked,
+)
 from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from schemas.rights import Right, rights_for
@@ -621,11 +625,19 @@ class ScheduleExecutor:
                 kind="sign_in_unavailable",
                 about_the_owner=False,
             ) from error
-        except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
+        except PrincipalExchangeRefused as error:
+            # The identity provider was reached and refused: an account it no longer knows, an
+            # exchange it refused, a token that fails verification. A fact about the owner, so it
+            # counts toward the three that pause (Amendment 3 point 3; Amendment 19).
+            raise _Refused(
+                f"the identity provider refused to act as the schedule's owner, {owner_id}",
+                kind="refused_rights",
+            ) from error
+        except Exception as error:  # noqa: BLE001 - a fault, not a refusal of the exchange
             raise _Refused(
                 f"OspreyFlow could not act as the schedule's owner, {owner_id}",
-                kind="failed",  # a network fault or a bug, not the owner's rights (Admin's review)
-                about_the_owner=False,  # never one of the three that pause (Amendment 3)
+                kind="failed",  # a store's fault or a bug, not the owner's rights (Admin's review)
+                about_the_owner=False,  # nothing about the owner, so never counted (Amendment 19)
             ) from error
 
     async def _not_run(
