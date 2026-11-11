@@ -157,14 +157,19 @@ deploy() {
   for s in clickhouse-keeper clickhouse arcadedb; do kubectl -n "$NS" rollout status "statefulset/$s" --timeout=600s; done
 }
 
+reset() {  # the deployment and the stand-in removed (their claims with them), the cluster kept
+  helm uninstall ospreyflow -n "$NS" 2>/dev/null || true
+  kubectl delete namespace "$NS" platform-managed --ignore-not-found --wait=true
+}
+
 restore_job() {  # the restore Job for a set, as an operator renders it (`--show-only`), to stdout
   helm template ospreyflow /chart -n "$NS" -f /render/values.yaml --set "backups.restore.set=$1" \
     --show-only templates/backups.yaml
 }
 
 case "${1:-}" in
-  up) up ;; down) down ;; status) status ;; tools) tools ;; deploy) deploy ;;
+  up) up ;; down) down ;; status) status ;; tools) tools ;; deploy) deploy ;; reset) reset ;;
   restore-job) restore_job "$2" ;;
   roundtrip|reds|seed|backup|destroy|restore|counts) DRIVER "$1" --helm-script "$0" ;;
-  *) echo "usage: p9_kind.sh up|deploy|roundtrip|reds|down|status|seed|backup|destroy|restore|counts" >&2; exit 2 ;;
+  *) echo "usage: p9_kind.sh up|deploy|roundtrip|reds|reset|down|status|seed|backup|destroy|restore|counts" >&2; exit 2 ;;
 esac

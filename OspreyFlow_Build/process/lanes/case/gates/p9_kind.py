@@ -49,12 +49,18 @@ STANDIN_PORT = 9443
 STANDIN = f"https://{STANDIN_HOST}:{STANDIN_PORT}"
 TOKEN_DIR = "/var/run/secrets/eks.amazonaws.com/serviceaccount"
 CA_DIR = "/etc/standin-ca"
+#: The names ClickHouse reaches S3 and STS by, as on the platform (its STS by the region in
+#: AWS_DEFAULT_REGION, never an endpoint override): inside its pod, kind's are the stand-in's.
+AWS_NAMES = (f"s3.{REGION}.amazonaws.com", f"sts.{REGION}.amazonaws.com")
 KEPT = ("arcadedb", "clickhouse", "clickhouse-keeper")
+#: The images those and the backups run: the only ones copied into the cluster's registry.
+DEPLOYED_IMAGES = ("arcadedb", "clickhouse-server", "clickhouse-keeper", "api")
 #: Memory on kind's 8 GB (the render's are the platform's): enough to run, not to measure speed by.
 KIND_MEMORY = {"arcadedb": "2Gi", "clickhouse": "2Gi", "clickhouse-keeper": "512Mi"}
 SEED_VERTICES = 5000
 SEED_EDGES = 1000
 SEED_ROWS = 200_000
+SEED_FILES = 300
 
 
 def sh(*args: str, stdin: str | None = None, check: bool = True) -> str:
@@ -109,12 +115,19 @@ class Run:
                 target += ":sha256-" + digest.removeprefix("sha256:")[:12]
             return target
 
-        resolver = (
-            (lambda ref: registry_digest_resolver(in_kind(ref)))
-            if resolve == "registry"
-            else (lambda ref: None)
-        )
-        result = render(config, resolver=resolver, allow_unpinned=resolve != "registry")
+        def deployed(ref: str) -> bool:
+            return any(
+                f"/{name}:" in str(ref) or f"/{name}@" in str(ref) for name in DEPLOYED_IMAGES
+            )
+
+        def resolver(ref: str) -> str | None:
+            # Only the images deployed here have copies in the cluster's registry; the rest of the
+            # render's are left unpinned (never deployed), and each deployed one is checked below.
+            if resolve != "registry" or not deployed(ref):
+                return None
+            return registry_digest_resolver(in_kind(ref))
+
+        result = render(config, resolver=resolver, allow_unpinned=True)
         values = yaml.safe_load(result.artefacts["values.yaml"])
         if "backups" not in values:  # P9_render.diff not applied: the same call it makes
             assert config.cloud_platform is not None
@@ -124,6 +137,14 @@ class Run:
             )
         values["workloads"] = [w for w in values["workloads"] if w["name"] in KEPT]
         values["jobs"] = []
+        # The poc shape's Ingest root on a claim of its own, as P7b's render writes it (not on main
+        # yet): the backups' claims run reads `storage.claims` (`shared_pod` makes the claim).
+        values["storage"]["claims"] = [{"name": "ingest", "size": "1Gi"}]
+        if resolve == "registry":
+            images = [w["image"] for w in values["workloads"]] + [values["backups"]["image"]]
+            unpinned = [i for i in images if "@sha256:" not in i]
+            if unpinned:
+                raise SystemExit(f"not pinned by the cluster registry's digest: {unpinned}")
         for w in values["workloads"]:
             memory = KIND_MEMORY[w["name"]]
             w["resources"] = {
@@ -238,7 +259,9 @@ class Run:
                 "-out",
                 str(ca / "tls.csr"),
             )
-            (ca / "san").write_text(f"subjectAltName=DNS:{STANDIN_HOST}")
+            (ca / "san").write_text(
+                "subjectAltName=" + ",".join(f"DNS:{n}" for n in (STANDIN_HOST, *AWS_NAMES))
+            )
             sh(
                 "openssl",
                 "x509",
@@ -339,11 +362,16 @@ class Run:
                     "metadata": {"name": "s3-standin", "namespace": STANDIN_NS},
                     "spec": {
                         "selector": {"app": "s3-standin"},
-                        "ports": [{"port": STANDIN_PORT, "targetPort": STANDIN_PORT}],
+                        # Its own port, and 443 for the AWS names ClickHouse uses (`patch`).
+                        "ports": [
+                            {"name": "standin", "port": STANDIN_PORT, "targetPort": STANDIN_PORT},
+                            {"name": "https", "port": 443, "targetPort": STANDIN_PORT},
+                        ],
                     },
                 },
             ]
         )
+        kubectl("-n", STANDIN_NS, "rollout", "restart", "deployment/s3-standin")
         kubectl("-n", STANDIN_NS, "rollout", "status", "deployment/s3-standin", "--timeout=300s")
         print(
             f"stand-in at {STANDIN}, trusting the cluster's issuer {config['roles'][0]['issuer']}"
@@ -490,9 +518,12 @@ class Run:
                 if m["name"] not in ("aws-iam-token", "standin-ca")
             ]
             container["volumeMounts"] = mounts + [
-                {"name": "aws-iam-token", "mountPath": TOKEN_DIR, "readOnly": True},
-                {"name": "standin-ca", "mountPath": CA_DIR, "readOnly": True},
+                {"name": "aws-iam-token", "mountPath": TOKEN_DIR, "readOnly": True}
             ]
+            if not any(m["mountPath"] == CA_DIR for m in mounts):
+                container["volumeMounts"].append(
+                    {"name": "standin-ca", "mountPath": CA_DIR, "readOnly": True}
+                )
 
     def patch(self) -> None:
         image = self.values()["backups"]["image"]
@@ -517,27 +548,44 @@ class Run:
         )
         sts = json.loads(kubectl("-n", self.ns, "get", "statefulset", "clickhouse", "-o", "json"))
         pod = sts["spec"]["template"]["spec"]
-        if not any(v["name"] == "p9-ca" for v in pod.get("volumes", [])):
-            pod.setdefault("volumes", []).extend(
-                [
-                    {"name": "p9-ca", "secret": {"secretName": "standin-ca"}},
-                    {"name": "p9-ca-config", "configMap": {"name": "p9-clickhouse-ca"}},
-                ]
-            )
-            container = next(c for c in pod["containers"] if c["name"] == "clickhouse")
-            container.setdefault("volumeMounts", []).extend(
-                [
-                    {"name": "p9-ca", "mountPath": CA_DIR, "readOnly": True},
-                    {
-                        "name": "p9-ca-config",
-                        "mountPath": "/etc/clickhouse-server/config.d/standin-ca.xml",
-                        "subPath": "standin-ca.xml",
-                        "readOnly": True,
-                    },
-                ]
-            )
-            kubectl("replace", "-f", "-", stdin=json.dumps(sts))
-        print("patched: the backup CronJob's IRSA; ClickHouse's trust of the stand-in's CA")
+        container = next(c for c in pod["containers"] if c["name"] == "clickhouse")
+        pod["volumes"] = [
+            v for v in pod.get("volumes", []) if v["name"] not in ("p9-ca", "p9-ca-config")
+        ] + [
+            {"name": "p9-ca", "secret": {"secretName": "standin-ca"}},
+            {"name": "p9-ca-config", "configMap": {"name": "p9-clickhouse-ca"}},
+        ]
+        container["volumeMounts"] = [
+            m
+            for m in container.get("volumeMounts", [])
+            if m["name"] not in ("p9-ca", "p9-ca-config")
+        ] + [
+            {"name": "p9-ca", "mountPath": CA_DIR, "readOnly": True},
+            {
+                "name": "p9-ca-config",
+                "mountPath": "/etc/clickhouse-server/config.d/standin-ca.xml",
+                "subPath": "standin-ca.xml",
+                "readOnly": True,
+            },
+        ]
+        # ClickHouse runs as the backup role (the render's serviceAccountName): what EKS's webhook
+        # adds for that, and the AWS names as the stand-in inside its pod.
+        self.irsa(pod, container["image"])
+        address = kubectl(
+            "-n", STANDIN_NS, "get", "service", "s3-standin", "-o", "jsonpath={.spec.clusterIP}"
+        ).strip()
+        pod["hostAliases"] = [{"ip": address, "hostnames": list(AWS_NAMES)}]
+        kubectl("replace", "-f", "-", stdin=json.dumps(sts))
+        for claims in kubectl("-n", self.ns, "get", "cronjob", "-o", "name").split():
+            if claims.endswith("/ospreyflow-backup-claims"):
+                cron = json.loads(kubectl("-n", self.ns, "get", claims, "-o", "json"))
+                self.irsa(cron["spec"]["jobTemplate"]["spec"]["template"]["spec"], image)
+                kubectl("replace", "-f", "-", stdin=json.dumps(cron))
+        self.shared_pod()
+        print(
+            "patched: the backups' and ClickHouse's IRSA; ClickHouse's AWS names and the stand-in's "
+            "CA; the Ingest root's claim and a shared pod on it"
+        )
 
     # -- the stores, from a pod of the deployment -------------------------------------------------
 
@@ -599,11 +647,100 @@ class Run:
             stdin=STORES + code,
         )
 
+    # -- the poc shape's claim of its own (P7b's `ospreyflow-ingest`, emulated) ------------------
+
+    def shared_pod(self) -> None:
+        """What P7b's render gives the poc shape and main's chart has not yet: the Ingest root's
+        claim (`ospreyflow-ingest`, ReadWriteOnce) and a pod of the shared folders mounting it
+        (`ospreyflow.io/shared`), standing for the Conduit and the workers."""
+        values = self.values()
+        security = values.get("podSecurity") or {"user": 10001, "group": 10001}
+        apply(
+            {
+                "apiVersion": "v1",
+                "kind": "PersistentVolumeClaim",
+                "metadata": {"name": "ospreyflow-ingest", "namespace": self.ns},
+                "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "storageClassName": values["storage"]["className"],
+                    "resources": {"requests": {"storage": "1Gi"}},
+                },
+            }
+        )
+        if kubectl(
+            "-n", self.ns, "get", "pod", "p9-shared", "--ignore-not-found", "-o", "name"
+        ).strip():
+            return
+        apply(
+            {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {
+                    "name": "p9-shared",
+                    "namespace": self.ns,
+                    "labels": {
+                        "app.kubernetes.io/part-of": "ospreyflow",
+                        "ospreyflow.io/shared": "true",
+                    },
+                },
+                "spec": {
+                    "securityContext": {
+                        "runAsNonRoot": True,
+                        "runAsUser": security["user"],
+                        "runAsGroup": security["group"],
+                        "fsGroup": security["group"],
+                    },
+                    "containers": [
+                        {
+                            "name": "shared",
+                            "image": values["backups"]["image"],
+                            "command": [
+                                "/app/.venv/bin/python",
+                                "-c",
+                                "import time; time.sleep(10**9)",
+                            ],
+                            "volumeMounts": [{"name": "ingest", "mountPath": "/claims/ingest"}],
+                        }
+                    ],
+                    "volumes": [
+                        {
+                            "name": "ingest",
+                            "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"},
+                        }
+                    ],
+                },
+            }
+        )
+        kubectl("-n", self.ns, "wait", "--for=condition=Ready", "pod/p9-shared", "--timeout=300s")
+
+    def stop_shared(self) -> None:
+        kubectl("-n", self.ns, "delete", "pod", "p9-shared", "--ignore-not-found", "--wait=true")
+
+    def in_shared(self, code: str) -> str:
+        return kubectl(
+            "-n",
+            self.ns,
+            "exec",
+            "-i",
+            "p9-shared",
+            "--",
+            "/app/.venv/bin/python",
+            "-",
+            stdin=CLAIMS + code,
+        )
+
+    # -- the stores -------------------------------------------------------------------------------
+
     def seed(self) -> dict[str, Any]:
         out = self.probe(
             f"seed({SEED_VERTICES}, {SEED_EDGES}, {SEED_ROWS}); print(json.dumps(counts()))"
         )
         found: dict[str, Any] = json.loads(out.strip().splitlines()[-1])
+        found["claims"] = json.loads(
+            self.in_shared(f"seed({SEED_FILES}); print(json.dumps(tree()))")
+            .strip()
+            .splitlines()[-1]
+        )
         print("seeded:", found)
         return found
 
@@ -611,10 +748,14 @@ class Run:
         found: dict[str, Any] = json.loads(
             self.probe("print(json.dumps(counts()))").strip().splitlines()[-1]
         )
+        found["claims"] = json.loads(
+            self.in_shared("print(json.dumps(tree()))").strip().splitlines()[-1]
+        )
         return found
 
     def destroy(self) -> dict[str, Any]:
         self.probe("destroy()")
+        self.in_shared("destroy()")
         left = self.counts()
         print("destroyed; the stores now hold:", left)
         return left
@@ -642,69 +783,101 @@ class Run:
             time.sleep(2)
         raise SystemExit(f"job {name} neither finished nor failed in {timeout} s")
 
-    def job_from_cron(self, name: str, command: list[str] | None = None) -> tuple[bool, str]:
+    def start_from_cron(
+        self,
+        name: str,
+        cron: str = "ospreyflow-backup",
+        *,
+        command: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> None:
+        """A Job of `cron`'s, named as the CronJob would name it for a slot (`<cron>-<minute>`),
+        its command or settings changed only where a refusal case says so."""
         kubectl("-n", self.ns, "delete", "job", name, "--ignore-not-found", "--wait=true")
-        if command is None:
-            kubectl("-n", self.ns, "create", "job", name, "--from=cronjob/ospreyflow-backup")
-        else:
-            cron = json.loads(
-                kubectl("-n", self.ns, "get", "cronjob", "ospreyflow-backup", "-o", "json")
-            )
-            spec = copy.deepcopy(cron["spec"]["jobTemplate"]["spec"])
-            spec["backoffLimit"] = 0
-            spec["template"]["spec"]["containers"][0]["command"] = command
-            apply(
-                {
-                    "apiVersion": "batch/v1",
-                    "kind": "Job",
-                    "metadata": {"name": name, "namespace": self.ns},
-                    "spec": spec,
-                }
-            )
-        return self.wait_job(name)
+        if command is None and env is None:
+            kubectl("-n", self.ns, "create", "job", name, f"--from=cronjob/{cron}")
+            return
+        spec = copy.deepcopy(
+            json.loads(kubectl("-n", self.ns, "get", "cronjob", cron, "-o", "json"))["spec"][
+                "jobTemplate"
+            ]["spec"]
+        )
+        spec["backoffLimit"] = 0
+        container = spec["template"]["spec"]["containers"][0]
+        if command is not None:
+            container["command"] = command
+        for key, value in (env or {}).items():
+            container["env"] = [e for e in container.get("env", []) if e["name"] != key] + [
+                {"name": key, "value": value}
+            ]
+        apply(
+            {
+                "apiVersion": "batch/v1",
+                "kind": "Job",
+                "metadata": {"name": name, "namespace": self.ns},
+                "spec": spec,
+            }
+        )
 
-    def backup(self, name: str = "p9-backup") -> tuple[bool, str]:
-        ok, logs = self.job_from_cron(name)
-        print(f"{name}: {'succeeded' if ok else 'FAILED'}\n{logs}")
-        return ok, logs
+    def backup(self, slot: int | None = None) -> tuple[bool, str, str]:
+        """Both runs of one slot, as the two CronJobs start them; the set's name and the logs."""
+        slot = slot or int(time.time() // 60)
+        main, claims = f"ospreyflow-backup-{slot}", f"ospreyflow-backup-claims-{slot}"
+        self.start_from_cron(main)
+        self.start_from_cron(claims, "ospreyflow-backup-claims")
+        ok_main, logs_main = self.wait_job(main)
+        ok_claims, logs_claims = self.wait_job(claims)
+        logs = logs_main + logs_claims
+        print(f"backup {slot}: {'succeeded' if ok_main and ok_claims else 'FAILED'}\n{logs}")
+        return (
+            ok_main and ok_claims,
+            logs,
+            dt.datetime.fromtimestamp(slot * 60, dt.UTC).strftime("%Y%m%dT%H%M%SZ"),
+        )
 
     def restore(self, set_id: str) -> dict[str, float]:
-        """ArcadeDB stopped, the restore Job (rendered as an operator does) run, ArcadeDB started:
-        each phase timed."""
+        """ArcadeDB and the shared pods stopped, the restore's two Jobs (rendered as an operator
+        does) run, then both started again: each phase timed."""
         assert self.helm_script
         times: dict[str, float] = {}
         start = time.monotonic()
         kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=0")
+        self.stop_shared()
         kubectl(
             "-n", self.ns, "wait", "--for=delete", "pod/arcadedb-0", "--timeout=300s", check=False
         )
-        times["arcadedb_stopped"] = round(time.monotonic() - start, 1)
+        times["stopped"] = round(time.monotonic() - start, 1)
         documents = [
             d for d in yaml.safe_load_all(sh("bash", self.helm_script, "restore-job", set_id)) if d
         ]
-        job = next(d for d in documents if d["kind"] == "Job")
-        self.irsa(job["spec"]["template"]["spec"], self.values()["backups"]["image"])
-        job["metadata"]["namespace"] = self.ns
-        kubectl(
-            "-n",
-            self.ns,
-            "delete",
-            "job",
-            job["metadata"]["name"],
-            "--ignore-not-found",
-            "--wait=true",
-        )
-        apply(job)
-        ok, logs = self.wait_job(job["metadata"]["name"])
-        times["restore_job"] = round(time.monotonic() - start - times["arcadedb_stopped"], 1)
-        print(f"restore job: {'succeeded' if ok else 'FAILED'}\n{logs}")
-        if not ok:
-            raise SystemExit("the restore Job failed")
+        jobs = [d for d in documents if d["kind"] == "Job"]
+        assert len(jobs) == 2, [j["metadata"]["name"] for j in jobs]
+        for job in jobs:
+            self.irsa(job["spec"]["template"]["spec"], self.values()["backups"]["image"])
+            job["metadata"]["namespace"] = self.ns
+            kubectl(
+                "-n",
+                self.ns,
+                "delete",
+                "job",
+                job["metadata"]["name"],
+                "--ignore-not-found",
+                "--wait=true",
+            )
+            apply(job)
+        for job in jobs:
+            name = job["metadata"]["name"]
+            ok, logs = self.wait_job(name)
+            times[name] = round(time.monotonic() - start - times["stopped"], 1)
+            print(f"{name}: {'succeeded' if ok else 'FAILED'}\n{logs}")
+            if not ok:
+                raise SystemExit(f"the restore Job {name} failed")
         restarted = time.monotonic()
         kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=1")
+        self.shared_pod()
         kubectl("-n", self.ns, "rollout", "status", "statefulset/arcadedb", "--timeout=900s")
         kubectl("-n", self.ns, "wait", "--for=condition=Ready", "pod/arcadedb-0", "--timeout=900s")
-        times["arcadedb_ready"] = round(time.monotonic() - restarted, 1)
+        times["started"] = round(time.monotonic() - restarted, 1)
         times["total"] = round(time.monotonic() - start, 1)
         return times
 
@@ -728,25 +901,28 @@ class Run:
         print(f"== record ({path})\n{json.dumps(self.record, indent=2)}")
 
     def roundtrip(self) -> None:
+        self.shared_pod()
         seeded = self.seed()
         before = set(self.finished_sets())
-        ok, logs = self.backup("p9-backup")
+        started = time.monotonic()
+        ok, logs, set_id = self.backup()
+        backup_seconds = round(time.monotonic() - started, 1)
         if not ok:
             raise SystemExit("the backup failed")
         new = sorted(set(self.finished_sets()) - before)
-        assert len(new) == 1, f"one finished set expected, found {new}"
-        set_id = new[0]
+        assert new == [set_id], f"the slot's set {set_id} expected, found {new}"
         objects = [o for o in self.bucket_objects() if o["key"].startswith(f"sets/{set_id}/")]
         unencrypted = [o["key"] for o in objects if o.get("kms_key") != KEY_ARN]
         self.record["backup"] = {
             "set": set_id,
+            "seconds": backup_seconds,
             "objects": len(objects),
             "bytes": sum(o["size"] for o in objects),
             "not_under_the_key": unencrypted,
-            "log": [line for line in logs.splitlines() if "backup:" in line],
+            "claims_part": [o["key"] for o in objects if "/claims/" in o["key"]],
+            "log": [line for line in logs.splitlines() if "backup" in line and "set " in line],
         }
-        left = self.destroy()
-        self.record["destroyed"] = left
+        self.record["destroyed"] = self.destroy()
         times = self.restore(set_id)
         after = self.counts()
         self.record.update(
@@ -762,7 +938,9 @@ class Run:
             raise SystemExit(
                 "FAIL: the restored stores differ from the seed, or an object was not under the key"
             )
-        print(f"PASS round trip: set {set_id} restored in {times['total']} s, counts equal")
+        print(
+            f"PASS round trip: set {set_id} restored in {times['total']} s, counts and the claim equal"
+        )
 
     def reds(self) -> None:
         from harness import cloud_platform_backups as backups
@@ -770,21 +948,22 @@ class Run:
         arn = f"arn:aws:s3:::{self.bucket()}"
         good = self.standin_config()
         results: list[dict[str, Any]] = []
+        self.shared_pod()
+        slot = int(time.time() // 60) + 10  # slots of their own, after the round trip's
 
         def expect(
-            name: str,
-            config: dict[str, Any] | None,
-            words: tuple[str, ...],
-            command: list[str] | None = None,
+            name: str, words: tuple[str, ...], run: Any, config: dict[str, Any] | None = None
         ) -> None:
+            nonlocal slot
+            slot += 1
             if config is not None:
                 self.configure(config)
             before = self.finished_sets()
             try:
-                ok, logs = self.job_from_cron(f"p9-red-{name}", command)
+                ok, logs = run(slot)
             finally:
                 self.configure(good)
-            said = [line for line in logs.splitlines() if "refused" in line or "REFUSED" in line]
+            said = [line for line in logs.splitlines() if "refused" in line]
             red = (
                 (not ok)
                 and all(any(w in line for line in said) for w in words)
@@ -793,6 +972,7 @@ class Run:
             results.append(
                 {
                     "red": name,
+                    "slot": slot,
                     "refused": not ok,
                     "words": said,
                     "no_new_set": self.finished_sets() == before,
@@ -801,11 +981,23 @@ class Run:
             )
             print(f"{'PASS' if red else 'FAIL'} {name}: {said or logs[-800:]}")
 
+        def main_only(env: dict[str, str] | None = None) -> Any:
+            def go(slot: int) -> tuple[bool, str]:
+                self.start_from_cron(f"ospreyflow-backup-{slot}", env=env)
+                return self.wait_job(f"ospreyflow-backup-{slot}")
+
+            return go
+
+        def both(slot: int) -> tuple[bool, str]:
+            ok, logs, _ = self.backup(slot)
+            return ok, logs
+
         # 1. The bucket's policy written for another role: the backup role is refused by the bucket.
         expect(
             "bucket-policy",
-            self.standin_config(bucket_policy=backups.bucket_policy(arn, KEY_ARN, OTHER_ROLE_ARN)),
             ("arcadedb", "AccessDenied"),
+            main_only(),
+            self.standin_config(bucket_policy=backups.bucket_policy(arn, KEY_ARN, OTHER_ROLE_ARN)),
         )
         # 2. The role without kms:GenerateDataKey: S3 refuses the encrypted write, naming the action.
         policy = backups.role_policy(arn, KEY_ARN)
@@ -813,16 +1005,51 @@ class Run:
             statement["Action"] = [a for a in statement["Action"] if a != "kms:GenerateDataKey"]
         expect(
             "kms-generate",
-            self.standin_config(role_policy=policy),
             ("AccessDenied", "kms:GenerateDataKey"),
+            main_only(),
+            self.standin_config(role_policy=policy),
         )
-        # 3. The session expired between taking its credentials and ClickHouse's BACKUP, by the
-        # runner's own calls (an hour on the platform; the stand-in's lever here).
+        # 3. The role's session expired under ClickHouse, which took its credentials at the round
+        # trip's BACKUP and keeps them: the next real BACKUP is refused (ClickHouse restarted after,
+        # to take a new one).
+        self.lever("/_standin/expire")
+        expect("expired-role", ("clickhouse",), both)
+        results[-1]["clickhouse_said"] = [w for w in results[-1]["words"] if "clickhouse" in w]
+        kubectl("-n", self.ns, "rollout", "restart", "statefulset/clickhouse")
+        kubectl("-n", self.ns, "rollout", "status", "statefulset/clickhouse", "--timeout=600s")
+        # 4. No claims part (the claims run never ran): the main run waits its bounded time, fails
+        # in words and leaves the set unfinished; a restore of that set is refused.
         expect(
-            "expired-role",
-            None,
-            ("clickhouse", "ExpiredToken"),
-            ["/app/.venv/bin/python", "-c", EXPIRED],
+            "missing-claims",
+            ("claims", "unfinished"),
+            main_only({"OSPREY_BACKUP_CLAIMS_WAIT": "45"}),
+        )
+        unfinished = dt.datetime.fromtimestamp(slot * 60, dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+        name = f"p9-restore-refused-{slot}"
+        self.start_from_cron(
+            name,
+            command=[
+                "/app/.venv/bin/python",
+                "-m",
+                "services.api.platform_backup",
+                "fetch-graph",
+                "--set",
+                unfinished,
+                "--to",
+                "/tmp/restore",
+            ],
+        )
+        ok, logs = self.wait_job(name)
+        results.append(
+            {
+                "red": "restore-of-the-unfinished-set",
+                "refused": not ok,
+                "words": [line for line in logs.splitlines() if "refused" in line],
+                "as_expected": (not ok) and "no finished set" in logs,
+            }
+        )
+        print(
+            f"{'PASS' if results[-1]['as_expected'] else 'FAIL'} restore of {unfinished}: {results[-1]['words']}"
         )
         self.record["reds"] = results
         self.save("reds")
@@ -853,6 +1080,12 @@ def ch(statement):
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"ClickHouse: {e.code} {e.read()[:400]!r}") from None
 def seed(vertices, edges, rows):
+    # From empty stores every time: a seed that half-ran before is never counted twice.
+    try:
+        arcade("/api/v1/server", {"command": "drop database ospreyflow"})
+    except RuntimeError:
+        pass
+    ch("DROP DATABASE IF EXISTS ospreyflow ON CLUSTER osprey SYNC")
     try:
         arcade("/api/v1/server", {"command": "create database ospreyflow"})
     except RuntimeError as e:
@@ -863,6 +1096,7 @@ def seed(vertices, edges, rows):
     for start in range(0, vertices, 500):
         rows_ = [{"n": i, "name": f"synthetic person {i}"} for i in range(start, min(start + 500, vertices))]
         sql("INSERT INTO P9Person CONTENT " + json.dumps(rows_))
+    sql("CREATE PROPERTY P9Person.n IF NOT EXISTS LONG")
     sql("CREATE INDEX IF NOT EXISTS ON P9Person (n) UNIQUE")
     for i in range(edges):
         sql(f"CREATE EDGE P9Knows FROM (SELECT FROM P9Person WHERE n = {i}) TO (SELECT FROM P9Person WHERE n = {i + 1})")
@@ -886,23 +1120,33 @@ def destroy():
     ch("DROP DATABASE IF EXISTS ospreyflow ON CLUSTER osprey SYNC")
 """
 
-#: The runner's own calls, the session expired between them (the third red).
-EXPIRED = r"""
-import ssl, sys, urllib.request
-from services.api.platform_backup import Bucket, BackupRefused, Settings, Stores
-settings = Settings.from_env()
-bucket, stores = Bucket(settings), Stores(settings)
-credentials = bucket.credentials()
-bucket.client.list_objects_v2(Bucket=settings.bucket, MaxKeys=1)  # accepted while the session lives
-print("the role's session accepted by S3")
-context = ssl.create_default_context(cafile=__import__("os").environ["AWS_CA_BUNDLE"])
-urllib.request.urlopen(urllib.request.Request(settings.s3_endpoint + "/_standin/expire", data=b"", method="POST"), context=context)
-try:
-    stores.clickhouse_backup(f"{settings.s3_base}/sets/expired-probe/clickhouse/", credentials)
-except BackupRefused as refusal:
-    print(f"expired-role refused: {refusal}", file=sys.stderr)
-    sys.exit(1)
-print("FAIL: ClickHouse's BACKUP was accepted on an expired session")
+#: The shared claim's own files, in the shared pod: synthetic uploads and a drop folder.
+CLAIMS = r"""
+import hashlib, json, os, pathlib, random, shutil
+ROOT = pathlib.Path("/claims/ingest")
+def seed(files):
+    destroy()
+    rng = random.Random(9)
+    for i in range(files):
+        path = ROOT / "ingest" / "uploads" / f"case-{i % 7}" / f"synthetic upload {i}.bin"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(rng.randbytes(20_000 + i * 37))
+    drop = ROOT / "ingest" / "drop" / "nightly"
+    drop.mkdir(parents=True, exist_ok=True)
+    (drop / "people.csv").write_text("id,name\n" + "".join(f"{i},Synthetic Person {i}\n" for i in range(500)))
+def tree():
+    found = []
+    for path in sorted(ROOT.rglob("*")):
+        rel = path.relative_to(ROOT).as_posix()
+        if rel == "lost+found" or rel.startswith("lost+found/") or not path.is_file():
+            continue
+        found.append(rel + " " + hashlib.sha256(path.read_bytes()).hexdigest())
+    return {"files": len(found), "sha256": hashlib.sha256("\n".join(found).encode()).hexdigest()}
+def destroy():
+    for entry in ROOT.iterdir():
+        if entry.name == "lost+found":
+            continue
+        shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
 """
 
 
