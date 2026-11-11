@@ -35,3 +35,8 @@ Send "built" for each filled part. It merges in parts, without the owner, under 
   P7b replaced both with per-workload rows and named keys.
 - **P12 part 2, carried to docs:** §10.1 says nothing of Admin › Models' read-only extraction-engine row, or of how
   to change the engine (osprey.yaml, re-render, the platform team applies).
+- **L1.9 part 2 (studio-b), after it merges:** "Admin guide, cloud-platform: declare S3 buckets and Athena
+  workgroups under cloud_platform.connector_sources (bucket/region/folder; workgroup/region/databases/
+  results_location/table_locations). Each needs its networks in egress_nets. Re-render, helm upgrade and apply
+  connector_sources.tf, and Admin › Connections then accepts S3 and Athena connections within them, refusing others
+  in words. Connector hosts now reach the Conduit only."
