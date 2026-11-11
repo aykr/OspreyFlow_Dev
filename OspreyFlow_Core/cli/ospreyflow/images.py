@@ -68,6 +68,18 @@ def push(
     say: Any = print,
 ) -> int:
     plan = read_plan(product, folder)
+    by_tag = [
+        i["source"] for i in plan["images"] if "source" in i and "@sha256:" not in i["source"]
+    ]
+    if by_tag:
+        # A copy by tag pins nothing the values can name: the pinned render would resolve the tag
+        # again, and a tag moved in between pins a digest the registry's copy does not have.
+        raise CommandRefused(
+            f"The plan names {', '.join(by_tag)} by its tag alone, so its copy could not be the "
+            "one the values pin. Render again with each image's registry reachable (from "
+            "OspreyFlow_Core: PYTHONPATH=.:packages .venv/bin/python -m harness.render "
+            "--allow-unpinned), then push."
+        )
     if registry.rstrip("/") != plan["registry"]:
         raise CommandRefused(
             f"The render names the registry {plan['registry']}, not {registry}: the values would "

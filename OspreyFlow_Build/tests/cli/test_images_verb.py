@@ -213,3 +213,21 @@ def test_no_plan_is_refused_with_a_command_that_renders_it(tmp_path: Path) -> No
     )  # fmt: skip
     assert done.returncode == 0, done.stderr
     assert "usage: python -m harness.render" in done.stdout
+
+
+def test_a_third_party_image_named_by_tag_alone_is_never_copied(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The D2c guide's finding (b): a plan rendered with the image's registry out of reach names a
+    third-party image by its tag, and a copy by tag pins nothing the values can name. The push
+    refuses before any step runs, saying how to render it by digest."""
+    text = render(
+        load_config(FIXTURES / "production.yaml"), resolver=lambda ref: None, allow_unpinned=True
+    ).artefacts["images.yaml"]
+    folder = rig.product / "deploy" / "generated" / "cloud-platform"
+    folder.mkdir(parents=True)
+    (folder / "images.yaml").write_text(text, encoding="utf-8")
+    assert rig("images", "push", "--registry", REGISTRY) != 0
+    assert not rig.runner.calls
+    out = capsys.readouterr()
+    assert "by its tag alone" in out.out + out.err
