@@ -995,10 +995,21 @@ class CloudPlatformConfig(BaseModel):
     )
     connector_hosts: list[str] = Field(
         default_factory=list,
-        description="The hosts a SQL or API connection may reach, each with its networks in "
-        "egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list "
-        "(OSPREY_CONNECTOR_EGRESS), so the two never disagree",
+        description="The hosts a SQL or API connection may reach, each as host or host:port (a "
+        "name, not an IPv6 literal), with its networks in egress_nets under the host alone. The "
+        "namespace's egress allows each host on its ports; the Conduit's own allow-list "
+        "(OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a "
+        "port not listed here passes the Conduit and times out at the egress. A bare host is "
+        "reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port "
+        "here (db.example.org:5432). A host given twice with two ports is reached on both",
     )
+
+    @field_validator("connector_hosts")
+    @classmethod
+    def _connector_ports(cls, hosts: list[str]) -> list[str]:
+        for entry in hosts:
+            connector_address(entry)  # refused in words when its port is not a port
+        return hosts
 
     @model_validator(mode="after")
     def _networks_are_networks(self) -> CloudPlatformConfig:
@@ -1015,6 +1026,25 @@ class CloudPlatformConfig(BaseModel):
                 if why := too_wide_for_egress(net):
                     raise ValueError(f"cloud_platform.egress_nets[{host!r}]: {why}")
         return self
+
+
+def connector_address(entry: str) -> tuple[str, int]:
+    """A `cloud_platform.connector_hosts` entry's host and port: `host:port`, or a bare host on 443
+    (ADR-148 Amendment 5 point 21). The port is digits alone, 1 to 65535."""
+    if entry.startswith("[") or entry.count(":") > 1:
+        raise ValueError(
+            f"cloud_platform.connector_hosts {entry!r}: an IPv6 address is not taken; name the "
+            "host by its name (db.example.org or db.example.org:5432)"
+        )
+    host, sep, port = entry.rpartition(":")
+    if not sep:
+        return entry, 443
+    if not host or not re.fullmatch(r"[0-9]{1,5}", port) or not 1 <= int(port) <= 65535:
+        raise ValueError(
+            f"cloud_platform.connector_hosts {entry!r}: a host, or host:port with a port from 1 "
+            "to 65535 in digits alone (db.example.org:5432)"
+        )
+    return host, int(port)
 
 
 class TlsFiles(BaseModel):
