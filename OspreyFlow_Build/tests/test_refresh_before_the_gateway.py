@@ -524,3 +524,24 @@ def test_a_descriptor_named_that_is_not_the_lock_holds_nothing(
     finally:
         os.close(held)
         os.close(other)
+
+
+def test_a_stale_open_of_the_lock_itself_holds_nothing(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The handed-on descriptor is believed only if it flocks: a second, stale open of the lock
+    file itself (the same file, so it passes the identity check) while another process holds the
+    lock must not be taken for the parent's (the orchestrator's review of ad4bef7, item 2)."""
+    import fcntl
+
+    _after_the_gateway_database(deployment)
+    held = os.open(update.lock_path(deployment), os.O_RDONLY | os.O_CREAT, 0o644)
+    fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)  # another refresh, under way
+    stale = os.open(update.lock_path(deployment), os.O_RDONLY)  # its own open, never flocked
+    monkeypatch.setenv(update.LOCK_FD_VARIABLE, str(stale))
+    try:
+        with pytest.raises(refresh.RefreshFailed, match="under way"):
+            refresh.files_up_to_date(_checkout(deployment))
+    finally:
+        os.close(stale)
+        os.close(held)
