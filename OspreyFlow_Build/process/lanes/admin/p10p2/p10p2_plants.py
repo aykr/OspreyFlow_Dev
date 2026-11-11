@@ -8,7 +8,8 @@ planted where it will merge, and reverted at the end. Run from `OspreyFlow_Core`
         CLICKHOUSE_HTTP_PORT=59994 .venv/bin/python \\
         ../OspreyFlow_Build/process/lanes/admin/p10p2/p10p2_plants.py [--live]
 
-`--live` adds the plants whose cases need Postgres (under a lease, with its ports pinned).
+`--live` adds the plants whose cases need Postgres (under a lease, with its ports pinned);
+`--only-live` runs those alone (and no vitest control: the server need not hold the Glass's packages).
 
 **What counts as red** (as `p10/p10_plants.py`, the orchestrator's review of part 1): the planted
 source must still compile (Python) or the plant is a harness fault; a pytest case is red only on
@@ -574,7 +575,8 @@ def git(*args: str, check: bool = True) -> str:
 
 
 def main() -> int:
-    live = "--live" in sys.argv
+    only_live = "--only-live" in sys.argv
+    live = "--live" in sys.argv or only_live
     if git("status", "--porcelain", "--", "OspreyFlow_Core", "OspreyFlow_Build/tests").strip():
         print("refused: the tree has uncommitted changes")
         return 2
@@ -587,13 +589,19 @@ def main() -> int:
         print(
             f"control (diffs applied, no plant): {'green' if rc == 0 else 'RED'} (exit {rc}) — {tail}"
         )
-        vrc = subprocess.run(
-            ["npx", "vitest", "run", *GLASS_CONTROL], cwd=CORE, capture_output=True
-        ).returncode
+        vrc = (
+            0
+            if only_live
+            else subprocess.run(
+                ["npx", "vitest", "run", *GLASS_CONTROL], cwd=CORE, capture_output=True
+            ).returncode
+        )
         print(f"glass control: {'green' if vrc == 0 else 'RED'} (exit {vrc})")
         if rc != 0 or vrc != 0:
             return 1
         for plant in PLANTS:
+            if only_live and not plant.live:
+                continue
             if plant.live and not live:
                 print(f"[{plant.name}] live: run with --live under a lease")
                 continue
