@@ -5,7 +5,7 @@ Laurium runs in its own image (`services/laurium/`), built only when it is chose
 of the LangChain it brings, is in the Conduit's or any other image. Two legs, each a refusal in words
 and never a pass on anything it cannot read:
 
-- **the source leg** (no flag; offline, in `make ci`): the Conduit's build context leaves every file
+- **the source leg** (no flag; offline, in `make ci` once `P12_MAKEFILE.diff` is applied): the Conduit's build context leaves every file
   of Laurium's folder out (read with the repository's own `.dockerignore` matcher,
   `tests/test_dockerignore.py`'s, so any pattern that does so passes and one that leaves a file in is
   named, a file a `!` negation puts back among them); the Conduit's `pyproject.toml` and

@@ -5,12 +5,15 @@ gateway (`stand_in_http`).
 
 **Here are the refusals the pinned model cannot be made to give on demand** (an answer that breaks
 the schema's type or one of its constraints), **with two the real gateway could give** (a refused
-token, a model with no route), kept here so they run offline on every `make test`.
+token, a model with no route), kept here so they run without a model: in CI's `conformance-model`
+job (`make test` leaves this folder out) and in `make laurium-service` once `P12_MAKEFILE.diff` is
+applied.
 The stand-in answers whatever it is told to, whatever the prompt says, so it proves nothing of a
 model's answer to Laurium's prompt. The contract's own cases (a conforming answer from the pinned
 model, a malformed schema refused before any call) are `test_suite.py`'s, run on both engines
-through `registry.MODEL_PORT_ADAPTERS` against the stack's real LiteLLM and the pinned conformance
-model.
+through `registry.MODEL_PORT_ADAPTERS` against a real LiteLLM and the pinned conformance model (CI's
+`conformance-model` job; no leased stack has a gateway, so Laurium's run of them is recorded in
+`process/lanes/case-b/P12_RED_RECORD.md` with the gateway it used).
 
 The Laurium case needs Laurium's service code, installed only in its own 3.13 environment; in the
 Conduit's environment it is skipped with that reason (the `laurium-service` CI job runs it).

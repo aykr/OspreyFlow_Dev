@@ -257,12 +257,18 @@ LAURIUM: list[Plant] = [
     ("the review queue's write promoting a finding", REVIEW, [PROMOTE], [PENDING_T]),
 ]
 
-#: Leased, against the stack's real gateway (round 2, item 2): run under `stack_lease.sh remote` with the
-#: lease's ports and `LITELLM_*` exported, never with the closed ports. The token the adapter sends Laurium
-#: made the master key, so the gateway's admin routes grant it.
+#: Against a real gateway with its own database (round 2, item 2): `OSPREY_LIVE_GATEWAY_URL` and
+#: `OSPREY_LIVE_GATEWAY_MASTER` set, under a lease; the store ports stay closed (the test reaches none).
 KEY_LIVE_T = f"{B}/conformance/model_port/test_laurium_key_live.py"
 LIVE: list[Plant] = [
-    ("the master key sent to Laurium's service, against the real gateway's admin routes", A, [MASTER_KEY],
+    # The token the adapter sends Laurium's service made the master key, at the adapter's call site.
+    ("the master key sent to Laurium's service, at the real gateway's admin routes", A, [MASTER_KEY],
+     [KEY_LIVE_T]),
+    # Laurium's own key made with an admin role, where the key is made (put_laurium_key's fields). A
+    # measurement: whether the pinned LiteLLM honours `user_role` on /key/generate is not known here.
+    ("Laurium's own key made with the proxy admin's role", KEYS,
+     [('    fields = {"key": key, "models": list(models)}\n',
+       '    fields = {"key": key, "models": list(models), "user_role": "proxy_admin"}\n')],
      [KEY_LIVE_T]),
 ]
 
@@ -291,8 +297,9 @@ def main() -> int:
         plants = LAURIUM
     if "--live" in sys.argv:
         plants = LIVE
-        ENV.update({k: v for k, v in os.environ.items() if k.endswith(("_PORT", "_HOST")) or k in (
-            "LITELLM_API_KEY", "OSPREY_LANE")})  # the lease's own, not the closed ports
+        if not (os.environ.get("OSPREY_LIVE_GATEWAY_URL") and os.environ.get("OSPREY_LIVE_GATEWAY_MASTER")):
+            print("--live needs OSPREY_LIVE_GATEWAY_URL and OSPREY_LIVE_GATEWAY_MASTER: a real gateway")
+            return 2
     start = run(python, sorted({t for _, _, _, tests in plants for t in tests}))
     print(f"green start: {start}")
     if "failed" in start or "error" in start:

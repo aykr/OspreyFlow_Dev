@@ -34123,8 +34123,8 @@ client shows. Part 2 (after P7 and P11 part 1) renders the service in the
 `cloud-platform` profile with its egress line, presets it in that profile's pack, and adds the setting to *Admin ›
 Models*. **Decision 1's "checked in CI after each image's build" is carried, not built:** no CI step runs
 `tools/no_langchain_check.py --image` yet (`process/lanes/case-b/P12_CI.diff` leaves the image checks out, never
-having run them); what runs is the source leg, offline in `make ci`, and the image leg's reader, shown red on its
-own script's output in `tests/test_no_langchain_check.py`.
+having run them); what runs is the source leg, offline in `make ci` once `P12_MAKEFILE.diff` is applied,
+and the image leg's reader, shown red on its own script's output in `tests/test_no_langchain_check.py`.
 
 **The tests that would fail.** A gateway URL naming another host, `OPENAI_BASE_URL` set, or LangSmith tracing on:
 `tests/services/laurium/test_settings.py`, and the service's own code refusing to start
