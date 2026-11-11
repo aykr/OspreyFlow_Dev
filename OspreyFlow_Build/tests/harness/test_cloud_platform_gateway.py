@@ -23,11 +23,15 @@ from typing import Any
 
 import pytest
 
-from tests.harness.test_cloud_platform_render import AWS, _artefacts, _config, _hosts, _values
-from tests.services.api.test_model_engine_kinds import BEDROCK, BEDROCK_HOST, GATEWAY, GEMINI
+from tests.harness.test_cloud_platform_render import AWS, _artefacts, _hosts, _values
+from tests.services.api.test_model_engine_kinds import (
+    BEDROCK,
+    BEDROCK_HOST,
+    GATEWAY,
+    GEMINI,
+    _cloud_config,
+)
 
-NETS = {**AWS, BEDROCK_HOST: ["198.18.2.0/24"], "ai-gateway.client.example": ["203.0.113.0/24"],
-        "generativelanguage.googleapis.com": ["203.0.114.0/24"]}  # fmt: skip
 #: The gateway's own account, as the client's platform settings name it (`secrets.irsa`).
 GATEWAY_ACCOUNT = "ospreyflow-gateway"
 NAMESPACE_ACCOUNT = "ospreyflow"
@@ -36,9 +40,9 @@ INVOKE = {"bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"}
 
 
 def _engines(*providers: dict[str, Any]) -> Any:
-    models = {"local_only": not providers, "sendable_handling_codes": ["P"] if providers else [],
-              "providers": list(providers)}  # fmt: skip
-    return _config("development", models=models, cloud_platform={"egress_nets": NETS})
+    """A real cloud-platform deployment with these engines, each host given its networks (one
+    helper, the engine kinds' own)."""
+    return _cloud_config(*providers)
 
 
 def _pod(values: dict[str, Any], name: str) -> dict[str, Any] | None:
@@ -88,31 +92,123 @@ def _gateway_tf(*providers: dict[str, Any]) -> str:
     return _artefacts(_engines(*providers)).get("terraform/gateway.tf", "")
 
 
+Item = tuple[str, str, Any]  # ("attr", name, value) or ("block", header, [items])
+
+
+def parse_hcl(text: str) -> list[Item]:
+    """The rendered Terraform as `terraform._hcl` writes it: blocks (`header {`), maps
+    (`name = {`) and attributes (`name = value`), one to a line. Enough to compare the gateway's
+    file block by block, never by searching its text (the orchestrator's round 1, item 3)."""
+    lines = [x.strip() for x in text.splitlines()]
+    lines = [x for x in lines if x and not x.startswith("#")]
+
+    def items(i: int) -> tuple[list[Item], int]:
+        found: list[Item] = []
+        while i < len(lines):
+            line = lines[i]
+            if line == "}":
+                return found, i + 1
+            if line.endswith("{"):
+                head = line[:-1].strip()
+                body, i = items(i + 1)
+                kind = "map" if head.endswith("=") else "block"
+                found.append((kind, head.rstrip("= ").strip(), body))
+                continue
+            name, _, value = line.partition("=")
+            found.append(("attr", name.strip(), value.strip()))
+            i += 1
+        return found, i
+
+    return items(0)[0]
+
+
+def _only(body: list[Item], expected: dict[str, str]) -> list[str]:
+    """Faults where `body`'s attributes and blocks are not exactly `expected` (name → value)."""
+    seen = {name: value for kind, name, value in body if kind == "attr"}
+    faults = [f"unexpected {kind} {name!r}" for kind, name, _ in body
+              if kind != "attr" or name not in expected]  # fmt: skip
+    faults += [f"{name} is {seen.get(name)!r}, not {want!r}"
+               for name, want in expected.items() if seen.get(name) != want]  # fmt: skip
+    return faults
+
+
 def policy_faults(tf: str, account: str = GATEWAY_ACCOUNT) -> list[str]:
-    """What is wrong with the gateway's Terraform, in words: anything but Bedrock's two invoke
-    actions on London's foundation models, an S3 action, another region, or a trust not bound to
-    the gateway's own account through the cluster's OIDC provider."""
-    faults = []
-    actions = set(re.findall(r'"([a-z0-9]+:[A-Za-z*]+)"', tf))
-    if actions - INVOKE - {"sts:AssumeRoleWithWebIdentity"}:
-        faults.append(f"actions beyond Bedrock's invoke: {sorted(actions - INVOKE)}")
-    if not INVOKE <= actions:
-        faults.append("Bedrock's two invoke actions are not both granted")
-    if re.search(r"\bs3:", tf, re.IGNORECASE):
-        faults.append("an S3 action")
-    arns = set(re.findall(r'"(arn:aws:[^"]+)"', tf))
-    if arns != {LONDON_MODELS}:
-        faults.append(f"resources other than London's foundation models: {sorted(arns)}")
-    regions = set(re.findall(r"\b[a-z]{2}(?:-gov)?-[a-z]+-[0-9]\b", tf))
-    if regions - {"eu-west-2"}:
-        faults.append(f"another region: {sorted(regions)}")
-    subject = f'"system:serviceaccount:${{var.namespace}}:{account}"'
-    if subject not in tf or tf.count("system:serviceaccount:") != 1:
-        faults.append("the trust is not bound to the gateway's own account alone")
-    if "var.eks_oidc_provider_arn" not in tf or '"sts.amazonaws.com"' not in tf:
-        faults.append("the trust is not through the cluster's OIDC provider, for STS")
-    if f'name      = "{account}"' not in tf and f'name = "{account}"' not in tf:
-        faults.append("no service account of the gateway's own")
+    """What is wrong with the gateway's Terraform, in words, compared block by block: exactly the
+    six blocks; one permissions statement holding exactly Bedrock's two invoke actions on London's
+    foundation models (no effect, no `not_*`, no condition, no principal); one trust statement,
+    `sts:AssumeRoleWithWebIdentity` by the cluster's OIDC provider alone, with exactly two
+    `StringEquals` conditions pinning `:sub` to the gateway's own account and `:aud` to STS."""
+    blocks = {name: body for kind, name, body in parse_hcl(tf) if kind == "block"}
+    expected = {
+        'data "aws_iam_policy_document" "gateway_bedrock"',
+        'resource "aws_iam_policy" "gateway_bedrock"',
+        'data "aws_iam_policy_document" "gateway_trust"',
+        'resource "aws_iam_role" "gateway"',
+        'resource "aws_iam_role_policy_attachment" "gateway_bedrock"',
+        'resource "kubernetes_service_account" "gateway"',
+    }
+    faults = [f"unexpected block {name!r}" for name in set(blocks) - expected]
+    faults += [f"missing block {name!r}" for name in expected - set(blocks)]
+    if faults:
+        return faults
+    grant = blocks['data "aws_iam_policy_document" "gateway_bedrock"']
+    if [(k, n) for k, n, _ in grant] != [("block", "statement")]:
+        faults.append("the permissions document is not exactly one statement")
+    else:
+        faults += _only(grant[0][2], {
+            "actions": '["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]',
+            "resources": f'["{LONDON_MODELS}"]',
+        })  # fmt: skip
+    trust = blocks['data "aws_iam_policy_document" "gateway_trust"']
+    if [(k, n) for k, n, _ in trust] != [("block", "statement")]:
+        faults.append("the trust document is not exactly one statement")
+    else:
+        statement = trust[0][2]
+        principals = [b for k, n, b in statement if k == "block" and n == "principals"]
+        conditions = [b for k, n, b in statement if k == "block" and n == "condition"]
+        others = [n for k, n, _ in statement if (k, n) not in {
+            ("attr", "actions"), ("block", "principals"), ("block", "condition")}]  # fmt: skip
+        faults += [f"unexpected {n!r} in the trust" for n in others]
+        actions = next((v for k, n, v in statement if k == "attr" and n == "actions"), None)
+        if actions != '["sts:AssumeRoleWithWebIdentity"]':
+            faults.append(f"the trust's actions are {actions!r}")
+        if len(principals) != 1:
+            faults.append(f"{len(principals)} principals in the trust, not one")
+        else:
+            faults += _only(principals[0], {
+                "type": '"Federated"', "identifiers": "[var.eks_oidc_provider_arn]"})  # fmt: skip
+        subject = f'["system:serviceaccount:${{var.namespace}}:{account}"]'
+        pinned = {
+            '"${var.eks_oidc_issuer}:sub"': subject,
+            '"${var.eks_oidc_issuer}:aud"': '["sts.amazonaws.com"]',
+        }
+        variables = sorted(dict((n, v) for k, n, v in c if k == "attr").get("variable", "")
+                           for c in conditions)  # fmt: skip
+        if variables != sorted(pinned):
+            faults.append(f"the trust's conditions are on {variables}, not :sub and :aud")
+        for condition in conditions:
+            variable = dict((n, v) for k, n, v in condition if k == "attr").get("variable", "")
+            faults += _only(condition, {"test": '"StringEquals"', "variable": variable,
+                                        "values": pinned.get(variable, "?")})  # fmt: skip
+    faults += _only(blocks['resource "aws_iam_role" "gateway"'], {
+        "name": '"${var.namespace}-gateway"',
+        "assume_role_policy": "data.aws_iam_policy_document.gateway_trust.json"})  # fmt: skip
+    faults += _only(blocks['resource "aws_iam_policy" "gateway_bedrock"'], {
+        "name": '"${var.namespace}-gateway-bedrock"',
+        "policy": "data.aws_iam_policy_document.gateway_bedrock.json"})  # fmt: skip
+    faults += _only(blocks['resource "aws_iam_role_policy_attachment" "gateway_bedrock"'], {
+        "role": "aws_iam_role.gateway.name",
+        "policy_arn": "aws_iam_policy.gateway_bedrock.arn"})  # fmt: skip
+    account_block = blocks['resource "kubernetes_service_account" "gateway"']
+    metadata = next((b for k, n, b in account_block if n == "metadata"), [])
+    faults += _only(account_block, {}) if [n for _, n, _ in account_block] != ["metadata"] else []
+    annotations = next((b for k, n, b in metadata if k == "map" and n == "annotations"), [])
+    if dict((n, v) for k, n, v in metadata if k == "attr") != {
+        "name": f'"{account}"', "namespace": "var.namespace"}:  # fmt: skip
+        faults.append("the service account is not the gateway's own, in the namespace")
+    if [(n, v) for _, n, v in annotations] != [
+        ('"eks.amazonaws.com/role-arn"', "aws_iam_role.gateway.arn")]:  # fmt: skip
+        faults.append("the service account is not annotated with the gateway's role alone")
     return faults
 
 
@@ -132,21 +228,106 @@ def test_without_bedrock_no_gateway_role_is_made(declared: list[dict[str, Any]])
 # The policy check shown red with each fault planted in the real file's own shape.
 
 
+STATEMENT = (
+    "  statement {\n"
+    '    actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]\n'
+)
+ACTIONS = '["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]'
+SUB_TEST = '      test     = "StringEquals"\n      variable = "${var.eks_oidc_issuer}:sub"'
+
+
 @pytest.mark.parametrize(
     ("plant", "fault"),
     [
-        (lambda tf: tf.replace('"bedrock:InvokeModel",', '"bedrock:InvokeModel", "s3:GetObject",'),
-         "S3"),
-        (lambda tf: tf.replace("eu-west-2", "us-east-1"), "region"),
-        (lambda tf: tf.replace(LONDON_MODELS, "arn:aws:bedrock:eu-west-2::*"), "London"),
-        (lambda tf: tf.replace('"bedrock:InvokeModel",', '"bedrock:*",'), "invoke"),
-        (lambda tf: tf.replace(GATEWAY_ACCOUNT, NAMESPACE_ACCOUNT), "own account"),
-        (lambda tf: tf.replace("var.eks_oidc_provider_arn", '"*"'), "OIDC"),
+        (lambda tf: tf.replace(ACTIONS, ACTIONS[:-1] + ', "s3:GetObject"]'), "an S3 action"),
+        (lambda tf: tf.replace(ACTIONS, ACTIONS[:-1] + ', "*"]'), "a bare * action"),
+        (lambda tf: tf.replace(ACTIONS, '["bedrock:*"]'), "any Bedrock action"),
+        (lambda tf: tf.replace(ACTIONS, ACTIONS[:-1] + ', "aws-marketplace:Subscribe"]'),
+         "a hyphenated service's action"),
+        (lambda tf: tf.replace(ACTIONS, ACTIONS[:-1] + ', "IAM:PassRole"]'), "a capitalised one"),
+        (lambda tf: tf.replace(f'["{LONDON_MODELS}"]', f'["{LONDON_MODELS}", "*"]'),
+         "a bare * resource"),
+        (lambda tf: tf.replace("eu-west-2", "us-east-1"), "another region"),
+        (lambda tf: tf.replace(LONDON_MODELS, "arn:aws:bedrock:eu-west-2::*"), "any resource"),
+        (lambda tf: tf.replace("    actions   =", "    not_actions =", 1), "not_actions"),
+        (lambda tf: tf.replace("    resources =", "    not_resources =", 1), "not_resources"),
+        (lambda tf: tf.replace(STATEMENT, '  statement {\n    effect = "Deny"\n'
+                               + STATEMENT.split("\n", 1)[1], 1), "a Deny"),
+        (lambda tf: tf.replace(STATEMENT, '  statement {\n    actions = ["*"]\n'
+                               '    resources = ["*"]\n  }\n\n' + STATEMENT, 1),
+         "a whole */* statement"),
+        (lambda tf: tf.replace(SUB_TEST, SUB_TEST.replace("StringEquals", "StringLike")),
+         "StringLike"),
+        (lambda tf: tf.replace(SUB_TEST, SUB_TEST.replace("StringEquals", "StringNotEquals")),
+         "StringNotEquals"),
+        (lambda tf: tf.replace("[var.eks_oidc_provider_arn]", '[var.eks_oidc_provider_arn, "*"]'),
+         "an extra principal *"),
+        (lambda tf: tf.replace("var.eks_oidc_provider_arn", '"*"'), "no OIDC"),
+        (lambda tf: tf.replace(GATEWAY_ACCOUNT, NAMESPACE_ACCOUNT), "the namespace's account"),
+        (lambda tf: tf.replace(
+            'data "aws_iam_policy_document" "gateway_trust" {\n',
+            'data "aws_iam_policy_document" "gateway_trust" {\n  statement {\n'
+            '    actions = ["sts:AssumeRoleWithWebIdentity"]\n  }\n\n'),
+         "a second trust statement"),
     ],
-    ids=["s3-action", "other-region", "any-resource", "any-action", "namespace-account", "no-oidc"],
+    ids=["s3-action", "star-action", "bedrock-star", "marketplace", "capital", "star-resource",
+         "other-region", "any-resource", "not-actions", "not-resources", "deny", "star-statement",
+         "string-like", "string-not-equals", "star-principal", "no-oidc", "namespace-account",
+         "second-trust"],
 )  # fmt: skip
 def test_the_policy_check_flags_each_fault_planted(plant: Any, fault: str) -> None:
     real = _gateway_tf(BEDROCK)
+    assert policy_faults(real) == []
     planted = plant(real)
-    assert planted != real, "the plant did not change the file"
+    assert planted != real, f"the plant did not change the file: {fault}"
     assert policy_faults(planted), f"the check missed: {fault}"
+
+
+# ---- the two accounts kept apart (the orchestrator's round 1, items 5 and 6) -------------------
+
+
+def test_with_bedrock_on_the_namespace_s_role_is_unchanged() -> None:
+    """The bucket role's trust still names the namespace's own account alone, and it holds no
+    Bedrock action: the gateway's grant is its own role's, never added to the buckets'."""
+    irsa = _artefacts(_engines(BEDROCK))["terraform/irsa.tf"]
+    assert irsa == _artefacts(_engines())["terraform/irsa.tf"]
+    assert re.findall(r"system:serviceaccount:\$\{var\.namespace\}:([a-z0-9.-]+)", irsa) == [
+        NAMESPACE_ACCOUNT
+    ]
+    assert "bedrock" not in irsa.lower()
+
+
+@pytest.mark.parametrize(
+    ("gateway", "words"),
+    [("ospreyflow", "differ"), ("Ospreyflow_Gateway", "Kubernetes name"),
+     ("-gateway", "Kubernetes name")],
+    ids=["same-as-the-namespace-s", "underscore-and-capitals", "leading-hyphen"],
+)  # fmt: skip
+def test_the_gateway_account_is_its_own_and_a_kubernetes_name(gateway: str, words: str) -> None:
+    from harness.cloud_platform.settings import IrsaSettings
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match=words):
+        IrsaSettings(service_account="ospreyflow", gateway_service_account=gateway)
+    with pytest.raises(ValidationError, match="Kubernetes name"):
+        IrsaSettings(service_account="Osprey Flow")
+
+
+def test_bedrock_on_a_platform_naming_no_gateway_account_is_refused_in_words(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import harness.cloud_platform as cloud_platform
+
+    real = cloud_platform.load_platform
+
+    def without_the_gateway_account(name: str) -> Any:
+        platform = real(name)
+        irsa = platform.secrets.irsa.model_copy(update={"gateway_service_account": None})
+        return platform.model_copy(
+            update={"secrets": platform.secrets.model_copy(update={"irsa": irsa})}
+        )
+
+    monkeypatch.setattr(cloud_platform, "load_platform", without_the_gateway_account)
+    with pytest.raises(cloud_platform.CloudPlatformNotRenderable, match="gateway_service_account"):
+        _artefacts(_engines(BEDROCK))
+    _artefacts(_engines(GEMINI))  # no Bedrock, no account needed
