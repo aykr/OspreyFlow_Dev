@@ -9,6 +9,7 @@ Branch `lane/docs-d2c` rebased onto main; built at 2f21e72, P11 part 2's alignme
 | P11 part 2's gateway in §6a (the orchestrator's addition) | Done, 1.80–1.81 | Render of the three synthetic deployments (development 3.95 CPU, 27.1 GiB, limits 33.75 GiB) |
 | Backups and restore (P9), runbooks (P9b), Laurium (P12 part 2), L1.9 part 2, P8, P7b's rulings | Untouched, waiting | Not merged |
 | Docs gates and `test_docs_pdf` | Green on the Mac | `gates/d2c-p2-docs-tests.txt` (336 passed; 1 failed, `botocore` absent from this Mac's venv) |
+| Server gates at 77b249e | `make -k ci` green; `make test` 1 failed (the server's GPU), 11871 passed | `gates/77b249e.{ci,test}.txt` |
 
 - **For platform-b (code, ADR-135 Am 8):** *Admin › Models*' refusal says "re-render, and have the platform team apply the
   Terraform" but an engine's way out also needs the new values installed (`helm upgrade`): the egress and `OSPREY_MODEL_ROUTES_MADE`
