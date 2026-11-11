@@ -1,0 +1,15 @@
+# rules-hyg item 1, the key cap: homeKey.test.ts RED on main 36dc274 (home.css .home-key opacity 0.8)
+     × keeps 4.5:1 in dark, on the button's brass-press face 1ms
+     × keeps 4.5:1 in light, on the button's brass face 0ms
+     × keeps 4.5:1 in govuk, on the button's brass face 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  apps/workspace/src/home/homeKey.test.ts > Home's key cap on the primary button > keeps 4.5:1 in dark, on the button's brass-press face
+AssertionError: expected 3.5861481646174274 to be greater than or equal to 4.5
+ FAIL  apps/workspace/src/home/homeKey.test.ts > Home's key cap on the primary button > keeps 4.5:1 in light, on the button's brass face
+AssertionError: expected 4.128859323508949 to be greater than or equal to 4.5
+ FAIL  apps/workspace/src/home/homeKey.test.ts > Home's key cap on the primary button > keeps 4.5:1 in govuk, on the button's brass face
+AssertionError: expected 3.9115840570792733 to be greater than or equal to 4.5
+      Tests  3 failed | 6 passed (9)
+
+# GREEN after removing the opacity (the key cap takes the button's own ink):
+      Tests  9 passed (9)

@@ -751,13 +751,29 @@ class NeedsYouProposals(BaseModel):
     to_decide: int
 
 
+class ScheduleNoticeEntry(BaseModel):
+    """One scheduled load's notice in its owner's *Needs you* (ADR-110 Amendment 19): a run of their
+    schedule that failed or was refused, in its own words. Only ever its owner's (the read is
+    filtered by owner in the query); it names the recipe, never another person."""
+
+    notice_id: str
+    recipe_id: str
+    raised_at: datetime
+    words: str
+
+
 class NeedsYou(BaseModel):
     """The reader's *Needs you* (L2.7): their overdue promotions, served only while they are still a
     recipient (Amendment 4 decision 11), and the proposed link types of the datasets their cases
-    load into, for a holder of `accept_types`."""
+    load into, for a holder of `accept_types`; and their own scheduled loads' notices of the last
+    seven days, newest first, at most twenty with the total said (ADR-110 Amendment 19)."""
 
     promotions_overdue: list[PromotionOverdueNotice]
     proposals: list[NeedsYouProposals]
+    schedule_notices: list[ScheduleNoticeEntry] = []
+    #: How many of the reader's notices the window holds, the listed ones included: more than
+    #: `schedule_notices` lists is said, never cut silently (rule 2).
+    schedule_notices_total: int = 0
 
 
 ALL_MODELS: list[type[BaseModel]] = [
@@ -773,5 +789,6 @@ ALL_MODELS: list[type[BaseModel]] = [
     RolesCatalogue, TeamLeadInput, TeamCoverInput, OwnedItem, DisablePlan, OwnedTransfer,
     DisableInput, PersonCaseLevel, AdminPersonRow, CaseWithoutAuthor, AdminPeopleRows,
     AuditSectionEntry, AuditSectionPage, PromotionAlertSetting, AgeingRule, WaitingPromotion,
-    OperationsAgeing, PromotionOverdueAlert, PromotionOverdueNotice, NeedsYouProposals, NeedsYou,
+    OperationsAgeing, PromotionOverdueAlert, PromotionOverdueNotice, NeedsYouProposals,
+    ScheduleNoticeEntry, NeedsYou,
 ]  # fmt: skip

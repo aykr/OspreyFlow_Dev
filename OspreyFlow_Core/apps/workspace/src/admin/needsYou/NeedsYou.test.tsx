@@ -119,6 +119,62 @@ describe("Needs you", () => {
     expect(screen.getByRole("alert").textContent).toBe(NEEDS_YOU_WORDS.unread);
   });
 
+  it("lists the reader's own scheduled loads' notices with their tip, and counts every one (ADR-110 Amendment 19)", async () => {
+    const notices: Needs = {
+      promotions_overdue: [],
+      proposals: [],
+      schedule_notices: [
+        { notice_id: "nt-2", recipe_id: "r-1", raised_at: "2026-11-10T08:00:00Z",
+          words: "The scheduled run of Daily export due 10 November 2026 at 06:00 was refused: it no longer reaches its case or its dataset." },
+        { notice_id: "nt-1", recipe_id: "r-1", raised_at: "2026-11-09T08:00:00Z",
+          words: "The scheduled run of Daily export due 9 November 2026 at 06:00 failed. Its pipeline's Runs, in the Ingest Studio, say why." },
+      ],
+      schedule_notices_total: 2,
+    }; // prettier-ignore
+    await open(notices);
+    fireEvent.click(await screen.findByRole("button", { name: /Needs you · 2/ }));
+    const first = screen.getByText(/at 06:00 was refused: it no longer reaches its case or its dataset/);
+    expect(first.tagName).toBe("SPAN"); // said, focusable, not a button: there is nowhere to open
+    expect(first.getAttribute("tabindex")).toBe("0");
+    expect(document.getElementById(first.getAttribute("aria-describedby")!)?.textContent).toBe(
+      NEEDS_YOU_WORDS.noticeTip,
+    );
+    expect(screen.getByText(/due 9 November 2026 at 06:00 failed/)).toBeTruthy();
+    expect(screen.queryByText(/more notice/)).toBeNull();
+  });
+
+  it("says how many notices are not listed, never cutting them silently (rule 2)", async () => {
+    const many: Needs = {
+      promotions_overdue: [],
+      proposals: [],
+      schedule_notices: [
+        { notice_id: "nt-1", recipe_id: "r-1", raised_at: "2026-11-10T08:00:00Z", words: "A run failed." },
+      ],
+      schedule_notices_total: 23,
+    }; // prettier-ignore
+    expect(needsYouCount(many)).toBe(23);
+    await open(many);
+    fireEvent.click(await screen.findByRole("button", { name: /Needs you · 23/ }));
+    // The words themselves, so the line can never claim more than is listed.
+    expect(screen.getByText("22 more notices of your scheduled loads, not listed here")).toBeTruthy();
+  });
+
+  it("says an answer whose notice total is not a number as a failed read, never as nothing waiting", async () => {
+    const fetcher = vi.fn(
+      async () => new Response(JSON.stringify({ promotions_overdue: [], proposals: [], schedule_notices: [], schedule_notices_total: "3" })),
+    );
+    const { readNeedsYou } = await import("./needsYouApi");
+    await expect(readNeedsYou("http://x", "t", fetcher as unknown as typeof fetch)).rejects.toThrow(/not the reader's Needs you/);
+  });
+
+  it("reads a Conduit from before the amendment as no notices, not a failed read", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ promotions_overdue: [], proposals: [] })));
+    const { readNeedsYou } = await import("./needsYouApi");
+    const read = await readNeedsYou("http://x", "t", fetcher as unknown as typeof fetch);
+    expect(read.schedule_notices).toEqual([]);
+    expect(needsYouCount(read)).toBe(0);
+  });
+
   it("gives the Model tab the count of its own dataset alone", () => {
     expect(proposedIn(NEEDS, "ds-a")).toBe(2);
     expect(proposedIn(NEEDS, "ds-other")).toBe(0);

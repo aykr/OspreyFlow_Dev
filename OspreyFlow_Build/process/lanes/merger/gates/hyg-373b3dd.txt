@@ -1,0 +1,28 @@
+rules-hyg 373b3dd merged on 9de435c (the merger, 11 November 2026). Server ospreyflow-test.
+
+## Offline (no stack, no lease): the lane's five files
+Running on ospreyflow-test (stack offline, osprey-runs/merger/OspreyFlow_Core/), logged at osprey-runs/merger.meta/runs/20261111T091105Z/log: bash -c .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_needs_you.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py -p no:cacheprovider -q -rf --tb=no 2>&1 | grep -E '^FAILED|passed|failed in'; echo pytest_rc=${PIPESTATUS[0]}; .venv/bin/mypy services/api/scheduler.py 2>&1 | tail -2
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_run_a_slot_once
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_take_a_watched_file_once
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py::test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queue
+3 failed, 29 passed, 5 skipped, 1 warning, 52 errors in 63.11s (0:01:03)
+Success: no issues found in 1 source file
+Wall time: 70 s, exit 0 (no stack, no lease; set-up before it 15 s)
+(the 3 failures and 52 errors all reach Postgres or Valkey on the closed ports; mypy on scheduler.py above)
+
+## Live, red: the new tests on 531aa24's scheduler.py (stack g)
+E   assert (0 == 1)
+E    +  where 0 = len([])
+E   AssertionError: (ConnectionDoesNotExistError('connection was closed in the middle of operation'), [])
+E   assert (0 == 1) is True
+E    +  where 0 = len([])
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_fault_acting_as_the_owner_keeps_its_error_in_the_log
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_resolving_the_owner_logs_a_fault_but_not_a_refusal
+2 failed, 53 deselected in 1.03s
+Wall time: 2 s, exit 1 (stack g, the lease merger took at 2026-11-11T09:13:05Z; set-up before it 16 s)
+
+## Live, green: the merged tree, the five files (stack g)
+89 passed, 1 warning in 7.85s
+Wall time: 10 s, exit 0 (stack g, the lease merger took at 2026-11-11T09:13:05Z; set-up before it 16 s)
+
+ruff check / format --check on scheduler.py and test_schedule_executor.py: clean after the merger's wrapping-only fix (8 E501 and 2 format hunks inherited from 531aa24).

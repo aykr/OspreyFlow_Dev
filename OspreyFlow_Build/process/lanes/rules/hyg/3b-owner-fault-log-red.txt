@@ -1,0 +1,43 @@
+rules-hyg on 531aa24: the studio lane's review finding, `_resolve`'s fault branch (notice kind "failed")
+keeps the raw error in neither the ledger nor the log (ADR-110 Amendment 19 point 5: "it stays in the run's
+ledger and the log"). Done on the test server by rules-srv, 11 November 2026, ~07:40Z. Offline (no store:
+ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994).
+
+Change: OspreyFlow_Core/services/api/scheduler.py, `_resolve`'s last `except Exception` branch:
+  log.exception("could not act as the schedule's owner, %s", owner_id)   before the `raise _Refused(...)`.
+The ledger's words and the notice's are unchanged (no error text in either, rule 7).
+
+Tests (OspreyFlow_Build/tests/services/api/test_schedule_executor.py):
+- test_resolving_the_owner_logs_a_fault_but_not_a_refusal (offline, `_resolve` itself): the fault planted
+  where the real caller meets it (the custom-role read after the exchange, asyncpg's
+  ConnectionDoesNotExistError) is logged once at ERROR on services.api.scheduler with that exception
+  attached and the owner named; each refusal of the exchange (PrincipalRevoked, PrincipalExchangeRefused,
+  PrincipalExchangeUnavailable) is not logged; no refusal's words carry the error.
+- test_a_fault_acting_as_the_owner_keeps_its_error_in_the_log (live, through `tick`): the same at the
+  executor's own call site, the ledger "refused", the notice without the error. NOT RUN HERE: no store on
+  this server's offline ports; owed to the merger's live run.
+
+$ pytest -c OspreyFlow_Build/pytest.ini tests/services/api/test_schedule_executor.py -k resolving_the_owner_logs
+
+1. 531aa24's scheduler.py (no log line): RED, for the reason claimed
+   E   AssertionError: (ConnectionDoesNotExistError('connection was closed in the middle of operation'), [])
+       assert (0 == 1) is True
+   1 failed, 54 deselected in 0.91s
+2. Plant: the log line in place AND a `log.exception("PLANT")` in the PrincipalRevoked branch: RED (the
+   other half: a refusal logged as a fault is caught)
+   E   AssertionError: (PrincipalRevoked('disabled'), [<LogRecord: services.api.scheduler, 40, ...scheduler.py, 619, "PLANT">])
+       assert (1 == 1) is False
+   1 failed, 54 deselected in 0.87s
+3. The change alone: GREEN
+   1 passed, 54 deselected in 0.84s
+   With test_schedule_notice_words.py: 15 passed (the live tests -k also matched errored at setup on
+   Postgres 59992, as every live test does offline).
+
+Not run here (this session's permission mode refused them): ruff check / ruff format --check / mypy on the
+two files (lines checked by eye: none over 100; the offline test's cases typed list[tuple[Exception, _Edges,
+bool]] so `_Edges(owner=...)` takes PrincipalExchangeError's own). Owed to the merger's gate.
+
+Optional item, NOT done: the ledger's word. A fault acting as the owner is recorded outcome "refused" (with
+counts=False) while its notice says "failed". Changing it means a `failed` not-run outcome through
+record_not_run and refusals_in_a_row, and the existing test asserts ["refused"] * 4; a data-model step
+the merger should rule on, not a review fix.

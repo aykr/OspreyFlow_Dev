@@ -2,8 +2,10 @@
 claim and the lock) and the real run ledger in Postgres.
 
 The edges are fakes, each refusing what the real one refuses (rule 15): the owner resolver raises
-`PrincipalRevoked` for a disabled account and `PrincipalExchangeUnavailable` for an identity
-provider it cannot reach, as `PrincipalResolver.resolve_for_owner_detailed` does; the case check
+only what `PrincipalResolver.resolve_for_owner_detailed` raises, `PrincipalRevoked` for a disabled
+account, `PrincipalExchangeRefused` for one the identity provider no longer knows (or an exchange it
+refused) and `PrincipalExchangeUnavailable` for an identity provider it cannot reach, and after it
+the custom-role read `app._owner_with_custom_roles` adds may fail as a store does; the case check
 raises `InsufficientAccessError` for an owner below Editor, as `InvestigationStore.get_authorized`
 does. The run itself is a stand-in that writes the ledger as `run_recipe_as` does — the one run path
 is `test_recipe_run_path.py`'s and `test_recipe_run_ledger.py`'s to prove.
@@ -14,6 +16,7 @@ The two-replica case runs two executors in two processes against the same Valkey
 from __future__ import annotations
 
 import asyncio
+import logging
 import multiprocessing
 import os
 from collections.abc import AsyncIterator
@@ -21,6 +24,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import asyncpg
 import pytest
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.folder_watch import WatchedFile
@@ -32,7 +36,12 @@ from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
-from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
+from principal_auth import (
+    PrincipalExchangeError,
+    PrincipalExchangeRefused,
+    PrincipalExchangeUnavailable,
+    PrincipalRevoked,
+)
 from schemas.domain import Principal
 from schemas.ingest import LoadReport, StudioRecipeDraft, StudioRecipeStatus
 
@@ -94,7 +103,11 @@ class _Recipes:
 
 @dataclass
 class _Edges:
-    owner: Principal | Exception = field(default_factory=lambda: OWNER)
+    #: The exchange: the owner, or only what the real resolver raises
+    #: (`PrincipalExchangeError`'s own).
+    owner: Principal | PrincipalExchangeError = field(default_factory=lambda: OWNER)
+    #: The custom-role read `with_custom_roles` makes after the exchange: a store's fault, or none.
+    roles_read: Exception | None = None
     case_level_ok: bool = True
     runs_made: list[tuple[str, datetime | None]] = field(default_factory=list)
     hold_run: asyncio.Event | None = None
@@ -125,8 +138,12 @@ class _Edges:
         self.notices.append((owner_id, recipe.recipe_id, words))
 
     async def resolve_owner(self, owner_id: str) -> Principal:
-        if isinstance(self.owner, Exception):
+        """As `app._owner_with_custom_roles` over `resolve_for_owner_detailed`: the exchange, then
+        the owner's custom roles read from their store."""
+        if isinstance(self.owner, PrincipalExchangeError):
             raise self.owner
+        if self.roles_read is not None:
+            raise self.roles_read
         return self.owner
 
     async def check_case(self, owner: Principal, case: str) -> Principal:
@@ -268,11 +285,19 @@ async def test_a_paused_schedule_does_nothing(runs: RecipeRunStore, valkey: Valk
     ("edges", "words"),
     [
         (_Edges(owner=PrincipalRevoked("approver-1 is disabled")), "can no longer sign in"),
+        (
+            _Edges(
+                owner=PrincipalExchangeRefused(
+                    "owner 'approver-1' is not known to the identity provider"
+                )
+            ),
+            "identity provider refused",
+        ),
         (_Edges(owner=PrincipalExchangeUnavailable("timed out")), "could not be reached"),
         (_Edges(owner=OWNER.model_copy(update={"roles": ["analyst"]})), "schedule_pipelines"),
         (_Edges(case_level_ok=False), "Editor"),
     ],
-    ids=["revoked", "idp-unreachable", "right-withdrawn", "case-access-lowered"],
+    ids=["revoked", "unknown-to-idp", "idp-unreachable", "right-withdrawn", "case-access-lowered"],
 )
 async def test_an_owner_who_may_no_longer_run_it_is_refused_in_words(
     runs: RecipeRunStore, valkey: Valkey, edges: _Edges, words: str
@@ -431,6 +456,115 @@ async def test_an_identity_provider_outage_is_refused_but_never_pauses_the_sched
     assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
 
 
+async def test_an_owner_the_identity_provider_no_longer_knows_pauses_on_the_third_slot(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 (the merger's round-4 review): the identity provider reached and
+    refusing (here a deleted account, as `resolve_for_owner_detailed` raises it) is a fact about the
+    owner, so it counts toward the three that pause (Amendment 3, point 3), told "was refused" each
+    time."""
+    recipe = _recipe()
+    refused = PrincipalExchangeRefused("owner 'x' is not known to the identity provider")
+    recipes, edges = _Recipes([recipe]), _Edges(owner=refused)
+    executor = _executor(recipes, edges, runs, valkey)
+    for day in range(2):
+        await executor.tick(FIRST_SLOT + timedelta(days=day))
+    assert recipe.recipe_id not in recipes.paused
+    await executor.tick(FIRST_SLOT + timedelta(days=2))
+    assert "three refused runs in a row" in recipes.paused[recipe.recipe_id]
+    assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"] * 3
+    assert all(
+        words.endswith("was refused: its owner may no longer run it.")
+        and "identity provider" not in words
+        for _, _, words in edges.notices
+    )
+
+
+async def test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 (Admin's review): a fault acting as the owner that is no refusal of the
+    exchange (here the custom-role store's read failing, as asyncpg raises it) is told "failed",
+    and, being nothing about the owner, never counts toward the three refusals that pause the
+    schedule, as an identity provider outage does not."""
+    recipe = _recipe()
+    lost = asyncpg.exceptions.ConnectionDoesNotExistError(
+        "connection was closed in the middle of operation"
+    )
+    recipes, edges = _Recipes([recipe]), _Edges(roles_read=lost)
+    executor = _executor(recipes, edges, runs, valkey)
+    for day in range(4):
+        await executor.tick(FIRST_SLOT + timedelta(days=day))
+    assert recipe.recipe_id not in recipes.paused
+    assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"] * 4
+    assert all(
+        words.endswith("failed. Its pipeline's Runs, in the Ingest Studio, say why.")
+        and "connection was closed" not in words
+        for _, _, words in edges.notices
+    )
+
+
+async def test_a_fault_acting_as_the_owner_keeps_its_error_in_the_log(
+    runs: RecipeRunStore, valkey: Valkey, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ADR-110 Amendment 19 point 5: the notice says "failed" and never the error, which "stays in
+    the run's ledger and the log". The ledger's words for a fault acting as the owner carry none of
+    it, so the log must: one record at ERROR naming the owner, with the error itself attached (the
+    studio lane's review of rules-hyg 531aa24). The error is planted where the real resolver's
+    caller meets it, the custom-role read after the exchange, in asyncpg's shape."""
+    recipe = _recipe()
+    lost = asyncpg.exceptions.ConnectionDoesNotExistError(
+        "connection was closed in the middle of operation"
+    )
+    edges = _Edges(roles_read=lost)
+    with caplog.at_level(logging.ERROR, logger="services.api.scheduler"):
+        await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    kept = [r for r in caplog.records if r.exc_info and r.exc_info[1] is lost]
+    assert len(kept) == 1 and kept[0].name == "services.api.scheduler"
+    assert kept[0].levelno == logging.ERROR
+    assert OWNER.id in kept[0].getMessage()
+    assert [o for o, _ in await _outcomes(runs, recipe)] == ["refused"]
+    assert [words for _, _, words in edges.notices] and all(
+        "connection was closed" not in words for _, _, words in edges.notices
+    )
+
+
+async def test_resolving_the_owner_logs_a_fault_but_not_a_refusal(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The same, offline, at `_resolve` itself (no store: the ledger and Valkey are never reached):
+    a fault is logged with its error attached; a refusal of the exchange (revoked, refused, not
+    reached) is the owner's or the identity provider's, in fixed words, and is not logged as a
+    fault."""
+    from services.api.scheduler import _Refused
+
+    lost = asyncpg.exceptions.ConnectionDoesNotExistError(
+        "connection was closed in the middle of operation"
+    )
+    cases: list[tuple[Exception, _Edges, bool]] = [
+        (lost, _Edges(roles_read=lost), True),
+        *(
+            (refusal, _Edges(owner=refusal), False)
+            for refusal in (
+                PrincipalRevoked("disabled"),
+                PrincipalExchangeRefused("not known"),
+                PrincipalExchangeUnavailable("down"),
+            )
+        ),
+    ]
+    for planted, edges, logged in cases:
+        executor = _executor(_Recipes([]), edges, None, None)  # type: ignore[arg-type]
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, logger="services.api.scheduler"):
+            with pytest.raises(_Refused) as refused:
+                await executor._resolve(OWNER.id)
+        kept = [r for r in caplog.records if r.exc_info and r.exc_info[1] is planted]
+        assert (len(kept) == 1) is logged, (planted, caplog.records)
+        assert "connection was closed" not in str(refused.value)
+        if logged:
+            assert refused.value.kind == "failed" and OWNER.id in kept[0].getMessage()
+
+
 async def test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_the_schedule(
     runs: RecipeRunStore, valkey: Valkey
 ) -> None:
@@ -447,7 +581,8 @@ async def test_a_run_refused_as_in_progress_is_never_a_refusal_and_never_pauses_
     assert recipe.recipe_id not in recipes.paused
     outcomes = [o for o, _ in await _outcomes(runs, recipe)]
     assert outcomes == ["failed"] * 5 and "refused" not in outcomes
-    assert all("in progress" in words for _, _, words in edges.notices)
+    assert all(words.endswith("did not run: an earlier run into its case was still going.")
+               for _, _, words in edges.notices)  # fmt: skip
     assert await runs.refusals_in_a_row(recipe.recipe_id) == 0
 
 
@@ -458,14 +593,41 @@ async def test_a_refused_run_tells_its_owner_in_words(runs: RecipeRunStore, valk
     ((owner, recipe_id, words),) = edges.notices
     assert (owner, recipe_id) == ("approver-1", recipe.recipe_id)
     assert words.startswith("The scheduled run of Daily export due ")
-    assert "was refused: the schedule's owner, approver-1, can no longer sign in" in words
+    # ADR-110 Amendment 19: the kind's fixed sentence; the refusal's own words (which name the
+    # owner's id) stay in the ledger.
+    assert words.endswith("was refused: its owner may no longer run it.")
+    assert "approver-1" not in words and "sign in" not in words
 
 
 async def test_a_failed_run_tells_its_owner_in_words(runs: RecipeRunStore, valkey: Valkey) -> None:
     recipe, edges = _recipe(), _Edges(fail_run=FileNotFoundError("no such file: a.csv"))
     await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
     ((owner, _, words),) = edges.notices
-    assert owner == "approver-1" and "failed: no such file: a.csv" in words
+    assert owner == "approver-1"
+    assert words.endswith("failed. Its pipeline's Runs, in the Ingest Studio, say why.")
+    # The error's own text stays in the ledger and the log (rule 7).
+    assert "no such file" not in words
+
+
+async def test_a_graph_store_error_never_reaches_the_owners_words(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19, rule 7: an error raised while a run loads is told by its kind alone.
+    Planted in the shape the graph adapter raises (`ArcadeDBError` carries the server's whole
+    reply, `client.py`), naming a host, a type and a row's key."""
+    from adapters.graph_arcadedb.client import ArcadeDBError
+
+    reply = ('ArcadeDB error 500: {"error":"Internal error","exception":"com.arcadedb.exception.'
+             'DuplicatedKeyException","detail":"Duplicated key [ROW-7731] on Person[source_key] at '
+             'arcadedb.internal:2480"}')  # fmt: skip
+    recipe = _recipe()
+    edges = _Edges(fail_run=ArcadeDBError(reply, status_code=500))
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((_, _, words),) = edges.notices
+    lead = ScheduleExecutor._due(recipe, FIRST_SLOT)  # "The scheduled run of Daily export due …"
+    assert words == f"{lead} failed. Its pipeline's Runs, in the Ingest Studio, say why."
+    for leaked in ("ArcadeDB", "ROW-7731", "source_key", "arcadedb.internal", "Duplicated"):
+        assert leaked not in words
 
 
 async def test_a_run_that_succeeds_or_is_missed_tells_nobody(
@@ -612,6 +774,39 @@ async def test_a_paused_watch_takes_nothing(runs: RecipeRunStore, valkey: Valkey
     assert edges.files_run == [] and await _watch_rows(runs, recipe) == []
 
 
+async def test_a_quota_refusal_tells_its_owner_in_the_quota_sentence(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 with ADR-141 decision 6: a run refused past a quota tells its owner the
+    fixed quota sentence, never the quota's own words, which name its scope and number."""
+    from services.api.run_quotas import QuotaRefused, quota_words
+
+    recipe, edges = _recipe(), _Edges(fail_run=QuotaRefused(quota_words("dataset", 3)))
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((_, _, words),) = edges.notices
+    lead = ScheduleExecutor._due(recipe, FIRST_SLOT)
+    assert words == (f"{lead} was refused: today's run quota is used. The next may start after "
+                     "midnight, or an administrator may raise the quota in Admin › Running › "
+                     "Operations.")  # fmt: skip
+
+
+async def test_a_quota_refused_file_tells_its_owner_the_quota_sentence(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 with ADR-141 decision 6, at the watched-file site: the fixed quota
+    sentence, never the quota's own words."""
+    from services.api.run_quotas import QuotaRefused, quota_words
+
+    recipe = _watched()
+    edges = _Edges(fail_run=QuotaRefused(quota_words("unit", 5)), waiting=[_file("a.csv")])
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((_, _, words),) = edges.notices
+    assert words == ("The run of Daily export on the file a.csv was refused: today's run quota is "
+                     "used. The next may start after midnight, or an administrator may raise the "
+                     "quota in Admin › Running › Operations.")  # fmt: skip
+    assert "5 runs" not in words and "unit's" not in words
+
+
 async def test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried(
     runs: RecipeRunStore, valkey: Valkey
 ) -> None:
@@ -624,8 +819,9 @@ async def test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried(
     assert await _watch_rows(runs, recipe) == [("refused", _file("a.csv").identity)]
     ((owner, _, words),) = edges.notices
     assert owner == OWNER.id
-    assert words.startswith("The run of Daily export on the file a.csv was refused: ")
-    assert "can no longer sign in" in words
+    assert words == (
+        "The run of Daily export on the file a.csv was refused: its owner may no longer run it."
+    )
 
 
 async def test_a_failed_file_tells_its_owner_and_is_not_retried(
@@ -638,7 +834,11 @@ async def test_a_failed_file_tells_its_owner_and_is_not_retried(
     await executor.tick(FIRST_SLOT + timedelta(minutes=1))
     assert len(edges.files_run) == 1
     ((_, _, words),) = edges.notices
-    assert words == "The run of Daily export on the file a.csv failed: column amount is missing"
+    assert words == (
+        "The run of Daily export on the file a.csv failed. Its pipeline's Runs, in the "
+        "Ingest Studio, say why."
+    )
+    assert "column amount" not in words
 
 
 async def test_three_refused_files_in_a_row_pause_the_watch(

@@ -72,6 +72,7 @@ from .audit import AuditWriter
 from .dataset_scope import reach_clause
 from .hotlists import BOOTSTRAP_SQL as _HOTLISTS_BOOTSTRAP_SQL
 from .hotlists import take_bootstrap_lock
+from .schedule_notices import NOTICE_RULE_PREFIX
 
 DisclosurePolicy = Literal["strict", "notify"]
 
@@ -856,6 +857,38 @@ class AlertStore:
                 *extra,
             )
         return [_row_to_alert(row) for row in rows]
+
+    async def list_schedule_notices(
+        self, principal: Principal, *, since: datetime, limit: int
+    ) -> tuple[list[Alert], int]:
+        """ADR-110 Amendment 19: the principal's own open notices of their scheduled loads raised
+        since `since`, newest first, at most `limit`, with how many there are in all (more than
+        `limit` is said, never cut silently: rule 2). A notice is an alert whose `rule_id` is
+        `schedule:<recipe id>` with no typology (`schedule_notices.NOTICE_RULE_PREFIX`), so those
+        written before the amendment are served too.
+
+        **Owner alone, no dataset reach** (the orchestrator's ruling of 10 November 2026): a notice
+        is about the owner's own schedule and carries no data, and a refused run is exactly what its
+        owner must read even after it stopped reaching its dataset. `owner_id = $1` is in the query
+        itself, and the list and its total come from one statement (`count(*) OVER ()`), so the
+        total is never read at another moment than the list. No one, an administrator or a team
+        lead included, reads or counts another's (rule 3)."""
+        if limit < 1:
+            raise ValueError("a notice list holds at least one notice")
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS}, count(*) OVER () AS total FROM alerts "
+                "WHERE owner_id = $1 AND rule_id LIKE $2 AND typology IS NULL "
+                "AND status = 'open' AND created_at >= $3 "
+                "ORDER BY created_at DESC, id DESC LIMIT $4",
+                principal.id,
+                f"{NOTICE_RULE_PREFIX}%",
+                since,
+                limit,
+            )
+        if not rows:
+            return [], 0  # with `limit` at least 1, no row means none in the window
+        return [_row_to_alert(row) for row in rows], int(rows[0]["total"])
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         """ADR-109 ruling 3 — the case team's queue: every rule-raised alert of the case within

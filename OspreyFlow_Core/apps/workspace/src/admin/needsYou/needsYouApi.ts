@@ -19,19 +19,29 @@ export async function readNeedsYou(
   if (
     !body ||
     !Array.isArray(body.promotions_overdue) ||
-    !Array.isArray(body.proposals)
+    !Array.isArray(body.proposals) ||
+    (body.schedule_notices !== undefined && !Array.isArray(body.schedule_notices)) ||
+    (body.schedule_notices_total !== undefined && typeof body.schedule_notices_total !== "number")
   ) {
     throw new Error("needs-you: the answer was not the reader's Needs you");
   }
-  return body as NeedsYou;
+  // A Conduit from before ADR-110 Amendment 19 serves no notices: none, not a failed read.
+  return {
+    ...body,
+    schedule_notices: body.schedule_notices ?? [],
+    schedule_notices_total: body.schedule_notices_total ?? body.schedule_notices?.length ?? 0,
+  } as NeedsYou;
 }
 
-/** How many things wait for the reader: each overdue promotion and each proposed link type they may
- * decide; a dataset they may not read the proposals of is never listed (ADR-143 Amendment 4's *Open*). */
+/** How many things wait for the reader: each overdue promotion, each proposed link type they may
+ * decide (a dataset they may not read the proposals of is never listed, ADR-143 Amendment 4's
+ * *Open*), and each of their own scheduled loads' notices of the last seven days, all of them, not
+ * only those listed (ADR-110 Amendment 19). */
 export function needsYouCount(needs: NeedsYou): number {
   return (
     needs.promotions_overdue.length +
-    needs.proposals.reduce((n, p) => n + p.to_decide, 0)
+    needs.proposals.reduce((n, p) => n + p.to_decide, 0) +
+    (needs.schedule_notices_total ?? needs.schedule_notices?.length ?? 0)
   );
 }
 
@@ -62,6 +72,12 @@ export const NEEDS_YOU_WORDS = {
     `${plural(n, "proposed link type waits", "proposed link types wait")} for you on the Model tab.`,
   reminderTip:
     "Analysts proposed new link types for this dataset. Decide them on 1 Model: added to the draft model, a type is made live with the next model version.",
+  noticeTip:
+    "A scheduled load of yours did not run as planned. Its pipeline's Runs, in the Ingest Studio, say what happened. This stays here for seven days.",
+  moreNotices: (n: number) =>
+    `${plural(n, "more notice", "more notices")} of your scheduled loads, not listed here`,
+  moreNoticesTip:
+    "Each pipeline's Runs, in the Ingest Studio, list every run of its schedule, the ones not shown here included.",
   unread: "Needs you could not be read",
   unreadProposals: "The proposed link types waiting for you could not be counted; the Model tab lists them.",
 };

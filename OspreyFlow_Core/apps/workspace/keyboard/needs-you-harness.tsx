@@ -2,7 +2,9 @@
 // (rule 13) and the every-harness axe scan, in both themes and under GOV.UK (`?brand=govuk`). The page
 // serves `GET /v1/me/needs-you` itself, synthetic (rule 9): an overdue promotion, proposals to decide
 // in one dataset. Where an entry opens is recorded on
-// `window.__opened`. `?open=1` draws the panel open, for the scan.
+// `window.__opened`. `?open=1` draws the panel open, for the scan. `?notices=1` adds the reader's own
+// scheduled loads' notices (ADR-110 Amendment 19): two listed, of twenty-three, so the line saying how
+// many more is drawn too.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -23,6 +25,17 @@ const NEEDS = {
   ],
 }; // prettier-ignore
 
+if (new URLSearchParams(location.search).get("notices") === "1") {
+  Object.assign(NEEDS, {
+    schedule_notices: [
+      { notice_id: "SYN-nt-2", recipe_id: "SYN-recipe-1", raised_at: "2026-11-10T06:00:00Z",
+        words: "The scheduled run of Harbour visits export (synthetic) due 10 November 2026 at 06:00 was refused: it no longer reaches its case or its dataset." },
+      { notice_id: "SYN-nt-1", recipe_id: "SYN-recipe-1", raised_at: "2026-11-09T06:00:00Z",
+        words: "The scheduled run of Harbour visits export (synthetic) due 9 November 2026 at 06:00 failed. Its pipeline's Runs, in the Ingest Studio, say why." },
+    ],
+    schedule_notices_total: 23,
+  });
+} // prettier-ignore
 const opened: string[] = [];
 (window as unknown as { __opened: string[] }).__opened = opened;
 window.fetch = async () => new Response(JSON.stringify(NEEDS), { status: 200 });

@@ -20,7 +20,12 @@ What a mistake would do, and the case that catches it (each shown red at its cal
 - a dataset a case only reads reached: `test_a_dataset_a_case_only_reads_is_not_reached`;
 - an item marked above a reviewer served to them (an unmarked dataset, or one lowered while it
   waits): `test_an_item_marked_above_a_reviewer_on_an_unmarked_dataset_is_not_served_to_them`,
-  `test_a_dataset_lowered_while_the_promotion_waits_widens_nothing` (CARRIES row 46).
+  `test_a_dataset_lowered_while_the_promotion_waits_widens_nothing` (CARRIES row 46);
+- a scheduled load's notice (ADR-110 Amendment 19) served to someone other than its owner, or the
+  route asking the store for anyone but the reader:
+  `test_a_schedule_notice_is_served_to_its_owner_alone`
+  (the store's own owner filter, in its SQL, is proven live in `test_schedule_notices_needs_you.py`;
+  the stand-in here answers as that query does).
 """
 
 from __future__ import annotations
@@ -32,16 +37,15 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from ontology.handling import HandlingScheme
+from schemas.admin import PersonAccount, PromotionOverdueAlert
+from schemas.dataset_model import HomeCase
+from schemas.domain import Alert, AlertMode, Principal
 from services.api.app import app
 from services.api.datasets import Dataset
 from services.api.investigations import AccessLevel, Investigation
 from services.api.link_types import ModelProposalView
 from services.api.promotion_ageing import InMemoryAgeingStore, PendingPromotion
-
-from ontology.handling import HandlingScheme
-from schemas.admin import PersonAccount, PromotionOverdueAlert
-from schemas.dataset_model import HomeCase
-from schemas.domain import Principal
 
 T0 = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
 SCHEME = HandlingScheme(name="t", classification=["OFFICIAL", "SECRET", "TOP SECRET"],
@@ -190,6 +194,30 @@ class _Waiting:
         return list(self.waiting)
 
 
+class _Notices:
+    """`AlertStore.list_schedule_notices` as its query answers (`test_schedule_notices_needs_you.py`
+    holds the real one to it, red by plants in the SQL): the asking principal's own open
+    `schedule:` alerts with no typology since `since`, newest first, at most `limit`, and their
+    total; by owner alone, with no dataset reach (the orchestrator's ruling). It refuses what the
+    query refuses: another's, a closed one, a typed one and one older than `since` are neither
+    listed nor counted."""
+
+    def __init__(self) -> None:
+        self.held: list[Alert] = []
+        self.asked: list[str] = []
+
+    async def list_schedule_notices(
+        self, principal: Principal, *, since: datetime, limit: int
+    ) -> tuple[list[Alert], int]:
+        self.asked.append(principal.id)
+        mine = sorted(
+            (a for a in self.held if a.owner_id == principal.id and a.rule_id.startswith("schedule:")
+             and a.typology is None and a.status == "open" and a.created_at >= since),
+            key=lambda a: a.created_at, reverse=True,
+        )  # fmt: skip
+        return mine[:limit], len(mine)
+
+
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     TOKENS.clear()
@@ -211,7 +239,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
              "investigations": _Cases(), "datasets": _Datasets(), "link_types": _LinkTypes(),
              "identity_admin": _People(people), "custom_roles": None,
              "handling_scheme": SCHEME, "graph": object(), "analytics": object(),
-             "alerts_store": object()}  # fmt: skip
+             "alerts_store": _Notices()}  # fmt: skip
     for name, value in state.items():
         monkeypatch.setattr(app.state, name, value, raising=False)
     yield SimpleNamespace(client=TestClient(app), ageing=ageing, people=people, waiting=waiting,
@@ -294,7 +322,8 @@ def test_only_the_datasets_the_readers_cases_load_into_are_asked(world: SimpleNa
 def test_no_proposal_is_counted_without_accept_types(world: SimpleNamespace) -> None:
     """ana-1 reaches ds-a through case-a but holds no `accept_types`: no proposal is counted or
     asked for. Red with the right check removed."""
-    assert _read(world, "ana-1") == {"promotions_overdue": [], "proposals": []}
+    assert _read(world, "ana-1") == {"promotions_overdue": [], "proposals": [],
+                                     "schedule_notices": [], "schedule_notices_total": 0}
     assert world.link_types.asked == []
 
 
@@ -362,7 +391,6 @@ def test_the_people_are_read_once_a_read(world: SimpleNamespace) -> None:
     """The recipients of every stored alert are asked from one read of the people (the top bar
     reads every minute)."""
     import asyncio
-
     from dataclasses import replace
 
     asyncio.run(_raise(world, ["rev-1"]))
@@ -384,3 +412,80 @@ def test_a_dataset_a_case_only_reads_is_not_reached(world: SimpleNamespace) -> N
     body = _read(world, "reader-eng")
     assert "ds-a" not in str(body)
     assert {d for d, _ in world.link_types.asked} <= {"ds-x"}
+
+
+def test_a_schedule_notice_is_served_to_its_owner_alone(world: SimpleNamespace) -> None:
+    """ADR-110 Amendment 19: the route asks the store for the reader's own notices, as the reader,
+    and serves them with their total; someone else, an administrator among them, is served none."""
+    now = datetime.now(UTC)
+    world.alerts_store.held.append(
+        Alert(id="nt-1", rule_id="schedule:SYN-recipe-1", owner_id="eng-1", mode=AlertMode.FULL,
+              referent_node_ids=[], investigation_id="case-a", created_at=now - timedelta(hours=1),
+              words="The scheduled run of Daily export due 2 June 2026 at 06:00 was refused: its owner "
+                    "may no longer run it.")
+    )  # fmt: skip
+    mine = _read(world, "eng-1")
+    (served,) = mine["schedule_notices"]
+    assert datetime.fromisoformat(served.pop("raised_at")) == world.alerts_store.held[0].created_at
+    assert served == {"notice_id": "nt-1", "recipe_id": "SYN-recipe-1",
+                      "words": "The scheduled run of Daily export due 2 June 2026 at 06:00 was "
+                               "refused: its owner may no longer run it."}
+    assert mine["schedule_notices_total"] == 1  # fmt: skip
+    for other in ("rev-1", "adm-1"):
+        theirs = _read(world, other)
+        assert theirs["schedule_notices"] == [] and theirs["schedule_notices_total"] == 0
+    assert world.alerts_store.asked == ["eng-1", "rev-1", "adm-1"]
+
+
+def _notices(world: SimpleNamespace, owner: str, ages: list[timedelta]) -> list[Alert]:
+    now = datetime.now(UTC)
+    made = [
+        Alert(id=f"nt-{owner}-{i}", rule_id=f"schedule:SYN-recipe-{i}", owner_id=owner,
+              mode=AlertMode.FULL, referent_node_ids=[], investigation_id="case-a",
+              created_at=now - age,
+              words=f"The scheduled run of Daily export due {i} November 2026 at 06:00 failed. Its "
+                    "pipeline's Runs, in the Ingest Studio, say why.")
+        for i, age in enumerate(ages)
+    ]  # fmt: skip
+    world.alerts_store.held.extend(made)
+    return made
+
+
+def test_twenty_newest_notices_are_listed_and_the_true_total_said(world: SimpleNamespace) -> None:
+    """Rule 2: past twenty, the twenty newest are listed and the total says how many there are, so
+    the Glass says the rest rather than cutting them (ADR-110 Amendment 19 point 4)."""
+    made = _notices(world, "eng-1", [timedelta(minutes=m) for m in range(23)])
+    mine = _read(world, "eng-1")
+    assert [n["notice_id"] for n in mine["schedule_notices"]] == [n.id for n in made[:20]]
+    assert mine["schedule_notices_total"] == 23
+
+
+def test_a_notice_older_than_seven_days_is_neither_listed_nor_counted(world: SimpleNamespace) -> None:
+    """Amendment 19 point 4: the window is seven days, asked of the store as `since`."""
+    fresh, _ = _notices(world, "eng-1", [timedelta(days=6, hours=23), timedelta(days=8)])
+    mine = _read(world, "eng-1")
+    assert [n["notice_id"] for n in mine["schedule_notices"]] == [fresh.id]
+    assert mine["schedule_notices_total"] == 1
+
+
+def test_a_notice_from_before_the_amendment_is_served_fixed_words_not_its_error(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 7, the merger's review: a notice written before ADR-110 Amendment 19 holds its error's
+    own text (`"<run> failed: <error>"`), here an `ArcadeDBError`'s whole reply naming a host, a type
+    and a row's key. It is served, as every notice of the window is, but in the fixed fallback words,
+    never its own."""
+    from services.api.schedule_notices import FALLBACK_WORDS
+
+    now = datetime.now(UTC)
+    world.alerts_store.held.append(
+        Alert(id="nt-old", rule_id="schedule:SYN-recipe-1", owner_id="eng-1", mode=AlertMode.FULL,
+              referent_node_ids=[], investigation_id="case-a", created_at=now - timedelta(days=1),
+              words='The scheduled run of Daily export due 9 November 2026 at 06:00 failed: ArcadeDB '
+                    'error 500: {"detail":"Duplicated key [ROW-7731] on Person[source_key] at '
+                    'arcadedb.internal:2480"}')
+    )  # fmt: skip
+    (served,) = _read(world, "eng-1")["schedule_notices"]
+    assert served["words"] == FALLBACK_WORDS
+    for leaked in ("ArcadeDB", "ROW-7731", "source_key", "arcadedb.internal"):
+        assert leaked not in served["words"]

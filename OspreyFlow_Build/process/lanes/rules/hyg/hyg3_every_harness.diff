@@ -1,0 +1,14 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 11cb21c..d5f3cf7 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -245,7 +245,8 @@ const EXTRA_STATES: Record<string, string[]> = {
+   // every section in the side list, a coming placeholder open.
+   // L2.7 (ADR-145 decision 11): Needs you drawn open, its entries and their tips; the Studio with
+   // two proposed link types, its Model tab's count and the reminder above the other tabs.
+-  "needs-you-harness.html": ["open=1"],
++  // ADR-110 Amendment 19: the reader's own scheduled loads' notices, and the line saying how many more.
++  "needs-you-harness.html": ["open=1", "open=1&notices=1"],
+   "admin-harness.html": [
+     "open=connections&rights=administer_system",
+     "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Uploads%20(coming)",

@@ -1,0 +1,12 @@
+# keyboard/needs-you.spec.ts at 13a04bc, local slot 8. 7 passed.
+
+Running 7 tests using 1 worker
+
+[1/7] keyboard/needs-you.spec.ts:23:1 › Needs you opens, each entry's tip is read with it, and Escape gives focus back
+[2/7] keyboard/needs-you.spec.ts:40:1 › the reader's scheduled loads' notices are reached by Tab, each read with its tip, and how many more is said (ADR-110 Amendment 19)
+[3/7] keyboard/needs-you.spec.ts:62:1 › an overdue promotion opens Operations, and a dataset's proposals its Model tab, by keyboard
+[4/7] keyboard/needs-you.spec.ts:77:1 › the Studio's reminder opens 1 Model · n proposed by keyboard, its tip read with it
+[5/7] keyboard/needs-you.spec.ts:91:1 › a Needs you request opens the Studio on its dataset's Model tab, and not on another's
+[6/7] keyboard/needs-you.spec.ts:109:1 › what you answer for opens where to act, its why read with each line, by keyboard
+[7/7] keyboard/needs-you.spec.ts:135:1 › every registered Needs you action has its own proving test case above
+  7 passed (2.2s)

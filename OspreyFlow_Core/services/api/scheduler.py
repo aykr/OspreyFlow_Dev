@@ -23,13 +23,18 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
+from services.ingest.engine import RowKeyRunInProgress
 from services.ingest.watermark import RefreshRead
 from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
-from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
+from principal_auth import (
+    PrincipalExchangeRefused,
+    PrincipalExchangeUnavailable,
+    PrincipalRevoked,
+)
 from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from schemas.rights import Right, rights_for
@@ -38,6 +43,7 @@ from .dataset_scope import CompositeReadOnlyError
 from .investigations import InsufficientAccessError, InvestigationNotFoundError
 from .recipe_runs import NotRunOutcome, RecipeRunStore, RunTrigger
 from .run_quotas import QuotaRefused
+from .schedule_notices import NOTICE_RULE_PREFIX, NoticeKind, notice_words
 from .studio_map import resolve_source_handling
 
 if TYPE_CHECKING:
@@ -157,10 +163,6 @@ def schedule_notice(owner_id: str, recipe: StudioRecipeDraft, words: str, now: d
     )
 
 
-#: The `rule_id` prefix of a schedule notice; the Glass's inbox reads it as a notice, not a match.
-NOTICE_RULE_PREFIX = "schedule:"
-
-
 # --- the executor --------------------------------------------------------------------------------
 
 #: A claimed slot is remembered a week; a run of one recipe holds its lock at most six hours.
@@ -247,13 +249,24 @@ _COMPOSITE_CASE = (
 )
 
 
+def failure_kind(error: BaseException) -> NoticeKind:
+    """The kind a run that raised is told as. Its own text is never read."""
+    if isinstance(error, RowKeyRunInProgress):
+        return "in_progress"
+    if isinstance(error, TimeoutError):  # asyncio.TimeoutError is TimeoutError from Python 3.11
+        return "timed_out"
+    return "failed"
+
+
 class _Refused(Exception):
     """A slot that may not run, and why, in words for the ledger. `about_the_owner` is false for a
-    refusal that says nothing about the owner (Amendment 3), which never pauses the schedule."""
+    refusal that says nothing about the owner (Amendment 3), which never pauses the schedule. `kind`
+    is what its owner is told (Amendment 19); the words here go to the ledger alone."""
 
-    def __init__(self, why: str, *, about_the_owner: bool = True) -> None:
+    def __init__(self, why: str, *, kind: NoticeKind, about_the_owner: bool = True) -> None:
         super().__init__(why)
         self.about_the_owner = about_the_owner
+        self.kind: NoticeKind = kind
 
 
 @dataclass
@@ -371,7 +384,7 @@ class ScheduleExecutor:
             await self._not_run(
                 recipe, latest, "refused", str(refused), counts=refused.about_the_owner
             )
-            await self._tell_owner(recipe, f"{self._due(recipe, latest)} was refused: {refused}")
+            await self._tell_owner(recipe, notice_words(self._due(recipe, latest), refused.kind))
             await self._pause_if_refused_again(recipe, refused)
             return
         lock = f"schedule:lock:{recipe.recipe_id}"
@@ -383,11 +396,13 @@ class ScheduleExecutor:
             return
         try:
             await self.run(owner, recipe, case, latest)
-        except QuotaRefused as refused:  # ADR-141 decision 6: recorded refused, in words
-            await self._tell_owner(recipe, f"{self._due(recipe, latest)} was refused: {refused}")
+        except QuotaRefused:  # ADR-141 decision 6: its own words stay in the ledger
+            await self._tell_owner(recipe, notice_words(self._due(recipe, latest), "refused_quota"))
         except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
             log.exception("scheduled run of recipe %s failed", recipe.recipe_id)
-            await self._tell_owner(recipe, f"{self._due(recipe, latest)} failed: {error}")
+            await self._tell_owner(
+                recipe, notice_words(self._due(recipe, latest), failure_kind(error))
+            )
         finally:
             await self._release(lock, token)
 
@@ -427,7 +442,7 @@ class ScheduleExecutor:
                     recipe, None, "refused", KEYLESS_REFRESH, counts=False,
                     trigger=trigger, source_file=file.identity,
                 )  # fmt: skip
-                await self._tell_owner(recipe, f"{words} was refused: {KEYLESS_REFRESH}")
+                await self._tell_owner(recipe, notice_words(words, "keyless_refresh"))
                 return
             try:
                 owner, case = await self._owner(
@@ -437,14 +452,15 @@ class ScheduleExecutor:
                     # Rule 4: the folder is the dataset's, read only through a case that has it.
                     raise _Refused(
                         f"the recipe's dataset, {recipe.dataset_id}, is no longer in the case the "
-                        "watch was set in"
+                        "watch was set in",
+                        kind="refused_reach",
                     )
             except _Refused as refused:
                 await self._not_run(
                     recipe, None, "refused", str(refused), counts=refused.about_the_owner,
                     trigger=trigger, source_file=file.identity,
                 )  # fmt: skip
-                await self._tell_owner(recipe, f"{words} was refused: {refused}")
+                await self._tell_owner(recipe, notice_words(words, refused.kind))
                 await self._pause_if_refused_again(recipe, refused, source=source)
                 return
             try:
@@ -452,11 +468,11 @@ class ScheduleExecutor:
                     owner, recipe, case, None, file, trigger=trigger,
                     refresh=source.read if source is not None else None,
                 )  # fmt: skip
-            except QuotaRefused as refused:  # ADR-141 decision 6: recorded refused, in words
-                await self._tell_owner(recipe, f"{words} was refused: {refused}")
+            except QuotaRefused:  # ADR-141 decision 6: its own words stay in the ledger
+                await self._tell_owner(recipe, notice_words(words, "refused_quota"))
             except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
                 log.exception("watched run of recipe %s failed", recipe.recipe_id)
-                await self._tell_owner(recipe, f"{words} failed: {error}")
+                await self._tell_owner(recipe, notice_words(words, failure_kind(error)))
         finally:
             await self._release(lock, token)
 
@@ -540,27 +556,39 @@ class ScheduleExecutor:
         owner_id, case = recipe.schedule_owner, recipe.schedule_case
         if dataset is not None:
             if owner_id is None:
-                raise _Refused("the source's refresh has no owner; set it again on the source")
+                raise _Refused(
+                    "the source's refresh has no owner; set it again on the source",
+                    kind="refused_rights",
+                )
             case = await self._case_into(owner_id, case, dataset)
         if owner_id is None or case is None:
-            raise _Refused("the schedule has no owner; set it again from the case it runs in")
+            raise _Refused(
+                "the schedule has no owner; set it again from the case it runs in",
+                # No owner: who may run it is gone. An owner with no case to run in: its reach.
+                kind="refused_rights" if owner_id is None else "refused_reach",
+            )
         owner = await self._resolve(owner_id)
         if Right.SCHEDULE_PIPELINES not in rights_for(owner.roles):
-            raise _Refused(f"the schedule's owner, {owner_id}, no longer holds schedule_pipelines")
+            raise _Refused(
+                f"the schedule's owner, {owner_id}, no longer holds schedule_pipelines",
+                kind="refused_rights",
+            )
         try:
             owner = await self.check_case(owner, case)
         except (InsufficientAccessError, InvestigationNotFoundError) as error:
             raise _Refused(
-                f"the schedule's owner, {owner_id}, is no longer an Editor of its case"
+                f"the schedule's owner, {owner_id}, is no longer an Editor of its case",
+                kind="refused_rights",
             ) from error
         except CompositeReadOnlyError as error:
             # Every run, so a case switched to a composite after its schedule was set starts none;
             # a lasting refusal, so after three in a row the schedule is paused, saying why,
             # rather than the owner told at every slot (Amendment 3).
-            raise _Refused(_COMPOSITE_CASE) from error
+            raise _Refused(_COMPOSITE_CASE, kind="refused_reach") from error
         if not principal_may_view(resolve_source_handling(recipe), owner, self.scheme):
             raise _Refused(
-                f"the source is marked above the clearance of the schedule's owner, {owner_id}"
+                f"the source is marked above the clearance of the schedule's owner, {owner_id}",
+                kind="refused_rights",
             )
         return owner, case
 
@@ -578,7 +606,9 @@ class ScheduleExecutor:
         found = await self.case_for_dataset(owner, dataset) if self.case_for_dataset else None
         if found is None:
             raise _Refused(
-                f"the refresh's owner, {owner_id}, has no case that loads into the source's dataset"
+                f"the refresh's owner, {owner_id}, has no case that loads into the source's "
+                "dataset",
+                kind="refused_reach",
             )
         return found
 
@@ -586,15 +616,31 @@ class ScheduleExecutor:
         try:
             return await self.resolve_owner(owner_id)
         except PrincipalRevoked as error:
-            raise _Refused(f"the schedule's owner, {owner_id}, can no longer sign in") from error
+            raise _Refused(
+                f"the schedule's owner, {owner_id}, can no longer sign in", kind="refused_rights"
+            ) from error
         except PrincipalExchangeUnavailable as error:
             raise _Refused(
                 "the identity provider could not be reached to act as the schedule's owner",
+                kind="sign_in_unavailable",
                 about_the_owner=False,
             ) from error
-        except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
+        except PrincipalExchangeRefused as error:
+            # The identity provider was reached and refused: an account it no longer knows, an
+            # exchange it refused, a token that fails verification. A fact about the owner, so it
+            # counts toward the three that pause (Amendment 3 point 3; Amendment 19).
             raise _Refused(
-                f"OspreyFlow could not act as the schedule's owner, {owner_id}"
+                f"the identity provider refused to act as the schedule's owner, {owner_id}",
+                kind="refused_rights",
+            ) from error
+        except Exception as error:  # noqa: BLE001 - a fault, not a refusal of the exchange
+            # The notice says "failed" and the ledger's words carry nothing of the error, so the
+            # log keeps it (Amendment 19 point 5; the studio lane's review of 531aa24).
+            log.exception("could not act as the schedule's owner, %s", owner_id)
+            raise _Refused(
+                f"OspreyFlow could not act as the schedule's owner, {owner_id}",
+                kind="failed",  # a store's fault or a bug, not the owner's rights (Admin's review)
+                about_the_owner=False,  # nothing about the owner, so never counted (Amendment 19)
             ) from error
 
     async def _not_run(

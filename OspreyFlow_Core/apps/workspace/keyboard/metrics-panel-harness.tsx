@@ -146,7 +146,10 @@ function Harness() {
           }}
         />
       </div>
-      <div style={{ width: 300, height: 600 }}>
+      {/* The panel scrolls inside its column, as it does in the product's side panel slot
+          (`SidePanelStack`, overflow: auto). Without it the Filters section ran 10.6px past the column
+          and the page's body, and axe read the last note as partly obscured (rules-hyg item 2). */}
+      <div style={{ width: 300, height: 600, overflow: "auto" }}>
         <MetricsPanel
           apiBaseUrl="http://keyboard-test.invalid"
           bearerToken="unused"

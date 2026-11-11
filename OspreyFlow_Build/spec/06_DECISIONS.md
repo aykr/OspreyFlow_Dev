@@ -28360,6 +28360,71 @@ nothing is refused.
 498–499). It is access-filtered, so it tells no one of a link they cannot read; it is recorded,
 not changed here.
 
+### ADR-110, Amendment 19 (10 November 2026) — a scheduled load's notice reaches its owner in *Needs you*, in fixed words
+
+Status: written 10 November 2026 by the rules lane (rules-hyg item 3), on the orchestrator's rulings
+of that evening (reserved 6327743; the reach and the words ruled after the merger's and Admin's
+reviews). It amends Amendment 3 point 1, whose "owner's own inbox" L2.10 removed (ADR-146 decision
+1, one queue; the inbox's routes gone, 7d5d8b3), leaving the notice written and read by nothing:
+`AlertStore.list_authorized` had no route left that called it for notices, so a failed or refused
+scheduled load was said to no one. It keeps point 1's intent, since *Needs you* is now the owner's
+own place (ADR-145 decision 11).
+
+1. **A notice is any alert whose `rule_id` is `schedule:<recipe id>` and that has no typology**
+   (`schedule_notices.NOTICE_RULE_PREFIX`), as point 1 has always written it; so the notices written
+   before this amendment are served too, and none needs migrating. It still never enters any queue.
+2. **It reaches its owner in *Needs you*** (`GET /v1/me/needs-you`, `NeedsYou.schedule_notices`), as a
+   focusable entry in its own words with a tip saying where its pipeline's Runs are; it opens nothing,
+   so the top bar needs no new action. A reader who owns no schedule sees none.
+3. **Only its owner reads or counts it, by owner alone, with no dataset reach.**
+   `AlertStore.list_schedule_notices` filters `owner_id` in the query itself, the list and the total
+   alike, from one statement (`count(*) OVER ()`, so the total is read at the list's moment). No dataset
+   reach is applied: a notice is about the owner's own schedule and carries no data, and a run refused
+   because it no longer reaches its dataset is exactly what its owner must read; while the reader of
+   *Needs you* is outside any case (`datasets=[]`), so a reach would hide every notice once
+   `scripts.stamp_datasets` placed it in its case's dataset. An administrator, a team lead, anyone else
+   or an unknown principal reads and counts none of another's (rule 3). No right gates it, as nothing
+   but the owner's own is served.
+4. **Open notices of the last seven days, newest first, at most twenty, with the total.** More are
+   said in words ("n more notices of your scheduled loads, not listed here"), never cut silently
+   (rule 2); the count on *Needs you · n* is the total. A notice leaves *Needs you* after seven days; it
+   is not dismissed (each pipeline's Runs keep every run, and Admin › Schedules a paused schedule).
+5. **A notice says one fixed sentence per kind, never an error's own text** (rule 7): an error can carry
+   a host, a table or a source row's key (an `ArcadeDBError` carries the server's whole reply), and it
+   stays in the run's ledger and the log. The sentence follows the run's name (`The scheduled run of
+   <recipe> due <time>`, or `The run of <recipe> on the file <name>`), by kind (`schedule_notices.NoticeKind`):
+   *failed* (any error), *timed out* (a `TimeoutError`), *refused for reach* (the run no longer reaches
+   its case or its dataset), *refused for rights* (its owner may no longer run it: a right, a clearance,
+   a sign-in), *the sign-in service did not answer* (not the owner's doing, so it never pauses the
+   schedule; the slot is not run again, so nothing is promised), and two the scheduler already said in
+   fixed words: *an earlier run into its case was still going* and *a refresh with no deduplication key*;
+   and *today's run quota is used* (ADR-141 decision 6's refusal, whose own words name its scope and number,
+   so they stay in the ledger). The kinds are the orchestrator's four and its fifth for the sign-in service,
+   plus those three.
+   **And at read:** *Needs you* serves a notice's stored words only when they end in one of these
+   sentences (`schedule_notices.served_words`); a notice written before this amendment, as
+   `"<run> failed: <the error's text>"`, is served the fixed fallback ("A scheduled load of yours
+   did not run as planned. …") instead, so no error's text reaches the Glass in the seven days after
+   an upgrade either (the merger's review). Every `_Refused` names its kind; none is defaulted.
+   **Acting as the owner, which outcomes pause** (Amendment 3 point 3; the merger's round-4 review): an
+   owner revoked, or the identity provider reached and refusing (an account it no longer knows, an
+   exchange it refuses, a token that fails verification: `PrincipalExchangeRefused`), is *refused for
+   rights* and counts toward the three that pause; an identity provider not reached is *the sign-in
+   service did not answer* and does not count; any other fault (a store's, a bug) is *failed* and does
+   not count.
+
+**Tests.** Live, against Postgres, each reader made as the route makes it: `test_schedule_notices_needs_you.py`
+(another person, an administrator, a team lead and an unknown principal read and count none of the
+owner's; a stamped notice and an unstamped one both served; a notice written before the amendment
+served, and a rule's alert or a typed `schedule:` alert not; the window and the status; the total past
+the limit). The words: `test_schedule_notice_words.py` (offline: each kind's sentence; an error told by
+its kind alone) and `test_schedule_executor.py` (live: the executor's own call sites, with an error
+planted in `ArcadeDBError`'s shape whose text never reaches the words). The route:
+`test_needs_you.py` (the owner alone served; twenty listed and the true total; the seven-day window).
+The Glass: `NeedsYou.test.tsx`, `keyboard/needs-you.spec.ts` (each notice and the "more" line reached by
+Tab with its tip; Escape closes), and every-harness's `needs-you-harness.html open=1&notices=1` in three
+themes. Each shown red at its call site (`process/lanes/rules/hyg/3-schedule-notices-red.txt`).
+
 ### ADR-143, Amendment 3 (7 November 2026) — where a fresh drawing's items live, and who merges a drawn dataset
 
 Status: accepted from the owner's rulings of 7 November 2026 on Amendment 2's two open questions, L5 and L6
@@ -33512,3 +33577,34 @@ passed, not skipped.
   so a staged file above the ceiling past them is told only at Load.
 - New: a backstop refusal after raw staging leaves that load's raw and resolved rows staged, on any load.
 - New: a staged run refused for a cause other than the ceiling keeps its step tables.
+
+### ADR-110, Amendment 20 (11 November 2026) — a fault acting as a schedule's owner: the ledger keeps refused with the notice kind failed; the error's text stays in the log alone, and Am 19 point 5's 'ledger' does not hold for this branch
+
+Status: written 11 November 2026 by the merger, at rules-hyg's merge (373b3dd), on the orchestrator's ruling of
+that morning (about 09:25 UTC; recorded for the owner, reserved c835b9d). It corrects one sentence of Amendment 19
+point 5 for one branch, without editing it.
+
+1. **A fault met while acting as a schedule's owner** (`ScheduleExecutor._resolve`'s last branch: neither a
+   revoked owner nor a refusal of the exchange, nor the identity provider not answering, but a store's fault or a
+   bug) **is recorded in the run's ledger as outcome `refused`, with notice kind *failed***, as built. The row does
+   not count toward the three refusals that pause, and `refusals_in_a_row` passes over it rather than ending the
+   run of refusals (`recipe_runs`). The ledger's words are fixed ("OspreyFlow could not act as the schedule's
+   owner, <owner>"), because refused words are served to every reader of the pipeline's Runs.
+2. **For this branch the error's own text is kept in the log alone** (`log.exception` on
+   `services.api.scheduler`, once per fault, the owner named). Amendment 19 point 5's "it stays in the run's
+   ledger and the log" does not hold here: the ledger keeps none of it. Every other kind is unchanged.
+3. Recording such a fault as a ledger outcome `failed` is not done: `NotRunOutcome` has no such value, and a
+   `failed` row would end a run of refusals where this one is passed over. That would be a data-model change,
+   left to a later step if the owner wants the Runs view to say "failed" here too.
+
+**Tests** (red first: `process/lanes/rules/hyg/3b-owner-fault-log-red.txt` offline, and
+`process/lanes/merger/gates/hyg-373b3dd.txt` live on 531aa24's `scheduler.py`):
+`test_schedule_executor.py::test_resolving_the_owner_logs_a_fault_but_not_a_refusal` (offline, at `_resolve`:
+the fault logged once at ERROR with its error attached and the owner named; no refusal logged at ERROR) and
+`::test_a_fault_acting_as_the_owner_keeps_its_error_in_the_log` (live, through `tick`: the ledger `refused`,
+the notice without the error, the log with it); `::test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule`
+(live: four faults, four `refused` rows, no pause).
+
+**Still carried** (`CARRIES.md`): the identity provider's refusals and its not answering are not logged; an
+outage the resolver classifies as a refusal counts toward the pause; a fault elsewhere in acting as the owner
+writes no ledger row; the refusal half of the offline test checks only the planted shape.

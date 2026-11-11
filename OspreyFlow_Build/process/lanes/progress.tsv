@@ -77,7 +77,7 @@ rules-b	T3	S	done	Dialogs' and invisible text's colour contrast actually gated i
 rules	UPG	S	done	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, before the publish: four runs; run 4 passed on platform-b's d85f514 (refusal, the one-time apply, the migrations, end state); update's real pull, pin and rollback owed to the post-tag check (merged e620588)
 platform-b	UPG-fix	S	done	Update from v0.4.12 refuses in words before writing anything and names the one-time `ospreyflow apply` route; a named update reaches its own deployment; files moved into place whole; apply starts a newly added service with its dependencies (ADR-114 Am 39; merged 1223cc8)
 rules	UPG-check	S	building	The real update from v0.4.12 to the published v0.5.0 (CHANGELOG steps 1–7), on the test server
-rules	hyg	M	review	Home's key cap, the metrics note, schedule notices in Needs you (ADR-110 Am 19); studio's finding fixed on the server
+rules	hyg	S	done	Hygiene, three items: the key cap's own ink; the metrics harness panel scrolls (the rarity note); a scheduled load's notice reaches its owner in Needs you, owner alone, fixed words by kind (ADR-110 Am 19) ; a fault acting as the owner kept in the log (studio's finding) (merged 373b3dd)
 rules	lists	S	todo	Live files remove the screening lists they load; ADR-146: one owner on two lists, one alert or two
 rules-b	T3b	S	review	The contrast probe's limits (SVG surfaces, shadows, points); Show as BPMN's task-box contrast
 platform-b	carries	M	building	The chart's quoted checksums; ADR-114 Am 39's edge cases (crash flags, ownership, atomic writes, stale stage, shell values); the lockout's words
