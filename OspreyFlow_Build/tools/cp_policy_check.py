@@ -264,6 +264,15 @@ def _admits_ingress(spec: dict[str, Any]) -> bool:
     return "Ingress" in types if types else True  # Kubernetes' own default
 
 
+def _calico_admits_ingress(spec: dict[str, Any]) -> bool:
+    """Calico's own default: a policy with no `types` is an Ingress policy unless it has egress
+    rules and no ingress rules."""
+    types = spec.get("types")
+    if types:
+        return "Ingress" in types
+    return bool(spec.get("ingress")) or not spec.get("egress")
+
+
 def _ingress_rules(docs: list[dict[str, Any]], controller_namespace: str) -> Iterator[Violation]:
     """Other tenants: every pod is selected by an ingress policy, and every ingress rule admits the
     namespace's own pods or the platform's ingress controller's namespace, nothing else."""
@@ -298,7 +307,7 @@ def _ingress_rules(docs: list[dict[str, Any]], controller_namespace: str) -> Ite
                             f"controller's ({controller_namespace}) alone",
                         )  # fmt: skip
     for doc in docs:
-        if not _is_calico(doc) or "Ingress" not in ((doc.get("spec") or {}).get("types") or []):
+        if not _is_calico(doc) or not _calico_admits_ingress(doc.get("spec") or {}):
             continue
         for rule in (doc.get("spec") or {}).get("ingress") or []:
             source = rule.get("source") or {}

@@ -456,6 +456,7 @@ def test_the_open_egress_policy_is_refused(development: tuple[dict[str, Any], st
     ("cidr", "why"),
     [
         ("0.0.0.0/0", "0.0.0.0/0 is a default route"),
+        ("::/0", "::/0 is a default route"),
         ("10.0.0.0/8", "10.0.0.0/8 is wider than /16"),
         ("2001:db8::/32", "2001:db8::/32 is wider than /48"),
     ],
@@ -581,6 +582,25 @@ def test_a_calico_ingress_allow_beyond_a_selector_is_refused(
     _with_calico_ingress(docs, source)
     [(rule, where, detail)] = _isolation(docs, registry)
     assert (rule, where) == ("ingress-isolation", "NetworkPolicy/default.ospreyflow-allow-egress")
+    assert detail.startswith("a Calico rule admitting beyond the namespace's own pods")
+
+
+def test_a_calico_ingress_allow_in_a_policy_with_no_types_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Calico gives a policy with no `types` Ingress unless it has egress rules alone, so ingress
+    rules without `types` are applied (the round-2 self-review, point 2). Planted as a new Calico
+    policy a template might emit, ingress rules and no `types`."""
+    docs, registry = _helm(development)
+    allow = copy.deepcopy(_doc(docs, "NetworkPolicy", "default.ospreyflow-allow-egress"))
+    allow["metadata"]["name"] = "default.ospreyflow-allow-ingress"
+    allow["spec"] = {
+        "tier": "default", "order": 100, "selector": "all()",
+        "ingress": [{"action": "Allow", "source": {"nets": ["10.0.0.0/8"]}}],
+    }  # fmt: skip
+    docs.append(allow)
+    [(rule, where, detail)] = _isolation(docs, registry)
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/default.ospreyflow-allow-ingress")
     assert detail.startswith("a Calico rule admitting beyond the namespace's own pods")
 
 
