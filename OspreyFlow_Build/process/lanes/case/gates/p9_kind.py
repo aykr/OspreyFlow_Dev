@@ -24,6 +24,7 @@ import copy
 import datetime as dt
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -196,6 +197,7 @@ class Run:
         self,
         *,
         role_policy: dict[str, Any] | None = None,
+        clickhouse_policy: dict[str, Any] | None = None,
         bucket_policy: dict[str, Any] | None = None,
         trusted_account: str | None = None,
         key_policy: dict[str, Any] | None = None,
@@ -218,7 +220,9 @@ class Run:
                 "arn": role_arn, "issuer_secret": "unused: the cluster's keys are the trust",
                 "subject": subject, "jwks": jwks, "issuer": issuer,
                 "trust": backups.trust_policy(provider, issuer.removeprefix("https://"), subject),
-                "policies": [(role_policy if role_arn == ROLE_ARN and role_policy else policies[account])],
+                "policies": [(role_policy if role_arn == ROLE_ARN and role_policy
+                              else clickhouse_policy if role_arn == CLICKHOUSE_ROLE_ARN and clickhouse_policy
+                              else policies[account])],
             })  # fmt: skip
         return {
             "region": REGION,
@@ -925,6 +929,11 @@ class Run:
             times[name] = round(time.monotonic() - start - times["stopped"], 1)
             print(f"{name}: {'succeeded' if ok else 'FAILED'}\n{logs}")
             if not ok:
+                # The stores started again first, so a later step does not meet ArcadeDB scaled to
+                # nothing (round 3's first run: a name that did not resolve, after this failure).
+                kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=1")
+                self.shared_pod()
+                kubectl("-n", self.ns, "rollout", "status", "statefulset/arcadedb", "--timeout=900s", check=False)
                 raise SystemExit(f"the restore Job {name} failed")
         restarted = time.monotonic()
         kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=1")
@@ -1063,7 +1072,7 @@ class Run:
             raise SystemExit("FAIL: the restore did not refuse closed, or something was touched")
         print("PASS the restore refused closed in both Jobs; the stores untouched")
 
-    def osprey_sources(self) -> None:
+    def osprey_sources(self, record_as: str = "osprey_sources") -> None:
         """The orchestrator's blocker, after the fix: as the deployment's own ClickHouse user, each of
         the four that were accepted on 11 November (a set's manifest read, ArcadeDB's zip read, a set
         overwritten, url() to another host) is refused; and ClickHouse's own pod reaches no outside
@@ -1080,6 +1089,8 @@ for name, q in [
     ("write over a set", "INSERT INTO FUNCTION s3('{base}/sets/probe/arcadedb/ospreyflow.zip', 'RawBLOB') SELECT 'overwritten'"),
     ("url() to another host", "SELECT count() FROM url('https://{STANDIN_HOST}:{STANDIN_PORT}/', 'RawBLOB')"),
     ("RESTORE a set's ClickHouse part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored FROM S3('{restore_url}')"),
+    ("RESTORE from ArcadeDB's part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored_a FROM S3('{base}/sets/{finished[-1]}/arcadedb/')"),
+    ("RESTORE from the claims' part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored_c FROM S3('{base}/sets/{finished[-1]}/claims/')"),
     ("the S3 table engine", "CREATE TABLE ospreyflow.p9_s3_engine (x String) ENGINE = S3('{base}/sets/probe/x', 'RawBLOB')"),
     ("s3Cluster", "SELECT count() FROM s3Cluster('osprey', '{base}/sets/*/manifest.json', 'RawBLOB')"),
     ("icebergS3", "SELECT count() FROM icebergS3('{base}/sets/probe/')"),
@@ -1100,19 +1111,63 @@ for name, q in [
         self.record["osprey_sources"] = lines
         self.record["clickhouse_egress_to_1.1.1.1"] = egress
         refused = [line for line in lines if line.startswith("REFUSED")]
-        accepted = [line for line in lines if line.startswith("ACCEPTED")]
-        self.probe("ch('DROP DATABASE IF EXISTS p9_osprey_restored SYNC')")
-        self.save("osprey_sources")
+        accepted = [line.split(" -> ")[0].removeprefix("ACCEPTED ") for line in lines
+                    if line.startswith("ACCEPTED")]  # fmt: skip
+        # The bound on the one acceptance (Amendment 7 point 4): RESTORE reaches only what
+        # ClickHouse's own role reaches, so from ArcadeDB's or the claims' part S3 itself refuses
+        # it, by access (not because no backup is there, which a role reaching `sets/*` would say).
+        bound = {
+            name: next((line for line in refused if line.startswith(f"REFUSED {name} ->")), "")
+            for name in BOUND
+        }
+        outside = [n for n, line in bound.items() if not re.search("access ?denied", line, re.I)]
+        self.probe(
+            "for d in ('p9_osprey_restored', 'p9_osprey_restored_a', 'p9_osprey_restored_c'):\n"
+            "    ch(f'DROP DATABASE IF EXISTS {d} SYNC')"
+        )
+        self.record["osprey_accepted"] = accepted
+        self.record["osprey_restore_bound"] = bound
         self.record["show_grants_osprey"] = (
             self.probe("print(ch('SHOW GRANTS'))").strip().splitlines()
         )
-        if accepted or not refused or egress.endswith("REACHED"):
+        self.save(record_as)
+        if accepted != [PINNED_ACCEPTANCE] or outside or egress.endswith("REACHED"):
             raise SystemExit(
-                "FAIL: the deployment's user, or ClickHouse's egress, still reaches what it must not"
+                "FAIL: the deployment's user, or ClickHouse's egress, reaches what it must not: "
+                f"accepted {accepted} (only {[PINNED_ACCEPTANCE]} is ruled), RESTORE not refused by "
+                f"S3's access from {outside}, egress {egress}"
             )
         print(
-            f"PASS the deployment's user is refused all {len(refused)}; ClickHouse reaches no outside address"
+            f"PASS the deployment's user is refused all {len(refused)} but the ruled RESTORE of "
+            "ClickHouse's own part, which S3 refuses from ArcadeDB's and the claims'; ClickHouse "
+            "reaches no outside address"
         )
+
+    def osprey_bound_red(self) -> None:
+        """Rule 15 for the bound: ClickHouse's role planted to reach every set's prefix, the check
+        above must fail (osprey's RESTORE from ArcadeDB's and the claims' part no longer refused by
+        access); the stand-in put back as the Terraform makes it whatever happens."""
+        from harness import cloud_platform_backups as backups
+
+        arn = f"arn:aws:s3:::{self.bucket()}"
+        wide = backups.role_policies(arn, KEY_ARN, REGION)[backups.CLICKHOUSE_SERVICE_ACCOUNT]
+        wide = json.loads(json.dumps(wide).replace("/sets/*/clickhouse/*", "/sets/*"))
+        assert "/sets/*/clickhouse/*" not in json.dumps(wide), wide
+        self.configure(self.standin_config(clickhouse_policy=wide))
+        try:
+            self.osprey_sources(record_as="osprey_bound_planted")
+            red, said = False, "the check passed with ClickHouse's role reaching every set"
+        except SystemExit as e:
+            said = str(e)
+            red = "RESTORE not refused by S3's access from ['RESTORE from ArcadeDB" in said
+        finally:
+            self.configure(self.standin_config())
+        self.record = {"osprey_bound_red": {"red": red, "said": said,
+                                            "bound": self.record.get("osprey_restore_bound")}}  # fmt: skip
+        self.save("osprey_bound_red")
+        print(f"{'PASS' if red else 'FAIL'} the bound planted wide: {said}")
+        if not red:
+            raise SystemExit("FAIL: the bound's check did not go red with the role planted wide")
 
     def reds(self) -> None:
         from harness import cloud_platform_backups as backups
@@ -1325,6 +1380,12 @@ for name, q in [
 
 
 #: The stores' own HTTP, run in the probe pod (the deployment's own network), with the runner's names.
+#: The one statement shape the deployment's ClickHouse user is let do that reaches the bucket: no
+#: privilege gates RESTORE (measured, gates/p9_grants_probe3.log); the orchestrator's ruling A of
+#: 11 November, Amendment 7 point 4. Anything else accepted turns osprey_sources red.
+PINNED_ACCEPTANCE = "RESTORE a set's ClickHouse part"
+BOUND = ("RESTORE from ArcadeDB's part", "RESTORE from the claims' part")
+
 STORES = r"""
 import base64, json, os, urllib.error, urllib.request
 A = "http://arcadedb-0.arcadedb-headless:2480"
@@ -1434,6 +1495,7 @@ def main() -> None:
             "roundtrip",
             "reds",
             "osprey_sources",
+            "osprey_bound_red",
             "restore_refused",
         ],
     )
