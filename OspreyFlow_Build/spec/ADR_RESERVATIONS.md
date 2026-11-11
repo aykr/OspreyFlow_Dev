@@ -189,3 +189,4 @@ Amendment headings in another form at the baseline: 15
 | ADR-139 | 3 |
 | ADR-140 | 6 |
 | ADR-146 Amendment 6 | The rule editor as built (L2.11): a declared dataset fixed at creation, draft, Test over 30 days and Make live with the dataset's second-person policy (ADR-145 A3), the per-version stored rule files, when a screening list refreshes, and the migration of whole-deployment rules; the template form just for its author, and who a rule runs as | rules | 2026-11-10 | written |
+| ADR-135 Amendment 7 | The model route's two engine kinds as built (P11 part 1): the client's gateway and Bedrock by the namespace's IAM role in Admin › Models, Amendment 4's rules held to the cloud-platform profile, London-only model ids, no key in an address | platform-b | 2026-11-11 | reserved |
