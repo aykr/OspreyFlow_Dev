@@ -199,6 +199,7 @@ class Run:
         *,
         role_policy: dict[str, Any] | None = None,
         bucket_policy: dict[str, Any] | None = None,
+        trusted_account: str | None = None,
     ) -> dict[str, Any]:
         from harness import cloud_platform_backups as backups
 
@@ -211,7 +212,7 @@ class Run:
                 {
                     "arn": ROLE_ARN,
                     "issuer_secret": "unused: the cluster's keys are the trust",
-                    "subject": f"system:serviceaccount:{self.ns}:{backups.SERVICE_ACCOUNT}",
+                    "subject": f"system:serviceaccount:{self.ns}:{trusted_account or backups.SERVICE_ACCOUNT}",
                     "jwks": jwks,
                     "issuer": issuer,
                     "policies": [role_policy or backups.role_policy(arn, KEY_ARN)],
@@ -1006,14 +1007,49 @@ class Run:
             main_only(),
             self.standin_config(role_policy=policy),
         )
-        # 3. The role's session expired under ClickHouse, which took its credentials at the round
-        # trip's BACKUP and keeps them: the next real BACKUP is refused (ClickHouse restarted after,
-        # to take a new one).
+        # 3a. Every session expired (an hour on the platform): measured, not a refusal. ClickHouse
+        # and the runner each take a new one from STS by their pods' identity, and the set is
+        # written (measured on osprey-p9, 11 November 2026: ClickHouse renews, it does not keep a
+        # dead session).
         self.lever("/_standin/expire")
-        expect("expired-role", ("clickhouse",), both)
-        results[-1]["clickhouse_said"] = [w for w in results[-1]["words"] if "clickhouse" in w]
-        kubectl("-n", self.ns, "rollout", "restart", "statefulset/clickhouse")
-        kubectl("-n", self.ns, "rollout", "status", "statefulset/clickhouse", "--timeout=600s")
+        slot += 1
+        ok, logs, renewed = self.backup(slot)
+        results.append(
+            {
+                "measured": "expired-sessions-renewed",
+                "slot": slot,
+                "set_written": ok,
+                "as_expected": ok and renewed in self.finished_sets(),
+            }
+        )
+        print(
+            f"{'PASS' if results[-1]['as_expected'] else 'FAIL'} expired sessions renewed: set {renewed}"
+        )
+        # 3b. An expired role that cannot be renewed (its trust no longer the backup's service
+        # account): refused at the runner's own STS call, and at ClickHouse's BACKUP, its words kept.
+        untrusting = self.standin_config(trusted_account="another-account")
+        self.configure(untrusting)
+        self.lever("/_standin/expire")
+        try:
+            said = (
+                self.probe(
+                    "try:\n"
+                    f"    ch(\"BACKUP DATABASE ospreyflow ON CLUSTER osprey TO S3('https://{AWS_NAMES[0]}/{self.bucket()}/sets/unrenewable/clickhouse/')\")\n"
+                    "    print('ACCEPTED')\n"
+                    "except RuntimeError as e:\n"
+                    "    print('REFUSED', e)\n"
+                )
+                .strip()
+                .splitlines()[-1]
+            )
+        finally:
+            self.configure(good)
+        expect("unrenewable-role", ("AssumeRoleWithWebIdentity",), main_only(), untrusting)
+        results[-1]["clickhouse_said"] = said
+        results[-1]["as_expected"] = results[-1]["as_expected"] and said.startswith("REFUSED")
+        print(
+            f"{'PASS' if said.startswith('REFUSED') else 'FAIL'} ClickHouse unrenewable: {said[:300]}"
+        )
         # 4. No claims part (the claims run never ran): the main run waits its bounded time, fails
         # in words and leaves the set unfinished; a restore of that set is refused.
         expect(
