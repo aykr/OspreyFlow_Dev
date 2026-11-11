@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index 8a5cbc5..53311c0 100644
+index 5f9e704..d9b2c56 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
-@@ -2435,6 +2435,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -2445,11 +2445,12 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `cloud_platform.platform` | str | `client` | The platform's settings file, by name |
  | `cloud_platform.namespace` | str or none | none | The namespace the platform's team created for the deployment (required) |
  | `cloud_platform.environment` | `development` \| `production` | `development` | One copy of each store; production runs the cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3) |
@@ -10,7 +10,13 @@ index 8a5cbc5..53311c0 100644
  | `cloud_platform.registry` | str or none | none | Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there |
  | `cloud_platform.allow_from` | list of str | — | The networks (CIDR) the platform's ingress admits; empty: every address |
  | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
-@@ -2506,7 +2507,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+ | `cloud_platform.tls_secret` | str or none | none | The platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them |
+-| `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each with its networks in egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS), so the two never disagree |
++| `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each as host or host:port, with its networks in egress_nets under the host alone: rendered as both the namespace's egress, on that port, and the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS), so the two never disagree. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432), or its connection times out. A host given twice with two ports is reached on both |
+ | `network` | section | — | The address the deployment answers at, and what it publishes. |
+ | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
+ | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |
+@@ -2516,7 +2517,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `deployment` | section | — | Which deployment this is, on a machine that runs more than one. |
  | `deployment.name` | str or none | none | Names this deployment's Compose project, its volumes and its rendered folder, so a second deployment on the same machine shares none of them. |
  | `deployment.graph_port` | int or none | none | The port on this machine (127.0.0.1 only) the graph store's own tools reach it at. A deployment installed beside another with ospreyflow install --name is given one of its own, so the two share no port. |

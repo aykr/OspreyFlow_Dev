@@ -34563,8 +34563,19 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     - Now DNS is the one policy that selects every pod, and it allows DNS alone.
     - Each workload has its own policy, `default.ospreyflow-egress-<workload>` (order 100, selecting
       its own pods by `app.kubernetes.io/name`). It allows the namespace's workloads it calls, on
-      their Services' ports; the managed stores' networks if it reads a store; and the hosts of
-      each kind it is given.
+      their Services' ports; the managed stores' networks if it reads a store, on their ports
+      (RDS's 5432, ElastiCache's 6379, and the OpenSearch domain's 443 where the Terraform makes
+      one); and the hosts of each kind it is given, each on its own ports, TCP.
+    - A host's ports come from the settings the render already reads, in one parse: 443 for S3,
+      STS and an engine kind's host; an address's own port or its scheme's (80 for http) for an
+      engine's or a map source's; `mail.port` for the mail server; and a connector host's
+      `host:port` from `cloud_platform.connector_hosts`, a bare host on 443 (the final review of
+      P7b, item 5, as agreed with the orchestrator). A SQL connection needs its database's port
+      there, or its connection times out. A host given twice with two ports is reached on both;
+      the Conduit's allow-list (`OSPREY_CONNECTOR_EGRESS`) keeps the hosts alone.
+    - The deny runs at order 200, before the place Calico gives the namespace's Kubernetes
+      policies (1000). On this profile the cluster's `ospreyflow-internal` policy is not rendered
+      at all, so no Kubernetes policy here types Egress (the final review, item 1).
     - The rows are `profile.yaml`'s `egress.reach`, `egress.managed` and `egress.paths`.
       - The paths come from the addresses each workload's environment names.
       - S3 and STS go to the bucket role's pods, and to ClickHouse for its `BACKUP TO S3` (P9).
@@ -34580,15 +34591,23 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       restore also reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
       cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that the
       writers have stopped. The claims' runs reach none of ours: a claim is a mount, not a path.
-      No pod reaches KMS: S3 calls it on the backups' behalf (SSE-KMS), so a row to it would be a
-      path never used (the orchestrator's ruling with case, 11 November). No lane renders a Calico
+      No row names KMS: S3 calls it on the backups' behalf (SSE-KMS), so a row to it would be a
+      path never used (the orchestrator's ruling with case, 11 November). Calico matches networks,
+      not names, so an STS or regional range that also holds KMS is not excluded (a question for
+      the platform team, below). No lane renders a Calico
       policy of its own: every path is a row, and a later workload (case-b's Laurium) is a row,
       not a template edit.
     - Point 22's whole-secret rule is about our Secret alone. A Secret of its own (P9's ClickHouse
       backup user's password, read by ClickHouse and the backup and restore pods) passes it,
       whole or by key.
     - `make cp-policy-check` refuses an Allow beyond DNS under a policy selecting every pod
-      (`wide-egress`).
+      (`wide-egress`); a deny with no order, or one at 1000 or after (`deny-order`); an Allow
+      without its protocol and ports (`allow-ports`), the rule to the API server by its
+      `kubernetes` Service alone excepted, matched exactly, as Calico takes no ports there; and a
+      selector it cannot narrow (`unreadable-selector`): an empty one is every pod, and `has(...)`,
+      a part-of label or `all()` in a rule is refused. A DNS rule names the platform's DNS's
+      namespace, or it is no DNS rule. An ingress peer names workloads by name alone, or it is
+      `wide-ingress` (an `Exists` expression, an instance label, the part-of label, every pod).
 22. **Our Secret only to what reads it** (the same review). P7 gave the whole deployment Secret to
     every workload that reads the settings (`envFrom`), the stores' passwords and the gateway's
     master key among them, with only the model keys blanked.
@@ -34599,14 +34618,19 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       named allowance (`whole-secret`). The allowance is default-deny (the orchestrator's ruling,
       11 November): a pod not listed in the check may hold no key of ours, so a new workload
       (case-b's Laurium) is refused one until it is listed, with no other edit to the check. The
-      list holds the keys the render gives each store, Keycloak, the gateway and Superset; the
-      gateway also holds each engine's key (`OSPREY_MODEL_KEY_<NAME>`).
+      list holds the keys the render gives each store, Keycloak, the gateway and Superset. The
+      gateway also holds this deployment's keyed engines' keys, read from its own `osprey.yaml`
+      in Helm's output (`model_key_variables`), never by a prefix: an IAM-role engine's held key
+      is refused it (ADR-135 Amendments 4 and 7).
+    - Our Secret is whatever the values name it (`secrets.name`), as the chart reads it, and it
+      is held however a pod reads it: `envFrom`, a key, a `secret` volume (whole or by items), or
+      a `projected` volume's `secret` source (the final review, item 2).
 23. **Ingress is the paths turned round** (the orchestrator's ruling). Each workload's Kubernetes
     policy, `ospreyflow-ingress-<workload>`, admits only the workloads whose paths name it, on its
     own ports, rendered from the same rows as their egress so the two cannot drift. A workload
     nothing calls admits nothing in the namespace. The front doors keep the ingress controller's
     namespace (`ospreyflow-from-ingress`).
-    - On this profile `ospreyflow-internal` keeps its egress half alone; the cluster's render is
+    - On this profile `ospreyflow-internal` is not rendered (point 21); the cluster's render is
       unchanged.
     - `make cp-policy-check` refuses an ingress rule admitting every pod of ours (`wide-ingress`).
     - The evaluator (`tests/cp_policy_check/test_cp_egress_order.py`) applies Calico's order to
@@ -34622,7 +34646,12 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     false`: the Glass, the recogniser, the dashboards, Keycloak, the stores and their Keeper, the
     gateway without Bedrock, the Jobs, and case-b's Laurium when it lands.
     - `make cp-policy-check` refuses a mounted token (`token`) on any pod not in its own list, held
-      in the check and not read from the render, and on a listed pod with no account of its own.
+      in the check and not read from the render, and on a listed pod under any account but its
+      own: IRSA's (the platform's `secrets.irsa.service_account`) for the Conduit, the workers and
+      the report sync, the gateway's own for the gateway, one of their own for P9's pods; never
+      the namespace's `default`. The bucket role's account on any other pod, or the gateway's on
+      any but the gateway, is refused whether or not a token is mounted: IRSA's webhook gives a
+      pod its role by the account alone (the final review, item 6).
     - The other profiles' renders are unchanged: the chart writes the setting only when the render
       gives it.
 
@@ -34630,6 +34659,11 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
 volume binding. The poc shape's Conduit mounts two ReadWriteOnce claims, the shared one and the
 Ingest root's. With `WaitForFirstConsumer` both are made in its node's zone. With `Immediate`
 they may land in two zones, and no node could mount both.
+
+**Open question for the client's platform team**, the same list: whether the networks the
+platform names for STS, or any regional range a pod is allowed, also hold KMS's addresses. No row
+names KMS (point 21), but Calico matches networks, not names, so a shared range would not exclude
+it.
 
 **The tests that would fail.** `tests/harness/test_cloud_platform_poc.py` (the shape, the stores,
 the claim, the CPU limits, the runbooks), `tests/cp_policy_check/test_cp_policy_check.py` (every
