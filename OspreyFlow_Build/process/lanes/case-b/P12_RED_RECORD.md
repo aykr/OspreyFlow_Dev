@@ -193,11 +193,13 @@ measured here (the service does not log the model's answer, by design: ADR-135 A
 So `ModelPort.extract`'s contract case is **red on Laurium** against the pinned model, and part 1 does not meet its
 own exit on that case.
 
-**The `--live` plants**, against the same gateway (`gates/8190228d.live-plants-2.txt`; green start 1 passed):
+**The `--live` plants**, against the same gateway (`gates/8190228d.live-plants-2.txt`; green start 1 passed). That run
+used `plants_P12.py` as it stood uncommitted on disk (its no-tally and `MINIO_ENDPOINT` fixes, committed after in
+6539d337); the script records pytest's tally alone, so the failing assertion was not logged there:
 
 | Plant | Outcome |
 | --- | --- |
-| the master key sent to Laurium's service, at the adapter's call site | **red** (1 failed). On the real gateway it is caught first by the token-is-the-key-held check, so the four admin-route assertions themselves are shown red only on the stand-in (the dry run before the lease: master token → all four answered 200, red) |
+| the master key sent to Laurium's service, at the adapter's call site | **red** (1 failed), at `assert token == held, "the adapter did not send Laurium's own key"`, the first assertion after the key is made: the master key is never the key derived from it, so this is the only assertion that can fail first (the same plant on the stand-in, logged: `gates/9780c253.key-live-stand-in-dry-run.txt`). On the real gateway it is caught first by the token-is-the-key-held check, so the four admin-route assertions themselves are shown red only on the stand-in (the dry run before the lease: master token → all four answered 200, red) |
 | Laurium's own key made with `"user_role": "proxy_admin"` (where `put_laurium_key` makes it) | **green**: the pinned LiteLLM does not make a key admin for that field on `/key/generate`. So no field of the request this code sends is known to grant an admin right; a plant that gives the scoped key one at its making is not known, and is recorded so (the review's defect 4) |
 
 The plants' first leased attempt printed no tally: `plants_P12.py` counted an empty green start as green (fixed: no
@@ -209,3 +211,18 @@ stores closed as offline).
 - **The built image refusing to start on a planted host, the image leg of `no_langchain_check` on the real Conduit
   and worker images, and `trivy image` on Laurium's image** (item 8): `docker run` and `trivy` each asked for
   approval. Kept out of `P12_CI.diff` and carried.
+
+## Round 3: the confirmation of d02aea8 (offline, no lease)
+
+- **The strict xfail narrowed to the unparseable refusal alone** (`test_suite.py`), shown in Laurium's own 3.13
+  environment on the server at 9780c253, offline (`p12_xfail_check.py`, `gates/9780c253.laurium-env-offline.txt`):
+  an answer no parser reads, XFAIL; a conforming answer, FAILED (strict); **a gateway refusal planted at the adapter
+  (a token the gateway does not hold, 401), FAILED**, `AssertionError: extract failed for another reason: The model
+  gateway refused Laurium's call ... (HTTP 401)`; the same refusal under round 2's mark and plain call, XFAIL (the
+  hole closed). 4 of 4.
+- **Found running it (rule 15's second clause):** the check's first run (18a5ad77,
+  `gates/18a5ad77.laurium-env-offline-run4-unfaithful.txt`) restored round 2's mark alone; round 3's `except` still
+  turned the 401 into an `AssertionError`, so its fourth outcome said FAILED and proved nothing about round 2's mark.
+  Fixed to restore round 2's call too.
+- **`laurium-service`'s command at the head**: 26 passed; **the 14 plants in Laurium's environment**: green start 26
+  passed, 14 of 14 red (same file).

@@ -34127,11 +34127,16 @@ asks for the format in the prompt alone (LangChain's `PydanticOutputParser`, at 
 are likely one answer three times), where the LiteLLM adapter sends `response_format: json_schema` (constrained
 decoding); the model it would need is one that follows Laurium's prompt-only format, which no pinned model is shown
 to do, and the client's own engine sits behind the client's gateway or Bedrock route that P11 part 2 renders
-(Amendment 7). The conforming-answer case on Laurium is `xfail(strict=True)` for the pinned conformance model alone,
-by that refusal alone (the orchestrator's ruling of 11 November, recorded for the owner), so it fails the day it
-starts passing; every other Laurium case stays a hard pass. **Part 2's exit gains a named, leased live case:
-Laurium reading a conforming answer from the client's actual engine**; until it passes, D2c says Laurium is not yet
-shown on a real model. D2c
+(Amendment 7). The conforming-answer case on Laurium is a strict xfail for Laurium alone and **for the unparseable
+refusal alone** (the orchestrator's rulings of 11 November, recorded for the owner): `test_suite.py` turns only that
+refusal's words into the one exception the mark accepts, and any other failure (a refused key, an unreachable
+gateway, another host) is reported FAILED, as a conforming answer is (strict); its four outcomes are shown on the
+stand-in in Laurium's environment (`process/lanes/case-b/p12_xfail_check.py`, `gates/9780c253.laurium-env-offline.txt`).
+**No CI job runs that case in Laurium's environment, so it fires only on a leased run against a real gateway**; every
+other Laurium case stays a hard pass. **Part 2's exit gains a named, leased live case: Laurium reading a conforming
+answer from the client's actual engine** (`test_suite.py`'s conforming-answer case on `extract_laurium`, in Laurium's
+environment, against the gateway or Bedrock route P11 part 2 renders, under a lease), and that run is where the strict
+mark is read; until it passes, D2c says Laurium is not yet shown on a real model. D2c
 records that Laurium runs in its own container, not inside the Conduit and Workers as the page shared with the
 client shows. Part 2 (after P7 and P11 part 1) renders the service in the
 `cloud-platform` profile with its egress line, presets it in that profile's pack, and adds the setting to *Admin ›
@@ -34150,8 +34155,11 @@ empty finding: that file's refused cases through the stand-in. A schema outside 
 chat model without `openai_api_base`): `test_laurium_service.py`, every other name refused at the lookup and named.
 The master key sent to the service: `tests/adapters/extract_laurium/test_adapter.py`, read off every byte the
 adapter sends. Laurium's key given an admin right: `tests/conformance/model_port/test_laurium_key_live.py`, live
-against a gateway with its own database (no admin-granting field of the key's request is known, so its plant is the
-master key at the adapter's call site). Laurium's findings auto-accepted: `tests/adapters/extract_laurium/test_findings_inferred.py`
+against a gateway with its own database. Its plants against the real gateway: the master key at the adapter's call
+site, red, **but caught first by its token-is-the-key-held check**, so the four admin-route assertions themselves are
+shown red only on the stand-in (`process/lanes/case-b/gates/9780c253.key-live-stand-in-dry-run.txt`: that check
+removed too, all four routes granted, red); and Laurium's key made with `user_role: proxy_admin`, **run, and green**:
+the pinned LiteLLM does not grant an admin right for that field, and no field of the key's request that would is known. Laurium's findings auto-accepted: `tests/adapters/extract_laurium/test_findings_inferred.py`
 (the fake service) and `tests/conformance/model_port/test_laurium_findings_pending.py` (the real service
 in-process), each through `run_extraction` and the real `ExtractionCandidateStore`'s own `pending` write, down to
 the row its `INSERT` sends; asyncpg's pool under the store is stood in for (refusing a NULL where the store's table

@@ -1,0 +1,41 @@
+# test_laurium_key_live.py against the gateway's stand-in served over HTTP (not the real gateway), on the Mac at 9780c253, offline.
+# The stand-in's /key/info omits models, which the real gateway gives; this harness adds them (scratch key_dry.py). Not evidence of the real gateway.
+
+## clean
+/key/generate: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/generate. Your role=unknown.","type":"auth_error","param":
+/key/update: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/update. Your role=unknown.","type":"auth_error","param":nu
+/key/delete: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/delete. Your role=unknown.","type":"auth_error","param":nu
+/model/new: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/model/new. Your role=unknown.","type":"auth_error","param":nul
+1 passed in 0.40s
+left keys: []
+
+## plant: the master key sent to Laurium's service (adapter.py)
+            failed = True
+E               AssertionError: the adapter did not send Laurium's own key
+E               assert 'sk-dry-master' == 'sk-osprey-la...8ff33dcc5aeae'
+E                 
+E                 - sk-osprey-laurium-21e007f799a93a8152e5dbe068a4744cdc98ff33dcc5aeae
+E                 + sk-dry-master
+1 failed in 0.28s
+left keys: []
+
+## plant: the token==held check removed as well, so the routes are asked with the master key
+1
+            failed = True
+E               AssertionError: Laurium's key was granted an admin route: {'/key/generate': 200, '/key/update': 200, '/key/delete': 200, '/model/new': 200}
+E               assert False
+E                +  where False = all(<generator object test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway.<locals>.<genexpr> at 0x1048069b0>)
+/key/generate: 200 {"key":"sk-osprey-p12-planted-dd4e988a7101","key_alias":null,"spend":0.0}
+/key/update: 200 {"key":"sk-osprey-laurium-21e007f799a93a8152e5dbe068a4744cdc98ff33dcc5aeae","token":"7f4444979dc5d894d079dc819b6730b81db5e7d107db1a9df8c8382d9236317c","spend":0.0}
+/key/delete: 200 {"deleted_keys":["sk-osprey-p12-decoy-dd4e988a7101"]}
+/model/new: 200 {"model_id":"osprey-p12-planted-dd4e988a7101","model_name":"osprey-p12-planted-dd4e988a7101","litellm_params":{"model":"BDpxh2tKFOkVrF3S-VXf28iSvTBjONp0qg==","api_base":"BDpxh2xOBfdO6l2MuBKDjp-P4204b4
+1 failed in 0.27s
+left keys: []
+
+## plant: Laurium's key made with user_role proxy_admin (keys.py); the stand-in ignores the field
+/key/generate: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/generate. Your role=unknown.","type":"auth_error","param":
+/key/update: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/update. Your role=unknown.","type":"auth_error","param":nu
+/key/delete: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/delete. Your role=unknown.","type":"auth_error","param":nu
+/model/new: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/model/new. Your role=unknown.","type":"auth_error","param":nul
+1 passed in 0.27s
+left keys: []
