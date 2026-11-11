@@ -9,8 +9,10 @@ import {
   judge,
   needFor,
   parseColour,
+  over,
   ratioOf,
   readFindings,
+  shadowCoverage,
   type Layer,
   type Rgba,
   type Sample,
@@ -315,6 +317,97 @@ describe("what lies under the text", () => {
       expect(j.ratio, String(why)).toBeNull();
       expect(j.why).toMatch(why);
     }
+  });
+});
+
+describe("a shadow at the words, measured (T3b's server round)", () => {
+  // A shadow is measured by what it paints at each point, not failed by how far it reaches, so the
+  // words a few pixels nearer it on one platform's font than another's are judged the same (the
+  // merger's server run 20261111T093929Z: Show as BPMN's shadow at "Expires" on Linux Chromium only).
+  const at = (colour: string, edges: [number, number, number, number], blur: number) => ({ colour, edges, blur, x: 0, y: 0 });
+
+  it("paints the colour's full alpha inside a sharp shadow, half at a blurred edge, and nothing far past it", () => {
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [-10, -10, 10, 10], 0))).toBeCloseTo(1, 6);
+    // On one edge of a long blurred shadow: half of the Gaussian lies inside.
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [0, -1000, 1000, 1000], 24))).toBeCloseTo(0.5, 5);
+    // σ is half the blur radius (CSS Backgrounds 3): a blur of 24 is σ 12, so 12px out is Φ(−1).
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [12, -1000, 1000, 1000], 24))).toBeCloseTo(0.158655, 4);
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [60, -1000, 1000, 1000], 24))).toBeLessThan(1e-6);
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [1, -10, 10, 10], 0))).toBe(0);
+  });
+
+  it("fails dark words with a ratio where a shadow darkens the page under them", () => {
+    // 7:1 grey on white, under a sharp 0.7 black shadow: the background is rgb(76.5), well under 4.5:1.
+    const shaded = judge(sample({ shadows: [[at("rgba(0, 0, 0, 0.7)", [-10, -10, 10, 10], 0)]] }));
+    expect(shaded.ratio).not.toBeNull();
+    expect(shaded.why).toMatch(/< 4\.5:1$/);
+    expect(judge(sample({ shadows: [[]] })).why).toBe("");
+  });
+
+  it("takes the worst of the shadow under the words, over them and away", () => {
+    // Light words on black at an edge of a blurred white shadow (alpha 0.5 there): under, the page lightens
+    // and the words lose; over, both lighten; the worst counts.
+    const ink: Rgba = [200, 200, 200, 1];
+    const shadow: Rgba = [255, 255, 255, 0.5];
+    const black: Rgba = [0, 0, 0, 1];
+    const under = ratioOf(over(ink, over(shadow, black)), over(shadow, black));
+    const above = ratioOf(over(shadow, ink), over(shadow, black));
+    const none = ratioOf(ink, black);
+    const j = judge(
+      sample({
+        color: "rgb(200, 200, 200)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)" })],
+        shadows: [[at("rgba(255, 255, 255, 1)", [0, -1000, 1000, 1000], 24)]],
+      }),
+    );
+    expect(j.ratio as number).toBeCloseTo(Math.min(under, above, none), 4);
+    // A black shadow on that black page: laid under the words it changes nothing, so only the shadow
+    // laid over them, darkening the words alone, finds their worst.
+    const dark: Rgba = [0, 0, 0, 0.5];
+    const darkened = judge(
+      sample({
+        color: "rgb(200, 200, 200)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)" })],
+        shadows: [[at("rgba(0, 0, 0, 1)", [0, -1000, 1000, 1000], 24)]],
+      }),
+    );
+    expect(darkened.ratio as number).toBeCloseTo(ratioOf(over(dark, ink), black), 4);
+    expect(darkened.ratio as number).toBeLessThan(none - 1);
+  });
+
+  it("fails a shadow colour it cannot read, and more shadows at a point than it will combine", () => {
+    const unread = judge(sample({ shadows: [[at("lab(50 0 0)", [-10, -10, 10, 10], 0)]] }));
+    expect(unread.ratio).toBeNull();
+    expect(unread.why).toBe("not measurable: an unread shadow colour lab(50 0 0)");
+    const many = judge(sample({ shadows: [Array.from({ length: 6 }, () => at("rgba(0, 0, 0, 0.1)", [-10, -10, 10, 10], 0))] }));
+    expect(many.ratio).toBeNull();
+    expect(many.why).toBe("not measurable: more than 5 shadows at one point");
+  });
+});
+
+describe("words hidden at a point (T3b's server round)", () => {
+  // Under an opaque element laid over them, or clipped by a scrolling box, the words are not shown
+  // there, so there is no contrast to judge at that point; the rest of them still is.
+  const twoPoints = (hidden?: boolean[]) =>
+    judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)", covers: [false, true] }), layer({ backgroundColor: WHITE, covers: [true, true] })],
+        hidden,
+      }),
+    );
+
+  it("judges only the points where the words are shown", () => {
+    // Black words: on white at the first point, on black at the second.
+    expect(twoPoints().why).toMatch(/^1\.00:1/);
+    expect(twoPoints([false, true]).why).toBe("");
+    expect(twoPoints([true, false]).why).toMatch(/^1\.00:1/);
+  });
+
+  it("passes words hidden at every point, with no ratio, as nothing of them is shown", () => {
+    const gone = twoPoints([true, true]);
+    expect(gone.why).toBe("");
+    expect(gone.ratio).toBeNull();
   });
 });
 

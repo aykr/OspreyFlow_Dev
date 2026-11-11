@@ -11,12 +11,20 @@
 // `elementsFromPoint` finds at each point, with every element taking pointer events and none inert for
 // the probe. `src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
 // closed: an element painted under or over the words that is neither the node nor an ancestor (map
-// tiles under a chip, an overlay, a drawn line, a descendant's background, a shadow reaching them), a
-// filter or blend, a colour it cannot read, a node in a frame or shadow root are offenders, never
-// passes. Text axe calls partly covered is measured when the probe finds nothing foreign at its points
-// (rules-b's T3 report, decision 3). Its limit: points every 8px along the words (three rows where axe
-// says partly covered; wider apart past 600 points), so a cover narrower than that between two of them
+// tiles under a chip, a translucent overlay, a drawn line, a descendant's background), a filter or
+// blend, a colour it cannot read, a node in a frame or shadow root are offenders, never passes. Text
+// axe calls partly covered is measured when the probe finds nothing foreign at its points (rules-b's T3
+// report, decision 3). Its limit: points every 8px along the words (three rows where axe says partly
+// covered; more than 600 points is unmeasurable), so a cover narrower than that between two of them
 // passes.
+//
+// Judged alike on every platform (T3b's server round, 11 November 2026: the merger's Linux Chromium run
+// found what the Mac's had not, because the UI font falls back to the system's and moves the words a
+// few pixels). Another element's outer shadow is measured by what it paints at each point, not failed
+// by how far it reaches. A point where the words are hidden is not judged: under an opaque element the
+// browser's hit test finds over them (never one of their own descendants), or clipped by a scrolling
+// box. Each node is scrolled to the middle of its boxes at once and every scroll put back after it, so
+// neither the order of the nodes nor where the viewport's edge falls on the words changes its result.
 import type { Page } from "@playwright/test";
 
 import {
@@ -87,27 +95,31 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     document.documentElement.append(canvas);
     const pageColour = getComputedStyle(canvas).backgroundColor;
     canvas.remove();
-    // Every element with an outer box-shadow, and each shadow's offset, blur and spread; the box each
-    // reaches is taken per node, after any scroll (`reachOf`).
-    const shadowed: { e: Element; parts: [number, number, number, number][] }[] = [];
+    // Every element with an outer box-shadow: each shadow's colour as computed (or the whole shadow as
+    // written when no colour is found, for the judgement to refuse), offset, blur and spread. Where each
+    // lies is taken per node, after scrolling, and what it paints at each point is measured in Node
+    // (`shadowCoverage`), so the words a few pixels nearer it on one platform's font than another's are
+    // judged alike, not failed by a reach they cross on one platform only.
+    type Part = { colour: string; dx: number; dy: number; blur: number; spread: number };
+    const shadowed: { e: Element; parts: Part[] }[] = [];
     for (const e of document.querySelectorAll("*")) {
       const shadow = getComputedStyle(e).boxShadow;
       if (shadow === "none") continue;
-      const parts: [number, number, number, number][] = [];
+      const parts: Part[] = [];
       for (const one of shadow.split(/,(?![^(]*\))/)) {
         if (/inset/.test(one)) continue;
-        const lengths = (one.replace(/(rgba?|color|oklab|oklch)\([^)]*\)/g, "").match(/-?[\d.]+px/g) ?? []).map(parseFloat);
+        const colour = one.match(/\b(?:rgba?|color|oklab|oklch|lab|lch|hsla?|hwb)\([^()]*\)|\b(?:transparent|currentcolor)\b/i)?.[0] ?? one.trim();
+        const lengths = (one.replace(/\b[a-z-]+\([^()]*\)/gi, "").match(/-?[\d.]+px/g) ?? []).map(parseFloat);
         const [dx = 0, dy = 0, blur = 0, spread = 0] = lengths;
-        parts.push([dx, dy, blur, spread]);
+        parts.push({ colour, dx, dy, blur, spread });
       }
       if (parts.length) shadowed.push({ e, parts });
     }
-    // The box a shadow reaches: the element's box moved by its offset, grown (or shrunk) by its spread,
-    // then grown by its blur radius.
-    const reachOf = (r: DOMRect, [dx, dy, blur, spread]: [number, number, number, number]) => {
-      const grow = spread + blur;
-      return { left: r.left + dx - grow, right: r.right + dx + grow, top: r.top + dy - grow, bottom: r.bottom + dy + grow };
-    };
+    // The shape a shadow is cast from (the box moved by its offset and grown by its spread), and how far
+    // past it the blur is taken: three standard deviations (1.5 blur radii), beyond which a shadow lays
+    // under 0.14% of its colour, less than one step of an 8-bit channel.
+    const castOf = (r: DOMRect, { dx, dy, spread }: Part): [number, number, number, number] =>
+      [r.left + dx - spread, r.top + dy - spread, r.right + dx + spread, r.bottom + dy + spread];
     // A foreign element that changes what is seen at the point (x, y): a replaced element or an SVG
     // shape, a background, a filter or blend, a shadow, a painted pseudo-element, a border under the
     // point, or words of its own there.
@@ -138,6 +150,35 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         if (getComputedStyle(at).opacity !== "1") return false;
       }
       return true;
+    };
+    // An element over the words that hides them at (x, y), which the browser's own hit test has found
+    // there: its own background an opaque colour painted to its border box, nothing translucent from it
+    // up, no filter or blend on it, and the point inside its box (to within the pixel the browser snaps
+    // its paint and its hit test to) clear of every rounded corner (each corner's largest radius taken,
+    // so a corner is only ever read as smaller than it is).
+    const hides = (e: Element, x: number, y: number) => {
+      const s = getComputedStyle(e);
+      if (!opaque(e) || s.backgroundClip !== "border-box") return false;
+      if (s.filter !== "none" || s.backdropFilter !== "none" || s.mixBlendMode !== "normal") return false;
+      const box = e.getBoundingClientRect();
+      const r = { left: box.left - 1, top: box.top - 1, right: box.right + 1, bottom: box.bottom + 1, width: box.width + 2, height: box.height + 2 };
+      if (!within(x, y, r)) return false;
+      const radius = (corner: string) => {
+        const values = s.getPropertyValue(`border-${corner}-radius`).split(/\s+/);
+        return Math.max(...values.map((v) => (v.endsWith("%") ? (parseFloat(v) / 100) * Math.max(r.width, r.height) : parseFloat(v) || 0)));
+      };
+      const corners: [string, number, number, number, number][] = [
+        ["top-left", r.left, r.top, 1, 1],
+        ["top-right", r.right, r.top, -1, 1],
+        ["bottom-left", r.left, r.bottom, 1, -1],
+        ["bottom-right", r.right, r.bottom, -1, -1],
+      ];
+      return corners.every(([corner, cx, cy, sx, sy]) => {
+        const k = radius(corner);
+        const [ox, oy] = [cx + sx * k, cy + sy * k];
+        const inCorner = sx * (x - ox) < 0 && sy * (y - oy) < 0;
+        return !inCorner || Math.hypot(x - ox, y - oy) <= k;
+      });
     };
     // An SVG shape under an SVG label's words that is a plain surface there: a rect, circle, ellipse,
     // polygon or path whose fill (a colour, not a pattern or gradient) covers the point and whose
@@ -170,6 +211,16 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       selector, unreadable, text: "", color: "", fontSize: "", fontWeight: "", chain: [],
       overlappedBy: null, axeReason, page: pageColour,
     });
+    // Each node is scrolled to the middle of its scrolling boxes and the viewport (instantly), and every
+    // scroll position is put back after it, so a node is measured the same whatever came before it and
+    // whether or not its words cross the viewport's edge on this platform's font.
+    const scrollers = () => {
+      const all: [Element, number, number][] = [];
+      for (const e of document.querySelectorAll("*")) {
+        if (e.scrollTop || e.scrollLeft) all.push([e, e.scrollTop, e.scrollLeft]);
+      }
+      return all;
+    };
     const MAX_POINTS = 600;
     try {
     return nodes.map(({ selector, unreadable, axeReason }) => {
@@ -194,12 +245,10 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         }).filter((r) => r.width > 0 && r.height > 0);
         return found.length ? found : [node.getBoundingClientRect()];
       };
-      let rects = boxes();
-      const inView = (r: DOMRect) => r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
-      if (!rects.every(inView)) {
-        node.scrollIntoView({ block: "center", inline: "center" });
-        rects = boxes();
-      }
+      const [pageX, pageY, scrolled] = [scrollX, scrollY, scrollers()];
+      try {
+      node.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+      const rects = boxes();
       // Points along every box: every 8px across, at mid-height, or at a fifth, a half and four fifths
       // where axe saw part of the text covered. Past MAX_POINTS the words are unmeasurable, never
       // sampled more thinly.
@@ -252,6 +301,8 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       // loses `inert`, both put back straight after.
       let overlappedBy: string | null = null;
       const under: { fill: string; at: number }[][] = points.map(() => []);
+      const shadows: { colour: string; edges: [number, number, number, number]; blur: number; x: number; y: number }[][] = points.map(() => []);
+      const hidden: boolean[] = points.map(() => false);
       const lift = document.createElement("style");
       lift.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
       document.head.append(lift);
@@ -261,7 +312,21 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         points.forEach(([x, y], p) => {
           if (overlappedBy) return;
           let below = false;
-          for (const e of document.elementsFromPoint(x, y)) {
+          const stack = document.elementsFromPoint(x, y);
+          // Clipped: the innermost of the words' own boxes holding the point is not hit there, so a
+          // scrolling box (or a clip) hides the words at it.
+          const holder = chainOf.find((a) => within(x, y, a.getBoundingClientRect()));
+          if (stack.length && holder && !stack.includes(holder)) {
+            hidden[p] = true;
+            return;
+          }
+          for (const e of stack) {
+            if (!below && e !== node && !e.contains(node) && !node.contains(e) && hides(e, x, y)) {
+              // Over the words and opaque there: nothing beneath it, the words included, is seen. A
+              // descendant of the words' own element is never taken as hiding them (it stays a cover).
+              hidden[p] = true;
+              return;
+            }
             if (e === node) {
               below = true;
               if (opaque(e)) break;
@@ -290,9 +355,13 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
             if (e === node || e.contains(node) || node.contains(e)) continue;
             const box = e.getBoundingClientRect();
             if (within(x, y, box)) continue;
-            if (parts.some((part) => within(x, y, reachOf(box, part)))) {
-              overlappedBy = `the shadow of ${name(e)}`;
-              return;
+            for (const part of parts) {
+              const edges = castOf(box, part);
+              const far = 1.5 * part.blur;
+              const [left, top, right, bottom] = edges;
+              if (within(x, y, { left: left - far, top: top - far, right: right + far, bottom: bottom + far })) {
+                shadows[p]?.push({ colour: part.colour, edges, blur: part.blur, x, y });
+              }
             }
           }
         });
@@ -307,10 +376,15 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         ? withAlpha(style.fill, parseFloat(style.fillOpacity))
         : style.getPropertyValue("-webkit-text-fill-color") || style.color;
       return {
-        selector, unreadable: null, axeReason, chain, overlappedBy, under, page: pageColour,
+        selector, unreadable: null, axeReason, chain, overlappedBy, under, shadows, hidden, page: pageColour,
         text: (node.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40),
         color: ink, fontSize: style.fontSize, fontWeight: style.fontWeight,
       };
+      } finally {
+        for (const [e] of scrollers()) [e.scrollTop, e.scrollLeft] = [0, 0];
+        for (const [e, top, left] of scrolled) [e.scrollTop, e.scrollLeft] = [top, left];
+        scrollTo({ left: pageX, top: pageY, behavior: "instant" });
+      }
     });
     } finally {
       probeColour.remove();
