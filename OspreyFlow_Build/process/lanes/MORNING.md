@@ -443,6 +443,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       document content stay with Deep read, whose schemas Laurium's mapper cannot all take. The live case on a real
       model now runs against the product's own extraction model, qwen2.5 7B (pinned), on a gateway stood up on the
       test server.
+      **Result (about 18:30):** Laurium read a conforming answer from qwen2.5 7B 3 times of 3 through the rendered
+      gateway route (lease b, 18:01:21Z), the 0.5B failing 3 of 3 as the control. So P12 part 2's exit holds on the
+      product's own extraction model, which eases the preset question above; the client's own engine is proven at their
+      install (20 November), recorded as P12's last open item.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
