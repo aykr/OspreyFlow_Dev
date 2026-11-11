@@ -49,7 +49,10 @@ _FINISHED = {"SUCCEEDED", "FAILED", "CANCELLED"}
 #: comments stripped first by their own pattern took `'--'` as the start of one, and the text after
 #: it, a second statement or a table, was never checked).
 _TOKEN = re.compile(
-    r"""(?P<comment>--[^\n]*|/\*.*?\*/)"""
+    # A `--` comment ends at a carriage return as at a newline, as Trino's lexer ends it
+    # (SIMPLE_COMMENT); read to the newline alone, the rest of a line after `--\r` was a comment
+    # here and a query to Athena (the lane's own reviewer, round 1).
+    r"""(?P<comment>--[^\r\n]*|/\*.*?\*/)"""
     r"""|(?P<string>'(?:[^']|'')*')"""
     r"""|(?P<quoted>"(?:[^"]|"")*"|`[^`]*`)"""
     r"""|(?P<word>[A-Za-z_][A-Za-z0-9_$]*)"""

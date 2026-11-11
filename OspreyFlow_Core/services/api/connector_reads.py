@@ -134,8 +134,11 @@ class CloudS3Store:
 
     def list_objects(self, base: str, *, recursive: bool, limit: int) -> list[pa_fs.FileInfo]:
         """The objects under `base` (`<bucket>/<folder>`), no more than `limit` + 1: each page asks
-        for no more than are still wanted, and the listing stops past `limit`. Folder markers (a key
-        ending `/`) are no objects; one level (`recursive=False`) gives its folders as directories.
+        for no more than are still wanted, and the listing stops past `limit`. A folder marker (a
+        zero-byte key ending `/`) is an object too and counts, so no listing of markers alone runs
+        on unbounded (the lane's own reviewer, round 1); it is never read, having no file's name.
+        One level (`recursive=False`) gives its folders as directories. A listing S3 says is cut
+        short but gives no new token to go on from is refused, never looped on or read as whole.
         S3's refusals are botocore's errors, worded by `s3_connector.refused_by_s3`."""
         bucket, _, key = base.partition("/")
         ask: dict[str, Any] = {"Bucket": bucket, "Prefix": f"{key}/" if key else ""}
@@ -145,15 +148,20 @@ class CloudS3Store:
         while True:
             page = self.client.list_objects_v2(**ask, MaxKeys=min(1_000, limit + 1 - len(found)))
             for item in page.get("Contents", []):
-                if not str(item["Key"]).endswith("/"):
-                    found.append(pa_fs.FileInfo(f"{bucket}/{item['Key']}", pa_fs.FileType.File,
-                                                size=int(item["Size"])))  # fmt: skip
+                found.append(pa_fs.FileInfo(f"{bucket}/{item['Key']}", pa_fs.FileType.File,
+                                            size=int(item["Size"])))  # fmt: skip
             for item in page.get("CommonPrefixes", []):
                 found.append(pa_fs.FileInfo(f"{bucket}/{str(item['Prefix']).rstrip('/')}",
                                             pa_fs.FileType.Directory))  # fmt: skip
             if len(found) > limit or not page.get("IsTruncated"):
                 return found
-            ask["ContinuationToken"] = page["NextContinuationToken"]
+            token = page.get("NextContinuationToken")
+            if not token or token == ask.get("ContinuationToken"):
+                raise ConnectorRefused(
+                    "the bucket's listing could not be followed past its first pages (S3 gave no "
+                    "new place to go on from); nothing was read"
+                )
+            ask["ContinuationToken"] = token
 
 
 def only_to(client: Any, service: str, host: str) -> Any:
@@ -187,7 +195,10 @@ def cloud_s3_store(settings: S3ConnectionSettings) -> CloudS3Store:
     service accounts). Never given one: no connection holds a key. Both the filesystem and the
     listing client have the endpoint named, never taken from the environment (`AWS_ENDPOINT_URL`),
     and address the bucket virtual-hosted, so the one host they reach is `settings.host()`, the one
-    the egress check names (the lane review of L1.9); the client is held to it (`only_to`). Unlike
+    the egress check names (the lane review of L1.9). The botocore listing client is also held to it
+    on every request (`only_to`); pyarrow's filesystem, which opens objects and asks for the bucket,
+    by its arguments alone, since its requests are made in its C++ SDK where no Python hook reaches
+    (whether that SDK follows a region redirect is part 2's check, against S3 itself). Unlike
     SQL and API, the checked addresses are not pinned: the SDK resolves the name itself, and the
     name is AWS's own, made from a checked region and bucket, never typed, so no one but AWS answers
     for it. `test_cloud_clients.py` proves each of these on the objects this builds."""
@@ -547,7 +558,8 @@ async def read_rows(
         # The host on the egress allow-list first (ADR-148 decision 7), then the read, each off the
         # event loop: both block.
         await asyncio.to_thread(readers.check, "s3", settings.host())
-        return await asyncio.to_thread(read_s3, readers.s3_store(settings), settings, read)
+        store = await asyncio.to_thread(_s3_store, readers, settings)
+        return await asyncio.to_thread(read_s3, store, settings, read)
     if isinstance(settings, AthenaConnectionSettings) and isinstance(read, AthenaRead):
         await asyncio.to_thread(readers.check, "athena", settings.host())
         client = await asyncio.to_thread(readers.athena_client, settings)  # loads its model
@@ -642,6 +654,17 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     return ConnectionTest(ok=True, words="Files in the ingest folder: nothing to sign in to.")
 
 
+def _s3_store(readers: Readers, settings: S3ConnectionSettings) -> ObjectStore:
+    """The bucket's store, a failure to make it (pyarrow's own `OSError`) refused in words at a read
+    and at *Test connection* alike, never a 500 (the lane's own reviewer, round 1)."""
+    try:
+        return readers.s3_store(settings)
+    except OSError as error:
+        raise ConnectorRefused(
+            f"the bucket's client could not be made ({type(error).__name__}); nothing was read"
+        ) from error
+
+
 def _check_cloud(
     settings: S3ConnectionSettings | AthenaConnectionSettings, readers: Readers
 ) -> ConnectionTest:
@@ -651,7 +674,7 @@ def _check_cloud(
         # The read's own listing, so a missing bucket is told here as at a read (the lane review:
         # the sibling path that did not have the read's fix).
         base = f"{settings.bucket}/{settings.prefix}".rstrip("/")
-        list_folder(readers.s3_store(settings), settings.bucket, base, recursive=False, limit=1)
+        list_folder(_s3_store(readers, settings), settings.bucket, base, recursive=False, limit=1)
         return ConnectionTest(ok=True, words="The bucket answered, and its folder can be listed.")
     try:
         readers.athena_client(settings).get_work_group(WorkGroup=settings.workgroup)

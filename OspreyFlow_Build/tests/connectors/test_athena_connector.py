@@ -155,6 +155,12 @@ def test_a_named_query_lands_as_the_golden_file(tmp_path: Path) -> None:
         # A comment's marker inside a string value is no comment.
         "SELECT '--', booking_id FROM finance.ledger",
         "SELECT '/*' AS a FROM finance.ledger WHERE '*/' = '*/'",
+        # Trino ends a `--` comment at a lone carriage return as at a newline (its lexer's
+        # SIMPLE_COMMENT); read to the newline, the rest of the line was a comment to the checker
+        # and a query to Athena (own lane-reviewer, round 1).
+        "SELECT * FROM visits.many --\rUNION ALL SELECT * FROM finance.ledger",
+        "SELECT * FROM visits.many --\r, finance.ledger",
+        "SELECT * FROM visits.many --\rCROSS JOIN finance.ledger",
     ],
 )
 def test_a_named_query_naming_a_table_outside_the_connection_is_never_sent(statement: str) -> None:
@@ -292,6 +298,7 @@ def test_athena_s_refusals_are_refused_in_words(case: str, words: str) -> None:
         # in the review's sibling hunt, round 1): the string is a string, wherever its markers are.
         "SELECT '--' AS a FROM visits.many; DROP TABLE visits.visit_bookings",
         "SELECT '/*' AS a FROM visits.many; DROP TABLE visits.visit_bookings; SELECT '*/'",
+        "SELECT 1 FROM visits.many --\r; DROP TABLE visits.visit_bookings",
     ],
 )
 def test_a_named_query_that_is_not_one_select_is_never_sent(statement: str) -> None:
@@ -383,6 +390,30 @@ def test_a_join_to_a_table_athena_does_not_hold_is_refused_in_words() -> None:
     )
     with pytest.raises(ConnectorRefused, match="TABLE_NOT_FOUND.*visits.no_such_table"):
         _read(athena, AthenaRead(named_query=SELECT_NQ))
+
+
+def test_a_table_athena_does_not_hold_after_a_comma_is_refused_in_words() -> None:
+    """Own lane-reviewer, round 1: the fixture resolved tables after FROM or JOIN only, so a missing
+    table in a FROM's comma list read as rows, where Athena fails it."""
+    athena = _athena()
+    athena.named_queries[SELECT_NQ]["QueryString"] = "SELECT * FROM visits.many, visits.nope"
+    with pytest.raises(ConnectorRefused, match="TABLE_NOT_FOUND.*visits.nope"):
+        _read(athena, AthenaRead(named_query=SELECT_NQ))
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT extract(year FROM booked_for) AS y FROM visits.visit_bookings",
+        "SELECT booking_id IS DISTINCT FROM notes AS d FROM visits.visit_bookings",
+        "SELECT * FROM visits.visit_bookings b, visits.many m WHERE b.booking_id = m.booking_id",
+    ],
+)
+def test_the_fixture_reads_what_athena_reads(statement: str) -> None:
+    """The other way round: a function's FROM, or IS DISTINCT FROM, is no table to resolve."""
+    athena = _athena()
+    athena.named_queries[SELECT_NQ]["QueryString"] = statement
+    _read(athena, AthenaRead(named_query=SELECT_NQ))
 
 
 def test_an_unqualified_table_is_read_from_the_query_s_own_database(tmp_path: Path) -> None:

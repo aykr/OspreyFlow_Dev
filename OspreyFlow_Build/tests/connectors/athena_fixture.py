@@ -40,8 +40,45 @@ GRANTED_KEY = "AKIDSYNTHETICGRANTED"
 REFUSED_KEY = "AKIDSYNTHETICREFUSED"
 _KNOWN = {GRANTED_KEY, REFUSED_KEY}
 _PART = r'(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_]*)'
-#: Each table after FROM or JOIN: one, two or three parts.
-_RELATION = re.compile(rf"\b(?:FROM|JOIN)\s+({_PART}(?:\s*\.\s*{_PART}){{0,2}})", re.IGNORECASE)
+#: A relation's name at the start of a FROM list's item: one, two or three parts.
+_NAME = re.compile(rf"^\s*({_PART}(?:\s*\.\s*{_PART}){{0,2}})")
+_FROM = re.compile(r"\bFROM\b", re.IGNORECASE)
+#: Where a FROM list ends, at its own depth.
+_LIST_END = re.compile(r"\b(WHERE|GROUP|ORDER|LIMIT|HAVING|UNION|INTERSECT|EXCEPT|OFFSET|FETCH|"
+                       r"WINDOW)\b", re.IGNORECASE)  # fmt: skip
+#: What separates a FROM list's items: a comma, or a join's own words.
+_ITEM = re.compile(r",|\b(?:NATURAL\s+|CROSS\s+|INNER\s+|(?:LEFT|RIGHT|FULL)\s+(?:OUTER\s+)?)?JOIN\b",
+                   re.IGNORECASE)  # fmt: skip
+#: A FROM that is no relation's: a function's own (`extract(year FROM d)`), or IS DISTINCT FROM.
+_NOT_A_FROM = re.compile(r"\b(?:EXTRACT|SUBSTRING|TRIM)\s*\([^()]*\)|\bIS\s+(?:NOT\s+)?DISTINCT\s+FROM\b",
+                         re.IGNORECASE)  # fmt: skip
+
+
+def relations(query: str) -> list[str]:
+    """Every relation's name in each FROM list, as Athena reads them: after FROM, after each comma
+    and each JOIN at the list's own depth, up to the list's end (the lane's own reviewer, round 1:
+    the fixture had read only the name after FROM or JOIN, so a missing table after a comma read as
+    rows). String values are blanked first, and a function's FROM is none."""
+    text = _NOT_A_FROM.sub(" x ", re.sub(r"'(?:[^']|'')*'", "''", query))
+    found: list[str] = []
+    for start in _FROM.finditer(text):
+        depth, at, items, item = 0, start.end(), [], ""
+        while at < len(text):
+            char = text[at]
+            if depth == 0 and (char == ")" or _LIST_END.match(text, at)):
+                break
+            if depth == 0 and (cut := _ITEM.match(text, at)):
+                items.append(item)
+                item, at = "", cut.end()
+                continue
+            depth += {"(": 1, ")": -1}.get(char, 0)
+            item += char
+            at += 1
+        for piece in [*items, item]:
+            if piece.strip().startswith("(") or not (name := _NAME.match(piece)):
+                continue
+            found.append(name.group(1))
+    return found
 #: A WITH's own names, which are no table.
 _WITH_NAME = re.compile(r"(?:\bWITH|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+AS\s*\(", re.IGNORECASE)
 #: What follows FROM or JOIN but is no table.
@@ -189,7 +226,7 @@ class RecordedAthena:
         """Every table after FROM or JOIN resolved as Athena resolves it: the first that does not
         exist fails the execution; the first that does is the one whose rows the results give."""
         own = {name.lower() for name in _WITH_NAME.findall(query)}
-        for found in _RELATION.findall(query):
+        for found in relations(query):
             parts = [p.strip().strip('"').lower() for p in found.split(".")]
             if len(parts) == 1 and (parts[0] in own or parts[0] in _NOT_TABLES):
                 continue

@@ -65,6 +65,8 @@ class RecordedS3:
 
     buckets: dict[str, list[tuple[str, int]]]
     refusing: dict[str, str] = field(default_factory=dict)
+    #: A broken S3-compatible store: says a page is cut short, but gives no token to go on from.
+    no_token: bool = False
     #: Every request: its host, its query and the access key it was signed with.
     requests: list[dict[str, Any]] = field(default_factory=list)
 
@@ -137,7 +139,7 @@ class RecordedS3:
                          "<StorageClass>STANDARD</StorageClass></Contents>")  # fmt: skip
         for common in prefixes:
             parts.append(f"<CommonPrefixes><Prefix>{escape(common)}</Prefix></CommonPrefixes>")
-        if truncated:
+        if truncated and not self.no_token:
             parts.append(f"<NextContinuationToken>{at}</NextContinuationToken>")
         parts.append("</ListBucketResult>")
         return _answer(url, 200, "".join(parts))

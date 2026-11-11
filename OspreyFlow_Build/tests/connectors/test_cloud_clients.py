@@ -20,6 +20,7 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -140,6 +141,52 @@ def test_a_listing_stops_at_the_object_cap_and_one(monkeypatch: pytest.MonkeyPat
     with pytest.raises(ReadOverCap, match="more than 1500 objects"):
         read_s3(store, S3, S3Read(folder="visits/", format="csv"))
     assert [r["query"]["max-keys"] for r in recorded.requests] == ["1000", "501"]
+
+
+def test_folder_markers_count_so_a_listing_of_them_stops_at_the_cap() -> None:
+    """Own lane-reviewer, round 1: markers took up each page but were never counted, so a folder of
+    them was listed page after page, unbounded by the cap, and then read as empty."""
+    store = cloud_s3_store(S3)
+    markers = [(f"client-a/visits/dir-{n:05d}/", 0) for n in range(5_000)]
+    recorded = RecordedS3(buckets={S3.bucket: markers})
+    recorded.attach(store.client)
+    with pytest.raises(ReadOverCap, match="more than 1000 objects"):
+        read_s3(store, S3, S3Read(folder="visits/", format="csv"))
+    assert recorded.keys_listed == 1_001
+
+
+def test_a_listing_cut_short_with_nowhere_to_go_on_is_refused_in_words() -> None:
+    """Own lane-reviewer, round 1: a page marked cut short with no token was a KeyError (a 500)."""
+    store = cloud_s3_store(S3)
+    recorded = RecordedS3(buckets={S3.bucket: _keys(1_500)}, no_token=True)
+    recorded.attach(store.client)
+    with pytest.raises(ConnectorRefused, match="could not be followed"):
+        store.list_objects(f"{S3.bucket}/client-a/visits", recursive=True, limit=2_000)
+    assert len(recorded.requests) == 1
+
+
+def test_a_store_that_cannot_be_made_is_refused_in_words_at_a_read_and_at_test() -> None:
+    """Own lane-reviewer, round 1: pyarrow's OSError while making the filesystem was a 500."""
+    import asyncio
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from schemas.sources import Connection
+
+    def broken(_settings: S3ConnectionSettings) -> Any:
+        raise OSError("synthetic: the SDK could not start")
+
+    readers = connector_reads.Readers(s3_store=broken, host_check=lambda *_a: None)
+    connection = Connection(id="c-s3", kind="s3", name="Synthetic", created_by="adm-1",
+                            created_at=datetime(2026, 11, 11, tzinfo=UTC), settings=S3,
+                            datasets=["ds-a"])  # fmt: skip
+    tested = asyncio.run(connector_reads.check_connection(connection, readers))
+    assert (tested.ok, tested.words.startswith("the bucket's client could not be made")) == (
+        False, True)  # fmt: skip
+    source = SimpleNamespace(read=S3Read(folder="visits/", format="csv"))
+    with pytest.raises(ConnectorRefused, match="the bucket's client could not be made"):
+        asyncio.run(connector_reads.read_rows(source, connection, dataset_id="ds-a", cursor=None,
+                                              readers=readers, root=Path("/nonexistent")))  # fmt: skip
 
 
 def test_a_listing_under_the_cap_is_whole_and_in_key_order() -> None:

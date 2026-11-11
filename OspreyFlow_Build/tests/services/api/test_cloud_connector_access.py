@@ -223,7 +223,11 @@ def test_refresh_now_through_a_rebound_connection_reads_nothing(
     world.sources._connections[connection_id] = bound.model_copy(update={"datasets": ["ds-b"]})
     refused = world.client.post(f"/v1/datasets/ds-a/sources/{made['id']}/read",
                                 headers=_as("author_a"))  # fmt: skip
-    assert refused.status_code == 404 and "not bound" not in refused.text
+    # Pinned whole to the reply a connection that does not exist gets (rule 3; own lane-reviewer,
+    # round 1: this case alone still checked only the status and one phrase).
+    unknown = _register(world, "ds-a", "no-such-connection", "author_a", kind)
+    assert (refused.status_code, refused.json()) == (unknown.status_code, unknown.json())
+    assert refused.status_code == 404
     assert file.read_text() == held and _reads(world) == asked
 
 
