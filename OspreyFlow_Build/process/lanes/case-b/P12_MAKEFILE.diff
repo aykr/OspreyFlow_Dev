@@ -1,0 +1,40 @@
+diff --git a/OspreyFlow_Build/Makefile b/OspreyFlow_Build/Makefile
+index 35a1a6f3..406e3390 100644
+--- a/OspreyFlow_Build/Makefile
++++ b/OspreyFlow_Build/Makefile
+@@ -15,7 +15,7 @@ TOOLS := PYTHONPATH=$(BUILD)
+
+ # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
+ # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
+-ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check bundle
++ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
+
+ # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
+ # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
+@@ -36,6 +36,27 @@ no-branches-check:
+ 	$(IN_CORE) $(TOOLS) $(PY) -m tools.no_branches_check
+ 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_no_branches_check.py
+
++# ADR-135 Amendment 6: no LangChain, spaCy or Laurium outside Laurium's own image. The source leg here,
++# offline; the image leg runs in CI after each image is built (`--image`). Each refusal shown red
++# (tests/test_no_langchain_check.py; process/lanes/case-b/P12_RED_RECORD.md).
++no-langchain-check:
++	$(IN_CORE) $(TOOLS) $(PY) -m tools.no_langchain_check
++	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_no_langchain_check.py
++
++# ADR-135 Amendment 6: Laurium's service code on Python 3.13 in its own environment, built by hash from
++# services/laurium/requirements.txt (never the image's own pip, never the Conduit's lock), with the test
++# tools the Build suite needs; then its live cases and ModelPort.extract's suite on both engines, all
++# through the gateway's stand-in served over HTTP on 127.0.0.1. No container and no stack.
++LAURIUM_ENV := $(BUILD)/laurium-env/.venv
++laurium-service:
++	uv venv --python 3.13 --allow-existing $(LAURIUM_ENV)
++	uv pip install --python $(LAURIUM_ENV)/bin/python --require-hashes --only-binary :all: --no-deps -r $(CORE)/services/laurium/requirements.txt
++	uv pip install --python $(LAURIUM_ENV)/bin/python -r $(BUILD)/tests/conformance/model_port/laurium_test_requirements.txt
++	$(IN_CORE) ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 \
++	  $(LAURIUM_ENV)/bin/python -m pytest -c $(BUILD)/pytest.ini -p no:cacheprovider \
++	  ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py \
++	  ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py
++
+ core-check:
+ 	$(MAKE) -C $(CORE) check

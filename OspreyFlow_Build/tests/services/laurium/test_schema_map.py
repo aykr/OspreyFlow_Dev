@@ -94,10 +94,15 @@ def test_an_enum_becomes_a_literal_that_refuses_another_value() -> None:
 
 
 def test_an_item_refuses_a_property_its_schema_does_not_declare() -> None:
-    model = _model(_profile_schema())
-    name = next(iter(_profile_schema()["properties"]))
+    """The item is complete, every property filled, so the one fault is the invented one (rule 15:
+    an item missing a required property would be refused for that instead)."""
+    schema = _profile_schema()
+    model = _model(schema)
+    name, prop = next(iter(schema["properties"].items()))
+    item = {key: _sample(sub) for key, sub in prop["items"]["properties"].items()}
+    assert model.model_validate({**_empty(), name: [item]})  # type: ignore[attr-defined]
     with pytest.raises(ValidationError):
-        model.model_validate({**_empty(), name: [{"confidence": 1.0, "invented": "x"}]})  # type: ignore[attr-defined]
+        model.model_validate({**_empty(), name: [{**item, "invented": "x"}]})  # type: ignore[attr-defined]
 
 
 def _empty() -> dict[str, list[Any]]:
@@ -146,7 +151,14 @@ def test_a_required_property_left_out_is_refused() -> None:
         {"type": "object", "properties": {"a": {"type": "array"}}},
         {"type": "object", "properties": {"a": {"type": "string", "enum": [1, 2]}}},
         {"type": "object", "properties": {}},
-        {"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": True},
+        # Undeclared properties allowed in so many words; otherwise well formed. (Left unsaid, they
+        # are not refused: Laurium's model forbids them in the answer, stricter than the schema.)
+        {
+            "type": "object",
+            "properties": {"a": {"type": "string"}},
+            "required": ["a"],
+            "additionalProperties": True,
+        },
         # A top-level property not required: Laurium makes every field required.
         {"type": "object", "properties": {"a": {"type": "string"}}, "required": []},
     ],
@@ -163,3 +175,12 @@ def test_each_field_is_described_with_its_own_schema() -> None:
     descriptions = descriptions_for(schema)
     name = next(iter(schema["properties"]))
     assert '"confidence"' in descriptions[name]
+
+
+def test_a_description_names_no_template_variable() -> None:
+    """Laurium's prompt is a LangChain f-string template: a JSON Schema's braces left single would
+    be read as variables, and every call would fail. Read as that template reads it."""
+    import string
+
+    for text in descriptions_for(_profile_schema()).values():
+        assert [field for _, field, _, _ in string.Formatter().parse(text) if field] == []

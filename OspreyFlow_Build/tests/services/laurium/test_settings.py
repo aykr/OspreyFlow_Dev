@@ -48,6 +48,11 @@ def test_no_gateway_url_is_refused() -> None:
         "http://127.0.0.1:4000",
         "ftp://litellm:4000",
         "litellm:4000",
+        # The gateway's name, but with a credential in the URL, a path elsewhere, or no port.
+        "http://user:secret@litellm:4000",
+        "http://litellm:4000/elsewhere",
+        "http://litellm:4000/v1?to=elsewhere.example",
+        "http://litellm",
     ],
 )
 def test_a_gateway_url_naming_any_other_host_is_refused(url: str) -> None:

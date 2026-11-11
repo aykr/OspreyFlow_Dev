@@ -1,0 +1,10 @@
+# Laurium's test environment, never its image (ADR-135 Amendment 6): Python 3.13 with
+# OspreyFlow_Core/services/laurium/requirements.txt installed by hash, then these, which the Build
+# suite's own conftest and the Conduit code the tests reach need. Versions are the Conduit lock's
+# (OspreyFlow_Core/uv.lock), so both environments test with the same ones. Used by the Makefile's
+# laurium-service target and CI's laurium-service job (process/lanes/case-b/P12_CI.diff).
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pyjwt==2.15.1
+cryptography==50.0.2
+python-ulid==4.0.1
