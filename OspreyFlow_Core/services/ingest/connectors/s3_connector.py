@@ -65,8 +65,15 @@ def refused_by_store(error: OSError) -> ConnectorRefused:
     Judged by the AWS error code pyarrow quotes (`AWS Error ACCESS_DENIED during …`) alone, never by
     words anywhere in the message, which also holds the bucket and key (a folder named
     `forbidden/` is no refusal; the lane review of L1.9)."""
-    found = re.search(r"AWS Error ([A-Z_]+)", str(error))
-    code = found.group(1) if found else ""
+    text = str(error)
+    # The last `AWS Error` is pyarrow's own: one earlier in the message is a key's or a bucket's.
+    found = re.findall(r"AWS Error ([A-Z_]+)(?: \(HTTP status ([0-9]{3})\))?", text)
+    code, status = found[-1] if found else ("", "")
+    if code == "UNKNOWN" and (status == "301" or _PYARROW_REGION.search(text)):
+        # A bucket in another region (L1.9 part 2, measured on pyarrow 26.0.0 against S3's
+        # documented answers): a 301 (`PermanentRedirect`), or the region words pyarrow itself
+        # adds at the end of a HeadBucket's answer. Never followed: pyarrow sends one request.
+        return ConnectorRefused(OTHER_REGION)
     if code in {"ACCESS_DENIED", "INVALID_ACCESS_KEY_ID", "SIGNATURE_DOES_NOT_MATCH"}:
         return ConnectorRefused(
             "the bucket refused the read (access denied): the deployment's cloud role may not read "
@@ -80,6 +87,11 @@ def refused_by_store(error: OSError) -> ConnectorRefused:
 
 
 MISSING_BUCKET = "the bucket does not exist; nothing was read"
+#: The words pyarrow adds, at the very end of its message, when S3 names the bucket's own region.
+_PYARROW_REGION = re.compile(
+    r"\. Looks like the configured region is '[a-z0-9-]+' while the bucket is located in "
+    r"'[a-z0-9-]+'\.$"
+)
 OTHER_REGION = (
     "the bucket is in another region than the connection names: correct its Region in Admin › "
     "Connections; nothing was read"
@@ -131,7 +143,10 @@ def list_folder(
     if not found:
         try:
             missing = fs.get_file_info(bucket).type == pa_fs.FileType.NotFound
-        except OSError:
+        except OSError as error:
+            refused = refused_by_store(error)
+            if str(refused) == OTHER_REGION:
+                raise refused from error  # asked in another region: never an empty folder
             missing = False  # not ours to ask: the folder is empty, as far as this role can see
         if missing:
             raise ConnectorRefused(MISSING_BUCKET)

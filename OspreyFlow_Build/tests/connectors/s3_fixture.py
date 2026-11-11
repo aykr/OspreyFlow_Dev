@@ -143,3 +143,61 @@ class RecordedS3:
             parts.append(f"<NextContinuationToken>{at}</NextContinuationToken>")
         parts.append("</ListBucketResult>")
         return _answer(url, 200, "".join(parts))
+
+
+class RefusingS3Server:
+    """A local HTTP server answering every request with one of S3's documented refusals, for
+    pyarrow's own S3 filesystem (its C++ SDK, which no `before-send` handler reaches). Used as a
+    context manager; `endpoint` is what `S3FileSystem(endpoint_override=…, scheme="http")` takes.
+
+    **Modelled, not measured against S3** (rule 15): the answers are AWS's documented ones for a
+    bucket in another region than the client signs for: `PermanentRedirect` (301, with the bucket's
+    region in `x-amz-bucket-region`) and `AuthorizationHeaderMalformed` (400, likewise); a HEAD's
+    answer has no body, as S3's has none. What pyarrow does with them **is** measured here, on the
+    pinned pyarrow (11 November 2026, 26.0.0): it follows neither, sending one request to one host,
+    and raises `OSError` naming `AWS Error UNKNOWN (HTTP status 301|400)`. Every request's host and
+    path is recorded, so a test proves nothing was sent elsewhere."""
+
+    def __init__(self, refusal: str) -> None:
+        import http.server
+        import threading
+
+        status, code, message, extra = REFUSALS[refusal]
+        body = (
+            f'<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>{code}</Code>'
+            f"<Message>{escape(message)}</Message>"
+            f"{extra.format(bucket='synthetic-exports')}<RequestId>SYNTHETIC</RequestId></Error>"
+        ).encode()
+        requests: list[tuple[str, str, str]] = []
+        self.requests = requests
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def _answer(self) -> None:
+                requests.append((self.command, self.headers.get("Host", ""), self.path))
+                self.send_response(status)
+                self.send_header("x-amz-bucket-region", "eu-west-1")
+                self.send_header("Content-Type", "application/xml")
+                self.send_header("Content-Length", "0" if self.command == "HEAD" else str(len(body)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(body)
+
+            do_GET = do_HEAD = _answer
+
+            def log_message(self, *_: Any) -> None:
+                return None
+
+        self._server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        return f"127.0.0.1:{self._server.server_address[1]}"
+
+    def __enter__(self) -> RefusingS3Server:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._server.shutdown()
+        self._server.server_close()

@@ -1,0 +1,4 @@
+    @pytest.mark.parametrize("at_start", [False, True], ids=["failed_execution", "refused_at_start"])
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_query_that_does_not_parse_is_refused_in_the_same_words_either_way[refused_at_start]
+FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words
+2 failed, 117 passed in 4.48s

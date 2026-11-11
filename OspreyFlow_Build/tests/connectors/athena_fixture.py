@@ -129,6 +129,12 @@ class RecordedAthena:
         default_factory=lambda: {"primary": "s3://synthetic-athena-results/out/", "bare": None}
     )
     polls: int = 1
+    #: L1.9 part 2: a statement that does not parse is refused at StartQueryExecution
+    #: (`InvalidRequestException`), the other answer Athena may give, rather than run and FAILED.
+    syntax_refused_at_start: bool = False
+    #: Tables whose objects the role may not read (their location not in its policy): each read
+    #: fails as an execution, as Athena reads a table's objects as the caller.
+    unreadable_data: set[str] = field(default_factory=set)
     #: Every QueryString sent to StartQueryExecution, in order.
     sent: list[str] = field(default_factory=list)
     #: Every operation asked, in order.
@@ -216,6 +222,9 @@ class RecordedAthena:
             execution.fill = {"catalog": catalog}
         else:
             self._resolve(execution, query, catalog, database)
+        if self.syntax_refused_at_start and execution.outcome in {"syntax", "syntax_eof"}:
+            reason = RECORDED["failures"][execution.outcome]["StateChangeReason"]
+            return _error("malformed_query", message=reason.format(**execution.fill))
         if output and "forbidden" in output:
             execution.outcome = "s3_access_denied"
             execution.fill = {"id": execution_id}
@@ -244,6 +253,9 @@ class RecordedAthena:
             if table not in self.tables[db]:
                 execution.outcome = "table_not_found"
                 execution.fill = {"table": f"{in_catalog}.{db}.{table}"}
+                return
+            if table in self.unreadable_data:
+                execution.outcome, execution.fill = "table_data_denied", {"table": table}
                 return
             if execution.table is None:
                 execution.table = (db, table)

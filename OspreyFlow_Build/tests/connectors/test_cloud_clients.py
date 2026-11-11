@@ -223,3 +223,77 @@ def test_readers_build_the_deployment_s_own_clients_by_default() -> None:
     readers = connector_reads.Readers()
     assert readers.s3_store is cloud_s3_store and readers.athena_client is cloud_athena_client
     assert isinstance(readers.s3_store(S3), CloudS3Store)
+
+
+# --- L1.9 part 2: a bucket in another region, on pyarrow's own path (CARRIES row 150) ------------
+
+
+class _ListedOne:
+    """A bucket whose listing (botocore's, in a deployment) gave one object, opened by the real
+    pyarrow filesystem against `RefusingS3Server`: the read's own call site for an object."""
+
+    def __init__(self, fs: Any, keys: list[str]) -> None:
+        import pyarrow.fs as pa_fs
+
+        self.fs, self._pa = fs, pa_fs
+        self.keys = keys
+
+    def get_file_info(self, selector_or_path: Any, /) -> Any:
+        return self.fs.get_file_info(selector_or_path)
+
+    def open_input_stream(self, path: str, /) -> Any:
+        return self.fs.open_input_stream(path)
+
+    def list_objects(self, base: str, *, recursive: bool, limit: int) -> list[Any]:
+        return [self._pa.FileInfo(f"{S3.bucket}/{k}", self._pa.FileType.File, size=10)
+                for k in self.keys]  # fmt: skip
+
+
+def _pyarrow_against(server: Any) -> Any:
+    import pyarrow.fs as pa_fs
+
+    return pa_fs.S3FileSystem(
+        region=S3.region, scheme="http", access_key=OWN_KEY,
+        secret_key="synthetic-secret-not-a-real-key", endpoint_override=server.endpoint,
+        allow_bucket_creation=False, allow_bucket_deletion=False, connect_timeout=2,
+        request_timeout=3, retry_strategy=pa_fs.AwsStandardS3RetryStrategy(max_attempts=1),
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("refusal", ["moved", "wrong_region"])
+def test_pyarrow_s_answer_for_another_region_is_worded_and_never_followed(refusal: str) -> None:
+    """Measured: pyarrow (26.0.0) sends one request and raises `AWS Error UNKNOWN (HTTP status
+    301|400)`; it follows neither answer (ADR-140 Amendment 20 point 3's open question). A 301 is
+    told as another region; a HEAD's 400 has no body to say why, so it is told only as unreadable
+    (the bucket's HeadBucket, below, carries pyarrow's own region words)."""
+    from .s3_fixture import RefusingS3Server
+
+    with RefusingS3Server(refusal) as server:
+        store = _ListedOne(_pyarrow_against(server), ["client-a/visits/a.csv"])
+        with pytest.raises(ConnectorRefused) as refused:
+            read_s3(store, S3, S3Read(folder="visits/", format="csv"))
+    words = str(refused.value)
+    if refusal == "moved":
+        assert words == s3_connector.OTHER_REGION
+    else:
+        assert words.startswith("the bucket could not be read")
+    assert len(server.requests) == 1  # one HEAD, never sent again, nor anywhere else
+    assert server.requests[0][1] == server.endpoint
+    assert "eu-west-1" not in words and S3.bucket not in words
+
+
+@pytest.mark.parametrize("refusal", ["moved", "wrong_region"])
+def test_an_empty_listing_in_another_region_is_told_so_not_read_as_an_empty_folder(
+    refusal: str,
+) -> None:
+    """The bucket is asked for when the listing is empty (Amendment 20 point 4); asked in another
+    region, pyarrow says so, and the read is refused as another region, not as a folder with no
+    objects (red before part 2: the OSError was taken as "not ours to ask")."""
+    from .s3_fixture import RefusingS3Server
+
+    with RefusingS3Server(refusal) as server:
+        store = _ListedOne(_pyarrow_against(server), [])
+        with pytest.raises(ConnectorRefused) as refused:
+            read_s3(store, S3, S3Read(folder="visits/", format="csv"))
+    assert str(refused.value) == s3_connector.OTHER_REGION
+    assert {host for _m, host, _p in server.requests} == {server.endpoint}

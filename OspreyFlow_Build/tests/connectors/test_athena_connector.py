@@ -449,3 +449,50 @@ def test_the_fixture_refuses_what_athena_refuses() -> None:
     running = slow.start_query_execution(QueryString='SELECT * FROM "visits"."many"')
     with pytest.raises(ClientError, match="not yet finished"):
         slow.get_query_results(QueryExecutionId=running["QueryExecutionId"])
+
+
+# --- L1.9 part 2 (CARRIES row 150): the two answers Athena may give a query that does not parse ----
+
+
+@pytest.mark.parametrize("at_start", [False, True], ids=["failed_execution", "refused_at_start"])
+def test_a_query_that_does_not_parse_is_refused_in_the_same_words_either_way(
+    at_start: bool,
+) -> None:
+    """Athena may run an unparseable statement and fail it (FAILED, with the parser's reason), or
+    refuse it at `StartQueryExecution` (`InvalidRequestException`, the same reason as its message);
+    which one is unconfirmed until the client's platform (`test_athena_connector_live.py`). Both are
+    modelled; the reader gives the author the same words for each, never a retry and never an empty
+    read. Red before part 2: the second was "Athena refused the request: …"."""
+    athena = _athena(syntax_refused_at_start=at_start)
+    athena.named_queries[SELECT_NQ]["QueryString"] = (
+        "SELECT booking_id FROM visits.visit_bookings WHERE"
+    )
+    with pytest.raises(ConnectorRefused) as refused:
+        _read(athena, AthenaRead(named_query=SELECT_NQ))
+    assert str(refused.value) == (
+        "Athena could not run the query: line 1:51: mismatched input '<EOF>'. Expecting: "
+        "<expression>; nothing was read"
+    )
+    assert len(athena.sent) == 1  # sent once, never again
+    assert ("GetQueryExecution" in athena.asked) is not at_start
+
+
+def test_another_invalid_request_is_not_taken_for_a_parse_error() -> None:
+    """Only the parser's own shape (`line N:M: …`) is a query that does not parse: any other
+    `InvalidRequestException` stays a refused request (a workgroup's missing results location)."""
+    athena = _athena()
+    with pytest.raises(ConnectorRefused) as refused:
+        _read(athena, AthenaRead(table="visits.visit_bookings"), settings=_settings(workgroup="bare"))
+    assert str(refused.value).startswith("Athena refused the request: No output location")
+
+
+def test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words() -> None:
+    """A table whose objects lie outside the role's policy (its location not among the
+    declaration's `table_locations`): Athena reads them as the caller and fails the execution with
+    the S3 path. The author is told what to declare, in fixed words; the path is not repeated."""
+    athena = _athena(unreadable_data={"visit_bookings"})
+    with pytest.raises(ConnectorRefused) as refused:
+        _read(athena, AthenaRead(table="visits.visit_bookings"))
+    words = str(refused.value)
+    assert words == athena_connector.TABLE_DATA_DENIED
+    assert "synthetic-lake" not in words and "s3://" not in words
