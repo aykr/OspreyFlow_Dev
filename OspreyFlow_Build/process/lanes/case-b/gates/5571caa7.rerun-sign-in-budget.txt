@@ -1,0 +1,42 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T162305Z/log: bash -c uptime; cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/harness/test_organisation_sign_in.py; echo "sign-in: exit $?"; cd apps/workspace && npx vitest run src/matrix/MatrixView.budget.test.tsx; echo "budget: exit $?"
+ 16:23:06 up 16 days,  1:01,  8 users,  load average: 10.20, 10.37, 14.73
+............                                                             [100%]
+============================= slowest 30 durations =============================
+35.92s setup    tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends
+2.62s call     tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends
+2.00s call     tests/harness/test_organisation_sign_in.py::test_joining_by_email_joins_an_arrival_when_on_and_refuses_again_when_off
+1.64s call     tests/harness/test_organisation_sign_in.py::test_a_wrong_client_secret_is_refused_by_the_organisation_and_repair_puts_it_back
+1.59s teardown tests/harness/test_organisation_sign_in.py::test_joining_by_email_joins_an_arrival_when_on_and_refuses_again_when_off
+1.50s call     tests/harness/test_organisation_sign_in.py::test_keycloak_trusts_the_organisations_ca_for_its_back_channel
+1.31s call     tests/harness/test_organisation_sign_in.py::test_an_administrator_joins_a_refused_arrival_who_then_lands_in_the_account
+1.29s call     tests/harness/test_organisation_sign_in.py::test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined
+1.24s call     tests/harness/test_organisation_sign_in.py::test_a_person_from_the_organisation_has_no_role_until_an_administrator_grants_one
+1.08s call     tests/harness/test_organisation_sign_in.py::test_repair_sign_in_sets_the_brokers_client_secret_again
+1.07s call     tests/harness/test_organisation_sign_in.py::test_the_glass_is_given_no_refresh_token_and_repair_turns_it_off_on_an_older_realm
+0.98s call     tests/harness/test_organisation_sign_in.py::test_a_removed_account_frees_its_email_for_the_organisation_arrival
+0.87s call     tests/harness/test_organisation_sign_in.py::test_a_restored_person_still_signs_in_through_the_organisation
+0.86s call     tests/harness/test_organisation_sign_in.py::test_signing_out_returns_through_the_printed_post_logout_address
+
+(16 durations < 0.005s hidden.  Use -vv to show these durations.)
+12 passed in 54.50s
+sign-in: exit 0
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 4142[2mms[22m[39m
+   [32m✓[39m MatrixView at 50,000 nodes and 250,000 links [2m(1)[22m
+     [33m[2m✓[22m[39m opens inside §5's first-frame budget, drawing one page of each table and saying so[33m 4141[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 16:24:01
+[2m   Duration [22m 5.16s[2m (tests 82%, environment 12%, transform 4%, import 3%)[22m
+
+
+Slowest 1 tests:
+  4141 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+budget: exit 0
+Wall time: 61 s, exit 0 (no stack, no lease; set-up before it 15 s)
