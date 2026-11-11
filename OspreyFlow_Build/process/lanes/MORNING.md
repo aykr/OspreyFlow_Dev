@@ -443,8 +443,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       document content stay with Deep read, whose schemas Laurium's mapper cannot all take. The live case on a real
       model now runs against the product's own extraction model, qwen2.5 7B (pinned), on a gateway stood up on the
       test server.
-      **Result (about 18:30):** Laurium read a conforming answer from qwen2.5 7B 3 times of 3 through the rendered
-      gateway route (lease b, 18:01:21Z), the 0.5B failing 3 of 3 as the control. So P12 part 2's exit holds on the
+      **Result (about 18:30):** Laurium read a conforming answer from qwen2.5 7B 3 times of 3 (lease b, 18:01:21Z),
+      the 0.5B failing 3 of 3 as the control. **Corrected, 21:40:** the gateway was LiteLLM reached directly, not P11's
+      rendered route. Laurium's code ran in-process, not its image, and the schema was a one-string test, not the
+      review queue's own. So P12 part 2's exit holds on the
       product's own extraction model, which eases the preset question above; the client's own engine is proven at their
       install (20 November), recorded as P12's last open item.
     - **P9 rulings from my round 2 (about 19:00), yours to overrule:** ClickHouse is never dropped before its restore
@@ -472,6 +474,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **Ruled for P10 part 2 (about 21:10):** a new `GET /v1/me` gives the Glass the signed-in person's roles and
       clearance on every profile, so the Glass no longer reads them from the sign-in token. It fails closed (no
       Admin place while loading or on error). Keycloak's sign-in settings are unchanged, with a test.
+    - **Your preset question again, with a new fact (P12 part 2's round 2, about 21:40):** no screen reaches Laurium
+      yet. Laurium serves only the review queue's document-extraction route, and no Glass screen calls that route.
+      The Glass's own model extraction (document content and email) uses Deep read, as ruled. So with Laurium as the
+      cloud-platform preset, every default deployment runs a Laurium container (250m CPU, 1 GiB) that no analyst
+      action uses until a screen calls the route. Its image has also not yet been built or scanned in any gate; that
+      is being fixed now. **My recommendation:** keep Laurium as the preset, as you decided, and record the gap in
+      ADR-135 Amendment 9. The alternative is deep_read as the preset until a screen uses Laurium. I have not
+      changed it; your call.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
