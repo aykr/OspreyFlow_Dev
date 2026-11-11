@@ -56,19 +56,28 @@ CONFIGS = {
 }  # fmt: skip
 
 #: P7b: the cloud-platform profile's standard shape, its two synthetic fixtures as `make
-#: cp-policy-check` renders them, unchanged but for the one intended difference there (below).
+#: cp-policy-check` renders them, unchanged but for the two intended differences there (below).
 for _shape in ("development", "production"):
     CONFIGS[f"cloud-platform-{_shape}"] = json.loads(json.dumps(__import__("yaml").safe_load(
         (CORE.parent / "OspreyFlow_Build" / "tests" / "fixtures" / "cloud_platform" / f"{_shape}.yaml")
         .read_text(encoding="utf-8"))))  # fmt: skip
 
 #: The cloud-platform profile's ceiling (ADR-148 Amendment 5 point 8): OFFICIAL-SENSITIVE where the
-#: deployment names none, where the base held the scheme's highest. Forgiven there alone.
-CEILING = re.compile(r'(OSPREY_HIGHEST_MARKING:? ?=?("?))SECRET(\2)$', re.M)
+#: deployment names none, where the base held the scheme's highest; as an env line, a ConfigMap's
+#: YAML and its JSON.
+CEILING = re.compile(r'(OSPREY_HIGHEST_MARKING"?(?:: |=)("?))SECRET(\2)')
+#: And the schema's new `cloud_platform.shape` at its default, in the copy of the deployment's own
+#: configuration the values carry (an escaped `\n` inside a quoted string, or a real newline).
+SHAPE = re.compile(r"(  environment: (?:development|production))(\\n|\n)(  registry:)")
 
 
 def intended(name: str, text: str) -> str:
-    return CEILING.sub(r"\1OFFICIAL-SENSITIVE\3", text) if name.startswith("cloud-platform-") else text
+    """The base's artefact as it would read with the two intended changes, for the cloud-platform
+    configurations alone; every other configuration is compared as it is."""
+    if not name.startswith("cloud-platform-"):
+        return text
+    text = CEILING.sub(r"\1OFFICIAL-SENSITIVE\3", text)
+    return SHAPE.sub(r"\1\2  shape: standard\2\3", text)
 
 DRIVER = r"""
 import hashlib, json, sys
@@ -104,6 +113,10 @@ def normalised(text: str) -> str:
     # (the archive has no git, so its checkout says `unknown`).
     commit = r"(?:[0-9a-f]{7,40}|unknown|dev-[0-9a-f]{7,40})"
     text = re.sub(rf"(ghcr\.io/ospreyflow/[a-z-]+:){commit}\b", r"\1<commit>", text)
+    # Ours in a platform's registry (cloud-platform), and the chart's checksums of content that
+    # holds that commit.
+    text = re.sub(rf"(/ospreyflow/[a-z-]+:){commit}\b", r"\1<commit>", text)
+    text = re.sub(r'(checksum/(?:files|environment): )"?[0-9a-f]{16}"?', r"\1<checksum>", text)
     text = re.sub(rf"^(\s*tag: ){commit}$", r"\1<commit>", text, flags=re.M)
     text = re.sub(r"sha256:[0-9a-f]{64}", "sha256:<digest>", text)
     text = re.sub(r"(OSPREY_RELEASE_VERSION[=:] ?)\S+", r"\1<release>", text)
