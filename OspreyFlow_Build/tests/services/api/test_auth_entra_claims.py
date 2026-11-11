@@ -33,6 +33,7 @@ groups is a directory error for the operator to see, not one to guess past.
 from __future__ import annotations
 
 import ast
+import asyncio
 import re
 import time
 from pathlib import Path
@@ -40,10 +41,20 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
-from services.api.auth import PrincipalResolutionError, PrincipalResolver
+from services.api.auth import (
+    PrincipalExchangeUnavailable,
+    PrincipalResolutionError,
+    PrincipalResolver,
+)
 from services.api.config import ApiConfig
 
-from principal_auth import ClaimMapping, CodesSource, ValueSource
+from principal_auth import (
+    ClaimMapping,
+    CodesSource,
+    PrincipalLookupUnavailable,
+    StoredPerson,
+    ValueSource,
+)
 from tests.conftest import (
     TOKEN_EXCHANGE_CLIENT_ID,
     TOKEN_EXCHANGE_CLIENT_SECRET,
@@ -130,8 +141,45 @@ def _entra_config(jwks_url: str) -> ApiConfig:
     return _config(jwks_url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID)
 
 
-def _resolver(jwks_url: str, mapping: ClaimMapping) -> PrincipalResolver:
-    return PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping)
+class FakePeople:
+    """Stands in for `services/api/entra_people.py`'s store, and refuses as it does (rule 15): keyed
+    by tenant **and** object id, a person not yet seen recorded with no roles, and a failure raised,
+    never answered as "no roles". `test_entra_people_live.py` holds the real store to the same."""
+
+    def __init__(self) -> None:
+        self.rows: dict[tuple[str, str], StoredPerson] = {}
+        self.calls: list[tuple[str, str]] = []
+        self.fail: Exception | None = None
+        self.delay = 0.0
+
+    async def person(self, tenant_id: str, oid: str, claims: object) -> StoredPerson:
+        self.calls.append((tenant_id, oid))
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.fail is not None:
+            raise self.fail
+        return self.rows.setdefault((tenant_id, oid), StoredPerson(roles=(), disabled=False))
+
+
+class _EntraResolver:
+    """The resolver as the Conduit calls it on Entra (`resolve_principal`, its stored person read
+    from `people`), driven from a plain test."""
+
+    def __init__(self, jwks_url: str, mapping: ClaimMapping, people: FakePeople | None = None):
+        self.people = people or FakePeople()
+        self.real = PrincipalResolver(
+            _entra_config(jwks_url),
+            claim_mapping=mapping,
+            role_source=self.people,
+            role_lookup_timeout_seconds=0.2,
+        )
+
+    def resolve(self, token: str):  # type: ignore[no-untyped-def]
+        return asyncio.run(self.real.resolve_principal(token))
+
+
+def _resolver(jwks_url: str, mapping: ClaimMapping) -> _EntraResolver:
+    return _EntraResolver(jwks_url, mapping)
 
 
 def _key(keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]) -> rsa.RSAPrivateKey:
@@ -530,7 +578,7 @@ def test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver(jwks
             tenant_id=None,
         )
     with pytest.raises(ValidationError, match="tenant_id"):
-        PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping)
+        PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping, role_source=FakePeople())
 
 
 def test_the_settings_refuse_an_unknown_key() -> None:
@@ -624,18 +672,16 @@ def test_the_default_mapping_does_not_read_entra_attributes(keypair, jwks_url) -
         PrincipalResolver(_config(jwks_url)).resolve(sign_token(_key(keypair), claims))
 
 
-async def test_the_owner_exchange_maps_claims_through_the_same_path(
+async def test_owner_resolution_is_unavailable_on_entra_even_with_an_exchange_configured(
     keypair, jwks_url, token_exchange_url: str, token_exchange_registry: TokenExchangeRegistry
 ) -> None:
-    """ADR-043's one claims-construction path: a token got by exchange is mapped by the
-    deployment's mapping, as a session's is (owner-ok's clearance and unit come from its groups),
-    and two clearances are refused there too. It proves the path, not Entra's behaviour: Entra has
-    no impersonation exchange, and how owners resolve on Entra is P10 part 2's question."""
+    """Entra has no impersonation exchange, so a scheduled run cannot act as its owner (the
+    orchestrator's ruling, 11 November 2026): `resolve_for_owner` answers None (ADR-044's
+    unreachable path, the run marked stopped) and the detailed form says why, even where an
+    exchange endpoint is configured and would grant. Red with the Entra refusal removed: the
+    exchange's token resolves. The one-path proof for owners stays `test_auth.py`'s (Keycloak)."""
     token_exchange_registry.register(
         "owner-ok", entra_claims(sub="owner-ok", groups=[G_OFFICIAL, G_UNIT_1, G_CODE_R])
-    )
-    token_exchange_registry.register(
-        "owner-two", entra_claims(sub="owner-two", groups=[G_OFFICIAL, G_SENSITIVE, G_UNIT_1])
     )
     config = _config(
         jwks_url,
@@ -645,16 +691,11 @@ async def test_the_owner_exchange_maps_claims_through_the_same_path(
         oidc_token_exchange_client_id=TOKEN_EXCHANGE_CLIENT_ID,
         oidc_token_exchange_client_secret=TOKEN_EXCHANGE_CLIENT_SECRET,
     )
-    resolver = PrincipalResolver(config, claim_mapping=BY_GROUPS)
+    resolver = PrincipalResolver(config, claim_mapping=BY_GROUPS, role_source=FakePeople())
     try:
-        ok = await resolver.resolve_for_owner("owner-ok")
-        assert ok is not None
-        assert (ok.clearance, ok.org_unit, ok.receivable_handling_codes) == (
-            "OFFICIAL",
-            "unit-1",
-            ["R"],
-        )
-        assert await resolver.resolve_for_owner("owner-two") is None
+        assert await resolver.resolve_for_owner("owner-ok") is None
+        with pytest.raises(PrincipalExchangeUnavailable, match="unavailable with Entra ID"):
+            await resolver.resolve_for_owner_detailed("owner-ok")
     finally:
         await resolver.aclose()
 
@@ -707,7 +748,8 @@ def test_the_construction_check_sees_each_other_way_to_build_one(plant) -> None:
 def test_an_entra_principal_is_keyed_by_oid_not_its_pairwise_sub(keypair, jwks_url) -> None:
     """Entra's `sub` is pairwise per application: keyed by it, one person signing in through a
     second client id would be two principals, and Admin › People could never name a person before
-    their first sign-in (Graph gives `oid`). Two `sub`s, one `oid`: one principal, keyed by `oid`."""
+    their first sign-in (Graph gives `oid`). Two `sub`s, one `oid`: one principal, keyed by
+    `oid`."""
     resolver = _resolver(jwks_url, BY_EXTENSION)
     first = resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, sub="pairwise-app-1")))
     second = resolver.resolve(
@@ -841,3 +883,188 @@ def test_one_group_cannot_grant_two_clearances_or_units(field) -> None:
         ValueSource.model_validate(two)
     with pytest.raises(ValidationError):
         ClaimMapping.model_validate({"tenant_id": TENANT, "client_id": GLASS, field: two})
+
+
+# --- P10 part 2: the guest check by tenant (CARRIES, P10 round 2) ---
+
+V1_ISSUER = f"https://sts.windows.net/{TENANT}/"
+
+
+@pytest.mark.parametrize("idp", [ISSUER, V1_ISSUER], ids=["member-v2-form", "member-v1-form"])
+def test_a_member_whose_idp_names_our_tenant_in_either_form_resolves(
+    keypair, jwks_url, idp
+) -> None:
+    """Entra may send `idp` in the v1.0 form on a v2.0 token, or the reverse: a member's `idp` names
+    our tenant whichever form it takes. Red against the string comparison with `iss`: the v1 form
+    on a v2.0 token was refused as a guest."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, idp=idp))
+    assert _resolver(jwks_url, BY_EXTENSION).resolve(token).id == OID
+
+
+@pytest.mark.parametrize(
+    "idp",
+    [
+        f"https://login.microsoftonline.com/{OTHER_TENANT}/v2.0",
+        f"https://sts.windows.net/{OTHER_TENANT}/",
+        "live.com",
+        "https://adfs.example.test/adfs/services/trust",
+        f"https://sts.windows.net/{TENANT}/extra",
+        f"https://login.microsoftonline.com/{TENANT}/",
+        ["https://sts.windows.net/" + TENANT + "/"],
+    ],
+    ids=[
+        "other-v2",
+        "other-v1",
+        "msa",
+        "federated",
+        "trailing-path",
+        "v2-without-version",
+        "not-text",
+    ],
+)
+def test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest(keypair, jwks_url, idp) -> None:
+    """Strict: an `idp` that names another tenant, a Microsoft account, a federation's own issuer
+    (a federated member, should Entra send one; unmeasured, Amendment 6's assumption list) or
+    anything malformed is refused as a guest's. Admitting a federated member is a later setting."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, idp=idp))
+    with pytest.raises(PrincipalResolutionError, match="guest"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+# --- P10 part 2: a client or scope with no tenant (CARRIES, P10 round 2) ---
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"client_id": GLASS}, {"scope": "other_scope"}], ids=["client", "scope"]
+)
+def test_a_client_or_scope_without_a_tenant_is_refused(kwargs) -> None:
+    """Checked only for an Entra mapping, so set without a tenant they would be ignored."""
+    with pytest.raises(ValidationError, match="tenant_id"):
+        ClaimMapping(**kwargs)
+
+
+def test_the_default_mapping_still_loads_after_a_dump() -> None:
+    """The control: the default scope, dumped and re-read by the resolver, is not taken as set."""
+    assert ClaimMapping.model_validate(ClaimMapping().model_dump()) == ClaimMapping()
+
+
+# --- P10 part 2: the stored person (the orchestrator's ruling, 11 November 2026) ---
+
+
+def test_an_entra_principals_roles_are_the_stored_ones_never_the_tokens(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(TENANT, OID)] = StoredPerson(roles=("osprey-admin",), disabled=False)
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, roles=["analyst", "role:x"]))
+    assert resolver.resolve(token).roles == ["osprey-admin"]
+    assert resolver.people.calls == [(TENANT, OID)]
+
+
+def test_a_first_sign_in_records_the_person_with_no_roles(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    assert resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD))).roles == []
+    assert (TENANT, OID) in resolver.people.rows
+
+
+def test_another_tenants_row_for_the_same_oid_grants_nothing(keypair, jwks_url) -> None:
+    """Rule 3 at the resolver: the store is read by our tenant and the oid together."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(OTHER_TENANT, OID)] = StoredPerson(
+        roles=("osprey-admin",), disabled=False
+    )
+    assert resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD))).roles == []
+
+
+def test_a_person_disabled_here_is_refused(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(TENANT, OID)] = StoredPerson(roles=("osprey-admin",), disabled=True)
+    with pytest.raises(PrincipalResolutionError, match="disabled"):
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+@pytest.mark.parametrize("how", ["raises", "slow"])
+def test_a_failed_or_slow_lookup_is_unavailable_never_a_principal(keypair, jwks_url, how) -> None:
+    """A 503, never a principal with no roles (the ruling's words)."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(TENANT, OID)] = StoredPerson(roles=("osprey-admin",), disabled=False)
+    if how == "raises":
+        resolver.people.fail = ConnectionError("store down")
+    else:
+        resolver.people.delay = 1.0
+    with pytest.raises(PrincipalLookupUnavailable):
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [StoredPerson(roles=("",), disabled=False), StoredPerson(roles=["x"], disabled=False), None],  # type: ignore[arg-type]
+    ids=["empty-role", "a-list", "not-a-person"],
+)
+def test_a_malformed_stored_person_is_unavailable(keypair, jwks_url, stored) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+
+    async def answer(tenant_id: str, oid: str, claims: object) -> object:
+        return stored
+
+    resolver.people.person = answer  # type: ignore[method-assign]
+    with pytest.raises(PrincipalLookupUnavailable):
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+def test_a_refused_token_records_nobody(keypair, jwks_url) -> None:
+    """Every token refusal comes before the store is touched."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    for overrides in ({"azp": OTHER_APP}, {"scp": "User.Read"}, {"acct": 1}):
+        with pytest.raises(PrincipalResolutionError):
+            resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, **overrides)))
+    with pytest.raises(PrincipalResolutionError):
+        # no clearance: refused by the mapping, before the store
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**{f"{EXT}_orgUnit": "unit-1"})))
+    assert resolver.people.calls == []
+
+
+def test_the_synchronous_path_refuses_an_entra_mapping(keypair, jwks_url) -> None:
+    """Only `resolve_principal` reads the stored roles; `resolve` would build one without them."""
+    real = _resolver(jwks_url, BY_EXTENSION).real
+    with pytest.raises(PrincipalLookupUnavailable):
+        real.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+def test_an_entra_mapping_needs_a_people_store_and_keycloak_refuses_one(jwks_url) -> None:
+    with pytest.raises(ValueError, match="people store"):
+        PrincipalResolver(_entra_config(jwks_url), claim_mapping=BY_EXTENSION)
+    with pytest.raises(ValueError, match="only for an Entra"):
+        PrincipalResolver(_config(jwks_url), role_source=FakePeople())
+
+
+async def test_the_keycloak_path_is_unchanged_through_resolve_principal(keypair, jwks_url) -> None:
+    principal = await PrincipalResolver(_config(jwks_url)).resolve_principal(
+        sign_token(_key(keypair), default_claims(roles=["osprey-admin"]))
+    )
+    assert principal.roles == ["osprey-admin"]
+
+
+# --- P10 part 2: the mapping from the environment the profile renders ---
+
+
+def test_the_mapping_is_read_from_the_environment(monkeypatch) -> None:
+    import json
+
+    monkeypatch.setenv(
+        "OSPREY_CLAIM_MAPPING",
+        json.dumps({"tenant_id": TENANT, "client_id": GLASS, "clearance": {"claim": "c"}}),
+    )
+    assert ClaimMapping.from_env().tenant_id == TENANT
+    monkeypatch.delenv("OSPREY_CLAIM_MAPPING")
+    assert ClaimMapping.from_env() == ClaimMapping()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["{not json", '{"clearence": {"claim": "c"}}', f'{{"tenant_id": "{TENANT}"}}'],
+    ids=["not-json", "unknown-key", "no-client"],
+)
+def test_a_mapping_in_the_environment_that_does_not_load_stops_the_start(monkeypatch, raw) -> None:
+    """Never a silent fall back to the fixed names, which would be Keycloak-handled."""
+    monkeypatch.setenv("OSPREY_CLAIM_MAPPING", raw)
+    with pytest.raises(ValueError):
+        ClaimMapping.from_env()

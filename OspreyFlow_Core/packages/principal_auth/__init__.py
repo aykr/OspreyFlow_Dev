@@ -24,6 +24,9 @@ verbatim below, because they document decisions rather than location.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -159,6 +162,13 @@ CLAIM_ROLES = "roles"
 # group grants nothing.
 
 
+#: The delegated scope the Glass asks this API for, unless the mapping names another.
+DEFAULT_SCOPE = "access_as_user"
+
+#: The claim mapping's environment variable: the profile renders `cloud_platform.claims` into it as
+#: JSON (ADR-148 Amendment 8); unset, the fixed names (Keycloak).
+CLAIM_MAPPING_VARIABLE = "OSPREY_CLAIM_MAPPING"
+
 #: An Entra object id (a tenant, a group): lower-case, as Entra writes it in a token.
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
@@ -230,7 +240,7 @@ class ClaimMapping(BaseModel):
     #: it, so a token another application obtained for this API is no session of ours.
     client_id: str | None = None
     #: The delegated scope the Glass asks for; an Entra token's `scp` must include it.
-    scope: str = "access_as_user"
+    scope: str = DEFAULT_SCOPE
 
     @model_validator(mode="after")
     def _entra_needs_its_tenant(self) -> ClaimMapping:
@@ -244,6 +254,12 @@ class ClaimMapping(BaseModel):
             raise ValueError("an Entra ID mapping needs `client_id`, the Glass's application id")
         if not self.scope or " " in self.scope:
             raise ValueError("`scope` must name one delegated scope")
+        if self.tenant_id is None and (self.client_id is not None or self.scope != DEFAULT_SCOPE):
+            # Only an Entra mapping checks the client and the scope; accepted here they would be
+            # ignored, and a deployment that set them would believe they were checked.
+            raise ValueError(
+                "`client_id` and `scope` are checked only for an Entra ID mapping: set `tenant_id`"
+            )
         fixed = (
             self.clearance == ValueSource(claim=CLAIM_CLEARANCE)
             and self.org_unit == ValueSource(claim=CLAIM_ORG_UNIT)
@@ -261,6 +277,21 @@ class ClaimMapping(BaseModel):
     def is_entra(self) -> bool:
         return self.tenant_id is not None
 
+    @classmethod
+    def from_env(cls) -> ClaimMapping:
+        """The deployment's mapping from `OSPREY_CLAIM_MAPPING` (JSON), or the fixed names when it
+        is unset. A value that is not JSON or not a valid mapping stops the Conduit at start, in
+        words: a sign-in mapping that silently fell back to the fixed names would be Keycloak-
+        handled, with no tenant check."""
+        raw = os.environ.get(CLAIM_MAPPING_VARIABLE, "").strip()
+        if not raw:
+            return DEFAULT_CLAIM_MAPPING
+        try:
+            data = json.loads(raw)
+        except ValueError as exc:
+            raise ValueError(f"{CLAIM_MAPPING_VARIABLE} is not JSON: {exc}") from None
+        return cls.model_validate(data)
+
     def required_claims(self) -> list[str]:
         """The claims PyJWT must find before anything is mapped. `tid` and `oid` are checked once
         each, in `principal_from_claims` (an absent one fails there), and `sub`'s type is PyJWT's
@@ -269,6 +300,9 @@ class ClaimMapping(BaseModel):
 
 
 DEFAULT_CLAIM_MAPPING = ClaimMapping()
+
+#: How long a session waits for its stored roles before the request is a 503.
+ROLE_LOOKUP_TIMEOUT_SECONDS = 2.0
 
 #: Entra's own cap on the groups a JWT carries; past it the claim is replaced by an overage.
 MAX_TOKEN_GROUPS = 200
@@ -350,10 +384,106 @@ def _handling_codes(claims: Mapping[str, Any], source: CodesSource, groups: list
     return codes
 
 
-def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> Principal:
+#: Entra's two issuer forms, v1.0 and v2.0, each naming the tenant (Amendment 6's assumptions).
+_ENTRA_ISSUER = re.compile(
+    r"^https://(?:sts\.windows\.net/(?P<v1>[0-9a-f-]{36})/"
+    r"|login\.microsoftonline\.com/(?P<v2>[0-9a-f-]{36})/v2\.0)$"
+)
+
+
+def _tenant_of_entra_issuer(value: object) -> str | None:
+    """The tenant an Entra issuer URL names, in either form, or None for anything else (another
+    provider, a federation's own issuer, a malformed URL). Entra sends `idp` only for an account
+    homed elsewhere, and in either form whatever the token's own version, so a member's `idp` is
+    compared by its tenant, never as a string against `iss` (CARRIES, P10 round 2)."""
+    if not isinstance(value, str):
+        return None
+    found = _ENTRA_ISSUER.match(value)
+    if found is None:
+        return None
+    tenant = found.group("v1") or found.group("v2")
+    return tenant if _GUID.match(tenant) else None
+
+
+@dataclass(frozen=True)
+class StoredPerson:
+    """What the deployment keeps of an Entra person (ADR-148 Amendment 8): the roles Admin › People
+    gave them and whether an administrator disabled them here. Entra holds the account; these are
+    ours."""
+
+    roles: tuple[str, ...]
+    disabled: bool
+
+
+class RoleSource(Protocol):
+    """Where an Entra principal's roles are read (ADR-148 Amendment 8, the orchestrator's ruling of
+    11 November 2026): the deployment's own store, keyed by tenant and object id. `person` records
+    a person on their first sign-in (with no roles) and answers what is stored; it raises on any
+    failure, which the resolver turns into `PrincipalLookupUnavailable`, never a principal."""
+
+    async def person(self, tenant_id: str, oid: str, claims: Mapping[str, Any]) -> StoredPerson: ...
+
+
+class PrincipalLookupUnavailable(Exception):
+    """The stored person could not be read in time (the store down, slow or answering something
+    malformed): a 503, never a principal with no roles and never one from an earlier read."""
+
+
+@dataclass(frozen=True)
+class _Verified:
+    """A verified token's principal parts, before roles: built only by `_verified_parts`."""
+
+    id: str
+    clearance: str
+    org_unit: str
+    codes: list[str]
+    token_roles: list[str]
+
+
+def _stored_roles(stored: StoredPerson) -> list[str]:
+    roles = stored.roles
+    if not isinstance(roles, tuple) or not all(isinstance(r, str) and r for r in roles):
+        raise PrincipalLookupUnavailable("the stored person's roles are not a list of role names")
+    return list(dict.fromkeys(roles))
+
+
+def principal_from_claims(
+    claims: Mapping[str, Any], mapping: ClaimMapping, stored: StoredPerson | None = None
+) -> Principal:
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
-    claims."""
+    claims. An Entra principal's roles are the stored person's (`stored`, read by the resolver
+    from its `RoleSource`), never the token's; one disabled here is refused (401)."""
+    verified = _verified_parts(claims, mapping)
+    if mapping.is_entra:
+        if stored is None:
+            raise PrincipalLookupUnavailable(
+                "an Entra principal's roles are read from the deployment's store, and none was read"
+            )
+        if stored.disabled:
+            raise PrincipalResolutionError(
+                "this account is disabled in this deployment: ask an administrator"
+            )
+        roles = _stored_roles(stored)
+    else:
+        if stored is not None:
+            raise PrincipalLookupUnavailable("a stored person is read only for an Entra mapping")
+        roles = verified.token_roles
+    return Principal(
+        # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
+        # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
+        # application. Keycloak: `sub`, required and refused unless a string by PyJWT's decode.
+        id=verified.id,
+        clearance=verified.clearance,
+        org_unit=verified.org_unit,
+        receivable_handling_codes=verified.codes,
+        roles=roles,
+    )
+
+
+def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verified:
+    """Every refusal a token's claims can earn, before anything is read about the person: a
+    refused token never records a person in the store."""
     if mapping.is_entra:
         if claims.get("tid") != mapping.tenant_id:
             raise PrincipalResolutionError("token's tid is missing or names another tenant")
@@ -364,7 +494,7 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
             raise PrincipalResolutionError(
                 "token is app-only (no delegated scp): a service principal is no person"
             )
-        if mapping.scope not in scope.split(" "):
+        if not isinstance(scope, str) or mapping.scope not in scope.split(" "):
             raise PrincipalResolutionError(
                 f"token's scp does not grant this API's scope ({mapping.scope!r})"
             )
@@ -374,7 +504,7 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
             raise PrincipalResolutionError("token was not issued to the Glass's client")
         # A guest (B2B) account is homed in another tenant: `acct` 1, or an `idp` other than the
         # issuer. Refused until the deployment decides to admit guests (ADR-148 Amendment 6).
-        guest_idp = "idp" in claims and claims["idp"] != claims.get("iss")
+        guest_idp = "idp" in claims and _tenant_of_entra_issuer(claims["idp"]) != mapping.tenant_id
         if claims.get("acct") in (1, "1") or guest_idp:
             raise PrincipalResolutionError("token is a guest account's: guests are not admitted")
     elif "tid" in claims:
@@ -389,16 +519,14 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     groups = _token_groups(claims, mapping) if uses_groups else []
     clearance = _single_value(claims, mapping.clearance, "clearance", groups)
     org_unit = _single_value(claims, mapping.org_unit, "organisational unit", groups)
-    return Principal(
-        # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
-        # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
-        # application. Keycloak: `sub`, required and refused unless a string by PyJWT's decode.
+    return _Verified(
         id=str(claims["oid"]) if mapping.is_entra else str(claims["sub"]),
         clearance=clearance,
         org_unit=org_unit,
-        receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
-        # Keycloak's `roles` come from Admin › People; an Entra token's are not ours to read.
-        roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
+        codes=_handling_codes(claims, mapping.handling_codes, groups),
+        # Keycloak's `roles` come from Admin › People through its attribute; an Entra token's are
+        # app roles an Entra administrator assigns, never read (Amendment 6 point 4).
+        token_roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
     )
 
 
@@ -477,7 +605,14 @@ class PrincipalResolver:
     process, `aclose()`d at lifespan shutdown alongside every other
     client this codebase already closes there."""
 
-    def __init__(self, config: OidcSettings, *, claim_mapping: ClaimMapping | None = None) -> None:
+    def __init__(
+        self,
+        config: OidcSettings,
+        *,
+        claim_mapping: ClaimMapping | None = None,
+        role_source: RoleSource | None = None,
+        role_lookup_timeout_seconds: float = ROLE_LOOKUP_TIMEOUT_SECONDS,
+    ) -> None:
         # Validated again from plain data: a copy or a `model_construct` skips the validators,
         # and they are what make an Entra mapping checked as one.
         mapping = ClaimMapping.model_validate(
@@ -494,6 +629,16 @@ class PrincipalResolver:
                 raise ValueError(
                     "an Entra ID claim mapping needs the token audience checked (OIDC_AUDIENCE)"
                 )
+            if role_source is None:
+                # Its roles live in the deployment's store (Amendment 8); a resolver that could not
+                # read them would build principals with none, or with the token's app roles.
+                raise ValueError("an Entra ID claim mapping needs the deployment's people store")
+        elif role_source is not None:
+            raise ValueError("a people store is read only for an Entra ID claim mapping")
+        if role_lookup_timeout_seconds <= 0:
+            raise ValueError("the role lookup's timeout must be positive")
+        self._role_source = role_source
+        self._role_lookup_timeout = role_lookup_timeout_seconds
         self._config = config
         self._claim_mapping = mapping
         self._jwk_client = PyJWKClient(
@@ -648,6 +793,14 @@ class PrincipalResolver:
         requirement, and ADR-043's own freshness argument, both mean every call is a real,
         independent exchange against the IdP's own current state, not a lookup against anything
         this process remembers from a previous call."""
+        if self._claim_mapping.is_entra:
+            # Entra has no impersonation exchange: a person cannot be signed in as without them
+            # (the orchestrator's ruling, 11 November 2026). ADR-044's unreachable path marks the
+            # run stopped; a later step gives owners a way to resolve (CARRIES).
+            raise PrincipalExchangeUnavailable(
+                "owner resolution is unavailable with Entra ID sign-in: a scheduled run cannot act "
+                "as its owner on this deployment"
+            )
         if not self._config.oidc_token_exchange_url:
             raise PrincipalExchangeUnavailable(
                 "OIDC_TOKEN_EXCHANGE_URL is not set — this deployment has not configured "
@@ -701,6 +854,38 @@ class PrincipalResolver:
             ) from exc
 
     def resolve(self, token: str) -> Principal:
+        """A Keycloak session's principal, from its token alone. An Entra principal's roles are
+        read from the store, which this synchronous path cannot do: `resolve_principal`."""
+        if self._claim_mapping.is_entra:
+            raise PrincipalLookupUnavailable(
+                "an Entra principal is resolved with its stored roles (resolve_principal)"
+            )
+        return principal_from_claims(self._verified_claims(token), self._claim_mapping)
+
+    async def resolve_principal(self, token: str) -> Principal:
+        """Every session's principal, as the Conduit asks for it. For an Entra mapping the token is
+        checked in full first (a refused token records nobody), then the person is read from the
+        store, within the timeout: a failure or a slow answer is `PrincipalLookupUnavailable` (a
+        503), never a principal with no roles. Nothing is kept between calls."""
+        claims = self._verified_claims(token)
+        if not self._claim_mapping.is_entra:
+            return principal_from_claims(claims, self._claim_mapping)
+        _verified_parts(claims, self._claim_mapping)
+        assert self._role_source is not None and self._claim_mapping.tenant_id is not None
+        try:
+            stored = await asyncio.wait_for(
+                self._role_source.person(self._claim_mapping.tenant_id, str(claims["oid"]), claims),
+                timeout=self._role_lookup_timeout,
+            )
+        except Exception as exc:  # noqa: BLE001 - every failure of the read is the one 503
+            raise PrincipalLookupUnavailable(
+                f"the person's stored roles could not be read: {type(exc).__name__}"
+            ) from exc
+        if not isinstance(stored, StoredPerson):
+            raise PrincipalLookupUnavailable("the people store answered something not a person")
+        return principal_from_claims(claims, self._claim_mapping, stored)
+
+    def _verified_claims(self, token: str) -> dict[str, Any]:
         try:
             signing_key = self._jwk_client.get_signing_key_from_jwt(token)
             claims = jwt.decode(
@@ -722,4 +907,4 @@ class PrincipalResolver:
         # closed (`01_DOMAIN_MODEL.md` §2.2: an unrecognised clearance sees nothing) but silently,
         # as a principal who can never see anything rather than a rejected token — worse for
         # whoever has to debug an IdP misconfiguration than an explicit 401.
-        return principal_from_claims(claims, self._claim_mapping)
+        return dict(claims)
