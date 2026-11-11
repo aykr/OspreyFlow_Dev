@@ -310,12 +310,15 @@ PLANTS = [
           '    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED\n'
           '                 and (config.models.enabled_providers or w["name"] != "litellm")]',
           (G, R), "gateway_is_rendered"),
+    # W2 planted with a host whose networks the test gives (Gemini's), so it is red on the egress
+    # itself, not on the render's own refusal of a host with none (the orchestrator's round 1).
     Plant("W2", "_egress_hosts", "a model host allowed out with no engine enabled", CLOUD,
-          "    hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]",
-          "    hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]\n"
-          "    hosts += list(defaults.values())",
+          "    hosts += engine_hosts(config, profile)",
+          "    hosts += engine_hosts(config, profile)\n"
+          '    hosts += [profile.egress.engine_hosts["gemini"]]',
           (G,), "no_model_host"),
-    Plant("W3", "render_cloud_platform", "the gateway given no account of its own", CLOUD,
+    Plant("W3", "render_cloud_platform", "the gateway given no account of its own (the engine "
+          "kinds' Bedrock cases red too: the stand-in's role is the render's)", CLOUD,
           '        if pod["name"] == "litellm" and bedrock_enabled(config):',
           '        if False and pod["name"] == "litellm":',
           (G, R, K)),
@@ -335,7 +338,22 @@ PLANTS = [
     Plant("W8", "render_cloud_platform", "the gateway run as the namespace's own account", CLOUD,
           "            pod[\"serviceAccountName\"] = gateway_account(platform)",
           "            pod[\"serviceAccountName\"] = platform.secrets.irsa.service_account",
-          (G, R)),
+          (G, R, K)),
+    # --- P11 part 2, round 1's fixes ---------------------------------------------------------------
+    Plant("W9", "ModelAdmin._made_by_the_render", "an engine the render did not make enabled",
+          ADMIN, "        if self._file.profile != MODEL_ROUTE_PROFILE:\n            return",
+          "        if True:\n            return", (K,), "render_did_not or host_the_render"),
+    Plant("W10", "gateway_account", "Bedrock rendered with no gateway account named", CLOUD,
+          "    if not account:\n        raise CloudPlatformNotRenderable(",
+          "    if False:\n        raise CloudPlatformNotRenderable(", (G,), "naming_no_gateway"),
+    Plant("W11", "IrsaSettings", "one account for both, or a name Kubernetes refuses",
+          "harness/cloud_platform/settings.py",
+          "        if self.gateway_service_account == self.service_account:",
+          "        return self\n        if self.gateway_service_account == self.service_account:",
+          (G,), "kubernetes_name"),
+    Plant("W12", "ModelProviderConfig._reference_is_words", "the reference's word-by-word check "
+          "on every profile", SCHEMA, "        if _looks_like_a_key(cleaned):",
+          "        if _label_looks_like_a_key(cleaned):", (K,), "long_reference"),
 ]
 
 
