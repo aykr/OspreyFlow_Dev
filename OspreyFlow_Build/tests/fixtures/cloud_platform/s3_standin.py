@@ -193,6 +193,11 @@ class Role:
     subject: str
     audience: str = "sts.amazonaws.com"
     max_seconds: int = 3600
+    #: The cluster's own issuer instead (on kind: its service-account tokens, RS256, verified by
+    #: the keys `kubectl get --raw /openid/v1/jwks` gives, and its `iss`), as IRSA's OIDC
+    #: provider verifies them on EKS.
+    jwks: dict[str, Any] | None = None
+    issuer: str | None = None
 
 
 @dataclass
@@ -232,6 +237,17 @@ class StandIn:
     @classmethod
     def from_config(cls, config: dict[str, Any], root: Path) -> StandIn:
         stand_in = cls(root=root, region=config.get("region", "eu-west-2"))
+        stand_in.configure(config)
+        return stand_in
+
+    def configure(self, config: dict[str, Any]) -> None:
+        """Who may call and each bucket's policy and key, from `config`; the objects kept, every
+        session ended (a changed role is assumed again, as on AWS after its policy changes)."""
+        stand_in = self
+        with self.lock:
+            self.users.clear()
+            self.roles.clear()
+            self.sessions.clear()
         for user in config.get("users", []):
             stand_in.users[user["access_key"]] = Principal(
                 arn=user["arn"], secret=user["secret_key"], policies=user.get("policies", [])
@@ -244,13 +260,15 @@ class StandIn:
                 subject=role["subject"],
                 audience=role.get("audience", "sts.amazonaws.com"),
                 max_seconds=int(role.get("max_seconds", 3600)),
+                jwks=role.get("jwks"),
+                issuer=role.get("issuer"),
             )
+        stand_in.buckets.clear()
         for bucket in config.get("buckets", []):
             stand_in.buckets[bucket["name"]] = Bucket(
                 name=bucket["name"], policy=bucket.get("policy"), kms_key=bucket.get("kms_key")
             )
-            (root / bucket["name"]).mkdir(parents=True, exist_ok=True)
-        return stand_in
+            (self.root / bucket["name"]).mkdir(parents=True, exist_ok=True)
 
     # -- objects on disk ------------------------------------------------------------------------
 
@@ -290,7 +308,11 @@ class StandIn:
         token = params.get("WebIdentityToken", "")
         if role is None:
             raise Refused(403, "AccessDenied", "Not authorized to perform sts:AssumeRoleWithWebIdentity")
-        claims = _verify_jwt(token, role.issuer_secret, self.clock())
+        claims = (
+            _verify_rs256(token, role.jwks, role.issuer, self.clock())
+            if role.jwks is not None
+            else _verify_jwt(token, role.issuer_secret, self.clock())
+        )
         if claims.get("aud") != role.audience and role.audience not in _listed(claims.get("aud")):
             raise Refused(403, "AccessDenied", "Not authorized to perform sts:AssumeRoleWithWebIdentity")
         if claims.get("sub") != role.subject:
@@ -482,6 +504,28 @@ def _verify_jwt(token: str, secret: str, now: dt.datetime) -> dict[str, Any]:
     return claims
 
 
+def _verify_rs256(token: str, jwks: dict[str, Any], issuer: str | None, now: dt.datetime) -> dict[str, Any]:
+    """A token the cluster signed, by its published keys (PyJWT, the Conduit's own)."""
+    import jwt
+
+    try:
+        kid = jwt.get_unverified_header(token).get("kid")
+        key = next(k for k in jwks.get("keys", []) if k.get("kid") == kid)
+        claims: dict[str, Any] = jwt.decode(
+            token,
+            jwt.PyJWK(key).key,
+            algorithms=["RS256"],
+            options={"verify_aud": False, "verify_exp": False},
+        )
+    except (StopIteration, jwt.PyJWTError) as error:
+        raise Refused(400, "InvalidIdentityToken", "The web identity token that was passed could not be validated by AWS.") from error
+    if issuer is not None and claims.get("iss") != issuer:
+        raise Refused(400, "InvalidIdentityToken", "The web identity token that was passed could not be validated by AWS.")
+    if int(claims.get("exp", 0)) <= now.timestamp():
+        raise Refused(400, "ExpiredTokenException", "Token is expired")
+    return claims
+
+
 def decode_chunked(body: bytes) -> bytes:
     """An `aws-chunked` body's data (signed chunks or the unsigned-with-trailer form)."""
     out = bytearray()
@@ -585,6 +629,16 @@ class Handler(BaseHTTPRequestHandler):
         headers = {k.lower(): v for k, v in self.headers.items()}
         path, _, query = self.path.partition("?")
         params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
+        # The stand-in's own lever, for a run on kind (no bucket may start with `_`): every
+        # session expired now, as an hour on the platform would leave them.
+        if method == "POST" and path == "/_standin/expire":
+            stand_in.expire()
+            self._send(204)
+            return
+        if method == "POST" and path == "/_standin/configure":
+            stand_in.configure(json.loads(raw_body))
+            self._send(204)
+            return
         # STS: a form POST to the root, unsigned for AssumeRoleWithWebIdentity (as AWS takes it).
         if method == "POST" and path == "/" and "Action=" in raw_body.decode(errors="replace"):
             self._sts_call = True

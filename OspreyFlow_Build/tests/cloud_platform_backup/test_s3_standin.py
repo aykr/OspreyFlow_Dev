@@ -208,3 +208,34 @@ def test_a_missing_key_is_404_with_list_and_never_reveals_without(aws: Running) 
 def _with_policy(role: Role, policy: dict[str, object]) -> Role:
     return Role(arn=role.arn, policies=[policy], issuer_secret=role.issuer_secret,
                 subject=role.subject, audience=role.audience, max_seconds=role.max_seconds)  # fmt: skip
+
+
+def test_a_role_trusting_the_clusters_keys_takes_its_signed_token_and_refuses_another(aws: Running) -> None:
+    """On kind the stand-in trusts the cluster's own issuer, as IRSA's OIDC provider does: RS256
+    by its published keys, its `iss` the cluster's."""
+    import json as _json
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public = _json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
+    role = aws.stand_in.roles[ROLE_ARN]
+    role.jwks, role.issuer = {"keys": [{**public, "kid": "k1"}]}, "https://kubernetes.default.svc"
+
+    def token(signer: rsa.RSAPrivateKey, issuer: str = "https://kubernetes.default.svc") -> str:
+        import time
+
+        claims = {"sub": role.subject, "aud": ["sts.amazonaws.com"], "iss": issuer,
+                  "exp": int(time.time()) + 600}  # fmt: skip
+        return jwt.encode(claims, signer, algorithm="RS256", headers={"kid": "k1"})
+
+    aws.token_file.write_text(token(key))
+    aws.s3().list_objects_v2(Bucket=BUCKET)
+    for refused_token in (token(other), token(key, issuer="https://another.issuer")):
+        aws.stand_in.sessions.clear()
+        aws.token_file.write_text(refused_token)
+        with pytest.raises(ClientError) as refused:
+            aws.s3().list_objects_v2(Bucket=BUCKET)
+        assert _code(refused) == "InvalidIdentityToken"
