@@ -181,12 +181,45 @@ class ImageOfOurs(_Strict):
     build_args: dict[str, str] = Field(default_factory=dict)
 
 
+#: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
+#: reached only by the workloads `egress.reach` names for it.
+HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors")
+#: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
+KUBE_API = "kube-api"
+
+
 class EgressHosts(_Strict):
     always: list[str] = Field(default_factory=list)
     engine_hosts: dict[str, str] = Field(default_factory=dict)
     #: A model engine of a kind that names no address (ADR-135 Amendment 4: `bedrock`), by its
     #: kind, whatever its name, `{region}` the engine's own (P11).
     engine_kind_hosts: dict[str, str] = Field(default_factory=dict)
+    #: ADR-148 Amendment 5 point 21: egress is each workload's own. Who reaches each kind of host,
+    #: who reaches the managed stores' networks, and which of the namespace's own workloads each
+    #: one calls; anything not named here is denied.
+    reach: dict[str, list[str]] = Field(default_factory=dict)
+    #: STS alone (a subset of `always`), for a workload that signs in by a role of its own and
+    #: never reaches the buckets: the gateway's, for Bedrock (P11 part 2).
+    identity: list[str] = Field(default_factory=list)
+    #: The pods rendered outside the workloads that have rows by their own pods' names (P9's
+    #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
+    others: list[str] = Field(default_factory=list)
+    managed: list[str] = Field(default_factory=list)
+    #: The managed stores' ports (RDS, ElastiCache); the OpenSearch domain's 443 is added when the
+    #: deployment searches with it.
+    managed_ports: list[int] = Field(default_factory=list)
+    paths: dict[str, list[str]] = Field(default_factory=dict)
+
+    @field_validator("reach")
+    @classmethod
+    def _known_kinds(cls, reach: dict[str, list[str]]) -> dict[str, list[str]]:
+        unknown = sorted(set(reach) - set(HOST_KINDS))
+        if unknown:
+            raise ValueError(
+                f"egress.reach names {', '.join(unknown)}, not a kind of host this profile "
+                f"reaches ({', '.join(HOST_KINDS)})"
+            )
+        return reach
 
 
 _QUANTITY = r"^[0-9]+(\.[0-9]+)?(m|Ki|Mi|Gi|Ti)?$"
@@ -198,6 +231,43 @@ class Resources(_Strict):
     memory_limit: str = Field(pattern=_QUANTITY)
 
 
+class OwnClaim(_Strict):
+    """A shared folder given a claim of its own (ADR-148 Amendment 5): its name (the claim is
+    `ospreyflow-<name>`), the folder it takes from the shared claim, and its size."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    folder: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    size: str = Field(pattern=r"^[0-9]+(Mi|Gi|Ti)$")
+
+
+class PocShape(_Strict):
+    """`cloud_platform.shape: poc` (ADR-148 Amendment 5): the folders that leave the shared claim
+    for claims of their own."""
+
+    claims: list[OwnClaim]
+    #: Each container's CPU limit, by the name `resources` uses, `default` for any not named.
+    cpu_limits: dict[str, str]
+
+    @field_validator("cpu_limits")
+    @classmethod
+    def _a_default_limit(cls, limits: dict[str, str]) -> dict[str, str]:
+        if "default" not in limits:
+            raise ValueError("poc.cpu_limits names no `default`, which a container not named takes")
+        for quantity in limits.values():
+            if not re.fullmatch(_QUANTITY, quantity):
+                raise ValueError(f"poc.cpu_limits: {quantity!r} is not a quantity")
+        return limits
+
+
+class SecretReaders(_Strict):
+    """ADR-148 Amendment 5 point 22: which workloads read our Secret whole (`envFrom`), and the keys
+    each other workload that reads the deployment's settings is given by name. A workload named in
+    neither gets the ConfigMap alone, never the stores' passwords or the gateway's master key."""
+
+    whole: list[str]
+    named: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class ProfileSettings(_Strict):
     doors: list[Door]
     group_zero: list[str] = Field(default_factory=list)
@@ -205,6 +275,8 @@ class ProfileSettings(_Strict):
     egress: EgressHosts
     resources: dict[str, Resources]
     arcadedb_heap_fraction: float = Field(gt=0, lt=1)
+    poc: PocShape
+    secrets: SecretReaders
 
     @field_validator("resources")
     @classmethod

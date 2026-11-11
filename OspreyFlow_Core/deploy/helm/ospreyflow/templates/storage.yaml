@@ -20,4 +20,25 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.sharedSize }}
+{{- range .Values.storage.claims }}
+---
+# ADR-148 Amendment 5: a shared folder on a claim of its own (the poc shape's Ingest root), on the
+# same class and mode as the shared claim, and kept with it when the release is removed.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ printf "ospreyflow-%s" .name }}
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" .name "root" $) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [{{ $.Values.storage.sharedAccessMode | default "ReadWriteMany" | quote }}]
+  {{- with $.Values.storage.sharedClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .size }}
+{{- end }}
 {{- end }}

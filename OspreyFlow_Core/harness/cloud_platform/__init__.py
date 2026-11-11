@@ -39,6 +39,7 @@ from typing import Any
 import yaml
 
 from harness.cloud_platform.settings import (
+    KUBE_API,
     PlatformSettings,
     ProfileSettings,
     load_platform,
@@ -53,6 +54,7 @@ from schemas.deployment import (
     OspreyConfig,
     Profile,
     SearchBackend,
+    connector_address,
 )
 
 #: ADR-148 decision 3: the one numeric user every pod runs as.
@@ -132,6 +134,16 @@ def _refuse(config: OspreyConfig) -> None:
         raise CloudPlatformNotRenderable(
             "a cloud platform runs ArcadeDB (ADR-148 decision 5); components.graph_store is "
             f"{config.components.graph_store.value!r}"
+        )
+    cp = config.cloud_platform
+    if (
+        cp is not None
+        and cp.shape == "poc"
+        and config.components.search is SearchBackend.OPENSEARCH
+    ):
+        raise CloudPlatformNotRenderable(
+            "the poc shape makes no OpenSearch domain (ADR-148 Amendment 5), so its Conduit would "
+            "reach for one that is not there: set components.search: postgres-fulltext"
         )
     if config.components.source_path is not None:
         raise CloudPlatformNotRenderable(
@@ -405,30 +417,45 @@ def _read_from_the_platform(
             ]
 
 
-def _host(address: str) -> str | None:
+def _address(address: str) -> tuple[str | None, int]:
+    """An address's host and port, in one parse: its own port, or its scheme's (80 for http, 443
+    otherwise). The one place a host and its port are read from an address (point 21)."""
     from urllib.parse import urlsplit
 
-    return urlsplit(re.sub(r"\{[^}]*\}", "x", address)).hostname
+    parts = urlsplit(re.sub(r"\{[^}]*\}", "x", address))
+    return parts.hostname, parts.port or (80 if parts.scheme == "http" else 443)
+
+
+def _host(address: str) -> str | None:
+    return _address(address)[0]
+
+
+def engine_address(
+    name: str, kind: str, api_base: str | None, region: str | None, profile: ProfileSettings
+) -> tuple[str | None, int]:
+    """The one host a model engine's calls reach, and its port: its address's, its kind's
+    (Bedrock's runtime in its region, `egress.engine_kind_hosts`), or its provider's own
+    (`egress.engine_hosts`), the last two on 443."""
+    if api_base:
+        return _address(api_base)
+    if kind in profile.egress.engine_kind_hosts:
+        # A kind that names no address (Bedrock): by its kind, its region's (P11).
+        return profile.egress.engine_kind_hosts[kind].format(region=region), 443
+    return profile.egress.engine_hosts.get(name), 443
 
 
 def engine_host(
     name: str, kind: str, api_base: str | None, region: str | None, profile: ProfileSettings
 ) -> str | None:
-    """The one host a model engine's calls reach: its address's, its kind's (Bedrock's runtime in
-    its region, `egress.engine_kind_hosts`), or its provider's own (`egress.engine_hosts`)."""
-    if api_base:
-        return _host(api_base)
-    if kind in profile.egress.engine_kind_hosts:
-        # A kind that names no address (Bedrock): by its kind, its region's (P11).
-        return profile.egress.engine_kind_hosts[kind].format(region=region)
-    return profile.egress.engine_hosts.get(name)
+    """The one host a model engine's calls reach (`engine_address`'s)."""
+    return engine_address(name, kind, api_base, region, profile)[0]
 
 
-def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
-    """Each enabled engine's host, refused in words when one cannot be known."""
-    hosts = []
+def _engine_addresses(config: OspreyConfig, profile: ProfileSettings) -> list[tuple[str, int]]:
+    """Each enabled engine's host and port, refused in words when its host cannot be known."""
+    addresses = []
     for provider in config.models.enabled_providers:
-        host = engine_host(
+        host, port = engine_address(
             provider.name, provider.kind, provider.api_base, provider.region, profile
         )
         if host is None:
@@ -436,40 +463,89 @@ def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
                 f"the model engine {provider.name!r} names no api_base, so its traffic's host is "
                 "not known and cannot be allowed"
             )
-        hosts.append(host)
-    return hosts
+        addresses.append((host, port))
+    return addresses
+
+
+def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
+    """Each enabled engine's host, refused in words when one cannot be known."""
+    return [host for host, _ in _engine_addresses(config, profile)]
 
 
 def _egress_hosts(
     config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
 ) -> list[str]:
+    """Every host the namespace reaches, whoever reaches it (`_egress_hosts_by_kind`)."""
+    return sorted({h for hosts in _egress_hosts_by_kind(config, platform, profile).values()
+                   for h in hosts})  # fmt: skip
+
+
+def _egress_hosts_by_kind(
+    config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
+) -> dict[str, list[str]]:
+    """Each kind's hosts (`_egress_addresses_by_kind`'s, without their ports)."""
+    return {kind: sorted({host for host, _ in addresses}) for kind, addresses
+            in _egress_addresses_by_kind(config, platform, profile).items()}  # fmt: skip
+
+
+def _host_ports(addresses: dict[str, list[tuple[str, int]]]) -> dict[str, list[int]]:
+    """Each host's ports, whichever kinds reach it: a host given twice with two ports has both."""
+    ports: dict[str, set[int]] = {}
+    for host, port in (a for kind in addresses.values() for a in kind):
+        ports.setdefault(host, set()).add(port)
+    return {host: sorted(held) for host, held in ports.items()}
+
+
+def _egress_addresses_by_kind(
+    config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
+) -> dict[str, list[tuple[str, int]]]:
     """Each host the namespace reaches: the profile's `egress.always` (S3, the bucket, and STS,
     IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
     (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
     mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
-    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)"""
-    hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]
-    hosts += engine_hosts(config, profile)
+    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)
+    Each with its port (Amendment 5 point 21): an AWS service's 443, an address's own or its
+    scheme's, the mail server's `mail.port`, a connector host's `host:port` or 443."""
+    region = platform.aws_region
+    kinds: dict[str, list[tuple[str, int]]] = {
+        "always": [(host.format(region=region), 443) for host in profile.egress.always],
+        "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
+        "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
+    }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:
         if map_provider.proxy == "none":
             continue  # fetched by the browser, never from the namespace
         for address in (map_provider.source or "", map_provider.endpoint or ""):
-            if address.startswith(("http://", "https://")) and (host := _host(address)):
-                hosts.append(host)
+            if address.startswith(("http://", "https://")):
+                host, port = _address(address)
+                if host:
+                    kinds["maps"].append((host, port))
     if config.mail is not None:
-        hosts.append(config.mail.host)
-    hosts += _cp(config).connector_hosts
-    return sorted(set(hosts))
+        kinds["mail"].append((config.mail.host, config.mail.port))
+    kinds["connectors"] += [connector_address(e) for e in _cp(config).connector_hosts]
+    return {kind: sorted(set(addresses)) for kind, addresses in kinds.items()}
 
 
 def egress_policy(
-    config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings | None = None
+    config: OspreyConfig,
+    platform: PlatformSettings,
+    profile: ProfileSettings | None = None,
+    workloads: Sequence[dict[str, Any]] = (),
+    others: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Decision 7's two policies' settings: the networks allowed out, each host's by name, from the
-    deployment's `egress_nets` or, for an AWS service, the platform's settings."""
+    """Decision 7's policies' settings: the networks allowed out, each host's by name, from the
+    deployment's `egress_nets` or, for an AWS service, the platform's settings; and (Amendment 5
+    point 21) what each rendered workload alone may reach, from `profile.yaml`'s `egress`."""
+    profile = profile or load_profile()
     given = {**platform.egress.service_nets, **_cp(config).egress_nets}
-    hosts = _egress_hosts(config, platform, profile or load_profile())
+    # Every pod that has a row: the workloads, and the pods rendered outside them (`others`: P9's
+    # backup and restore, by their pods' names), which admit nothing and reach what their rows give.
+    rows = [*workloads, *({"name": name} for name in others)]
+    addresses = _egress_addresses_by_kind(config, platform, profile)
+    by_kind = {kind: sorted({host for host, _ in held}) for kind, held in addresses.items()}
+    ports = _host_ports(addresses)
+    hosts = sorted(ports)
     missing = [host for host in hosts if not given.get(host)]
     if missing:
         raise CloudPlatformNotRenderable(
@@ -481,8 +557,75 @@ def egress_policy(
         "kind": platform.egress.kind,
         "dnsNamespace": platform.egress.dns_namespace,
         "managedNets": list(platform.egress.managed_nets),
-        "hosts": [{"host": host, "nets": list(given[host])} for host in hosts],
+        "managedPorts": _managed_ports(config, profile),
+        "hosts": [
+            {"host": host, "nets": list(given[host]), "ports": ports[host]} for host in hosts
+        ],  # fmt: skip
+        "workloads": _egress_by_workload(by_kind, profile, rows),
     }
+
+
+def _bare_connector_hosts_note(config: OspreyConfig) -> str:
+    """The render's warning, in words, at the head of `values.yaml` on either shape (the poc's
+    INSTALL.md says it too): a connector host named without a port is reached on 443 alone."""
+    import textwrap
+
+    bare = [e for e in _cp(config).connector_hosts if ":" not in e]
+    if not bare:
+        return ""
+    words = (
+        f"Connector hosts reached on 443 only: {', '.join(bare)}, named in "
+        "cloud_platform.connector_hosts without a port. A SQL connection to one times out until "
+        f"its port is named there ({bare[0]}:5432) and the deployment is rendered again."
+    )
+    return "".join(f"# {line}\n" for line in textwrap.wrap(words, 96))
+
+
+def _managed_ports(config: OspreyConfig, profile: ProfileSettings) -> list[int]:
+    """The managed stores' ports (Amendment 5 point 21): RDS's and ElastiCache's, and the
+    OpenSearch domain's 443 when the deployment searches with OpenSearch."""
+    ports = set(profile.egress.managed_ports)
+    if config.components.search is SearchBackend.OPENSEARCH:
+        ports.add(443)
+    return sorted(ports)
+
+
+def _egress_by_workload(
+    by_kind: dict[str, list[str]], profile: ProfileSettings, workloads: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Each rendered workload's own egress (Amendment 5 point 21): the namespace's workloads it
+    calls, on their Services' ports; whether it reaches the managed stores' networks; and the hosts
+    of each kind `egress.reach` gives it. A workload with none of these reaches DNS alone."""
+    ports = {w["name"]: [p["port"] for p in w.get("ports", [])] for w in workloads}
+    egress = profile.egress
+    out = []
+    for workload in workloads:
+        name = workload["name"]
+        to_pods = [
+            {"name": target, "ports": ports[target]}
+            for target in egress.paths.get(name, [])
+            if ports.get(target)
+        ]
+        to_api = KUBE_API in egress.paths.get(name, [])
+        hosts = sorted({h for kind, hs in by_kind.items() if name in egress.reach.get(kind, [])
+                        for h in hs})  # fmt: skip
+        # Amendment 5 point 23: who may reach it, from the same rows, so the two never drift.
+        callers = sorted(w["name"] for w in workloads if name in egress.paths.get(w["name"], []))
+        entry: dict[str, Any] = {"name": name}
+        if ports.get(name):
+            entry["ports"] = ports[name]
+        if callers:
+            entry["fromPods"] = callers
+        if to_pods:
+            entry["toPods"] = to_pods
+        if to_api:
+            entry["toKubeApi"] = True
+        if name in egress.managed:
+            entry["managed"] = True
+        if hosts:
+            entry["hosts"] = hosts
+        out.append(entry)
+    return out
 
 
 def _covered(host: str, wildcard: str) -> bool:
@@ -642,6 +785,96 @@ def _heap_from_the_limit(pod: dict[str, Any], profile: ProfileSettings) -> None:
         pod["env"].append({"name": "ARCADEDB_OPTS_MEMORY", "value": opts})
 
 
+def _as_written(config: OspreyConfig) -> dict[str, Any]:
+    """The deployment's own configuration for the values' copy, its shape left out at its default
+    (ADR-148 Amendment 5): the copy is in the ConfigMap whose checksum restarts every pod when it
+    changes, so a deployment rendered before the shape existed reads the same after it."""
+    raw = config.model_dump(mode="json", exclude_none=True)
+    cloud = raw.get("cloud_platform") or {}
+    if cloud.get("shape") == "standard":
+        del cloud["shape"]
+    return raw
+
+
+def _without(lock: str, services: set[str]) -> str:
+    """The lock without the entries of `services` (the poc shape's Keeper, which no pod runs), its
+    header and every other entry as written."""
+    if not services:
+        return lock
+    head, _, body = lock.partition("images:\n")
+    entries = re.split(r"(?m)^(?=- service: )", body)
+    kept = [e for e in entries if not any(e.startswith(f"- service: {s}\n") for s in services)]
+    return head + "images:\n" + "".join(kept)
+
+
+def embedded_keeper_clickhouse_config() -> str:
+    """The poc shape's ClickHouse (ADR-148 Amendment 5): the cluster's configuration for one server
+    (`harness.cluster.clickhouse_config`), its Keeper the server's own, a Raft of one whose log is
+    on the server's own claim, reached at 127.0.0.1. The cluster's Replicated database needs a
+    Keeper; here it runs inside the server rather than as a StatefulSet of its own."""
+    from harness.cluster import CLAIMS, clickhouse_config
+
+    data = next(path for name, path, _ in CLAIMS["clickhouse"] if name == "data")
+    one = clickhouse_config(1, 1).replace(
+        "<host>clickhouse-keeper-0.clickhouse-keeper-headless</host>", "<host>127.0.0.1</host>"
+    )
+    keeper = f"""  <keeper_server>
+    <tcp_port>9181</tcp_port>
+    <server_id>1</server_id>
+    <log_storage_path>{data}/coordination/log</log_storage_path>
+    <snapshot_storage_path>{data}/coordination/snapshots</snapshot_storage_path>
+    <raft_configuration>
+      <server><id>1</id><hostname>127.0.0.1</hostname><port>9234</port></server>
+    </raft_configuration>
+  </keeper_server>
+"""
+    return one.replace("  <zookeeper>\n", keeper + "  <zookeeper>\n", 1)
+
+
+def _secrets_it_reads(pod: dict[str, Any], profile: ProfileSettings) -> None:
+    """Amendment 5 point 22: a workload that reads the settings whole (`envFrom`) but is not one of
+    `secrets.whole` gets the ConfigMap alone, and only the keys `secrets.named` gives it, each by
+    name, so the Glass and the recogniser never hold the stores' passwords or the gateway's keys."""
+    if not pod.get("envFrom") or pod["name"] in profile.secrets.whole:
+        return
+    pod["noSecret"] = True
+    named = profile.secrets.named.get(pod["name"], [])
+    kept = [e for e in pod.get("env", []) if e.get("value") != "" or "secret" in e]
+    pod["env"] = [*kept, *({"name": key, "secret": key} for key in named)]
+    if not pod["env"]:
+        pod.pop("env")
+
+
+def _millicores(quantity: str) -> float:
+    return float(quantity[:-1]) if quantity.endswith("m") else float(quantity) * 1000
+
+
+def _cpu_limit(container: dict[str, Any], profile: ProfileSettings, name: str) -> None:
+    """The poc shape names a CPU limit on every container (ADR-148 Amendment 5), never below the
+    CPU it requests."""
+    limit = profile.poc.cpu_limits.get(name) or profile.poc.cpu_limits["default"]
+    request = container["resources"]["requests"]["cpu"]
+    if _millicores(limit) < _millicores(request):
+        raise CloudPlatformNotRenderable(
+            f"{name}'s CPU limit {limit} is below its request {request}: raise poc.cpu_limits in "
+            "the profile's settings"
+        )
+    container["resources"]["limits"]["cpu"] = limit
+
+
+def _onto_own_claims(pod: dict[str, Any], profile: ProfileSettings) -> None:
+    """The poc shape (ADR-148 Amendment 5): a shared folder the profile gives a claim of its own
+    (`profile.yaml`'s `poc.claims`) is mounted from that claim, at the same folder on it, so the
+    claim's root, which holds the file system's lost+found, is never the folder itself."""
+    for container in [pod, *pod.get("initContainers", [])]:
+        for mount in container.get("shared") or []:
+            for claim in profile.poc.claims:
+                if mount["subPath"] == claim.folder or mount["subPath"].startswith(
+                    claim.folder + "/"
+                ):
+                    mount["claim"] = claim.name
+
+
 def render_cloud_platform(
     config: OspreyConfig,
     images: Sequence[ServiceImage],  # noqa: ARG001 — the cluster configuration's are rendered
@@ -654,11 +887,13 @@ def render_cloud_platform(
     from harness.cloud_platform.terraform import render_terraform
     from harness.cluster import render_cluster
     from harness.render import service_images
+    from harness.site import highest_marking
 
     _refuse(config)
     platform = load_platform(_cp(config).platform)
     profile = load_profile()
     production = _cp(config).environment == "production"
+    poc = _cp(config).shape == "poc"
     as_cluster = _as_cluster(config, platform)
     # The images the cluster's configuration runs: none of the stores the platform manages. The
     # gateway always (P11 part 2): an engine first added in Admin › Models then has one without a
@@ -679,7 +914,10 @@ def render_cloud_platform(
     api_image = next(i.image for i in images if i.service == "api")
     copies = _Copies(registry, api_image.rsplit("/", 1)[0], resolver, profile)
 
-    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED]
+    workloads = [
+        w for w in values["workloads"]
+        if w["name"] not in NOT_RENDERED and not (poc and w["name"] == "clickhouse-keeper")
+    ]  # fmt: skip
     jobs = [j for j in values["jobs"] if j["name"] not in NOT_RENDERED]
     for pod in [*workloads, *jobs]:
         pod.pop("runAs", None)  # decision 3: every pod is 10001's (the chart's podSecurity)
@@ -712,8 +950,18 @@ def render_cloud_platform(
             # Bedrock's calls signed by the gateway's own role, Bedrock's invoke in London alone
             # (P11 part 2, least privilege): never the namespace's, which holds the buckets.
             pod["serviceAccountName"] = gateway_account(platform)
-        if pod.get("kind") == "StatefulSet":
+        # Amendment 5 point 24: the service account's token is mounted only in a pod given an
+        # account of its own (IRSA's web identity); a pod calling no Kubernetes API holds none.
+        pod["automountToken"] = bool(pod.get("serviceAccountName"))
+        if pod.get("kind") == "StatefulSet" and not poc:
             pod["disruptionBudget"] = {"maxUnavailable": 1}
+        _secrets_it_reads(pod, profile)
+        if poc:
+            _onto_own_claims(pod, profile)
+            for container in _containers(pod):
+                _cpu_limit(
+                    container, profile, pod["name"] if container is pod else container["name"]
+                )
     names = {w["name"] for w in workloads}
     if copies.unresolved and not allow_unpinned:
         from harness.render import UnpinnedImagesError
@@ -740,12 +988,17 @@ def render_cloud_platform(
         },
         sort_keys=True,
     )
+    # Decision 10: the ceiling from its one source, for this deployment as it is (the cluster's
+    # translation above is another profile's, whose default is the scheme's highest).
+    environment["OSPREY_HIGHEST_MARKING"] = highest_marking(config)
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
     environment.update(install.settings)
     if _cp(config).connector_hosts:
         # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
-        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(_cp(config).connector_hosts))
+        # Hosts alone: the Conduit's allow-list matches a host; the port is the egress policy's.
+        hosts = {connector_address(e)[0] for e in _cp(config).connector_hosts}
+        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(hosts))
     secrets = values["secrets"]
     secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
     secrets["defaults"] = {
@@ -756,34 +1009,44 @@ def render_cloud_platform(
     # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
     # master key (found on the kind cluster, where its pod could not start without it).
 
+    files = {k: v for k, v in values["files"].items() if k != "Caddyfile"}
+    storage: dict[str, Any] = {
+        "className": platform.storage.class_name,
+        "sharedClassName": platform.storage.class_name,
+        "sharedAccessMode": "ReadWriteOnce",
+        "sharedSize": values["storage"]["sharedSize"],
+    }
+    if poc:
+        # Amendment 5: the server runs its own Keeper, so no Keeper of its own is rendered.
+        files.pop("keeper.xml")
+        files["clickhouse.xml"] = embedded_keeper_clickhouse_config()
+        storage["claims"] = [{"name": c.name, "size": c.size} for c in profile.poc.claims]
+
     out = {
         "secrets": secrets,
-        "storage": {
-            "className": platform.storage.class_name,
-            "sharedClassName": platform.storage.class_name,
-            "sharedAccessMode": "ReadWriteOnce",
-            "sharedSize": values["storage"]["sharedSize"],
-        },
+        "storage": storage,
         "imagePullSecrets": [],
         "podSecurity": {"user": UID, "group": UID},
         "networkPolicy": {"openEgress": False},
-        "egress": egress_policy(config, platform, profile),
+        # P9's backup and restore pods render beside the workloads; their rows by their names.
+        "egress": egress_policy(config, platform, profile, workloads, others=profile.egress.others),
         "ingress": _ingress(config, platform, names, profile, environment),
         "environment": environment,
         "files": {
-            **{k: v for k, v in values["files"].items() if k != "Caddyfile"},
+            **files,
             # The deployment's own configuration, as it was written, not the cluster's shape.
-            "osprey.yaml": yaml.safe_dump(
-                config.model_dump(mode="json", exclude_none=True), sort_keys=False
-            ),
+            "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
         },
         "workloads": workloads,
         "jobs": jobs,
     }
     artefacts = {
         "values.yaml": _BANNER
+        + _bare_connector_hosts_note(config)
         + yaml.safe_dump(out, sort_keys=False, default_flow_style=False, width=4096),
-        "versions.lock": rendered["versions.lock"],
+        "versions.lock": _without(
+            rendered["versions.lock"], {"clickhouse-keeper"} if poc else set()
+        ),
         "images.yaml": "# What `ospreyflow images push --registry` copies (ADR-148 decision 8).\n"
         + yaml.safe_dump(
             {"registry": registry, "images": [copies.plan[k] for k in sorted(copies.plan)]},
@@ -796,4 +1059,10 @@ def render_cloud_platform(
             for name, text in render_terraform(config, platform, out).items()
         }
     )
+    if poc:
+        # Amendment 5: the runbooks, for the client's team, with the deployment's own names.
+        from harness.cloud_platform.runbooks import render_decommission, render_install
+
+        artefacts["INSTALL.md"] = render_install(config, platform, out)
+        artefacts["DECOMMISSION.md"] = render_decommission(config, platform, out)
     return artefacts

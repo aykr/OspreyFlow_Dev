@@ -55,6 +55,24 @@ CONFIGS = {
     },
 }  # fmt: skip
 
+#: P7b: the cloud-platform profile's standard shape, its two synthetic fixtures as `make
+#: cp-policy-check` renders them, unchanged but for the one intended difference there (below).
+for _shape in ("development", "production"):
+    CONFIGS[f"cloud-platform-{_shape}"] = json.loads(json.dumps(__import__("yaml").safe_load(
+        (CORE.parent / "OspreyFlow_Build" / "tests" / "fixtures" / "cloud_platform" / f"{_shape}.yaml")
+        .read_text(encoding="utf-8"))))  # fmt: skip
+
+#: The cloud-platform profile's ceiling (ADR-148 Amendment 5 point 8): OFFICIAL-SENSITIVE where the
+#: deployment names none, where the base held the scheme's highest; as an env line, a ConfigMap's
+#: YAML and its JSON.
+CEILING = re.compile(r'(OSPREY_HIGHEST_MARKING"?(?:: |=)("?))SECRET(\2)')
+def intended(name: str, text: str) -> str:
+    """The base's artefact as it would read with the one intended change, for the cloud-platform
+    configurations alone; every other configuration is compared as it is."""
+    if not name.startswith("cloud-platform-"):
+        return text
+    return CEILING.sub(r"\1OFFICIAL-SENSITIVE\3", text)
+
 DRIVER = r"""
 import hashlib, json, sys
 from schemas.deployment import OspreyConfig
@@ -89,6 +107,10 @@ def normalised(text: str) -> str:
     # (the archive has no git, so its checkout says `unknown`).
     commit = r"(?:[0-9a-f]{7,40}|unknown|dev-[0-9a-f]{7,40})"
     text = re.sub(rf"(ghcr\.io/ospreyflow/[a-z-]+:){commit}\b", r"\1<commit>", text)
+    # Ours in a platform's registry (cloud-platform), and the chart's checksums of content that
+    # holds that commit.
+    text = re.sub(rf"(/ospreyflow/[a-z-]+:){commit}\b", r"\1<commit>", text)
+    text = re.sub(r'(checksum/(?:files|environment): )"?[0-9a-f]{16}"?', r"\1<checksum>", text)
     text = re.sub(rf"^(\s*tag: ){commit}$", r"\1<commit>", text, flags=re.M)
     text = re.sub(r"sha256:[0-9a-f]{64}", "sha256:<digest>", text)
     text = re.sub(r"(OSPREY_RELEASE_VERSION[=:] ?)\S+", r"\1<release>", text)
@@ -135,7 +157,7 @@ def parsed(text: str) -> str:
     return json.dumps(docs, indent=1, sort_keys=True)
 
 
-def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
+def main(base: str, helm: bool = False, base_tar: str | None = None, full: bool = False) -> int:
     with tempfile.TemporaryDirectory() as folder:
         old = Path(folder) / "OspreyFlow_Core"
         old.mkdir()
@@ -155,6 +177,7 @@ def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
     for name in CONFIGS:
         for artefact in sorted(set(before[name]) | set(after[name])):
             a, b = before[name].get(artefact), after[name].get(artefact)
+            a = intended(name, a) if a is not None else None
             same = a is not None and b is not None and normalised(a) == normalised(b)
             print(f"{'same' if same else 'DIFFERS'}  {name}  {artefact}")
             if not same:
@@ -163,7 +186,8 @@ def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
 
                 sys.stdout.writelines(
                     list(difflib.unified_diff(normalised(a or "").splitlines(True),
-                                              normalised(b or "").splitlines(True), n=1))[:40]
+                                              normalised(b or "").splitlines(True), n=1))
+                    [: None if full else 40]
                 )  # fmt: skip
     print(f"p7_renders_unchanged: {differ} artefact(s) differ from {base}")
     return 1 if differ else 0
@@ -171,6 +195,7 @@ def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
 
 if __name__ == "__main__":
     tars = [a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--base-tar=")]
-    args = [a for a in sys.argv[1:] if a != "--helm" and not a.startswith("--base-tar=")]
+    args = [a for a in sys.argv[1:] if a not in {"--helm", "--full"} and not a.startswith("--base-tar=")]
+    # --full: every changed line of each differing artefact, not its first 40 (the record).
     sys.exit(main(args[0] if args else "78bb4ae", helm="--helm" in sys.argv[1:],
-                  base_tar=tars[0] if tars else None))  # fmt: skip
+                  base_tar=tars[0] if tars else None, full="--full" in sys.argv[1:]))  # fmt: skip

@@ -1,0 +1,34 @@
+# A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148 Amendment 5): the
+# proof-of-concept shape, one ArcadeDB and one ClickHouse with its Keeper inside, nothing enabled that
+# reaches out.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+  # The poc shape makes no OpenSearch domain (ADR-148 Amendment 5): search is PostgreSQL's own.
+  search: postgres-fulltext
+network:
+  public_origin: https://ospreyflow-poc.apps.example.org
+cloud_platform:
+  platform: client
+  namespace: ospreyflow-poc
+  environment: development
+  shape: poc
+  registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+  allow_from: ["192.0.2.0/24"]
+  # S3 and STS by their networks (synthetic): the bucket and IRSA's role, on every render.
+  egress_nets:
+    s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+    sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
+# The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+map:
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "\xA9 OpenStreetMap contributors"

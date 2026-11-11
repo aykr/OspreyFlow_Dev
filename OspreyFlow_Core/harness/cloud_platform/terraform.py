@@ -80,7 +80,7 @@ def _secret(name: str, data: dict[str, str]) -> Block:
     )
 
 
-def _repositories(values: dict[str, Any], registry: str) -> list[str]:
+def ecr_repositories(values: dict[str, Any], registry: str) -> list[str]:
     paths: set[str] = set()
     for pod in [*values["workloads"], *values["jobs"]]:
         for container in [pod, *pod.get("initContainers", [])]:
@@ -242,6 +242,7 @@ def render_terraform(
             ),
         ],  # fmt: skip
     )
+    # ADR-148 Amendment 5: a poc shape naming OpenSearch is refused at render, so none is made.
     if config.components.search is SearchBackend.OPENSEARCH:
         files["opensearch.tf"] = _file(
             "Decision 4: the platform's OpenSearch 2.x, encrypted, HTTPS only, inside the VPC,\n"
@@ -387,7 +388,7 @@ def render_terraform(
         ],  # fmt: skip
     )
     registry = cp.registry or ""
-    repositories = _repositories(values, registry)
+    repositories = ecr_repositories(values, registry)
     files["ecr.tf"] = _file(
         "Decision 8: a repository for each image, scanned on push; `ospreyflow images push\n"
         "--registry` copies ours and the third-party ones into them, by digest.",

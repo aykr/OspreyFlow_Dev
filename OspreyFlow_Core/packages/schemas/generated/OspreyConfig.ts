@@ -186,6 +186,10 @@ export type Namespace1 = string | null;
  */
 export type Environment = "development" | "production";
 /**
+ * Default: standard — the stores as the environment sets them. poc: the proof-of-concept shape (ADR-148 Amendment 5), a development namespace's only: one ArcadeDB and one ClickHouse running its own Keeper, no disruption budgets, and the Ingest root on a claim of its own
+ */
+export type Shape = "standard" | "poc";
+/**
  * Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there
  */
 export type Registry = string | null;
@@ -198,7 +202,7 @@ export type AllowFrom = string[];
  */
 export type TlsSecret = string | null;
 /**
- * The hosts a SQL or API connection may reach, each with its networks in egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS), so the two never disagree
+ * The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both
  */
 export type ConnectorHosts = string[];
 /**
@@ -421,7 +425,7 @@ export type Name2 = string | null;
  */
 export type GraphPort = number | null;
 /**
- * Default: the handling scheme's highest. The highest marking this deployment may hold: a load or an import marked above it is refused before anything is written, in words that say this limit and never the item's content. A demo pack that declares no highest marking is judged as the scheme's highest, so under a lower setting it is refused. One of the handling scheme's classifications.
+ * Default: OFFICIAL-SENSITIVE on the cloud-platform profile, else the handling scheme's highest. The highest marking this deployment may hold: a load or an import marked above it is refused before anything is written, in words that say this limit and never the item's content. A demo pack that declares no highest marking is judged as the scheme's highest, so under a lower setting it is refused. One of the handling scheme's classifications. Left unset, it is the scheme's highest, or OFFICIAL-SENSITIVE on the cloud-platform profile.
  */
 export type HighestMarking = string | null;
 /**
@@ -707,6 +711,7 @@ export interface CloudPlatformConfig {
   platform?: Platform;
   namespace?: Namespace1;
   environment?: Environment;
+  shape?: Shape;
   registry?: Registry;
   allow_from?: AllowFrom;
   egress_nets?: EgressNets;

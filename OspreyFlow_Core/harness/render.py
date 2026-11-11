@@ -2012,16 +2012,47 @@ def make_shared_folder(path: Path, *, under: Path) -> None:
         folder.chmod(SHARED_FOLDER_MODE)
 
 
+#: What `write` wrote last into a deployment's folder, one path a line, so the next render removes
+#: what it no longer makes (a standard shape's `terraform/opensearch.tf` after a poc render), and
+#: never a file of anyone else's.
+RENDERED_MANIFEST = ".rendered"
+
+
+def _remove_what_is_no_longer_rendered(result: RenderResult, out_dir: Path) -> None:
+    manifest = out_dir / RENDERED_MANIFEST
+    if not manifest.is_file():
+        return
+    root = out_dir.resolve()
+    for name in manifest.read_text(encoding="utf-8").splitlines():
+        if not name or name in result.artefacts:
+            continue
+        stale = (out_dir / name).resolve()
+        if root in stale.parents and stale.is_file():
+            stale.unlink()
+            # Its folder too, once nothing is left in it (never the deployment's own folder).
+            folder = stale.parent
+            while folder != root and folder.is_dir() and not any(folder.iterdir()):
+                folder.rmdir()
+                folder = folder.parent
+
+
 def write(result: RenderResult, out_dir: Path) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
+    _remove_what_is_no_longer_rendered(result, out_dir)
     written = []
     for name, content in sorted(result.artefacts.items()):
         target = out_dir / name
+        # An artefact in a folder of its own (the cloud-platform profile's `terraform/`): the
+        # folder made, readable as the rest, before the file (a first render stopped without it).
+        make_shared_folder(target.parent, under=out_dir)
         if name == SECRETS_FILE:
             write_private(target, content)
         else:
             write_shared(target, content)
         written.append(target)
+    write_shared(
+        out_dir / RENDERED_MANIFEST, "".join(f"{name}\n" for name in sorted(result.artefacts))
+    )
     return written
 
 
@@ -2117,8 +2148,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.build:
         components = config.components.model_copy(update={"source_path": str(REPO_ROOT)})
         config = config.model_copy(update={"components": components})
-    result = render(config, allow_unpinned=args.allow_unpinned)
     out_dir = args.out_root / generated_folder(config)
+    resolver = None
+    if config.profile is Profile.CLOUD_PLATFORM:
+        # ADR-148 decision 8: theirs resolved even when unpinned (ours alone wait for the push),
+        # and each one the previous plan copied pinned by the digest it copied.
+        from harness.cloud_platform.carry import carried_resolver
+
+        resolver = carried_resolver(out_dir / "images.yaml", daemon_then_registry_digest_resolver)
+    result = render(config, resolver=resolver, allow_unpinned=args.allow_unpinned)
 
     if args.check:
         drifted = find_drift(result, out_dir)

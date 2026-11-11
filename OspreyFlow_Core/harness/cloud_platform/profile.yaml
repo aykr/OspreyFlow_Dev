@@ -44,11 +44,59 @@ egress:
   # engine's own (ADR-135 Amendment 4: Bedrock in London only).
   engine_kind_hosts:
     bedrock: "bedrock-runtime.{region}.amazonaws.com"
+  # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
+  # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
+  # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
+  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host the Conduit and the
+  # workers.
+  # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
+  identity: ["sts.{region}.amazonaws.com"]
+  # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
+  # The pods rendered outside the workloads that have rows by their own pods' names: P9's backup
+  # and restore (ADR-148 Amendment 7). A row whose pod is not rendered selects nothing.
+  others: [backup, backup-claims, restore, restore-claims]
+  reach:
+    identity: [litellm]
+    # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
+    # P9's backup and restore pods.
+    always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
+    engines: [litellm]
+    maps: [api]
+    mail: [keycloak]
+    connectors: [api, worker]
+  # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
+  managed: [api, worker, report-sync, superset, keycloak, litellm]
+  # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
+  # 443 is added when the deployment searches with it.
+  managed_ports: [5432, 6379]
+  # Which of the namespace's own workloads each one calls, from the addresses its environment names
+  # (the Glass the Conduit; the Conduit its stores, the identity provider, the gateway, the
+  # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
+  paths:
+    workspace: [api]
+    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset]
+    worker: [arcadedb, clickhouse, keycloak, ner]
+    report-sync: [api, keycloak]
+    superset: [keycloak]
+    keycloak: [keycloak]
+    arcadedb: [arcadedb]
+    clickhouse: [clickhouse, clickhouse-keeper]
+    clickhouse-keeper: [clickhouse-keeper]
+    # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names: ArcadeDB's
+    # backup and ClickHouse's BACKUP and RESTORE; a restore also asks the cluster's API whether the
+    # writers have stopped (`kube-api`, the `kubernetes` Service), as no other workload may. The
+    # claims' runs (`backup-claims`, `restore-claims`) call none of ours: a claim is a mount, and
+    # they reach S3 and STS alone (`reach.always`).
+    backup: [arcadedb, clickhouse]
+    restore: [kube-api, arcadedb, clickhouse]
 
 # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
-# shared platform may carry a LimitRange whose defaults would otherwise cap a container that names
-# none, the stores among them. Memory is limited; CPU is requested, not limited (a CPU limit
-# throttles a store's compaction and the Conduit's bursts for no gain on a node it shares).
+# shared platform may carry a LimitRange, whose defaults are given to exactly the containers that
+# name none: every container here names its requests and its memory limit, so none takes the
+# LimitRange's memory default. CPU is requested, not limited, in the standard shape (a CPU limit
+# throttles a store's compaction and the Conduit's bursts): so a LimitRange's default CPU limit
+# *is* given to each container, and a ResourceQuota on `limits.cpu` refuses its pods outright
+# (ADR-148 Amendment 5; the poc shape names its own below, and the platform team is asked which).
 # **Proposals, not measurements**: no load has been run on the platform (P7a measures them).
 resources:
   default: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}  # init containers, and any not named
@@ -70,3 +118,35 @@ resources:
 # metaspace, threads and direct buffers). Its readiness cannot see a heap OOM (harness.profiles),
 # so it exits on one.
 arcadedb_heap_fraction: 0.75
+
+# Our Secret (ADR-148 Amendment 5 point 22): read whole (`envFrom`) by the Conduit, the workers and
+# the report sync alone, which read the stores' passwords and the gateway's keys. Superset is given
+# the keys it reads by name (its own key, its sign-in client's secret, the embedding's, the report
+# mart reader's password); the Glass and the recogniser read no secret and get the ConfigMap alone.
+secrets:
+  whole: [api, worker, report-sync]
+  named:
+    superset: [SUPERSET_SECRET_KEY, SUPERSET_OIDC_CLIENT_SECRET, SUPERSET_GUEST_TOKEN_SECRET,
+               SUPERSET_EMBEDDER_PASSWORD, REPORT_MART_READER_PASSWORD]
+
+# The proof-of-concept shape (`cloud_platform.shape: poc`, ADR-148 Amendment 5): the folders that
+# leave the shared claim for a claim of their own. The Ingest root (uploads and the drop folder),
+# so uploads cannot fill the disk the settings files and the recipes are on; removed by name at
+# decommission. The size is a proposal, unmeasured.
+poc:
+  claims:
+    - {name: ingest, folder: ingest, size: 100Gi}
+  # A CPU limit on every container (the standard shape requests CPU and limits none): a namespace's
+  # LimitRange gives its default CPU limit to exactly the containers that name none, and a
+  # ResourceQuota on `limits.cpu` refuses a pod with none, so a namespace whose LimitRange and quota
+  # the platform team has not yet named takes these. Proposals, unmeasured; each at least its
+  # container's request (checked at render).
+  cpu_limits:
+    default: 500m
+    workspace: 500m
+    api: "2"
+    worker: "2"
+    ner: "1"
+    keycloak: "1"
+    arcadedb: "2"
+    clickhouse: "2"

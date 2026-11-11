@@ -34352,6 +34352,340 @@ path segments, are taken in an address's path. CARRIES' P11 minors stay carried:
 words key on a string AWS does not document; the other-shape gateway test accepts either refusal; the stand-in never
 cools an entry after a 429 and LiteLLM's cooldown is unmeasured.
 
+### ADR-148, Amendment 5 (11 November 2026) — the `cloud-platform` profile's proof-of-concept shape (`shape: poc`) as built (P7b)
+
+Status: accepted. Built by the platform lane at step P7b. Where the reservation left a choice, the
+platform lane's recommendation was taken; each such choice is marked below, for the owner to
+overrule. The standard shape, P7's, is unchanged by points 1–7. Point 8 changes both shapes, as the
+orchestrator asked. Amendment 1 stands except where point 6 corrects it.
+
+1. **The setting.** `cloud_platform.shape` takes `standard` (the default) or `poc`. A `poc` outside a
+   development namespace is refused in words (`environment: production` would run one copy of each
+   store and call it production). Its only effect is on this profile's render, and naming
+   `standard` renders exactly what leaving it out does (`test_the_standard_shape_is_the_default`).
+2. **The stores.** One ArcadeDB and one ClickHouse. ClickHouse's Keeper runs **inside the server**:
+   the server's own configuration carries `keeper_server`, a Raft of one, its log and snapshots on
+   the server's own claim, and its `zookeeper` is that Keeper at 127.0.0.1:9181. No Keeper
+   StatefulSet is rendered. The cluster's Replicated database still has the Keeper it needs
+   (`test_the_clickhouse_server_runs_its_own_keeper`). This reading of "with its Keeper, inside the
+   server" was the platform lane's, and the orchestrator agreed it.
+3. **No PodDisruptionBudgets** (`test_no_disruption_budgets`).
+4. **The Ingest root on a claim of its own** (decided on the platform lane's recommendation, for the
+   owner to overrule). The reservation's "scratch volume for Ingest" is defined nowhere else.
+   - Uploads and the drop folder (`/var/lib/osprey/ingest`) are mounted from `ospreyflow-ingest`.
+     The claim is ReadWriteOnce on the platform's class, kept on uninstall like the shared claim,
+     and sized in `profile.yaml`'s `poc.claims`. Uploads therefore cannot fill the disk that holds
+     the settings files and the recipes, and the decommission removes the claim by name.
+   - The folder sits on its claim as `ingest/`, not at the claim's root, which holds the file
+     system's lost+found.
+   - An emptyDir as each pod's temporary folder was not needed: connector reads' temporary files
+     are small and sit beside their target.
+   - The chart mounts a shared folder from a claim of its own wherever the folder names one
+     (`storage.claims`, a shared mount's `claim`); the standard shape names none.
+5. **CPU limits in the poc shape.** Every container names a CPU limit, never below its request,
+   from `profile.yaml`'s `poc.cpu_limits`; a limit below its request is refused at render. The poc
+   shape goes onto the client's namespace before their team has said what LimitRange and quota it
+   carries (point 6). The standard shape still requests CPU and limits none.
+6. **A correction to Amendment 1 item 13.** Item 13 says that with no CPU limit, "a namespace's
+   LimitRange never caps it by default". That is the wrong way round. A LimitRange's default CPU
+   limit is given to exactly the containers that name none, and a ResourceQuota that sets
+   `limits.cpu` refuses any pod without one. Each container's memory limit is named, so the
+   LimitRange's memory default is never applied. In the standard shape its CPU default is, and a
+   quota on `limits.cpu` would refuse the pods. Point 5 is the poc shape's answer; the standard
+   shape's waits for the platform team (below).
+7. **The runbooks.** The poc render writes `INSTALL.md` and `DECOMMISSION.md` beside the values,
+   with the deployment's own names in them, for the client's team to run end to end from the
+   release's `OspreyFlow_Core` folder.
+   - **The fenced blocks are the runbook**, run in order in one shell. A block fenced `bash` runs
+     wherever the runbook is followed. A block fenced `bash platform` runs only on the client's
+     platform (the Terraform pull requests and the AWS accounts' own commands); a rehearsal on a
+     local cluster supplies its stand-in instead. `harness.cloud_platform.runbooks.command_blocks`
+     reads the blocks back, so a rehearsal can run the text the client's team reads; until one
+     has, the tests check the blocks' syntax, order and rights only.
+   - No block ends the reader's shell (`exit`), each block parses as shell, and the rehearsal's
+     blocks call neither the AWS command line nor Terraform. Each of these is a test.
+   - **Every command runs with a namespace tenant's rights.** Nothing cluster-wide is listed or
+     changed: no volume objects, and no listing of every kind there is. The namespace is listed
+     one kind at a time, for the kinds the deployment makes. The disks are read from the account
+     by the namespace tag the EBS CSI driver gives each one, in a block of the platform's
+     (`test_no_command_needs_more_than_a_namespace_s_rights`).
+   - **The install** renders the plan unpinned, signs in to the registry (the platform's block),
+     runs `ospreyflow images push`, renders again pinned, so the values name ours by the digest
+     the registry holds (decision 8), then installs the chart. It ends with the sign-in step,
+     `python -m harness.cloud_platform.identity`, which does what the cluster's own install does
+     once Keycloak answers. It gives the identity provider the deployment's settings together
+     with our Secret, since the realm's sign-in reads ConfigMap settings (the dashboards' address
+     among them), then makes the first administrator, `admin`, and prints the one-time code they
+     sign in with once. P10's sign-in replaces it.
+   - **The decommission removes what `helm uninstall` keeps:**
+     - each StatefulSet's claims, selected by the release's label, which the StatefulSet
+       controller gives every claim it makes;
+     - the shared claims, by name;
+     - our Secret.
+   - **It then empties what the namespace's Terraform cannot remove while it holds anything**,
+     before the pull request that removes those resources: every bucket, of every object and
+     every version (`media` is versioned), and every ECR repository the render names, a hundred
+     images a call (they have no `force_delete`).
+   - **Its last block runs the decommission check** (`harness.cloud_platform.decommission_check`).
+     The check names anything of the deployment's still in the namespace (by the chart's label,
+     Helm's release annotation, our Secret's and the kept claims' names, and each StatefulSet's
+     claims), and any disk made for one of its claims. In the Terraform state it counts only the
+     resources the rendered `terraform/` declares: the namespace's folder holds the platform's
+     own resources too, which are listed as left alone. An IAM role or policy, and a KMS key
+     alias, are named as such, since each outlives the namespace (the render makes no KMS key
+     today). Each leftover is planted in the shape its source prints it, each branch red alone
+     (`tests/cp_policy_check/test_cp_decommission_check.py`).
+8. **The profile's ceiling** (decision 10; Amendment 2's carry for P7, closed here). On this
+   profile a deployment that names no `deployment.highest_marking` is held to OFFICIAL-SENSITIVE,
+   not the handling scheme's highest; one that names its own keeps it
+   (`test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own`, red first at
+   SECRET).
+   The orchestrator accepted this default, and with it that the poc shape's kind run seeds only the
+   packs declared at or below OFFICIAL-SENSITIVE (HMP, declared SECRET, is not among them).
+   `deployment.highest_marking`'s own description now says so, and with it both settings
+   appendices. The poc shape's lock names only the images its pods run, so it has no Keeper of its
+   own (`test_the_lock_names_only_the_images_a_poc_pod_runs`), and `make cp-policy-check` holds
+   every poc container to a CPU limit (point 5) in Helm's own output.
+9. **`ospreyflow images push`'s refusal**, with no render to push, names a command that works as
+   given from `OspreyFlow_Core` (`PYTHONPATH=.:packages .venv/bin/python -m harness.render`). A test
+   runs the command its words give.
+10. **No OpenSearch domain in the poc shape** (the orchestrator's ruling). No pod reads it, and it
+    is a paid domain on the client's own install, so the poc shape's Terraform makes none
+    (`test_the_poc_shape_makes_no_opensearch_domain`). The standard shape's is carried (below).
+11. **A first render into a new folder** writes every artefact. `harness.render.write` made the
+    output folder but not `terraform/`, so the first render stopped on `terraform/ecr.tf`. Each
+    artefact's folder is now made, readable as the rest
+    (`test_a_first_render_into_an_empty_folder_writes_every_artefact`).
+12. **One digest from the image plan to the values** (decision 8). The install renders twice: first
+    `--allow-unpinned`, since our images are not in the namespace's registry until `images push`
+    puts them there, then pinned. The first render named the third-party images by tag, so the push
+    copied them by tag and the pinned render resolved each tag afresh. A tag moved in between
+    pinned a digest the registry's copy does not have. Now:
+    - on this profile, the render resolves the third-party images even when unpinned (only ours
+      may stay unresolved);
+    - `images push` refuses an image named by its tag alone;
+    - the pinned render pins each image the previous plan copied by the digest it copied
+      (`harness.cloud_platform.carry`).
+    A test drives `harness.render.main` twice with a stand-in registry that moves every tag between
+    the two renders (`test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copied`).
+
+**Open question for the client's platform team** (Amendment 1's list gains it): what LimitRange
+and ResourceQuota the namespace carries, and in particular whether the quota sets `limits.cpu` or
+the LimitRange a default CPU limit. Until then the standard shape names no CPU limit (point 6).
+
+**Left, and why.**
+- The acceptance scenarios on kind in the poc shape, both runbooks run end to end there (the
+  install's blocks, then the decommission's, with the decommission check green at the end), and
+  the final render they run, all come after P11's and P12's part 2s land, since the shape renders
+  what they leave. Under point 8's ceiling the run seeds only packs declared at or below
+  OFFICIAL-SENSITIVE. Until then the runbooks are checked by tests for their syntax, their order
+  and the rights they need, and nothing more: no block has run against a cluster or an account.
+  The rehearsal supplies the files the platform's blocks write (`state.txt`, `buckets.txt`, and
+  `volumes.json` in place of the disks). The identity step has never met a real Keycloak, and its
+  reading of an existing administrator ("Conflict detected") is unproven.
+- `scripts/seed_internal.py` checks a pack against the ceiling it reads from `deployment.env`, which
+  this profile has none of, so before seeding it judges against the scheme's highest. Only the
+  engine's refusal at each write holds the ceiling there. Carried to the seeds' owner.
+- Carried by name:
+  - the standard shape's OpenSearch domain (`opensearch.tf`), which no pod reads
+    (`opensearch-output`), left unchanged by the orchestrator's ruling;
+  - a gateway for an engine first added in *Admin › Models*, which the render leaves out when the
+    install declares none, so that engine has no gateway until a re-render. That is P11 part 2's
+    own item (the gateway rendered by default), and P7b's final render picks it up when it lands.
+
+**After the orchestrator's review of P7b (11 November 2026).**
+
+13. **The decommission check names what the namespace's Terraform writes**: the managed stores'
+    Secrets (the database's password among them) and the bucket role's service account carry no
+    label of the chart's, so they are ours by name. It also names Helm's own release record, and
+    gives each removal with its API group (Calico's `networkpolicy.projectcalico.org`). It refuses,
+    rather than reads as nothing left, a disks listing that holds no `Volumes`, or that was taken
+    in another region or another account than the cluster's. The runbook wraps the listing with
+    the account `aws sts` answers for and the region it asked. A disk counts as ours by its
+    namespace's tag and one of our claims' names together. In the Terraform state, only the
+    folder's root (or the module the environments repository names, `--module`) holds ours; a
+    resource of the same type and name in another module is the platform's.
+14. **The decommission's AWS steps.**
+    - Every AWS call names its region.
+    - The deployment's buckets are checked one by one, by name (`head-bucket`), not listed
+      account-wide.
+    - The buckets are emptied five hundred keys a call, versions and delete markers apart, each
+      listing sliced in its query (`--max-items` counts the versions alone, so it cannot cap the
+      delete markers). The images go a hundred a call, buildx's tagged indexes before the untagged
+      images they hold.
+    - A step stops, and ends on having stopped, on a listing that fails, a call that answers exit 0
+      with per-key `Errors` or `failures`, and a listing that comes back the same after a delete. A
+      loop that cannot finish never runs on, and each loop's block ends on its own result, so a
+      pasted block never carries on past a stop.
+    - These steps are run under bash in the tests, against a stand-in `aws` that refuses what AWS
+      refuses: more than a thousand keys, a 403 against a 404 from `head-bucket`, a failing
+      listing, and exit 0 with errors. Each branch is shown red
+      (`tests/harness/test_cloud_platform_decommission_aws.py`).
+    - Its first step is the last backup, to a place outside the buckets it empties (refused if it
+      is inside them). The command is P9's backup, added there by P9's diff, with the poc shape's
+      Ingest claim in its set.
+15. **The runbooks are bash**, fenced `bash` and `bash platform`.
+    - Each says what it needs: the release's checkout at its tag, whose Dockerfiles and source
+      `images push` builds from; its environment (`.venv`); the `ospreyflow` command; Docker with
+      `buildx`; and bash.
+    - The install's header names the render that works before the push (`--allow-unpinned`).
+    - The tenant's-rights test reads every `kubectl` and `helm` call wherever it stands in a
+      line, every AWS call for its region, and the Python steps' own `kubectl`.
+16. **The poc shape refuses `components.search: opensearch`** in words: it makes no domain for one.
+    The poc fixture names `postgres-fulltext`.
+17. **The ceiling has one source**, `harness.site.highest_marking`, which holds each profile's own
+    default (`PROFILE_CEILINGS`, OFFICIAL-SENSITIVE for this profile) and refuses one the handling
+    scheme does not hold. The render reads it for the deployment as it is. The change to
+    `harness/site.py`, studio-b's file, was made at the orchestrator's word.
+18. **A render removes what its last render wrote and this one does not**, by the manifest it
+    leaves (`.rendered`), and never a file it did not write, so a standard shape's
+    `terraform/opensearch.tf` does not survive a poc render to be applied.
+19. **The standard shape is left out of the configuration's copy** in the values. The copy is in
+    the ConfigMap whose checksum restarts every pod, so a P7 deployment does not restart on
+    upgrade for a setting it never wrote.
+
+20. **A decommission keeps the backups** (the orchestrator's ruling from P9's work): the backups
+    bucket and its key are the decommission's one named exception, so no decommission makes a
+    retained backup unreadable. P9 (ADR-148 Amendment 7) holds the rule, in
+    `harness.cloud_platform_backups`: the bucket's name after the prefix (`BUCKET_SUFFIX`) and its
+    kept resources (`KEPT_AT_DECOMMISSION`). Its diff to this step's decommission check and runbook
+    is applied at merge, once both steps have merged. The check then reports the bucket and those
+    resources as kept, and only when the render declares them; anything else of ours, the backup
+    role among it, still fails. The runbook takes the last backup into that bucket, takes the kept
+    resources out of the state before the removal, and says how they are removed when the
+    retention ends. That diff was shown here to apply cleanly to this step's files and to pass
+    (66 tests, with P9's module beside them).
+
+21. **Egress is each workload's own** (the orchestrator's ruling from case-b's P12 review, for both
+    shapes). P7 rendered one Calico Allow selecting every pod (`all()`, order 100). It gave every
+    workload every other workload, the managed stores' networks and every host, and the namespace's
+    Kubernetes policies, at Calico's order 1000 after the deny, never decided egress.
+    - Now DNS is the one policy that selects every pod, and it allows DNS alone.
+    - Each workload has its own policy, `default.ospreyflow-egress-<workload>` (order 100, selecting
+      its own pods by `app.kubernetes.io/name`). It allows the namespace's workloads it calls, on
+      their Services' ports; the managed stores' networks if it reads a store, on their ports
+      (RDS's 5432, ElastiCache's 6379, and the OpenSearch domain's 443 where the Terraform makes
+      one); and the hosts of each kind it is given, each on its own ports, TCP.
+    - A host's ports come from the settings the render already reads, in one parse: 443 for S3,
+      STS and an engine kind's host; an address's own port or its scheme's (80 for http) for an
+      engine's or a map source's; `mail.port` for the mail server; and a connector host's
+      `host:port` from `cloud_platform.connector_hosts`, a bare host on 443 (the final review of
+      P7b, item 5, as agreed with the orchestrator). A SQL connection needs its database's port
+      there, or its connection times out. A host given twice with two ports is reached on both.
+      The Conduit's allow-list (`OSPREY_CONNECTOR_EGRESS`) holds the hosts alone and the egress
+      the hosts and their ports, so a connection to a listed host on an unlisted port passes the
+      Conduit and times out at the egress. The render says, in words at the head of
+      `values.yaml` (and in the poc shape's INSTALL.md), which hosts are named without a port and
+      so reached on 443 alone. An IPv6 literal is refused in its own words: a host is named.
+    - The deny runs at order 200, before the place Calico gives the namespace's Kubernetes
+      policies (1000). On this profile the cluster's `ospreyflow-internal` policy is not rendered
+      at all, so no Kubernetes policy here types Egress (the final review, item 1).
+    - The rows are `profile.yaml`'s `egress.reach`, `egress.managed` and `egress.paths`.
+      - The paths come from the addresses each workload's environment names.
+      - S3 and STS go to the bucket role's pods, and to ClickHouse for its `BACKUP TO S3` (P9).
+      - A model engine's host goes to the gateway alone, a proxied map source to the Conduit,
+        the mail server to Keycloak, and a connector host to the Conduit and the workers.
+      - The Glass and the recogniser reach DNS and their own targets, nothing outside.
+    - The gateway, which signs Bedrock's calls by its own role (P11 part 2), reaches STS alone
+      (`egress.identity`), never S3.
+    - P9's backup and restore pods (`backup`, `backup-claims`, `restore`, `restore-claims`) are
+      rows by their own pods' names (`egress.others`), which the render gives to
+      `egress_policy(..., others=...)`, since they render beside the workloads. A row whose pod is
+      not rendered selects nothing. Each admits nothing and reaches S3 and STS. The backup and the
+      restore also reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
+      cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that the
+      writers have stopped. The claims' runs reach none of ours: a claim is a mount, not a path.
+      No row names KMS: S3 calls it on the backups' behalf (SSE-KMS), so a row to it would be a
+      path never used (the orchestrator's ruling with case, 11 November). Calico matches networks,
+      not names, so an STS or regional range that also holds KMS is not excluded (a question for
+      the platform team, below). No lane renders a Calico
+      policy of its own: every path is a row, and a later workload (case-b's Laurium) is a row,
+      not a template edit.
+    - Point 22's whole-secret rule is about our Secret alone. A Secret of its own (P9's ClickHouse
+      backup user's password, read by ClickHouse and the backup and restore pods) passes it,
+      whole or by key.
+    - `make cp-policy-check` refuses an Allow beyond DNS under a policy selecting every pod
+      (`wide-egress`); a deny with no order, or one at 1000 or after (`deny-order`); an Allow
+      without its protocol and ports (`allow-ports`), the rule to the API server by its
+      `kubernetes` Service alone excepted, matched exactly, as Calico takes no ports there, and
+      each port a single number (a range such as `"1:65535"` or a named port is refused); and a
+      selector it cannot narrow (`unreadable-selector`): an empty one is every pod, and `has(...)`,
+      a part-of label or `all()` in a rule is refused, as is a rule's `notSelector`,
+      `notNamespaceSelector` or `serviceAccounts.selector`. A DNS rule names the platform's DNS's
+      namespace, or it is no DNS rule. An ingress peer names workloads by name alone, or it is
+      `wide-ingress` (an `Exists` expression, an instance label, the part-of label, every pod).
+22. **Our Secret only to what reads it** (the same review). P7 gave the whole deployment Secret to
+    every workload that reads the settings (`envFrom`), the stores' passwords and the gateway's
+    master key among them, with only the model keys blanked.
+    - Now the Conduit, the workers and the report sync read it whole (`secrets.whole`).
+    - Superset is given by name only the keys it reads (`secrets.named`).
+    - The Glass and the recogniser get the ConfigMap alone (the chart's `noSecret`).
+    - `make cp-policy-check` refuses our Secret whole to any other pod, and any key outside a
+      named allowance (`whole-secret`). The allowance is default-deny (the orchestrator's ruling,
+      11 November): a pod not listed in the check may hold no key of ours, so a new workload
+      (case-b's Laurium) is refused one until it is listed, with no other edit to the check. The
+      list holds the keys the render gives each store, Keycloak, the gateway and Superset. The
+      gateway also holds this deployment's keyed engines' keys, read from its own `osprey.yaml`
+      in Helm's output (`model_key_variables`), never by a prefix or a fixed name: an IAM-role
+      engine's held key is refused it, and so is `OSPREY_MODEL_PROVIDER_KEY` when the single
+      `models.provider` is an IAM-role one (ADR-135 Amendments 4 and 7).
+    - The ceiling (`OSPREY_HIGHEST_MARKING`) is the ConfigMap's alone, in no key of our Secret, so
+      the Secret the Conduit and the workers read whole cannot say otherwise.
+    - Our Secret is whatever the values name it (`secrets.name`), as the chart reads it, and it
+      is held however a pod reads it: `envFrom`, a key, a `secret` volume (whole or by items), or
+      a `projected` volume's `secret` source (the final review, item 2).
+23. **Ingress is the paths turned round** (the orchestrator's ruling). Each workload's Kubernetes
+    policy, `ospreyflow-ingress-<workload>`, admits only the workloads whose paths name it, on its
+    own ports, rendered from the same rows as their egress so the two cannot drift. A workload
+    nothing calls admits nothing in the namespace. The front doors keep the ingress controller's
+    namespace (`ospreyflow-from-ingress`).
+    - On this profile `ospreyflow-internal` is not rendered (point 21); the cluster's render is
+      unchanged.
+    - `make cp-policy-check` refuses an ingress rule admitting every pod of ours (`wide-ingress`).
+    - The evaluator (`tests/cp_policy_check/test_cp_egress_order.py`) applies Calico's order to
+      egress and the Kubernetes policies to ingress, over Helm's own output. It checks every
+      workload against every other workload, the managed network, each host, the internet and DNS,
+      both ways, against the rows.
+24. **A token only where the API is called** (the orchestrator's ruling from case-b's P12 part 2).
+    Kubernetes mounts a pod's service-account token by default. On this profile every pod and Job
+    says whether to mount it: only a pod given an account of its own does. Today that is IRSA's
+    pods (the Conduit, the workers, the report sync, for their web identity) and, with Bedrock,
+    the gateway. P9's backup and restore pods have accounts of their own; a restore also asks the
+    API whether the writers have stopped. Every other pod has `automountServiceAccountToken:
+    false`: the Glass, the recogniser, the dashboards, Keycloak, the stores and their Keeper, the
+    gateway without Bedrock, the Jobs, and case-b's Laurium when it lands.
+    - `make cp-policy-check` refuses a mounted token (`token`) on any pod not in its own list, held
+      in the check and not read from the render, and on a listed pod under any account but its
+      own: IRSA's (the platform's `secrets.irsa.service_account`) for the Conduit, the workers and
+      the report sync, the gateway's own for the gateway, one of their own for P9's pods; never
+      the namespace's `default`. An account named by the older `serviceAccount` field counts as
+      one named by `serviceAccountName`. The bucket role's account on any other pod, or the
+      gateway's on any but the gateway, is refused whether or not a token is mounted: IRSA's
+      webhook gives a pod its role by the account alone (the final review, item 6).
+    - The other profiles' renders are unchanged: the chart writes the setting only when the render
+      gives it.
+
+**Open question for the client's platform team**, added to Amendment 1's list: the storage class's
+volume binding. The poc shape's Conduit mounts two ReadWriteOnce claims, the shared one and the
+Ingest root's. With `WaitForFirstConsumer` both are made in its node's zone. With `Immediate`
+they may land in two zones, and no node could mount both.
+
+**Open question for the client's platform team**, the same list: whether the networks the
+platform names for STS, or any regional range a pod is allowed, also hold KMS's addresses. No row
+names KMS (point 21), but Calico matches networks, not names, so a shared range would not exclude
+it.
+
+**The tests that would fail.** `tests/harness/test_cloud_platform_poc.py` (the shape, the stores,
+the claim, the CPU limits, the runbooks), `tests/cp_policy_check/test_cp_policy_check.py` (every
+planted fault refused in the poc shape's own render, the claim rendered, mounted and refused
+ReadWriteMany), `tests/cp_policy_check/test_cp_decommission_check.py`,
+`tests/harness/test_cloud_platform_identity.py`, the ceiling's, the first render's and the moving
+tag's cases in `tests/harness/test_cloud_platform_render.py`, and the refusals' in
+`tests/cli/test_images_verb.py`; for points 21-24, `tests/cp_policy_check/test_cp_egress_order.py`
+(the evaluator over Helm's own output, every pod against every pod, host, port, network, the
+internet and DNS) and `tests/harness/test_cloud_platform_egress.py` (the rows, the ports, the
+token, the ceiling and `connector_hosts`).
+
 ### ADR-148, Amendment 6 (11 November 2026) — Entra ID's claims as built (P10 part 1): mapped by settings, one construction path, the tenant, issuer, client and scope pinned, a principal keyed by `oid` within its tenant
 
 *Entra ID's claims as built (P10 part 1), by the admin lane; two independent review rounds.*

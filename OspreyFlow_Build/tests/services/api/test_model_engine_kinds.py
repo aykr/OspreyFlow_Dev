@@ -1012,11 +1012,15 @@ def test_the_cloud_platform_render_tells_the_conduit_its_profile(
 
 
 def test_an_iam_role_engine_s_held_key_is_blanked_in_every_cloud_platform_workload() -> None:
-    from tests.harness.test_cloud_platform_render import _containers
+    from tests.harness.test_cloud_platform_render import _containers, _pods
 
-    containers = _containers(_cloud_values(BEDROCK))
-    readers = [c for c in containers if c.get("envFrom")]
-    assert readers
+    values = _cloud_values(BEDROCK)
+    containers = _containers(values)
+    # Our Secret whole is read only by a pod given it (ADR-148 Amendment 5 point 22): one marked
+    # `noSecret` gets the ConfigMap alone, so it holds no key to blank.
+    readers = [c for p in _pods(values) if p.get("envFrom") and not p.get("noSecret")
+               for c in [p, *p.get("initContainers", [])]]  # fmt: skip
+    assert {r["name"] for r in readers} >= {"api", "worker"}
     for container in readers:
         blanked = {e["name"]: e.get("value") for e in container.get("env", [])}
         assert blanked.get("OSPREY_MODEL_KEY_BEDROCK") == "", container["name"]

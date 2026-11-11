@@ -1,0 +1,5 @@
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T205146Z/log: bash -c for i in 1 2 3; do .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/test_lanes_launch.py 2>&1 | tail -1; done
+28 passed in 4.16s
+28 passed in 4.18s
+28 passed in 4.14s
+Wall time: 13 s, exit 0 (no stack, no lease; set-up before it 13 s)

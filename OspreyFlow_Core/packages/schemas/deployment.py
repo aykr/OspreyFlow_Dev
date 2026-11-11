@@ -968,6 +968,13 @@ class CloudPlatformConfig(BaseModel):
         description="Default: development — one copy of each store; production runs the "
         "cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3)",
     )
+    shape: Literal["standard", "poc"] = Field(
+        default="standard",
+        description="Default: standard — the stores as the environment sets them. poc: the "
+        "proof-of-concept shape (ADR-148 Amendment 5), a development namespace's only: one "
+        "ArcadeDB and one ClickHouse running its own Keeper, no disruption budgets, and the "
+        "Ingest root on a claim of its own",
+    )
     registry: str | None = Field(
         default=None,
         pattern=r"^[a-z0-9.-]+(:[0-9]+)?(/[a-z0-9._-]+)*$",
@@ -995,10 +1002,21 @@ class CloudPlatformConfig(BaseModel):
     )
     connector_hosts: list[str] = Field(
         default_factory=list,
-        description="The hosts a SQL or API connection may reach, each with its networks in "
-        "egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list "
-        "(OSPREY_CONNECTOR_EGRESS), so the two never disagree",
+        description="The hosts a SQL or API connection may reach, each as host or host:port (a "
+        "name, not an IPv6 literal), with its networks in egress_nets under the host alone. The "
+        "namespace's egress allows each host on its ports; the Conduit's own allow-list "
+        "(OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a "
+        "port not listed here passes the Conduit and times out at the egress. A bare host is "
+        "reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port "
+        "here (db.example.org:5432). A host given twice with two ports is reached on both",
     )
+
+    @field_validator("connector_hosts")
+    @classmethod
+    def _connector_ports(cls, hosts: list[str]) -> list[str]:
+        for entry in hosts:
+            connector_address(entry)  # refused in words when its port is not a port
+        return hosts
 
     @model_validator(mode="after")
     def _networks_are_networks(self) -> CloudPlatformConfig:
@@ -1009,12 +1027,36 @@ class CloudPlatformConfig(BaseModel):
                 ipaddress.ip_network(net)
             except ValueError:
                 raise ValueError(f"{net!r} is not a network (for example 192.0.2.0/24)") from None
+        if self.shape == "poc" and self.environment != "development":
+            raise ValueError(
+                "cloud_platform.shape: poc is a development namespace's (one copy of each store); "
+                "a production namespace takes the standard shape"
+            )
         # ADR-148 decision 7: one setting must never open the namespace's egress.
         for host, nets in self.egress_nets.items():
             for net in nets:
                 if why := too_wide_for_egress(net):
                     raise ValueError(f"cloud_platform.egress_nets[{host!r}]: {why}")
         return self
+
+
+def connector_address(entry: str) -> tuple[str, int]:
+    """A `cloud_platform.connector_hosts` entry's host and port: `host:port`, or a bare host on 443
+    (ADR-148 Amendment 5 point 21). The port is digits alone, 1 to 65535."""
+    if entry.startswith("[") or entry.count(":") > 1:
+        raise ValueError(
+            f"cloud_platform.connector_hosts {entry!r}: an IPv6 address is not taken; name the "
+            "host by its name (db.example.org or db.example.org:5432)"
+        )
+    host, sep, port = entry.rpartition(":")
+    if not sep:
+        return entry, 443
+    if not host or not re.fullmatch(r"[0-9]{1,5}", port) or not 1 <= int(port) <= 65535:
+        raise ValueError(
+            f"cloud_platform.connector_hosts {entry!r}: a host, or host:port with a port from 1 "
+            "to 65535 in digits alone (db.example.org:5432)"
+        )
+    return host, int(port)
 
 
 class TlsFiles(BaseModel):
@@ -1282,15 +1324,18 @@ class DeploymentConfig(BaseModel):
     )
 
     #: ADR-148 decision 10: the highest marking this deployment may hold. Checked against the
-    #: handling scheme the Conduit loads at render (`harness.site.highest_marking`).
+    #: handling scheme the Conduit loads at render (`harness.site.highest_marking`, which holds
+    #: each profile's own default, `PROFILE_CEILINGS`).
     highest_marking: str | None = Field(
         default=None,
         description=(
-            "Default: the handling scheme's highest. The highest marking this deployment may hold: "
+            "Default: OFFICIAL-SENSITIVE on the cloud-platform profile, else the handling "
+            "scheme's highest. The highest marking this deployment may hold: "
             "a load or an import marked above it is refused before anything is written, in words "
             "that say this limit and never the item's content. A demo pack that declares no "
             "highest marking is judged as the scheme's highest, so under a lower setting it is "
-            "refused. One of the handling scheme's classifications."
+            "refused. One of the handling scheme's classifications. Left unset, it is the "
+            "scheme's highest, or OFFICIAL-SENSITIVE on the cloud-platform profile."
         ),
     )
 
