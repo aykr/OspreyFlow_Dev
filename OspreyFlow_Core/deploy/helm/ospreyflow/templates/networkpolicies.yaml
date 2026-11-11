@@ -49,8 +49,11 @@ spec:
   egress:
     - {}
 {{- end }}
+{{- if not (dig "enabled" false (.Values.ingress | default dict)) }}
 ---
-# The one door: the proxy, from anywhere.
+# The one door: the proxy, from anywhere. Not on a shared platform (ADR-148 decision 2), where the
+# platform's ingress controller is the door and `ospreyflow-from-ingress` admits it alone: a policy
+# admitting every address, there, would open any pod later labelled public to other tenants.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -64,6 +67,7 @@ spec:
   policyTypes: ["Ingress"]
   ingress:
     - {}
+{{- end }}
 {{- end }}
 {{- with .Values.egress }}
 ---

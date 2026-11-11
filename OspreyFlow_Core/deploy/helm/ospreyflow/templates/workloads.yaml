@@ -32,9 +32,10 @@ spec:
         ospreyflow.io/shared: "true"
         {{- end }}
       annotations:
-        # A changed configuration restarts what reads it.
-        checksum/files: {{ toJson $.Values.files | sha256sum | trunc 16 }}
-        checksum/environment: {{ toJson $.Values.environment | sha256sum | trunc 16 }}
+        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
+        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
+        checksum/files: {{ toJson $.Values.files | sha256sum | trunc 16 | quote }}
+        checksum/environment: {{ toJson $.Values.environment | sha256sum | trunc 16 | quote }}
     spec:
       {{- include "ospreyflow.podSpec" $ctx | nindent 6 }}
   {{- if .claims }}

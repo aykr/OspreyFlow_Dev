@@ -71,6 +71,11 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
     capabilities:
       drop: ["ALL"]
   {{- end }}
+  {{- with .w.resources }}
+  # ADR-148 decision 5: what it asks of the node and may use, so a namespace's LimitRange never
+  # caps it by default.
+  resources: {{ toJson . }}
+  {{- end }}
   {{- with .w.ports }}
   ports:
     {{- range . }}
@@ -160,6 +165,9 @@ securityContext:
   runAsUser: {{ .user }}
   runAsGroup: {{ .group }}
   fsGroup: {{ .group }}
+  # Given to the group once, not walked again at every start: a store's claim holds millions of
+  # files, and a recursive change on each restart can outlast its readiness (and its grace period).
+  fsGroupChangePolicy: OnRootMismatch
   {{- with $.w.supplementalGroups }}
   supplementalGroups: {{ toJson . }}
   {{- end }}

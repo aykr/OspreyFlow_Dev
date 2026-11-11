@@ -15,6 +15,9 @@ storage:
   # the proxy's certificates. EFS on EKS, Azure Files on AKS.
   sharedClassName: ""
   sharedSize: 200Gi
+  # ReadWriteOnce on a platform with no shared class (ADR-148, `profile: cloud-platform`), the one
+  # claim's mounters then placed on one node (`sharedAffinity`).
+  sharedAccessMode: ReadWriteMany
 
 imagePullSecrets: []
 
@@ -26,3 +29,26 @@ files: {}
 
 workloads: []
 jobs: []
+
+# ---- ADR-148: what `profile: cloud-platform` alone sets. Empty here, so a cluster's render is
+# unchanged. A workload of that profile may also carry `resources`, `supplementalGroups`,
+# `scratch`, `serviceAccountName`, `terminationGracePeriodSeconds`, `sharedAffinity` and
+# `disruptionBudget` (harness/cloud_platform/__init__.py).
+
+# One numeric non-root user and group for every pod, `{user: 10001, group: 10001}`; empty: each
+# image's own user (`runAs` on a workload).
+podSecurity: {}
+
+networkPolicy:
+  # The policy letting a pod that reaches a configured service out anywhere; false where the
+  # platform's own egress policies (`egress`, below) decide instead.
+  openEgress: true
+
+# Calico's two egress policies, the allow (`dnsNamespace`, `managedNets`, `hosts`: each `{host,
+# nets}`) before the deny; empty: neither is rendered.
+egress: {}
+
+# The platform's Ingress in place of Caddy: `className`, `annotations`, `rules` (each `{host,
+# service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
+ingress:
+  enabled: false
