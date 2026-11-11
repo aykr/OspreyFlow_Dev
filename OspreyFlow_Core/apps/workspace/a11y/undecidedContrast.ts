@@ -101,7 +101,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     // lies is taken per node, after scrolling, and what it paints at each point is measured in Node
     // (`shadowCoverage`), so the words a few pixels nearer it on one platform's font than another's are
     // judged alike, not failed by a reach they cross on one platform only.
-    type Part = { colour: string; dx: number; dy: number; blur: number; spread: number };
+    type Part = { colour: string; dx: number; dy: number; blur: number; spread: number; radius: number };
     const shadowed: { e: Element; parts: Part[] }[] = [];
     for (const e of document.querySelectorAll("*")) {
       const shadow = getComputedStyle(e).boxShadow;
@@ -112,7 +112,11 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         const colour = one.match(/\b(?:rgba?|color|oklab|oklch|lab|lch|hsla?|hwb)\([^()]*\)|\b(?:transparent|currentcolor)\b/i)?.[0] ?? one.trim();
         const lengths = (one.replace(/\b[a-z-]+\([^()]*\)/gi, "").match(/-?[\d.]+(?:e[-+]?\d+)?px/gi) ?? []).map(parseFloat);
         const [dx = 0, dy = 0, blur = 0, spread = 0] = lengths;
-        parts.push({ colour, dx, dy, blur, spread });
+        // The largest corner radius, grown by the spread, for the judgement's rounded-corner bracket.
+        const cs = getComputedStyle(e);
+        const corner = Math.max(...["top-left", "top-right", "bottom-left", "bottom-right"].flatMap((c) =>
+          cs.getPropertyValue(`border-${c}-radius`).split(/\s+/).map((v) => (v.endsWith("%") ? Infinity : parseFloat(v) || 0))));
+        parts.push({ colour, dx, dy, blur, spread, radius: corner > 0 ? corner + Math.max(0, spread) : 0 });
       }
       if (parts.length) shadowed.push({ e, parts });
     }
@@ -143,8 +147,10 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       });
     };
     // An ancestor hides what lies beneath it only when its own background is opaque and neither it
-    // nor anything above it is translucent (an opacity lets the group's underlay through).
+    // nor anything above it is translucent (an opacity lets the group's underlay through). An SVG
+    // element other than the root paints no CSS background, whatever its computed one says.
     const opaque = (e: Element) => {
+      if (e instanceof SVGElement && e.tagName.toUpperCase() !== "SVG") return false;
       const bg = getComputedStyle(e).backgroundColor;
       if (!(/^rgb\(/.test(bg) || /^color\(srgb [^/]*\)$/.test(bg))) return false;
       for (let at: Element | null = e; at; at = at.parentElement) {
@@ -167,6 +173,8 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         const u = getComputedStyle(up);
         if (u.filter !== "none" || u.backdropFilter !== "none" || u.mixBlendMode !== "normal") return false;
         if (u.maskImage !== "none" || u.getPropertyValue("-webkit-mask-image") !== "none" || u.clipPath !== "none") return false;
+        const border = [u.getPropertyValue("mask-border-source"), u.getPropertyValue("-webkit-mask-box-image-source"), u.getPropertyValue("-webkit-mask-box-image")];
+        if (border.some((v) => v !== "" && v !== "none")) return false;
       }
       const box = e.getBoundingClientRect();
       const r = { left: box.left - 1, top: box.top - 1, right: box.right + 1, bottom: box.bottom + 1, width: box.width + 2, height: box.height + 2 };
@@ -309,7 +317,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       // loses `inert`, both put back straight after.
       let overlappedBy: string | null = null;
       const under: { fill: string; at: number }[][] = points.map(() => []);
-      const shadows: { colour: string; edges: [number, number, number, number]; blur: number; x: number; y: number }[][] = points.map(() => []);
+      const shadows: { colour: string; edges: [number, number, number, number]; blur: number; radius: number; x: number; y: number }[][] = points.map(() => []);
       const hidden: boolean[] = points.map(() => false);
       const lift = document.createElement("style");
       lift.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
@@ -397,7 +405,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
               const far = 1.5 * part.blur;
               const [left, top, right, bottom] = edges;
               if (within(x, y, { left: left - far, top: top - far, right: right + far, bottom: bottom + far })) {
-                shadows[p]?.push({ colour: part.colour, edges, blur: part.blur, x, y });
+                shadows[p]?.push({ colour: part.colour, edges, blur: part.blur, radius: part.radius, x, y });
               }
             }
           }

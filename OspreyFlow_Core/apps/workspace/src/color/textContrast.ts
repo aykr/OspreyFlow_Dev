@@ -33,6 +33,9 @@ export interface ShadowAt {
   colour: string;
   edges: [number, number, number, number];
   blur: number;
+  /** The shadowed element's largest corner radius grown by the spread (0 for square corners); read,
+   * not yet used (T3b's rounded-corner bracket, in hand). */
+  radius?: number;
   x: number;
   y: number;
 }
