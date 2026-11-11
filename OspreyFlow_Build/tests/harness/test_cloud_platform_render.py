@@ -915,7 +915,7 @@ def test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copi
         if ref.startswith(REGISTRY + "/ospreyflow/"):
             return ("sha256:" + "b" * 64) if moved["yet"] else None  # ours, once pushed
         if "@" in ref:
-            return None
+            return ref.split("@", 1)[1]  # given by its digest, as the real resolver answers it
         return "sha256:" + ("2" if moved["yet"] else "1") * 64
 
     monkeypatch.setattr(render_module, "daemon_then_registry_digest_resolver", registry)
@@ -928,14 +928,18 @@ def test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copi
     folder = next(p for p in out.rglob("images.yaml")).parent
     plan = yaml.safe_load((folder / "images.yaml").read_text(encoding="utf-8"))
     theirs = [i for i in plan["images"] if "source" in i]
-    assert theirs and all(i["source"].endswith("@sha256:" + "1" * 64) for i in theirs), theirs
+    # Each by a digest: the stand-in's for a tag it resolved, or the one the render already pins
+    # (the gateway's, given by its digest in code).
+    assert theirs and all("@sha256:" in i["source"] for i in theirs), theirs
+    assert [i for i in theirs if i["source"].endswith("@sha256:" + "1" * 64)], theirs
     moved["yet"] = True  # the push made the copies, and every tag at its source moved
     assert render_module.main(["--config", str(config), "--out-root", str(out)]) == 0
     values = yaml.safe_load((folder / "values.yaml").read_text(encoding="utf-8"))
     pinned = {c["image"] for p in [*values["workloads"], *values["jobs"]]
               for c in [p, *p.get("initContainers", [])]}  # fmt: skip
     assert not [i for i in pinned if i.endswith("2" * 64)], pinned
-    assert all(i.endswith(("1" * 64, "b" * 64)) for i in pinned), pinned
+    copied = {i["source"].split("@", 1)[1] for i in theirs}
+    assert all(i.split("@")[-1] in copied or i.endswith("b" * 64) for i in pinned), pinned
 
 
 def test_the_ceiling_has_one_source_and_it_is_checked_against_the_scheme(

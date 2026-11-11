@@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
 
 #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
 #: reached only by the workloads `egress.reach` names for it.
-HOST_KINDS = ("always", "engines", "maps", "mail", "connectors")
+HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors")
 
 
 class EgressHosts(_Strict):
@@ -196,6 +196,9 @@ class EgressHosts(_Strict):
     #: who reaches the managed stores' networks, and which of the namespace's own workloads each
     #: one calls; anything not named here is denied.
     reach: dict[str, list[str]] = Field(default_factory=dict)
+    #: STS alone (a subset of `always`), for a workload that signs in by a role of its own and
+    #: never reaches the buckets: the gateway's, for Bedrock (P11 part 2).
+    identity: list[str] = Field(default_factory=list)
     managed: list[str] = Field(default_factory=list)
     paths: dict[str, list[str]] = Field(default_factory=dict)
 

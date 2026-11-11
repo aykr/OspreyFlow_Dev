@@ -49,14 +49,18 @@ def test_every_rendered_workload_has_its_row(values: dict[str, Any]) -> None:
 def test_a_workload_reaches_only_what_its_rows_give_it(values: dict[str, Any]) -> None:
     rows, egress = _rows(values), load_profile().egress
     hosts = {h["host"] for h in values["egress"]["hosts"]}
-    always = {h for h in hosts if h.startswith(("s3.", "sts."))}
+    s3 = {h for h in hosts if h.startswith("s3.")}
+    sts = {h for h in hosts if h.startswith("sts.")}
     for name, row in rows.items():
         assert row.get("managed", False) == (name in egress.managed), name
         given = set(row.get("hosts", []))
         if name in egress.reach["always"]:
-            assert always <= given, name
+            assert s3 | sts <= given, name
         else:
-            assert not given & always, name
+            # The buckets to the bucket role's pods alone; STS alone to a workload signing in by
+            # a role of its own (the gateway, for Bedrock).
+            assert not given & s3, name
+            assert bool(given & sts) == (name in egress.reach.get("identity", [])), name
         for target in row.get("toPods", []):
             assert target["name"] in egress.paths.get(name, []), (name, target)
     # The Glass and the recogniser reach no store, no host and nothing outside: DNS and the
@@ -68,7 +72,8 @@ def test_a_workload_reaches_only_what_its_rows_give_it(values: dict[str, Any]) -
 
 def test_a_model_engine_s_host_is_the_gateway_s_alone() -> None:
     rows = _rows(_values("production"))
-    assert rows["litellm"]["hosts"] == ["api.openai.com"]
+    assert "api.openai.com" in rows["litellm"]["hosts"]
+    assert not [h for h in rows["litellm"]["hosts"] if h.startswith("s3.")]
     assert [n for n, r in rows.items() if "api.openai.com" in r.get("hosts", [])] == ["litellm"]
 
 

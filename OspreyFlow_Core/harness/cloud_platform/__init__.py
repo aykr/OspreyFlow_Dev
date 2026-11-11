@@ -469,6 +469,7 @@ def _egress_hosts_by_kind(
     is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)"""
     kinds: dict[str, list[str]] = {
         "always": [host.format(region=platform.aws_region) for host in profile.egress.always],
+        "identity": [host.format(region=platform.aws_region) for host in profile.egress.identity],
         "engines": engine_hosts(config, profile), "maps": [], "mail": [], "connectors": [],
     }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:

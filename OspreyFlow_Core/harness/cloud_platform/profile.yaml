@@ -49,7 +49,10 @@ egress:
   # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
   # the Conduit, the mail server Keycloak (its sign-in mail), a connector host the Conduit and the
   # workers.
+  # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
+  identity: ["sts.{region}.amazonaws.com"]
   reach:
+    identity: [litellm]
     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
     # P9's backup and restore pods.
     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
