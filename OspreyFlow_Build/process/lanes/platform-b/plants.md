@@ -105,3 +105,32 @@ note` read as `# note`), and both were fixed. The owner cases now give the old f
 runner is not (4242), so a version taking the runner's or the new file's owner fails. Earlier counts
 corrected: "20 of 20 chart tests" is `test_helm_chart.py`'s 20 collected (12 functions, parametrised);
 "132 green" named no file set and is withdrawn in favour of the counts in `SERVER_LOG-carries.md`.
+
+The lane review's table above holds **14 plants** (A1–A2, R1–R7, U1, H1–H2, C1–C2), not the 16 the
+report and friction row said.
+
+### Carries, after the orchestrator's review of c5209b1 (11 November 2026, on the Mac, offline)
+
+Each case written red first against c5209b1, or, where its first red was only a missing name or a
+setup error, shown red again by a plant of the real defect at its call site (copy, replace, run,
+restore; every plant removed, `grep -c PLANT` 0 after each). Offline, closed ports, on the Mac.
+
+| Plant | Fault | Red |
+|---|---|---|
+| O1 | the three in-place writers (as at c5209b1) | `test_env_writers_whole.py`: the scan names all three; each writer's hard-link witness saw the rewrite (5 failed) |
+| O2 | the Redactor hiding our own words (as at c5209b1; then `if False:` for the new branch) | `test_refusal_words_reach_the_operator.py`: start --build's two refusals and update's line hidden (5 failed); planted, 3 failed |
+| O3 | `FilesHeld` skipping a symlink (as at c5209b1) | `test_refresh.py::…symlinked_file_through_its_link[compose.yaml, deployment.env]`: the target kept the refresh's bytes |
+| O4 | the owner taken from the staged file (`_owner_of(Path(staged))`) | with the path-keyed stand-in, both owner cases red; with c5209b1's any-path stand-in, the same plant **passed** |
+| O5 | the lock made under umask 077, an unreadable lock (as at c5209b1) | `…lock_file_is_644_whatever_the_umask`: 600; `…cannot_open_is_said_in_words`: PermissionError |
+| O6 | backup, restore, update, demo add, repair-sign-in unguarded (as at c5209b1) | `cli/test_compose_lockout.py`: those five red; map, grading, models green already (guarded, now tested) |
+| O7a | update not locked whole (`contextlib.nullcontext()`) | `test_update_apply.py`: refused-while-held and held-for-the-whole-update red |
+| O7b | no descriptor handed to the files child | the child refused its own parent: "another refresh or update … is under way" |
+| O7c | any descriptor believed (the identity check removed) | `…descriptor_named_that_is_not_the_lock_holds_nothing` red |
+| M1 | the lockout words with no shell mention (`emptied = []`) | `…shell_sets_empty_is_said_to_be_the_shell_s` red; the `--name` and `xargs -r` cases red against c5209b1 |
+| M2 | refresh's move writing in place (`target.write_bytes`) | the now-unconditional symlink witness red |
+| M3 | deployment.env moved into place 644 (as at c5209b1) | `…moved_into_place_is_600`: 644 |
+
+`test_the_lock_file_is_opened_read_only` failed on the Mac before any change of this round (its spy
+took no `dir_fd`, which macOS's `rmtree` passes); fixed with the round. `start --build` is left out of
+the lockout case on purpose: it hands to refresh, whose own refusal O2 holds.
+
