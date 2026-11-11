@@ -6,7 +6,7 @@
 - **Findings *inferred*, met through the real store's write** (`test_findings_inferred.py`, `test_laurium_findings_pending.py`, promoting plant red in both). Postgres's own acceptance of the row is not proven by them (`test_review_store.py`'s, live).
 - **The suite on both engines: NOT met against a real gateway.** Laurium is registered in `MODEL_PORT_ADAPTERS`; the stand-in refusals pass on both. **The leased live run was not taken**: the lease asked for approval. Laurium has never met a real gateway or model.
 - **Rule 1 not kept for the extract suite**: it was committed after `adapter.py` and `app.py` (red record).
-- **Schema mapping, met** for all 33 entity types of default, fibo and niem. **No LangChain without Laurium**: the source leg is met; the image leg is carried.
+- **Schema mapping, met** for all 13 distinct entity types (33 cases: default's 10, and fibo's 11 and niem's 12, each pack composed on the default). **No LangChain without Laurium**: the source leg is met; the image leg is carried.
 - **Red record**: 53 offline and 14 in Laurium's environment, all red (`P12_RED_RECORD.md`).
 
 **Gates at 283cfeb7** (main unmoved at 459ae1d4; run directly, not through the lease, which asked for approval; full outputs in `gates/283cfeb7.*`). make test: 4 failed / 11,033 passed. make test-js: 1 timing budget failed under server load (passes alone). make -k ci: core-check only (ESLint and trivy fs on the venv, a11y without a slot; with slot 3, 34 passed). Each is explained in SERVER_LOG "Built"; none is in a branch file.

@@ -173,7 +173,7 @@ Fixed in ca85e385…283cfeb7, each new refusal's test red before its fix, each p
    the adapter sends for each kind of call. Four plants red. **A credential step: two review rounds.**
 8. **CI checks never run.** `docker run` and `trivy` asked for approval, so all three are out of `P12_CI.diff`
    and carried.
-9. **Schema mapping.** All 33 entity types (default 10, fibo 11, niem 12) map and round-trip, each alone and all
+9. **Schema mapping.** All 13 distinct entity types, in 33 cases (default 10, fibo 11, niem 12, each pack composed on the default), map and round-trip, each alone and all
    together. None needed fixing.
 10. **Files outside the map.** The rows ratified. The mypy override is narrowed to `services.laurium.app`
     (`disable_error_code`, since `ignore_missing_imports` matches the imported name wherever it is imported).
@@ -211,8 +211,8 @@ CLICKHOUSE_HTTP_PORT=59994`), with no lease and no stack. Each run's full output
   at 283cfeb7: the refusals are read from `review_queue.py`.
 - **`make test-js`** (the `test` recipe's last line, which does not run once its first fails), `gates/283cfeb7.test-
   js.txt`: **1 failed, 3052 passed**. `MatrixView.budget.test.tsx` opened in 3389 ms against its 2500 ms budget
-  while the server's load average was 9; run alone straight after, it passed. The branch touches nothing under
-  `apps/`.
+  while the server's load average was 9. (A pass on a rerun was claimed here and is withdrawn: it was never
+  recorded. The gates at the rebased head supersede this run.) The branch touches nothing under `apps/`.
 - **`make -k ci`**, `gates/283cfeb7.ci.txt`: failed only in `core-check`. Ruff passed, mypy found no issues in 450
   files, and all eight image scans passed, the workspace's included (the libxslt finding of a5fa3c1b is gone). Every
   Build target after it passed, `licence-check` and `test-file-coverage-check` among them:

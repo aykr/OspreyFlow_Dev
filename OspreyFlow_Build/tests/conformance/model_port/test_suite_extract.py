@@ -3,8 +3,9 @@ LiteLLM adapter (Deep read) and Laurium's (`adapters/extract_laurium` and its se
 over `MODEL_EXTRACT_ADAPTERS`, through the gateway's measured stand-in served over real HTTP as the
 gateway (`stand_in_http`).
 
-**Only what the real gateway and model cannot be made to do on demand is here**: an answer that breaks
-the schema's type or one of its constraints, a gateway that refuses the token, a model with no route.
+**Here are the refusals the pinned model cannot be made to give on demand** (an answer that breaks
+the schema's type or one of its constraints), **with two the real gateway could give** (a refused
+token, a model with no route), kept here so they run offline on every `make test`.
 The stand-in answers whatever it is told to, whatever the prompt says, so it proves nothing of a
 model's answer to Laurium's prompt. The contract's own cases (a conforming answer from the pinned
 model, a malformed schema refused before any call) are `test_suite.py`'s, run on both engines

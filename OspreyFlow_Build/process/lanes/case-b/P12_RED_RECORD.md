@@ -39,8 +39,8 @@ not rewritten. In this round every new refusal's test was run red before its fix
 - `test_no_langchain_check.py`, the matcher and the image leg (item 11): 5 failed against the tool as it was (three
   other spellings that leave Laurium out refused, a pattern leaving part of it in not named, the source leg run in
   an image step), then green.
-- `test_schema_map.py` (items 5 and 9): each refusal now matched by its own words; the 33 entity types (default 10,
-  fibo 11, niem 12) mapped green at once (none raised `UnsupportedSchema`, so none needed a fix or fixed words).
+- `test_schema_map.py` (items 5 and 9): each refusal now matched by its own words; the 13 distinct entity types, in 33 cases (default 10,
+  fibo 11, niem 12, each pack composed on the default), mapped green at once (none raised `UnsupportedSchema`, so none needed a fix or fixed words).
 
 ## Plants found green, and what was wrong (rule 15's second clause)
 
