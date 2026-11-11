@@ -104,12 +104,14 @@ PLANTS = [
         "client_id or scope accepted and ignored without a tenant",
         PA,
         [
-            off(
-                "        if self.tenant_id is None and (self.client_id is not None or self.scope != DEFAULT_SCOPE):\n"
+            (
+                "        if self.tenant_id is None and (\n            self.client_id is not None",
+                "        if False and (\n            self.client_id is not None",
             )
         ],
         [
             f"{ENTRA}::test_a_client_or_scope_without_a_tenant_is_refused[client]",
+            f"{ENTRA}::test_a_client_or_scope_without_a_tenant_is_refused[api-client]",
             f"{ENTRA}::test_a_client_or_scope_without_a_tenant_is_refused[scope]",
         ],
     ),
@@ -441,7 +443,12 @@ PLANTS = [
     Plant(
         "the Glass's or this API's own registration taken for an orchestrator",
         SI,
-        [off("        if client in (self._mapping.client_id, self._config.oidc_audience):\n")],
+        [
+            (
+                "        if client in (\n            self._mapping.client_id,\n",
+                "        if False and client in (\n            self._mapping.client_id,\n",
+            )
+        ],
         [
             f"{SERVICE}::test_what_is_no_service_identity_on_entra_is_refused[the-glass]",
             f"{SERVICE}::test_what_is_no_service_identity_on_entra_is_refused[this-api-itself]",
