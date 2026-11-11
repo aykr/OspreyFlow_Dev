@@ -249,9 +249,10 @@ class ClaimMapping(BaseModel):
         return self.tenant_id is not None
 
     def required_claims(self) -> list[str]:
-        """The claims PyJWT must find before anything is mapped (`tid` is checked against the
-        tenant in `principal_from_claims`, so it is not listed twice)."""
-        return ["sub", "exp", "oid"] if self.is_entra else ["sub"]
+        """The claims PyJWT must find before anything is mapped. `tid` and `oid` are checked once
+        each, in `principal_from_claims` (an absent one fails there), and `sub`'s type is PyJWT's
+        own check."""
+        return ["sub", "exp"] if self.is_entra else ["sub"]
 
 
 DEFAULT_CLAIM_MAPPING = ClaimMapping()
@@ -330,9 +331,6 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
     claims."""
-    subject = claims.get("sub")
-    if not isinstance(subject, str) or not subject:
-        raise PrincipalResolutionError("token's sub is not a non-empty string")
     if mapping.is_entra:
         if claims.get("tid") != mapping.tenant_id:
             raise PrincipalResolutionError("token's tid is missing or names another tenant")
@@ -350,7 +348,8 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     clearance = _single_value(claims, mapping.clearance, "clearance", groups)
     org_unit = _single_value(claims, mapping.org_unit, "organisational unit", groups)
     return Principal(
-        id=subject,
+        # `sub` is required, and refused unless a string, by PyJWT's own decode.
+        id=str(claims["sub"]),
         clearance=clearance,
         org_unit=org_unit,
         receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
