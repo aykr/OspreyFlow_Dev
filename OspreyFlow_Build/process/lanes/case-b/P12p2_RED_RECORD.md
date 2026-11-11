@@ -288,3 +288,9 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
    CI diff (1 failed, Laurium with no twin in the release's matrix); `UnreadableShape` FAILED and the stated failure
    XFAIL under `UNTIL_P7B`; `ready` not wired (1 failed).
 8. The image's user measured: 10001:10001.
+
+**make test at a44f448** (round 3's fixes touched `release_local.py`'s docstring, so run again; all diffs applied):
+2 failed / 11,953 passed: the GPU preflight (the server's), and `test_render_memory.py`'s OpenSearch OOM case, which
+failed alone too with the server at load ~31 and 4 GiB free (`gates/a44f448.rerun-render-memory.txt`). No file under
+`OspreyFlow_Core` differs from 69bb4f8, where it passed; the same case fails in the admin lane's server gates on main
+(`process/lanes/admin/gates/0989d88.test.txt` and others): the server's, not this branch's.

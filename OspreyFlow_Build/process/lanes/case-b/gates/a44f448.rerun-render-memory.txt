@@ -1,0 +1,57 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T202927Z/log: bash -c uptime; free -g | head -2; cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q "../OspreyFlow_Build/tests/harness/test_render_memory.py"
+ 20:29:28 up 16 days,  5:07,  8 users,  load average: 30.73, 19.18, 12.94
+               total        used        free      shared  buff/cache   available
+Mem:              62          26           4           3          36          36
+...F.                                                                    [100%]
+=================================== FAILURES ===================================
+_ test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory _
+
+    def test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory() -> None:
+        services, _env = _rendered(_own_server(32))
+        environment = services["opensearch"]["environment"]
+        port = _free_port()
+        name = _name("opensearch")
+        argv = ["run", "-d", "--name", name, "--memory", "3g", "-p", f"127.0.0.1:{port}:9200"]
+        for key, value in environment.items():
+            argv += ["-e", f"{key}={value}"]
+        docker(*argv, OPENSEARCH_IMAGE)
+        try:
+            assert _wait(name, lambda: _opensearch_heap(port) is not None, seconds=180), docker(
+                "logs", name, check=False
+            ).stdout[-1500:]
+            assert _opensearch_heap(port) == 2 * 1024**3
+        finally:
+            docker("rm", "-f", "-v", name, check=False)
+        beyond = _name("opensearch")
+        docker("run", "-d", "--name", beyond, "--memory", "1g", "-e", "discovery.type=single-node",
+               "-e", "DISABLE_SECURITY_PLUGIN=true", "-e", "OPENSEARCH_JAVA_OPTS=-Xms4096m -Xmx4096m",
+               OPENSEARCH_IMAGE)  # fmt: skip
+        try:
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                state = docker("inspect", "-f", "{{.State.Running}} {{.State.OOMKilled}}", beyond).stdout
+                if state.split()[0] == "false":
+                    break
+                time.sleep(2)
+>           assert state.split() == ["false", "true"], state
+E           AssertionError: false false
+E             
+E           assert ['false', 'false'] == ['false', 'true']
+E             
+E             At index 1 diff: 'false' != 'true'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_render_memory.py:178: AssertionError
+============================= slowest 30 durations =============================
+27.02s call     tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory
+9.83s call     tests/harness/test_render_memory.py::test_postgres_starts_with_the_rendered_settings_and_refuses_an_impossible_one
+5.49s call     tests/harness/test_render_memory.py::test_the_graph_store_starts_with_the_rendered_heap
+0.23s setup    tests/harness/test_render_memory.py::test_the_rendered_compose_and_env_carry_the_sized_values
+0.20s call     tests/harness/test_render_memory.py::test_a_resize_restarts_only_the_stores_concerned
+0.18s call     tests/harness/test_render_memory.py::test_the_rendered_compose_and_env_carry_the_sized_values
+
+(9 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory
+1 failed, 4 passed in 43.74s
+Wall time: 44 s, exit 1 (no stack, no lease; set-up before it 16 s)
