@@ -9,7 +9,10 @@ Run from `OspreyFlow_Core`, offline (closed ports, no stack):
         .venv/bin/python ../OspreyFlow_Build/process/lanes/platform-b/p11/plant.py [ID…]
 
 Each plant's id is the red record's (`RED_RECORD.md`): 1-8 and A-L from the first round, as they now
-stand; N1-N24 and U1-U3 from the orchestrator's review, round 1.
+stand; N1-N24 and U1-U3 from the orchestrator's review, round 1; R1-R6 from round 2 and its review
+(carried into P11 part 2 by the confirmation); W1-W8 P11 part 2's own (the gateway by default and
+its own identity). The R and W plants need `cloud-platform`'s files as on main after 2733de4, and
+the W plants part 2's own changes to them.
 """
 
 from __future__ import annotations
@@ -36,6 +39,10 @@ STAND_IN = "packages/adapters/model_litellm/stand_in.py"
 CLI_MODELS = "cli/ospreyflow/models.py"
 CLI_MAIN = "cli/ospreyflow/main.py"
 GLASS = "apps/workspace/src/admin/sections/Models.tsx"
+CLOUD = "harness/cloud_platform/__init__.py"
+TERRAFORM = "harness/cloud_platform/terraform.py"
+G = "../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py"
+R = "../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py"
 
 
 @dataclass(frozen=True)
@@ -272,6 +279,63 @@ PLANTS = [
     Plant("U5", "Models.tsx providerOf", "an engine of the two kinds sent as a provider", GLASS,
           '...(draft.kind === "provider" ? {} : { kind: draft.kind, auth: authFor(draft.kind) }),',
           "...{},", (KEYBOARD,)),
+    # --- round 2 and its review, carried into P11 part 2 (CARRIES: their reds were prose only) ----
+    Plant("R1", "_a_key_in_the_path", "a token in one case (lower or upper hex, base32) taken",
+          SCHEMA, 're.fullmatch(r"[a-z0-9]{24,}|[A-Z0-9]{24,}", segment)',
+          're.fullmatch(r"(?!)", segment)', (K,), "never_echoed"),
+    Plant("R2", "_label_looks_like_a_key", "a token among a label's or reference's words taken",
+          SCHEMA, "    return _looks_like_a_key(text) or any(",
+          "    return _looks_like_a_key(text) or False and any(", (K,), "never_echoed"),
+    Plant("R3", "_JWT", "a padded or encoded JWT's dot not read", SCHEMA,
+          '_DOT = r"=*(?:\\.|%2[eE])"', '_DOT = r"\\."', (K,), "never_echoed"),
+    Plant("R4", "_JWT", "a JWE (its second part not `eyJ`) not read", SCHEMA,
+          '_JWT = re.compile(rf"eyJ{_B64}{{8,}}{_DOT}{_B64}{{8,}}',
+          '_JWT = re.compile(rf"eyJ{_B64}{{8,}}{_DOT}eyJ{_B64}{{8,}}', (K,), "never_echoed"),
+    Plant("R5", "OspreyConfig._engines_suit_the_profile", "ENGINES_AS honoured on any profile",
+          SCHEMA,
+          "translated = engines_as == MODEL_ROUTE_PROFILE and self.profile is Profile.CLUSTER",
+          "translated = engines_as == MODEL_ROUTE_PROFILE", (K,), "engines_as_context"),
+    Plant("R6", "_egress_hosts", "a no-address engine's host found by its name, not its kind",
+          CLOUD,
+          "        if host is None and provider.kind in profile.egress.engine_kind_hosts:\n"
+          "            # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
+          "            host = profile.egress.engine_kind_hosts[provider.kind]",
+          "        if host is None and provider.name in profile.egress.engine_kind_hosts:\n"
+          "            # A kind that names no address (Bedrock): by its kind, its region's (P11).\n"
+          "            host = profile.egress.engine_kind_hosts[provider.name]",
+          (K,), "egress_host"),
+    # --- P11 part 2: the gateway by default, and its own identity ---------------------------------
+    Plant("W1", "render_cloud_platform", "the gateway only with an engine enabled at install", CLOUD,
+          '    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED]',
+          '    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED\n'
+          '                 and (config.models.enabled_providers or w["name"] != "litellm")]',
+          (G, R), "gateway_is_rendered"),
+    Plant("W2", "_egress_hosts", "a model host allowed out with no engine enabled", CLOUD,
+          "    hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]",
+          "    hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]\n"
+          "    hosts += list(defaults.values())",
+          (G,), "no_model_host"),
+    Plant("W3", "render_cloud_platform", "the gateway given no account of its own", CLOUD,
+          '        if pod["name"] == "litellm" and bedrock_enabled(config):',
+          '        if False and pod["name"] == "litellm":',
+          (G, R, K)),
+    Plant("W4", "_gateway_role", "the role's trust bound to the namespace's account", TERRAFORM,
+          "    account = gateway_account(platform)",
+          "    account = platform.secrets.irsa.service_account", (G,), "grants_bedrock"),
+    Plant("W5", "_gateway_role", "an S3 action granted the gateway", TERRAFORM,
+          "'[\"bedrock:InvokeModel\", \"bedrock:InvokeModelWithResponseStream\"]'",
+          "'[\"bedrock:InvokeModel\", \"bedrock:InvokeModelWithResponseStream\", \"s3:GetObject\"]'",
+          (G,), "grants_bedrock"),
+    Plant("W6", "_gateway_role", "every region's models granted", TERRAFORM,
+          '_q(f"arn:aws:bedrock:{r}::foundation-model/*")',
+          '_q("arn:aws:bedrock:*::foundation-model/*")', (G,), "grants_bedrock"),
+    Plant("W7", "render_terraform", "a gateway role made with no Bedrock engine", TERRAFORM,
+          '    if any(p.kind == "bedrock" for p in config.models.enabled_providers):',
+          "    if True:", (G,), "without_bedrock"),
+    Plant("W8", "render_cloud_platform", "the gateway run as the namespace's own account", CLOUD,
+          "            pod[\"serviceAccountName\"] = gateway_account(platform)",
+          "            pod[\"serviceAccountName\"] = platform.secrets.irsa.service_account",
+          (G, R)),
 ]
 
 

@@ -1,0 +1,232 @@
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/platforms/kind.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/platforms/kind.yaml
+index dfdb5df..eb0ca69 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/platforms/kind.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/platforms/kind.yaml
+@@ -38,3 +38,4 @@ secrets:
+     keys: {prefix: bucket_prefix}
+   irsa:
+     service_account: ospreyflow
++    gateway_service_account: ospreyflow-gateway
+diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+index a0e35c6..2975f2d 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
++++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+@@ -225,6 +225,23 @@ def _what_the_install_writes(
+     return _InstallWrites(settings, keys, defaults, copies)
+ 
+ 
++def bedrock_enabled(config: OspreyConfig) -> bool:
++    """Whether an enabled engine is Bedrock, signed by the gateway's own role (ADR-135 Am 4)."""
++    return any(p.kind == "bedrock" for p in config.models.enabled_providers)
++
++
++def gateway_account(platform: PlatformSettings) -> str:
++    """The gateway's own service account (`secrets.irsa.gateway_service_account`), refused in
++    words when the platform's settings name none and a Bedrock engine needs it."""
++    account = platform.secrets.irsa.gateway_service_account
++    if not account:
++        raise CloudPlatformNotRenderable(
++            "a Bedrock engine is enabled, and Bedrock's calls are signed by the gateway's own IAM "
++            "role, but the platform's settings name no secrets.irsa.gateway_service_account"
++        )
++    return account
++
++
+ def _as_cluster(config: OspreyConfig, platform: PlatformSettings) -> OspreyConfig:
+     """The same deployment as a cluster would be configured, its managed stores named by the
+     variables their secrets give (`$(VAR)`, which Kubernetes expands in a container's env, command
+@@ -627,13 +644,10 @@ def render_cloud_platform(
+     profile = load_profile()
+     production = _cp(config).environment == "production"
+     as_cluster = _as_cluster(config, platform)
+-    engines = bool(config.models.enabled_providers)
+-    # The images the cluster's configuration runs: none of the stores the platform manages, and
+-    # the gateway's only with an engine enabled, so the lock names nothing a pod does not run.
+-    images = [
+-        i for i in service_images(as_cluster)
+-        if i.service not in NOT_RENDERED and (engines or i.service not in GATEWAY)
+-    ]  # fmt: skip
++    # The images the cluster's configuration runs: none of the stores the platform manages. The
++    # gateway always (P11 part 2): an engine first added in Admin › Models then has one without a
++    # re-render, and the namespace reaches a model host only while an engine is enabled (egress).
++    images = [i for i in service_images(as_cluster) if i.service not in NOT_RENDERED]
+     rendered = render_cluster(
+         as_cluster,
+         images,
+@@ -649,16 +663,11 @@ def render_cloud_platform(
+     api_image = next(i.image for i in images if i.service == "api")
+     copies = _Copies(registry, api_image.rsplit("/", 1)[0], resolver, profile)
+ 
+-    workloads = [
+-        w for w in values["workloads"]
+-        if w["name"] not in NOT_RENDERED and (engines or w["name"] not in GATEWAY)
+-    ]  # fmt: skip
++    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED]
+     jobs = [j for j in values["jobs"] if j["name"] not in NOT_RENDERED]
+     for pod in [*workloads, *jobs]:
+         pod.pop("runAs", None)  # decision 3: every pod is 10001's (the chart's podSecurity)
+-        pod["initContainers"] = [
+-            c for c in pod.get("initContainers", []) if engines or c["name"] not in GATEWAY
+-        ]
++        pod["initContainers"] = list(pod.get("initContainers", []))
+         if not pod["initContainers"]:
+             pod.pop("initContainers")
+         for container in _containers(pod):
+@@ -683,6 +692,10 @@ def render_cloud_platform(
+             pod["sharedAffinity"] = True
+         if pod["name"] in ("api", "worker", "report-sync"):
+             pod["serviceAccountName"] = platform.secrets.irsa.service_account
++        if pod["name"] == "litellm" and bedrock_enabled(config):
++            # Bedrock's calls signed by the gateway's own role, Bedrock's invoke in London alone
++            # (P11 part 2, least privilege): never the namespace's, which holds the buckets.
++            pod["serviceAccountName"] = gateway_account(platform)
+         if pod.get("kind") == "StatefulSet":
+             pod["disruptionBudget"] = {"maxUnavailable": 1}
+     names = {w["name"] for w in workloads}
+diff --git a/OspreyFlow_Core/harness/cloud_platform/platforms/client.yaml b/OspreyFlow_Core/harness/cloud_platform/platforms/client.yaml
+index a741b47..5d7cc61 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/platforms/client.yaml
++++ b/OspreyFlow_Core/harness/cloud_platform/platforms/client.yaml
+@@ -50,3 +50,6 @@ secrets:
+   irsa:
+     # The service account the Conduit, ingest and the workers run as, given S3 by its role.
+     service_account: ospreyflow
++    # The model gateway's own, given Bedrock's invoke in London by its role, only while a Bedrock
++    # engine is enabled (P11 part 2).
++    gateway_service_account: ospreyflow-gateway
+diff --git a/OspreyFlow_Core/harness/cloud_platform/settings.py b/OspreyFlow_Core/harness/cloud_platform/settings.py
+index 125cc3c..4a32d77 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/settings.py
++++ b/OspreyFlow_Core/harness/cloud_platform/settings.py
+@@ -91,6 +91,9 @@ class SecretSettings(_Strict):
+ 
+ class IrsaSettings(_Strict):
+     service_account: str = Field(min_length=1)
++    #: The model gateway's own account, its role Bedrock's invoke in London alone, made only while a
++    #: Bedrock engine is enabled (P11 part 2; the orchestrator's ruling, option A).
++    gateway_service_account: str | None = Field(default=None, min_length=1)
+ 
+ 
+ class PlatformSecrets(_Strict):
+diff --git a/OspreyFlow_Core/harness/cloud_platform/terraform.py b/OspreyFlow_Core/harness/cloud_platform/terraform.py
+index 25313a3..f7b4cc1 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/terraform.py
++++ b/OspreyFlow_Core/harness/cloud_platform/terraform.py
+@@ -546,4 +546,117 @@ def render_terraform(
+         "here, and each key a person holds (a model engine's, a connection's) given as a variable.",
+         blocks,
+     )
++    if any(p.kind == "bedrock" for p in config.models.enabled_providers):
++        files["gateway.tf"] = _gateway_role(config, platform)
+     return files
++
++
++def _gateway_role(config: OspreyConfig, platform: PlatformSettings) -> str:
++    """P11 part 2 (the orchestrator's ruling, option A, least privilege): the model gateway's own
++    service account and IAM role, made only while a Bedrock engine is enabled. The role grants
++    Bedrock's two invoke actions on the foundation models of each Bedrock engine's region (London
++    alone, by ADR-135 Amendment 4), so IAM itself holds the region; no S3 action, no other service.
++    Its trust is that one account's, through the cluster's OIDC provider, for STS alone."""
++    from harness.cloud_platform import gateway_account
++
++    account = gateway_account(platform)
++    regions = sorted(
++        {p.region or "eu-west-2" for p in config.models.enabled_providers if p.kind == "bedrock"}
++    )
++    models = "[" + ", ".join(_q(f"arn:aws:bedrock:{r}::foundation-model/*") for r in regions) + "]"
++    return _file(
++        "P11 part 2: the model gateway's own service account, given Bedrock's invoke in London\n"
++        "by its role (IRSA), made only while a Bedrock engine is enabled. No key exists anywhere,\n"
++        "and the role holds no S3 action: the buckets are the namespace's own account's (irsa.tf).",
++        [
++            (
++                'data "aws_iam_policy_document" "gateway_bedrock"',
++                [
++                    (
++                        "statement",
++                        [
++                            (
++                                "actions",
++                                '["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]',
++                            ),
++                            ("resources", models),
++                        ],
++                    ),
++                ],
++            ),
++            (
++                'resource "aws_iam_policy" "gateway_bedrock"',
++                [
++                    ("name", '"${var.namespace}-gateway-bedrock"'),
++                    ("policy", "data.aws_iam_policy_document.gateway_bedrock.json"),
++                ],
++            ),
++            (
++                'data "aws_iam_policy_document" "gateway_trust"',
++                [
++                    (
++                        "statement",
++                        [
++                            ("actions", '["sts:AssumeRoleWithWebIdentity"]'),
++                            (
++                                "principals",
++                                [
++                                    ("type", _q("Federated")),
++                                    ("identifiers", "[var.eks_oidc_provider_arn]"),
++                                ],
++                            ),
++                            (
++                                "condition",
++                                [
++                                    ("test", _q("StringEquals")),
++                                    ("variable", '"${var.eks_oidc_issuer}:sub"'),
++                                    (
++                                        "values",
++                                        f'["system:serviceaccount:${{var.namespace}}:{account}"]',
++                                    ),
++                                ],
++                            ),
++                            (
++                                "condition",
++                                [
++                                    ("test", _q("StringEquals")),
++                                    ("variable", '"${var.eks_oidc_issuer}:aud"'),
++                                    ("values", '["sts.amazonaws.com"]'),
++                                ],
++                            ),
++                        ],
++                    ),
++                ],
++            ),
++            (
++                'resource "aws_iam_role" "gateway"',
++                [
++                    ("name", '"${var.namespace}-gateway"'),
++                    ("assume_role_policy", "data.aws_iam_policy_document.gateway_trust.json"),
++                ],
++            ),
++            (
++                'resource "aws_iam_role_policy_attachment" "gateway_bedrock"',
++                [
++                    ("role", "aws_iam_role.gateway.name"),
++                    ("policy_arn", "aws_iam_policy.gateway_bedrock.arn"),
++                ],
++            ),
++            (
++                'resource "kubernetes_service_account" "gateway"',
++                [
++                    (
++                        "metadata",
++                        [
++                            ("name", _q(account)),
++                            ("namespace", "var.namespace"),
++                            (
++                                "annotations",
++                                {_q("eks.amazonaws.com/role-arn"): "aws_iam_role.gateway.arn"},
++                            ),
++                        ],
++                    ),
++                ],
++            ),
++        ],
++    )

@@ -1,0 +1,78 @@
+  R1  RED  _a_key_in_the_path: a token in one case (lower or upper hex, base32) taken
+      3 failed, 12 passed, 92 deselected, 1 warning in 4.33s
+      E   AssertionError: ('api_base', '{"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"a...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:565: AssertionError: ('api_base', '{"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"a...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+  R2  RED  _label_looks_like_a_key: a token among a label's or reference's words taken
+      2 failed, 13 passed, 92 deselected, 1 warning in 4.19s
+      E   AssertionError: ('label', '{"engines":[{"provider":{"name":"acme","label":"Acme gateway gw-PLANTED-model-token-Q7Z4-do-not-leak","role...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:565: AssertionError: ('label', '{"engines":[{"provider":{"name":"acme","label":"Acme gateway gw-PLANTED-model-token-Q7Z4-do-not-leak","role...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      E   AssertionError: ('contract_reference', '{"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:565: AssertionError: ('contract_reference', '{"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed[label-words-and-token]
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed[reference-words-and-token]
+  R3  RED  _JWT: a padded or encoded JWT's dot not read
+      1 failed, 14 passed, 92 deselected, 1 warning in 4.19s
+      E   AssertionError: ('label', '{"engines":[{"provider":{"name":"acme","label":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9=.eyJpc3MiOiJhY21lIiwic...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:565: AssertionError: ('label', '{"engines":[{"provider":{"name":"acme","label":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9=.eyJpc3MiOiJhY21lIiwic...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed[label-padded-jwt]
+  R4  RED  _JWT: a JWE (its second part not `eyJ`) not read
+      1 failed, 14 passed, 92 deselected, 1 warning in 4.18s
+      E   AssertionError: ('label', '{"engines":[{"provider":{"name":"acme","label":"eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.OKOawDo13gRp...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:565: AssertionError: ('label', '{"engines":[{"provider":{"name":"acme","label":"eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ.OKOawDo13gRp...l_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed[label-jwe]
+  R5  RED  OspreyConfig._engines_suit_the_profile: ENGINES_AS honoured on any profile
+      2 failed, 1 passed, 104 deselected, 1 warning in 1.52s
+      E   Failed: DID NOT RAISE ValidationError
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_engines_as_context_frees_only_a_cluster_translation[local-lite]
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_engines_as_context_frees_only_a_cluster_translation[small]
+  R6  RED  _egress_hosts: a no-address engine's host found by its name, not its kind
+      1 failed, 106 deselected, 1 warning in 1.81s
+      E   harness.cloud_platform.CloudPlatformNotRenderable: the model engine 'claude_london' names no api_base, so its traffic's host is not known and cannot be allowed
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_bedrock_engine_s_host_is_an_egress_host_by_its_region
+  W1  RED  render_cloud_platform: the gateway only with an engine enabled at install
+      2 failed, 101 deselected, 1 warning in 1.84s
+      E   AssertionError: no gateway: an engine added in Admin › Models would have none
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py:51: AssertionError: no gateway: an engine added in Admin › Models would have none
+      E   AssertionError: assert 'litellm' in {'workspace': {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:1d97ea...rList=arcadedb-0.arcadedb-headless:2434:2480 -Darcadedb.ha.clusterToken=$(OSPREY_ARCADEDB_CLUSTER_TOKEN)'}], ...}, ...}
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py:95: AssertionError: assert 'litellm' in {'workspace': {'name': 'workspace', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:1d97ea...rList=arcadedb-0.arcadedb-headless:2434:2480 -Darcadedb.ha.clusterToken=$(OSPREY_ARCADEDB_CLUSTER_TOKEN)'}], ...}, ...}
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_the_gateway_is_rendered_with_no_engine_enabled
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py::test_the_gateway_is_rendered_whether_or_not_an_engine_is_enabled
+  W2  RED  _egress_hosts: a model host allowed out with no engine enabled
+      1 failed, 16 deselected, 1 warning in 1.61s
+      E   harness.cloud_platform.CloudPlatformNotRenderable: egress is denied by default on a cloud platform (ADR-148 decision 7); name the networks of api.anthropic.com, api.openai.com under cloud_platform.egress_nets, or switch the feature off
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_with_no_engine_enabled_no_model_host_is_allowed_out
+  W3  RED  render_cloud_platform: the gateway given no account of its own
+      8 failed, 202 passed, 1 warning in 29.25s
+      E   AssertionError: assert None == 'ospreyflow-gateway'
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py:76: AssertionError: assert None == 'ospreyflow-gateway'
+      E   AssertionError: litellm
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py:348: AssertionError: litellm
+  W4  RED  _gateway_role: the role's trust bound to the namespace's account
+      1 failed, 16 deselected, 1 warning in 1.64s
+      E   AssertionError: ["the trust is not bound to the gateway's own account alone", "no service account of the gateway's own"]
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py:123: AssertionError: ["the trust is not bound to the gateway's own account alone", "no service account of the gateway's own"]
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_the_gateway_role_grants_bedrock_invoke_in_london_alone_to_its_own_account
+  W5  RED  _gateway_role: an S3 action granted the gateway
+      1 failed, 16 deselected, 1 warning in 1.66s
+      E   AssertionError: ["actions beyond Bedrock's invoke: ['s3:GetObject', 'sts:AssumeRoleWithWebIdentity']", 'an S3 action']
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py:123: AssertionError: ["actions beyond Bedrock's invoke: ['s3:GetObject', 'sts:AssumeRoleWithWebIdentity']", 'an S3 action']
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_the_gateway_role_grants_bedrock_invoke_in_london_alone_to_its_own_account
+  W6  RED  _gateway_role: every region's models granted
+      1 failed, 16 deselected, 1 warning in 1.70s
+      E   AssertionError: ["resources other than London's foundation models: ['arn:aws:bedrock:*::foundation-model/*']"]
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py:123: AssertionError: ["resources other than London's foundation models: ['arn:aws:bedrock:*::foundation-model/*']"]
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_the_gateway_role_grants_bedrock_invoke_in_london_alone_to_its_own_account
+  W7  RED  render_terraform: a gateway role made with no Bedrock engine
+      3 failed, 14 deselected, 1 warning in 1.93s
+      E   assert '# P11 part 2...  }\n  }\n}\n' == ''
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_without_bedrock_no_gateway_role_is_made[none]
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_without_bedrock_no_gateway_role_is_made[keyed]
+      FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py::test_without_bedrock_no_gateway_role_is_made[client]
+  W8  RED  render_cloud_platform: the gateway run as the namespace's own account
+      3 failed, 100 passed, 1 warning in 13.62s
+      E   AssertionError: assert 'ospreyflow' == 'ospreyflow-gateway'
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_gateway.py:76: AssertionError: assert 'ospreyflow' == 'ospreyflow-gateway'
+      E   AssertionError: litellm
+      /Users/ayankar/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py:348: AssertionError: litellm
+
+14 of 14 plants red
