@@ -24,13 +24,15 @@ verbatim below, because they document decisions rather than location.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote
 
 import httpx
 import jwt
 from jwt import PyJWKClient
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from schemas.domain import Principal
 
@@ -138,6 +140,160 @@ CLAIM_ORG_UNIT = "org_unit"
 CLAIM_RECEIVABLE_HANDLING_CODES = "receivable_handling_codes"
 CLAIM_ROLES = "roles"
 
+
+# --- where the principal's claims come from: settings, not fixed names (ADR-148 decision 9) ---
+#
+# Entra ID issues no `clearance`, `org_unit` or `receivable_handling_codes` claim. The deployment
+# says, for each, which token claim carries it (a directory extension attribute,
+# `extension_<app id>_<name>`) or a table from Entra group id to value. The default is the three
+# fixed names this module always read, so every deployment that names nothing behaves exactly as
+# before. Only the *source names* are settings: what a principal is, and the one function that
+# builds it (`principal_from_claims`), stay here.
+#
+# **Refused, never guessed** (CLAUDE.md rules 3 and 5's spirit): a clearance or unit with no source
+# in the token, groups granting more than one clearance or unit, a group overage, or a value of the
+# wrong type is a `PrincipalResolutionError` (a 401), never a default. `principal_auth` holds no
+# marking scheme, so "the lowest of two clearances" is not something it could compute honestly;
+# and a person in two clearance groups is a directory error the operator should see. An unmapped
+# group grants nothing.
+
+
+class _Source(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    claim: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> _Source:
+        groups = getattr(self, "groups", None)
+        if (self.claim is None) == (groups is None):
+            raise ValueError("name exactly one of `claim` or `groups`")
+        if self.claim is not None and not self.claim:
+            raise ValueError("`claim` must name a claim")
+        if groups is not None and not groups:
+            raise ValueError("`groups` must map at least one group")
+        return self
+
+
+class ValueSource(_Source):
+    """Where a single-valued claim (clearance, organisational unit) comes from: a token claim, or a
+    table from group id to value."""
+
+    groups: dict[str, str] | None = None
+
+
+class CodesSource(_Source):
+    """Where the receivable handling codes come from: a token claim (a list, or one code as a
+    string), or a table from group id to the codes that group grants."""
+
+    groups: dict[str, list[str]] | None = None
+
+
+class ClaimMapping(BaseModel):
+    """The deployment's claim settings. `tenant_id` set means an Entra ID tenant: the token must
+    then carry `oid`, `tid` (equal to it) and `exp`, and the resolver must check issuer and
+    audience."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    clearance: ValueSource = ValueSource(claim=CLAIM_CLEARANCE)
+    org_unit: ValueSource = ValueSource(claim=CLAIM_ORG_UNIT)
+    handling_codes: CodesSource = CodesSource(claim=CLAIM_RECEIVABLE_HANDLING_CODES)
+    groups_claim: str = "groups"
+    tenant_id: str | None = None
+
+    def required_claims(self) -> list[str]:
+        """The claims PyJWT must find before anything is mapped."""
+        return ["sub", "exp", "oid", "tid"] if self.tenant_id else ["sub"]
+
+
+DEFAULT_CLAIM_MAPPING = ClaimMapping()
+
+
+def _token_groups(claims: Mapping[str, Any], mapping: ClaimMapping) -> list[str]:
+    """The token's group ids. A group overage (Entra leaves `groups` out of a JWT past 200 groups
+    and names a Graph source in `_claim_names`) is refused, never read as "no groups"."""
+    names = claims.get("_claim_names")
+    if (
+        mapping.groups_claim not in claims
+        and isinstance(names, dict)
+        and mapping.groups_claim in names
+    ):
+        raise PrincipalResolutionError(
+            f"token has a group overage: its `{mapping.groups_claim}` claim was left out for "
+            "Graph; limit the groups the app's token carries (groups assigned to the application)"
+        )
+    groups = claims.get(mapping.groups_claim, [])
+    if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
+        raise PrincipalResolutionError(
+            f"token's `{mapping.groups_claim}` claim is not a list of group ids"
+        )
+    return groups
+
+
+def _single_value(
+    claims: Mapping[str, Any], source: ValueSource, what: str, groups: list[str]
+) -> str:
+    if source.claim is not None:
+        value = claims.get(source.claim)
+        if value is None:
+            raise PrincipalResolutionError(
+                f"token is missing required claim: {what} ({source.claim!r})"
+            )
+        if isinstance(value, (list, dict, bool)) or value == "":
+            raise PrincipalResolutionError(
+                f"token's {what} claim ({source.claim!r}) is not a single value"
+            )
+        return str(value)
+    assert source.groups is not None
+    found = {source.groups[g] for g in groups if g in source.groups}
+    if not found:
+        raise PrincipalResolutionError(f"token is missing required claim: no group grants a {what}")
+    if len(found) > 1:
+        raise PrincipalResolutionError(f"token's groups grant more than one {what}; refused")
+    return found.pop()
+
+
+def _handling_codes(claims: Mapping[str, Any], source: CodesSource, groups: list[str]) -> list[str]:
+    if source.claim is not None:
+        value = claims.get(source.claim, [])
+        if isinstance(value, str):
+            return [value] if value else []
+        if not isinstance(value, list) or not all(isinstance(c, str) for c in value):
+            raise PrincipalResolutionError(
+                f"token's handling codes claim ({source.claim!r}) is not a list of codes"
+            )
+        return list(value)
+    assert source.groups is not None
+    codes: list[str] = []
+    for g in groups:
+        for code in source.groups.get(g, []):
+            if code not in codes:
+                codes.append(code)
+    return codes
+
+
+def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> Principal:
+    """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
+    package builds, from a session's token or an exchanged one, is built here from verified
+    claims."""
+    if mapping.tenant_id is not None and claims.get("tid") != mapping.tenant_id:
+        raise PrincipalResolutionError("token is from another tenant")
+    uses_groups = any(
+        s.groups is not None for s in (mapping.clearance, mapping.org_unit, mapping.handling_codes)
+    )
+    groups = _token_groups(claims, mapping) if uses_groups else []
+    clearance = _single_value(claims, mapping.clearance, "clearance", groups)
+    org_unit = _single_value(claims, mapping.org_unit, "organisational unit", groups)
+    return Principal(
+        id=str(claims["sub"]),
+        clearance=clearance,
+        org_unit=org_unit,
+        receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
+        roles=list(claims.get(CLAIM_ROLES, [])),
+    )
+
+
 #: RFC 8693 §2.1's own grant-type URI, unchanged by this simplified client.
 TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange"
 
@@ -213,8 +369,21 @@ class PrincipalResolver:
     process, `aclose()`d at lifespan shutdown alongside every other
     client this codebase already closes there."""
 
-    def __init__(self, config: OidcSettings) -> None:
+    def __init__(self, config: OidcSettings, *, claim_mapping: ClaimMapping | None = None) -> None:
+        mapping = claim_mapping or DEFAULT_CLAIM_MAPPING
+        if mapping.tenant_id is not None:
+            # A tenant-bound mapping that did not check `iss` and `aud` would take another tenant's
+            # (or another app's) token signed by a key it trusts: refused before any token is read.
+            if not config.oidc_issuer:
+                raise ValueError(
+                    "an Entra ID claim mapping needs the token issuer checked (OIDC_ISSUER)"
+                )
+            if not config.oidc_audience:
+                raise ValueError(
+                    "an Entra ID claim mapping needs the token audience checked (OIDC_AUDIENCE)"
+                )
         self._config = config
+        self._claim_mapping = mapping
         self._jwk_client = PyJWKClient(
             config.oidc_jwks_url, cache_keys=True, lifespan=config.oidc_jwks_ttl_seconds
         )
@@ -429,7 +598,7 @@ class PrincipalResolver:
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={
-                    "require": ["sub"],
+                    "require": self._claim_mapping.required_claims(),
                     "verify_aud": self._config.oidc_audience is not None,
                     "verify_iss": self._config.oidc_issuer is not None,
                 },
@@ -437,21 +606,8 @@ class PrincipalResolver:
         except jwt.PyJWTError as exc:
             raise PrincipalResolutionError(f"token rejected: {exc}") from exc
 
-        try:
-            clearance = str(claims[CLAIM_CLEARANCE])
-            org_unit = str(claims[CLAIM_ORG_UNIT])
-        except KeyError as exc:
-            # Defaulting a missing claim to "" would still fail closed
-            # (`01_DOMAIN_MODEL.md` §2.2: an unrecognised clearance sees
-            # nothing) but silently, as a principal who can never see
-            # anything rather than a rejected token — worse for whoever
-            # has to debug an IdP misconfiguration than an explicit 401.
-            raise PrincipalResolutionError(f"token is missing required claim: {exc}") from exc
-
-        return Principal(
-            id=str(claims["sub"]),
-            clearance=clearance,
-            org_unit=org_unit,
-            receivable_handling_codes=list(claims.get(CLAIM_RECEIVABLE_HANDLING_CODES, [])),
-            roles=list(claims.get(CLAIM_ROLES, [])),
-        )
+        # A missing clearance or unit is refused, not defaulted to "": defaulting would still fail
+        # closed (`01_DOMAIN_MODEL.md` §2.2: an unrecognised clearance sees nothing) but silently,
+        # as a principal who can never see anything rather than a rejected token — worse for
+        # whoever has to debug an IdP misconfiguration than an explicit 401.
+        return principal_from_claims(claims, self._claim_mapping)
