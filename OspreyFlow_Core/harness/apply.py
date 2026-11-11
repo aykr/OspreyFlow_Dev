@@ -60,7 +60,7 @@ import yaml
 from pydantic import ValidationError
 
 from demo_fixtures.datasets import domains_for
-from harness import ingest_uploads, model_downloads, store_volumes, tls_check
+from harness import compose_env, ingest_uploads, model_downloads, store_volumes, tls_check
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -810,7 +810,12 @@ def preflight(context: PreflightContext) -> None:
 def own_published_ports(compose_file: Path) -> set[int]:
     """The host ports the deployment's own running containers publish, as Compose itself reports
     them (`ps --format json`, each container's `Publishers`). Empty when nothing of it runs, or
-    when Docker cannot be asked — then every port is checked as on a first install."""
+    when Docker cannot be asked — then every port is checked as on a first install. A compose file
+    Compose cannot read (a required value `deployment.env` does not hold) is refused in words before
+    it is asked, rather than read as nothing running (CARRIES, the v0.5.0 upgrade rehearsal)."""
+    missing = compose_env.unset_required(compose_file.parent)
+    if missing:
+        raise ApplyFailed("preflight", compose_env.locked_out(compose_file.parent, missing))
     try:
         out = _run(_compose(compose_file) + ["ps", "--format", "json"], stage="preflight")
     except ApplyFailed:

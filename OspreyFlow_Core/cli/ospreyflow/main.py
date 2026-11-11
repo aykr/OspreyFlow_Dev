@@ -74,7 +74,9 @@ from .run import (
     StepFailed,
     SubprocessRunner,
     compose,
+    locked_out,
     subprocess_capture,
+    unset_required,
 )
 
 VERBS = (
@@ -1129,7 +1131,12 @@ def _repair_sign_in(args: argparse.Namespace, ctx: _Context) -> int:
 
 
 def _stop(ctx: _Context) -> int:
-    ctx.step("stop the deployment", [*compose(ctx.deployed()), "stop"])
+    directory = ctx.deployed()
+    # A compose file Compose cannot read is said in words, before Compose is asked (CARRIES).
+    missing = unset_required(directory)
+    if missing:
+        raise CommandRefused(locked_out(directory, missing))
+    ctx.step("stop the deployment", [*compose(directory), "stop"])
     return 0
 
 
