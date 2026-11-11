@@ -18,10 +18,14 @@ claim of its own (`backups-arcadedb-0`), which the CronJob's pod mounts on the s
 is read from it, uploaded and removed. The request goes to that pod by name (`arcadedb-0`), never
 the Service, which would hand it to whichever copy answered.
 
-**ClickHouse** is given no role and no key: the backup role's temporary credentials travel in the
-`BACKUP` statement, so ClickHouse writes as the role does, under the bucket's policy and its key,
-and an expired session is refused as S3 refuses one. ClickHouse masks the credentials in its
-query log.
+**ClickHouse** writes its backup to S3 itself, **as the backup role, by its own pod's web identity**
+(IRSA: the render gives its pod the role's service account and AWS_DEFAULT_REGION), and the
+statement names only the region's own address,
+`S3('https://s3.<region>.amazonaws.com/<bucket>/…')`. No key, secret or token is ever in a
+statement or ClickHouse's query log. ClickHouse 25.8's `S3()` takes a
+URL or a URL and a static key pair, never a session token (Code 42, measured on kind), so the role's
+temporary credentials cannot be handed to it; and its web identity client asks STS in the region
+AWS_DEFAULT_REGION names (without it, us-east-1, which the platform's egress does not reach).
 
 Every refusal is reported in words naming the store, the step and S3's own code and message, and
 the run exits non-zero, so a refused backup is never a quiet one (the CronJob's failed Job).
@@ -35,7 +39,11 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
+import shutil
 import sys
+import tarfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -50,6 +58,12 @@ PART_SIZE = 64 * 1024 * 1024
 #: Sets kept unless `OSPREY_BACKUP_KEEP` says otherwise.
 KEEP = 14
 MANIFEST = "manifest.json"
+#: How long the main run waits for the claims part before leaving the set unfinished, unless
+#: `OSPREY_BACKUP_CLAIMS_WAIT` says otherwise; and how often it looks.
+CLAIMS_WAIT = 3 * 3600
+CLAIMS_POLL = 15.0
+#: The file system's own folder at a claim's root: never backed up, never replaced.
+LOST_FOUND = "lost+found"
 
 
 class BackupRefused(RuntimeError):
@@ -81,6 +95,13 @@ class Settings:
     #: region unless `AWS_ENDPOINT_URL_S3` points elsewhere (the stand-in).
     s3_endpoint: str | None
     keep: int = KEEP
+    #: The poc shape's claims of their own (`storage.claims`, e.g. `ingest`), each mounted at
+    #: `claims_folder/<name>` by the claims run; none in the standard shape.
+    claims: tuple[str, ...] = ()
+    claims_folder: Path = Path("/claims")
+    #: The Job's name, `<cronjob>-<scheduled minute>`, which names the set (`set_of`).
+    job_name: str | None = None
+    claims_wait: float = CLAIMS_WAIT
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
@@ -113,12 +134,18 @@ class Settings:
             clickhouse_cluster=env.get("CLICKHOUSE_CLUSTER") or None,
             s3_endpoint=env.get("AWS_ENDPOINT_URL_S3") or env.get("AWS_ENDPOINT_URL") or None,
             keep=int(env.get("OSPREY_BACKUP_KEEP", str(KEEP))),
+            claims=tuple(n for n in env.get("OSPREY_BACKUP_CLAIMS", "").split(",") if n),
+            claims_folder=Path(env.get("OSPREY_BACKUP_CLAIMS_FOLDER", "/claims")),
+            job_name=env.get("OSPREY_BACKUP_JOB") or None,
+            claims_wait=float(env.get("OSPREY_BACKUP_CLAIMS_WAIT", str(CLAIMS_WAIT))),
         )
 
     @property
     def s3_base(self) -> str:
-        endpoint = self.s3_endpoint or f"https://s3.{self.region}.amazonaws.com"
-        return f"{endpoint.rstrip('/')}/{self.bucket}"
+        """The bucket as ClickHouse reaches it: the region's own address, path style, whatever
+        this pod's own S3 client is pointed at (on kind, ClickHouse's pod resolves it to the
+        stand-in)."""
+        return f"https://s3.{self.region}.amazonaws.com/{self.bucket}"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -159,20 +186,6 @@ class Bucket:
     def _sse(self) -> dict[str, str]:
         return {"ServerSideEncryption": "aws:kms", "SSEKMSKeyId": self.settings.kms_key}
 
-    def credentials(self) -> tuple[str, str, str | None]:
-        """The role's credentials now, as ClickHouse is handed them (frozen: never refreshed)."""
-        if self.session is None:
-            raise BackupRefused("clickhouse", "credentials", "no session to take them from")
-        found = self.session.get_credentials()
-        if found is None:
-            raise BackupRefused(
-                "clickhouse",
-                "credentials",
-                "the role gave no credentials (is the pod's service account the backup role's?)",
-            )
-        frozen = found.get_frozen_credentials()
-        return frozen.access_key, frozen.secret_key, frozen.token
-
     def put_bytes(self, key: str, data: bytes) -> None:
         self.client.put_object(Bucket=self.settings.bucket, Key=key, Body=data, **self._sse())
 
@@ -209,6 +222,38 @@ class Bucket:
             raise
         return size, digest.hexdigest()
 
+    def put_tree(self, key: str, folder: Path) -> tuple[int, str, int]:
+        """`folder` (its top-level lost+found left out) as a gzipped tar, streamed up in parts;
+        its size, SHA-256 and the number of entries."""
+        bucket = self.settings.bucket
+        upload_id = self.client.create_multipart_upload(Bucket=bucket, Key=key, **self._sse())[
+            "UploadId"
+        ]
+        writer = _PartWriter(self.client, bucket, key, upload_id)
+        entries = 0
+
+        def counted(info: tarfile.TarInfo) -> tarfile.TarInfo:
+            nonlocal entries
+            entries += 1
+            return info
+
+        try:
+            with tarfile.open(fileobj=writer, mode="w|gz") as tar:  # type: ignore[call-overload]
+                for entry in sorted(folder.iterdir()):
+                    if entry.name != LOST_FOUND:
+                        tar.add(entry, arcname=entry.name, filter=counted)
+            writer.finish()
+            self.client.complete_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=upload_id, MultipartUpload={"Parts": writer.parts}
+            )
+        except Exception:
+            try:
+                self.client.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+            except Exception:  # noqa: BLE001, S110 - the first refusal is the one reported
+                pass
+            raise
+        return writer.size, writer.digest.hexdigest(), entries
+
     def get_to(self, key: str, path: Path) -> tuple[int, str]:
         body = self.client.get_object(Bucket=self.settings.bucket, Key=key)["Body"]
         digest = hashlib.sha256()
@@ -243,6 +288,38 @@ class Bucket:
             )
 
 
+class _PartWriter:
+    """A write-only file that uploads each `PART_SIZE` written as a part (the last may be less)."""
+
+    def __init__(self, client: Any, bucket: str, key: str, upload_id: str) -> None:
+        self.client, self.bucket, self.key, self.upload_id = client, bucket, key, upload_id
+        self.buffer = bytearray()
+        self.parts: list[dict[str, Any]] = []
+        self.size = 0
+        self.digest = hashlib.sha256()
+
+    def write(self, data: bytes) -> int:
+        self.buffer += data
+        self.size += len(data)
+        self.digest.update(data)
+        while len(self.buffer) >= PART_SIZE:
+            self._part(bytes(self.buffer[:PART_SIZE]))
+            del self.buffer[:PART_SIZE]
+        return len(data)
+
+    def finish(self) -> None:
+        if self.buffer or not self.parts:
+            self._part(bytes(self.buffer))
+            self.buffer.clear()
+
+    def _part(self, chunk: bytes) -> None:
+        number = len(self.parts) + 1
+        done = self.client.upload_part(
+            Bucket=self.bucket, Key=self.key, UploadId=self.upload_id, PartNumber=number, Body=chunk
+        )
+        self.parts.append({"PartNumber": number, "ETag": done["ETag"]})
+
+
 # ---------------------------------------------------------------------------------------------
 # The stores' own HTTP
 # ---------------------------------------------------------------------------------------------
@@ -272,12 +349,9 @@ def _quoted(text: str) -> str:
     return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-def _s3_function(url: str, credentials: tuple[str, str, str | None]) -> str:
-    key, secret, token = credentials
-    words = [_quoted(url), _quoted(key), _quoted(secret)]
-    if token:
-        words.append(_quoted(token))
-    return f"S3({', '.join(words)})"
+def _s3_function(url: str) -> str:
+    """ClickHouse's `S3()` by its URL alone: it writes as its own pod's role."""
+    return f"S3({_quoted(url)})"
 
 
 @dataclass
@@ -324,9 +398,8 @@ class Stores:
             )
         return path
 
-    def clickhouse(self, statement: str, step: str, secrets: tuple[str | None, ...] = ()) -> str:
-        """`statement` run; a refusal reported with `secrets` (the role's) never in its words:
-        ClickHouse's error may quote the statement back."""
+    def clickhouse(self, statement: str, step: str) -> str:
+        """`statement` run; a refusal reported in ClickHouse's own words."""
         s = self.settings
         request = _request(
             f"{s.clickhouse_url}/",
@@ -336,18 +409,17 @@ class Stores:
         try:
             return self.http(request, self.timeout).decode()
         except Exception as error:  # noqa: BLE001 - reported in words
-            raise BackupRefused("clickhouse", step, _scrub(_http_said(error), secrets)) from None
+            raise BackupRefused("clickhouse", step, _http_said(error)) from None
 
     def _on_cluster(self) -> str:
         cluster = self.settings.clickhouse_cluster
         return f" ON CLUSTER {_identifier(cluster)}" if cluster else ""
 
-    def clickhouse_backup(self, url: str, credentials: tuple[str, str, str | None]) -> str:
+    def clickhouse_backup(self, url: str) -> str:
         database = _identifier(self.settings.clickhouse_database)
         answer = self.clickhouse(
-            f"BACKUP DATABASE {database}{self._on_cluster()} TO {_s3_function(url, credentials)}",
+            f"BACKUP DATABASE {database}{self._on_cluster()} TO {_s3_function(url)}",
             "BACKUP … TO S3",
-            credentials[1:],
         )
         if "BACKUP_CREATED" not in answer:
             raise BackupRefused(
@@ -355,28 +427,19 @@ class Stores:
             )
         return answer.split("\t", 1)[0].strip()
 
-    def clickhouse_restore(self, url: str, credentials: tuple[str, str, str | None]) -> None:
+    def clickhouse_restore(self, url: str) -> None:
         database = _identifier(self.settings.clickhouse_database)
         self.clickhouse(
             f"DROP DATABASE IF EXISTS {database}{self._on_cluster()} SYNC", "DROP DATABASE"
         )
-        source = _s3_function(url, credentials)
         answer = self.clickhouse(
-            f"RESTORE DATABASE {database}{self._on_cluster()} FROM {source}",
+            f"RESTORE DATABASE {database}{self._on_cluster()} FROM {_s3_function(url)}",
             "RESTORE … FROM S3",
-            credentials[1:],
         )
         if "RESTORED" not in answer:
             raise BackupRefused(
                 "clickhouse", "RESTORE … FROM S3", f"ClickHouse answered {answer.strip()[:300]!r}"
             )
-
-
-def _scrub(text: str, secrets: tuple[str | None, ...]) -> str:
-    for secret in secrets:
-        if secret:
-            text = text.replace(secret, "[the role's secret]")
-    return text
 
 
 def _identifier(name: str) -> str:
@@ -394,14 +457,39 @@ def stamp(now: dt.datetime | None = None) -> str:
     return (now or dt.datetime.now(dt.UTC)).strftime("%Y%m%dT%H%M%SZ")
 
 
-def take(settings: Settings, bucket: Bucket, stores: Stores, *, now: dt.datetime | None = None,
-         clock: Callable[[], float] | None = None) -> dict[str, Any]:  # fmt: skip
-    """One set: ArcadeDB's zip, ClickHouse's backup, then the manifest. Returns the manifest."""
-    import time
+_SLOT = re.compile(r"-(\d{8,})$")
 
+
+def set_of(job_name: str) -> str:
+    """The set a Job writes, named by its schedule slot: a CronJob names each Job
+    `<cronjob>-<scheduled minute since 1970>`, so the main run and the claims run of a slot name
+    the same set without looking for it; a slow or overlapping run never meets another slot's."""
+    found = _SLOT.search(job_name)
+    if not found:
+        raise BackupRefused(
+            "backup",
+            "name the set",
+            f"the Job's name {job_name!r} names no schedule slot: a CronJob names each Job by its "
+            "scheduled minute (<cronjob>-<minutes since 1970>), and a Job made by hand is named "
+            "the same way, e.g. ospreyflow-backup-$(( $(date +%s) / 60 ))",
+        )
+    return stamp(dt.datetime.fromtimestamp(int(found.group(1)) * 60, dt.UTC))
+
+
+def take(
+    settings: Settings,
+    bucket: Bucket,
+    stores: Stores,
+    *,
+    now: dt.datetime | None = None,
+    clock: Callable[[], float] | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """One set: ArcadeDB's zip, ClickHouse's backup, the claims part (from the claims run, waited
+    for, bounded), then the manifest. Returns the manifest."""
     tick = clock or time.monotonic
     started = tick()
-    set_id = stamp(now)
+    set_id = set_of(settings.job_name) if settings.job_name else stamp(now)
     prefix = f"sets/{set_id}/"
     manifest: dict[str, Any] = {
         "set": set_id,
@@ -430,7 +518,7 @@ def take(settings: Settings, bucket: Bucket, stores: Stores, *, now: dt.datetime
 
     analytics_started = tick()
     url = f"{settings.s3_base}/{prefix}clickhouse/"
-    backup_id = stores.clickhouse_backup(url, bucket.credentials())
+    backup_id = stores.clickhouse_backup(url)
     manifest["clickhouse"] = {
         "database": settings.clickhouse_database,
         "prefix": f"{prefix}clickhouse/",
@@ -438,12 +526,95 @@ def take(settings: Settings, bucket: Bucket, stores: Stores, *, now: dt.datetime
         "cluster": settings.clickhouse_cluster,
         "seconds": round(tick() - analytics_started, 1),
     }
+    if settings.claims:
+        manifest["claims"] = _wait_for_claims(settings, bucket, set_id, tick, sleep)
     manifest["seconds"] = round(tick() - started, 1)
     try:
         bucket.put_bytes(prefix + MANIFEST, json.dumps(manifest, indent=2).encode())
     except Exception as error:  # noqa: BLE001 - reported in words
         raise BackupRefused("backup", "write the manifest", _said(error)) from error
     return manifest
+
+
+def _claims_part(bucket: Bucket, set_id: str) -> dict[str, Any] | None:
+    key = f"sets/{set_id}/claims/{MANIFEST}"
+    if key not in set(bucket.keys(f"sets/{set_id}/claims/")):
+        return None
+    found: dict[str, Any] = json.loads(bucket.get_bytes(key))
+    return found
+
+
+def _wait_for_claims(
+    settings: Settings,
+    bucket: Bucket,
+    set_id: str,
+    tick: Callable[[], float],
+    sleep: Callable[[float], None],
+) -> dict[str, Any]:
+    """The claims run's part of this slot's set, waited for at most `claims_wait` seconds: never a
+    hang. Without it the set is left unfinished and the run fails in words."""
+    deadline = tick() + settings.claims_wait
+    while True:
+        try:
+            part = _claims_part(bucket, set_id)
+        except Exception as error:  # noqa: BLE001 - reported in words
+            raise BackupRefused(
+                "claims", f"read set {set_id}'s claims part", _said(error)
+            ) from error
+        if part is not None:
+            missing = [n for n in settings.claims if n not in part]
+            if missing:
+                raise BackupRefused(
+                    "claims",
+                    f"check set {set_id}'s claims part",
+                    f"it lacks {', '.join(missing)}: the set is left unfinished",
+                )
+            return part
+        left = deadline - tick()
+        if left <= 0:
+            raise BackupRefused(
+                "claims",
+                f"wait for set {set_id}'s claims part",
+                f"none after {settings.claims_wait:g} s: the claims run (ospreyflow-backup-claims) "
+                "for this slot failed or never ran, so the set is left unfinished and is never "
+                "restored from",
+            )
+        sleep(min(CLAIMS_POLL, left))
+
+
+def take_claims(settings: Settings, bucket: Bucket) -> dict[str, Any]:
+    """The claims run: each claim streamed into its slot's set, then the part's own manifest. The
+    main run writes the set's manifest once it is there."""
+    if not settings.job_name:
+        raise BackupRefused("claims", "name the set", "OSPREY_BACKUP_JOB is not set")
+    set_id = set_of(settings.job_name)
+    prefix = f"sets/{set_id}/"
+    try:
+        finished = prefix + MANIFEST in set(bucket.keys(prefix))
+    except Exception as error:  # noqa: BLE001 - reported in words
+        raise BackupRefused("claims", f"read set {set_id}", _said(error)) from error
+    if finished:
+        raise BackupRefused(
+            "claims", f"add to set {set_id}", "that set is already finished; a part is never added"
+        )
+    part: dict[str, Any] = {}
+    for name in settings.claims:
+        folder = settings.claims_folder / name
+        if not folder.is_dir():
+            raise BackupRefused("claims", f"read {name}", f"{folder} is not mounted in this pod")
+        key = f"{prefix}claims/{name}.tar.gz"
+        try:
+            size, digest, entries = bucket.put_tree(key, folder)
+        except Exception as error:  # noqa: BLE001 - reported in words
+            raise BackupRefused(
+                "claims", f"upload {name} to s3://{settings.bucket}/{key}", _said(error)
+            ) from error
+        part[name] = {"key": key, "bytes": size, "sha256": digest, "entries": entries}
+    try:
+        bucket.put_bytes(f"{prefix}claims/{MANIFEST}", json.dumps(part, indent=2).encode())
+    except Exception as error:  # noqa: BLE001 - reported in words
+        raise BackupRefused("claims", "write the claims part's manifest", _said(error)) from error
+    return {"set": set_id, **part}
 
 
 @dataclass(frozen=True)
@@ -521,10 +692,62 @@ def fetch_graph(bucket: Bucket, set_id: str, folder: Path) -> Path:
     return path
 
 
+def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
+    """Each claim of the set put back into `folder/<name>` as it was in the set: the part checked
+    against the manifest, unpacked beside the claim's contents (refusing any entry outside it),
+    and only then the old contents, but for lost+found, replaced. Run with every pod that mounts
+    the claims stopped."""
+    manifest = manifest_of(bucket, set_id)
+    claims = manifest.get("claims")
+    if not claims:
+        raise BackupRefused("claims", f"restore set {set_id}", "the set holds no claims part")
+    restored = []
+    for name, part in sorted(claims.items()):
+        target = folder / name
+        target.mkdir(parents=True, exist_ok=True)
+        staging = target / ".osprey-restore"
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir()
+        archive = target / ".osprey-restore.tar.gz"
+        try:
+            try:
+                size, digest = bucket.get_to(part["key"], archive)
+            except Exception as error:  # noqa: BLE001 - reported in words
+                raise BackupRefused(
+                    "claims", f"fetch s3://{bucket.settings.bucket}/{part['key']}", _said(error)
+                ) from error
+            if (size, digest) != (part["bytes"], part["sha256"]):
+                raise BackupRefused(
+                    "claims",
+                    f"check {name}",
+                    f"it is {size} bytes, SHA-256 {digest[:12]}…; the manifest says "
+                    f"{part['bytes']}, {part['sha256'][:12]}…",
+                )
+            try:
+                with tarfile.open(archive, mode="r:gz") as tar:
+                    tar.extractall(staging, filter="data")
+            except (tarfile.TarError, OSError) as error:
+                raise BackupRefused("claims", f"unpack {name}", str(error)) from error
+            for entry in target.iterdir():
+                if entry.name in (LOST_FOUND, staging.name, archive.name):
+                    continue
+                if entry.is_dir() and not entry.is_symlink():
+                    shutil.rmtree(entry)
+                else:
+                    entry.unlink()
+            for entry in staging.iterdir():
+                entry.rename(target / entry.name)
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+            archive.unlink(missing_ok=True)
+        restored.append(name)
+    return restored
+
+
 def restore_analytics(settings: Settings, bucket: Bucket, stores: Stores, set_id: str) -> None:
     manifest = manifest_of(bucket, set_id)
     url = f"{settings.s3_base}/{manifest['clickhouse']['prefix']}"
-    stores.clickhouse_restore(url, bucket.credentials())
+    stores.clickhouse_restore(url)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -540,6 +763,9 @@ def main(argv: list[str] | None = None) -> int:
     fetch.add_argument("--to", type=Path, required=True)
     analytics = commands.add_parser("restore-analytics", help="ClickHouse's RESTORE from a set")
     analytics.add_argument("--set", default="latest")
+    commands.add_parser("backup-claims", help="the claims run: each claim into its slot's set")
+    restore_claims = commands.add_parser("restore-claims", help="a set's claims put back")
+    restore_claims.add_argument("--set", default="latest")
     args = parser.parse_args(argv)
     try:
         settings = Settings.from_env()
@@ -562,6 +788,16 @@ def main(argv: list[str] | None = None) -> int:
             set_id = latest(bucket) if args.set == "latest" else args.set
             path = fetch_graph(bucket, set_id, args.to)
             print(f"restore: set {set_id}'s ArcadeDB zip at {path}, checked against its manifest")
+        elif args.command == "backup-claims":
+            part = take_claims(settings, bucket)
+            print(
+                f"backup-claims: set {part['set']}'s claims part written: "
+                + "; ".join(f"{n} {part[n]['bytes']} bytes" for n in settings.claims)
+            )
+        elif args.command == "restore-claims":
+            set_id = latest(bucket) if args.set == "latest" else args.set
+            names = fetch_claims(bucket, set_id, settings.claims_folder)
+            print(f"restore: {', '.join(names)} put back from set {set_id}")
         elif args.command == "restore-analytics":
             set_id = latest(bucket) if args.set == "latest" else args.set
             restore_analytics(settings, bucket, stores, set_id)

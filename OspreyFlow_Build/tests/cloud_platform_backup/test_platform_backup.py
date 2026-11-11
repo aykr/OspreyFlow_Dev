@@ -3,14 +3,19 @@ stand-in, which refuses what S3, STS and KMS refuse: a set is written only when 
 granted, and every refusal is reported in words naming the store, the step and S3's own code.
 
 ArcadeDB and ClickHouse are fakes here, at their HTTP call sites: ArcadeDB's writes its zip into
-the mounted folder as the server does; ClickHouse's **writes to S3 itself with the credentials the
-statement hands it**, so a refusal the stand-in gives ClickHouse is the one the real ClickHouse
-meets (its own error quoting the statement back, as ClickHouse's errors do). The real servers are
-`test_platform_backup_live.py`'s.
+the mounted folder as the server does; ClickHouse's **writes to S3 itself, as the backup role, by
+its own pod's web identity** (IRSA), so a refusal the stand-in gives ClickHouse is the one the real
+ClickHouse meets (its own error quoting the statement back, as ClickHouse's errors do).
+
+The fake refuses what ClickHouse 25.8 refuses (rule 15's second example): `S3()` in `BACKUP` takes
+one argument or three, never a session token, which the real server answered with Code 42 on
+osprey-p9, 11 November 2026, after a fake that took four had passed every case here. The real
+servers are the kind run's (`process/lanes/case/gates/p9_kind.sh`).
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 import json
 import re
@@ -36,6 +41,8 @@ from tests.cloud_platform_backup.conftest import (
 from tests.fixtures.cloud_platform.s3_standin import Role
 
 ZIP = b"PK\x03\x04 an ArcadeDB backup" * 1000
+#: The address ClickHouse reaches S3 by on the platform: the region's own, path style.
+REGIONAL = f"https://s3.{REGION}.amazonaws.com"
 
 
 class FakeStores:
@@ -45,6 +52,20 @@ class FakeStores:
         self.aws, self.folder = aws, folder
         self.statements: list[str] = []
         self.arcadedb_answer: bytes | None = None
+        self.client: Any = None
+        self.access_key: str | None = None
+
+    def _s3(self) -> Any:
+        """ClickHouse's S3 client as the role, by its pod's web identity, its credentials kept
+        until they expire (as ClickHouse keeps them)."""
+        if self.client is None:
+            frozen = self.aws.session().get_credentials().get_frozen_credentials()
+            self.access_key = frozen.access_key
+            self.client = botocore.session.get_session().create_client(
+                "s3", region_name=REGION, endpoint_url=self.aws.endpoint, config=PATH_STYLE,
+                aws_access_key_id=frozen.access_key, aws_secret_access_key=frozen.secret_key,
+                aws_session_token=frozen.token)  # fmt: skip
+        return self.client
 
     def __call__(self, request: urllib.request.Request, timeout: float) -> bytes:
         url = request.full_url
@@ -61,14 +82,17 @@ class FakeStores:
         self.statements.append(body)
         if body.startswith("DROP DATABASE"):
             return b""
-        match = re.search(r"S3\('([^']*)', '([^']*)', '([^']*)'(?:, '([^']*)')?\)", body)
+        match = re.search(r"S3\((.*)\)", body)
         assert match, body
-        prefix_url, key, secret, token = match.groups()
-        s3 = botocore.session.get_session().create_client(
-            "s3", region_name=REGION, endpoint_url=self.aws.endpoint, config=PATH_STYLE,
-            aws_access_key_id=key, aws_secret_access_key=secret, aws_session_token=token)  # fmt: skip
-        bucket_and_prefix = prefix_url.split(self.aws.endpoint + "/", 1)[1]
-        bucket, _, prefix = bucket_and_prefix.partition("/")
+        arguments = re.findall(r"'((?:[^'\\]|\\.)*)'", match.group(1))
+        if len(arguments) not in (1, 3):  # ClickHouse 25.8's own refusal, word for word
+            text = (b"Code: 42. DB::Exception: Backup S3 requires 1 or 3 arguments: url, "
+                    b"[access_key_id, secret_access_key]. (NUMBER_OF_ARGUMENTS_DOESNT_MATCH)")  # fmt: skip
+            raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        assert len(arguments) == 1, "the runner never hands ClickHouse a key"
+        assert arguments[0].startswith(REGIONAL + "/"), arguments[0]
+        bucket, _, prefix = arguments[0].removeprefix(REGIONAL + "/").partition("/")
+        s3 = self._s3()
         try:
             if body.startswith("BACKUP"):
                 # ClickHouse sends no encryption header: the bucket's default (its key) applies.
@@ -125,7 +149,9 @@ def test_a_backup_writes_a_set_encrypted_by_the_deployments_key_its_manifest_las
     assert aws.stand_in.read(BUCKET, f"{prefix}arcadedb/ospreyflow.zip") == ZIP
     # ArcadeDB asked by its pod's own name, never the Service; the zip gone from the claim.
     assert not list((settings.arcadedb_folder / "ospreyflow").iterdir())
-    assert fake.statements[0].startswith(f"BACKUP DATABASE ospreyflow TO S3('{aws.endpoint}/{BUCKET}/{prefix}clickhouse/'")
+    # One argument, the regional address: ClickHouse writes as the role by its own pod's identity,
+    # and no key or token is ever in the statement (or ClickHouse's query log).
+    assert fake.statements[0] == f"BACKUP DATABASE ospreyflow TO S3('{REGIONAL}/{BUCKET}/{prefix}clickhouse/')"
     assert [s.set_id for s in pb.sets(bucket)] == [manifest["set"]]
 
 
@@ -164,22 +190,29 @@ def test_clickhouse_refused_by_kms_leaves_the_set_unfinished_and_says_so(aws: Ru
     assert [s.complete for s in pb.sets(bucket_session)] == [False]
 
 
-def test_an_expired_role_refuses_clickhouses_backup_and_the_secret_is_never_said(aws: Running, run: Any) -> None:
-    settings, bucket, stores, _ = run
-    secret = bucket.credentials()[1]
-    original = stores.clickhouse_backup
-
-    def after_an_hour(url: str, credentials: tuple[str, str, str | None]) -> str:
-        aws.stand_in.expire()
-        return original(url, credentials)
-
-    stores.clickhouse_backup = after_an_hour  # type: ignore[method-assign]
+def test_clickhouses_expired_session_refuses_its_backup_in_words(aws: Running, run: Any) -> None:
+    """ClickHouse keeps the role's credentials until they expire; a session the platform has
+    ended is refused at ClickHouse's own write, and the set is left unfinished."""
+    settings, bucket, stores, fake = run
+    first = pb.take(settings, bucket, stores, now=dt.datetime(2026, 11, 11, 2, 15, tzinfo=dt.UTC))
+    assert fake.access_key is not None
+    aws.stand_in.expire(fake.access_key)
     with pytest.raises(pb.BackupRefused) as refused:
-        pb.take(settings, bucket, stores)
+        pb.take(settings, bucket, stores, now=dt.datetime(2026, 11, 12, 2, 15, tzinfo=dt.UTC))
     assert refused.value.store == "clickhouse"
     assert "ExpiredToken" in refused.value.reason
-    assert secret not in str(refused.value)
-    assert "[the role's secret]" in str(refused.value)
+    assert [s.set_id for s in pb.sets(bucket) if s.complete] == [first["set"]]
+
+
+def test_a_statement_handing_clickhouse_a_session_is_refused_as_clickhouse_refuses_it(run: Any) -> None:
+    """The fake's own refusal, red at the shape the code once sent (url, key, secret, token)."""
+    settings, _, stores, _ = run
+    with pytest.raises(pb.BackupRefused) as refused:
+        stores.clickhouse(
+            f"BACKUP DATABASE ospreyflow TO S3('{REGIONAL}/{BUCKET}/x/', 'ASIA', 'secret', 'token')",
+            "BACKUP … TO S3",
+        )
+    assert "NUMBER_OF_ARGUMENTS_DOESNT_MATCH" in refused.value.reason
 
 
 def test_a_bucket_policy_refusing_the_role_refuses_the_backup(aws: Running, run: Any) -> None:
@@ -247,8 +280,8 @@ def test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set(
     assert path.read_bytes() == ZIP
     pb.restore_analytics(settings, bucket, stores, manifest["set"])
     assert fake.statements[-2] == "DROP DATABASE IF EXISTS ospreyflow SYNC"
-    assert fake.statements[-1].startswith(
-        f"RESTORE DATABASE ospreyflow FROM S3('{aws.endpoint}/{BUCKET}/sets/{manifest['set']}/clickhouse/'")
+    assert fake.statements[-1] == (
+        f"RESTORE DATABASE ospreyflow FROM S3('{REGIONAL}/{BUCKET}/sets/{manifest['set']}/clickhouse/')")
 
 
 def test_a_zip_that_does_not_match_its_manifest_is_never_restored(aws: Running, run: Any, tmp_path: Path) -> None:

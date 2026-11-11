@@ -107,6 +107,18 @@ def give_arcadedb_its_backups_claim(arcadedb: dict[str, Any]) -> dict[str, Any]:
     return claim
 
 
+def clickhouse_writes_as_the_backup_role(clickhouse: dict[str, Any], region: str) -> None:
+    """ClickHouse's pod runs as the backup role's service account (IRSA): ClickHouse 25.8 takes no
+    session token in `BACKUP … TO S3()`, so it writes as the role by its own web identity; its
+    STS client asks the region AWS_DEFAULT_REGION names (us-east-1 without it). Amendment 7."""
+    clickhouse["serviceAccountName"] = SERVICE_ACCOUNT
+    names = {"AWS_REGION", "AWS_DEFAULT_REGION"}
+    clickhouse["env"] = [e for e in clickhouse.get("env", []) if e["name"] not in names] + [
+        {"name": "AWS_REGION", "value": region},
+        {"name": "AWS_DEFAULT_REGION", "value": region},
+    ]
+
+
 def _env_from(environment: dict[str, Any], names: list[str]) -> list[dict[str, Any]]:
     return [{"name": n, "config": n} for n in names if n in environment]
 
@@ -136,6 +148,7 @@ def backups_values(
             f"Conduit's image; this render has no {', '.join(missing)}"
         )
     claim = give_arcadedb_its_backups_claim(arcadedb)
+    clickhouse_writes_as_the_backup_role(clickhouse, platform.aws_region)
     env: list[dict[str, Any]] = [
         {"name": "AWS_REGION", "value": platform.aws_region},
         {"name": "OSPREY_BACKUP_BUCKET",

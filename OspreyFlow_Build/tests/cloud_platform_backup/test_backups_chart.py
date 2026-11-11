@@ -128,7 +128,7 @@ def test_the_check_is_red_on_the_restore_without_its_resources(tmp_path: Path) -
 
 
 def test_the_chart_with_its_backups_is_valid_kubernetes() -> None:
-    values = rendered.values()
+    values = _with_claims(rendered.values())
     values["backups"]["restore"] = {"set": "20261111T021500Z"}
     docs = _docs(values)
     done = subprocess.run(
@@ -137,3 +137,83 @@ def test_the_chart_with_its_backups_is_valid_kubernetes() -> None:
         input=yaml.safe_dump_all(docs), capture_output=True, text=True, timeout=300, check=False,
     )  # fmt: skip
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+def _with_claims(values: dict[str, Any]) -> dict[str, Any]:
+    """The poc shape's Ingest root on a claim of its own (ADR-148 Amendment 5): `storage.claims`."""
+    values["storage"] = {**values["storage"], "claims": [{"name": "ingest", "size": "50Gi"}]}
+    return values
+
+
+def _exactly(docs: list[dict[str, Any]], kind: str, name: str) -> dict[str, Any]:
+    return next(d for d in docs if d["kind"] == kind and d["metadata"]["name"] == name)
+
+
+def _env(container: dict[str, Any]) -> dict[str, Any]:
+    return {e["name"]: e.get("value", e.get("valueFrom")) for e in container.get("env", [])}
+
+
+def test_the_standard_shape_has_no_claims_run() -> None:
+    docs = _docs(rendered.values())
+    assert not [d for d in docs if d["metadata"]["name"].startswith("ospreyflow-backup-claims")]
+    main = pod_spec(_exactly(docs, "CronJob", "ospreyflow-backup"))
+    assert main is not None
+    env = _env(main["containers"][0])
+    assert "OSPREY_BACKUP_CLAIMS" not in env
+    # Each run names its set by its Job's name, the schedule slot (platform_backup.set_of).
+    assert env["OSPREY_BACKUP_JOB"] == {"fieldRef": {"fieldPath": "metadata.labels['batch.kubernetes.io/job-name']"}}
+
+
+def test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only() -> None:
+    docs = _docs(_with_claims(rendered.values()))
+    main = _exactly(docs, "CronJob", "ospreyflow-backup")
+    claims = _exactly(docs, "CronJob", "ospreyflow-backup-claims")
+    assert claims["spec"]["schedule"] == main["spec"]["schedule"]
+    assert claims["spec"]["concurrencyPolicy"] == "Forbid"
+    pod = pod_spec(claims)
+    assert pod is not None
+    assert pod["serviceAccountName"] == "ospreyflow-backup"
+    term = pod["affinity"]["podAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][0]
+    assert term == {"labelSelector": {"matchLabels": {"ospreyflow.io/shared": "true"}},
+                    "topologyKey": "kubernetes.io/hostname"}  # fmt: skip
+    assert pod["volumes"] == [{"name": "claim-ingest",
+                               "persistentVolumeClaim": {"claimName": "ospreyflow-ingest", "readOnly": True}}]  # fmt: skip
+    container = pod["containers"][0]
+    assert container["command"][-1] == "backup-claims"
+    assert {"name": "claim-ingest", "mountPath": "/claims/ingest"} in container["volumeMounts"]
+    assert "envFrom" not in container
+    for cron in (main, claims):
+        spec = pod_spec(cron)
+        assert spec is not None
+        env = _env(spec["containers"][0])
+        assert env["OSPREY_BACKUP_CLAIMS"] == "ingest", cron["metadata"]["name"]
+        assert "fieldRef" in env["OSPREY_BACKUP_JOB"]
+    assert _rules(docs) == []
+
+
+def test_a_restore_with_claims_puts_them_back_in_a_job_of_its_own() -> None:
+    values = _with_claims(rendered.values())
+    values["backups"]["restore"] = {"set": "20261111T021500Z"}
+    docs = _docs(values)
+    job = _exactly(docs, "Job", "ospreyflow-restore-claims-20261111t021500z")
+    pod = pod_spec(job)
+    assert pod is not None
+    assert pod["containers"][0]["command"][-3:] == ["restore-claims", "--set", "20261111T021500Z"]
+    assert pod["volumes"] == [{"name": "claim-ingest", "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"}}]
+    assert "affinity" not in pod, "the claims' pods are stopped for a restore; the claim is free"
+    assert _exactly(docs, "Job", "ospreyflow-restore-20261111t021500z")
+    assert _rules(docs) == []
+
+
+def test_the_check_is_red_on_the_claims_run_without_its_pod_security(tmp_path: Path) -> None:
+    old = '{{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 10 }}'
+    chart = tmp_path / "chart"
+    shutil.copytree(helm_chart.CHART, chart)
+    path = chart / TEMPLATE
+    text = path.read_text()
+    first = text.index(old)
+    second = text.index(old, first + 1)  # the claims CronJob's, after the main one's
+    path.write_text(text[:second] + "serviceAccountName: {{ $b.serviceAccountName }}" + text[second + len(old):])
+    rules = _rules(_docs(_with_claims(rendered.values()), chart=chart))
+    assert any("CronJob/ospreyflow-backup-claims" in r for r in rules), rules
+    assert not any(r.endswith("CronJob/ospreyflow-backup") for r in rules), rules

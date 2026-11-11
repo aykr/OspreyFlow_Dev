@@ -117,6 +117,22 @@ def test_the_key_and_the_bucket_outlive_a_destroy_of_the_namespace() -> None:
         assert re.search(r"lifecycle\s*\{\s*prevent_destroy\s*=\s*true\s*\}", block), resource
 
 
+def test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod() -> None:
+    """ClickHouse 25.8 takes no session token in `BACKUP … TO S3()` (Code 42 on osprey-p9), so it
+    writes as the backup role by its own pod's web identity: the role's service account, and the
+    region its STS client is built for (without AWS_DEFAULT_REGION it asked sts.us-east-1, which the
+    platform's egress does not reach, and wrote anonymously, refused)."""
+    found = rendered.values()
+    clickhouse = next(w for w in found["workloads"] if w["name"] == "clickhouse")
+    assert clickhouse["serviceAccountName"] == backups.SERVICE_ACCOUNT
+    env = {e["name"]: e.get("value") for e in clickhouse["env"]}
+    assert env["AWS_DEFAULT_REGION"] == env["AWS_REGION"] == "eu-west-2"
+    # The Conduit's and the workers' own role stays theirs: no other workload is given the backups'.
+    others = [w["name"] for w in found["workloads"]
+              if w.get("serviceAccountName") == backups.SERVICE_ACCOUNT and w["name"] != "clickhouse"]  # fmt: skip
+    assert others == []
+
+
 def test_a_render_with_one_store_and_not_the_other_is_refused() -> None:
     values = rendered.values()
     workloads = [w for w in values["workloads"] if w["name"] != "clickhouse"]
