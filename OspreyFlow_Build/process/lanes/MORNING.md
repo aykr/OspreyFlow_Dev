@@ -419,6 +419,13 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       delete them when the client's retention ends; the decommission check reports them as kept, not as left over.
       Refined, measured on kind (three slots): ClickHouse 25.8's BACKUP must remove its own lock file at the end, so
       the role may delete `sets/*/clickhouse/.lock` and nothing else; a set's data and manifest stay undeletable by it.
+      **Corrected after P9's review (about 17:00), my earlier ruling having opened it:** with ClickHouse holding the
+      backup role, any ClickHouse SQL user (the Conduit's) could read or overwrite every set through `s3()`. Now:
+      ClickHouse's own backup user alone has S3 access (revoked from the application's user, tested on kind); two
+      roles, each scoped to its own prefix; **bucket versioning on now**, so an overwrite is recoverable (object
+      lock stays P9b); a KMS key policy; a restore that verifies every part before touching anything and refuses
+      while writers run; the restore proven for the single-replica shapes (production's procedure to P9b); the kept
+      bucket's expiry replaced by the client's retention at decommission.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
