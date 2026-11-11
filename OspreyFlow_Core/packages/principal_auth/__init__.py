@@ -24,6 +24,7 @@ verbatim below, because they document decisions rather than location.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
@@ -170,8 +171,13 @@ class _Source(BaseModel):
             raise ValueError("name exactly one of `claim` or `groups`")
         if self.claim is not None and not self.claim:
             raise ValueError("`claim` must name a claim")
-        if groups is not None and not groups:
-            raise ValueError("`groups` must map at least one group")
+        if groups is not None:
+            if not groups:
+                raise ValueError("`groups` must map at least one group")
+            for group, value in groups.items():
+                values = value if isinstance(value, list) else [value]
+                if not group or not values or not all(values):
+                    raise ValueError(f"group {group!r} must grant a non-empty value")
         return self
 
 
@@ -189,10 +195,18 @@ class CodesSource(_Source):
     groups: dict[str, list[str]] | None = None
 
 
+_GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
 class ClaimMapping(BaseModel):
-    """The deployment's claim settings. `tenant_id` set means an Entra ID tenant: the token must
-    then carry `oid`, `tid` (equal to it) and `exp`, and the resolver must check issuer and
-    audience."""
+    """The deployment's claim settings.
+
+    **A mapping other than the fixed names is an Entra ID mapping, and needs `tenant_id`** (ADR-148
+    decision 9 is the only reason the names are settings; a Keycloak deployment maps onto the fixed
+    names with protocol mappers). With `tenant_id` set the token must carry `oid` and `exp` and a
+    `tid` equal to it, the resolver must check issuer and audience, and **roles are not read from
+    the token**: an Entra token's `roles` are app roles an Entra administrator assigns, and roles
+    stay assigned in Admin › People (decision 9)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -202,9 +216,31 @@ class ClaimMapping(BaseModel):
     groups_claim: str = "groups"
     tenant_id: str | None = None
 
+    @model_validator(mode="after")
+    def _entra_needs_its_tenant(self) -> ClaimMapping:
+        if self.tenant_id is not None and not _GUID.match(self.tenant_id):
+            raise ValueError("`tenant_id` must be the Entra tenant's id (a GUID)")
+        fixed = (
+            self.clearance == ValueSource(claim=CLAIM_CLEARANCE)
+            and self.org_unit == ValueSource(claim=CLAIM_ORG_UNIT)
+            and self.handling_codes == CodesSource(claim=CLAIM_RECEIVABLE_HANDLING_CODES)
+            and self.groups_claim == "groups"
+        )
+        if not fixed and self.tenant_id is None:
+            raise ValueError(
+                "a claim mapping other than the fixed names is an Entra ID mapping: "
+                "set `tenant_id`, so the tenant, issuer and audience are checked"
+            )
+        return self
+
+    @property
+    def is_entra(self) -> bool:
+        return self.tenant_id is not None
+
     def required_claims(self) -> list[str]:
-        """The claims PyJWT must find before anything is mapped."""
-        return ["sub", "exp", "oid", "tid"] if self.tenant_id else ["sub"]
+        """The claims PyJWT must find before anything is mapped (`tid` is checked against the
+        tenant in `principal_from_claims`, so it is not listed twice)."""
+        return ["sub", "exp", "oid"] if self.is_entra else ["sub"]
 
 
 DEFAULT_CLAIM_MAPPING = ClaimMapping()
@@ -212,12 +248,12 @@ DEFAULT_CLAIM_MAPPING = ClaimMapping()
 
 def _token_groups(claims: Mapping[str, Any], mapping: ClaimMapping) -> list[str]:
     """The token's group ids. A group overage (Entra leaves `groups` out of a JWT past 200 groups
-    and names a Graph source in `_claim_names`) is refused, never read as "no groups"."""
+    and names a Graph source in `_claim_names`, or, in the implicit flow, sends `hasgroups: true`)
+    is refused, never read as "no groups"."""
     names = claims.get("_claim_names")
-    if (
-        mapping.groups_claim not in claims
-        and isinstance(names, dict)
-        and mapping.groups_claim in names
+    if mapping.groups_claim not in claims and (
+        (isinstance(names, dict) and mapping.groups_claim in names)
+        or claims.get("hasgroups") is True
     ):
         raise PrincipalResolutionError(
             f"token has a group overage: its `{mapping.groups_claim}` claim was left out for "
@@ -240,15 +276,17 @@ def _single_value(
             raise PrincipalResolutionError(
                 f"token is missing required claim: {what} ({source.claim!r})"
             )
-        if isinstance(value, (list, dict, bool)) or value == "":
+        if not isinstance(value, str) or not value:
             raise PrincipalResolutionError(
-                f"token's {what} claim ({source.claim!r}) is not a single value"
+                f"token's {what} claim ({source.claim!r}) is not a non-empty string"
             )
-        return str(value)
+        return value
     assert source.groups is not None
     found = {source.groups[g] for g in groups if g in source.groups}
     if not found:
-        raise PrincipalResolutionError(f"token is missing required claim: no group grants a {what}")
+        raise PrincipalResolutionError(
+            f"token is missing required claim: no group grants the {what}"
+        )
     if len(found) > 1:
         raise PrincipalResolutionError(f"token's groups grant more than one {what}; refused")
     return found.pop()
@@ -277,8 +315,8 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
     claims."""
-    if mapping.tenant_id is not None and claims.get("tid") != mapping.tenant_id:
-        raise PrincipalResolutionError("token is from another tenant")
+    if mapping.is_entra and claims.get("tid") != mapping.tenant_id:
+        raise PrincipalResolutionError("token's tid is missing or names another tenant")
     uses_groups = any(
         s.groups is not None for s in (mapping.clearance, mapping.org_unit, mapping.handling_codes)
     )
@@ -290,8 +328,19 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
         clearance=clearance,
         org_unit=org_unit,
         receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
-        roles=list(claims.get(CLAIM_ROLES, [])),
+        roles=[] if mapping.is_entra else _roles(claims),
     )
+
+
+def _roles(claims: Mapping[str, Any]) -> list[str]:
+    """The token's `roles` (Keycloak's, from Admin › People): a list of names, or one name as a
+    string, never split into its letters."""
+    value = claims.get(CLAIM_ROLES, [])
+    if isinstance(value, str):
+        return [value] if value else []
+    if not isinstance(value, list) or not all(isinstance(r, str) for r in value):
+        raise PrincipalResolutionError("token's roles claim is not a list of role names")
+    return list(value)
 
 
 #: RFC 8693 §2.1's own grant-type URI, unchanged by this simplified client.
@@ -371,7 +420,7 @@ class PrincipalResolver:
 
     def __init__(self, config: OidcSettings, *, claim_mapping: ClaimMapping | None = None) -> None:
         mapping = claim_mapping or DEFAULT_CLAIM_MAPPING
-        if mapping.tenant_id is not None:
+        if mapping.is_entra:
             # A tenant-bound mapping that did not check `iss` and `aud` would take another tenant's
             # (or another app's) token signed by a key it trusts: refused before any token is read.
             if not config.oidc_issuer:

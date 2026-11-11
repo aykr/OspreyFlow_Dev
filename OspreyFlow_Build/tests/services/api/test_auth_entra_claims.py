@@ -143,7 +143,15 @@ def test_extension_attributes_build_the_principal(keypair, jwks_url) -> None:
     assert principal.clearance == "OFFICIAL-SENSITIVE"
     assert principal.org_unit == "unit-2"
     assert principal.receivable_handling_codes == ["R", "S"]
-    assert principal.roles == ["analyst"]
+    assert principal.roles == []
+
+
+def test_an_entra_app_role_grants_no_ospreyflow_role(keypair, jwks_url) -> None:
+    """An Entra token's `roles` are app roles an Entra administrator assigns; OspreyFlow's roles
+    stay assigned in Admin › People (ADR-148 decision 9), so `admin` there makes nobody an
+    administrator here."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, roles=["admin", "analyst"]))
+    assert _resolver(jwks_url, BY_EXTENSION).resolve(token).roles == []
 
 
 def test_a_single_valued_handling_code_attribute_is_one_code_not_its_letters(
@@ -198,6 +206,16 @@ def test_both_missing_is_refused_never_defaulted_to_cleared(keypair, jwks_url, m
         _resolver(jwks_url, mapping).resolve(token)
 
 
+def test_a_missing_clearance_attribute_with_the_unit_group_present_is_refused(
+    keypair, jwks_url
+) -> None:
+    """The mixed mapping with everything but the clearance attribute: were a missing attribute
+    defaulted, this token would resolve, so the case fails for the reason it names (rule 15)."""
+    token = sign_token(_key(keypair), entra_claims(groups=[G_UNIT_1, G_CODE_R]))
+    with pytest.raises(PrincipalResolutionError, match="clearance"):
+        _resolver(jwks_url, MIXED).resolve(token)
+
+
 def test_a_missing_clearance_with_a_unit_present_is_refused(keypair, jwks_url) -> None:
     token = sign_token(_key(keypair), entra_claims(groups=[G_UNIT_1, G_CODE_R]))
     with pytest.raises(PrincipalResolutionError, match="clearance"):
@@ -222,6 +240,14 @@ def test_a_clearance_attribute_that_is_not_a_string_is_refused(keypair, jwks_url
     token = sign_token(
         _key(keypair),
         entra_claims(**{f"{EXT}_clearance": ["OFFICIAL", "SECRET"], f"{EXT}_orgUnit": "unit-1"}),
+    )
+    with pytest.raises(PrincipalResolutionError, match="clearance"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+def test_a_numeric_clearance_attribute_is_refused_not_turned_into_text(keypair, jwks_url) -> None:
+    token = sign_token(
+        _key(keypair), entra_claims(**{f"{EXT}_clearance": 2, f"{EXT}_orgUnit": "unit-1"})
     )
     with pytest.raises(PrincipalResolutionError, match="clearance"):
         _resolver(jwks_url, BY_EXTENSION).resolve(token)
@@ -291,10 +317,23 @@ def test_a_group_overage_is_refused_not_read_as_no_groups(keypair, jwks_url) -> 
             **_GOOD,
             _claim_names={"groups": "src1"},
             _claim_sources={
-                "src1": {"endpoint": "https://graph.microsoft.com/v1.0/users/x/getMemberObjects"}
+                "src1": {
+                    "endpoint": f"https://graph.windows.net/{TENANT}/users/"
+                    "50000000-0000-4000-8000-000000000001/getMemberObjects"
+                }
             },
         ),
     )
+    with pytest.raises(PrincipalResolutionError, match="overage"):
+        _resolver(jwks_url, codes_by_group).resolve(token)
+
+
+def test_the_implicit_flows_overage_signal_is_refused(keypair, jwks_url) -> None:
+    """In the implicit flow Entra marks the overage with `hasgroups: true` instead."""
+    codes_by_group = BY_EXTENSION.model_copy(
+        update={"handling_codes": CodesSource(groups={G_CODE_R: ["R"]})}
+    )
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, hasgroups=True))
     with pytest.raises(PrincipalResolutionError, match="overage"):
         _resolver(jwks_url, codes_by_group).resolve(token)
 
@@ -349,6 +388,19 @@ def test_a_token_entra_would_not_accept_is_refused(keypair, jwks_url, overrides,
         _resolver(jwks_url, BY_EXTENSION).resolve(token)
 
 
+def test_another_tenants_whole_token_is_refused(keypair, jwks_url) -> None:
+    """The shape Entra really issues for another tenant: its issuer and its `tid` together. Every
+    tenant's tokens are signed by the same published keys, so the signature alone proves nothing."""
+    token = sign_token(
+        _key(keypair),
+        entra_claims(
+            **_GOOD, tid=OTHER_TENANT, iss=f"https://login.microsoftonline.com/{OTHER_TENANT}/v2.0"
+        ),
+    )
+    with pytest.raises(PrincipalResolutionError):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
 def test_an_entra_mapping_without_issuer_and_audience_checks_is_refused_at_construction(
     jwks_url,
 ) -> None:
@@ -378,6 +430,33 @@ def test_a_source_names_exactly_one_of_a_claim_or_a_group_table(kwargs) -> None:
                 for k, t in kwargs.items()
             }
         )
+
+
+@pytest.mark.parametrize(
+    "groups", [{G_OFFICIAL: ""}, {"": "OFFICIAL"}], ids=["empty-value", "empty-group"]
+)
+def test_a_group_table_entry_must_grant_a_value(groups) -> None:
+    with pytest.raises(ValidationError):
+        ValueSource(groups=groups)
+    with pytest.raises(ValidationError):
+        CodesSource(groups={g: [v] for g, v in groups.items()})
+
+
+def test_a_mapping_other_than_the_fixed_names_needs_its_tenant() -> None:
+    """Without `tenant_id` an Entra mapping would demand no `oid`, `tid` or `exp` and no issuer or
+    audience check: refused when the settings load."""
+    with pytest.raises(ValidationError, match="tenant_id"):
+        ClaimMapping(clearance=ValueSource(claim=f"{EXT}_clearance"))
+    with pytest.raises(ValidationError, match="tenant_id"):
+        ClaimMapping(handling_codes=CodesSource(groups={G_CODE_R: ["R"]}))
+
+
+@pytest.mark.parametrize(
+    "tenant", ["", "contoso", TENANT.upper() + "x"], ids=["empty", "name", "bad"]
+)
+def test_the_tenant_id_must_be_a_guid(tenant) -> None:
+    with pytest.raises(ValidationError, match="tenant_id"):
+        ClaimMapping(tenant_id=tenant, clearance=ValueSource(claim=f"{EXT}_clearance"))
 
 
 def test_the_settings_refuse_an_unknown_key() -> None:
@@ -417,6 +496,40 @@ def test_the_default_mapping_is_the_fixed_claim_names(keypair, jwks_url) -> None
         "unit-1",
         ["R"],
     )
+    assert principal.roles == ["analyst"]
+
+
+def test_the_default_mapping_reads_one_code_or_role_as_one_not_its_letters(
+    keypair, jwks_url
+) -> None:
+    """Two old behaviours tightened for every deployment: `list("RS")` granted codes `R` and `S`,
+    and a role given as a string was split the same way."""
+    principal = PrincipalResolver(_config(jwks_url)).resolve(
+        sign_token(_key(keypair), default_claims(receivable_handling_codes="RS", roles="analyst"))
+    )
+    assert principal.receivable_handling_codes == ["RS"]
+    assert principal.roles == ["analyst"]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"clearance": ["OFFICIAL"]},
+        {"clearance": ""},
+        {"org_unit": 3},
+        {"receivable_handling_codes": {"R": True}},
+        {"roles": 1},
+    ],
+    ids=["list-clearance", "empty-clearance", "numeric-unit", "object-codes", "numeric-roles"],
+)
+def test_the_default_mapping_refuses_a_claim_of_the_wrong_type(
+    keypair, jwks_url, overrides
+) -> None:
+    """Formerly `str()`-ed or `list()`-ed (or a 500); now a 401, as a missing claim is."""
+    with pytest.raises(PrincipalResolutionError):
+        PrincipalResolver(_config(jwks_url)).resolve(
+            sign_token(_key(keypair), default_claims(**overrides))
+        )
 
 
 def test_the_default_mapping_does_not_read_entra_attributes(keypair, jwks_url) -> None:
