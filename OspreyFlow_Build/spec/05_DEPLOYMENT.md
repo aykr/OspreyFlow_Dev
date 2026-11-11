@@ -1032,8 +1032,26 @@ that would fail if it were broken:
   fault in its tests;
 - a managed store's detail reaches only a container that reads it, from the platform's secrets,
   and no secret is in a rendered file: `tests/harness/test_cloud_platform_render.py`;
-- egress is allowed by network to the hosts the settings name (S3, STS, the mail server, enabled
-  model engines, proxied map sources, connector hosts) and nowhere else: the same file;
+- egress is allowed to the cluster's DNS, the namespace's own pods, the platform settings file's
+  `managed_nets`, and the hosts the settings name (S3, STS, the mail server, enabled model engines,
+  proxied map sources, connector hosts), each by its own networks, and nowhere else: the same file.
+  **`managed_nets` is wider than our stores**: in the client's settings file it is the whole shared
+  VPC (`172.20.0.0/16`), every other tenant's managed stores in it as well as ours, so a pod may
+  reach any address in that VPC. It should be narrowed to our stores' own subnets (the database's,
+  the cache's and the search domain's) once the platform's team give them;
+- no one setting opens egress: an egress network wider than /16 (IPv4, the largest block AWS gives
+  a VPC) or /48 (IPv6, one site's), a default route above all, is refused in `osprey.yaml` and in a
+  platform's settings file (`test_a_network_that_would_open_egress_is_refused`,
+  `test_a_platform_s_networks_that_would_open_egress_are_refused`), and in the rendered policies an
+  allowing egress rule with no destination or with such a network is refused by `make
+  cp-policy-check` (`open-egress`, each red on the rendered values);
+- no other tenant reaches a pod: every pod is selected by an ingress policy, and every ingress rule
+  admits only the namespace's own pods or the platform's ingress controller's namespace (`make
+  cp-policy-check`'s `ingress-isolation`, red on a dropped and on a widened policy);
+- every container names its CPU and memory request and its memory limit, ArcadeDB's heap is set
+  from its limit, and a volume's group is applied once, not walked at every start
+  (`fsGroupChangePolicy: OnRootMismatch`): `make cp-policy-check`'s `no-resources` and
+  `fs-group-walk`;
 - `local-lite`, `small` and `cluster` render as before: shown once, at P7's merge, by a comparison
   against `main` in the build record (a script in no gate); after it, each profile's own render
   tests hold it (`test_cluster_render.py`, `test_helm_chart.py`),
@@ -1042,8 +1060,12 @@ that would fail if it were broken:
 
 It is **not yet** proven on a cluster: the acceptance run on a kind cluster set up to the platform's
 rules is the build plan's step P7a, and live on the platform is recorded once the client's
-namespaces exist. What P7 did show on kind (the stores, the Conduit and the workers running as
-10001, the Calico policies applied) is in the build record.
+namespaces exist. What P7 showed is narrower, and is in the build record: ArcadeDB, ClickHouse,
+Keeper and LiteLLM, and the init containers' `postgres`, each started as 10001:10001 with every
+capability dropped, as the chart starts them, in Docker; on kind, the stores' pods ran as 10001.
+**P7a's to show**, since the kind run did not: the Conduit and the workers running as 10001 (both
+were restarting there), Keycloak starting with group 0, and the egress policies enforced (the
+egress check timed out).
 
 ## 4. Moving up a profile
 
