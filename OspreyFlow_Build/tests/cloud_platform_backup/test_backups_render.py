@@ -350,3 +350,21 @@ def test_the_render_carries_the_backups_itself() -> None:
     assert "terraform/backups.tf" in files
     values = yaml.safe_load(files["values.yaml"])
     assert values["backups"]["serviceAccountName"] == backups.SERVICE_ACCOUNT
+
+
+@pytest.mark.parametrize("field", ["service_account", "gateway_service_account"])
+@pytest.mark.parametrize("taken", [backups.SERVICE_ACCOUNT, backups.CLICKHOUSE_SERVICE_ACCOUNT])
+def test_an_irsa_account_named_as_a_backups_account_is_refused(field: str, taken: str) -> None:
+    """P7b's rule, each pod under its own account: the namespace's IRSA account, or the gateway's,
+    named as one of the backups' would put two roles' trust on one name."""
+    from harness.cloud_platform.settings import load_platform
+
+    cfg = rendered.config("development")
+    assert cfg.cloud_platform is not None
+    platform = load_platform(cfg.cloud_platform.platform)
+    other = "ospreyflow-unrelated" if field == "gateway_service_account" else platform.secrets.irsa.service_account
+    irsa = platform.secrets.irsa.model_copy(update={"service_account": other, field: taken})
+    platform = platform.model_copy(update={"secrets": platform.secrets.model_copy(update={"irsa": irsa})})
+    found: dict[str, Any] = yaml.safe_load(rendered.artefacts("development")["values.yaml"])
+    with pytest.raises(ValueError, match=f"names '{taken}', the backups' own account"):
+        backups.add_backups(cfg, platform, found)

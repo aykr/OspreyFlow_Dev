@@ -364,6 +364,16 @@ def add_backups(
     found = backups_values(config, platform, values["workloads"], values["environment"])
     if found is None:
         return {}
+    irsa = platform.secrets.irsa
+    if taken := {irsa.service_account, irsa.gateway_service_account} & {
+        SERVICE_ACCOUNT,
+        CLICKHOUSE_SERVICE_ACCOUNT,
+    }:
+        # Each pod under its own account (P7b's rule): the backups' accounts never the namespace's
+        # IRSA account or the gateway's, or one name would be trusted by two roles.
+        raise ValueError(
+            f"secrets.irsa names {sorted(taken)[0]!r}, the backups' own account: name another"
+        )
     values["backups"] = found
     deployment_user = str(values["environment"].get("CLICKHOUSE_USER", "default"))
     values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(deployment_user)

@@ -256,6 +256,9 @@ runner.PLANTS = [
      [TP + "test_a_restore_into_a_deployment_whose_clickhouse_database_is_gone_puts_the_sets_in"]),
     ("the live ClickHouse database never set aside", RUN, '        if live.strip() == "1":', "        if False:",
      [TP + "test_a_restore_beside_the_live_clickhouse_database_swaps_it_and_drops_the_old"]),
+    ("an IRSA account named as one of the backups' let through (P7b: each pod under its own account)", RENDER,
+     "    if taken := {irsa.service_account, irsa.gateway_service_account} & {", "    if taken := set() & {",
+     [TR + "test_an_irsa_account_named_as_a_backups_account_is_refused"]),
 ]
 
 if __name__ == "__main__":
