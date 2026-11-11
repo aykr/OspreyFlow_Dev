@@ -4,6 +4,8 @@
 profile: cloud-platform
 components:
   analytics_engine: clickhouse
+  # The poc shape makes no OpenSearch domain (ADR-148 Amendment 5): search is PostgreSQL's own.
+  search: postgres-fulltext
 network:
   public_origin: https://ospreyflow-poc.apps.example.org
 cloud_platform:

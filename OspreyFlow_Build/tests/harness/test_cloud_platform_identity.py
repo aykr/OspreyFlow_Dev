@@ -68,6 +68,8 @@ def test_identity_is_given_the_settings_and_our_secret_together(
     assert {k: configured["held"][k] for k in environment} == environment
     assert kube.calls[0][0] == ["kubectl", "-n", "ospreyflow-poc", "get", "secret",
                                 "ospreyflow-secrets", "-o", "jsonpath={.data}"]  # fmt: skip
+    # The Python step's own kubectl, as the runbook's: the namespace's, never cluster-wide.
+    assert all(argv[:3] == ["kubectl", "-n", "ospreyflow-poc"] for argv, _ in kube.calls)
 
 
 def test_the_first_administrator_is_made_and_its_code_said_once(

@@ -65,9 +65,6 @@ NOT_RENDERED = frozenset({"proxy", "ollama", "ollama-models", "whisper", "whispe
 #: env, as the workspace's nginx does, is not handed the database's password for that).
 READERS = frozenset({"api", "worker", "report-sync", "superset"})
 
-#: Decision 10: the profile's ceiling when the deployment names none.
-DEFAULT_CEILING = "OFFICIAL-SENSITIVE"
-
 #: Decision 5: one of each in development.
 DEVELOPMENT_REPLICAS = {
     "workspace": 1, "api": 1, "report-sync": 1, "superset": 1, "worker": 1, "keycloak": 1,
@@ -135,6 +132,16 @@ def _refuse(config: OspreyConfig) -> None:
         raise CloudPlatformNotRenderable(
             "a cloud platform runs ArcadeDB (ADR-148 decision 5); components.graph_store is "
             f"{config.components.graph_store.value!r}"
+        )
+    cp = config.cloud_platform
+    if (
+        cp is not None
+        and cp.shape == "poc"
+        and config.components.search is SearchBackend.OPENSEARCH
+    ):
+        raise CloudPlatformNotRenderable(
+            "the poc shape makes no OpenSearch domain (ADR-148 Amendment 5), so its Conduit would "
+            "reach for one that is not there: set components.search: postgres-fulltext"
         )
     if config.components.source_path is not None:
         raise CloudPlatformNotRenderable(
@@ -645,6 +652,17 @@ def _heap_from_the_limit(pod: dict[str, Any], profile: ProfileSettings) -> None:
         pod["env"].append({"name": "ARCADEDB_OPTS_MEMORY", "value": opts})
 
 
+def _as_written(config: OspreyConfig) -> dict[str, Any]:
+    """The deployment's own configuration for the values' copy, its shape left out at its default
+    (ADR-148 Amendment 5): the copy is in the ConfigMap whose checksum restarts every pod when it
+    changes, so a deployment rendered before the shape existed reads the same after it."""
+    raw = config.model_dump(mode="json", exclude_none=True)
+    cloud = raw.get("cloud_platform") or {}
+    if cloud.get("shape") == "standard":
+        del cloud["shape"]
+    return raw
+
+
 def _without(lock: str, services: set[str]) -> str:
     """The lock without the entries of `services` (the poc shape's Keeper, which no pod runs), its
     header and every other entry as written."""
@@ -722,6 +740,7 @@ def render_cloud_platform(
     from harness.cloud_platform.terraform import render_terraform
     from harness.cluster import render_cluster
     from harness.render import service_images
+    from harness.site import highest_marking
 
     _refuse(config)
     platform = load_platform(_cp(config).platform)
@@ -818,10 +837,9 @@ def render_cloud_platform(
         },
         sort_keys=True,
     )
-    # Decision 10: the client's platform holds OFFICIAL-SENSITIVE at most; the profile's default
-    # ceiling is that, not the handling scheme's highest. A deployment naming its own keeps it.
-    if config.deployment.highest_marking is None:
-        environment["OSPREY_HIGHEST_MARKING"] = DEFAULT_CEILING
+    # Decision 10: the ceiling from its one source, for this deployment as it is (the cluster's
+    # translation above is another profile's, whose default is the scheme's highest).
+    environment["OSPREY_HIGHEST_MARKING"] = highest_marking(config)
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
     environment.update(install.settings)
@@ -863,9 +881,7 @@ def render_cloud_platform(
         "files": {
             **files,
             # The deployment's own configuration, as it was written, not the cluster's shape.
-            "osprey.yaml": yaml.safe_dump(
-                config.model_dump(mode="json", exclude_none=True), sort_keys=False
-            ),
+            "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
         },
         "workloads": workloads,
         "jobs": jobs,

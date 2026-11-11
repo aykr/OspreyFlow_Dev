@@ -151,7 +151,7 @@ def test_the_runbooks_are_rendered_for_the_poc_shape_alone() -> None:
 def test_a_platform_block_is_left_to_the_platform() -> None:
     from harness.cloud_platform.runbooks import command_blocks
 
-    text = "x\n```sh\necho everywhere\n```\n\n```sh platform\necho there\n```\n```python\nno\n```\n"
+    text = "x\n```bash\necho everywhere\n```\n\n```bash platform\necho there\n```\n```sh\nno\n```\n"
     assert command_blocks(text, on_the_platform=True) == ["echo everywhere\n", "echo there\n"]
     assert command_blocks(text, on_the_platform=False) == ["echo everywhere\n"]
 
@@ -220,13 +220,23 @@ def test_no_command_needs_more_than_a_namespace_s_rights(runbooks: dict[str, str
     (volumes, every kind there is), and the disks are read from the account, by the claims'
     namespace tag, in a block of the platform's (the self-review of P7b, point 2)."""
     for name, text in runbooks.items():
-        everything = "".join(command_blocks(text, on_the_platform=True))
+        # One logical line a command, continuations joined, wherever in the line it stands.
+        everything = "".join(command_blocks(text, on_the_platform=True)).replace("\\\n", " ")
+        everything = re.sub(r'echo "[^"]*"', "echo", everything)  # words said, not commands run
         assert not re.search(r"kubectl (get|delete) (pv|persistentvolume)s?\b", everything), name
         assert "--namespaced" not in everything, name
-        for command in re.findall(
-            r"^\s*kubectl (?!api-resources|config|auth)(.*)$", everything, re.M
-        ):
+        kubectl = re.findall(
+            r"(?<!-v )\bkubectl (?!api-resources|config|auth)([^\n|;)]*)", everything
+        )
+        assert kubectl, name
+        for command in kubectl:
             assert '-n "$NS"' in command, (name, command)
+        for command in re.findall(r"(?<!-v )\bhelm (?!version)([^\n|;)]*)", everything):
+            assert '-n "$NS"' in command, (name, command)
+        # Every AWS call names its region: without one, the profile's default answers, and an
+        # empty answer from the wrong region reads as nothing there.
+        for command in re.findall(r"\baws ([a-z0-9]+ [a-z-]+[^\n|;)]*)", everything):
+            assert '--region "$REGION"' in command, (name, command)
     platform = "".join(command_blocks(runbooks["DECOMMISSION.md"], on_the_platform=True))
     rehearsal = "".join(command_blocks(runbooks["DECOMMISSION.md"], on_the_platform=False))
     assert "aws ec2 describe-volumes" in platform and "aws ec2" not in rehearsal
@@ -240,7 +250,7 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
     (decision 8), before `helm` reads them; then the first administrator."""
     text = runbooks["INSTALL.md"]
     order = [
-        text.index("--allow-unpinned"),
+        text.index('"$CONFIG" --allow-unpinned\n```'),
         text.index("aws ecr get-login-password"),
         text.index("ospreyflow images push"),
         text.index('-m harness.render --config "$CONFIG"\n```\n\n## 5'),
@@ -309,3 +319,28 @@ def test_the_lock_names_only_the_images_a_poc_pod_runs() -> None:
     assert "clickhouse-keeper" not in services and "clickhouse" in services
     standard = yaml.safe_load(_artefacts(_config("development"))["versions.lock"])
     assert "clickhouse-keeper" in {entry["service"] for entry in standard["images"]}
+
+
+def test_a_poc_naming_opensearch_is_refused_in_words() -> None:
+    """The poc shape makes no OpenSearch domain, so a deployment that names OpenSearch as its search
+    would start a Conduit reaching for a domain that is not there (the orchestrator's review)."""
+    from harness.cloud_platform import CloudPlatformNotRenderable
+
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    raw["components"]["search"] = "opensearch"
+    with pytest.raises(CloudPlatformNotRenderable, match="postgres-fulltext"):
+        _artefacts(OspreyConfig.model_validate(raw))
+
+
+def test_the_standard_shape_leaves_the_configuration_s_copy_as_it_was() -> None:
+    """The orchestrator's review: the values carry the deployment's own configuration, whose
+    ConfigMap's checksum restarts every pod when it changes. A P7 deployment upgraded to this
+    release must not restart for a setting it never wrote, so the default shape is left out of
+    the copy; a poc deployment's copy names its shape."""
+    for name in ("development", "production"):
+        copy_ = yaml.safe_load(_values(_config(name))["files"]["osprey.yaml"])
+        assert "shape" not in copy_["cloud_platform"], name
+    assert (
+        yaml.safe_load(_values(_config())["files"]["osprey.yaml"])["cloud_platform"]["shape"]
+        == "poc"
+    )
