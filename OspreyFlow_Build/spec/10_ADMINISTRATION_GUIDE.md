@@ -1537,7 +1537,7 @@ still restores one, looking in the deployment's folder first. A set the doctor c
 `ospreyflow doctor` warns when the backups folder is under a folder a sync client copies: on
 macOS, `~/Library/CloudStorage` (Google Drive, OneDrive, Dropbox), `~/Library/Mobile Documents`
 (iCloud Drive), `~/Documents` or `~/Desktop` (which iCloud syncs when "Desktop & Documents" is
-on); and a `OneDrive` folder on any system (Windows, or WSL's `/mnt/c/Users/…`). It is a
+on); and a `OneDrive` folder on any system (Windows, or a Windows home folder under WSL's `/mnt/c/`). It is a
 warning, not a refusal, because you may mean it. A folder reached through a link is judged by
 where the link points. `ospreyflow doctor --config <answers>` checks the answers' folder before
 the install.
