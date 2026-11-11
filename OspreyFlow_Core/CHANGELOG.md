@@ -79,8 +79,9 @@ these steps in this order. Each takes `--name <x>`, the deployment's own name.
    7. `remark_alert_nodes` re-marks alerts written before this release no lower than the links they
       cite. An alert resting on markings of different units is listed, not changed.
 6. Assign the **Rule author** role to someone in Admin, so that the converted rule drafts can be
-   written and tested; no one is given it on update. Making a rule live needs *Deploy rules*, which
-   Analysts and Data Engineers hold (and the Super user preset), not Rule author alone.
+   written and tested; no one is given it on update. Making a rule live needs *Deploy rules* and a
+   role that opens Rules and Monitoring: an Analyst has both, as does the Super user preset; Rule
+   author alone does not, and a Data Engineer cannot open the place.
 7. Give an owner to each home case named "needs an owner": Admin › Datasets › *Change owner…*.
 
 - **Plain `ospreyflow update` first is refused.** Run on a v0.4.12 deployment before step 2, it
@@ -206,6 +207,8 @@ checker cannot decide it, so text too faint to read fails the build.
   `ospreyflow start --build`.
 - **An install is refused at preflight if `127.0.0.1:2480` is already taken.** As a workaround, set
   `OSPREY_ARCADEDB_PORT` to the graph port.
+- **A rule kept just for its author** (from a template or a sentence) raises *Watched pattern*
+  alerts at medium severity, although the template's card says high.
 - **Two v0.4.12 updates of different deployments within one hour are refused.** Update them one at a
   time, each with `ospreyflow update --name <deployment>`.
 
