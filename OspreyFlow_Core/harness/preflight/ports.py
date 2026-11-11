@@ -129,11 +129,13 @@ def read_env_file(path: Path) -> dict[str, str]:
         name, sep, value = line.partition("=")
         if not sep or not name.strip():
             continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
+        quoted = value.strip()
+        if len(quoted) >= 2 and quoted[0] == quoted[-1] and quoted[0] in "'\"":
+            value = quoted[1:-1]
         else:
-            value = re.split(r"\s#", value, maxsplit=1)[0].rstrip()
+            # The comment's space is looked for before the value is stripped: `X= # note` is
+            # empty, as Compose reads it, not "# note" (the lane review of the carries, item 9).
+            value = re.split(r"\s#", value, maxsplit=1)[0].strip()
         values[name.strip()] = value
     return values
 

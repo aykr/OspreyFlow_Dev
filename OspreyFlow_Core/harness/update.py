@@ -22,13 +22,15 @@ checked is the one the deployment was rendered with (`OSPREY_RELEASE_VERSION` in
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,6 +39,7 @@ from typing import Any
 import yaml
 
 from harness import ingest_uploads, model_downloads, store_volumes
+from harness.atomic import replace_whole
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
     GITHUB_API,
@@ -119,6 +122,113 @@ def check(directory: Path, repo_root: Path, *, github_api: str = GITHUB_API) -> 
 # --- update -------------------------------------------------------------------------------------
 
 Run = Callable[[Sequence[str]], tuple[int, str]]
+
+
+#: The restarts a files pass found needed, kept in the deployment's `state/` until done (refresh
+#: writes it, `start --build` and `update` clear it after their restarts; ADR-114 Amendment 39).
+PENDING_RESTARTS = "refresh-pending.json"
+#: The open lock an `update` hands its `--files-only` child, by descriptor number: the child is a
+#: process of its own, and would otherwise find its own parent's lock held and refuse.
+LOCK_FD_VARIABLE = "OSPREYFLOW_REFRESH_LOCK_FD"
+#: The deployments this process holds the lock of: how deeply, and by which descriptor.
+_HELD: dict[Path, list[int]] = {}
+
+
+class ChangeUnderWay(Exception):
+    """Another refresh or update of the deployment holds its lock, or this account cannot open
+    it."""
+
+
+def lock_path(directory: Path) -> Path:
+    """Beside the deployment, keyed by its resolved folder, so two names for it share one lock."""
+    real = directory.resolve()
+    return real.parent / f".{real.name}.refresh-lock"
+
+
+def _inherited(path: Path) -> int | None:
+    """The lock a parent `update` handed this process, believed only when the descriptor is that
+    very file and flocks (it shares the parent's open file, so it does while the parent holds
+    it)."""
+    raw = os.environ.get(LOCK_FD_VARIABLE, "")
+    if not raw.isdigit():
+        return None
+    descriptor = int(raw)
+    try:
+        held, on_disk = os.fstat(descriptor), os.stat(path)
+        if (held.st_dev, held.st_ino) != (on_disk.st_dev, on_disk.st_ino):
+            return None
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    return descriptor
+
+
+def _opened(path: Path) -> int:
+    """The lock opened **read-only** (`flock` needs no write access, so one a run under sudo left
+    root's stops no later run); made `644` on the open file if new, whatever the umask."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        pass
+    except OSError as cannot:  # the folder another account's, or a read-only file system
+        raise ChangeUnderWay(
+            f"The refresh lock {path} cannot be made ({cannot.strerror}): this account may not "
+            f"write {path.parent} (a run under sudo can leave it root's), so nothing was changed. "
+            "Give the folder back to this account, then run this again."
+        ) from None
+    else:
+        os.fchmod(descriptor, 0o644)
+        return descriptor
+    try:
+        return os.open(path, os.O_RDONLY)
+    except PermissionError:
+        raise ChangeUnderWay(
+            f"The refresh lock {path} belongs to another account (a run under sudo) and this "
+            "one cannot open it, so nothing was changed. Remove it as that account (sudo rm "
+            f"{path}), then run this again."
+        ) from None
+
+
+@contextlib.contextmanager
+def one_change(directory: Path) -> Iterator[None]:
+    """One refresh or update of a deployment at a time, **for the whole of it**: `start --build`'s
+    files pass, build, stores' move, `up` and restarts, and `update`'s backup, files step, pull,
+    stores' move, `up`, restarts and rollback (the orchestrator's review of c5209b1, item 7). Two
+    would share one stage, move the stores together and clear each other's pending record."""
+    key = directory.resolve()
+    if key in _HELD:
+        _HELD[key][0] += 1
+        try:
+            yield
+        finally:
+            _HELD[key][0] -= 1
+        return
+    path = lock_path(directory)
+    descriptor = _inherited(path)
+    owned = descriptor is None
+    if descriptor is None:
+        descriptor = _opened(path)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(descriptor)
+            raise ChangeUnderWay(
+                "another refresh or update of this deployment is under way, so nothing was "
+                "changed; wait for it to finish, then run this again."
+            ) from None
+    _HELD[key] = [1, descriptor]
+    try:
+        yield
+    finally:
+        _HELD.pop(key, None)
+        if owned:
+            os.close(descriptor)
+
+
+def held_lock(directory: Path) -> int | None:
+    """The descriptor of the lock this process holds for `directory`, if it holds it."""
+    held = _HELD.get(directory.resolve())
+    return held[1] if held else None
 
 
 class UpdateFailed(Exception):
@@ -278,7 +388,10 @@ _KEPT_DIRECTORIES = ("keycloak-theme",)
 
 def _keep_rollback_point(directory: Path, version: str, commit: str) -> Path:
     point = directory / "rollback" / f"{version}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
-    point.mkdir(parents=True)
+    # Private before anything is copied in: `copy2` gives deployment.env's copy its 600 only once it
+    # is done (the orchestrator's review of ad4bef7).
+    point.mkdir(parents=True, mode=0o700)
+    point.chmod(0o700)  # whatever the umask took off
     for item in directory.iterdir():
         if item.is_file():
             shutil.copy2(item, point / item.name)
@@ -298,8 +411,21 @@ def _put_back(directory: Path, point: Path) -> None:
         if item.is_dir():
             shutil.rmtree(directory / item.name, ignore_errors=True)
             shutil.copytree(item, directory / item.name)
+        elif item.name.endswith(".env"):
+            # The secrets back whole or not at all, a symlink kept a link (every writer of
+            # deployment.env goes through harness.atomic).
+            replace_whole(directory / item.name, item.read_bytes(), mode=0o600)
         else:
-            shutil.copy2(item, directory / item.name)
+            _copy_not_a_secret(item, directory)
+
+
+def _copy_not_a_secret(item: Path, directory: Path) -> None:
+    """A put-back file that holds no secret, copied in place so that a container mounting it on its
+    own keeps seeing it. Refuses an env file, which must go through `replace_whole`: the one copy
+    the scan of every writer allows (`tests/harness/test_env_writers_whole.py`)."""
+    if item.name.endswith(".env"):
+        raise ValueError(f"{item.name} holds secrets: it is replaced whole, never copied in place")
+    shutil.copy2(item, directory / item.name)
 
 
 def _conflicts(host: Host, repo: Path, tag: str) -> list[str]:
@@ -357,7 +483,25 @@ def apply_update(
     bundle: Path | None = None,
     confirm: Callable[[str], bool],
 ) -> int:
-    """0 updated (or already current), 1 refused or failed and rolled back, 2 rollback failed."""
+    """0 updated (or already current), 1 refused or failed and rolled back, 2 rollback failed.
+    Under the deployment's lock for the whole of it, its files step's child included."""
+    try:
+        with one_change(directory):
+            return _apply_update(directory, repo, host, to=to, bundle=bundle, confirm=confirm)
+    except ChangeUnderWay as refused:
+        print(f"ospreyflow: {refused}", file=sys.stderr)
+        return 1
+
+
+def _apply_update(
+    directory: Path,
+    repo: Path,
+    host: Host,
+    *,
+    to: str | None,
+    bundle: Path | None,
+    confirm: Callable[[str], bool],
+) -> int:
     from harness.bundle import BundleRefused
     from harness.bundle import open_bundle as unpack
 
@@ -463,6 +607,9 @@ def apply_update(
             if changed.get(flag):
                 _ok(host, [*compose, "restart", service], "start the release")
                 _ok(host, up, "start the release")
+        # Every restart the files called for is done: the files pass's record of them, kept until
+        # now so an update killed before its restarts leaves them owed (ADR-114 Amendment 39).
+        (directory / "state" / PENDING_RESTARTS).unlink(missing_ok=True)
         verify_running(host, directory, prepared.lock, prepared.image_ids)
     except store_volumes.StoresNotMoved as failed:
         print(
@@ -622,12 +769,16 @@ DEPLOYMENT_DIR = "OSPREYFLOW_DEPLOYMENT_DIR"
 
 
 def _subprocess(
-    argv: Sequence[str], cwd: Path | None = None, env: Mapping[str, str] | None = None
+    argv: Sequence[str],
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    pass_fds: Sequence[int] = (),
 ) -> tuple[int, str]:
     try:
         done = subprocess.run(
-            list(argv), capture_output=True, text=True, check=False, cwd=cwd, timeout=7200, env=env
-        )
+            list(argv), capture_output=True, text=True, check=False, cwd=cwd, timeout=7200,
+            env=env, pass_fds=tuple(pass_fds),
+        )  # fmt: skip
     except (OSError, subprocess.SubprocessError) as failed:
         return 1, str(failed)
     return done.returncode, (done.stdout + done.stderr).strip()
@@ -687,7 +838,14 @@ def real_host(
         # The deployment named to refresh, never left for it to find (ADR-114 Amendment 39): a
         # deployment kept by name is not the checkout's own (ADR-138).
         def run_here(argv: Sequence[str]) -> tuple[int, str]:
-            return _subprocess(argv, cwd=repo, env={**os.environ, DEPLOYMENT_DIR: str(directory)})
+            env = {**os.environ, DEPLOYMENT_DIR: str(directory)}
+            env.pop(LOCK_FD_VARIABLE, None)
+            held = held_lock(directory)
+            if held is None:
+                return _subprocess(argv, cwd=repo, env=env)
+            # The child under this update's own lock, handed on rather than refused (item 7).
+            env[LOCK_FD_VARIABLE] = str(held)
+            return _subprocess(argv, cwd=repo, env=env, pass_fds=(held,))
 
         said = _ok_real(
             run_here,

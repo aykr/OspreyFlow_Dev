@@ -67,3 +67,102 @@ Amendments 37 and 38 give.
 - Run 3 (rules, a9f5c69): `ospreyflow start --name osprey-upg` after the failed first apply recovered the deployment (litellm-db exited 0, the role made, 12 healthy, the gateway's master key equal to the Conduit's, GET /v1/models 200), which is why the words name `start`.
 - Run 4 (rules, live on ospreyflow-test, a fresh v0.4.12 at d85f514; evidence `/root/osprey-runs/rules-upg/logs/05{a,d,e}-*.txt`, `05-apply-1.log`): (a) the refusal, 43 of 43 files unchanged; (b)'s first `ospreyflow apply --name osprey-upg` exited 0, litellm-db ran, 12 healthy, the gateway's master key equal to the Conduit's by hash, GET /v1/models 200; the key move said "not moved… stay in deployment.env" on v0.4.12's api, as expected. **The whole-project up recreated api, litellm, ner, report-sync, superset and workspace, and made litellm-db; no store was recreated** (postgres, arcadedb, opensearch, valkey kept their container IDs and identical named-volume mounts; no volume emptied; rows identical: 3 cases, 2 datasets, 2 rules, 1 saved pattern; postgres-data 79 → 109 MB, the gateway's database; opensearch-data 812 → 720 KiB, its container untouched).
 - Run 4, the rest (rules; logs committed by rules under `process/lanes/rules/gates/upg-run4/`): `ospreyflow update` said "Already at v0.4.12; nothing to do" (no newer release exists), so the release's pull was stood in for by `harness.apply --build` (12 healthy, verify 3/3; it moved the key into the gateway); the second `ospreyflow apply` said "no model key to move". (c) today's files step twice, with the deployment named: 43 of 43 files unchanged. (d) seven migrations, each re-run writes 0. End state: no `OSPREY_MODEL_KEY_*` left, `KEYS_IN_GATEWAY=yes`, the gemini key present in the gateway; 77 of 77 secrets held at v0.4.12 byte-identical (only the moved key went, with `OSPREY_MODEL_ENGINES` and `OSPREY_RELEASE_VERSION`); the gateway's master key equal to the Conduit's, GET /v1/models 200; a Ledger rule made under v0.4.12 raised an alert after the upgrade. **Not proven:** api and workspace on a v0.5.0 lock's digests, and `update`'s real pull, pin and rollback (no release exists yet: owed by one real `ospreyflow update --name` after the tag); the checkout's own deployment's plain path (ii) (the box's osprey-small holds 2480), covered by the unit cases.
+
+## Carries (lane/platform-b-carries, 11 November 2026)
+
+- The chart's checksum annotations (the merger's find): `test_a_checksum_that_reads_as_a_number_is_still_a_string_kubernetes_takes` sets `environment` to `{OSPREY_PROBE: "2354"}` (its sha256 prefix is `3625796312017304`, all digits) and renders through `helm template` and kubeconform. Red on the server before `| quote` (the annotation came back as the int 3625796312017304); green after, 20 of 20 chart tests on the server. Audit: the two `workloads.yaml` lines were the chart's only unquoted hashes (`jobs.yaml`'s sits inside a `printf` name).
+- `write_private`, atomic: a write failing part way left the old file truncated, red; a run under sudo not given the old owner, red; both green after. The 600 case passed before, so it is a guard.
+- The staged refresh's edges, each red first in `tests/test_refresh_carries.py` and planted red after: the pending restarts (a run that dies after the move), the owner kept on the move, the stage glob, the lock, a symlinked `compose.yaml`, `export` lines, the shell. The symlink case was first written on `litellm.yaml`, which passed for the wrong reason (a mounted file is written in place), so it moved to `compose.yaml`. `test_refresh.py`'s `--files-only` case now expects the owed restart once.
+- The lockout's words: `ospreyflow stop` asked Compose anyway, red; apply's port lookup asked Compose anyway, planted red. The CLI's copy and the harness's are held to the same answers on the required, unset-only, plain, defaulted and escaped forms, the shell and `export` lines.
+- Lint: the touched Build tests tidied of I001, RUF028 and ISC004; 132 green after.
+
+### Carries, after my own lane review (11 November 2026, on the test server, offline)
+
+Each new test written against the reviewed code, then each fix planted back out at its call site
+(`/tmp/p11plants/plant.py` and `carries_plants.py`: replace, run, restore); every one red for its
+stated reason, green with the fix.
+
+| Plant | Fault put back | Red |
+|---|---|---|
+| A1 | `store_volumes.put_back` rewriting `deployment.env` in place | the witness link saw the rewrite (`test_put_back_replaces_…`) |
+| A2 | `apply.move_into_place` copying `deployment.env` with `copytree` | the same (`test_apply_s_move_into_place_replaces_…`) |
+| R1 | refresh counting a value in the shell as held | `test_a_value_only_in_the_shell_is_not_held`: `[] == ['OSPREY_LITELLM_SALT_SECRET']` |
+| R2 | the lock on the files pass alone | `test_the_lock_is_held_through_the_build_and_the_restarts`: free at build, up and restart |
+| R3 | the lock opened for writing | `test_the_lock_file_is_opened_read_only` |
+| R4 | a stale stage left by another account not said | `FileExistsError` instead of words |
+| R5 | `--files-only` clearing the record | `test_files_only_leaves_the_restarts_owed`: no record |
+| R6 | a stores refusal dropping what an earlier run owed | `test_a_stores_refusal_keeps_…`: no record |
+| R7 | a bare rename (no owner kept, the link replaced) | `…keeps_its_owner`: nothing given an owner; `…symlinked_deployment_env…`: not a link |
+| U1 | `update` never clearing the record | `test_an_update_clears_the_record_after_its_restarts` |
+| H1 | `checksum/files` unquoted | `9266205751740302 == '9266205751740302'` (the files probe `{"probe.txt": "420"}`) |
+| H2 | a ConfigMap key unquoted | Helm: "unsupported map key of type: <nil>" (`NULL`) |
+| C1 | `_compose_of` not checking | stop, start, logs, status, uninstall each answered 0 or asked Compose |
+| C2 | `switch` with no label fallback | `switch` answered 1 |
+
+The parity case gained a quoted value, an unquoted ` #` comment and an empty shell value; the comment
+case was **red against both readers**, the CLI's copy and the shared `read_env_file` alike (`X= #
+note` read as `# note`), and both were fixed. The owner cases now give the old file an owner the
+runner is not (4242), so a version taking the runner's or the new file's owner fails. Earlier counts
+corrected: "20 of 20 chart tests" is `test_helm_chart.py`'s 20 collected (12 functions, parametrised);
+"132 green" named no file set and is withdrawn in favour of the counts in `SERVER_LOG-carries.md`.
+
+The lane review's table above holds **14 plants** (A1–A2, R1–R7, U1, H1–H2, C1–C2), not the 16 the
+report and friction row said.
+
+### Carries, after the orchestrator's review of c5209b1 (11 November 2026, on the Mac, offline)
+
+Each case written red first against c5209b1, or, where its first red was only a missing name or a
+setup error, shown red again by a plant of the real defect at its call site (copy, replace, run,
+restore; every plant removed, `grep -c PLANT` 0 after each). Offline, closed ports, on the Mac.
+
+| Plant | Fault | Red |
+|---|---|---|
+| O1 | the three in-place writers (as at c5209b1) | `test_env_writers_whole.py`: the scan named all three (before `ALLOWED` gained `_put_back`, which then hid it: see L2); each writer's hard-link witness saw the rewrite (5 failed) |
+| O2 | the Redactor hiding our own words (as at c5209b1; then `if False:` for the new branch) | `test_refusal_words_reach_the_operator.py`: start --build's two refusals and update's line hidden (5 failed); planted, 3 failed: the gateway and update cases named no variable, so passed without the branch (see L3) |
+| O3 | `FilesHeld` skipping a symlink (as at c5209b1) | `test_refresh.py::…symlinked_file_through_its_link[compose.yaml, deployment.env]`: the target kept the refresh's bytes. **The test was then lost** (the round set aside with `git diff`, `checkout` and `apply` brought back only `store_volumes.py`) and committed without it; restored at L1 |
+| O4 | the owner taken from the staged file (`_owner_of(Path(staged))`) | with the path-keyed stand-in, both owner cases red; with c5209b1's any-path stand-in, the same plant **passed** |
+| O5 | the lock made under umask 077, an unreadable lock (as at c5209b1) | `…lock_file_is_644_whatever_the_umask`: 600; `…cannot_open_is_said_in_words`: PermissionError |
+| O6 | backup, restore, update, demo add, repair-sign-in unguarded (as at c5209b1) | `cli/test_compose_lockout.py`: those five red; map, grading, models green already (guarded, now tested) |
+| O7a | update not locked whole (`contextlib.nullcontext()`) | `test_update_apply.py`: refused-while-held and held-for-the-whole-update red |
+| O7b | no descriptor handed to the files child | the child refused its own parent: "another refresh or update … is under way" |
+| O7c | any descriptor believed (the identity check removed) | `…descriptor_named_that_is_not_the_lock_holds_nothing` red |
+| M1 | the lockout words with no shell mention (`emptied = []`) | `…shell_sets_empty_is_said_to_be_the_shell_s` red; the `--name` and `xargs -r` cases red against c5209b1 |
+| M2 | refresh's move writing in place (`target.write_bytes`) | the now-unconditional symlink witness red |
+| M3 | deployment.env moved into place 644 (as at c5209b1) | `…moved_into_place_is_600`: 644 |
+
+`test_the_lock_file_is_opened_read_only` failed on the Mac before any change of this round (its spy
+took no `dir_fd`, which macOS's `rmtree` passes); fixed with the round. `start --build` is left out of
+the lockout case on purpose: it hands to refresh, whose own refusal O2 holds.
+
+### Carries, after my own lane review of the round (11 November 2026, on the Mac, offline)
+
+| Plant | Fault | Red |
+|---|---|---|
+| L1 | `FilesHeld` skipping a symlink, planted back (`and not path.is_symlink()`) | the restored `test_refresh.py` case, both parameters |
+| L2 | `_put_back`'s own `shutil.copy2(item, directory / item.name)` put back on the real tree | the gate (`test_no_module_writes_an_env_file_in_place`, `test_the_gate_flags_c5209b1_s_put_back_copy`): `ALLOWED` now names the helper that refuses an env file, not `_put_back` |
+| L3 | the Redactor's branch removed (`if False:`) | the update case, now driven by the real `--files-only` child naming `OSPREY_POSTGRES_PASSWORD`, red with the rest (5 failed) |
+| L4 | the name-in-prose rule (as at c5209b1's round) | four lines shown with a value: `OSPREY_POSTGRES_PASSWORD is hunter2`, `…, hunter2`, `(OSPREY_X_SECRET) hunter2`, a child's `… was hunter2` |
+| L5 | the shell clause after "deployment.env does not hold" | `…shell_sets_empty_is_said_to_be_the_shell_s`: the file was said to lack a value it held |
+| L6 | `start --build` unguarded for a shell-emptied value | `test_start_build_refuses_a_value_the_shell_sets_empty`: refresh ran |
+| L7 | the lock's creation unguarded | `test_a_lock_this_account_cannot_make_is_said_in_words`: PermissionError |
+| L8 | update's arguments matched as whole tokens | `test_an_update_that_asks_no_compose_is_not_refused[--make-bundle=b.tar]`: refused |
+
+
+### Carries, after the orchestrator's review of ad4bef7 (11 November 2026, on the Mac, offline)
+
+| Plant | Fault | Red |
+|---|---|---|
+| A1 | the redactor's phrase rule (as at ad4bef7) | three still-hidden shapes shown: a value after our phrase, an upper-case value among the names, a value after our whole sentence; and `secret-lab`'s and `token-test-2`'s refusals hidden |
+| A1b | the gateway sentence's copy drifted (` (drift)` planted) | `…variable_is_shown[secret-lab, token-test-2]`: the copy is held to refresh's own words |
+| A2 | `_inherited`'s flock half planted out | `test_a_stale_open_of_the_lock_itself_holds_nothing`, the only case that sees it |
+| A4 | put-back's own `deployment.env` branch planted out | the writer scan **stays green**; `test_put_back_replaces_deployment_env_rather_than_rewriting_it` goes red: the scan's limit, now in its docstring |
+| M1 | the rollback point made with the umask's mode (as at ad4bef7) | `…rollback_point_is_private…`: not 700 |
+| M2 | `state/` another account's (as at ad4bef7) | `…state_folder_this_account_cannot_write…`: PermissionError |
+
+### Carries, after the orchestrator's confirmation of b2feedf (11 November 2026, on the Mac, offline)
+
+| Plant | Fault | Red |
+|---|---|---|
+| B1 | the advice exemption by next character (as at b2feedf, and on main) | `test_an_exempt_name_with_a_value_after_it_stays_hidden`: all eighteen (three names, six shapes: `"NAME": "v"`, `NAME v`, `NAME ghp_…`, `NAME is v`, `set NAME to v`, `NAME v on this machine…`) shown |
+| B2 | any upper-case name with an underscore taken as a variable (`_VARIABLE` planted back) | `…value_shaped_like_a_variable_among_the_names_stays_hidden[HUNTER_2, SECRET_VALUE_9]` shown |
+| B3 | update's step and version slots open (the earlier pattern planted back) | `test_update_s_slots_take_only_their_own_words[step, version]`: `'hunter password'` and `v0.5.0hunter` shown |

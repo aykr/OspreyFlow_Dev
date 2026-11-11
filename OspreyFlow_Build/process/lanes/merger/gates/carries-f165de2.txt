@@ -1,0 +1,10 @@
+carries (f165de2) merged on main, gated by the orchestrator on the merged tree aa96e62 (a23b3d8 + the carries), 11 Nov 2026
+test exit 2
+ci exit 0
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled
+= 3 failed, 11503 passed, 27 skipped, 4 xfailed, 91 warnings in 671.87s (0:11:11) =
+- test_lanes_heartbeat: 37 passed alone on the same tree (the server's lane state in the full run)
+- test_render_memory's OpenSearch case: fails on main 44207f9 too (environment; CARRIES)
+- GPU preflight: the server's GPU (known)

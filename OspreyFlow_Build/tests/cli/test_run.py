@@ -83,7 +83,10 @@ def test_naming_the_github_variable_is_not_a_secret_but_its_value_still_is() -> 
     redact = Redactor("/x/deployment.env")
     advice = "or it is private: set GITHUB_TOKEN to a token that can read it"
     assert redact(advice.replace("a token", "one")) == advice.replace("a token", "one")
-    assert redact("set GH_TOKEN first") == "set GH_TOKEN first"
+    # A name followed by a word is not told from a name followed by its value (`GH_TOKEN first`,
+    # `GH_TOKEN hunter2`), so only the fixed advice phrases are shown (the orchestrator's
+    # confirmation of b2feedf, item 1; no producer writes this one).
+    assert redact("set GH_TOKEN first") != "set GH_TOKEN first"
     for leaking in ("GITHUB_TOKEN=ghp_abc123", "GH_TOKEN: ghp_abc", "token ghp_abc",
                     "set GITHUB_TOKEN and the client secret"):  # fmt: skip
         assert redact(leaking) != leaking, leaking

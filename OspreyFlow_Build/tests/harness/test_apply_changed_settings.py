@@ -424,8 +424,10 @@ def test_every_other_secret_is_unchanged(deployment: Deployment) -> None:
 @pytest.mark.parametrize(
     "bad",
     [
-        "models: {provider: {name: openai, roles: {extraction: m}}, providers: [{name: gemini, "
-        "roles: {extraction: m}}]}\n",
+        (
+            "models: {provider: {name: openai, roles: {extraction: m}}, providers: [{name: gemini, "
+            "roles: {extraction: m}}]}\n"
+        ),
         "profile: not-a-profile\n",
         "models: [unclosed\n",
     ],
@@ -724,7 +726,7 @@ def test_what_reaches_a_service_decides_whether_it_restarts(tmp_path: Path) -> N
             "env_file": ["deployment.env"],
             "restart": "no",
             "profiles": ["batch"],
-        },  # fmt: skip
+        },
     }
     for folder, key, table, theme in ((old, "1", "a", "a"), (new, "2", "b", "b")):
         (folder / "theme" / "x").mkdir(parents=True)

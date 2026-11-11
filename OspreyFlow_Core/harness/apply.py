@@ -60,7 +60,7 @@ import yaml
 from pydantic import ValidationError
 
 from demo_fixtures.datasets import domains_for
-from harness import ingest_uploads, model_downloads, store_volumes, tls_check
+from harness import compose_env, ingest_uploads, model_downloads, store_volumes, tls_check
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -122,9 +122,22 @@ class ApplyFailed(RuntimeError):
 def move_into_place(stage: Path, out_dir: Path) -> None:
     """The staged files copied over the deployment's folder, which keeps its own mode: `copytree`
     also copies the stage folder's mode onto it, so a named deployment's folder, made `700` by the
-    command because it holds `deployment.env` (ADR-138), became `755` (found at step 11b)."""
+    command because it holds `deployment.env` (ADR-138), became `755` (found at step 11b).
+
+    **`deployment.env` is replaced whole, last** (`harness.atomic.replace_whole`): `copytree`
+    truncates and rewrites each file it copies, so a crash or a full disk part way would have torn
+    the live secrets (the lane review of the carries). Every other file is copied as before: a file
+    a container mounts on its own must keep its inode."""
+    from harness.atomic import replace_whole
+
     mode = out_dir.stat().st_mode & 0o777 if out_dir.is_dir() else None
-    shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+    secrets = stage / "deployment.env"
+    shutil.copytree(
+        stage, out_dir, dirs_exist_ok=True,
+        ignore=lambda folder, _names: ["deployment.env"] if Path(folder) == stage else [],
+    )  # fmt: skip
+    if secrets.is_file():
+        replace_whole(out_dir / "deployment.env", secrets.read_bytes(), mode=0o600)
     if mode is not None:
         out_dir.chmod(mode)
 
@@ -811,7 +824,16 @@ def preflight(context: PreflightContext) -> None:
 def own_published_ports(compose_file: Path) -> set[int]:
     """The host ports the deployment's own running containers publish, as Compose itself reports
     them (`ps --format json`, each container's `Publishers`). Empty when nothing of it runs, or
-    when Docker cannot be asked — then every port is checked as on a first install."""
+    when Docker cannot be asked — then every port is checked as on a first install.
+
+    **A compose file Compose cannot read** (a required value `deployment.env` does not hold: the
+    v0.5.0 upgrade rehearsal's lockout) is not asked: Docker itself is, by the project's label
+    (`docker ps`), which needs no compose file. Apply then goes on and renders the file again, which
+    keeps or mints every value it needs: it is the way out of the lockout (ADR-114 Amendment 39
+    decision 1), so it never refuses here (the lane review of the carries, items 2 and 3)."""
+    missing = compose_env.unset_required(compose_file.parent)
+    if missing:
+        return _ports_by_label(compose_env.project(compose_file.parent))
     try:
         out = _run(_compose(compose_file) + ["ps", "--format", "json"], stage="preflight")
     except ApplyFailed:
@@ -832,6 +854,21 @@ def own_published_ports(compose_file: Path) -> set[int]:
             if port:
                 found.add(port)
     return found
+
+
+def _ports_by_label(project: str) -> set[int]:
+    """The host ports a compose project's running containers publish, asked of Docker by the
+    project's label (`docker ps`, each container's `Ports`: `0.0.0.0:8090->8090/tcp, …`). Empty
+    when Docker cannot be asked."""
+    try:
+        out = _run(
+            ["docker", "ps", "--filter", f"label=com.docker.compose.project={project}",
+             "--format", "{{.Ports}}"],
+            stage="preflight",
+        )  # fmt: skip
+    except ApplyFailed:
+        return set()
+    return {int(port) for port in re.findall(r":(\d+)->", out)}
 
 
 def _services(folder: Path) -> dict[str, Any]:

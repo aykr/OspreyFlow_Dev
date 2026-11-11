@@ -682,13 +682,19 @@ def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
     changed = refresh.files_up_to_date(repo)
     assert changed == {"proxy_changed": True, "theme_changed": False, "routing_changed": False}
     assert "pull_and_verify qwen2.5:14b-instruct" in (out / "compose.yaml").read_text()
-    assert refresh.main(["--files-only"], repo_root=repo) == 0
-    said = capsys.readouterr().out.strip().splitlines()[-1]
-    assert json.loads(said) == {
-        "proxy_changed": False,
-        "theme_changed": False,
-        "routing_changed": False,
-    }
+    # The pass above restarted nothing, so the restart it found is still owed (ADR-114 Amendment
+    # 39's pending record): `--files-only` hands it to `update`, and it stays owed until `update`
+    # has done its restarts and cleared the record (the lane review of the carries, item 7).
+    for owed in (True, True, False):
+        if not owed:  # as `update` does once its restarts are done
+            (out / "state" / refresh.PENDING_RESTARTS).unlink()
+        assert refresh.main(["--files-only"], repo_root=repo) == 0
+        said = capsys.readouterr().out.strip().splitlines()[-1]
+        assert json.loads(said) == {
+            "proxy_changed": owed,
+            "theme_changed": False,
+            "routing_changed": False,
+        }
 
 
 def _proxy_published_bare(out: Path, ports: list[str]) -> None:
@@ -896,3 +902,35 @@ def test_a_refused_move_puts_back_every_file_start_build_wrote(
     assert {p: p.read_bytes() for p in out.rglob("*") if p.is_file()} == before
     assert "the deployment's files are as they were" in str(refused.value)
     assert "ospreyflow start starts it on that data" in str(refused.value)
+
+
+@pytest.mark.parametrize("linked", ["compose.yaml", "deployment.env"])
+def test_a_refused_move_puts_back_a_symlinked_file_through_its_link(
+    repo: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    linked: str,
+) -> None:
+    """The orchestrator's review of c5209b1, item 3: refresh writes through a symlinked
+    `compose.yaml` or `deployment.env` (the carries), but `FilesHeld` held no symlink, so a refused
+    stores' move left the linked compose file naming the new volumes while the words said the files
+    were as they were (Amendment 35 point 7). The link stays a link and its target is put back."""
+    from harness import store_volumes
+
+    out = _rendered(repo)
+    _without_store_volumes(out)
+    real = tmp_path_factory.mktemp("kept-elsewhere") / linked
+    (out / linked).rename(real)
+    (out / linked).symlink_to(real)
+    before = real.read_bytes()
+
+    def refuse(compose_file: Path, **kwargs: object) -> store_volumes.Moved:
+        assert b"postgres-data:" in compose_file.read_bytes(), "the move sees the named volumes"
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
+
+    monkeypatch.setattr(refresh.store_volumes, "move", refuse)
+    with pytest.raises(refresh.RefreshFailed) as refused:
+        refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "the deployment's files are as they were" in str(refused.value)
+    assert (out / linked).is_symlink() and (out / linked).resolve() == real.resolve()
+    assert real.read_bytes() == before

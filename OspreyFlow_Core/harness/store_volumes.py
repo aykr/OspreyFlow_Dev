@@ -179,7 +179,8 @@ class Moved:
 class FilesHeld:
     """The deployment's files as they were before a re-render, put back byte for byte (and mode for
     mode) when the move that follows it is refused, with any file the re-render added removed
-    (Amendment 35 point 7). Its runtime state (`state/`) is neither held nor touched."""
+    (Amendment 35 point 7). Its runtime state (`state/`) is neither held nor touched. A symlinked
+    file stays a link, its target put back."""
 
     def __init__(self, folder: Path) -> None:
         self.folder = folder
@@ -191,9 +192,10 @@ class FilesHeld:
         return [
             path
             for path in self.folder.rglob("*")
-            if path.is_file()
-            and not path.is_symlink()
-            and path.relative_to(self.folder).parts[0] not in _NOT_HELD
+            # A symlinked file is held by what it holds and put back through its link: refresh
+            # writes through a linked compose.yaml or deployment.env (the orchestrator's review of
+            # c5209b1, item 3), so a refused move must put its target back too.
+            if path.is_file() and path.relative_to(self.folder).parts[0] not in _NOT_HELD
         ]
 
     def put_back(self) -> None:
@@ -202,6 +204,14 @@ class FilesHeld:
                 path.unlink()
         for path, (content, mode) in self.files.items():
             path.parent.mkdir(parents=True, exist_ok=True)
+            if path.name == "deployment.env" and path.parent == self.folder:
+                # The secrets whole or not at all (`harness.atomic`; the lane review of the
+                # carries): a write in place torn by a crash would lose them.
+                from harness.atomic import replace_whole
+
+                if not path.is_file() or path.read_bytes() != content:
+                    replace_whole(path, content, mode=mode & 0o7777)
+                continue
             if not path.is_file() or path.read_bytes() != content:
                 path.write_bytes(content)
             path.chmod(mode & 0o7777)

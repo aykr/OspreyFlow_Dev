@@ -79,7 +79,7 @@ rules	UPG-check	S	done	The real update from v0.4.12 to the published v0.5.0: the
 rules	hyg	S	done	Hygiene, three items: the key cap's own ink; the metrics harness panel scrolls (the rarity note); a scheduled load's notice reaches its owner in Needs you, owner alone, fixed words by kind (ADR-110 Am 19) ; a fault acting as the owner kept in the log (studio's finding) (merged 373b3dd)
 rules	lists	S	todo	Live files remove the screening lists they load; ADR-146: one owner on two lists, one alert or two
 rules-b	T3b	S	review	The contrast probe's limits (SVG surfaces, shadows, points); Show as BPMN's task-box contrast
-platform-b	carries	M	building	The chart's quoted checksums; ADR-114 Am 39's edge cases (crash flags, ownership, atomic writes, stale stage, shell values); the lockout's words
+platform-b	carries	M	done	The upgrade path's carries (ADR-114 Am 40): one atomic writer for deployment.env, the refresh's lock, stage and pending record, every verb's lockout words, refusals that reach the operator through the redactor; merged f165de2 after three reviews, listed for the owner (it writes deployment.env)
 studio	carries	S	todo	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19)
 docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (user 1.46, admin 1.72), with their PDFs; merged f262e7b after two reviews
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape

@@ -991,3 +991,69 @@ def test_a_release_that_fails_after_the_move_restores_the_backup_and_removes_its
         < order.index("volume rm osprey-test_arcadedb-databases")
         < order.index("restore set-1")
     )
+
+
+# --- one change of a deployment at a time (the orchestrator's review of c5209b1, item 7) ----------
+
+
+def _another_holds_the_lock(directory: Path) -> int:
+    """The lock as another process holds it: its own open of the file, flocked."""
+    import fcntl
+    import os
+
+    descriptor = os.open(update.lock_path(directory), os.O_RDONLY | os.O_CREAT, 0o644)
+    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    return descriptor
+
+
+def _free_to_another(directory: Path) -> bool:
+    import fcntl
+    import os
+
+    descriptor = os.open(update.lock_path(directory), os.O_RDONLY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(descriptor)
+    return True
+
+
+def test_an_update_while_a_refresh_is_under_way_is_refused_and_changes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import os
+
+    fake = _Host(tmp_path)
+    before = _files(fake)
+    held = _another_holds_the_lock(fake.directory)
+    try:
+        assert _update(fake) == 1
+    finally:
+        os.close(held)
+    assert "another refresh or update of this deployment is under way" in capsys.readouterr().err
+    assert "backup" not in fake.actions and _files(fake) == before
+
+
+def test_the_lock_is_held_for_the_whole_update(tmp_path: Path) -> None:
+    """Not only the files step: the backup, the pull, the stores' move, `up` and the restarts too,
+    so a `start --build` begun meanwhile is refused rather than moving the stores beside it."""
+    fake = _Host(tmp_path)
+    seen: dict[str, bool] = {}
+    backup, run = fake.backup, fake.run
+
+    def backup_seeing() -> Path:
+        seen["backup"] = _free_to_another(fake.directory)
+        return backup()
+
+    def run_seeing(argv: Sequence[str]) -> tuple[int, str]:
+        if "up" in argv:
+            seen["up"] = _free_to_another(fake.directory)
+        return run(argv)
+
+    fake.backup = backup_seeing  # type: ignore[method-assign]
+    fake.run = run_seeing  # type: ignore[method-assign]
+    assert _update(fake) == 0
+    assert seen == {"backup": False, "up": False}
+    assert _free_to_another(fake.directory)  # and let go after
