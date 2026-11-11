@@ -18,6 +18,9 @@ storage:
   # ReadWriteOnce on a platform with no shared class (ADR-148, `profile: cloud-platform`), the one
   # claim's mounters then placed on one node (`sharedAffinity`).
   sharedAccessMode: ReadWriteMany
+  # Shared folders on claims of their own, `ospreyflow-<name>` (ADR-148 Amendment 5, the poc
+  # shape's Ingest root): each `{name, size}`, mounted where a workload's shared folder names it.
+  claims: []
 
 imagePullSecrets: []
 

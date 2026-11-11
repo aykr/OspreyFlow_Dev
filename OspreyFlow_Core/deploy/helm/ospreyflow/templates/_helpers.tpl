@@ -107,7 +107,7 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
       readOnly: true
     {{- end }}
     {{- range .w.shared }}
-    - name: shared
+    - name: {{ if .claim }}{{ printf "claim-%s" .claim }}{{ else }}shared{{ end }}
       mountPath: {{ .mountPath }}
       subPath: {{ .subPath }}
       readOnly: {{ .readOnly }}
@@ -128,6 +128,10 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 {{- $w := .w -}}
 {{- $shared := .w.shared -}}
 {{- range .w.initContainers }}{{ if .shared }}{{ $shared = true }}{{ end }}{{ end -}}
+{{- /* ADR-148 Amendment 5: a shared folder mounted from a claim of its own (`claim`). */}}
+{{- $claims := dict -}}
+{{- range .w.shared }}{{ with .claim }}{{ $_ := set $claims . true }}{{ end }}{{ end -}}
+{{- range .w.initContainers }}{{ range .shared }}{{ with .claim }}{{ $_ := set $claims . true }}{{ end }}{{ end }}{{ end -}}
 {{- if or .w.files .w.fileDirs $shared .w.scratch }}
 volumes:
   {{- if .w.files }}
@@ -145,6 +149,11 @@ volumes:
   - name: shared
     persistentVolumeClaim:
       claimName: ospreyflow-shared
+  {{- end }}
+  {{- range $claim, $_ := $claims }}
+  - name: {{ printf "claim-%s" $claim }}
+    persistentVolumeClaim:
+      claimName: {{ printf "ospreyflow-%s" $claim }}
   {{- end }}
   {{- range $i, $s := .w.scratch }}
   - name: {{ printf "scratch-%d" $i }}
