@@ -1,0 +1,201 @@
+diff --git a/OspreyFlow_Build/tests/harness/test_realm_readers_refuse_entra.py b/OspreyFlow_Build/tests/harness/test_realm_readers_refuse_entra.py
+new file mode 100644
+index 0000000..fbfe93c
+--- /dev/null
++++ b/OspreyFlow_Build/tests/harness/test_realm_readers_refuse_entra.py
+@@ -0,0 +1,128 @@
++"""The readers of `roles` outside `principal_auth` (`06_DECISIONS.md` ADR-148 Amendment 8; Amendment
++6's carried list): each is brought under the rule or shown not rendered on the cloud-platform
++profile.
++
++- `harness/webapp_auth.py`'s `require_admin_role` (the set-up console's `/admin`): an Entra ID token
++  (one carrying `tid`) is refused (404, as every refusal there), whatever app role it carries. The
++  console is the Keycloak realm's and is no workload of the cloud-platform render.
++- `harness/oidc.py`'s `verify_id_token` (the launcher's and the Admin console's sign-in): an Entra
++  ID token is refused (`entra_token`).
++- `deploy/superset/superset_config.py`: on Entra ID sign-in (`SUPERSET_SIGN_IN=entra`, rendered on
++  the cloud-platform profile) no token role is read; everyone is Gamma until Superset's own step.
++
++Each refusal's control is the same token without `tid` (or Superset on Keycloak), admitted as
++before. Synthetic values only (rule 9).
++"""
++
++from __future__ import annotations
++
++import base64
++import importlib.util
++import json
++import sys
++import types
++from pathlib import Path
++
++import pytest
++from fastapi.testclient import TestClient
++from harness.oidc import SignInRefused
++from harness.webapp import create_app
++
++from tests.conftest import default_claims, sign_token
++from tests.harness.test_oidc import _finish, idp  # noqa: F401 (the fixture)
++
++TENANT = "00000000-1111-4222-8333-444444444444"
++CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
++
++
++# --- the set-up console's /admin ---
++
++
++def _console(tmp_path: Path) -> TestClient:
++    return TestClient(
++        create_app(config_path=tmp_path / "osprey.yaml", mode="console"),
++        client=("127.0.0.1", 51000),
++    )
++
++
++@pytest.mark.parametrize(("tid", "status"), [(TENANT, 404), (None, 200)], ids=["entra", "control"])
++def test_the_consoles_admin_refuses_an_entra_token_with_the_admin_role(
++    tmp_path, jwks_url, keypair, monkeypatch, tid, status
++) -> None:
++    monkeypatch.setenv("OIDC_JWKS_URL", jwks_url)
++    claims = default_claims(roles=["osprey-admin"])
++    if tid:
++        claims["tid"] = tid
++    token = sign_token(keypair[0], claims)
++    response = _console(tmp_path).get("/admin", headers={"Authorization": f"Bearer {token}"})
++    assert response.status_code == status
++
++
++# --- the launcher's and the Admin console's sign-in ---
++
++
++def test_the_realms_sign_in_refuses_an_entra_id_token(idp) -> None:  # noqa: F811
++    idp.claim_overrides = {"tid": TENANT, "roles": ["osprey-admin"]}
++    with pytest.raises(SignInRefused) as refused:
++        _finish(idp)
++    assert refused.value.reason == "entra_token"
++
++
++def test_the_realms_sign_in_still_admits_its_own_token(idp) -> None:  # noqa: F811
++    idp.claim_overrides = {"roles": ["osprey-admin"]}
++    assert _finish(idp).roles == ("osprey-admin",)
++
++
++# --- Superset ---
++
++
++def _superset(monkeypatch, sign_in: str | None):  # type: ignore[no-untyped-def]
++    """`superset_config` loaded as Superset loads it, its two framework imports stood in for."""
++    manager = types.ModuleType("flask_appbuilder.security.manager")
++    manager.AUTH_OAUTH = 4  # type: ignore[attr-defined]
++    security = types.ModuleType("superset.security")
++    security.SupersetSecurityManager = object  # type: ignore[attr-defined]
++    for name, module in {
++        "flask_appbuilder": types.ModuleType("flask_appbuilder"),
++        "flask_appbuilder.security": types.ModuleType("flask_appbuilder.security"),
++        "flask_appbuilder.security.manager": manager,
++        "superset": types.ModuleType("superset"),
++        "superset.security": security,
++    }.items():
++        monkeypatch.setitem(sys.modules, name, module)
++    for name, value in {
++        "POSTGRES_USER": "u",
++        "POSTGRES_PASSWORD": "p",
++        "SUPERSET_SECRET_KEY": "k",
++        "SUPERSET_OIDC_CLIENT_SECRET": "s",
++        "SUPERSET_GUEST_TOKEN_SECRET": "g",
++    }.items():
++        monkeypatch.setenv(name, value)
++    if sign_in is None:
++        monkeypatch.delenv("SUPERSET_SIGN_IN", raising=False)
++    else:
++        monkeypatch.setenv("SUPERSET_SIGN_IN", sign_in)
++    spec = importlib.util.spec_from_file_location(
++        "superset_config_under_test", CORE / "deploy/superset/superset_config.py"
++    )
++    assert spec and spec.loader
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++def _access_token(claims: dict[str, object]) -> str:
++    body = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
++    return f"e30.{body}.sig"
++
++
++@pytest.mark.parametrize(
++    ("sign_in", "roles"), [("entra", []), (None, ["osprey-admin"])], ids=["entra", "keycloak"]
++)
++def test_superset_reads_no_token_role_on_entra(monkeypatch, sign_in, roles) -> None:
++    config = _superset(monkeypatch, sign_in)
++    token = _access_token({"preferred_username": "ana", "roles": ["osprey-admin"], "tid": TENANT})
++    info = config.OspreySecurityManager.oauth_user_info(None, "keycloak", {"access_token": token})
++    assert info["role_keys"] == roles
++    # Gamma for everyone the mapping names nothing for (Flask-AppBuilder's registration role).
++    assert config.AUTH_USER_REGISTRATION_ROLE == "Gamma"
+diff --git a/OspreyFlow_Core/deploy/superset/superset_config.py b/OspreyFlow_Core/deploy/superset/superset_config.py
+index ba0adc1..622fcac 100644
+--- a/OspreyFlow_Core/deploy/superset/superset_config.py
++++ b/OspreyFlow_Core/deploy/superset/superset_config.py
+@@ -71,6 +71,10 @@ OAUTH_PROVIDERS = [
+ ]
+ 
+ 
++#: Rendered on the cloud-platform profile, whose people sign in with Entra ID (ADR-148 decision 9).
++_ENTRA = os.environ.get("SUPERSET_SIGN_IN", "").lower() == "entra"
++
++
+ class OspreySecurityManager(SupersetSecurityManager):
+     """Reads who signed in from the access token the provider returned over the back channel —
+     never from anything the browser sent — including OspreyFlow's `roles` claim."""
+@@ -86,7 +90,10 @@ class OspreySecurityManager(SupersetSecurityManager):
+             "last_name": claims.get("family_name", ""),
+             "email": claims.get("email")
+             or f"{claims.get('preferred_username', 'user')}@ospreyflow.invalid",
+-            "role_keys": claims.get("roles", []),
++            # ADR-148 Amendment 8: on Entra ID sign-in a token's `roles` are app roles an Entra
++            # administrator assigns, never OspreyFlow's; everyone is Gamma there until Superset's
++            # own step (CARRIES, P10 part 2).
++            "role_keys": [] if _ENTRA else claims.get("roles", []),
+         }
+ 
+ 
+diff --git a/OspreyFlow_Core/harness/oidc.py b/OspreyFlow_Core/harness/oidc.py
+index 568e74a..1bb8494 100644
+--- a/OspreyFlow_Core/harness/oidc.py
++++ b/OspreyFlow_Core/harness/oidc.py
+@@ -251,6 +251,11 @@ def verify_id_token(config: SignInConfig, id_token: str, *, nonce: str) -> Ident
+ 
+     if claims.get("nonce") != nonce:
+         raise SignInRefused("nonce_mismatch")
++    if "tid" in claims:
++        # ADR-148 Amendment 8: an Entra ID token's `roles` are app roles, never OspreyFlow's. This
++        # sign-in is the deployment's own realm's (the launcher and the Admin console), which the
++        # cloud-platform profile does not render.
++        raise SignInRefused("entra_token")
+     roles = claims.get("roles", [])
+     if not isinstance(roles, list) or not all(isinstance(r, str) for r in roles):
+         raise SignInRefused("roles_claim_malformed")
+diff --git a/OspreyFlow_Core/harness/webapp_auth.py b/OspreyFlow_Core/harness/webapp_auth.py
+index d3af001..7de1afd 100644
+--- a/OspreyFlow_Core/harness/webapp_auth.py
++++ b/OspreyFlow_Core/harness/webapp_auth.py
+@@ -36,6 +36,7 @@ def _not_found() -> HTTPException:
+     request's traceback attach to another's exception."""
+     return HTTPException(status_code=404)
+ 
++
+ _LOOPBACK_ADDRESSES = {"127.0.0.1", "::1"}
+ 
+ 
+@@ -132,6 +133,11 @@ def require_admin_role(request: Request) -> None:
+     except jwt.PyJWTError as exc:
+         raise _not_found() from exc
+ 
++    if "tid" in claims:
++        # ADR-148 Amendment 8: an Entra ID token's `roles` are app roles an Entra administrator
++        # assigns, never OspreyFlow's (Amendment 6 point 4). This console is the Keycloak realm's,
++        # and is not rendered on the cloud-platform profile.
++        raise _not_found()
+     roles = claims.get("roles")
+     if not isinstance(roles, list) or ADMIN_ROLE not in roles:
+         raise _not_found()

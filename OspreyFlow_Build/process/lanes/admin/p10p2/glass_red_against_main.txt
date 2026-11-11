@@ -1,0 +1,8 @@
+     × while /v1/me is asked: no clearance, no role and no account menu, whatever the token claims 40ms
+     × when /v1/me does not answer: the same, never the token's 1007ms
+     × once /v1/me answers: its clearance and roles, the token's names 1006ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected 'Signed in as ana with clearance SECRE…' not to contain 'SECRET'
+AssertionError: expected 'Signed in as ana with clearance SECRE…' to contain 'clearance none'
+AssertionError: expected 'Signed in as ana with clearance SECRE…' to contain 'clearance OFFICIAL'
+      Tests  3 failed | 37 skipped (40)
