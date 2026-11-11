@@ -699,3 +699,24 @@ def test_the_poc_shape_s_own_claim_read_write_many_is_refused(
         "ReadWriteMany"
     ]
     assert _found(docs, registry) == [("rwx", "accessModes ReadWriteMany")]
+
+
+def test_a_poc_container_without_a_cpu_limit_is_refused(
+    poc: tuple[dict[str, Any], str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The self-review of P7b, point 15: `make cp-policy-check` itself holds the poc shape's CPU
+    limits, planted in Helm's own output and found through `check`, the path `main` takes; the
+    standard shape names none and is not held to it."""
+    import tools.cp_policy_check as cp
+
+    docs, _ = _helm(poc)
+    _api_container(docs)["resources"]["limits"].pop("cpu")
+    monkeypatch.setattr(cp, "helm_template", lambda *_a, **_k: docs)
+    target = cp.render(FIXTURES / "poc.yaml")
+    assert target.shape == "poc"
+    _, found = cp.check(target)
+    assert [(v.rule, v.where) for v in found] == [("no-cpu-limit", "Deployment/api/api")]
+    standard = cp.render(FIXTURES / "development.yaml")
+    assert standard.shape == "standard"
+    _, found = cp.check(standard)
+    assert "no-cpu-limit" not in {v.rule for v in found}

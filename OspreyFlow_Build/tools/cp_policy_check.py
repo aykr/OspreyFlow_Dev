@@ -84,6 +84,8 @@ class Target:
     namespace: str
     #: Where the platform's ingress controller runs: the only other namespace admitted.
     controller_namespace: str
+    #: `cloud_platform.shape` (ADR-148 Amendment 5): the poc shape's own rules apply to `poc`.
+    shape: str = "standard"
 
 
 def _name(doc: dict[str, Any]) -> str:
@@ -409,6 +411,7 @@ def render(config_path: Path) -> Target:
         registry=cloud.registry,
         namespace=cloud.namespace,
         controller_namespace=platform.ingress.controller_namespace,
+        shape=cloud.shape,
     )
 
 
@@ -424,7 +427,21 @@ def check(target: Target) -> tuple[int, list[Violation]]:
     violations = check_manifests(
         docs, target.registry, controller_namespace=target.controller_namespace
     )
+    if target.shape == "poc":
+        violations += list(poc_rules(docs))
     return len(docs), violations
+
+
+def poc_rules(docs: list[dict[str, Any]]) -> Iterator[Violation]:
+    """ADR-148 Amendment 5: in the poc shape every container names a CPU limit, so a namespace's
+    LimitRange gives it none of its own and a quota on `limits.cpu` admits its pod."""
+    for doc in docs:
+        spec = pod_spec(doc)
+        for container in _containers(spec or {}):
+            if not ((container.get("resources") or {}).get("limits") or {}).get("cpu"):
+                yield Violation(
+                    "no-cpu-limit", f"{_name(doc)}/{container.get('name')}", "no limits.cpu"
+                )
 
 
 def main(argv: list[str] | None = None) -> int:
