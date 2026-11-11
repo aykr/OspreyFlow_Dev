@@ -80,7 +80,9 @@ Minor items, all done except one:
 **Built** at `72d87192`: 66 cases plus `test_auth.py`'s 11 (unchanged, green); 34 plants with 59 case
 runs, all red, none missed (`P10_P1_RED_RECORD.md`, `gates/p10_plants_72d8719.txt`). `ruff check`,
 `ruff format --check` and `mypy` are clean on the branch's diff (mypy also over `services/api/auth.py` and
-`harness/verify.py`). The gates follow below.
+`harness/verify.py`). The gates at `5b0e6e1` are recorded below; the orchestrator's review round 1 found them run
+without a lease and short of two resolver users, and that the tenant plant was never red (see the round 1 section
+at the end).
 
 **Gates at `5b0e6e1`** (main `459ae1d` unchanged, so no rebase). Both were run here directly, without a lease, on
 the offline ports, as the brief says.
@@ -175,3 +177,84 @@ passes a mapping, so every deployment runs the fixed names.
    round 2, item 14). It must come under the same rule, or be shown not to run on this profile.
 5. **A real token.** Once the client's development tenant exists, one real token is put through
    `principal_auth`, so the assumed shapes are measured (rule 15).
+
+## P10 part 1 · the orchestrator's review, round 1 of 2, on `5b0e6e1`: not mergeable, fixed in one pass
+
+Fixed against the review's numbers (ADR-142 Amendment 6: one pass, each refusal red first at its real call site):
+
+1. **Blocker: the tenant pin had never been red.** The tenant plant replaced an 8-space `if` with a 4-space one, so
+   `principal_auth` failed to import, and `run()` counted "1 error" as caught (`gates/p10_plants_72d8719.txt`
+   lines 16, 17 and 22). Fixed in `p10/p10_plants.py` at `54c1700`:
+   - `off(line)` keeps the matched line's own indentation;
+   - every planted source is `compile()`d first;
+   - only exit 1 with "failed" and no "error" counts as red. Exit 2 or 5, or "error", is a harness fault.
+
+   `--self-test` shows each rule red, and shows that the `72d8719` plant does not compile
+   (`gates/p10_plants_selftest_54c1700.txt`). **All plants re-run at `54c1700`: 49 plants, 89 case runs, 89 red,
+   0 missed, 0 harness faults**, with controls of 104 cases green before and after (`gates/p10_plants_54c1700.txt`).
+2. **Gates at the reviewed head: NOT RUN, blocked by the environment.** `stack_lease.sh offline admin -- make -k test`
+   failed before running anything: `ssh: Could not resolve hostname ospreyflow-test`. This session runs on that
+   server, which has no `~/.ssh/config`, so `lane_stack_hosts.tsv`'s alias does not resolve here. The documented
+   override (`OSPREY_OFFLINE_HOST=localhost`) needs an approval this session was not given. Running the gates
+   directly, without the lease, is what the review rejected, so I did not.
+   - **Pre-check only, not a gate** (run directly on the closed ports at `ba183a9`): 205 passed over these files:
+     - `test_websocket_auth`, `test_principal_precheck_reads`, `test_service_identity_and_rollup` and
+       `tests/harness/test_organisation_sign_in`;
+     - `test_run_resources`, `test_studio_roles` and `test_drawn_watch_alerts`;
+     - `test_auth` and `test_auth_entra_claims`.
+   - `make test` ignores two resolver users, so they need their own recorded runs:
+     - `test_revoked_principal_precheck.py` needs a real Keycloak: `make idp-test`, a throwaway on 8082;
+     - `test_evaluation.py` needs a leased stack: `stack_lease.sh remote admin -- …`.
+   - **Request to the orchestrator:** make offline runs reachable from this server (an alias or
+     `OSPREY_OFFLINE_HOST`), or approve the override. Then, at one head, run `make -k test`, `make -k ci`,
+     `make idp-test` and a leased run of `test_evaluation.py`.
+   - "The gates follow below" above is corrected.
+3. **The principal's id is `oid`** (the orchestrator's ruling; the owner may overrule). For an Entra mapping,
+   `Principal.id` is `oid`, refused if absent or not an object id, and unique within the pinned `tid`. Keycloak keeps
+   `sub`. Decision 6 above is superseded. Tests:
+   - `test_an_entra_principal_is_keyed_by_oid_not_its_pairwise_sub` (two `sub`s, one principal);
+   - `test_a_keycloak_principal_is_still_keyed_by_sub`.
+
+   Each is red under its plant.
+4. **An Entra token under the Keycloak handling.** Without an Entra mapping, a token carrying `tid` is refused with
+   fixed words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
+   Test: `test_an_entra_token_under_the_keycloak_handling_is_refused[our-tenant|other-tenant]`, a default-mapping
+   token with `roles: ["osprey-admin"]`. Planted.
+5. **The amendment** is retitled "ADR-148, Amendment 6 (11 November 2026)" (`P10_ADR148_AMENDMENT_DRAFT.md`), and 3,
+   4, 7 and 8 are applied to it. It stays here until merge.
+6. **Carried into part 2, each with its named test.** Each test must fail first, or the reader is shown not rendered
+   on the `cloud-platform` profile. No such profile exists on this branch; it is P7's.
+   - `harness/webapp_auth.py:135` (`require_admin_role` reads `roles` with no issuer or `tid` check):
+     `test_the_harness_admin_check_refuses_an_entra_token_with_an_admin_app_role`;
+   - `deploy/superset/superset_config.py:89` (`role_keys` from `claims.get("roles")`):
+     `test_superset_reads_no_role_keys_from_an_entra_token`;
+   - `harness/oidc.py:254`: `test_the_harness_sign_in_reads_no_roles_from_an_entra_id_token`.
+7. **Assumptions written into the draft**, each with a part 2 test against the client's tenant:
+   - v1.0 against v2.0 access tokens: `test_a_real_tenant_token_matches_the_configured_issuer_and_audience`;
+   - `extn.<name>` against `extension_<appid>_<name>`: `test_the_real_directory_extension_names_reach_the_mapping`;
+   - a claims-mapping policy's `?appid=` JWKS: `test_a_claims_mapping_policy_token_verifies_against_the_app_specific_jwks`;
+   - also `test_a_real_guest_token_is_refused` and `test_the_glass_sends_an_access_token_for_this_api`.
+
+   The code already takes the issuer and audience from settings and reads v1.0's `appid`.
+8. **Decided, built and logged in the draft** (point 8). Each is planted, and each has a control that resolves:
+   - **`azp`/`appid` pinned** to a new required setting `client_id`, the Glass's app registration. Whichever field
+     is present must match, and a token with neither is refused.
+   - **Guests refused**: `acct` 1 (a number or text), or an `idp` different from `iss`.
+   - **`scp` must include the configured `scope`** (default `access_as_user`), as a whole word.
+9. **Bounds:**
+   - a groups list longer than 200 is refused;
+   - a handling code or role that is `""`, alone or in a list, is refused;
+   - repeats are kept once, as the group path does. This also applies to the Keycloak mapping and is logged in the
+     draft;
+   - one clearance or unit group granting two values fails to load
+     (`test_one_group_cannot_grant_two_clearances_or_units`).
+10. **Friction fragment** updated to the re-run's figures (49 plants, 89 runs, 104 control cases).
+
+`ruff check`, `ruff format --check` and `mypy` (`principal_auth`, `services/api/auth.py`, `harness/verify.py`) are
+clean on the diff. Commits:
+- `5b03c0d`: the code and tests, 93 Entra cases;
+- `54c1700`: the harness;
+- `ba183a9`: the records.
+
+**P10 part 1 built at `ba183a9`** (code at `5b03c0d`), with item 2's gates outstanding for the environmental reason
+above. Waiting for round 2 of the orchestrator's review. Nothing of mine is running.
