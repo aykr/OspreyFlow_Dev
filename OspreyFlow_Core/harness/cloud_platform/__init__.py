@@ -453,33 +453,48 @@ def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
 def _egress_hosts(
     config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
 ) -> list[str]:
+    """Every host the namespace reaches, whoever reaches it (`_egress_hosts_by_kind`)."""
+    return sorted({h for hosts in _egress_hosts_by_kind(config, platform, profile).values()
+                   for h in hosts})  # fmt: skip
+
+
+def _egress_hosts_by_kind(
+    config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
+) -> dict[str, list[str]]:
     """Each host the namespace reaches: the profile's `egress.always` (S3, the bucket, and STS,
     IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
     (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
     mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
     is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)"""
-    hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]
-    hosts += engine_hosts(config, profile)
+    kinds: dict[str, list[str]] = {
+        "always": [host.format(region=platform.aws_region) for host in profile.egress.always],
+        "engines": engine_hosts(config, profile), "maps": [], "mail": [], "connectors": [],
+    }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:
         if map_provider.proxy == "none":
             continue  # fetched by the browser, never from the namespace
         for address in (map_provider.source or "", map_provider.endpoint or ""):
             if address.startswith(("http://", "https://")) and (host := _host(address)):
-                hosts.append(host)
+                kinds["maps"].append(host)
     if config.mail is not None:
-        hosts.append(config.mail.host)
-    hosts += _cp(config).connector_hosts
-    return sorted(set(hosts))
+        kinds["mail"].append(config.mail.host)
+    kinds["connectors"] += _cp(config).connector_hosts
+    return {kind: sorted(set(hosts)) for kind, hosts in kinds.items()}
 
 
 def egress_policy(
-    config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings | None = None
+    config: OspreyConfig,
+    platform: PlatformSettings,
+    profile: ProfileSettings | None = None,
+    workloads: Sequence[dict[str, Any]] = (),
 ) -> dict[str, Any]:
-    """Decision 7's two policies' settings: the networks allowed out, each host's by name, from the
-    deployment's `egress_nets` or, for an AWS service, the platform's settings."""
+    """Decision 7's policies' settings: the networks allowed out, each host's by name, from the
+    deployment's `egress_nets` or, for an AWS service, the platform's settings; and (Amendment 5
+    point 21) what each rendered workload alone may reach, from `profile.yaml`'s `egress`."""
+    profile = profile or load_profile()
     given = {**platform.egress.service_nets, **_cp(config).egress_nets}
-    hosts = _egress_hosts(config, platform, profile or load_profile())
+    hosts = _egress_hosts(config, platform, profile)
     missing = [host for host in hosts if not given.get(host)]
     if missing:
         raise CloudPlatformNotRenderable(
@@ -492,7 +507,45 @@ def egress_policy(
         "dnsNamespace": platform.egress.dns_namespace,
         "managedNets": list(platform.egress.managed_nets),
         "hosts": [{"host": host, "nets": list(given[host])} for host in hosts],
+        "workloads": _egress_by_workload(
+            _egress_hosts_by_kind(config, platform, profile), profile, workloads
+        ),
     }
+
+
+def _egress_by_workload(
+    by_kind: dict[str, list[str]], profile: ProfileSettings, workloads: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Each rendered workload's own egress (Amendment 5 point 21): the namespace's workloads it
+    calls, on their Services' ports; whether it reaches the managed stores' networks; and the hosts
+    of each kind `egress.reach` gives it. A workload with none of these reaches DNS alone."""
+    ports = {w["name"]: [p["port"] for p in w.get("ports", [])] for w in workloads}
+    egress = profile.egress
+    out = []
+    for workload in workloads:
+        name = workload["name"]
+        to_pods = [
+            {"name": target, "ports": ports[target]}
+            for target in egress.paths.get(name, [])
+            if ports.get(target)
+        ]
+        hosts = sorted({h for kind, hs in by_kind.items() if name in egress.reach.get(kind, [])
+                        for h in hs})  # fmt: skip
+        # Amendment 5 point 23: who may reach it, from the same rows, so the two never drift.
+        callers = sorted(w["name"] for w in workloads if name in egress.paths.get(w["name"], []))
+        entry: dict[str, Any] = {"name": name}
+        if ports.get(name):
+            entry["ports"] = ports[name]
+        if callers:
+            entry["fromPods"] = callers
+        if to_pods:
+            entry["toPods"] = to_pods
+        if name in egress.managed:
+            entry["managed"] = True
+        if hosts:
+            entry["hosts"] = hosts
+        out.append(entry)
+    return out
 
 
 def _covered(host: str, wildcard: str) -> bool:
@@ -698,6 +751,20 @@ def embedded_keeper_clickhouse_config() -> str:
     return one.replace("  <zookeeper>\n", keeper + "  <zookeeper>\n", 1)
 
 
+def _secrets_it_reads(pod: dict[str, Any], profile: ProfileSettings) -> None:
+    """Amendment 5 point 22: a workload that reads the settings whole (`envFrom`) but is not one of
+    `secrets.whole` gets the ConfigMap alone, and only the keys `secrets.named` gives it, each by
+    name, so the Glass and the recogniser never hold the stores' passwords or the gateway's keys."""
+    if not pod.get("envFrom") or pod["name"] in profile.secrets.whole:
+        return
+    pod["noSecret"] = True
+    named = profile.secrets.named.get(pod["name"], [])
+    kept = [e for e in pod.get("env", []) if e.get("value") != "" or "secret" in e]
+    pod["env"] = [*kept, *({"name": key, "secret": key} for key in named)]
+    if not pod["env"]:
+        pod.pop("env")
+
+
 def _millicores(quantity: str) -> float:
     return float(quantity[:-1]) if quantity.endswith("m") else float(quantity) * 1000
 
@@ -805,6 +872,7 @@ def render_cloud_platform(
             pod["serviceAccountName"] = gateway_account(platform)
         if pod.get("kind") == "StatefulSet" and not poc:
             pod["disruptionBudget"] = {"maxUnavailable": 1}
+        _secrets_it_reads(pod, profile)
         if poc:
             _onto_own_claims(pod, profile)
             for container in _containers(pod):
@@ -875,7 +943,7 @@ def render_cloud_platform(
         "imagePullSecrets": [],
         "podSecurity": {"user": UID, "group": UID},
         "networkPolicy": {"openEgress": False},
-        "egress": egress_policy(config, platform, profile),
+        "egress": egress_policy(config, platform, profile, workloads),
         "ingress": _ingress(config, platform, names, profile, environment),
         "environment": environment,
         "files": {

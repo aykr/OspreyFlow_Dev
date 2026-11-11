@@ -1,4 +1,5 @@
 {{- if or .Values.workloads .Values.jobs }}
+{{- $perWorkload := dig "workloads" list (.Values.egress | default dict) }}
 ---
 # ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
 # and nothing else; anything from outside reaches nothing but the proxy.
@@ -12,12 +13,17 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/part-of: ospreyflow
+  {{- /* ADR-148 Amendment 5 point 23: on a shared platform each workload's ingress is its own (below). */}}
+  {{- if $perWorkload }}
+  policyTypes: ["Egress"]
+  {{- else }}
   policyTypes: ["Ingress", "Egress"]
   ingress:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: ospreyflow
+  {{- end }}
   egress:
     - to:
         - podSelector:
@@ -71,16 +77,15 @@ spec:
 {{- end }}
 {{- with .Values.egress }}
 ---
-# ADR-148 decision 7: what may leave the namespace, evaluated before the deny below: the cluster's
-# DNS, the namespace's own pods, the platform's managed stores, and each host an enabled feature
-# reaches (Admin's settings, ADR-135 Amendment 2 and ADR-147), by its networks.
+# ADR-148 decision 7 and Amendment 5 point 21: DNS, every pod's, evaluated before the deny below.
+# The one policy that selects every pod, and it allows nothing but DNS (`make cp-policy-check`).
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
   # Named with its tier, as Calico (3.28 and later, with tiers) stores it, so an upgrade can patch it.
-  name: default.ospreyflow-allow-egress
+  name: default.ospreyflow-allow-dns
   labels:
-    {{- include "ospreyflow.labels" (dict "name" "allow-egress" "root" $) | nindent 4 }}
+    {{- include "ospreyflow.labels" (dict "name" "allow-dns" "root" $) | nindent 4 }}
 spec:
   tier: default
   order: 100
@@ -97,18 +102,77 @@ spec:
       destination:
         namespaceSelector: {{ printf "kubernetes.io/metadata.name == '%s'" .dnsNamespace | quote }}
         ports: [53]
+{{- $nets := dict }}
+{{- range .hosts }}{{ $_ := set $nets .host .nets }}{{ end }}
+{{- $managed := .managedNets }}
+{{- range .workloads }}
+{{- if or .toPods .managed .hosts }}
+---
+# What {{ .name }} alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
+# the networks of the hosts it is given; nothing else, by the deny below.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "default.ospreyflow-egress-%s" .name }}
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" (printf "egress-%s" .name) "root" $) | nindent 4 }}
+spec:
+  tier: default
+  order: 100
+  selector: {{ printf "app.kubernetes.io/name == '%s'" .name | quote }}
+  types: ["Egress"]
+  egress:
+    {{- range .toPods }}
     - action: Allow
+      protocol: TCP
       destination:
-        selector: all()
-    - action: Allow
-      destination:
-        nets: {{ toJson .managedNets }}
-    {{- range .hosts }}
-    # {{ .host }}
-    - action: Allow
-      destination:
-        nets: {{ toJson .nets }}
+        selector: {{ printf "app.kubernetes.io/name == '%s'" .name | quote }}
+        ports: {{ toJson .ports }}
     {{- end }}
+    {{- if .managed }}
+    - action: Allow
+      destination:
+        nets: {{ toJson $managed }}
+    {{- end }}
+    {{- range .hosts }}
+    # {{ . }}
+    - action: Allow
+      destination:
+        nets: {{ toJson (get $nets .) }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- range .workloads }}
+---
+# Who in the namespace may reach {{ .name }} (Amendment 5 point 23): the workloads whose paths name
+# it, on its own ports, rendered from the same rows as their egress; none, if nothing calls it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "ospreyflow-ingress-%s" .name }}
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" (printf "ingress-%s" .name) "root" $) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .name }}
+  policyTypes: ["Ingress"]
+  {{- if and .fromPods .ports }}
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: {{ toJson .fromPods }}
+      ports:
+        {{- range .ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+  {{- else }}
+  ingress: []
+  {{- end }}
+{{- end }}
 ---
 # ADR-148 decision 7: egress is denied by default; nothing above, nothing out.
 apiVersion: projectcalico.org/v3

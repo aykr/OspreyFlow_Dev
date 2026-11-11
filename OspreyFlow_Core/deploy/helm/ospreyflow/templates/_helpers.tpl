@@ -25,8 +25,11 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
   envFrom:
     - configMapRef:
         name: ospreyflow-env
+    {{- /* ADR-148 Amendment 5 point 22: a workload that reads no secret whole gets the settings alone. */}}
+    {{- if not .w.noSecret }}
     - secretRef:
         name: {{ .root.Values.secrets.name }}
+    {{- end }}
   {{- end }}
   {{- if or .w.env .w.jgroups }}
   env:

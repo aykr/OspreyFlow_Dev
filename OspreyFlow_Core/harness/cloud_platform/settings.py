@@ -181,12 +181,34 @@ class ImageOfOurs(_Strict):
     build_args: dict[str, str] = Field(default_factory=dict)
 
 
+#: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
+#: reached only by the workloads `egress.reach` names for it.
+HOST_KINDS = ("always", "engines", "maps", "mail", "connectors")
+
+
 class EgressHosts(_Strict):
     always: list[str] = Field(default_factory=list)
     engine_hosts: dict[str, str] = Field(default_factory=dict)
     #: A model engine of a kind that names no address (ADR-135 Amendment 4: `bedrock`), by its
     #: kind, whatever its name, `{region}` the engine's own (P11).
     engine_kind_hosts: dict[str, str] = Field(default_factory=dict)
+    #: ADR-148 Amendment 5 point 21: egress is each workload's own. Who reaches each kind of host,
+    #: who reaches the managed stores' networks, and which of the namespace's own workloads each
+    #: one calls; anything not named here is denied.
+    reach: dict[str, list[str]] = Field(default_factory=dict)
+    managed: list[str] = Field(default_factory=list)
+    paths: dict[str, list[str]] = Field(default_factory=dict)
+
+    @field_validator("reach")
+    @classmethod
+    def _known_kinds(cls, reach: dict[str, list[str]]) -> dict[str, list[str]]:
+        unknown = sorted(set(reach) - set(HOST_KINDS))
+        if unknown:
+            raise ValueError(
+                f"egress.reach names {', '.join(unknown)}, not a kind of host this profile "
+                f"reaches ({', '.join(HOST_KINDS)})"
+            )
+        return reach
 
 
 _QUANTITY = r"^[0-9]+(\.[0-9]+)?(m|Ki|Mi|Gi|Ti)?$"
@@ -226,6 +248,15 @@ class PocShape(_Strict):
         return limits
 
 
+class SecretReaders(_Strict):
+    """ADR-148 Amendment 5 point 22: which workloads read our Secret whole (`envFrom`), and the keys
+    each other workload that reads the deployment's settings is given by name. A workload named in
+    neither gets the ConfigMap alone, never the stores' passwords or the gateway's master key."""
+
+    whole: list[str]
+    named: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class ProfileSettings(_Strict):
     doors: list[Door]
     group_zero: list[str] = Field(default_factory=list)
@@ -234,6 +265,7 @@ class ProfileSettings(_Strict):
     resources: dict[str, Resources]
     arcadedb_heap_fraction: float = Field(gt=0, lt=1)
     poc: PocShape
+    secrets: SecretReaders
 
     @field_validator("resources")
     @classmethod
