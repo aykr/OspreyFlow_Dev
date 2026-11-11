@@ -353,3 +353,21 @@ def test_an_update_clears_the_record_after_its_restarts(tmp_path: Path) -> None:
     assert _update(fake) == 0
     assert seen_at_restart and all(seen_at_restart)  # still owed while restarting
     assert not record.exists()  # done, so cleared
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes any folder")
+def test_a_lock_this_account_cannot_make_is_said_in_words(deployment: Path) -> None:
+    """The folder the lock sits in left another account's by a run under sudo: the lock cannot be
+    made, which is said in words naming it, never a PermissionError traceback (my own lane review
+    of the round, item 7)."""
+    _after_the_gateway_database(deployment)
+    lock = deployment.parent / f".{deployment.name}.refresh-lock"
+    lock.unlink(missing_ok=True)
+    deployment.parent.chmod(0o555)
+    try:
+        with pytest.raises(refresh.RefreshFailed) as refused:
+            refresh.files_up_to_date(_checkout(deployment))
+    finally:
+        deployment.parent.chmod(0o755)
+    words = str(refused.value)
+    assert str(lock) in words and "nothing was changed" in words

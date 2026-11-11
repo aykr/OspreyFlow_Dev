@@ -1069,6 +1069,12 @@ def _release_at_head(ctx: _Context) -> str | None:
 def _start(args: argparse.Namespace, ctx: _Context) -> int:
     directory = ctx.deployed()
     if args.build:
+        # Refresh reads deployment.env alone (ADR-114 Am 39 decision 2); a value this shell sets
+        # empty, which Compose takes over the file's, is refused here, before refresh moves anything
+        # (my own lane review of the round, item 5).
+        emptied = [name for name in unset_required(directory) if name in os.environ]
+        if emptied:
+            raise CommandRefused(locked_out(directory, emptied))
         ctx.step(
             "rebuild from the checkout",
             [*ctx.python, "-m", "scripts.refresh"],
@@ -1698,7 +1704,11 @@ def main(
             named.remember(env, target.name)
         if args.verb == "update":
             # ADR-114 Amendment 8: the checkout's own `harness.update`, told which deployment.
-            if not {"--check", "--make-bundle"} & set(passthrough):  # neither asks Compose
+            asks_no_compose = any(
+                a in ("--check", "--help", "-h") or a.startswith("--make-bundle")
+                for a in passthrough
+            )
+            if not asks_no_compose:
                 _refuse_if_locked_out(ctx.deployment)
             directory = ctx.deployed()
             return ctx.run(

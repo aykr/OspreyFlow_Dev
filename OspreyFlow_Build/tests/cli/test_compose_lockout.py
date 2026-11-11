@@ -82,3 +82,45 @@ def test_switch_stops_another_locked_out_deployment_by_its_label(rig: Rig, tmp_p
         rig.captured
     )
     assert rig.runner.argvs()[0] == ["docker", "stop", "c0ffee1", "c0ffee2"]
+
+
+def test_start_build_refuses_a_value_the_shell_sets_empty(
+    rig: Rig, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refresh's own check reads deployment.env alone (Am 39 decision 2), so a value the shell sets
+    empty passed it, and Compose's own refusal at the build was then hidden by the redactor (my own
+    lane review of the round, item 5). The command refuses that case before refresh runs."""
+    rig.install_deployment()
+    (rig.deployment / "compose.yaml").write_text(LOCKED, encoding="utf-8")
+    (rig.deployment / "deployment.env").write_text("OSPREY_POSTGRES_PASSWORD=held\n", "utf-8")
+    monkeypatch.setenv("OSPREY_POSTGRES_PASSWORD", "")
+    assert rig("start", "--build") != 0
+    said = capsys.readouterr()
+    assert "OSPREY_POSTGRES_PASSWORD, which this shell sets empty" in said.err
+    assert rig.runner.argvs() == []
+
+
+def test_start_build_leaves_a_value_deployment_env_lacks_to_refresh(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the shell's case: a value deployment.env lacks is refresh's to refuse, in its words."""
+    rig.install_deployment()
+    (rig.deployment / "compose.yaml").write_text(LOCKED, encoding="utf-8")
+    monkeypatch.delenv("OSPREY_POSTGRES_PASSWORD", raising=False)
+    rig("start", "--build")
+    assert any("scripts.refresh" in argv for argv in rig.runner.argvs())
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["update", "--check"],
+        ["update", "--make-bundle", "b.tar"],
+        ["update", "--make-bundle=b.tar"],
+    ],
+)
+def test_an_update_that_asks_no_compose_is_not_refused(rig: Rig, argv: list[str]) -> None:
+    rig.install_deployment()
+    (rig.deployment / "compose.yaml").write_text(LOCKED, encoding="utf-8")
+    rig(*argv)
+    assert any("harness.update" in a for a in rig.runner.argvs())

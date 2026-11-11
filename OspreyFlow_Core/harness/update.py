@@ -169,16 +169,24 @@ def _opened(path: Path) -> int:
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL, 0o644)
     except FileExistsError:
-        try:
-            return os.open(path, os.O_RDONLY)
-        except PermissionError:
-            raise ChangeUnderWay(
-                f"The refresh lock {path} belongs to another account (a run under sudo) and this "
-                "one cannot open it, so nothing was changed. Remove it as that account (sudo rm "
-                f"{path}), then run this again."
-            ) from None
-    os.fchmod(descriptor, 0o644)
-    return descriptor
+        pass
+    except OSError as cannot:  # the folder another account's, or a read-only file system
+        raise ChangeUnderWay(
+            f"The refresh lock {path} cannot be made ({cannot.strerror}): this account may not "
+            f"write {path.parent} (a run under sudo can leave it root's), so nothing was changed. "
+            "Give the folder back to this account, then run this again."
+        ) from None
+    else:
+        os.fchmod(descriptor, 0o644)
+        return descriptor
+    try:
+        return os.open(path, os.O_RDONLY)
+    except PermissionError:
+        raise ChangeUnderWay(
+            f"The refresh lock {path} belongs to another account (a run under sudo) and this "
+            "one cannot open it, so nothing was changed. Remove it as that account (sudo rm "
+            f"{path}), then run this again."
+        ) from None
 
 
 @contextlib.contextmanager
