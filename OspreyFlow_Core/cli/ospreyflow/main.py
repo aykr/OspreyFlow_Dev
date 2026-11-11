@@ -1139,11 +1139,20 @@ def _compose_of(directory: Path) -> list[str]:
     cannot read its compose file** (a required value nowhere: the v0.5.0 rehearsal's lockout), so
     no verb fails in Compose's words or none (CARRIES; the lane review of the carries, item 12).
     `doctor` keeps the bare `compose`: it must run on such a deployment to say what is wrong."""
+    _refuse_if_locked_out(directory)
+    return compose(directory)
+
+
+def _refuse_if_locked_out(directory: Path) -> None:
+    """Refused in words when Compose cannot read the deployment's compose file: for every verb that
+    acts on it, through `_compose_of` or a harness module that asks Compose in its own child
+    (`backup`, `restore`, `update`, `demo add`, `repair-sign-in`; the orchestrator's review of
+    c5209b1, item 6). `start --build` hands to refresh, which refuses such a file in its own words.
+    Nothing installed, nothing refused here: each verb says that in its own words."""
     if (directory / "compose.yaml").is_file():
         missing = unset_required(directory)
         if missing:
             raise CommandRefused(locked_out(directory, missing))
-    return compose(directory)
 
 
 def _stop_by_label(ctx: _Context, folder: Path) -> None:
@@ -1574,6 +1583,7 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
     if verb == "demo":
         if args.action == "list":
             return demo.list_packs(ctx.product, ctx.run)
+        _refuse_if_locked_out(ctx.deployment)
         if args.pack == "public":
             demo.add_public(
                 ctx.product, ctx.run, ctx.env, args.file, args.manifest, capture=ctx.capture,
@@ -1589,6 +1599,7 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
     if verb == "uninstall":
         return _uninstall(args, ctx)
     if verb == "repair-sign-in":
+        _refuse_if_locked_out(ctx.deployment)
         return _repair_sign_in(args, ctx)
     if verb == "models":
         return _models(args, ctx)
@@ -1687,12 +1698,15 @@ def main(
             named.remember(env, target.name)
         if args.verb == "update":
             # ADR-114 Amendment 8: the checkout's own `harness.update`, told which deployment.
+            if not {"--check", "--make-bundle"} & set(passthrough):  # neither asks Compose
+                _refuse_if_locked_out(ctx.deployment)
             directory = ctx.deployed()
             return ctx.run(
                 [*ctx.python, "-m", "harness.update", "--deployment", str(directory), *passthrough],
                 cwd=product,
             )
         if args.verb in ("backup", "restore"):
+            _refuse_if_locked_out(ctx.deployment)
             module = f"harness.{args.verb}"
             # ADR-138: a deployment kept by name is named to the harness by its own osprey.yaml and
             # rendered folder. Its sets go to its own subfolder of its backups folder, which the

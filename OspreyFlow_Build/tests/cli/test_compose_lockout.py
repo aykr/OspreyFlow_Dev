@@ -25,15 +25,37 @@ LOCKED = (
 )
 
 
-@pytest.mark.parametrize(
-    "argv", [["stop"], ["start"], ["logs"], ["status"], ["uninstall", "--yes"]],
-    ids=["stop", "start", "logs", "status", "uninstall"],
-)  # fmt: skip
+VERBS = {
+    "stop": ["stop"],
+    "start": ["start"],
+    "logs": ["logs"],
+    "status": ["status"],
+    "uninstall": ["uninstall", "--yes"],
+    # The orchestrator's review of c5209b1, item 6: the draft named these, untested, and the
+    # harness-delegating verbs reached Compose (in their child) unguarded. `start --build` is not
+    # here: it hands to refresh, which refuses such a file in its own words
+    # (`test_refusal_words_reach_the_operator.py`).
+    "map list": ["map", "list"],
+    "grading change": ["grading", "change", "--to", "3x5x2", "--mapping", "MAPPING", "--dry-run"],
+    "models": ["models"],
+    "models key": ["models", "key", "gemini"],
+    "backup": ["backup"],
+    "restore": ["restore", "set-1"],
+    "update": ["update", "--yes"],
+    "demo add": ["demo", "add", "pid"],
+    "repair-sign-in": ["repair-sign-in"],
+}
+
+
+@pytest.mark.parametrize("argv", list(VERBS.values()), ids=list(VERBS))
 def test_each_verb_names_the_missing_value_and_what_to_do(
     rig: Rig, capsys: pytest.CaptureFixture[str], argv: list[str]
 ) -> None:
     rig.install_deployment()
     (rig.deployment / "compose.yaml").write_text(LOCKED, encoding="utf-8")
+    mapping = rig.deployment.parent / "mapping.yaml"  # the verb's own checks pass, to reach Compose
+    mapping.write_text("{}\n", encoding="utf-8")
+    argv = [str(mapping) if a == "MAPPING" else a for a in argv]
     assert rig(*argv) != 0
     said = capsys.readouterr()
     words = said.out + said.err
