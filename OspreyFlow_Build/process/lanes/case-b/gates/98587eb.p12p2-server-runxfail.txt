@@ -1,0 +1,100 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T172132Z/log: bash -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q --runxfail ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py -k "development"
+FF.F                                                                     [100%]
+=================================== FAILURES ===================================
+_________ test_laurium_reaches_the_gateway_and_dns_alone[development] __________
+
+name = 'development'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_laurium_reaches_the_gateway_and_dns_alone(name: str) -> None:
+        docs, values = _manifests(name)
+        managed, host = _outside(values)
+        answers = {
+            "gateway:4000": decide(docs, LAURIUM, pod("litellm", 4000), "Egress"),
+            "dns/udp": decide(docs, LAURIUM, _dns(values, "UDP"), "Egress"),
+            "dns/tcp": decide(docs, LAURIUM, _dns(values, "TCP"), "Egress"),
+            "gateway:5432": decide(docs, LAURIUM, pod("litellm", 5432), "Egress"),
+            "arcadedb:2480": decide(docs, LAURIUM, pod("arcadedb", 2480), "Egress"),
+            "clickhouse:8123": decide(docs, LAURIUM, pod("clickhouse", 8123), "Egress"),
+            "api:8000": decide(docs, LAURIUM, pod("api", 8000), "Egress"),
+            "a managed store": decide(docs, LAURIUM, managed, "Egress"),
+            "an outside host": decide(docs, LAURIUM, host, "Egress"),
+        }
+>       assert answers == {
+            "gateway:4000": "Allow", "dns/udp": "Allow", "dns/tcp": "Allow",
+            "gateway:5432": "Deny", "arcadedb:2480": "Deny", "clickhouse:8123": "Deny",
+            "api:8000": "Deny", "a managed store": "Deny", "an outside host": "Deny",
+        }  # fmt: skip
+E       AssertionError: assert {'gateway:400... 'Allow', ...} == {'gateway:400...: 'Deny', ...}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'an outside host': 'Allow'} != {'an outside host': 'Deny'}
+E         {'api:8000': 'Allow'} != {'api:8000': 'Deny'}
+E         {'gateway:5432': 'Allow'} != {'gateway:5432': 'Deny'}
+E         {'clickhouse:8123': 'Allow'} != {'clickhouse:8123': 'Deny'}...
+E         
+E         ...Full output truncated (3 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:280: AssertionError
+_______ test_only_the_conduit_and_the_workers_reach_laurium[development] _______
+
+name = 'development'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_only_the_conduit_and_the_workers_reach_laurium(name: str) -> None:
+        docs, _ = _manifests(name)
+        into = {
+            who: decide(docs, pod("laurium", 8000), pod(who, 8000), "Ingress")
+            for who in ("api", "worker", "workspace", "arcadedb", "litellm")
+        }
+>       assert into == {
+            "api": "Allow",
+            "worker": "Allow",
+            "workspace": "Deny",
+            "arcadedb": "Deny",
+            "litellm": "Deny",
+        }
+E       AssertionError: assert {'api': 'Allo... 'Allow', ...} == {'api': 'Allo...: 'Deny', ...}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'litellm': 'Allow'} != {'litellm': 'Deny'}
+E         {'workspace': 'Allow'} != {'workspace': 'Deny'}
+E         {'arcadedb': 'Allow'} != {'arcadedb': 'Deny'}
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:295: AssertionError
+_____ test_without_lauriums_own_policy_it_reaches_everything[development] ______
+
+name = 'development'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_without_lauriums_own_policy_it_reaches_everything(name: str) -> None:
+        """Red first, in the shape Helm emits: the same manifests less Laurium's own Calico policy, and
+        the namespace's allow-egress lets Laurium reach the stores, the managed stores and the outside.
+        This is what the test above would fail on."""
+        docs, values = _manifests(name)
+        managed, host = _outside(values)
+        without = [d for d in docs if (d.get("metadata") or {}).get("name") != LAURIUM_EGRESS]
+>       assert len(without) == len(docs) - 1, "Laurium's egress policy was not rendered"
+E       AssertionError: Laurium's egress policy was not rendered
+E       assert 35 == (35 - 1)
+E        +  where 35 = len([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe...'selector': {'matchLabels': {'app.kubernetes.io/name': 'keycloak', 'app.kubernetes.io/instance': 'ospreyflow'}}}}, ...])
+E        +  and   35 = len([{'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': {'name': 'ospreyflow-from-ingress', 'labe...'selector': {'matchLabels': {'app.kubernetes.io/name': 'keycloak', 'app.kubernetes.io/instance': 'ospreyflow'}}}}, ...])
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:324: AssertionError
+============================= slowest 30 durations =============================
+1.52s call     tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+0.20s setup    tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+
+(10 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_only_the_conduit_and_the_workers_reach_laurium[development]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_without_lauriums_own_policy_it_reaches_everything[development]
+3 failed, 1 passed, 8 deselected in 2.48s
+Wall time: 3 s, exit 1 (no stack, no lease; set-up before it 14 s)

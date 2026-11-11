@@ -34,3 +34,20 @@ Mac offline with the closed ports, 11 November 2026:
 | --- | --- |
 | `env_file: [deployment.env]` in Laurium's stanza (its pod reads the deployment's Secret, the master key with it) | 2 failed: "Laurium's pod reads the deployment's Secret" |
 | Laurium rendered whatever the setting (the `chosen` check removed) | 4 failed: "values.yaml names Laurium, which was not chosen" |
+
+## Piece 3: Laurium's traffic, read from Helm's output in Calico's order
+
+`tests/harness/test_laurium_network_policy.py`, on the test server offline at 98587eb with `P12p2_platform.diff`
+applied from the working tree (Helm runs in Docker; `gates/98587eb.p12p2-server-*.txt`):
+
+- **The finding, measured on the rendered chart** (`--runxfail`): today Laurium's pod **reaches an outside host,
+  the Conduit, ClickHouse and the gateway on another port**, and **every pod reaches Laurium** (the workspace,
+  ArcadeDB and the gateway among them); no egress policy of its own is rendered. `allow-egress` (`all()`, order
+  100) decides before anything narrower.
+- **Ruled (the orchestrator, relaying platform's P7b design):** no policy of Laurium's own; its rows in P7b's
+  `egress.paths` (`P12p2_egress_paths.md`). Until they land the three Helm-read cases are `xfail(strict=True)`,
+  each failing for the reason above (read with `--runxfail`, not assumed: round 3's lesson); the controls
+  (the Conduit reaching a store, the managed stores and the gateway) pass, so the evaluator is not denying blindly.
+- **The evaluator**, on hand-written manifests in P7b's announced shape and in today's: 3 passed offline on the
+  Mac, among them a selector it cannot read refused rather than guessed.
+- With it on the server: the render's 13 and the setting's 15, passed.
