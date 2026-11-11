@@ -1,20 +1,22 @@
-# case-b · P12 part 1 · report after the orchestrator's review of a5fa3c1b, 11 November 2026 (the test server)
+# case-b · P12 part 1 · report after round 2 of the orchestrator's review, 11 November 2026 (the Mac, leased on the server)
 
-**Exit (part 1).** The amendment is drafted; the reservation is put back for the orchestrator to mark at merge.
-- **Laurium's service, met offline only.** Another host is refused at start (`test_settings.py`) and at the call that picks it (`test_laurium_service.py::test_every_model_call_goes_to_the_gateway_and_no_other_host`, planted: `['api.openai.com'] == []`).
-- **The master key never crosses into Laurium's container, met** (ADR decision 8, `keys.py`; `test_adapter.py::test_no_call_from_the_adapter_carries_the_master_key`, 4 plants red). **A credential step: two review rounds.**
-- **Findings *inferred*, met through the real store's write** (`test_findings_inferred.py`, `test_laurium_findings_pending.py`, promoting plant red in both). Postgres's own acceptance of the row is not proven by them (`test_review_store.py`'s, live).
-- **The suite on both engines: NOT met against a real gateway.** Laurium is registered in `MODEL_PORT_ADAPTERS`; the stand-in refusals pass on both. **The leased live run was not taken**: the lease asked for approval. Laurium has never met a real gateway or model.
-- **Rule 1 not kept for the extract suite**: it was committed after `adapter.py` and `app.py` (red record).
-- **Schema mapping, met** for all 13 distinct entity types (33 cases: default's 10, and fibo's 11 and niem's 12, each pack composed on the default). **No LangChain without Laurium**: the source leg is met; the image leg is carried.
-- **Red record**: 53 offline and 14 in Laurium's environment, all red (`P12_RED_RECORD.md`).
+**Exit (part 1)** — a credential step, listed for the owner.
+- **Laurium against a real gateway and model: run, and NOT met.** Leased (stack c, 14:39:46Z, beside the orchestrator's pinned LiteLLM-with-database and Ollama): Laurium's conforming-answer case failed 3 of 3, `unparseable`, on the pinned `qwen2.5:0.5b-instruct`; the LiteLLM adapter's same case passed on the same model (`P12_RED_RECORD.md` "Round 2", `gates/8190228d.live-*.txt`). **Open finding: Laurium has not yet read any real model's answer.** Ruled: that case is `xfail(strict=True, raises=ExtractionFailedError)` on Laurium alone (`test_suite.py`); part 2's exit gains Laurium reading a conforming answer from the client's own engine; D2c says so until then. Every other Laurium case passes (25 of its service and refusals, the malformed schema).
+- **Laurium's key has no admin right on the real gateway, met**: `test_laurium_key_live.py` (the adapter's own token, working, refused at `/key/generate`, `/key/update`, `/key/delete`, `/model/new` as a known key; nothing left). Plants: master key at the adapter red; `user_role: proxy_admin` at the key's making green (no admin-granting field known, so it cannot be shown red on the pinned LiteLLM); the four route assertions red on the stand-in only.
+- **The master key never crosses into Laurium's container, met** (`test_adapter.py::test_no_call_from_the_adapter_carries_the_master_key`, the hosted engine's `[gemini]` now planted red too: 5 offline plants and 1 in Laurium's environment).
+- **Findings *inferred***, **schema mapping** (13 distinct types in 33 cases), **the source leg of no-LangChain**: met as in round 1. The image leg is carried, now said so everywhere.
+- **Rule 1 not kept for the extract suite** (accepted by the orchestrator, on the record). **Red record**: 54 offline and 14 in Laurium's environment, all red, plus 2 leased.
 
-**Gates at 283cfeb7** (main unmoved at 459ae1d4; run directly, not through the lease, which asked for approval; full outputs in `gates/283cfeb7.*`). make test: 4 failed / 11,033 passed. make test-js: 1 timing budget failed under server load (passes alone). make -k ci: core-check only (ESLint and trivy fs on the venv, a11y without a slot; with slot 3, 34 passed). Each is explained in SERVER_LOG "Built"; none is in a branch file.
+**Gates at 46c1b0c9** (tree 78225269…, rebased onto main 2733de4, P11's merge; through `stack_lease.sh offline case-b`; `gates/46c1b0c9.*`): **make -k ci: green** (exit 0; ruff, mypy, the image scans, a11y 34 of 34, every Build target). **make test: 1 failed / 11,592 passed / 4 xfailed**, the one `test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform…`, which answers `pass` on the server's own GPU (studio's server gates show it too; no branch file). **test-js: 1 failed / 3,073 passed**, `MatrixView.budget.test.tsx` opening in 3,916 ms against 2,500 ms in the full run at load ~8; **run alone straight after at this head it passed, recorded** (`gates/46c1b0c9.test-js-budget-alone.txt`); the branch touches nothing under `apps/`. The offline plants at this head: 54 of 54 red (`gates/46c1b0c9.plants-offline.txt`). The superseded gates at c16154fc are kept.
 
-**Left, and why.** Each needs approval this unattended session cannot give: the leased live run (the blocker), the image's start refusal, the image leg and trivy on Laurium's image (out of `P12_CI.diff`), moving the venv, a11y. Friction row `2026-11-11-case-b-server-session-cannot-lease.md`.
+**Options for Laurium's parse (d), not work now:** constrained decoding (bind `response_format: json_schema` from the request's schema onto Laurium's chat model, as the LiteLLM adapter sends; Laurium's parser then reads a conforming answer); JSON mode (`response_format: json_object`, weaker: valid JSON, not the schema); a larger pinned model that fits the server (e.g. a 3B or 7B instruct at q4), measured first. At temperature 0 Laurium's three attempts likely repeat one answer.
 
-**Commits**: f6f85fcf…a5fa3c1b, then ca85e385…283cfeb7 and the records after, on `lane/case-b-p12`; never pushed.
+**Left, and why**: the image's start refusal, the image leg and trivy on Laurium's image (`docker run`, out of `P12_CI.diff`); `review_queue.py`'s asyncpg import, `extract_engines.py` duplicating `ModelAdapterFactory`, the suite factory's teardown deleting a held Laurium key (part 2 hazard); the strict xfail itself not shown red (it needs Laurium to parse).
 
-**Requests**: apply both diffs at merge; ratify `factory.require` in `test_suite.py`/`test_suite_vision.py` (SERVER_LOG decision 15); move the venv; run, or allow, the leased live run (SERVER_LOG question 2 has the command).
+**Lane-reviewer**: run on round 2's commits; 13 findings (the live test unguarded in CI's DB-less gateway, no positive control, cleanup gaps, the plant testing another defect, records); all fixed before the lease, or carried above.
 
-**Questions for the owner**: the proxy hazard for part 2 (ADR decision 4). Nothing of mine is still running.
+**Commits**: round 2 is b315601…46c1b0c on `lane/case-b-p12` (rebased twice); never pushed. Friction: `2026-11-11-case-b-conformance-suite-ownership.md`.
+
+**Requests**: apply `P12_CI.diff` and `P12_MAKEFILE.diff` at merge; mark ADR-135 Amendment 6 written; add part 2's live exit case to the plan's P12 row; D2c's wording on Laurium.
+
+**Questions for the owner**: the proxy hazard for part 2 (decision 4). **Nothing of mine is still running**; stack c down and released; the gateway pair torn down by the orchestrator.
