@@ -57,7 +57,10 @@ from tests.services.api.test_auth import _config
 
 TENANT = "00000000-1111-4222-8333-444444444444"
 OTHER_TENANT = "99999999-8888-4777-8666-555555555555"
-CLIENT_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+CLIENT_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"  # this API's app registration (the audience)
+GLASS = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"  # the Glass's app registration (`azp`)
+OTHER_APP = "cccccccc-dddd-4eee-8fff-000000000000"
+OID = "50000000-0000-4000-8000-000000000001"
 ISSUER = f"https://login.microsoftonline.com/{TENANT}/v2.0"
 EXT = "extension_0123456789abcdef0123456789abcdef"  # an app's id without hyphens, made up
 
@@ -81,11 +84,12 @@ def entra_claims(**overrides: object) -> dict[str, object]:
         "exp": now + 3600,
         "ver": "2.0",
         "tid": TENANT,
-        "oid": "50000000-0000-4000-8000-000000000001",
+        "oid": OID,
+        "azp": GLASS,
         "sub": "pairwise-subject-AbCdEf0123456789",
         "name": "Synthetic Analyst",
         "preferred_username": "synthetic.analyst@example.test",
-        "scp": "access_as_user",
+        "scp": "openid access_as_user",
         "roles": ["analyst"],
     }
     base.update(overrides)
@@ -97,6 +101,7 @@ _ABSENT = object()
 #: Each principal claim from a directory extension attribute.
 BY_EXTENSION = ClaimMapping(
     tenant_id=TENANT,
+    client_id=GLASS,
     clearance=ValueSource(claim=f"{EXT}_clearance"),
     org_unit=ValueSource(claim=f"{EXT}_orgUnit"),
     handling_codes=CodesSource(claim=f"{EXT}_handlingCodes"),
@@ -105,6 +110,7 @@ BY_EXTENSION = ClaimMapping(
 #: Each principal claim from a table of Entra groups.
 BY_GROUPS = ClaimMapping(
     tenant_id=TENANT,
+    client_id=GLASS,
     clearance=ValueSource(groups={G_OFFICIAL: "OFFICIAL", G_SENSITIVE: "OFFICIAL-SENSITIVE"}),
     org_unit=ValueSource(groups={G_UNIT_1: "unit-1", G_UNIT_2: "unit-2"}),
     handling_codes=CodesSource(groups={G_CODE_R: ["R"], G_CODES_ST: ["S", "T"]}),
@@ -113,6 +119,7 @@ BY_GROUPS = ClaimMapping(
 #: A named claim and a group table in one mapping.
 MIXED = ClaimMapping(
     tenant_id=TENANT,
+    client_id=GLASS,
     clearance=ValueSource(claim=f"{EXT}_clearance"),
     org_unit=ValueSource(groups={G_UNIT_1: "unit-1", G_UNIT_2: "unit-2"}),
     handling_codes=CodesSource(groups={G_CODE_R: ["R"]}),
@@ -146,7 +153,7 @@ def test_extension_attributes_build_the_principal(keypair, jwks_url) -> None:
         ),
     )
     principal = _resolver(jwks_url, BY_EXTENSION).resolve(token)
-    assert principal.id == "pairwise-subject-AbCdEf0123456789"
+    assert principal.id == OID
     assert principal.clearance == "OFFICIAL-SENSITIVE"
     assert principal.org_unit == "unit-2"
     assert principal.receivable_handling_codes == ["R", "S"]
@@ -482,7 +489,9 @@ def test_a_mapping_other_than_the_fixed_names_needs_its_tenant() -> None:
 )
 def test_the_tenant_id_must_be_a_guid(tenant) -> None:
     with pytest.raises(ValidationError, match="tenant_id"):
-        ClaimMapping(tenant_id=tenant, clearance=ValueSource(claim=f"{EXT}_clearance"))
+        ClaimMapping(
+            tenant_id=tenant, client_id=GLASS, clearance=ValueSource(claim=f"{EXT}_clearance")
+        )
 
 
 def test_a_group_table_key_must_be_a_group_id() -> None:
@@ -495,7 +504,12 @@ def test_a_group_table_key_must_be_a_group_id() -> None:
 
 def test_the_groups_claim_must_be_named() -> None:
     with pytest.raises(ValidationError, match="groups_claim"):
-        ClaimMapping(tenant_id=TENANT, groups_claim="", clearance=ValueSource(groups=_G_OFF))
+        ClaimMapping(
+            tenant_id=TENANT,
+            client_id=GLASS,
+            groups_claim="",
+            clearance=ValueSource(groups=_G_OFF),
+        )
 
 
 _G_OFF = {G_OFFICIAL: "OFFICIAL"}
@@ -530,6 +544,7 @@ def test_the_settings_load_from_a_plain_mapping() -> None:
     mapping = ClaimMapping.model_validate(
         {
             "tenant_id": TENANT,
+            "client_id": GLASS,
             "clearance": {"claim": f"{EXT}_clearance"},
             "org_unit": {"groups": {G_UNIT_1: "unit-1"}},
             "handling_codes": {"groups": {G_CODE_R: ["R"]}},
@@ -684,3 +699,145 @@ def test_the_construction_check_sees_each_other_way_to_build_one(plant) -> None:
         isinstance(n, ast.Call) and _PRINCIPAL_CALL.search(ast.unparse(n.func))
         for n in ast.walk(tree)
     )
+
+
+# --- review round 1 (the orchestrator, 11 November 2026): the id, the Keycloak side, the client ---
+
+
+def test_an_entra_principal_is_keyed_by_oid_not_its_pairwise_sub(keypair, jwks_url) -> None:
+    """Entra's `sub` is pairwise per application: keyed by it, one person signing in through a
+    second client id would be two principals, and Admin › People could never name a person before
+    their first sign-in (Graph gives `oid`). Two `sub`s, one `oid`: one principal, keyed by `oid`."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    first = resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, sub="pairwise-app-1")))
+    second = resolver.resolve(
+        sign_token(_key(keypair), entra_claims(**_GOOD, sub="pairwise-app-2"))
+    )
+    assert first.id == second.id == OID
+
+
+def test_a_keycloak_principal_is_still_keyed_by_sub(keypair, jwks_url) -> None:
+    principal = PrincipalResolver(_config(jwks_url)).resolve(
+        sign_token(_key(keypair), default_claims(oid=OID))
+    )
+    assert principal.id == "analyst-1"
+
+
+@pytest.mark.parametrize("tenant", [TENANT, OTHER_TENANT], ids=["our-tenant", "other-tenant"])
+def test_an_entra_token_under_the_keycloak_handling_is_refused(keypair, jwks_url, tenant) -> None:
+    """With the fixed names an Entra token would skip the tenant, `oid` and scope checks, and its
+    app role `osprey-admin` would be read as OspreyFlow's administrator. Keycloak never emits
+    `tid`, so a token carrying one is refused there, whichever tenant it names."""
+    claims = default_claims(roles=["osprey-admin"], tid=tenant, oid=OID, azp=GLASS)
+    with pytest.raises(PrincipalResolutionError, match="carries tid"):
+        PrincipalResolver(_config(jwks_url)).resolve(sign_token(_key(keypair), claims))
+
+
+def test_a_v1_token_naming_the_glass_by_appid_resolves(keypair, jwks_url) -> None:
+    """The control for the client pin: a v1.0 token names its client in `appid`, not `azp`."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, azp=_ABSENT, appid=GLASS, ver="1.0"))
+    assert _resolver(jwks_url, BY_EXTENSION).resolve(token).id == OID
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"azp": OTHER_APP},
+        {"azp": _ABSENT},
+        {"azp": _ABSENT, "appid": OTHER_APP},
+        {"appid": OTHER_APP},
+    ],
+    ids=["other-azp", "no-client", "v1-other-appid", "azp-and-other-appid"],
+)
+def test_a_token_issued_to_another_client_is_refused(keypair, jwks_url, overrides) -> None:
+    """Another application in the tenant can obtain a token for this API; it is no Glass session."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, **overrides))
+    with pytest.raises(PrincipalResolutionError, match="Glass's client"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+@pytest.mark.parametrize(
+    "scp",
+    ["User.Read", "openid access_as_user_extra", "openid"],
+    ids=["other-scope", "longer-name", "openid-only"],
+)
+def test_a_token_without_this_apis_scope_is_refused(keypair, jwks_url, scp) -> None:
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, scp=scp))
+    with pytest.raises(PrincipalResolutionError, match="scope"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"acct": 1}, {"acct": "1"}, {"idp": f"https://sts.windows.net/{OTHER_TENANT}/"}],
+    ids=["acct", "acct-text", "idp-other"],
+)
+def test_a_guest_account_is_refused(keypair, jwks_url, overrides) -> None:
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, **overrides))
+    with pytest.raises(PrincipalResolutionError, match="guest"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+def test_a_member_account_resolves(keypair, jwks_url) -> None:
+    """The control for the guest refusal: `acct` 0, and an `idp` equal to the issuer."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, acct=0, idp=ISSUER))
+    assert _resolver(jwks_url, BY_EXTENSION).resolve(token).id == OID
+
+
+@pytest.mark.parametrize("client", [None, "", "glass"], ids=["none", "empty", "not-a-guid"])
+def test_an_entra_mapping_needs_the_glass_client_id(client) -> None:
+    with pytest.raises(ValidationError, match="client_id"):
+        ClaimMapping(
+            tenant_id=TENANT, client_id=client, clearance=ValueSource(claim=f"{EXT}_clearance")
+        )
+
+
+@pytest.mark.parametrize("scope", ["", "openid access_as_user"], ids=["empty", "two"])
+def test_the_scope_setting_names_one_scope(scope) -> None:
+    with pytest.raises(ValidationError, match="scope"):
+        ClaimMapping(tenant_id=TENANT, client_id=GLASS, scope=scope)
+
+
+# --- bounds on what a token's lists may hold ---
+
+_CODES_BY_GROUP = CodesSource(groups={G_CODE_R: ["R"]})
+
+
+def test_a_groups_list_past_entras_cap_is_refused(keypair, jwks_url) -> None:
+    """Entra puts at most 200 groups in a JWT and sends an overage past that; a longer list is no
+    token Entra issued. 200 resolve; 201 are refused."""
+    mapping = BY_EXTENSION.model_copy(update={"handling_codes": _CODES_BY_GROUP})
+    resolver = _resolver(jwks_url, mapping)
+    many = [G_CODE_R] + [f"60000000-0000-4000-8000-{i:012d}" for i in range(199)]
+    granted = resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, groups=many)))
+    assert granted.receivable_handling_codes == ["R"]
+    with pytest.raises(PrincipalResolutionError, match="more than 200"):
+        resolver.resolve(
+            sign_token(_key(keypair), entra_claims(**_GOOD, groups=[*many, G_UNMAPPED]))
+        )
+
+
+@pytest.mark.parametrize("codes", ["", ["R", ""]], ids=["empty-string", "empty-in-list"])
+def test_an_empty_handling_code_is_refused(keypair, jwks_url, codes) -> None:
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, **{f"{EXT}_handlingCodes": codes}))
+    with pytest.raises(PrincipalResolutionError, match="empty name"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+def test_a_handling_code_given_twice_is_kept_once(keypair, jwks_url) -> None:
+    """As the group path keeps once a code two groups grant."""
+    token = sign_token(
+        _key(keypair), entra_claims(**_GOOD, **{f"{EXT}_handlingCodes": ["R", "S", "R"]})
+    )
+    assert _resolver(jwks_url, BY_EXTENSION).resolve(token).receivable_handling_codes == ["R", "S"]
+
+
+@pytest.mark.parametrize("field", ["clearance", "org_unit"])
+def test_one_group_cannot_grant_two_clearances_or_units(field) -> None:
+    """A clearance or unit table maps a group to one value; a list of two is refused when the
+    settings load, so a single group can never be read as two grants."""
+    two = {"groups": {G_OFFICIAL: ["OFFICIAL", "SECRET"]}}
+    with pytest.raises(ValidationError):
+        ValueSource.model_validate(two)
+    with pytest.raises(ValidationError):
+        ClaimMapping.model_validate({"tenant_id": TENANT, "client_id": GLASS, field: two})
