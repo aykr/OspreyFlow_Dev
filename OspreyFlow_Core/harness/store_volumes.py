@@ -202,6 +202,14 @@ class FilesHeld:
                 path.unlink()
         for path, (content, mode) in self.files.items():
             path.parent.mkdir(parents=True, exist_ok=True)
+            if path.name == "deployment.env" and path.parent == self.folder:
+                # The secrets whole or not at all (`harness.atomic`; the lane review of the
+                # carries): a write in place torn by a crash would lose them.
+                from harness.atomic import replace_whole
+
+                if not path.is_file() or path.read_bytes() != content:
+                    replace_whole(path, content, mode=mode & 0o7777)
+                continue
             if not path.is_file() or path.read_bytes() != content:
                 path.write_bytes(content)
             path.chmod(mode & 0o7777)

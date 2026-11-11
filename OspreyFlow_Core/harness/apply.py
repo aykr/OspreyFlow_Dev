@@ -122,9 +122,22 @@ class ApplyFailed(RuntimeError):
 def move_into_place(stage: Path, out_dir: Path) -> None:
     """The staged files copied over the deployment's folder, which keeps its own mode: `copytree`
     also copies the stage folder's mode onto it, so a named deployment's folder, made `700` by the
-    command because it holds `deployment.env` (ADR-138), became `755` (found at step 11b)."""
+    command because it holds `deployment.env` (ADR-138), became `755` (found at step 11b).
+
+    **`deployment.env` is replaced whole, last** (`harness.atomic.replace_whole`): `copytree`
+    truncates and rewrites each file it copies, so a crash or a full disk part way would have torn
+    the live secrets (the lane review of the carries). Every other file is copied as before: a file a
+    container mounts on its own must keep its inode."""
+    from harness.atomic import replace_whole
+
     mode = out_dir.stat().st_mode & 0o777 if out_dir.is_dir() else None
-    shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+    secrets = stage / "deployment.env"
+    shutil.copytree(
+        stage, out_dir, dirs_exist_ok=True,
+        ignore=lambda folder, _names: ["deployment.env"] if Path(folder) == stage else [],
+    )  # fmt: skip
+    if secrets.is_file():
+        replace_whole(out_dir / "deployment.env", secrets.read_bytes(), mode=0o600)
     if mode is not None:
         out_dir.chmod(mode)
 

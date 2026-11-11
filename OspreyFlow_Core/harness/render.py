@@ -1956,22 +1956,11 @@ def write_private(path: Path, text: str) -> None:
     to disk, given the old file's owner (so a run under sudo leaves it the operator's), and renamed
     over it; a failure part way leaves the old file as it was and nothing beside it. Only for a file
     a container reads when it is made (`deployment.env`, an `env_file`), never one it mounts: a
-    rename gives the file a new inode."""
-    staged = path.with_name(f".{path.name}.{os.getpid()}.writing")
-    descriptor = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            os.fchmod(handle.fileno(), 0o600)
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        if path.exists() and os.geteuid() == 0:
-            held = path.stat()
-            os.chown(staged, held.st_uid, held.st_gid)
-        os.replace(staged, path)
-    except BaseException:
-        staged.unlink(missing_ok=True)
-        raise
+    rename gives the file a new inode. A symlink stays a link, its target replaced
+    (`harness.atomic.replace_whole`, which every writer of `deployment.env` shares)."""
+    from harness.atomic import replace_whole
+
+    replace_whole(path, text.encode("utf-8"), mode=0o600)
 
 
 #: What a rendered file that holds no secret is written as, and a folder of them, whatever the
