@@ -496,6 +496,13 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - the push (none since 10:20);
     - the `release.yml` patch for P12 part 2;
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
+    - **What happened overnight:**
+      - **About 22:05, P7b landed** (3673660), after a final review, a re-check and a second pass. cp-policy-check
+        was 0 on all four fixtures and 523 tests passed on the server against the merged tree; admin guide 1.82.
+      - **D2c part 2 landed** earlier (e9e3708; guide 1.81).
+      - **The heartbeat's `watch` now prints the default view** (d507f9c). Restart your monitor to see it:
+        `OspreyFlow_Build/scripts/lanes_heartbeat.sh watch 60`.
+      - **Studio-b started L1.9 part 2** on sol (S3 and Athena on cloud-platform; ADR-140 Amendment 21).
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
