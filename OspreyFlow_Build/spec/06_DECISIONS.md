@@ -34426,9 +34426,30 @@ orchestrator asked. Amendment 1 stands except where point 6 corrects it.
    not the handling scheme's highest; one that names its own keeps it
    (`test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own`, red first at
    SECRET).
+   The orchestrator accepted this default, and with it that the poc shape's kind run seeds only the
+   packs declared at or below OFFICIAL-SENSITIVE (HMP, declared SECRET, is not among them).
 9. **`ospreyflow images push`'s refusal**, with no render to push, names a command that works as
    given from `OspreyFlow_Core` (`PYTHONPATH=.:packages .venv/bin/python -m harness.render`). A test
    runs the command its words give.
+10. **No OpenSearch domain in the poc shape** (the orchestrator's ruling). No pod reads it, and it
+    is a paid domain on the client's own install, so the poc shape's Terraform makes none
+    (`test_the_poc_shape_makes_no_opensearch_domain`). The standard shape's is carried (below).
+11. **A first render into a new folder** writes every artefact. `harness.render.write` made the
+    output folder but not `terraform/`, so the first render stopped on `terraform/ecr.tf`. Each
+    artefact's folder is now made, readable as the rest
+    (`test_a_first_render_into_an_empty_folder_writes_every_artefact`).
+12. **One digest from the image plan to the values** (decision 8). The install renders twice: first
+    `--allow-unpinned`, since our images are not in the namespace's registry until `images push`
+    puts them there, then pinned. The first render named the third-party images by tag, so the push
+    copied them by tag and the pinned render resolved each tag afresh. A tag moved in between
+    pinned a digest the registry's copy does not have. Now:
+    - on this profile, the render resolves the third-party images even when unpinned (only ours
+      may stay unresolved);
+    - `images push` refuses an image named by its tag alone;
+    - the pinned render pins each image the previous plan copied by the digest it copied
+      (`harness.cloud_platform.carry`).
+    A test drives `harness.render.main` twice with a stand-in registry that moves every tag between
+    the two renders (`test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copied`).
 
 **Open question for the client's platform team** (Amendment 1's list gains it): what LimitRange
 and ResourceQuota the namespace carries, and in particular whether the quota sets `limits.cpu` or
@@ -34438,17 +34459,20 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
 - The acceptance scenarios on kind in the poc shape, and the final render they run, come after
   P11's and P12's part 2s land, since the shape renders what they leave. Under point 8's ceiling
   the run seeds only packs declared at or below OFFICIAL-SENSITIVE.
-- Carried by name, each changing the standard shape's render, so not folded in here:
-  - the OpenSearch domain `opensearch.tf` makes, which no pod reads (`opensearch-output`);
+- Carried by name:
+  - the standard shape's OpenSearch domain (`opensearch.tf`), which no pod reads
+    (`opensearch-output`), left unchanged by the orchestrator's ruling;
   - a gateway for an engine first added in *Admin › Models*, which the render leaves out when the
-    install declares none, so that engine has no gateway until a re-render.
+    install declares none, so that engine has no gateway until a re-render. That is P11 part 2's
+    own item (the gateway rendered by default), and P7b's final render picks it up when it lands.
 
 **The tests that would fail.** `tests/harness/test_cloud_platform_poc.py` (the shape, the stores,
 the claim, the CPU limits, the runbooks), `tests/cp_policy_check/test_cp_policy_check.py` (every
 planted fault refused in the poc shape's own render, the claim rendered, mounted and refused
 ReadWriteMany), `tests/cp_policy_check/test_cp_decommission_check.py`,
-`tests/harness/test_cloud_platform_identity.py`, the ceiling's case in
-`tests/harness/test_cloud_platform_render.py` and the refusal's in `tests/cli/test_images_verb.py`.
+`tests/harness/test_cloud_platform_identity.py`, the ceiling's, the first render's and the moving
+tag's cases in `tests/harness/test_cloud_platform_render.py`, and the refusals' in
+`tests/cli/test_images_verb.py`.
 
 ### ADR-148, Amendment 6 (11 November 2026) — Entra ID's claims as built (P10 part 1): mapped by settings, one construction path, the tenant, issuer, client and scope pinned, a principal keyed by `oid` within its tenant
 
