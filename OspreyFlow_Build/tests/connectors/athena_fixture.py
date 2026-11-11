@@ -139,6 +139,12 @@ class RecordedAthena:
     #: them from the declaration: when given, a table is kept at `s3://synthetic-lake/<db>/<table>/`
     #: and fails as an execution unless one of them covers it, as Athena reads it as the role.
     granted_objects: list[str] | None = None
+    #: Workgroups that enforce their own configuration (`EnforceWorkGroupConfiguration`): a query's
+    #: results go to the workgroup's own location, whatever the request names (AWS's API reference).
+    enforced: set[str] = field(default_factory=set)
+    #: Where each started query's results went, in order (the request's, or an enforcing
+    #: workgroup's own).
+    outputs: list[str | None] = field(default_factory=list)
     #: Every QueryString sent to StartQueryExecution, in order.
     sent: list[str] = field(default_factory=list)
     #: Every operation asked, in order.
@@ -192,7 +198,11 @@ class RecordedAthena:
         if name not in self.workgroups:
             return _error("workgroup_not_found", workgroup=name)
         output = self.workgroups[name]
-        configuration = {"ResultConfiguration": {"OutputLocation": output}} if output else {}
+        configuration: dict[str, Any] = (
+            {"ResultConfiguration": {"OutputLocation": output}} if output else {}
+        )
+        if name in self.enforced:
+            configuration["EnforceWorkGroupConfiguration"] = True
         return _answer(200, {"WorkGroup": {"Name": name, "State": "ENABLED",
                                            "Configuration": configuration}})  # fmt: skip
 
@@ -207,6 +217,9 @@ class RecordedAthena:
         if workgroup not in self.workgroups:
             return _error("workgroup_not_found", workgroup=workgroup)
         output = (body.get("ResultConfiguration") or {}).get("OutputLocation")
+        if workgroup in self.enforced and self.workgroups[workgroup] is not None:
+            output = self.workgroups[workgroup]  # the workgroup's own, whatever the request says
+        self.outputs.append(output or self.workgroups[workgroup])
         if output is None and self.workgroups[workgroup] is None:
             return _error("no_output_location")
         query = body["QueryString"]
@@ -263,7 +276,8 @@ class RecordedAthena:
                 location.startswith(g.removesuffix("*")) for g in self.granted_objects
             )
             if table in self.unreadable_data or ungranted:
-                execution.outcome, execution.fill = "table_data_denied", {"table": table}
+                execution.outcome = "table_data_denied"
+                execution.fill = {"database": db, "table": table}
                 return
             if execution.table is None:
                 execution.table = (db, table)

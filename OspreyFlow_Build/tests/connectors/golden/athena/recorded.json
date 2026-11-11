@@ -79,8 +79,8 @@
     },
     "table_data_denied": {
       "_about": "L1.9 part 2: a table whose objects the role may not read (its location not among the declaration's table_locations, so not in the role's policy). Athena reads a table's objects as the caller and fails the execution. Modelled from AWS's Athena troubleshooting guide, not measured.",
-      "StateChangeReason": "Permission denied on S3 path: s3://synthetic-lake/{table}/part-00000.parquet. Please check that your IAM user or role has the s3:GetObject permission.",
-      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Permission denied on S3 path: s3://synthetic-lake/{table}/part-00000.parquet"}
+      "StateChangeReason": "Permission denied on S3 path: s3://synthetic-lake/{database}/{table}/part-00000.parquet. Please check that your IAM user or role has the s3:GetObject permission.",
+      "AthenaError": {"ErrorCategory": 2, "ErrorType": 1201, "Retryable": false, "ErrorMessage": "Permission denied on S3 path: s3://synthetic-lake/{database}/{table}/part-00000.parquet"}
     }
   }
 }

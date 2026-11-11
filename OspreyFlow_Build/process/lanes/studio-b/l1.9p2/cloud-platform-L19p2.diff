@@ -124,10 +124,10 @@ index 5707c7f..6fea034 100644
  KUBE_API = "kube-api"
  
 diff --git a/OspreyFlow_Core/harness/cloud_platform/terraform.py b/OspreyFlow_Core/harness/cloud_platform/terraform.py
-index 8b5caf2..0b176d3 100644
+index 8b5caf2..e48f7d6 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/terraform.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/terraform.py
-@@ -551,9 +551,229 @@ def render_terraform(
+@@ -551,9 +551,304 @@ def render_terraform(
  
      if bedrock_enabled(config):
          files["gateway.tf"] = _gateway_role(config, platform)
@@ -250,6 +250,72 @@ index 8b5caf2..0b176d3 100644
 +    return {d for a in config.cloud_platform.connector_sources.athena for d in a.databases}
 +
 +
++def _declared_workgroups(config: OspreyConfig) -> set[tuple[str, str]]:
++    """Each declared workgroup by (region, name)."""
++    assert config.cloud_platform is not None
++    return {(a.region, a.workgroup) for a in config.cloud_platform.connector_sources.athena}
++
++
++_ARN_ATHENA = re.compile(
++    r"^arn:aws:athena:(?P<region>[a-z0-9-]+):"
++    + re.escape(_ACCOUNT)
++    + r":workgroup/(?P<name>[^/]+)$"
++)
++_ARN_GLUE = re.compile(
++    r"^arn:aws:glue:(?P<region>[a-z0-9-]+):" + re.escape(_ACCOUNT)
++    + r":(?:catalog|database/(?P<database>[^/]+)|table/(?P<tdatabase>[^/]+)/\*)$"
++)  # fmt: skip
++_ARN_S3 = re.compile(r"^arn:aws:s3:::(?P<bucket>[^/]+)(?:/(?P<key>.*))?$")
++
++
++def _resource_why(resource: str, config: OspreyConfig) -> str:
++    """Why `resource` is not one the declaration names, or ''. **Default-deny**: an ARN of a shape
++    not recognised here (an access point, another partition, another service, another account) is
++    refused (the orchestrator's review of L1.9 part 2)."""
++    declared_s3 = _declared_s3(config)
++    if found := _ARN_S3.match(resource):
++        bucket, key = found["bucket"], found["key"]
++        if bucket not in declared_s3:
++            return f"names the bucket {bucket}, which is not declared"
++        if key is not None and not any(key.startswith(f) for f in declared_s3.get(bucket, set())):
++            return f"reads {bucket} outside its declared folders"
++        return ""
++    if found := _ARN_ATHENA.match(resource):
++        if (found["region"], found["name"]) not in _declared_workgroups(config):
++            name, region = found["name"], found["region"]
++            return f"names the workgroup {name} in {region}, which is not declared"
++        return ""
++    if found := _ARN_GLUE.match(resource):
++        regions = {region for region, _name in _declared_workgroups(config)}
++        if found["region"] not in regions:
++            return f"names Glue in {found['region']}, where no workgroup is declared"
++        database = found["database"] or found["tdatabase"]
++        if database is not None and database not in _declared_databases(config):
++            return f"names the database {database}, which is not declared"
++        return ""
++    return f"names {resource}, a resource of a shape this check does not recognise"
++
++
++def _listing_why(statement: dict[str, Any], config: OspreyConfig) -> str:
++    """A listing under its declared folders alone: `s3:ListBucket` on a bucket declared at its top,
++    or held by `StringLike` on `s3:prefix` to values each inside a declared folder (`["*"]`, or a
++    folder beside the declared one, is refused)."""
++    declared = _declared_s3(config)
++    condition = statement.get("condition") or {}
++    for resource in statement["resources"]:
++        bucket = resource.removeprefix("arn:aws:s3:::")
++        if "" in declared.get(bucket, set()):
++            continue  # declared at its top: the whole listing is declared
++        if condition.get("variable") != "s3:prefix" or not condition.get("values"):
++            return f"lists {bucket} beyond its declared folders (no s3:prefix condition)"
++        if condition.get("test") != "StringLike":
++            return f"lists {bucket} under a {condition.get('test')} condition, not StringLike"
++        for value in condition["values"]:
++            if not any(value.removesuffix("*").startswith(f) and f for f in declared[bucket]):
++                return f"lists {bucket} under {value!r}, beyond its declared folders"
++    return ""
++
++
 +def _wide(statement: dict[str, Any], config: OspreyConfig, results: set[str]) -> str:
 +    """Why `statement` is not read-only and scoped to the declaration, or ''."""
 +    actions, resources = set(statement["actions"]), list(statement["resources"])
@@ -260,27 +326,30 @@ index 8b5caf2..0b176d3 100644
 +    if any("?" in r or r == "*" or ("*" in r and not any(p.match(r) for p in _NARROW_STAR))
 +           for r in resources):  # fmt: skip
 +        return "names a wildcard resource"
-+    declared = _declared_s3(config)
 +    for resource in resources:
-+        if resource.startswith("arn:aws:s3:::"):
-+            bucket, _, key = resource.removeprefix("arn:aws:s3:::").partition("/")
-+            if bucket not in declared:
-+                return f"names the bucket {bucket}, which is not declared"
-+            if key and not any(key.startswith(f) for f in declared.get(bucket, set())):
-+                return f"reads {bucket} outside its declared folders"
-+        elif ":table/" in resource or ":database/" in resource:
-+            database = resource.split(":table/" if ":table/" in resource else ":database/")[1]
-+            if database.split("/")[0] not in _declared_databases(config):
-+                return f"names the database {database.split('/')[0]}, which is not declared"
++        if why := _resource_why(resource, config):
++            return why
 +    if "s3:ListBucket" in actions:
-+        condition = statement.get("condition") or {}
-+        for resource in resources:
-+            bucket = resource.removeprefix("arn:aws:s3:::")
-+            if "" in declared.get(bucket, set()):
-+                continue  # declared at its top: the whole listing is declared
-+            if condition.get("variable") != "s3:prefix" or not condition.get("values"):
-+                return f"lists {bucket} beyond its declared folders (no s3:prefix condition)"
++        return _listing_why(statement, config)
 +    return ""
++
++
++#: IAM's limit on a customer managed policy's document, in characters with whitespace removed.
++POLICY_LIMIT = 6_144
++
++
++def policy_characters(statements: list[dict[str, Any]]) -> int:
++    """The policy document's size as IAM counts it (whitespace removed), with the account id
++    written as its twelve digits."""
++    document = {"Version": "2012-10-17", "Statement": [
++        {"Sid": st["sid"], "Effect": "Allow", "Action": st["actions"],
++         "Resource": [r.replace(_ACCOUNT, "000000000000") for r in st["resources"]],
++         **({"Condition": {st["condition"]["test"]: {st["condition"]["variable"]:
++                                                      st["condition"]["values"]}}}
++            if "condition" in st else {})}
++        for st in statements
++    ]}  # fmt: skip
++    return len(json.dumps(document, separators=(",", ":")))
 +
 +
 +def refuse_wide_statements(config: OspreyConfig, statements: list[dict[str, Any]]) -> None:
@@ -297,6 +366,12 @@ index 8b5caf2..0b176d3 100644
 +    for athena in config.cloud_platform.connector_sources.athena:
 +        bucket, folder = s3_location(athena.results_location)
 +        results.add(f"arn:aws:s3:::{bucket}/{folder}*")
++    if (size := policy_characters(statements)) > POLICY_LIMIT:
++        raise CloudPlatformNotRenderable(
++            "cloud_platform.connector_sources: the role's policy for the declared sources comes "
++            f"to {size} characters, past IAM's limit of {POLICY_LIMIT:,} for one managed policy: "
++            "declare fewer buckets, folders or databases"
++        )
 +    for statement in statements:
 +        if why := _wide(statement, config, results):
 +            raise CloudPlatformNotRenderable(

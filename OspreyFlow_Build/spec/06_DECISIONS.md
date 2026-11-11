@@ -33904,7 +33904,17 @@ below); every other open choice was taken as recommended and is listed in `proce
      `client-ab/` never passes as `client-a/`.
    - **Athena** must match workgroup and region, with every database among the declared ones and the default
      catalog, the only one whose Glue entries the role may read. Its results location is the declared one, or
-     left to the workgroup.
+     left empty.
+   - **The declared results location is always sent** when the connection leaves it empty, since it is the
+     only place a declared source gives the role a write. *Test connection* also reads the workgroup
+     (`GetWorkGroup`): a workgroup that enforces its own results location (`EnforceWorkGroupConfiguration`),
+     different from the declared one, is refused in words before any read. Left to the workgroup, Test had
+     passed while every read failed on the workgroup's own location (the orchestrator's review).
+   - **The words are plain** ("The render made no way out or read for …"). A declaration the Conduit cannot read
+     refuses every connection, of any kind, in words about the rendered settings, never blaming S3 or Athena.
+   - **The declaration is checked at install:** a region in the standard partition alone, since the statements
+     name `arn:aws:` (a China or GovCloud region is refused in words); and at least one table location for each
+     workgroup.
    - Every other profile keeps part 1's allow-list alone.
 5. **IAM: read-only and scoped, on the role the Conduit already has.** `terraform/connector_sources.tf` attaches one
    policy to P7b's namespace role (`aws_iam_role.service`, IRSA's account). No new account is made and no key
@@ -33933,8 +33943,15 @@ below); every other open choice was taken as recommended and is listed in `proce
    - an action outside the read set;
    - a write anywhere but a results location's objects;
    - a `*` resource, a `?` anywhere, or a `*` anywhere but a folder's objects or a database's tables;
-   - a bucket, folder or database the declaration does not name;
-   - a bucket listed with no `s3:prefix` condition, unless it is declared at its top.
+   - a bucket, folder, workgroup, database or region the declaration does not name;
+   - a bucket listed with no `s3:prefix` condition (unless it is declared at its top), under a test other
+     than `StringLike`, or under a value outside a declared folder (`["*"]` is refused);
+   - **default-deny**, any resource ARN of a shape it does not recognise: an access point, another partition,
+     another service.
+
+   It also refuses a policy past IAM's 6,144-character limit for one managed policy, in words.
+   `s3:ListBucketMultipartUploads` takes no `s3:prefix` condition, so on the results bucket it lists that
+   bucket's in-progress uploads whole: a listing of upload keys, no object read, and carried as known.
 
    Each branch is planted out on its own and named in the refusal's words.
    - **The `data` block is named for its file** (`aws_caller_identity.osprey_connector_sources`), since the
@@ -33968,6 +33985,10 @@ below); every other open choice was taken as recommended and is listed in `proce
      the path not repeated. The recorded Athena is given the role's own `s3:GetObject` grants as the render makes
      them from the declaration, so a table location left out of the declaration is the plant. Only that shape is
      taken for the tables: a denial writing the results keeps Athena's own words.
+   - **The recorded S3 models the grants too:** given the role's rendered statements, it refuses with
+     `AccessDenied` a listing whose `prefix` no `StringLike` value matches, a listing with no prefix under a
+     conditioned grant, and a key outside every `s3:GetObject` resource, as the recorded Athena does for table
+     locations.
    - **Not measured against Athena itself:** `test_athena_connector_live.py`, on the client's platform, records
      which answer Athena gives.
 7. **cp-policy-check** gains a fifth fixture, `development-sources.yaml`, with an S3 and an Athena source declared.
@@ -33983,13 +34004,16 @@ and its generated types) is the head commit. `harness/cloud_platform/**`, `profi
 
 **The test that would fail.**
 - `tests/harness/test_cloud_sources_render.py`: the rows, the allow-list, no results or table bucket, the worker,
-  the statements and their conditions, nine planted wide statements each by its own reason, a table location
-  not declared refused by the recorded Athena from the rendered grants, nothing undeclared.
+  the statements and their conditions, eighteen planted wide statements each by its own reason, the policy's
+  size, the partition and the table locations, a table location not declared refused by the recorded Athena
+  from the rendered grants, the deployment's listing held to the rendered grants by the recorded S3, nothing
+  undeclared.
 - `tests/services/api/test_cloud_sources_declared.py`: save, *Test* and read refused; ten wider connections; a
-  narrower one passed; another profile; an unreadable declaration; an API connection to a declared host.
+  narrower one passed; another profile; an unreadable declaration; a SQL and an API connection to a declared
+  host; the declared results location sent; a workgroup enforcing another location refused at Test.
 - `tests/connectors/test_cloud_clients.py` and `test_s3_connector.py`: pyarrow's shapes.
 - `tests/connectors/test_athena_connector.py`: both parse answers, the denied table data.
-- Red records and twenty-three plants at their call sites are in `process/lanes/studio-b/l1.9p2/`.
+- Red records and thirty-four plants at their call sites are in `process/lanes/studio-b/l1.9p2/`.
 
 ### ADR-135, Amendment 7 (11 November 2026) — Amendment 4 as built in *Admin › Models* (P11 part 1): on the `cloud-platform` profile alone, the client's own gateway at its address by a token and Bedrock in London by the IAM role and a model's own id, no key stored for an IAM-role engine
 

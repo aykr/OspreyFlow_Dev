@@ -40,7 +40,7 @@ DECLARED = {
     "s3": [{"bucket": "synthetic-exports", "region": "eu-west-2", "prefix": "client-a/"}],
     "athena": [{"workgroup": "primary", "region": "eu-west-2", "databases": ["visits", "finance"],
                 "results_location": "s3://synthetic-athena-results/out/",
-                "table_locations": []}],
+                "table_locations": ["s3://synthetic-lake/visits/"]}],
 }  # fmt: skip
 KINDS = pytest.mark.parametrize("kind", ["s3", "athena"])
 
@@ -192,3 +192,67 @@ def test_an_api_connection_to_a_declared_source_s_host_is_refused(
     made = _save(world, "api", {"kind": "api", "base_url": base_url})
     assert made.status_code == 422, made.text
     assert "is a declared S3 or Athena source's host" in made.json()["detail"]["detail"]
+
+
+def test_a_sql_connection_to_a_declared_source_s_host_is_refused(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 21 point 5 says SQL or API: the SQL case (the orchestrator's review, rule 12)."""
+    _render_made(monkeypatch, DECLARED)
+    made = _save(world, "sql", {"kind": "sql", "host": "athena.eu-west-2.amazonaws.com",
+                                "port": 443, "database": "visits", "user": "reader",
+                                "secret": "SYNTHETIC_SQL", "schemas": ["public"]})  # fmt: skip
+    assert made.status_code == 422, made.text
+    assert "is a declared S3 or Athena source's host" in made.json()["detail"]["detail"]
+    assert "a sql connection" in made.json()["detail"]["detail"]
+
+
+@pytest.mark.parametrize("kind", ["sql", "api"])
+def test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """A corrupt `OSPREY_CONNECTOR_SOURCES` refuses a SQL or API connection too (fail closed), in
+    words about the rendered settings, never about S3 or Athena (the orchestrator's review)."""
+    _render_made(monkeypatch, DECLARED)
+    monkeypatch.setenv("OSPREY_CONNECTOR_SOURCES", "{not json")
+    settings = (
+        {"kind": "sql", "host": "db.example.org", "database": "visits", "user": "reader",
+         "secret": "SYNTHETIC_SQL", "schemas": ["public"]}
+        if kind == "sql" else {"kind": "api", "base_url": "https://api.example.org/"}
+    )  # fmt: skip
+    made = _save(world, kind, settings)
+    assert made.status_code == 422, made.text
+    words = made.json()["detail"]["detail"]
+    assert "rendered connector settings" in words
+    assert "S3" not in words and "Athena" not in words
+
+
+def test_a_connection_leaving_results_to_its_workgroup_sends_the_declared_location(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A workgroup with no location of its own: the read sends the declared one, the only place a
+    declared source gives the role a write (the orchestrator's review: left empty, Test passed
+    while every read failed on the workgroup's own location)."""
+    declared = {**DECLARED, "athena": [{**DECLARED["athena"][0], "workgroup": "bare"}]}
+    _render_made(monkeypatch, declared)
+    connection_id = _save(world, "athena", {**SETTINGS["athena"], "workgroup": "bare"}).json()["id"]
+    made = _register(world, "ds-a", connection_id, "author_a", "athena")
+    assert made.status_code == 201, made.text
+    assert world.athena.outputs == ["s3://synthetic-athena-results/out/"]
+
+
+def test_test_refuses_a_workgroup_enforcing_another_results_location(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A workgroup that enforces its own location overrides the declared one at every query; Test
+    says so in words before any read (the orchestrator's review)."""
+    declared = {**DECLARED, "athena": [{**DECLARED["athena"][0],
+                                        "results_location": "s3://synthetic-athena-results/ours/"}]}
+    _render_made(monkeypatch, declared)
+    connection_id = _save(world, "athena").json()["id"]
+    tested = world.client.post(f"/v1/admin/connections/{connection_id}/test", headers=_as("admin"))
+    assert tested.json()["ok"] is True  # not enforced: the declared location is sent
+    world.athena.enforced.add("primary")
+    tested = world.client.post(f"/v1/admin/connections/{connection_id}/test", headers=_as("admin"))
+    assert tested.json()["ok"] is False
+    assert "enforces its own results location" in tested.json()["words"]

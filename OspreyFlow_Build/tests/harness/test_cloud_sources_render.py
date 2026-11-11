@@ -190,6 +190,39 @@ def test_a_listing_condition_never_holds_an_action_that_carries_no_prefix() -> N
         ({"actions": ["glue:GetTable"],
           "resources": [f"arn:aws:glue:eu-west-2:{terraform._ACCOUNT}:table/payroll/*"]},
          "names the database payroll, which is not declared"),
+        # The orchestrator's review of part 2, item 2 (a): a condition's values held to the folders.
+        ({"actions": ["s3:ListBucket"], "resources": ["arn:aws:s3:::synthetic-exports"],
+          "condition": {"test": "StringLike", "variable": "s3:prefix", "values": ["*"]}},
+         "lists synthetic-exports under '*', beyond its declared folders"),
+        ({"actions": ["s3:ListBucket"], "resources": ["arn:aws:s3:::synthetic-exports"],
+          "condition": {"test": "StringNotLike", "variable": "s3:prefix", "values": ["client-a/"]}},
+         "lists synthetic-exports under a StringNotLike condition, not StringLike"),
+        # (b): a workgroup, or a region, the declaration does not name.
+        ({"actions": ["athena:GetQueryResults"],
+          "resources": [f"arn:aws:athena:eu-west-2:{terraform._ACCOUNT}:workgroup/primary"]},
+         "names the workgroup primary in eu-west-2, which is not declared"),
+        ({"actions": ["athena:GetQueryResults"],
+          "resources": [f"arn:aws:athena:eu-west-1:{terraform._ACCOUNT}:workgroup/analysts"]},
+         "names the workgroup analysts in eu-west-1, which is not declared"),
+        ({"actions": ["glue:GetTable"],
+          "resources": [f"arn:aws:glue:eu-west-1:{terraform._ACCOUNT}:table/visits/*"]},
+         "names Glue in eu-west-1, where no workgroup is declared"),
+        # (c): default-deny, a shape not recognised.
+        ({"actions": ["s3:GetObject"],
+          "resources": ["arn:aws:s3:eu-west-2:000000000000:accesspoint/synthetic-exports"]},
+         "names arn:aws:s3:eu-west-2:000000000000:accesspoint/synthetic-exports, a resource of a "
+         "shape this check does not recognise"),
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws-cn:s3:::synthetic-exports/client-a/a"]},
+         "names arn:aws-cn:s3:::synthetic-exports/client-a/a, a resource of a shape this check "
+         "does not recognise"),
+        ({"actions": ["s3:GetObject"],
+          "resources": [f"arn:aws:dynamodb:eu-west-2:{terraform._ACCOUNT}:table/visits"]},
+         f"names arn:aws:dynamodb:eu-west-2:{terraform._ACCOUNT}:table/visits, a resource of a "
+         "shape this check does not recognise"),
+        # Item 3: a `*` only the `*` branch refuses: in a declared bucket under its declared folder,
+        # but not at the end (every other branch admits it).
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::synthetic-exports/client-a/*.csv"]},
+         "names a wildcard resource"),
     ],
 )  # fmt: skip
 def test_a_wide_statement_is_refused_by_the_render(
@@ -242,3 +275,103 @@ def test_nothing_is_rendered_with_no_source_declared() -> None:
     assert terraform.connector_source_statements(
         OspreyConfig.model_validate(_raw("development"))
     ) == []
+
+
+def test_a_policy_past_iam_s_size_limit_is_refused_at_render() -> None:
+    """IAM refuses a managed policy past 6,144 characters (whitespace removed), so the render does
+    first, in words, rather than leave the platform team a Terraform that cannot apply (the
+    orchestrator's review). The fixture's own policy is well within it."""
+    assert terraform.policy_characters(_statements()) < terraform.POLICY_LIMIT
+    raw = _raw()
+    raw["cloud_platform"]["connector_sources"]["s3"] = [
+        {"bucket": f"synthetic-exports-{n:02d}", "region": "eu-west-2", "prefix": "client-a/"}
+        for n in range(40)
+    ]
+    for n in range(40):
+        raw["cloud_platform"]["egress_nets"][
+            f"synthetic-exports-{n:02d}.s3.eu-west-2.amazonaws.com"] = ["198.18.0.0/24"]
+    with pytest.raises(CloudPlatformNotRenderable, match="past IAM's limit of 6,144"):
+        _artefacts(raw)
+
+
+@pytest.fixture
+def own_identity(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """The deployment's identity as botocore's chain finds it (synthetic), as `test_cloud_clients`."""
+    from ..connectors.athena_fixture import GRANTED_KEY
+
+    for name in ("AWS_PROFILE", "AWS_SESSION_TOKEN", "AWS_ROLE_ARN", "AWS_WEB_IDENTITY_TOKEN_FILE",
+                 "AWS_ENDPOINT_URL", "AWS_ENDPOINT_URL_S3"):  # fmt: skip
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", GRANTED_KEY)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "synthetic-secret-not-a-real-key")
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "none"))
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "none"))
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+
+
+@pytest.mark.usefixtures("own_identity")
+def test_the_deployment_s_listing_asks_only_within_the_role_s_rendered_grants() -> None:
+    """Rule 15, the orchestrator's review of part 2: the recorded S3 is given the role's own
+    statements, rendered from the declaration, and refuses what IAM would. The deployment's own
+    listing client (`CloudS3Store`) asks within them: Test's one-level listing of the connection's
+    folder (`Prefix=client-a/`, which the `s3:prefix` values match) and a read's folder under it.
+    A connection at the bucket's top, beyond the declared folder, is refused by S3 itself in words;
+    so is a key outside the role's `s3:GetObject` resources."""
+    from botocore.exceptions import ClientError
+    from services.api.connector_reads import _check_cloud, cloud_s3_store
+    from services.api.connector_reads import Readers
+    from services.ingest.connectors.reads import ConnectorRefused
+    from services.ingest.connectors.s3_connector import list_folder
+
+    from schemas.sources import S3ConnectionSettings
+
+    from ..connectors.s3_fixture import RecordedS3
+
+    keys = [("client-a/visits/a.csv", 10), ("client-b/b.csv", 10)]
+    recorded = RecordedS3(buckets={"synthetic-exports": keys}, granted=_statements())
+    settings = S3ConnectionSettings(region="eu-west-2", bucket="synthetic-exports",
+                                    prefix="client-a/")  # fmt: skip
+
+    def store(s: S3ConnectionSettings) -> Any:
+        made = cloud_s3_store(s)
+        recorded.attach(made.client)
+        return made
+
+    readers = Readers(s3_store=store)
+    assert _check_cloud(settings, readers).ok  # Test: Prefix=client-a/
+    found = list_folder(store(settings), "synthetic-exports", "synthetic-exports/client-a/visits",
+                        recursive=True, limit=10)  # fmt: skip
+    assert [f.path for f in found] == ["synthetic-exports/client-a/visits/a.csv"]
+    assert {r["query"].get("prefix") for r in recorded.requests} == {"client-a/", "client-a/visits/"}
+    top = settings.model_copy(update={"prefix": ""})
+    with pytest.raises(ConnectorRefused, match="access denied"):
+        _check_cloud(top, readers)  # Prefix="" under a grant conditioned on client-a/
+    with pytest.raises(ClientError, match="AccessDenied|403"):
+        store(settings).client.head_object(Bucket="synthetic-exports", Key="client-b/b.csv")
+
+
+@pytest.mark.parametrize(
+    ("change", "words"),
+    [
+        ({"s3": [{"bucket": "synthetic-exports", "region": "cn-north-1"}]},
+         "cn-north-1 is outside AWS's standard partition"),
+        ({"s3": [{"bucket": "synthetic-exports", "region": "us-gov-west-1"}]},
+         "us-gov-west-1 is outside AWS's standard partition"),
+        ({"athena": [{"workgroup": "analysts", "region": "eu-west-2", "databases": ["visits"],
+                      "results_location": "s3://synthetic-athena-results/out/",
+                      "table_locations": []}]},
+         "table_locations names at least one s3://bucket/folder/"),
+    ],
+)  # fmt: skip
+def test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words(
+    change: dict[str, Any], words: str
+) -> None:
+    """The statements name `arn:aws:` resources, so a China or GovCloud region is refused (the
+    orchestrator's recommendation); an Athena workgroup with no table location could read no
+    table, so one is required (the orchestrator's review of part 2)."""
+    from pydantic import ValidationError
+
+    raw = _raw()
+    raw["cloud_platform"]["connector_sources"] = change
+    with pytest.raises(ValidationError, match=re.escape(words)):
+        OspreyConfig.model_validate(raw)
