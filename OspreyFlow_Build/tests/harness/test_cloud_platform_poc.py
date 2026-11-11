@@ -212,3 +212,42 @@ def test_the_decommission_removes_every_claim_the_render_makes(
     assert (
         text.index("helm uninstall") < text.index("delete pvc") < text.index("decommission_check")
     )
+
+
+# ---- CPU limits (the orchestrator's D2c finding on LimitRanges) --------------------------------
+
+
+def _cpu(quantity: str) -> float:
+    return float(quantity[:-1]) / 1000 if quantity.endswith("m") else float(quantity)
+
+
+def test_every_poc_container_names_a_cpu_limit_at_or_above_its_request(poc: dict[str, Any]) -> None:
+    """A LimitRange's default CPU limit is given to exactly the containers that name none, and a
+    ResourceQuota on `limits.cpu` refuses a pod with none; so in the poc shape, which goes onto the
+    client's namespace before their team has said which they set, each container names its own."""
+    for pod in [*poc["workloads"], *poc["jobs"]]:
+        for container in [pod, *pod.get("initContainers", [])]:
+            resources = container["resources"]
+            assert "cpu" in resources["limits"], container["name"]
+            assert _cpu(resources["limits"]["cpu"]) >= _cpu(resources["requests"]["cpu"])
+
+
+def test_the_standard_shape_names_no_cpu_limit() -> None:
+    values = _values(_config("development"))
+    for pod in [*values["workloads"], *values["jobs"]]:
+        for container in [pod, *pod.get("initContainers", [])]:
+            assert "cpu" not in container["resources"]["limits"], container["name"]
+
+
+def test_a_cpu_limit_below_its_request_is_refused_in_words(monkeypatch: pytest.MonkeyPatch) -> None:
+    import harness.cloud_platform as cp
+    from harness.cloud_platform import CloudPlatformNotRenderable
+    from harness.cloud_platform.settings import load_profile
+
+    profile = load_profile()
+    low = profile.model_copy(
+        update={"poc": profile.poc.model_copy(update={"cpu_limits": {"default": "50m"}})}
+    )
+    monkeypatch.setattr(cp, "load_profile", lambda: low)
+    with pytest.raises(CloudPlatformNotRenderable, match="CPU limit 50m is below its request"):
+        _artefacts(_config())

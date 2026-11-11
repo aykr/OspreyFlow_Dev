@@ -865,3 +865,16 @@ def test_arcadedb_s_heap_follows_its_memory_limit(
 
     _profile(tmp_path, monkeypatch, change)
     assert heap(_values(_config())) == "-Xms1G -Xmx6G -XX:+ExitOnOutOfMemoryError"
+
+
+# ---- the deployment's ceiling (ADR-148 decision 10; the orchestrator's D2c finding 1) -----------
+
+
+@pytest.mark.parametrize("name", ["development", "production", "poc"])
+def test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own(name: str) -> None:
+    """Decision 10: the client's platform holds OFFICIAL-SENSITIVE at most, so the profile's
+    default is that, not the handling scheme's highest (SECRET, every other profile's default);
+    a deployment naming its own keeps it."""
+    assert _values(_config(name))["environment"]["OSPREY_HIGHEST_MARKING"] == "OFFICIAL-SENSITIVE"
+    own = _config(name, deployment={"highest_marking": "OFFICIAL"})
+    assert _values(own)["environment"]["OSPREY_HIGHEST_MARKING"] == "OFFICIAL"

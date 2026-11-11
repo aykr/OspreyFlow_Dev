@@ -212,6 +212,18 @@ class PocShape(_Strict):
     for claims of their own."""
 
     claims: list[OwnClaim]
+    #: Each container's CPU limit, by the name `resources` uses, `default` for any not named.
+    cpu_limits: dict[str, str]
+
+    @field_validator("cpu_limits")
+    @classmethod
+    def _a_default_limit(cls, limits: dict[str, str]) -> dict[str, str]:
+        if "default" not in limits:
+            raise ValueError("poc.cpu_limits names no `default`, which a container not named takes")
+        for quantity in limits.values():
+            if not re.fullmatch(_QUANTITY, quantity):
+                raise ValueError(f"poc.cpu_limits: {quantity!r} is not a quantity")
+        return limits
 
 
 class ProfileSettings(_Strict):

@@ -65,6 +65,9 @@ NOT_RENDERED = frozenset({"proxy", "ollama", "ollama-models", "whisper", "whispe
 #: env, as the workspace's nginx does, is not handed the database's password for that).
 READERS = frozenset({"api", "worker", "report-sync", "superset"})
 
+#: Decision 10: the profile's ceiling when the deployment names none.
+DEFAULT_CEILING = "OFFICIAL-SENSITIVE"
+
 #: Decision 5: one of each in development.
 DEVELOPMENT_REPLICAS = {
     "workspace": 1, "api": 1, "report-sync": 1, "superset": 1, "worker": 1, "keycloak": 1,
@@ -666,6 +669,23 @@ def embedded_keeper_clickhouse_config() -> str:
     return one.replace("  <zookeeper>\n", keeper + "  <zookeeper>\n", 1)
 
 
+def _millicores(quantity: str) -> float:
+    return float(quantity[:-1]) if quantity.endswith("m") else float(quantity) * 1000
+
+
+def _cpu_limit(container: dict[str, Any], profile: ProfileSettings, name: str) -> None:
+    """The poc shape names a CPU limit on every container (ADR-148 Amendment 5), never below the
+    CPU it requests."""
+    limit = profile.poc.cpu_limits.get(name) or profile.poc.cpu_limits["default"]
+    request = container["resources"]["requests"]["cpu"]
+    if _millicores(limit) < _millicores(request):
+        raise CloudPlatformNotRenderable(
+            f"{name}'s CPU limit {limit} is below its request {request}: raise poc.cpu_limits in "
+            "the profile's settings"
+        )
+    container["resources"]["limits"]["cpu"] = limit
+
+
 def _onto_own_claims(pod: dict[str, Any], profile: ProfileSettings) -> None:
     """The poc shape (ADR-148 Amendment 5): a shared folder the profile gives a claim of its own
     (`profile.yaml`'s `poc.claims`) is mounted from that claim, at the same folder on it, so the
@@ -757,6 +777,10 @@ def render_cloud_platform(
             pod["disruptionBudget"] = {"maxUnavailable": 1}
         if poc:
             _onto_own_claims(pod, profile)
+            for container in _containers(pod):
+                _cpu_limit(
+                    container, profile, pod["name"] if container is pod else container["name"]
+                )
     names = {w["name"] for w in workloads}
     if copies.unresolved and not allow_unpinned:
         from harness.render import UnpinnedImagesError
@@ -783,6 +807,10 @@ def render_cloud_platform(
         },
         sort_keys=True,
     )
+    # Decision 10: the client's platform holds OFFICIAL-SENSITIVE at most; the profile's default
+    # ceiling is that, not the handling scheme's highest. A deployment naming its own keeps it.
+    if config.deployment.highest_marking is None:
+        environment["OSPREY_HIGHEST_MARKING"] = DEFAULT_CEILING
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
     environment.update(install.settings)
