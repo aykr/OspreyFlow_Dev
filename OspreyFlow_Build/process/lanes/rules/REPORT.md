@@ -16,6 +16,9 @@
   looks' means: for the orchestrator to ratify. Studio's (~22:05): `services/api/scheduler.py`'s notice wording
   and `_Refused`'s kind, and `tests/services/api/test_schedule_executor.py`'s assertions; the new cases added to
   that file (the ArcadeDB, quota and exchange cases) go beyond "assertions": for ratification too.
+  **Both ratified by the orchestrator (11 November, after ready-to-merge e5e3063):** the harness's `?notices=1`
+  state (needs-you is under Admin's grant, and the harness serves its looks), and the new executor cases
+  (`test_schedule_executor.py` is under Studio's grant). The merger lands the lane after the v0.5.0 tag.
 - A packages/schemas change rides with the step in its own commit at the head (the orchestrator's standing instruction at a lane's start).
 - Kinds beyond the ruling's five: still going and keyless refresh (already fixed words), and quota (new on main while the branch was open).
 - The notice tip and the "more" line in plain words; the TS fields stay optional so a Glass reads an older Conduit as no notices.
