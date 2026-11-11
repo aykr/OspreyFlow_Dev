@@ -80,7 +80,9 @@ def test_the_restore_job_is_rendered_only_for_a_named_set_and_in_order() -> None
     job = _named(docs, "Job", "ospreyflow-restore-20261111t021500z")
     pod = pod_spec(job)
     assert pod is not None
-    assert [c["name"] for c in pod["initContainers"]] == ["fetch-graph", "restore-graph"]
+    assert [c["name"] for c in pod["initContainers"]] == ["verify", "fetch-graph", "restore-graph"]
+    env = {e["name"]: e.get("value") for e in pod["initContainers"][0]["env"]}
+    assert env["OSPREY_BACKUP_WRITERS"] == "arcadedb,api,worker,report-sync"
     assert pod["containers"][0]["name"] == "restore-analytics"
     assert {"name": "arcadedb-databases", "persistentVolumeClaim": {"claimName": "databases-arcadedb-0"}} in pod["volumes"]
     assert _rules(docs) == []
@@ -199,6 +201,7 @@ def test_a_restore_with_claims_puts_them_back_in_a_job_of_its_own() -> None:
     pod = pod_spec(job)
     assert pod is not None
     assert pod["containers"][0]["command"][-3:] == ["restore-claims", "--set", "20261111T021500Z"]
+    assert [c["name"] for c in pod["initContainers"]] == ["verify"], "every part checked before a claim is replaced"
     assert pod["volumes"] == [{"name": "claim-ingest", "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"}}]
     assert "affinity" not in pod, "the claims' pods are stopped for a restore; the claim is free"
     assert _exactly(docs, "Job", "ospreyflow-restore-20261111t021500z")
@@ -217,3 +220,20 @@ def test_the_check_is_red_on_the_claims_run_without_its_pod_security(tmp_path: P
     rules = _rules(_docs(_with_claims(rendered.values()), chart=chart))
     assert any("CronJob/ospreyflow-backup-claims" in r for r in rules), rules
     assert not any(r.endswith("CronJob/ospreyflow-backup") for r in rules), rules
+
+
+def test_the_backups_account_may_see_pods_and_nothing_else() -> None:
+    """The restore's writers check (Amendment 7): a Role to get and list the namespace's pods, bound
+    to the backup's service account alone."""
+    docs = _docs(rendered.values())
+    role = _exactly(docs, "Role", "ospreyflow-backup-pods")
+    assert role["rules"] == [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list"]}]
+    binding = _exactly(docs, "RoleBinding", "ospreyflow-backup-pods")
+    assert [s["name"] for s in binding["subjects"]] == ["ospreyflow-backup"]
+    assert binding["roleRef"]["name"] == "ospreyflow-backup-pods"
+
+
+def test_a_refused_run_is_never_retried() -> None:
+    docs = _docs(_with_claims(rendered.values()))
+    for name in ("ospreyflow-backup", "ospreyflow-backup-claims"):
+        assert _exactly(docs, "CronJob", name)["spec"]["jobTemplate"]["spec"]["backoffLimit"] == 0

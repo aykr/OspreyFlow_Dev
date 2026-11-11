@@ -1,0 +1,54 @@
+# ClickHouse 25.8.33.6 grants, measured in a throwaway container on the test server (removed), 11 Nov 2026
+# users.d file:
+#   <clickhouse>
+#     <users>
+#       <osprey>
+#         <grants>
+#           <query>GRANT ALL ON *.*</query>
+#           <query>REVOKE S3, URL, BACKUP ON *.*</query>
+#         </grants>
+#       </osprey>
+#       <backup>
+#         <password from_env="OSPREY_CLICKHOUSE_BACKUP_PASSWORD"/>
+#         <profile>default</profile>
+#         <quota>default</quota>
+#         <networks><ip>::/0</ip></networks>
+#         <grants>
+#           <query>GRANT ALL ON ospreyflow.*</query>
+#           <query>GRANT BACKUP, CLUSTER, S3 ON *.*</query>
+#         </grants>
+#       </backup>
+#     </users>
+#   </clickhouse>
+Code: 497. DB::Exception: Received from localhost:9000. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant WRITE ON S3. (ACCESS_DENIED)
+(query: INSERT INTO FUNCTION s3('http://127.0.0.1:1/ospreybucket/k', 'RawBLOB') SELECT 'x')
+-- CREATE DATABASE IF NOT EXISTS ospreyflow as osprey:
+-- CREATE TABLE ospreyflow.t (x UInt8) ENGINE=MergeTree ORDER BY x as osprey:
+-- INSERT INTO ospreyflow.t VALUES (1) as osprey:
+-- BACKUP DATABASE ospreyflow TO S3('http://127.0.0.1:1/ospreybucket/k/') as osprey:
+Code: 497. DB::Exception: Received from localhost:9000. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant BACKUP ON ospreyflow.*. (ACCESS_DENIED)
+(query: BACKUP DATABASE ospreyflow TO S3('http://127.0.0.1:1/ospreybucket/k/'))
+-- SHOW GRANTS as backup:
+GRANT BACKUP, CLUSTER ON *.* TO backup
+GRANT S3 ON *.* TO backup
+GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE DATABASE, CREATE TABLE, CREATE VIEW, CREATE DICTIONARY, DROP DATABASE, DROP TABLE, DROP VIEW, DROP DICTIONARY, UNDROP TABLE, TRUNCATE, OPTIMIZE, CREATE ROW POLICY, ALTER ROW POLICY, DROP ROW POLICY, SHOW ROW POLICIES, SYSTEM MERGES, SYSTEM TTL MERGES, SYSTEM FETCHES, SYSTEM MOVES, SYSTEM PULLING REPLICATION LOG, SYSTEM CLEANUP, SYSTEM VIEWS, SYSTEM 
+GRANT READ, WRITE ON ospreyflow TO backup
+GRANT TABLE ENGINE ON ospreyflow TO backup
+GRANT SET DEFINER ON ospreyflow TO backup
+GRANT CREATE USER, ALTER USER, DROP USER, CREATE ROLE, ALTER ROLE, DROP ROLE ON ospreyflow TO backup
+GRANT NAMED COLLECTION ADMIN ON ospreyflow TO backup
+-- SELECT count() FROM s3('http://127.0.0.1:1/ospreybucket/k', 'RawBLOB') as backup:
+Code: 499. DB::Exception: Received from localhost:9000. DB::Exception: Failed to get object info: Poco::Exception. Code: 1000, e.code() = 111, Connection refused (version 25.8.33.6 (official build)). HTTP response code: 18446744073709551615: while reading k: While executing ReadFromObjectStorage. (S3_ERROR)
+(query: SELECT count() FROM s3('http://127.0.0.1:1/ospreybucket/k', 'RawBLOB'))
+-- SELECT count() FROM url('http://127.0.0.1:1/', 'RawBLOB') as backup:
+Code: 497. DB::Exception: Received from localhost:9000. DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant READ ON URL. (ACCESS_DENIED)
+(query: SELECT count() FROM url('http://127.0.0.1:1/', 'RawBLOB'))
+-- BACKUP DATABASE ospreyflow TO S3('http://127.0.0.1:1/ospreybucket/k/') as backup:
+Timeout exceeded while receiving data from server. Waited for 300 seconds, timeout is 300 seconds.
+-- DROP DATABASE ospreyflow SYNC as backup:
+Error response from daemon: container 2fd844852e49abcb412f114883478503542a33f3a2b0ac24bed318f3168e4001 is not running
+Error response from daemon: removal of container p9-grants-probe is already in progress
+removed: 1
+Wall time: 1305 s, exit 0 (no stack, no lease; set-up before it 15 s)
+
+[exited with code 0]

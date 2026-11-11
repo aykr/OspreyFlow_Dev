@@ -33,6 +33,36 @@ unfinished and never restored from. Its restore is a Job of its own, with the sh
 {{- if $claims }}
 {{- $env = append $env (dict "name" "OSPREY_BACKUP_CLAIMS" "value" (join "," $claims)) }}
 {{- end }}
+{{- /* A restore refuses while any of these runs (Amendment 7): it lists the pods by its own Role. */}}
+{{- $restoreEnv := append $env (dict "name" "OSPREY_BACKUP_WRITERS" "value" (join "," ($b.writers | default list))) }}
+---
+# A restore's own right (Amendment 7): to see whether anything that writes still runs, and nothing
+# more. The backup's service account may get and list the namespace's pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ospreyflow-backup-pods
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ospreyflow-backup-pods
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ospreyflow-backup-pods
+subjects:
+  - kind: ServiceAccount
+    name: {{ $b.serviceAccountName }}
+    namespace: {{ $root.Release.Namespace }}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -52,8 +82,9 @@ spec:
       labels:
         {{- include "ospreyflow.labels" $ctx | nindent 8 }}
     spec:
-      # A refused backup is reported, not retried until the platform's quota runs out.
-      backoffLimit: 1
+      # A refused backup is reported, never retried: a run of the same slot again would meet its
+      # own half-written set (the runner refuses a finished one).
+      backoffLimit: 0
       activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
       template:
         metadata:
@@ -101,7 +132,7 @@ spec:
       labels:
         {{- include "ospreyflow.labels" (dict "name" "backup-claims" "root" $root) | nindent 8 }}
     spec:
-      backoffLimit: 1
+      backoffLimit: 0
       activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
       template:
         metadata:
@@ -157,10 +188,15 @@ spec:
     spec:
       restartPolicy: Never
       {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 6 }}
+      # First, before anything is replaced: nothing writing, and every part of the set checked.
       initContainers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "verify" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "verify" "--set" .set)
+              "env" $restoreEnv "resources" $b.resources)
+            "root" $root) | nindent 8 }}
         {{- include "ospreyflow.container" (dict "w" (dict "name" "fetch-graph" "image" $b.image
               "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "fetch-graph" "--set" .set "--to" "/restore")
-              "env" $b.env "resources" $b.resources
+              "env" $restoreEnv "resources" $b.resources
               "scratch" (list (dict "mountPath" "/restore")))
             "root" $root) | nindent 8 }}
         {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-graph" "image" $b.arcadedb.image
@@ -172,7 +208,7 @@ spec:
       containers:
         {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-analytics" "image" $b.image
               "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-analytics" "--set" .set)
-              "env" $b.env "resources" $b.resources)
+              "env" $restoreEnv "resources" $b.resources)
             "root" $root) | nindent 8 }}
       volumes:
         - name: scratch-0
@@ -202,12 +238,17 @@ spec:
     spec:
       restartPolicy: Never
       {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 6 }}
+      initContainers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "verify" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "verify" "--set" .set)
+              "env" $restoreEnv "resources" $b.resources)
+            "root" $root) | nindent 8 }}
       containers:
         {{- $mounts := list }}
         {{- range $claims }}{{ $mounts = append $mounts (dict "name" (printf "claim-%s" .) "mountPath" (printf "/claims/%s" .)) }}{{ end }}
         {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-claims" "image" $b.image
               "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-claims" "--set" .set)
-              "env" $env "resources" $b.resources "claims" $mounts)
+              "env" $restoreEnv "resources" $b.resources "claims" $mounts)
             "root" $root) | nindent 8 }}
       volumes:
         {{- range $claims }}
