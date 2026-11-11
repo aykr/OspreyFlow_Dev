@@ -131,3 +131,84 @@ def test_the_ingest_root_is_on_a_claim_of_its_own(poc: dict[str, Any]) -> None:
     assert claims[0]["size"]
     # Only the shape adds it: the standard shape's values carry no claims of their own.
     assert "claims" not in _values(_config("development"))["storage"]
+
+
+# ---- the runbooks -----------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def runbooks() -> dict[str, str]:
+    artefacts = _artefacts(_config())
+    return {name: artefacts[name] for name in ("INSTALL.md", "DECOMMISSION.md")}
+
+
+def test_the_runbooks_are_rendered_for_the_poc_shape_alone() -> None:
+    assert {"INSTALL.md", "DECOMMISSION.md"} <= set(_artefacts(_config()))
+    assert not {"INSTALL.md", "DECOMMISSION.md"} & set(_artefacts(_config("development")))
+
+
+def test_a_platform_block_is_left_to_the_platform() -> None:
+    from harness.cloud_platform.runbooks import command_blocks
+
+    text = "x\n```sh\necho everywhere\n```\n\n```sh platform\necho there\n```\n```python\nno\n```\n"
+    assert command_blocks(text, on_the_platform=True) == ["echo everywhere\n", "echo there\n"]
+    assert command_blocks(text, on_the_platform=False) == ["echo everywhere\n"]
+
+
+@pytest.mark.parametrize("on_the_platform", [True, False], ids=["platform", "rehearsal"])
+def test_every_block_is_shell_that_parses_and_never_exits_the_shell(
+    runbooks: dict[str, str], on_the_platform: bool, tmp_path: Any
+) -> None:
+    """Pasted into one shell by a person, or run as one script by the rehearsal: each parses, and
+    none ends the person's shell (`exit`) on a failure; `false` stops a script run with `set -e`."""
+    import subprocess
+
+    from harness.cloud_platform.runbooks import command_blocks
+
+    for name, text in runbooks.items():
+        blocks = command_blocks(text, on_the_platform=on_the_platform)
+        assert blocks, name
+        script = tmp_path / f"{name}.sh"
+        script.write_text("".join(blocks), encoding="utf-8")
+        done = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
+        assert done.returncode == 0, (name, done.stderr)
+        assert not re.search(r"(^|[;&|{ ])exit\b", "".join(blocks), re.M), name
+
+
+def test_the_rehearsal_reaches_no_aws_account_and_no_terraform(runbooks: dict[str, str]) -> None:
+    """What the kind rehearsal runs never calls the AWS command line or Terraform: those are the
+    platform's blocks, which it stands in for."""
+    from harness.cloud_platform.runbooks import command_blocks
+
+    for name, text in runbooks.items():
+        rehearsed = "".join(command_blocks(text, on_the_platform=False))
+        assert not re.search(r"(^|\s)(aws|tofu|terraform)\s", rehearsed, re.M), name
+        assert (
+            re.search(r"(^|\s)aws\s", "".join(command_blocks(text, on_the_platform=True)))
+            or name == "INSTALL.md"
+        )
+
+
+def test_the_runbooks_carry_the_deployment_s_own_names(runbooks: dict[str, str]) -> None:
+    for text in runbooks.values():
+        assert "export NS=ospreyflow-poc " in text
+    assert "123456789012.dkr.ecr.eu-west-2.amazonaws.com" in runbooks["INSTALL.md"]
+
+
+def test_the_decommission_removes_every_claim_the_render_makes(
+    poc: dict[str, Any], runbooks: dict[str, str]
+) -> None:
+    """`helm uninstall` keeps every claim. The runbook removes the StatefulSets' claims by the
+    release's label (the StatefulSet controller gives each claim its selector's labels, the
+    release's among them) and the kept claims by name, then waits until no volume of the namespace
+    is held; the decommission check (its last block) names anything still left."""
+    text = runbooks["DECOMMISSION.md"]
+    assert 'delete pvc -l app.kubernetes.io/instance="$RELEASE"' in text
+    names = ["ospreyflow-shared", *(f"ospreyflow-{c['name']}" for c in poc["storage"]["claims"])]
+    line = next(x for x in text.splitlines() if "delete pvc ospreyflow-shared" in x)
+    assert all(n in line.split() for n in names), line
+    assert "spec.claimRef.namespace=='$NS'" in text
+    assert text.rstrip().endswith('--bucket-prefix "$PREFIX"\n```') or "decommission_check" in text
+    assert (
+        text.index("helm uninstall") < text.index("delete pvc") < text.index("decommission_check")
+    )

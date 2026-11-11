@@ -847,4 +847,10 @@ def render_cloud_platform(
             for name, text in render_terraform(config, platform, out).items()
         }
     )
+    if poc:
+        # Amendment 5: the runbooks, for the client's team, with the deployment's own names.
+        from harness.cloud_platform.runbooks import render_decommission, render_install
+
+        artefacts["INSTALL.md"] = render_install(config, platform, out)
+        artefacts["DECOMMISSION.md"] = render_decommission(config, platform, out)
     return artefacts

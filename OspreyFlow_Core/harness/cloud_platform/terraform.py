@@ -80,7 +80,7 @@ def _secret(name: str, data: dict[str, str]) -> Block:
     )
 
 
-def _repositories(values: dict[str, Any], registry: str) -> list[str]:
+def ecr_repositories(values: dict[str, Any], registry: str) -> list[str]:
     paths: set[str] = set()
     for pod in [*values["workloads"], *values["jobs"]]:
         for container in [pod, *pod.get("initContainers", [])]:
@@ -387,7 +387,7 @@ def render_terraform(
         ],  # fmt: skip
     )
     registry = cp.registry or ""
-    repositories = _repositories(values, registry)
+    repositories = ecr_repositories(values, registry)
     files["ecr.tf"] = _file(
         "Decision 8: a repository for each image, scanned on push; `ospreyflow images push\n"
         "--registry` copies ours and the third-party ones into them, by digest.",
