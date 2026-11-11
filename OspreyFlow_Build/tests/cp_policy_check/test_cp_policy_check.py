@@ -11,6 +11,7 @@ Helm and kubeconform run as their pinned images, so this needs Docker, as `test_
 from __future__ import annotations
 
 import copy
+import dataclasses
 import re
 import subprocess
 from pathlib import Path
@@ -453,7 +454,7 @@ def test_a_host_s_network_that_opens_egress_is_refused(
     development: tuple[dict[str, Any], str], net: str, why: str
 ) -> None:
     values, registry = copy.deepcopy(development)
-    values["egress"]["hosts"].append({"host": "api.example.org", "nets": [net]})
+    values["egress"]["hosts"].append({"host": "api.example.org", "nets": [net], "ports": [443]})
     _given_to_the_conduit(values, "api.example.org")
     [(rule, detail)] = _found(helm_template(yaml.safe_dump(values)), registry)
     assert rule == "open-egress" and detail.startswith(why)
@@ -475,9 +476,13 @@ def test_managed_networks_that_open_egress_are_refused(
 def test_a_platform_s_widest_networks_pass(development: tuple[dict[str, Any], str]) -> None:
     """The cap's own edge: a /16 (the client's shared VPC is one) and a /48 pass."""
     values, registry = copy.deepcopy(development)
-    values["egress"]["hosts"].append({"host": "a.example.org", "nets": ["10.1.0.0/16"]})
+    values["egress"]["hosts"].append(
+        {"host": "a.example.org", "nets": ["10.1.0.0/16"], "ports": [443]}
+    )
     _given_to_the_conduit(values, "a.example.org")
-    values["egress"]["hosts"].append({"host": "b.example.org", "nets": ["2001:db8:1::/48"]})
+    values["egress"]["hosts"].append(
+        {"host": "b.example.org", "nets": ["2001:db8:1::/48"], "ports": [443]}
+    )
     _given_to_the_conduit(values, "b.example.org")
     assert _found(helm_template(yaml.safe_dump(values)), registry) == []
 
@@ -486,10 +491,13 @@ def test_an_allow_rule_with_no_destination_is_refused(
     development: tuple[dict[str, Any], str],
 ) -> None:
     """Calico's Allow with no destination allows every address; planted as a template edit would
-    emit it, in the allow policy before the deny."""
+    emit it, in the allow policy before the deny, with its protocol and ports (so `allow-ports` is
+    satisfied and only the destination is missing)."""
     docs, registry = _helm(development)
     allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-egress-api")
-    allow["spec"]["egress"].append({"action": "Allow", "protocol": "TCP"})
+    allow["spec"]["egress"].append(
+        {"action": "Allow", "protocol": "TCP", "destination": {"ports": [443]}}
+    )
     [(rule, detail)] = _found(docs, registry)
     assert rule == "open-egress" and detail.startswith("an Allow rule with no destination")
 
@@ -516,15 +524,26 @@ def test_a_kubernetes_egress_address_block_that_opens_egress_is_refused(
     development: tuple[dict[str, Any], str], cidr: str, why: str
 ) -> None:
     """A Kubernetes `NetworkPolicy` egress rule whose `to` is an `ipBlock` (the round-2 review's
-    first unproven branch). Planted as a template edit would emit it, a second `to` rule in
-    `ospreyflow-internal` beside its pods and DNS rules: it has a `to`, so only the address-block
-    branch can see it."""
+    first unproven branch). Planted as the cluster's chart emits its internal policy (not rendered
+    on this profile), with a second `to` rule beside its pods rule: it has a `to`, so only the
+    address-block branch can see it."""
     docs, registry = _helm(development)
-    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
-    internal["spec"]["egress"].append({"to": [{"ipBlock": {"cidr": cidr}}]})
+    docs.append(_egress_policy([{"to": [{"ipBlock": {"cidr": cidr}}]}]))
     [(rule, where, detail)] = _isolation(docs, registry)
     assert (rule, where) == ("open-egress", "NetworkPolicy/ospreyflow-internal")
     assert detail.startswith(why)
+
+
+def _egress_policy(extra: list[dict[str, Any]]) -> dict[str, Any]:
+    """The cluster's internal policy's egress half, every pod of ours to every pod of ours, with
+    `extra` rules beside it (Kubernetes' egress, which the deny's order leaves undecided here)."""
+    ours = {"podSelector": {"matchLabels": {"app.kubernetes.io/part-of": "ospreyflow"}}}
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": "ospreyflow-internal"},
+        "spec": {**ours, "policyTypes": ["Egress"], "egress": [{"to": [ours]}, *extra]},
+    }
 
 
 def test_a_kubernetes_egress_address_block_within_the_cap_passes(
@@ -532,8 +551,7 @@ def test_a_kubernetes_egress_address_block_within_the_cap_passes(
 ) -> None:
     """The branch's other side: a /16 address block is not refused."""
     docs, registry = _helm(development)
-    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
-    internal["spec"]["egress"].append({"to": [{"ipBlock": {"cidr": "10.1.0.0/16"}}]})
+    docs.append(_egress_policy([{"to": [{"ipBlock": {"cidr": "10.1.0.0/16"}}]}]))
     assert _isolation(docs, registry) == []
 
 
@@ -632,7 +650,9 @@ def test_a_calico_ingress_allow_beyond_a_selector_is_refused(
     Calico branch can see it."""
     docs, registry = _helm(development)
     _with_calico_ingress(docs, source)
-    [(rule, where, detail)] = _isolation(docs, registry)
+    # `all()` is a selector this check cannot narrow as well (`unreadable-selector`), set apart.
+    [(rule, where, detail)] = [f for f in _isolation(docs, registry)
+                               if f[0] != "unreadable-selector"]  # fmt: skip
     assert (rule, where) == ("ingress-isolation", "NetworkPolicy/default.ospreyflow-egress-api")
     assert detail.startswith("a Calico rule admitting beyond the namespace's own pods")
 
@@ -659,9 +679,10 @@ def test_a_calico_ingress_allow_in_a_policy_with_no_types_is_refused(
 def test_a_calico_ingress_allow_from_a_selector_alone_passes(
     development: tuple[dict[str, Any], str],
 ) -> None:
-    """The branch's other side: a source of a selector alone (this namespace's pods) passes."""
+    """The branch's other side: a source of a selector alone (this namespace's pods, by name)
+    passes."""
     docs, registry = _helm(development)
-    _with_calico_ingress(docs, {"selector": "all()"})
+    _with_calico_ingress(docs, {"selector": "app.kubernetes.io/name == 'workspace'"})
     assert _isolation(docs, registry) == []
 
 
@@ -840,15 +861,289 @@ def test_a_new_workload_given_one_key_of_ours_is_refused(
     ]
 
 
-def test_the_gateway_holds_each_engine_s_key_and_no_store_s(
+def test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s(
     rendered: tuple[dict[str, Any], str],
 ) -> None:
+    """The gateway holds the keys of this deployment's keyed engines alone, read from its own
+    `osprey.yaml` (ADR-135 Amendments 4 and 7): an engine's key it does not have is refused, as a
+    store's password is."""
     values, registry = copy.deepcopy(rendered)
+    assert _secret_violations(values, registry) == []
     gateway = _workload(values, "litellm")
     gateway["env"].append({"name": "OSPREY_MODEL_KEY_ANTHROPIC",
                            "secret": "OSPREY_MODEL_KEY_ANTHROPIC"})  # fmt: skip
-    assert _secret_violations(values, registry) == []
     gateway["env"].append({"name": "ARCADEDB_PASSWORD", "secret": "OSPREY_ARCADEDB_PASSWORD"})
     assert _secret_violations(values, registry) == [
-        ("Deployment/litellm/litellm", "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD")
+        ("Deployment/litellm/litellm", "is given ospreyflow-secrets's OSPREY_MODEL_KEY_ANTHROPIC"),
+        ("Deployment/litellm/litellm", "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD"),
     ]
+
+
+def _bedrock() -> tuple[dict[str, Any], str]:
+    values, registry = render_values(FIXTURES / "production-bedrock.yaml")
+    return yaml.safe_load(values), registry
+
+
+def test_an_iam_role_engine_s_held_key_is_refused_to_the_gateway() -> None:
+    """`production-bedrock` has a keyed engine (openai) and an IAM-role one (bedrock): the gateway
+    is given the first's key as rendered and passes; the second's held key, planted beside it in
+    the render's own shape, is refused (ADR-135 Amendments 4 and 7)."""
+    values, registry = _bedrock()
+    gateway = _workload(values, "litellm")
+    assert [e for e in gateway["env"] if e.get("secret") == "OSPREY_MODEL_KEY_OPENAI"]
+    assert _secret_violations(values, registry) == []
+    gateway["env"].append(
+        {"name": "OSPREY_MODEL_KEY_BEDROCK", "secret": "OSPREY_MODEL_KEY_BEDROCK"}
+    )
+    assert _secret_violations(values, registry) == [
+        ("Deployment/litellm/litellm", "is given ospreyflow-secrets's OSPREY_MODEL_KEY_BEDROCK")
+    ]
+
+
+# ---- the final review of P7b: the checks as wide as the rules ----------------------------------
+
+
+def test_the_internal_policy_is_not_rendered_on_a_shared_platform(
+    rendered: tuple[dict[str, Any], str],
+) -> None:
+    """Item 1: egress is Calico's alone here. P7's internal policy's egress half (every pod of ours
+    to every pod, and every namespace's DNS) is not rendered: no Kubernetes policy here types
+    Egress, so none could decide egress if the deny's order ever let it."""
+    values, _ = rendered
+    docs = helm_template(yaml.safe_dump(values))
+    assert not [d for d in docs if d["metadata"]["name"] == "ospreyflow-internal"]
+    assert not [d["metadata"]["name"] for d in docs if d["kind"] == "NetworkPolicy"
+                and d["apiVersion"].startswith("networking.k8s.io")
+                and "Egress" in (d["spec"].get("policyTypes") or [])]  # fmt: skip
+
+
+@pytest.mark.parametrize("order", [None, 1000, 1500], ids=["no-order", "at-1000", "after-1000"])
+def test_a_deny_that_runs_after_the_kubernetes_policies_is_refused(
+    development: tuple[dict[str, Any], str], order: int | None
+) -> None:
+    """Item 1: the deny counts only when it runs before Calico's place for the Kubernetes
+    policies (order 1000); with no order Calico runs it last."""
+    docs, registry = _helm(development)
+    deny = _doc(docs, "NetworkPolicy", "default.ospreyflow-deny-egress")
+    assert deny["spec"]["order"] == 200 and _found(docs, registry) == []
+    if order is None:
+        deny["spec"].pop("order")
+    else:
+        deny["spec"]["order"] = order
+    assert {rule for rule, _ in _found(docs, registry)} == {"deny-order", "no-deny-egress"}
+
+
+@pytest.mark.parametrize("shape", ["secret", "secret-items", "projected"])
+def test_our_secret_by_volume_is_refused(
+    development: tuple[dict[str, Any], str], shape: str
+) -> None:
+    """Item 2: our Secret mounted, not only read into the environment: a `secret` volume (whole,
+    or by its items), or a `projected` volume's `secret` source, on a pod given none."""
+    docs, registry = _helm(development)
+    spec = pod_spec(_doc(docs, "Deployment", "workspace"))
+    assert spec is not None
+    items = [{"key": "OSPREY_ARCADEDB_PASSWORD", "path": "arcadedb"}]
+    volume = {
+        "secret": {"name": "ours", "secret": {"secretName": "ospreyflow-secrets"}},
+        "secret-items": {
+            "name": "ours", "secret": {"secretName": "ospreyflow-secrets", "items": items}
+        },
+        "projected": {
+            "name": "ours", "projected": {"sources": [{"secret": {"name": "ospreyflow-secrets"}}]}
+        },
+    }[shape]  # fmt: skip
+    spec.setdefault("volumes", []).append(volume)
+    detail = (
+        "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD"
+        if shape == "secret-items" else "mounts ospreyflow-secrets whole"
+    )  # fmt: skip
+    assert _found(docs, registry) == [("whole-secret", detail)]
+
+
+def test_the_secret_s_name_is_the_values() -> None:
+    """Item 2: our Secret is whatever the values name it (`secrets.name`), as the chart reads it:
+    a deployment naming its own is held to it."""
+    from tools.cp_policy_check import check, render
+
+    target = render(FIXTURES / "development.yaml")
+    values = yaml.safe_load(target.values)
+    values["secrets"]["name"] = "tenant-app-secrets"
+    _workload(values, "workspace")["noSecret"] = False  # the chart then gives it ours whole
+    _, found = check(dataclasses.replace(target, values=yaml.safe_dump(values)))
+    assert [(v.rule, v.detail) for v in found] == [
+        ("whole-secret", "reads tenant-app-secrets whole")
+    ]
+
+
+def _calico(docs: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    return _doc(docs, "NetworkPolicy", name)
+
+
+def test_an_empty_selector_selects_every_pod_and_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Item 4: Calico reads an empty selector as every pod, so a workload's Allows under one are
+    every pod's."""
+    docs, registry = _helm(development)
+    _calico(docs, "default.ospreyflow-egress-api")["spec"]["selector"] = ""
+    found = _found(docs, registry)
+    assert found and {rule for rule, _ in found} == {"wide-egress"}
+
+
+def test_a_dns_rule_to_every_namespace_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Item 4: a destination `namespaceSelector: all()` is no DNS rule: every namespace."""
+    docs, registry = _helm(development)
+    dns = _calico(docs, "default.ospreyflow-allow-dns")
+    dns["spec"]["egress"][0]["destination"]["namespaceSelector"] = "all()"
+    assert {rule for rule, _ in _found(docs, registry)} == {"wide-egress", "unreadable-selector"}
+
+
+def test_a_dns_rule_to_another_namespace_is_not_dns(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Item 4: the DNS rule names the platform's DNS's namespace, not merely some namespace."""
+    docs, registry = _helm(development)
+    dns = _calico(docs, "default.ospreyflow-allow-dns")
+    dns["spec"]["egress"][1]["destination"]["namespaceSelector"] = (
+        "kubernetes.io/metadata.name == 'default'"
+    )
+    assert {rule for rule, _ in _found(docs, registry)} == {"wide-egress", "unreadable-selector"}
+
+
+@pytest.mark.parametrize(
+    ("where", "selector"),
+    [
+        ("policy", "app.kubernetes.io/part-of == 'ospreyflow'"),
+        ("policy", "has(app.kubernetes.io/name)"),
+        ("rule", "has(app.kubernetes.io/name)"),
+        ("rule", "all()"),
+        ("rule", ""),
+    ],
+    ids=["policy-part-of", "policy-has", "rule-has", "rule-all", "rule-empty"],
+)
+def test_a_selector_this_check_cannot_narrow_is_refused(
+    development: tuple[dict[str, Any], str], where: str, selector: str
+) -> None:
+    docs, registry = _helm(development)
+    policy = _calico(docs, "default.ospreyflow-egress-api")
+    if where == "policy":
+        policy["spec"]["selector"] = selector
+    else:
+        policy["spec"]["egress"][0]["destination"]["selector"] = selector
+    assert "unreadable-selector" in {rule for rule, _ in _found(docs, registry)}
+
+
+@pytest.mark.parametrize(
+    "peer",
+    [
+        {"matchExpressions": [{"key": "app.kubernetes.io/name", "operator": "Exists"}]},
+        {"matchLabels": {"app.kubernetes.io/instance": "ospreyflow"}},
+        {"matchLabels": {"app.kubernetes.io/part-of": "ospreyflow"}},
+        {},
+    ],
+    ids=["exists", "instance", "part-of", "every-pod"],
+)
+def test_an_ingress_peer_this_check_cannot_name_is_refused(
+    development: tuple[dict[str, Any], str], peer: dict[str, Any]
+) -> None:
+    """Item 4: a workload's ingress admits workloads by name alone."""
+    docs, registry = _helm(development)
+    policy = _doc(docs, "NetworkPolicy", "ospreyflow-ingress-api")
+    policy["spec"]["ingress"][0]["from"] = [{"podSelector": peer}]
+    assert {rule for rule, _ in _found(docs, registry)} == {"wide-ingress"}
+
+
+API_SERVER_RULE = {
+    "action": "Allow",
+    "protocol": "TCP",
+    "destination": {"services": {"name": "kubernetes", "namespace": "default"}},
+}
+
+
+def test_every_allow_names_its_protocol_and_ports(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Item 5: every Allow, the managed stores' and each host's included, names its protocol and
+    ports; the rule to the API server by its Service alone carries its protocol only. A ports-less
+    Allow planted beside that rule is refused, and so is a `services` rule to any other Service."""
+    docs, registry = _helm(development)
+    restore = _calico(docs, "default.ospreyflow-egress-restore")
+    egress = restore["spec"]["egress"]
+    assert API_SERVER_RULE in egress and _found(docs, registry) == []
+    nets = next(r for r in egress if "nets" in r["destination"])["destination"]["nets"]
+    egress.append({"action": "Allow", "destination": {"nets": nets}})
+    assert [rule for rule, _ in _found(docs, registry)] == ["allow-ports"]
+    egress.pop()
+    other = copy.deepcopy(API_SERVER_RULE)
+    other["destination"]["services"] = {"name": "superset", "namespace": "ospreyflow-dev"}
+    egress.append(other)
+    assert [rule for rule, _ in _found(docs, registry)] == ["allow-ports"]
+
+
+def test_the_gateway_never_runs_as_the_bucket_role() -> None:
+    """Item 6: the bucket role's account is IRSA's pods' alone, the gateway's own the gateway's,
+    whether or not a token is mounted (IRSA's webhook gives the role by the account alone)."""
+    values, registry = _bedrock()
+    irsa = _workload(values, "api")["serviceAccountName"]
+    gateway = _workload(values, "litellm")
+    assert gateway["serviceAccountName"] != irsa
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert not [v for v in found if v.rule == "token"]
+    gateway["serviceAccountName"] = irsa
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.where) for v in found if v.rule == "token"] == [
+        ("token", "Deployment/litellm"),
+        ("token", "Deployment/litellm"),
+    ]
+    values, registry = _bedrock()
+    _workload(values, "superset")["serviceAccountName"] = irsa  # no token, the role all the same
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.detail) for v in found if v.rule == "token"] == [
+        ("token", f"runs as {irsa}, the bucket role's account")
+    ]
+
+
+@pytest.mark.parametrize("account", ["default", None], ids=["named", "none"])
+def test_a_p9_pod_under_the_default_account_is_refused(
+    development: tuple[dict[str, Any], str], account: str | None
+) -> None:
+    """Item 6: P9's backup pod mounts its token under an account of its own; under the
+    namespace's default account (named, or by naming none) it is refused."""
+    values, registry = _job_values(development)
+    job = values["jobs"][0]
+    job.update(name="backup", automountToken=True, serviceAccountName="ospreyflow-backup")
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert not [v for v in found if v.rule == "token"]
+    if account is None:
+        job.pop("serviceAccountName")
+    else:
+        job["serviceAccountName"] = account
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.detail) for v in found if v.rule == "token"] == [
+        ("token", "mounts the namespace's default account's token")
+    ]
+
+
+def test_the_conduit_and_the_workers_are_told_the_ceiling(
+    rendered: tuple[dict[str, Any], str],
+) -> None:
+    """Item 7: with `deployment.highest_marking` unset, the Conduit's and the workers' containers
+    read OFFICIAL-SENSITIVE from the settings they are given (ADR-148 Amendment 5 point 8), and no
+    variable of their own says otherwise."""
+    values, _ = rendered
+    written = yaml.safe_load(values["files"]["osprey.yaml"])
+    assert "highest_marking" not in (written.get("deployment") or {})
+    docs = helm_template(yaml.safe_dump(values))
+    settings = _doc(docs, "ConfigMap", "ospreyflow-env")["data"]
+    assert settings["OSPREY_HIGHEST_MARKING"] == "OFFICIAL-SENSITIVE"
+    for name in ("api", "worker"):
+        spec = pod_spec(_doc(docs, "Deployment", name))
+        assert spec is not None
+        for container in spec["containers"]:
+            maps = [s["configMapRef"]["name"] for s in container.get("envFrom") or []
+                    if "configMapRef" in s]  # fmt: skip
+            assert maps == ["ospreyflow-env"], (name, maps)
+            told = [e for e in container.get("env") or [] if e["name"] == "OSPREY_HIGHEST_MARKING"]
+            assert not told, (name, told)

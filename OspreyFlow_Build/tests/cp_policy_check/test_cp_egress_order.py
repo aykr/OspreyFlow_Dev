@@ -162,10 +162,15 @@ def test_who_reaches_whom_is_the_rows_and_nothing_more(
         assert _reaches(docs, values, source, {"ip": managed, "port": 5432}) == (
             source in egress.managed
         ), source
+        # On their own ports alone (the final review's item 5): never another.
+        assert not _reaches(docs, values, source, {"ip": managed, "port": 22}), source
         for host in values["egress"]["hosts"]:
             given = host["host"] in rows[source].get("hosts", [])
-            assert _reaches(docs, values, source, {"ip": _one_address(host["nets"]), "port": 443}
-                            ) == given, (source, host["host"])  # fmt: skip
+            address = _one_address(host["nets"])
+            for port in host["ports"]:
+                assert _reaches(docs, values, source, {"ip": address, "port": port}) == given, (
+                    source, host["host"], port)  # fmt: skip
+            assert not _reaches(docs, values, source, {"ip": address, "port": 22}), source
         for target, labels in pods.items():
             if not ports.get(target):
                 continue
@@ -218,8 +223,12 @@ def test_the_one_allow_for_every_pod_is_refused(
         {"action": "Allow", "destination": {"nets": values["egress"]["managedNets"]}},
     ]
     found = check_manifests([*docs, old], registry, controller_namespace=CONTROLLER)
+    # P7's policy as it was: an Allow under every pod, by `all()`, with no ports; each refused.
+    where = "NetworkPolicy/default.ospreyflow-allow-egress"
     assert {(v.rule, v.where) for v in found} == {
-        ("wide-egress", "NetworkPolicy/default.ospreyflow-allow-egress")
+        ("wide-egress", where),
+        ("unreadable-selector", where),
+        ("allow-ports", where),
     }
     assert _reaches(
         [*docs, old],
@@ -232,18 +241,31 @@ def test_the_one_allow_for_every_pod_is_refused(
 def test_ingress_from_every_pod_of_ours_is_refused(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:
-    """P7's internal policy's ingress half, planted back: every pod of ours admitted to all."""
+    """P7's internal policy's ingress half, planted back as the cluster's chart renders it: every
+    pod of ours admitted to all. On this profile the internal policy is not rendered at all."""
     docs, _, registry = copy.deepcopy(rendered)
-    internal = next(d for d in docs if d["metadata"]["name"] == "ospreyflow-internal")
-    assert internal["spec"]["policyTypes"] == ["Egress"]
-    internal["spec"]["policyTypes"] = ["Ingress", "Egress"]
-    internal["spec"]["ingress"] = [
+    assert not [d for d in docs if d["metadata"]["name"] == "ospreyflow-internal"]
+    docs.append(_kubernetes_policy("ospreyflow-internal", ingress=[
         {"from": [{"podSelector": {"matchLabels": {"app.kubernetes.io/part-of": "ospreyflow"}}}]}
-    ]
+    ]))  # fmt: skip
     found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
     assert [(v.rule, v.where) for v in found] == [
         ("wide-ingress", "NetworkPolicy/ospreyflow-internal")
     ]
+
+
+def _kubernetes_policy(name: str, **rules: list[dict[str, Any]]) -> dict[str, Any]:
+    """A Kubernetes NetworkPolicy over every pod of ours, as the chart emits one."""
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": name},
+        "spec": {
+            "podSelector": {"matchLabels": {"app.kubernetes.io/part-of": "ospreyflow"}},
+            "policyTypes": [k.capitalize() for k in rules],
+            **rules,
+        },
+    }
 
 
 @pytest.mark.parametrize("workload", ["workspace", "ner", "superset"])

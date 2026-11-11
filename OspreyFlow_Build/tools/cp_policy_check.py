@@ -12,7 +12,19 @@ platform's rules. Red on:
 - a `ReadWriteMany` claim, a claim's or a StatefulSet's;
 - a `hostPath` volume;
 - an image not from the profile's registry;
-- a namespace without the deny-egress policy (Calico's, every pod, egress, deny);
+- a namespace without the deny-egress policy (Calico's, every pod, egress, deny), or one whose
+  deny has no `order` or an order of 1000 or more, so the namespace's Kubernetes policies (at 1000)
+  would decide egress before it (`deny-order`);
+- a Calico Allow without its protocol and ports (`allow-ports`): only the rule to the cluster's API
+  server by its `kubernetes` Service carries its protocol alone, as Calico takes no ports there;
+- a Calico selector or namespace selector this check cannot narrow (`unreadable-selector`): an
+  empty one, `has(...)`, a part-of label, `all()` in a rule; a DNS rule to any namespace but the
+  platform's DNS's is no DNS rule;
+- our Secret, whole or by key, to a pod not given it (`whole-secret`): by `envFrom`, a key, a
+  `secret` volume or a `projected` one; a model engine's key to the gateway only for this
+  deployment's keyed engines;
+- a token mounted on a pod that calls no Kubernetes API, or under any account but its own; the
+  bucket role's account on any pod but IRSA's, the gateway's on any but the gateway (`token`);
 - **egress opened by one rule** (decision 7): an allowing egress rule with no destination, or one
   whose networks are a default route or wider than `schemas.deployment.EGRESS_WIDEST_PREFIX`
   (Calico's, or a Kubernetes policy's);
@@ -36,8 +48,10 @@ are, they join here (ADR-148 decision 14).
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import ipaddress
+import re
 import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -86,6 +100,10 @@ class Target:
     controller_namespace: str
     #: `cloud_platform.shape` (ADR-148 Amendment 5): the poc shape's own rules apply to `poc`.
     shape: str = "standard"
+    #: The platform's DNS namespace and accounts (IRSA's bucket role's, the gateway's own).
+    dns_namespace: str | None = None
+    irsa_account: str | None = None
+    gateway_account: str | None = None
 
 
 def _name(doc: dict[str, Any]) -> str:
@@ -194,18 +212,50 @@ def _is_kubernetes_policy(doc: dict[str, Any]) -> bool:
     )
 
 
-def _denies_egress(doc: dict[str, Any]) -> bool:
-    """Calico's deny: every pod (`all()`), egress, a rule that denies with nothing to match."""
+#: Where Calico places the namespace's Kubernetes policies: a deny at this order or after it, or
+#: with no order (Calico's last), lets them decide egress first (ADR-148 Amendment 5 point 21).
+KUBERNETES_POLICY_ORDER = 1000
+
+
+def _selects_every_pod(spec: dict[str, Any]) -> bool:
+    """A Calico policy's own selector: missing or empty is every pod, as `all()` is."""
+    return str(spec.get("selector") or "all()").replace(" ", "") == "all()"
+
+
+def _is_egress_deny(doc: dict[str, Any]) -> bool:
+    """Calico's deny: every pod, egress, a rule that denies with nothing to match."""
     if not _is_calico(doc):
         return False
     spec = doc.get("spec") or {}
-    if spec.get("selector", "all()").replace(" ", "") != "all()":
-        return False
-    if "Egress" not in (spec.get("types") or []):
+    if not _selects_every_pod(spec) or "Egress" not in (spec.get("types") or []):
         return False
     return any(
         set(rule) == {"action"} and rule["action"] == "Deny" for rule in spec.get("egress") or []
     )
+
+
+def _orders_first(doc: dict[str, Any]) -> bool:
+    order = (doc.get("spec") or {}).get("order")
+    return (
+        isinstance(order, (int, float))
+        and not isinstance(order, bool)
+        and (order < KUBERNETES_POLICY_ORDER)
+    )
+
+
+def _denies_egress(doc: dict[str, Any]) -> bool:
+    """The deny, run before the namespace's Kubernetes policies (`order` below 1000)."""
+    return _is_egress_deny(doc) and _orders_first(doc)
+
+
+def _deny_order(doc: dict[str, Any]) -> Iterator[Violation]:
+    if _is_egress_deny(doc) and not _orders_first(doc):
+        order = (doc.get("spec") or {}).get("order")
+        yield Violation(
+            "deny-order", _name(doc),
+            f"order {order!r}: the deny must run before the Kubernetes policies (order "
+            f"{KUBERNETES_POLICY_ORDER}), or they decide egress",
+        )  # fmt: skip
 
 
 def _too_wide(net: str) -> str:
@@ -223,7 +273,6 @@ def _too_wide(net: str) -> str:
 #: new workload (case-b's Laurium) is refused one until it is listed here. Held here on its own, as
 #: the group-0 list is, not read from the harness's `profile.yaml`, so a render that widens either
 #: is refused here.
-SECRET = "ospreyflow-secrets"
 WHOLE_SECRET_ALLOWED = frozenset({"api", "worker", "report-sync"})
 NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
     "arcadedb": frozenset({"OSPREY_ARCADEDB_CLUSTER_TOKEN", "OSPREY_ARCADEDB_PASSWORD"}),
@@ -236,9 +285,25 @@ NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
                            "SUPERSET_GUEST_TOKEN_SECRET", "SUPERSET_EMBEDDER_PASSWORD",
                            "REPORT_MART_READER_PASSWORD"}),
 }  # fmt: skip
-#: Keys named by what they hold rather than listed: each model engine's key, the gateway's alone
-#: (`OSPREY_MODEL_KEY_<NAME>`, harness/render.py).
-NAMED_SECRET_PREFIXES: dict[str, tuple[str, ...]] = {"litellm": ("OSPREY_MODEL_KEY_",)}
+#: The gateway also holds each of this deployment's keyed engines' keys (ADR-135 Amendments 4 and
+#: 7): read from the deployment's own `osprey.yaml` in what Helm printed, never by a prefix, so an
+#: IAM-role engine's held key is refused it.
+ENGINE_KEYS_TO = "litellm"
+
+
+def _engine_keys(docs: list[dict[str, Any]]) -> frozenset[str]:
+    """This deployment's keyed engines' keys, from the `osprey.yaml` Helm printed (the files
+    ConfigMap): `harness.render.model_key_variables`, the variables the render itself names."""
+    import yaml
+    from harness.render import model_key_variables
+
+    from schemas.deployment import OspreyConfig
+
+    for doc in docs:
+        if doc.get("kind") == "ConfigMap" and "osprey.yaml" in (doc.get("data") or {}):
+            config = OspreyConfig.model_validate(yaml.safe_load(doc["data"]["osprey.yaml"]))
+            return frozenset(model_key_variables(config).values())
+    return frozenset()
 
 
 def _pod_name(doc: dict[str, Any]) -> str:
@@ -247,26 +312,50 @@ def _pod_name(doc: dict[str, Any]) -> str:
                or (doc.get("metadata") or {}).get("name"))  # fmt: skip
 
 
-def _whole_secret(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violation]:
-    """Amendment 5 point 22: our Secret (the stores' passwords, the gateway's master key) whole
-    only to the workloads that read it whole, and to every other pod only the keys it is listed as
-    reading, by name; none to a pod not listed."""
+def _secret_volumes(spec: dict[str, Any], secret: str) -> Iterator[tuple[str, list[str] | None]]:
+    """Each volume of `secret`'s: its name, and the keys it carries (None: every key). A `secret`
+    volume, or a `projected` one's `secret` source."""
+    for volume in spec.get("volumes") or []:
+        held = volume.get("secret") or {}
+        if held.get("secretName") == secret:
+            items = held.get("items")
+            yield str(volume.get("name")), [i.get("key") for i in items] if items else None
+        for source in (volume.get("projected") or {}).get("sources") or []:
+            held = source.get("secret") or {}
+            if held.get("name") == secret:
+                items = held.get("items")
+                yield str(volume.get("name")), [i.get("key") for i in items] if items else None
+
+
+def _whole_secret(
+    doc: dict[str, Any], spec: dict[str, Any], secret: str, engine_keys: frozenset[str]
+) -> Iterator[Violation]:
+    """Amendment 5 point 22: our Secret (`secrets.name` in the values: the stores' passwords, the
+    gateway's master key) whole only to the workloads that read it whole, and to every other pod
+    only the keys it is listed as reading, by name; none to a pod not listed. Read however the pod
+    reads it: `envFrom`, a key, or a volume, `secret` or `projected`."""
     workload = _pod_name(doc)
+    if workload in WHOLE_SECRET_ALLOWED:
+        return
+    allowed = NAMED_SECRET_ALLOWED.get(workload, frozenset())
+    if workload == ENGINE_KEYS_TO:
+        allowed = allowed | engine_keys
+    for volume, keys in _secret_volumes(spec, secret):
+        at = f"{_name(doc)} volume {volume}"
+        if keys is None:
+            yield Violation("whole-secret", at, f"mounts {secret} whole")
+        for key in [k for k in keys or [] if k not in allowed]:
+            yield Violation("whole-secret", at, f"is given {secret}'s {key}")
     for container in _containers(spec):
         at = f"{_name(doc)}/{container.get('name')}"
         for source in container.get("envFrom") or []:
-            if (source.get("secretRef") or {}).get("name") == SECRET:
-                if workload not in WHOLE_SECRET_ALLOWED:
-                    yield Violation("whole-secret", at, f"reads {SECRET} whole")
-        if workload in WHOLE_SECRET_ALLOWED:
-            continue
-        allowed = NAMED_SECRET_ALLOWED.get(workload, frozenset())
-        prefixes = NAMED_SECRET_PREFIXES.get(workload, ())
+            if (source.get("secretRef") or {}).get("name") == secret:
+                yield Violation("whole-secret", at, f"reads {secret} whole")
         for variable in container.get("env") or []:
             ref = (variable.get("valueFrom") or {}).get("secretKeyRef") or {}
             key = str(ref.get("key"))
-            if ref.get("name") == SECRET and key not in allowed and not key.startswith(prefixes):
-                yield Violation("whole-secret", at, f"is given {SECRET}'s {key}")
+            if ref.get("name") == secret and key not in allowed:
+                yield Violation("whole-secret", at, f"is given {secret}'s {key}")
 
 
 #: Amendment 5 point 24: the pods that may mount their service account's token, each only with an
@@ -277,46 +366,152 @@ TOKEN_ALLOWED = frozenset({"api", "worker", "report-sync", "litellm",
                            "backup", "backup-claims", "restore", "restore-claims"})  # fmt: skip
 
 
-def _token(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violation]:
+#: Whose account each holds: IRSA's bucket role (the platform's `secrets.irsa.service_account`) is
+#: the Conduit's, the workers' and the report sync's alone; the gateway's own role
+#: (`gateway_service_account`) the gateway's alone; P9's pods each an account of their own.
+IRSA_PODS = frozenset({"api", "worker", "report-sync"})
+
+
+def _token(
+    doc: dict[str, Any], spec: dict[str, Any], irsa: str, gateway: str | None
+) -> Iterator[Violation]:
     """Amendment 5 point 24: a pod whose token is mounted (Kubernetes' default, unless
-    `automountServiceAccountToken` is false) must be one that needs it, with its own account."""
+    `automountServiceAccountToken` is false) must be one that needs it, under its own account. An
+    account is held to its pods whether or not the token is mounted: IRSA's webhook gives a pod its
+    role's web identity by the account alone."""
+    pod = _pod_name(doc)
+    where = _name(doc)
+    account = str(spec.get("serviceAccountName") or "default")
+    if account == irsa and pod not in IRSA_PODS:
+        yield Violation("token", where, f"runs as {irsa}, the bucket role's account")
+    if gateway and account == gateway and pod != "litellm":
+        yield Violation("token", where, f"runs as {gateway}, the gateway's account")
     if spec.get("automountServiceAccountToken") is False:
         return
-    pod = _pod_name(doc)
-    if pod in TOKEN_ALLOWED and spec.get("serviceAccountName"):
-        return
-    yield Violation("token", _name(doc), "mounts its service account's token")
+    if pod not in TOKEN_ALLOWED:
+        yield Violation("token", where, "mounts its service account's token")
+    elif account == "default":
+        yield Violation("token", where, "mounts the namespace's default account's token")
+    elif pod in IRSA_PODS and account != irsa:
+        yield Violation("token", where, f"mounts {account}'s token, not {irsa}'s")
+    elif pod == "litellm" and account != gateway:
+        yield Violation("token", where, f"mounts {account}'s token, not the gateway's own")
+    elif pod not in IRSA_PODS | {"litellm"} and account in {irsa, gateway}:
+        yield Violation("token", where, f"mounts {account}'s token, not an account of its own")
 
 
-def _is_dns(rule: dict[str, Any]) -> bool:
-    """A rule to the cluster's DNS alone: a namespace selector and port 53, nothing else."""
+def _dns_selector(dns_namespace: str) -> str:
+    return f"kubernetes.io/metadata.name == '{dns_namespace}'"
+
+
+def _is_dns(rule: dict[str, Any], dns_namespace: str) -> bool:
+    """A rule to the cluster's DNS alone: the platform's DNS's namespace by name, port 53, nothing
+    else."""
     destination = rule.get("destination") or {}
     return (
         rule.get("protocol") in {"UDP", "TCP"}
         and set(destination) == {"namespaceSelector", "ports"}
+        and str(destination.get("namespaceSelector")).strip() == _dns_selector(dns_namespace)
         and destination.get("ports") == [53]
     )
 
 
-def _wide_egress(doc: dict[str, Any]) -> Iterator[Violation]:
+#: The selectors this check can narrow: a pod by its workload's name, one or a list.
+_BY_NAME = re.compile(r"app\.kubernetes\.io/name == '[a-z0-9-]+'")
+_BY_NAMES = re.compile(r"app\.kubernetes\.io/name in \{\s*'[a-z0-9-]+'(\s*,\s*'[a-z0-9-]+')*\s*\}")
+
+
+def _readable(selector: Any) -> bool:
+    text = str(selector).strip() if isinstance(selector, str) else ""
+    return bool(_BY_NAME.fullmatch(text) or _BY_NAMES.fullmatch(text))
+
+
+def _selectors(doc: dict[str, Any], dns_namespace: str) -> Iterator[Violation]:
+    """Amendment 5 point 21: every Calico selector is one this check can read, or it is refused:
+    the policy's own (every pod, or a workload by name), and each rule's (a workload by name; a
+    namespace only the platform's DNS's, in a DNS rule)."""
+    if not _is_calico(doc):
+        return
+    where = _name(doc)
+    spec = doc.get("spec") or {}
+    own = spec.get("selector")
+    if own is not None and str(own).strip() and not _selects_every_pod(spec) and not _readable(own):
+        yield Violation("unreadable-selector", where, f"selects pods by {own!r}")
+    if "namespaceSelector" in spec:
+        yield Violation(
+            "unreadable-selector", where, f"selects namespaces by {spec['namespaceSelector']!r}"
+        )
+    for field, peer in (("egress", "destination"), ("ingress", "source")):
+        for rule in spec.get(field) or []:
+            ends = rule.get(peer) or {}
+            if "selector" in ends and not _readable(ends["selector"]):
+                yield Violation(
+                    "unreadable-selector", where, f"a rule's selector {ends['selector']!r}"
+                )
+            if "namespaceSelector" in ends and not (
+                field == "egress" and _is_dns(rule, dns_namespace)
+            ):
+                yield Violation(
+                    "unreadable-selector", where,
+                    f"a rule's namespace selector {ends['namespaceSelector']!r}: only a DNS "
+                    f"rule to {dns_namespace} may name a namespace",
+                )  # fmt: skip
+
+
+def _is_api_server(rule: dict[str, Any]) -> bool:
+    """The one Allow without ports: TCP to the cluster's API server by its `kubernetes` Service,
+    which is all the rule names (Calico takes no ports beside `services` on an egress rule)."""
+    return (
+        rule.get("protocol") == "TCP"
+        and set(rule) == {"action", "protocol", "destination"}
+        and (
+            rule.get("destination") == {"services": {"name": "kubernetes", "namespace": "default"}}
+        )
+    )
+
+
+def _allow_ports(doc: dict[str, Any]) -> Iterator[Violation]:
+    """Amendment 5 point 21: every Calico Allow names its protocol and its ports."""
+    if not _is_calico(doc):
+        return
+    for rule in (doc.get("spec") or {}).get("egress") or []:
+        if rule.get("action") != "Allow" or _is_api_server(rule):
+            continue
+        if rule.get("protocol") not in {"TCP", "UDP"} or not (rule.get("destination") or {}).get(
+            "ports"
+        ):
+            yield Violation(
+                "allow-ports", _name(doc), f"an Allow without its protocol and ports: {rule}"
+            )
+
+
+def _wide_egress(doc: dict[str, Any], dns_namespace: str) -> Iterator[Violation]:
     """ADR-148 Amendment 5 point 21: egress is each workload's own. Under a Calico policy that
     selects every pod, the only Allow is DNS: anything more would give every pod, the Glass and the
     recogniser among them, what one workload needs."""
     if not _is_calico(doc):
         return
     spec = doc.get("spec") or {}
-    if spec.get("selector", "all()").replace(" ", "") != "all()":
+    if not _selects_every_pod(spec):
         return
     for rule in spec.get("egress") or []:
-        if rule.get("action") == "Allow" and not _is_dns(rule):
+        if rule.get("action") == "Allow" and not _is_dns(rule, dns_namespace):
             yield Violation("wide-egress", _name(doc), f"every pod allowed: {rule}")
 
 
-#: A pod selector that selects every pod of the deployment's, or every pod there is.
-_EVERY_POD: tuple[dict[str, Any], ...] = (
-    {},
-    {"matchLabels": {"app.kubernetes.io/part-of": "ospreyflow"}},
-)
+def _names_workloads(selector: dict[str, Any]) -> bool:
+    """A pod selector this check can narrow: workloads by name alone (`matchLabels` of the name, or
+    one `In` expression on it). Anything else (every pod, the part-of label, `Exists`, an instance
+    label) may admit every pod of ours."""
+    labels = selector.get("matchLabels") or {}
+    expressions = selector.get("matchExpressions") or []
+    if labels and not expressions:
+        return set(labels) == {"app.kubernetes.io/name"}
+    if expressions and not labels and len(expressions) == 1:
+        [only] = expressions
+        return (only.get("key") == "app.kubernetes.io/name" and only.get("operator") == "In"
+                and bool(only.get("values")))  # fmt: skip
+    return False
 
 
 def _wide_ingress(doc: dict[str, Any]) -> Iterator[Violation]:
@@ -326,8 +521,8 @@ def _wide_ingress(doc: dict[str, Any]) -> Iterator[Violation]:
         return
     for rule in (doc.get("spec") or {}).get("ingress") or []:
         for peer in rule.get("from") or []:
-            if set(peer) == {"podSelector"} and (peer["podSelector"] or {}) in _EVERY_POD:
-                yield Violation("wide-ingress", _name(doc), f"admits every pod: {peer}")
+            if set(peer) == {"podSelector"} and not _names_workloads(peer["podSelector"] or {}):
+                yield Violation("wide-ingress", _name(doc), f"admits pods it cannot name: {peer}")
 
 
 def _egress_rules(doc: dict[str, Any]) -> Iterator[Violation]:
@@ -433,19 +628,37 @@ def _ingress_rules(docs: list[dict[str, Any]], controller_namespace: str) -> Ite
 
 
 def check_manifests(
-    docs: list[dict[str, Any]], registry: str, *, controller_namespace: str
+    docs: list[dict[str, Any]],
+    registry: str,
+    *,
+    controller_namespace: str,
+    secret: str | None = None,
+    dns_namespace: str | None = None,
+    irsa_account: str | None = None,
+    gateway_account: str | None = None,
 ) -> list[Violation]:
-    """Every rule but the Dockerfiles', over what `helm template` printed."""
+    """Every rule but the Dockerfiles', over what `helm template` printed. `secret` is the values'
+    `secrets.name`; the DNS namespace and the accounts are the platform's (`check` passes each from
+    its target; left out, the chart's default name and the fixtures' platform's)."""
+    defaults = _defaults()
+    secret = secret or defaults["secret"]
+    dns_namespace = dns_namespace or defaults["dns_namespace"]
+    irsa_account = irsa_account or defaults["irsa_account"]
+    gateway_account = gateway_account or defaults["gateway_account"]
+    engine_keys = _engine_keys(docs)
     found: list[Violation] = []
     for doc in docs:
         spec = pod_spec(doc)
         if spec is not None:
             found += _pod_rules(doc, spec, registry)
-            found += _whole_secret(doc, spec)
-            found += _token(doc, spec)
+            found += _whole_secret(doc, spec, secret, engine_keys)
+            found += _token(doc, spec, irsa_account, gateway_account)
         found += _egress_rules(doc)
-        found += _wide_egress(doc)
+        found += _wide_egress(doc, dns_namespace)
         found += _wide_ingress(doc)
+        found += _deny_order(doc)
+        found += _selectors(doc, dns_namespace)
+        found += _allow_ports(doc)
         kind = doc.get("kind")
         if kind == "PersistentVolumeClaim" and _claims_rwx(
             (doc.get("spec") or {}).get("accessModes")
@@ -465,6 +678,24 @@ def check_manifests(
     if not any(_denies_egress(doc) for doc in docs):
         found.append(Violation("no-deny-egress", "namespace", "no Calico policy denies egress"))
     return found
+
+
+@functools.cache
+def _defaults() -> dict[str, str | None]:
+    """The chart's own `secrets.name` and the fixtures' platform's DNS namespace and accounts."""
+    import yaml
+    from harness.cloud_platform.settings import load_platform
+
+    platform = load_platform("client")
+    chart = yaml.safe_load(
+        (CORE / "deploy" / "helm" / "ospreyflow" / "values.yaml").read_text(encoding="utf-8")
+    )
+    return {
+        "secret": chart["secrets"]["name"],
+        "dns_namespace": platform.egress.dns_namespace,
+        "irsa_account": platform.secrets.irsa.service_account,
+        "gateway_account": platform.secrets.irsa.gateway_service_account,
+    }
 
 
 def final_user(text: str) -> str | None:
@@ -528,6 +759,9 @@ def render(config_path: Path) -> Target:
         namespace=cloud.namespace,
         controller_namespace=platform.ingress.controller_namespace,
         shape=cloud.shape,
+        dns_namespace=platform.egress.dns_namespace,
+        irsa_account=platform.secrets.irsa.service_account,
+        gateway_account=platform.secrets.irsa.gateway_service_account,
     )
 
 
@@ -539,10 +773,15 @@ def render_values(config_path: Path) -> tuple[str, str]:
 
 def check(target: Target) -> tuple[int, list[Violation]]:
     """`target` templated into its own namespace and held to every manifest rule."""
+    import yaml
+
     docs = helm_template(target.values, target.namespace)
     violations = check_manifests(
-        docs, target.registry, controller_namespace=target.controller_namespace
-    )
+        docs, target.registry, controller_namespace=target.controller_namespace,
+        secret=yaml.safe_load(target.values)["secrets"]["name"],
+        dns_namespace=target.dns_namespace, irsa_account=target.irsa_account,
+        gateway_account=target.gateway_account,
+    )  # fmt: skip
     if target.shape == "poc":
         violations += list(poc_rules(docs))
     return len(docs), violations
