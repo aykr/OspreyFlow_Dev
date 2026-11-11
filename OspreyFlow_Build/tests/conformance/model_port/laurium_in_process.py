@@ -111,11 +111,25 @@ async def laurium_live_adapter(model: str) -> AsyncIterator[ExtractLauriumAdapte
     (`LITELLM_HOST`, `LITELLM_PORT`, `LITELLM_API_KEY`, as the LiteLLM adapter's own conformance
     factory reads them) under the name `litellm`. Laurium's own key is made on that gateway for
     `model` alone before, and deleted after, even when the test fails (a live test removes what it
-    writes). Any name other than `litellm` the service asks for fails the run."""
+    writes). Any name other than `litellm` the service asks for fails the run.
+
+    **A gateway already holding Laurium's key is refused before anything is written** (P12 part 2,
+    the hazard carried from part 1): it is a deployment's, and the teardown would delete the key
+    that deployment's Laurium runs on."""
     from adapters.model_litellm.client import LiteLLMConfig
 
     config = LiteLLMConfig.from_env()
     async with httpx.AsyncClient(base_url=config.base_url, timeout=30) as gateway:
+        held = await gateway.get(
+            "/key/info",
+            params={"key": laurium_key(config.api_key)},
+            headers={"Authorization": f"Bearer {config.api_key}"},
+        )
+        if held.status_code != 404:
+            raise AssertionError(
+                "This gateway already holds Laurium's key (or would not say): it is a "
+                f"deployment's, not a test gateway (HTTP {held.status_code}). Nothing was written."
+            )
         await put_laurium_key(gateway, config.api_key, [model])
         try:
             with resolve_litellm_here(config.host) as refused:

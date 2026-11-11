@@ -72,3 +72,52 @@ async def delete_laurium_key(gateway: httpx.AsyncClient, master: str) -> None:
         raise LauriumKeyRefused(
             f"The model gateway refused to delete Laurium's key (HTTP {resp.status_code})."
         )
+
+
+#: As the engines' sweep reads the gateway's keys (`ModelAdmin.revoke_stale_engine_keys`): at most
+#: 100 a page (measured), every page read before anything is deleted.
+_KEY_PAGE = 100
+_MAX_KEY_PAGES = 100
+
+
+async def laurium_at_start(gateway: httpx.AsyncClient, master: str, models: Sequence[str]) -> str:
+    """At the Conduit's start, Laurium chosen (decision 8, part 2): Laurium's key held with `models`
+    alone, and **every other key tagged as Laurium's deleted**, so a key made from a master key
+    since rotated is not left valid for whoever holds the old one. Every page of `/key/list` is
+    read before anything is deleted, and each stale key is named by its SHA-256 alone, so no old
+    key travels. A key not tagged `osprey_service: laurium` is someone else's and is left alone."""
+    key = await put_laurium_key(gateway, master, models)
+    current = hashlib.sha256(key.encode()).hexdigest()
+    auth = {"Authorization": f"Bearer {master}"}
+    stale: list[str] = []
+    page, pages = 1, 1
+    while page <= pages:
+        if page > _MAX_KEY_PAGES:
+            raise LauriumKeyRefused(
+                f"The model gateway holds more than {_MAX_KEY_PAGES * _KEY_PAGE} keys, so "
+                "Laurium's old keys were not looked for."
+            )
+        resp = await gateway.get(
+            "/key/list",
+            params={"return_full_object": "true", "page": page, "size": _KEY_PAGE},
+            headers=auth,
+        )
+        if resp.status_code != 200:
+            raise LauriumKeyRefused(
+                f"The model gateway refused the list of keys (HTTP {resp.status_code})."
+            )
+        body = resp.json()
+        pages = int(body.get("total_pages") or 1)
+        for row in body.get("keys") or []:
+            token = str(dict(row).get("token") or "")
+            tag = dict(dict(row).get("metadata") or {}).get("osprey_service")
+            if tag == METADATA["osprey_service"] and token and token != current:
+                stale.append(token)
+        page += 1
+    for token in stale:
+        resp = await gateway.post("/key/delete", json={"keys": [token]}, headers=auth)
+        if resp.status_code not in (200, 404):
+            raise LauriumKeyRefused(
+                f"The model gateway refused to delete an old Laurium key (HTTP {resp.status_code})."
+            )
+    return key

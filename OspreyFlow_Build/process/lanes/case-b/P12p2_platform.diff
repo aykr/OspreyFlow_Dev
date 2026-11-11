@@ -48,17 +48,17 @@ index a3eb4fd..fa55323 100644
      "arcadedb": [2480, 2434],
      "clickhouse": [8123, 9000, 9009],
 diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
-index f977d16..e5c430c 100644
+index f977d16..f580088 100644
 --- a/OspreyFlow_Core/harness/render.py
 +++ b/OspreyFlow_Core/harness/render.py
-@@ -65,6 +65,7 @@ from harness.images import (
+@@ -63,6 +63,7 @@ from harness.images import (
+     daemon_then_registry_digest_resolver,
+     unresolved_digest_resolver,
  )
++from harness.laurium import laurium_env, laurium_services
  from harness.profiles import arcadedb_java_memory_opts, postgres_command, store_memory
  from harness.realm import CONDUIT_CLIENT_ID
-+from harness.laurium import laurium_services
  from harness.reporting import reporting_env, reporting_services
- from harness.site import (
-     PROXY_IMAGE,
 @@ -1224,6 +1225,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
              config, api_image=api.image, building=api.building, build_context=api.build_context
          )
@@ -72,3 +72,11 @@ index f977d16..e5c430c 100644
      _keys_for_the_gateway_alone(config, services)
      _connection_secrets_for_the_conduit_alone(config, services)
      _gateway_database(config, services)
+@@ -1640,6 +1647,7 @@ def _render_env(config: OspreyConfig) -> str:
+     # key is here: only the gateway reads one, from the secrets apply writes.
+     lines += model_engines_env(config)
+     lines += reporting_env(config)
++    lines += laurium_env(config)
+     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
+     # value; every one of these is a name, a path or a choice already written in osprey.yaml.
+     return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"

@@ -69,3 +69,18 @@ def laurium_services(
         root = Path(build_context) if build_context is not None else Path("../../..")
         stanza["build"] = {"context": str(root / FOLDER), "dockerfile": "Dockerfile"}
     return {SERVICE: stanza}
+
+
+def laurium_env(config: OspreyConfig) -> list[str]:
+    """The Conduit's settings for Laurium (`adapters.extract_laurium.composed`), when it is chosen:
+    the engine and Laurium's address inside the deployment. No key: the Conduit derives Laurium's
+    own from the master key it already reads."""
+    if not chosen(config):
+        return []
+    return [
+        "",
+        "# ADR-135 Amendment 6: Laurium extracts (its own service); every other model call is",
+        "# the gateway's, as before.",
+        "OSPREY_EXTRACTION_ENGINE=laurium",
+        f"OSPREY_LAURIUM_URL=http://{SERVICE}:{PORT}",
+    ]

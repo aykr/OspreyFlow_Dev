@@ -109,6 +109,9 @@ from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
 
+from adapters.extract_laurium.composed import ENGINE as EXTRACTION_ENGINE
+from adapters.extract_laurium.composed import LAURIUM, extraction_from_env
+from adapters.extract_laurium.keys import laurium_at_start
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import (
@@ -1246,7 +1249,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # and whose every dataset allows that provider, and an engine an analyst names is used only
     # when it is enabled and has a key.
     model: ModelPort = RoutedModel(
-        ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
+        # ADR-135 Amendment 6 (P12 part 2): `extract` by Laurium's service when the deployment
+        # chose it (`OSPREY_EXTRACTION_ENGINE`), every other operation the gateway's; inside the
+        # routes, so each call keeps its engine's own key and the egress rules.
+        extraction_from_env(
+            ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
+            os.environ,
+            master=LiteLLMConfig.from_env().api_key,
+        ),
         routes=routes_from_env(models, os.environ),
         # ADR-136: and only from datasets whose egress allows the engine.
         egress=datasets_store,
@@ -1453,6 +1463,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await model_admin.start()
     if routed is not None:
         routed.follow(model_admin.routes)
+    if os.environ.get(EXTRACTION_ENGINE) == LAURIUM:
+        # ADR-135 Amendment 6 decision 8: Laurium's own key, the deployment's extraction model
+        # alone, and any older one (a master key since rotated) deleted, before a call is taken.
+        await laurium_at_start(gateway_http, gateway_config.api_key, [models.extraction])
     app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme

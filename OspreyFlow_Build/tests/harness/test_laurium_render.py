@@ -112,3 +112,13 @@ def test_every_other_profile_is_unchanged(profile_fixture: str) -> None:
 
 def test_the_fixture_loader_is_the_renders_own() -> None:
     assert load_config(FIXTURES / "development.yaml").models.extraction_engine == "deep_read"
+
+
+@pytest.mark.parametrize("name", FIXTURE_NAMES)
+def test_the_conduit_is_told_the_choice_and_lauriums_address(name: str) -> None:
+    """The Conduit reads the choice from its environment (`adapters.extract_laurium.composed`):
+    the engine and Laurium's address inside the deployment, and nothing that is a key."""
+    values = yaml.safe_load(_artefacts(_config(name, "laurium"))["values.yaml"])
+    environment = values["environment"]
+    assert environment["OSPREY_EXTRACTION_ENGINE"] == "laurium"
+    assert environment["OSPREY_LAURIUM_URL"] == "http://laurium:8000"

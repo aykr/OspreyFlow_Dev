@@ -51,3 +51,23 @@ applied from the working tree (Helm runs in Docker; `gates/98587eb.p12p2-server-
 - **The evaluator**, on hand-written manifests in P7b's announced shape and in today's: 3 passed offline on the
   Mac, among them a selector it cannot read refused rather than guessed.
 - With it on the server: the render's 13 and the setting's 15, passed.
+
+## Piece 4: the Conduit's routing and Laurium's key at start
+
+Written before `adapters/extract_laurium/composed.py`, `keys.laurium_at_start` and `harness.laurium.laurium_env`
+(rule 1): `tests/adapters/extract_laurium/test_laurium_at_start.py` (red at collection: the module did not exist),
+the render's `test_the_conduit_is_told_the_choice_and_lauriums_address` (2 failed: `KeyError
+'OSPREY_EXTRACTION_ENGINE'`). Green after: 8 and 15. Plants at the real call sites, each put back (offline, the Mac):
+
+| Plant | Red |
+| --- | --- |
+| `extract` sent to the inner adapter (`LauriumExtracts.extract`) | 1 failed |
+| an unknown engine read as Deep read (`extraction_from_env`) | 1 failed |
+| every key but the current deleted, the `osprey_service` tag not read (`laurium_at_start`) | 1 failed |
+| no stale key deleted | 2 failed |
+| **part 1's carried hazard:** the live factory's guard removed (a gateway already holding Laurium's key written to and its key deleted) — `test_live_factory_guard.py` | 1 failed |
+
+**Not shown red, and why:** `services/api/app.py`'s two lines (the model wrapped by `extraction_from_env`, and
+`laurium_at_start` after the model admin starts) run only in the Conduit's lifespan, which needs the stores; no
+offline test reaches them. The test that fails if either is dropped is piece 7's leased live case through the
+Conduit, carried to it.

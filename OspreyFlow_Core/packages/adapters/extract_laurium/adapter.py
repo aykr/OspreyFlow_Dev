@@ -73,6 +73,11 @@ class ExtractLauriumAdapter:
             base_url=config.base_url, timeout=config.timeout_seconds, transport=transport
         )
 
+    @property
+    def base_url(self) -> str:
+        """Laurium's service this adapter calls."""
+        return str(self._http.base_url).rstrip("/")
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -180,6 +185,4 @@ def _refusal(resp: httpx.Response, model: str) -> Exception:
         return ExtractionFailedError(
             f"The model gateway refused Laurium's call for model {model!r} (HTTP {status})."
         )
-    return ExtractionFailedError(
-        f"Laurium's service refused the call (HTTP {resp.status_code})."
-    )
+    return ExtractionFailedError(f"Laurium's service refused the call (HTTP {resp.status_code}).")
