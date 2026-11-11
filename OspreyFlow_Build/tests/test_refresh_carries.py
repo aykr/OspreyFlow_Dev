@@ -207,14 +207,48 @@ def test_the_lock_file_is_opened_read_only(
     opened: list[int] = []
     real_open = os.open
 
-    def spy(path: object, flags: int, *args: object) -> int:
+    def spy(path: object, flags: int, *args: object, **kwargs: object) -> int:
         if str(path).endswith(".refresh-lock"):
             opened.append(flags)
-        return real_open(path, flags, *args)  # type: ignore[arg-type]
+        return real_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(refresh.os, "open", spy)
     refresh.files_up_to_date(_checkout(deployment))
     assert opened and all(f & (os.O_WRONLY | os.O_RDWR | os.O_APPEND) == 0 for f in opened)
+
+
+def test_a_new_lock_file_is_644_whatever_the_umask(deployment: Path) -> None:
+    """The orchestrator's review of c5209b1, item 5: `os.open(..., 0o644)` is subject to the umask,
+    so under sudo with umask 077 the lock was made root's `600`, and the operator's next run could
+    not open it. Its mode is set on the open file."""
+    _after_the_gateway_database(deployment)
+    lock = deployment.parent / f".{deployment.name}.refresh-lock"
+    lock.unlink(missing_ok=True)
+    before = os.umask(0o077)
+    try:
+        refresh.files_up_to_date(_checkout(deployment))
+    finally:
+        os.umask(before)
+    assert lock.stat().st_mode & 0o777 == 0o644
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root opens any file, so none is unreadable to it")
+def test_a_lock_this_account_cannot_open_is_said_in_words(deployment: Path) -> None:
+    """A lock another account left that this one may not read (root's `600`): a refusal naming it
+    and what to do, never a PermissionError traceback, and nothing changed."""
+    _after_the_gateway_database(deployment)
+    lock = deployment.parent / f".{deployment.name}.refresh-lock"
+    lock.write_bytes(b"")
+    lock.chmod(0o000)  # as root's 600 is to the operator
+    before = {p.name: p.read_bytes() for p in deployment.iterdir() if p.is_file()}
+    try:
+        with pytest.raises(refresh.RefreshFailed) as refused:
+            refresh.files_up_to_date(_checkout(deployment))
+    finally:
+        lock.chmod(0o644)
+    words = str(refused.value)
+    assert str(lock) in words and "sudo rm" in words and "nothing was changed" in words
+    assert {p.name: p.read_bytes() for p in deployment.iterdir() if p.is_file()} == before
 
 
 def test_a_stage_this_account_cannot_remove_is_said(
