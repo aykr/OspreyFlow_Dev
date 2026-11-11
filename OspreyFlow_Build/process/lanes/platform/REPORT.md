@@ -1,91 +1,48 @@
-# Platform lane · P7 · report (10 November 2026, the `cloud-platform` profile, ADR-148) — NOT READY TO MERGE
+# Platform lane · P7 · report (11 November 2026, test server; the `cloud-platform` profile, ADR-148)
 
-P7 is in progress. The shared UID change merged alone (`fdd717d`, proofs in `gates/p7_uid_proof.7a89a87.log`).
-The rest is on `lane/platform` above main `aec1f41`, with schemas at the head (the brief's rule, agreed by the
-orchestrator). The lane-reviewer's 18 points are below, each marked fixed or open. `HANDOFF.md` says what the
-next session does first. Nothing of this session is still running: the kind cluster is down, with 0 containers
-and 0 images left on the test server.
+P7 is built to ADR-142 Amendment 8's bar. That bar is the render, `make cp-policy-check` (green, and red on each
+planted fault) and the ordinary gates. The acceptance run on kind is **P7a**, after P9, and was not run. The branch
+is rebased onto main 9bcadc6, with the schemas commit at the head. `SERVER_LOG.md` has the session; the built hash
+is recorded there. Nothing of mine is running, and the kind cluster is down (0 `osprey-p7-*` containers).
 
-## Exit criteria
-
-| Criterion | State | Evidence |
+| Exit criterion (BRIEF.md, as Amendment 8 cut it) | State | Proof |
 | --- | --- | --- |
-| `make cp-policy-check` green on the render | Met at `2e9afaa` (chart since changed; re-run) | `tools.cp_policy_check`: 0 violations, both fixtures; 67 passed on the server, with `test_helm_chart` and `test_cluster_render` |
-| …red on each planted fault | **Partly**: reviewer point 2 | `tests/cp_policy_check/test_cp_policy_check.py`; no `P7_RED_RECORD.md` yet |
-| ArcadeDB, ClickHouse, Keeper start as 10001 | Met, in Docker and on kind | `gates/p7_stores_uid_proof.2026-11-10.log`, `gates/p7_kind_check.677d473.log` |
-| Acceptance scenarios on kind/k3d | **Not met** | The Conduit exits (no `OIDC_JWKS_URL`); the workspace image could not build (Docker Hub 429 on `node:22-slim`) |
-| `local-lite`, `small`, `cluster` renders unchanged but the UIDs | Met for values and lock (the one intended difference is the `_Pins` fix) | `gates/p7_renders_unchanged.py` against main: 0 differences. The Helm output is untested (point 7) |
-| A friction row | Written | `process/friction/2026-11-10-platform-p7-cloud-platform.md` (and the shared commit's row) |
+| `make cp-policy-check` green on the render | Met at the head | 0 violations (development 32 manifests, production 37), and the check's, the Terraform's and the render's tests all pass (`P7_RED_RECORD.md`, last section) |
+| …red on each planted fault, other-uid included | Met | `P7_RED_RECORD.md`: every branch red on its own fault; on the server, the other-uid rule, the group rules, Jobs and CronJobs, and the six newer render tests |
+| ArcadeDB, ClickHouse, Keeper start as 10001 | Met (10 Nov) | `gates/p7_stores_uid_proof.2026-11-10.log`, `gates/p7_kind_check.677d473.log` |
+| `local-lite`, `small`, `cluster` renders unchanged but the UIDs | Met (10 Nov) | `gates/p7_renders_unchanged.helm.log`: 0 differences; the settings are refused at every other profile, each red |
+| `make test`, `make -k ci` at the head | See *Gates* | `gates/<sha>.test.txt`, `gates/<sha>.ci.txt` |
+| Acceptance scenarios on kind | **P7a**, not this step | `HANDOFF.md` items 2–4 carry to P7a |
+| Friction row | Written | `process/friction/2026-11-10-platform-p7-cloud-platform.md` |
 
-On kind (`gates/p7_kind.sh`; Calico from quay.io, no ReadWriteMany class, an ingress controller):
+**Lane-reviewer, 11 November, on the rebased branch.** It raised nine points. Fixed:
+- 1: `PROFILE_NAMES` lacked `cloud-platform`. main's test `test_the_profile_names_refused_are_the_schemas_profiles` went red in `make test`; the fix rides in the schemas commit.
+- 2: Jobs and CronJobs had no red; each now has one.
+- 3: §3c claimed a kind proof; it no longer does.
+- 4: this report was stale; rewritten.
+- 5: Keycloak's group 0 is now recorded in ADR-148 Amendment 1 item 4 and gated by the new group rules.
+- 8, in part: the settings test now covers every profile, each with a red.
 
-- the stores are Ready as 10001 on `gp2-expand` ReadWriteOnce claims, with PDBs;
-- the Calico deny and allow policies are applied: the internet is refused, the managed stand-ins and the namespace's pods are reached;
-- the worker and ner run as 10001; the Conduit runs as 10001 with no Java;
-- Keycloak builds itself and initialises its schema on the RDS stand-in, given group 0 as a supplementary group.
+Not changed:
+- 6, ownership: the chart templates beyond `ingress.yaml`, `cli/ospreyflow/main.py` (a rebase conflict, both verbs kept) and `cli/ospreyflow/deployments.py` (one name) are outside platform's map. These are requests below.
+- 7: the brief's `stack_lease.sh offline` predates the server prompt, which says to run directly here.
+- 8, the rest:
+  - The no-Java image is never built in a test; its `included` label says `omitted`.
+  - The check templates every fixture into `ospreyflow-dev`, which no rule reads.
+  - The first red table was taken before the rebase. The check's tests pass at the head.
+- 9: the duplicate Dockerfile-USER parser. Left as it is.
 
-## Defects the cluster found, each fixed red-first
+**Decisions taken** (for the owner to overrule): 1–7 as on 10 November (the shared claim until P8; plain-resource
+Terraform; egress by networks; `--group-add`; no OpenSearch address; Keycloak group 0 until P10, now in the ADR and
+gated; Java by build argument). 8: `PROFILE_NAMES` carried in the schemas commit, since a separate commit below it
+would fail its own test.
 
-- **Calico policy names.** Calico 3.28+ stores a default-tier policy as `default.<name>`, so a Helm upgrade could not patch ours. They are now named with their tier.
-- **The gateway's master key.** Our Secret dropped it while the Conduit still names it. The new test `test_every_key_a_pod_names_in_our_secret_is_in_it` covers this.
-- **OpenSearch.** A pod named a secret for an OpenSearch address nothing reads, so it could not start. The variable is dropped; the domain stays in the Terraform.
-- **Keycloak.** Its image is built for group 0, and it cannot build itself as 10001:10001.
-- **`_Pins` double digests** (`ref@sha256:…@sha256:…`). Fixed in its own commit, with the pin test anchored at both ends.
-
-## Decisions taken (for the owner to overrule)
-
-1. **Shared folders before P8:** one ReadWriteOnce claim, its mounters co-scheduled on one node by pod affinity. Accepted by the orchestrator; a CARRIES row is on P8.
-2. **Terraform:** plain AWS/Kubernetes resources in the environments repository's shape, not the platform's modules, whose sources would name the client in this repository.
-3. **Egress by networks:** Calico's open-source policy matches networks, not names, so every enabled host names its networks in `cloud_platform.egress_nets`. One without is refused at render.
-4. **No baked docker group in the harness image:** run with `--group-add` instead.
-5. **No pod is given an OpenSearch address** until the index leg reads one.
-6. **Keycloak gets supplementary group 0** on this profile, not a thin image (it leaves in P10).
-7. **Java via a build argument** (`CONDUIT_JAVA=omitted`), not a second Dockerfile (ADR-148 question 3, the recommended answer).
-
-## The reviewer's 18 points
-
-- **Open: the exit evidence and red record (1, 2).**
-  - 1: the exit evidence. Partly answered by the logs now in `gates/`; the acceptance run is still open.
-  - 2: `P7_RED_RECORD.md`, with each policy-check branch red on its own fault: `allowPrivilegeEscalation`, the capabilities, a container port and a Service port separately, and a StatefulSet's RWX claim template.
-- **Disputed (3):** schemas at the branch head, per the brief.
-- **Open: egress (4).** Mail, organisation sign-in and connector hosts are missing, and `OSPREY_CONNECTOR_EGRESS` has no route in. The client's S3 gateway endpoint is a prefix list, not the VPC CIDR, and IRSA's STS call needs a route too. The list is read from `osprey.yaml`, not from Admin's runtime settings (L1.9).
-- **Open: the Ingress (5).** It lacks Caddy's `id.<host>/assets/govuk` route, and has no TLS secret setting; the `id.`/`bi.` hosts sit two levels below the platform's wildcard.
-- **Open: unproven images (6).**
-  - LiteLLM and the postgres init containers are not shown starting as 10001 with every capability dropped.
-  - The stores' proof lacks `--cap-drop ALL` and `no-new-privileges`.
-  - Keycloak is now shown on kind.
-- **Open: ownership and the chart's output (7).**
-  - The chart templates outside `ingress.yaml` are edited; that needs the orchestrator's acceptance.
-  - No test holds the cluster's Helm output unchanged (`p7_renders_unchanged.py --helm` was promised and not built).
-  - The rendered pods' shared-claim affinity is untested.
-- **Open: `images push` (8).** No fake registry models a refusal. The by-digest copy never ran against a real registry. There is no `--platform` (an arm64 Mac would push arm64).
-- **Open: the stand-ins (9).** The kind stand-ins are more permissive than RDS: a superuser, and TLS not forced. The kind S3-key and CA patches bypass the rendered IRSA and TLS paths, and `report-sync` is unpatched.
-- **Open: tests (10, 11).**
-  - 10: the image-pin test is end-anchored.
-  - 11: the readers test leaves out init containers, Keycloak and LiteLLM, and the Amendment's "no other" is untrue for them. `READERS`/IRSA name `ingest`, which this profile never renders.
-- **Open: minors (12–18).**
-  - 12: the Java-less build is never built in a test, and its image keeps the Java labels.
-  - 13: Calico's CRDs are not schema-checked.
-  - 14: spec/05 is silent on the profile, and the reservation row still says reserved.
-  - 15: duplications (`OURS`, `in_kind_registry`, `_egress_hosts`, `_refuse`).
-  - 16: renderer edges (`plan.setdefault`, an empty `:sha256-` tag, any non-zero UID accepted, global bucket names).
-  - 17: wording.
-  - 18: `tofu init` in the check needs the network.
-- **New, from the cluster:** the Conduit and the workers need the non-secret settings `harness.apply` writes for a cluster (`OIDC_JWKS_URL`, the issuer, …). This profile renders none of them; they belong in its ConfigMap.
-
-## Commits (main..HEAD)
-
-`65091cd` harness · `be0639a` chart · `0a925d2` policy check · `8dc5084` images push · `12017bd` Java arg and
-Maps' words · `e3950ff` render comparison · `0001f7b` `_Pins` fix · `0c1ec85` stores proof · `0c88235` OpenSearch,
-kind file, format · `0d36f5b` ADR-148 Am 1 and kind scripts · `f572a88` schemas · `79e3d0c` Calico names ·
-`2f21d20` gateway key · `677d473` Keycloak group. The next session moves the schemas commit back to the head.
-
-## Requests to the orchestrator
-
-- Accept, or reassign, the chart template edits beyond `ingress.yaml`.
-- Apply `P7_ci_makefile.diff` once the red record is in.
-- The reservation row for ADR-148 Am 1 to say written, at merge.
+**Requests to the orchestrator:**
+- Accept the chart templates beyond `ingress.yaml`, plus `cli/ospreyflow/{main,deployments}.py`.
+- Apply `P7_ci_makefile.diff`, which is regenerated on 9bcadc6.
+- At merge, mark ADR-148 Am 1's reservation row as written.
+- Main's issues, reported here and not fixed: `create_investigation` sends no dataset, and the seeds default to `unit-1`. B4's seed gives 0 nodes. `render.py`'s `_KEYCLOAK_DATABASE_SQL` lacks the PG16 GRANT for Small on RDS.
 
 ## Gates
 
-`make -k ci` and `make test` have not been run for P7: they wait for the open points.
+Filled in at the head below.

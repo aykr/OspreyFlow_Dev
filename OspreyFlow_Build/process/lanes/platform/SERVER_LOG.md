@@ -39,3 +39,42 @@ the orchestrator fetches this clone.
   kind) and its items 3–4 are **P7a**, not this step; not run. `main` in this clone is `local/main`.
 - `main` is 203 commits past this branch's base (382268e). Prompt L asks for a rebase onto current main before
   the gated run; done after the reorder (below).
+- **Reorder.** `git rebase -i` and `git cherry-pick` still need approval here, so done with plain
+  `git rebase --onto`: the schemas commit lifted out, the wip commit (HANDOFF.md alone) reworded to
+  `docs(process): P7's handoff to the server session…`, the log commit and then the schemas commit replayed on
+  top. The tree afterwards was identical to the old head's (`git diff ef997ce5 HEAD` empty).
+- **Rebase onto `local/main` 9bcadc6.** One conflict, `OspreyFlow_Core/cli/ospreyflow/main.py`: main added the
+  `release` and `run` verbs where this branch adds `images`; both kept (the VERBS tuple and `_dispatch`).
+- **`P7_ci_makefile.diff` was stale**: main's `.PHONY` line gained `live-collect`, so the diff's first hunk no
+  longer applied. Regenerated on 9bcadc6 (the same three changes); the Makefile and `ci.yml` themselves left as
+  main has them (the owner's files).
+- **`make cp-policy-check` green** (the diff applied in the working tree only): 32 and 37 manifests, 0
+  violations; 91 tests passed.
+- **The reds, on the server** (HANDOFF item 1 and the render tests it names): the other-uid rule, and the six
+  render tests from the kind and reviewer-16 fixes, each planted alone, each red alone in its file, then
+  restored. Recorded in P7_RED_RECORD.md's new section (commit baaf6bf).
+- **Lane-reviewer** (on the rebased branch): nine points. Fixed, each red first or red shown:
+  - `PROFILE_NAMES` (1);
+  - Job and CronJob reds (2);
+  - §3c's kind claim (3);
+  - REPORT (4);
+  - Keycloak's group 0, recorded and gated by new group rules (5);
+  - the settings test at every profile (8).
+
+  Not changed: ownership (6, requests in REPORT); the lease (7, the server prompt says run directly); minors.
+  **Decision taken:** Keycloak's supplementary group 0 does not contradict ADR-148 decision 3, which fixes the
+  UID and not the group. Amendment 1 is this lane's own as-built record. So it is recorded there and gated
+  (`GROUP_ZERO_ALLOWED`), not stopped on.
+- **`make test` at baaf6bf** (`gates/baaf6bfc.test.txt`): 12 failed, 10923 passed, 13 skipped. Ten were this
+  branch meeting main's newer tests, all fixed since:
+  - `PROFILE_NAMES`;
+  - the admin guide's appendix and commands (5 cases);
+  - the Build path in `platforms/kind.yaml`;
+  - `process/` paths in spec/05 §3c;
+  - the licence test's Dockerfile anchor (2 cases).
+
+  Two are environmental, in main's own files, and not this branch's:
+  - `test_webapp_preflight::test_gpu_is_skipped_…`: this server has a working `nvidia-smi`, so the check
+    passes.
+  - `test_valkey_config::test_the_deployments_own_valkey_is_reached_plainly`: the test never clears
+    `VALKEY_PORT`, and the prescribed offline port is 59993.
