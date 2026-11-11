@@ -1,12 +1,12 @@
 """The live suite's Laurium factory never deletes a deployment's key (P12 part 2; the hazard carried
-from part 1): `laurium_live_adapter` makes Laurium's key on the gateway it is pointed at and deletes
-it after, so pointed at a gateway that **already** holds Laurium's key (a deployment's, whose Laurium
-runs on it) it refuses before writing anything. Pointed at a test gateway, what it made is gone after,
-even when the run fails.
+from part 1): `laurium_live_adapter` makes Laurium's key on the gateway it is pointed at and
+deletes it after, so pointed at a gateway that **already** holds Laurium's key (a deployment's,
+whose Laurium runs on it) it refuses before writing anything. Pointed at a test gateway, what it
+made is gone after, even when the run fails.
 
-Offline, in the Conduit's environment: the gateway's stand-in served over HTTP; the factory's guard and
-its key's lifetime come before Laurium's own code is imported, which this environment does not carry
-(so a run past the guard fails at that import, and its key is still removed).
+Offline, in the Conduit's environment: the gateway's stand-in served over HTTP; the factory's guard
+and its key's lifetime come before Laurium's own code is imported, which this environment does not
+carry (so a run past the guard fails at that import, and its key is still removed).
 """
 
 from __future__ import annotations
