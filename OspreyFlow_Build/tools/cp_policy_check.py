@@ -13,6 +13,16 @@ platform's rules. Red on:
 - a `hostPath` volume;
 - an image not from the profile's registry;
 - a namespace without the deny-egress policy (Calico's, every pod, egress, deny);
+- **egress opened by one rule** (decision 7): an allowing egress rule with no destination, or one
+  whose networks are a default route or wider than `schemas.deployment.EGRESS_WIDEST_PREFIX`
+  (Calico's, or a Kubernetes policy's);
+- **a pod other tenants may reach**: one no ingress policy selects (so every address may), or an
+  ingress rule admitting anything but the namespace's own pods and the platform's ingress
+  controller's namespace (an address block, another namespace, every source);
+- a container with no memory request and limit, or no CPU request (a namespace's LimitRange would
+  otherwise give it the platform's defaults, the stores included);
+- a pod whose `fsGroup` is applied by walking its volumes at every start (no
+  `fsGroupChangePolicy: OnRootMismatch`);
 - an image of ours whose Dockerfile does not run as 10001:10001.
 
 Each rule is shown red on a planted fault in `tests/cp_policy_check/test_cp_policy_check.py`, in the
@@ -27,27 +37,29 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import re
-import subprocess
+import ipaddress
 import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
+from tools.helm_chart import template
+from tools.licence_check import _instructions
 
 BUILD = Path(__file__).resolve().parents[1]
 CORE = BUILD.parent / "OspreyFlow_Core"
-CHART = CORE / "deploy" / "helm" / "ospreyflow"
 FIXTURES = BUILD / "tests" / "fixtures" / "cloud_platform"
-HELM = "alpine/helm:3.16.3"
 UID = 10001
 
 POD_KINDS = {"Deployment", "StatefulSet", "Job", "DaemonSet", "ReplicaSet", "Pod", "CronJob"}
+CALICO = ("projectcalico.org/", "crd.projectcalico.org/")
+#: What a Calico egress destination may select by, any one of which makes it something narrower
+#: than "anywhere" (a `notNets` or `ports` alone does not).
+CALICO_DESTINATIONS = {"nets", "selector", "namespaceSelector", "serviceAccounts", "services"}
 
 #: The workloads allowed group 0 as a supplementary group, and why. Held here on its own, not read
-#: from the harness's `GROUP_ZERO`, so a render that widens that list is refused here.
+#: from the harness's `profile.yaml`, so a render that widens that list is refused here.
 GROUP_ZERO_ALLOWED = {
     "keycloak": "its image is built for any user in group 0 and builds itself at start (until P10)"
 }
@@ -63,20 +75,40 @@ class Violation:
         return f"{self.rule}: {self.where}: {self.detail}"
 
 
+@dataclass(frozen=True)
+class Target:
+    """What one configuration renders to, and what the check holds it to."""
+
+    values: str
+    registry: str
+    namespace: str
+    #: Where the platform's ingress controller runs: the only other namespace admitted.
+    controller_namespace: str
+
+
 def _name(doc: dict[str, Any]) -> str:
     return f"{doc.get('kind')}/{(doc.get('metadata') or {}).get('name')}"
 
 
-def pod_spec(doc: dict[str, Any]) -> dict[str, Any] | None:
+def _template(doc: dict[str, Any]) -> dict[str, Any] | None:
     kind = doc.get("kind")
     if kind not in POD_KINDS:
         return None
     spec = doc.get("spec") or {}
     if kind == "Pod":
-        return spec
+        return doc
     if kind == "CronJob":
         spec = (spec.get("jobTemplate") or {}).get("spec") or {}
-    return (spec.get("template") or {}).get("spec") or {}
+    return spec.get("template") or {}
+
+
+def pod_spec(doc: dict[str, Any]) -> dict[str, Any] | None:
+    template_ = _template(doc)
+    return None if template_ is None else template_.get("spec") or {}
+
+
+def _pod_labels(doc: dict[str, Any]) -> dict[str, str]:
+    return ((_template(doc) or {}).get("metadata") or {}).get("labels") or {}
 
 
 def _containers(spec: dict[str, Any]) -> Iterator[dict[str, Any]]:
@@ -89,6 +121,11 @@ def _pod_rules(doc: dict[str, Any], spec: dict[str, Any], registry: str) -> Iter
     pod = spec.get("securityContext") or {}
     if pod.get("fsGroup", UID) != UID:
         yield Violation("other-gid", where, f"fsGroup is {pod['fsGroup']!r}, not {UID}")
+    if "fsGroup" in pod and pod.get("fsGroupChangePolicy") != "OnRootMismatch":
+        yield Violation(
+            "fs-group-walk", where,
+            "fsGroup with no fsGroupChangePolicy: OnRootMismatch: every start walks the volumes",
+        )  # fmt: skip
     allowed = {0} if (doc.get("metadata") or {}).get("name") in GROUP_ZERO_ALLOWED else set()
     extra = [g for g in pod.get("supplementalGroups") or [] if g != UID and g not in allowed]
     if extra:
@@ -128,19 +165,36 @@ def _pod_rules(doc: dict[str, Any], spec: dict[str, Any], registry: str) -> Iter
         image = str(container.get("image", ""))
         if not image.startswith(registry.rstrip("/") + "/"):
             yield Violation("foreign-registry", at, f"{image} is not from {registry}")
+        resources = container.get("resources") or {}
+        missing = [
+            f"{part}.{what}"
+            for part, what in (("requests", "cpu"), ("requests", "memory"), ("limits", "memory"))
+            if not (resources.get(part) or {}).get(what)
+        ]
+        if missing:
+            yield Violation("no-resources", at, "no " + ", ".join(missing))
 
 
 def _claims_rwx(modes: Iterable[str] | None) -> bool:
     return "ReadWriteMany" in (modes or [])
 
 
+def _is_calico(doc: dict[str, Any]) -> bool:
+    return str(doc.get("apiVersion", "")).startswith(CALICO) and doc.get("kind") in {
+        "NetworkPolicy",
+        "GlobalNetworkPolicy",
+    }
+
+
+def _is_kubernetes_policy(doc: dict[str, Any]) -> bool:
+    return doc.get("kind") == "NetworkPolicy" and str(doc.get("apiVersion", "")).startswith(
+        "networking.k8s.io/"
+    )
+
+
 def _denies_egress(doc: dict[str, Any]) -> bool:
     """Calico's deny: every pod (`all()`), egress, a rule that denies with nothing to match."""
-    if not str(doc.get("apiVersion", "")).startswith(
-        ("projectcalico.org/", "crd.projectcalico.org/")
-    ):
-        return False
-    if doc.get("kind") not in {"NetworkPolicy", "GlobalNetworkPolicy"}:
+    if not _is_calico(doc):
         return False
     spec = doc.get("spec") or {}
     if spec.get("selector", "all()").replace(" ", "") != "all()":
@@ -152,13 +206,119 @@ def _denies_egress(doc: dict[str, Any]) -> bool:
     )
 
 
-def check_manifests(docs: list[dict[str, Any]], registry: str) -> list[Violation]:
+def _too_wide(net: str) -> str:
+    from schemas.deployment import too_wide_for_egress
+
+    try:
+        ipaddress.ip_network(net, strict=False)
+    except ValueError:
+        return f"{net!r} is not a network"
+    return too_wide_for_egress(net) or ""
+
+
+def _egress_rules(doc: dict[str, Any]) -> Iterator[Violation]:
+    """Decision 7: no one rule opens the namespace's egress."""
+    where = _name(doc)
+    spec = doc.get("spec") or {}
+    if _is_calico(doc):
+        for rule in spec.get("egress") or []:
+            if rule.get("action") != "Allow":
+                continue
+            destination = rule.get("destination") or {}
+            if not CALICO_DESTINATIONS & set(destination):
+                yield Violation("open-egress", where, f"an Allow rule with no destination: {rule}")
+            for net in destination.get("nets") or []:
+                if why := _too_wide(net):
+                    yield Violation("open-egress", where, why)
+    elif _is_kubernetes_policy(doc):
+        for rule in spec.get("egress") or []:
+            if not rule.get("to"):
+                yield Violation("open-egress", where, f"an egress rule to everywhere: {rule}")
+            for peer in rule.get("to") or []:
+                cidr = (peer.get("ipBlock") or {}).get("cidr")
+                if cidr and (why := _too_wide(cidr)):
+                    yield Violation("open-egress", where, why)
+
+
+def _matches(selector: dict[str, Any], labels: dict[str, str]) -> bool:
+    """A Kubernetes label selector against a pod's labels (`{}` selects every pod)."""
+    if any(labels.get(k) != v for k, v in (selector.get("matchLabels") or {}).items()):
+        return False
+    for expression in selector.get("matchExpressions") or []:
+        key, operator = expression["key"], expression["operator"]
+        values = expression.get("values") or []
+        held = labels.get(key)
+        if operator == "In" and held not in values:
+            return False
+        if operator == "NotIn" and held in values:
+            return False
+        if operator == "Exists" and key not in labels:
+            return False
+        if operator == "DoesNotExist" and key in labels:
+            return False
+    return True
+
+
+def _admits_ingress(spec: dict[str, Any]) -> bool:
+    types = spec.get("policyTypes")
+    return "Ingress" in types if types else True  # Kubernetes' own default
+
+
+def _ingress_rules(docs: list[dict[str, Any]], controller_namespace: str) -> Iterator[Violation]:
+    """Other tenants: every pod is selected by an ingress policy, and every ingress rule admits the
+    namespace's own pods or the platform's ingress controller's namespace, nothing else."""
+    policies = [
+        d for d in docs if _is_kubernetes_policy(d) and _admits_ingress(d.get("spec") or {})
+    ]
+    selectors = [(p.get("spec") or {}).get("podSelector") or {} for p in policies]
+    controller = {"kubernetes.io/metadata.name": controller_namespace}
+    for doc in docs:
+        if _template(doc) is None:
+            continue
+        labels = _pod_labels(doc)
+        if not any(_matches(selector, labels) for selector in selectors):
+            yield Violation(
+                "ingress-isolation", _name(doc),
+                "no ingress policy selects its pods, so any address may reach them",
+            )  # fmt: skip
+    for policy in policies:
+        where = _name(policy)
+        for rule in (policy.get("spec") or {}).get("ingress") or []:
+            if not rule.get("from"):
+                yield Violation("ingress-isolation", where, f"a rule admitting any source: {rule}")
+            for peer in rule.get("from") or []:
+                if "ipBlock" in peer:
+                    yield Violation("ingress-isolation", where, f"admits {peer['ipBlock']}")
+                elif "namespaceSelector" in peer:
+                    selector = peer["namespaceSelector"] or {}
+                    if selector != {"matchLabels": controller}:
+                        yield Violation(
+                            "ingress-isolation", where,
+                            f"admits namespaces {selector or 'all'}, not the ingress "
+                            f"controller's ({controller_namespace}) alone",
+                        )  # fmt: skip
+    for doc in docs:
+        if not _is_calico(doc) or "Ingress" not in ((doc.get("spec") or {}).get("types") or []):
+            continue
+        for rule in (doc.get("spec") or {}).get("ingress") or []:
+            source = rule.get("source") or {}
+            if rule.get("action") == "Allow" and set(source) != {"selector"}:
+                yield Violation(
+                    "ingress-isolation", _name(doc),
+                    f"a Calico rule admitting beyond the namespace's own pods: {rule}",
+                )  # fmt: skip
+
+
+def check_manifests(
+    docs: list[dict[str, Any]], registry: str, *, controller_namespace: str
+) -> list[Violation]:
     """Every rule but the Dockerfiles', over what `helm template` printed."""
     found: list[Violation] = []
     for doc in docs:
         spec = pod_spec(doc)
         if spec is not None:
             found += _pod_rules(doc, spec, registry)
+        found += _egress_rules(doc)
         kind = doc.get("kind")
         if kind == "PersistentVolumeClaim" and _claims_rwx(
             (doc.get("spec") or {}).get("accessModes")
@@ -174,22 +334,30 @@ def check_manifests(docs: list[dict[str, Any]], registry: str) -> list[Violation
                     number = port.get(field)
                     if isinstance(number, int) and number < 1024:
                         found.append(Violation("low-port", _name(doc), f"{field} {number}"))
+    found += _ingress_rules(docs, controller_namespace)
     if not any(_denies_egress(doc) for doc in docs):
         found.append(Violation("no-deny-egress", "namespace", "no Calico policy denies egress"))
     return found
 
 
-def dockerfile_user(text: str) -> str | None:
-    last_stage = re.split(r"^\s*FROM\s", text, flags=re.MULTILINE | re.IGNORECASE)[-1]
-    users = re.findall(r"^\s*USER\s+(\S+)\s*$", last_stage, flags=re.MULTILINE | re.IGNORECASE)
-    return users[-1] if users else None
+def final_user(text: str) -> str | None:
+    """The `USER` the image's last stage runs as, or None when its last stage sets none; read with
+    `make licence-check`'s parser (continued lines joined, comments left out, any case)."""
+    user: str | None = None
+    for instruction in _instructions(text):
+        word, _, rest = instruction.partition(" ")
+        if word.upper() == "FROM":
+            user = None  # a new stage starts as its base's user
+        elif word.upper() == "USER":
+            user = rest.strip()
+    return user
 
 
 def check_dockerfiles(paths: Iterable[Path]) -> list[Violation]:
     return [
         Violation("named-uid", str(path), f"USER {user} is not {UID}:{UID}")
         for path in paths
-        if (user := dockerfile_user(path.read_text(encoding="utf-8"))) != f"{UID}:{UID}"
+        if (user := final_user(path.read_text(encoding="utf-8"))) != f"{UID}:{UID}"
     ]
 
 
@@ -205,26 +373,49 @@ def _resolver(ref: str) -> str:
     return "sha256:" + hashlib.sha256(ref.encode()).hexdigest()
 
 
-def helm_template(values: str) -> list[dict[str, Any]]:
-    done = subprocess.run(
-        ["docker", "run", "--rm", "-i", "-v", f"{CHART}:/chart:ro", HELM, "template", "ospreyflow",
-         "/chart", "--namespace", "ospreyflow-dev", "-f", "-"],
-        input=values, capture_output=True, text=True, timeout=300, check=False,
-    )  # fmt: skip
-    if done.returncode != 0:
-        raise RuntimeError(f"helm template failed: {done.stderr or done.stdout}")
-    return [doc for doc in yaml.safe_load_all(done.stdout) if doc]
+def helm_template(values: str, namespace: str = "ospreyflow-dev") -> list[dict[str, Any]]:
+    """The chart's manifests for `values`, into `namespace` (`tools.helm_chart`'s runner)."""
+    return template(values, namespace)
+
+
+def render(config_path: Path) -> Target:
+    """The profile's `values.yaml` for `config_path`, and what the check holds it to. A
+    configuration of another profile is refused in words, not with a traceback."""
+    from harness.cloud_platform.settings import load_platform
+    from harness.render import load_config
+    from harness.render import render as render_config
+
+    config = load_config(config_path)
+    cloud = config.cloud_platform
+    if cloud is None:
+        raise SystemExit(
+            f"{config_path} is profile: {config.profile.value}, and `make cp-policy-check` "
+            "checks a cloud-platform deployment's render alone (profile: cloud-platform)"
+        )
+    if cloud.registry is None or cloud.namespace is None:
+        raise SystemExit(f"{config_path} names no cloud_platform.registry or namespace")
+    platform = load_platform(cloud.platform)
+    return Target(
+        values=render_config(config, resolver=_resolver).artefacts["values.yaml"],
+        registry=cloud.registry,
+        namespace=cloud.namespace,
+        controller_namespace=platform.ingress.controller_namespace,
+    )
 
 
 def render_values(config_path: Path) -> tuple[str, str]:
     """The profile's `values.yaml` for `config_path`, and the registry it names."""
-    from harness.render import load_config, render
+    target = render(config_path)
+    return target.values, target.registry
 
-    config = load_config(config_path)
-    registry = config.cloud_platform.registry
-    if registry is None:
-        raise SystemExit(f"{config_path} names no cloud_platform.registry")
-    return render(config, resolver=_resolver).artefacts["values.yaml"], registry
+
+def check(target: Target) -> tuple[int, list[Violation]]:
+    """`target` templated into its own namespace and held to every manifest rule."""
+    docs = helm_template(target.values, target.namespace)
+    violations = check_manifests(
+        docs, target.registry, controller_namespace=target.controller_namespace
+    )
+    return len(docs), violations
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -239,10 +430,8 @@ def main(argv: list[str] | None = None) -> int:
     configs = args.config or sorted(FIXTURES.glob("*.yaml"))
     found = check_dockerfiles(our_dockerfiles())
     for config_path in configs:
-        values, registry = render_values(config_path)
-        docs = helm_template(values)
-        violations = check_manifests(docs, registry)
-        print(f"{config_path.name}: {len(docs)} manifests, {len(violations)} violation(s)")
+        count, violations = check(render(config_path))
+        print(f"{config_path.name}: {count} manifests, {len(violations)} violation(s)")
         found += violations
     for violation in found:
         print(f"  {violation}")

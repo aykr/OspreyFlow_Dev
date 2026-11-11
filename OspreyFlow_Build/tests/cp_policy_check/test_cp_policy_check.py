@@ -18,18 +18,26 @@ from typing import Any
 
 import pytest
 import yaml
+from harness.cloud_platform.settings import load_platform
 from tools.cp_policy_check import (
     FIXTURES,
+    Violation,
     check_dockerfiles,
-    check_manifests,
     helm_template,
     main,
     our_dockerfiles,
     pod_spec,
     render_values,
 )
+from tools.cp_policy_check import check_manifests as _check_manifests
 
 KUBECONFORM = "ghcr.io/yannh/kubeconform:v0.6.7"
+#: The fixtures' platform's ingress controller's namespace, the one other namespace admitted.
+CONTROLLER = load_platform("client").ingress.controller_namespace
+
+
+def check_manifests(docs: list[dict[str, Any]], registry: str) -> list[Violation]:
+    return _check_manifests(docs, registry, controller_namespace=CONTROLLER)
 
 
 @pytest.fixture(scope="module", params=["development", "production"])
@@ -381,6 +389,171 @@ def test_a_cron_job_s_pod_is_held_to_the_rules(development: tuple[dict[str, Any]
 
 def _name_of(doc: dict[str, Any]) -> str:
     return f"{doc['kind']}/{doc['metadata']['name']}"
+
+
+# ---- egress opened by one rule (ADR-148 decision 7; the independent review of P7, item 3) --------
+# Planted in the values the render emits (`egress.hosts`, `egress.managedNets`,
+# `networkPolicy.openEgress`), then templated, so each fault is the policy Helm would apply.
+
+
+@pytest.mark.parametrize(
+    ("net", "why"),
+    [
+        ("0.0.0.0/0", "0.0.0.0/0 is a default route"),
+        ("::/0", "::/0 is a default route"),
+        ("10.0.0.0/8", "10.0.0.0/8 is wider than /16"),
+        ("2001:db8::/32", "2001:db8::/32 is wider than /48"),
+    ],
+)
+def test_a_host_s_network_that_opens_egress_is_refused(
+    development: tuple[dict[str, Any], str], net: str, why: str
+) -> None:
+    values, registry = copy.deepcopy(development)
+    values["egress"]["hosts"].append({"host": "api.example.org", "nets": [net]})
+    [(rule, detail)] = _found(helm_template(yaml.safe_dump(values)), registry)
+    assert rule == "open-egress" and detail.startswith(why)
+
+
+def test_managed_networks_that_open_egress_are_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    values, registry = copy.deepcopy(development)
+    values["egress"]["managedNets"] = ["0.0.0.0/0"]
+    [(rule, detail)] = _found(helm_template(yaml.safe_dump(values)), registry)
+    assert rule == "open-egress" and detail.startswith("0.0.0.0/0 is a default route")
+
+
+def test_a_platform_s_widest_networks_pass(development: tuple[dict[str, Any], str]) -> None:
+    """The cap's own edge: a /16 (the client's shared VPC is one) and a /48 pass."""
+    values, registry = copy.deepcopy(development)
+    values["egress"]["hosts"].append({"host": "a.example.org", "nets": ["10.1.0.0/16"]})
+    values["egress"]["hosts"].append({"host": "b.example.org", "nets": ["2001:db8:1::/48"]})
+    assert _found(helm_template(yaml.safe_dump(values)), registry) == []
+
+
+def test_an_allow_rule_with_no_destination_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Calico's Allow with no destination allows every address; planted as a template edit would
+    emit it, in the allow policy before the deny."""
+    docs, registry = _helm(development)
+    allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-allow-egress")
+    allow["spec"]["egress"].append({"action": "Allow", "protocol": "TCP"})
+    [(rule, detail)] = _found(docs, registry)
+    assert rule == "open-egress" and detail.startswith("an Allow rule with no destination")
+
+
+def test_the_open_egress_policy_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    """The cluster's open-egress `NetworkPolicy` (`egress: [{}]`), rendered from the values that
+    switch it on."""
+    values, registry = copy.deepcopy(development)
+    values["networkPolicy"]["openEgress"] = True
+    [(rule, detail)] = _found(helm_template(yaml.safe_dump(values)), registry)
+    assert rule == "open-egress" and detail.startswith("an egress rule to everywhere")
+
+
+# ---- other tenants (the independent review of P7, item 4) ------------------------------------
+
+
+def _isolation(docs: list[dict[str, Any]], registry: str) -> list[tuple[str, str, str]]:
+    return [(v.rule, v.where, v.detail) for v in check_manifests(docs, registry)]
+
+
+def test_a_dropped_internal_policy_leaves_pods_open_and_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    docs, registry = _helm(development)
+    docs = [d for d in docs if (d.get("metadata") or {}).get("name") != "ospreyflow-internal"]
+    found = _isolation(docs, registry)
+    assert {rule for rule, _, _ in found} == {"ingress-isolation"}
+    # The doors stay selected by the controller's policy; every other pod is left open.
+    assert ("ingress-isolation", "Deployment/api",
+            "no ingress policy selects its pods, so any address may reach them") in found  # fmt: skip
+    assert not [w for _, w, _ in found if w in {"Deployment/workspace", "StatefulSet/keycloak"}]
+
+
+def test_a_widened_ingress_policy_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    """Planted three ways a template edit would emit: the controller's policy admitting every
+    namespace, the internal one admitting another namespace, and an address block."""
+    docs, registry = _helm(development)
+    _doc(docs, "NetworkPolicy", "ospreyflow-from-ingress")["spec"]["ingress"][0]["from"] = [
+        {"namespaceSelector": {}}
+    ]
+    [(rule, where, detail)] = _isolation(docs, registry)
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/ospreyflow-from-ingress")
+    assert detail.startswith("admits namespaces all")
+
+    docs, registry = _helm(development)
+    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
+    internal["spec"]["ingress"][0]["from"].append(
+        {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "other-tenant"}}}
+    )
+    [(rule, where, _)] = _isolation(docs, registry)
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/ospreyflow-internal")
+
+    docs, registry = _helm(development)
+    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
+    internal["spec"]["ingress"][0]["from"].append({"ipBlock": {"cidr": "10.0.0.0/8"}})
+    [(rule, where, detail)] = _isolation(docs, registry)
+    assert (rule, detail) == ("ingress-isolation", "admits {'cidr': '10.0.0.0/8'}")
+
+
+def test_an_ingress_controller_namespace_not_the_platform_s_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Planted in the values the chart reads: the Ingress's policy admitting a namespace that is
+    not the platform's controller's (another tenant's)."""
+    values, registry = copy.deepcopy(development)
+    values["ingress"]["controllerNamespace"] = "other-tenant"
+    [(rule, where, detail)] = _isolation(helm_template(yaml.safe_dump(values)), registry)
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/ospreyflow-from-ingress")
+    assert "not the ingress controller's (ingress-controllers) alone" in detail
+
+
+def test_the_public_policy_admitting_every_address_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Without the platform's Ingress the chart renders the cluster's `ospreyflow-public` (every
+    source); the render never does, and the check refuses it if it is."""
+    values, registry = copy.deepcopy(development)
+    values["ingress"]["enabled"] = False
+    found = _isolation(helm_template(yaml.safe_dump(values)), registry)
+    assert ("ingress-isolation", "NetworkPolicy/ospreyflow-public") in {(r, w) for r, w, _ in found}
+
+
+# ---- resources and the volumes' group (the independent review of P7, items 8 and 11) ------------
+
+
+def test_a_container_without_resources_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    values, registry = copy.deepcopy(development)
+    _workload(values, "arcadedb").pop("resources")
+    keycloak = _workload(values, "keycloak")
+    keycloak["initContainers"][0]["resources"] = {"requests": {"cpu": "100m"}}
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.where, v.detail) for v in found] == [
+        ("no-resources", "StatefulSet/arcadedb container arcadedb",
+         "no requests.cpu, requests.memory, limits.memory"),
+        ("no-resources", "StatefulSet/keycloak container keycloak-db",
+         "no requests.memory, limits.memory"),
+    ]  # fmt: skip
+
+
+def test_a_volume_walk_at_every_start_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    """`fsGroup` without `fsGroupChangePolicy: OnRootMismatch` re-owns every file of a store's claim
+    at each start; planted as the chart's pod spec emitted it before the policy was added."""
+    docs, registry = _helm(development)
+    arcadedb = _doc(docs, "StatefulSet", "arcadedb")
+    assert pod_spec(arcadedb)["securityContext"]["fsGroupChangePolicy"] == "OnRootMismatch"  # type: ignore[index]
+    del pod_spec(arcadedb)["securityContext"]["fsGroupChangePolicy"]  # type: ignore[index]
+    [(rule, detail)] = _found(docs, registry)
+    assert rule == "fs-group-walk" and detail.startswith("fsGroup with no fsGroupChangePolicy")
+
+
+def test_a_configuration_of_another_profile_is_refused_in_words(tmp_path: Path) -> None:
+    config = tmp_path / "osprey.yaml"
+    config.write_text("profile: local-lite\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="profile: local-lite, and `make cp-policy-check` checks"):
+        render_values(config)
 
 
 def test_main_fails_on_a_planted_fault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
