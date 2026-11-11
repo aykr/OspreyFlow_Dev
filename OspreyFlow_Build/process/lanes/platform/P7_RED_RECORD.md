@@ -65,6 +65,28 @@ rendered through `render_cloud_platform` for the harness).
 | Two sources for one copy refused | `if held.get("source") != …` → `if False and …` | `…::test_two_sources_copied_to_one_target_are_refused` | `DID NOT RAISE`; 1 failed, 58 passed |
 | Bucket names carry the Terraform's suffix | `aws_s3_bucket`'s name back to `"${var.namespace}-${each.key}"` | `…::test_bucket_names_are_unique_beyond_the_namespace_s_name` | `AssertionError` on `s3.tf`; 1 failed, 58 passed (a first attempt at this plant was a syntax error of mine, which failed the whole file at import; it proves nothing and is not counted) |
 
+### After the lane-reviewer (11 November): the group rules, Jobs and CronJobs, the settings at every profile
+
+Same conditions. Each new rule's test was written with it; each branch was then turned off alone and the whole
+file run.
+
+| Branch | Plant | Test | Red (only these failed in the file) |
+| --- | --- | --- | --- |
+| a Job's pod read (R1) | `"Job"` out of `POD_KINDS` | `test_cp_policy_check.py::test_a_job_s_pod_is_held_to_the_rules` | `[] == [('privileged…')]`; 1 failed, 33 passed |
+| a CronJob's pod read (R2) | `"CronJob"` out of `POD_KINDS` | `…::test_a_cron_job_s_pod_is_held_to_the_rules` | the same; 1 failed, 33 passed |
+| a CronJob's `jobTemplate` descended (R3) | `if kind == "CronJob":` → `if False and …` | `…::test_a_cron_job_s_pod_is_held_to_the_rules` | the same; 1 failed, 33 passed |
+| `runAsGroup` not 10001 (R4) | the branch off | `…::test_a_group_other_than_10001_is_refused`, `…::test_a_container_s_own_group_alone_is_refused` | `'runAsGroup is 1000…' in {('other-gid', 'fsGroup is 1000…')}`; 2 failed, 32 passed |
+| `fsGroup` not 10001 (R5) | the branch off | `…::test_a_group_other_than_10001_is_refused` | `'fsGroup is 1000…' in {('other-gid', 'runAsGroup is 1000…')}`; 1 failed, 33 passed |
+| a supplementary group (R6) | the branch off | `…::test_a_supplementary_group_outside_its_allowance_is_refused` | `[] == [('supplementary-group'…)]`; 1 failed, 33 passed |
+| group 0 for Keycloak alone (R7) | `allowed = {0}` for every pod | the same test | the same; 1 failed, 33 passed |
+| the settings refused at every other profile (R8) | the schema's refusal off (`packages/schemas/deployment.py`) | `test_cloud_platform_render.py::test_the_settings_belong_to_the_profile_alone[cluster, local-lite, small]` | `DID NOT RAISE ValidationError`, 3 failed, 58 passed; each base is validated alone first, after a first draft whose cluster and small bases failed on other rules (rule 15) |
+| `PROFILE_NAMES` holds the new profile | (found, not planted) | main's `tests/cli/test_named_deployments.py::test_the_profile_names_refused_are_the_schemas_profiles` | red in `make test` at `baaf6bf` (`gates/baaf6bfc.test.txt`) |
+
+A Job is planted where one would really arise: the profile renders none today, so one is given in the values'
+`jobs` and templated by the chart's own `jobs.yaml`. It is asserted clean before the fault goes in. The CronJob is
+that Job wrapped as Helm would emit one.
+
 Green before the plants, and again at the head after them: `make cp-policy-check` (the target as `P7_ci_makefile.diff` adds it, applied in the working
 tree only): `development.yaml: 32 manifests, 0 violation(s)`, `production.yaml: 37 manifests, 0 violation(s)`,
-then 91 passed (the check's tests, the rendered Terraform's and the render's).
+then 91 passed (the check's tests, the rendered Terraform's and the render's) before the reviewer's points, and
+98 after them (34, 3 and 61).
