@@ -51,6 +51,8 @@ from typing import Any
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 
+#: S3's own AWS-managed key, which `aws:kms` with no key named uses.
+AWS_MANAGED_S3_KEY = "arn:aws:kms:aws-managed:alias/aws/s3"
 #: S3's own tolerance for a request's clock (`RequestTimeTooSkewed`).
 SKEW = dt.timedelta(minutes=15)
 UNSIGNED = "UNSIGNED-PAYLOAD"
@@ -198,6 +200,9 @@ class Role:
     #: provider verifies them on EKS.
     jwks: dict[str, Any] | None = None
     issuer: str | None = None
+    #: The role's trust document as the Terraform writes it (`backups.trust_policy`): when given, it
+    #: alone decides, its conditions on `<issuer>:sub` and `<issuer>:aud` read from the token.
+    trust: dict[str, Any] | None = None
 
 
 @dataclass
@@ -262,6 +267,7 @@ class StandIn:
                 max_seconds=int(role.get("max_seconds", 3600)),
                 jwks=role.get("jwks"),
                 issuer=role.get("issuer"),
+                trust=role.get("trust"),
             )
         with self.lock:
             for key, session in list(self.sessions.items()):
@@ -320,9 +326,12 @@ class StandIn:
             if role.jwks is not None
             else _verify_jwt(token, role.issuer_secret, self.clock())
         )
-        if claims.get("aud") != role.audience and role.audience not in _listed(claims.get("aud")):
+        if role.trust is not None:
+            if not _trusted(role.trust, claims):
+                raise Refused(403, "AccessDenied", "Not authorized to perform sts:AssumeRoleWithWebIdentity")
+        elif claims.get("aud") != role.audience and role.audience not in _listed(claims.get("aud")):
             raise Refused(403, "AccessDenied", "Not authorized to perform sts:AssumeRoleWithWebIdentity")
-        if claims.get("sub") != role.subject:
+        elif claims.get("sub") != role.subject:
             raise Refused(403, "AccessDenied", "Not authorized to perform sts:AssumeRoleWithWebIdentity")
         seconds = int(params.get("DurationSeconds", "3600"))
         if seconds < 900 or seconds > role.max_seconds:
@@ -452,8 +461,12 @@ class StandIn:
             raise Refused(403, "AccessDenied", "Access Denied")
 
     def kms(self, principal: Principal, action: str, key_arn: str) -> None:
-        """S3 asks KMS on the caller's behalf; KMS's refusal comes back as S3's `AccessDenied`."""
-        verdict = evaluate(principal.policies, action, key_arn, {"aws:PrincipalArn": _role_of(principal.arn)})
+        """S3 asks KMS on the caller's behalf (`kms:ViaService` is S3 in the region); KMS's refusal
+        comes back as S3's `AccessDenied`. S3's own AWS-managed key needs no grant of the caller's."""
+        if key_arn == AWS_MANAGED_S3_KEY:
+            return
+        context = {"aws:PrincipalArn": _role_of(principal.arn), "kms:ViaService": f"s3.{self.region}.amazonaws.com"}
+        verdict = evaluate(principal.policies, action, key_arn, context)
         if verdict != "allow":
             reason = (
                 "with an explicit deny in an identity-based policy"
@@ -466,6 +479,28 @@ class StandIn:
                 f"User: {principal.arn} is not authorized to perform: {action} on resource: "
                 f"{key_arn} {reason}",
             )
+
+
+def _trusted(trust: dict[str, Any], claims: dict[str, Any]) -> bool:
+    """Whether a trust document lets this token assume its role, as STS reads one: an Allow of
+    `sts:AssumeRoleWithWebIdentity` whose conditions hold, `<issuer>:sub` and `<issuer>:aud` being
+    the token's (each `aud` it names tried, as IAM tries a multi-valued key)."""
+    for statement in trust.get("Statement", []):
+        if statement.get("Effect") != "Allow":
+            continue
+        if "sts:AssumeRoleWithWebIdentity" not in _listed(statement.get("Action", [])):
+            continue
+        conditions = statement.get("Condition", {})
+        issuers = {k.rsplit(":", 1)[0] for keys in conditions.values() for k in keys if ":" in k}
+        for aud in _listed(claims.get("aud")) or [None]:
+            context = {}
+            for issuer in issuers:
+                context[f"{issuer}:sub"] = str(claims.get("sub"))
+                if aud is not None:
+                    context[f"{issuer}:aud"] = str(aud)
+            if _condition_holds(conditions, context):
+                return True
+    return False
 
 
 def _role_of(arn: str) -> str:
@@ -688,6 +723,10 @@ class Handler(BaseHTTPRequestHandler):
                 if sse == "AES256":
                     return None
                 raise Refused(400, "InvalidArgument", "The encryption method specified is not supported")
+            if sse == "aws:kms" and not sse_key:
+                # `aws:kms` named without a key is S3's own AWS-managed key, never the bucket's
+                # (the lane-reviewer's finding): the bucket's policy must refuse it (`NoKeyNamed`).
+                return AWS_MANAGED_S3_KEY
             return sse_key or bucket.kms_key
 
         if not key:

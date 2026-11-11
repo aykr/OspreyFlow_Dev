@@ -22,7 +22,9 @@ from typing import Any
 
 import botocore.session
 import pytest
+from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from harness import cloud_platform_backups as backups
 from services.api import platform_backup as pb
 
@@ -33,35 +35,53 @@ REGION = "eu-west-2"
 BUCKET = "ospreyflow-dev-0a1b2c3d-backups"
 KEY_ARN = f"arn:aws:kms:{REGION}:{ACCOUNT}:key/1234abcd-12ab-34cd-56ef-1234567890ab"
 ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/ospreyflow-dev-backup"
+CLICKHOUSE_ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/ospreyflow-dev-backup-clickhouse"
 CONDUIT_ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/ospreyflow-dev-service"
-SUBJECT = "system:serviceaccount:ospreyflow-dev:ospreyflow-backup"
+SUBJECT = f"system:serviceaccount:ospreyflow-dev:{backups.SERVICE_ACCOUNT}"
+CLICKHOUSE_SUBJECT = f"system:serviceaccount:ospreyflow-dev:{backups.CLICKHOUSE_SERVICE_ACCOUNT}"
 ISSUER_SECRET = "the-cluster-oidc-issuer"
+#: The cluster's OIDC issuer as IAM names it (no scheme), and its provider.
+ISSUER = "oidc.eks.eu-west-2.amazonaws.com/id/0A1B2C3D"
+PROVIDER = f"arn:aws:iam::{ACCOUNT}:oidc-provider/{ISSUER}"
+BUCKET_ARN = f"arn:aws:s3:::{BUCKET}"
 
 
-def role_policy(*, kms_actions: tuple[str, ...] = tuple(backups.KMS_ACTIONS)) -> dict[str, Any]:
-    """The backup role's own policy as `backups.tf` writes it, its KMS actions narrowed for a
-    case that takes one away."""
-    policy = backups.role_policy(f"arn:aws:s3:::{BUCKET}", KEY_ARN)
+def role_policy(
+    account: str = backups.SERVICE_ACCOUNT, *, kms_actions: tuple[str, ...] = tuple(backups.KMS_ACTIONS)
+) -> dict[str, Any]:
+    """A backup role's own policy as `backups.tf` writes it, its KMS actions narrowed for a case
+    that takes one away (the condition kept)."""
+    policy = backups.role_policies(BUCKET_ARN, KEY_ARN, REGION)[account]
     statements = [s for s in policy["Statement"] if not s["Action"][0].startswith("kms:")]
     if kms_actions:
-        statements.append({"Effect": "Allow", "Action": list(kms_actions), "Resource": [KEY_ARN]})
+        kms = next(s for s in policy["Statement"] if s["Action"][0].startswith("kms:"))
+        statements.append({**kms, "Action": list(kms_actions)})
     return {**policy, "Statement": statements}
 
 
 def bucket_policy() -> dict[str, Any]:
     """The backups bucket's policy as `backups.tf` writes it (TLS only; SSE-KMS by its own key
-    only; its objects the backup role's alone)."""
-    return backups.bucket_policy(f"arn:aws:s3:::{BUCKET}", KEY_ARN, ROLE_ARN)
+    only; its objects the backup roles' alone)."""
+    return backups.bucket_policy(BUCKET_ARN, KEY_ARN, [ROLE_ARN, CLICKHOUSE_ROLE_ARN])
 
 
 def standin_config(
-    *, role: dict[str, Any] | None = None, bucket: dict[str, Any] | None = None
+    *, role: dict[str, Any] | None = None, bucket: dict[str, Any] | None = None,
+    clickhouse_role: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """The stand-in as the namespace's Terraform makes the AWS side: each role trusted by its own
+    trust document as rendered (`backups.trust_policy`), given its own policy."""
+    def trusted(subject: str) -> dict[str, Any]:
+        return backups.trust_policy(PROVIDER, ISSUER, subject)
+
     return {
         "region": REGION,
         "roles": [
-            {"arn": ROLE_ARN, "issuer_secret": ISSUER_SECRET, "subject": SUBJECT,
+            {"arn": ROLE_ARN, "issuer_secret": ISSUER_SECRET, "subject": SUBJECT, "trust": trusted(SUBJECT),
              "policies": [role or role_policy()]},
+            {"arn": CLICKHOUSE_ROLE_ARN, "issuer_secret": ISSUER_SECRET, "subject": CLICKHOUSE_SUBJECT,
+             "trust": trusted(CLICKHOUSE_SUBJECT),
+             "policies": [clickhouse_role or role_policy(backups.CLICKHOUSE_SERVICE_ACCOUNT)]},
             # The Conduit's role holds S3 in general, and still not this bucket (its policy).
             {"arn": CONDUIT_ROLE_ARN, "issuer_secret": ISSUER_SECRET,
              "subject": "system:serviceaccount:ospreyflow-dev:ospreyflow",
@@ -78,6 +98,8 @@ class Running:
     endpoint: str
     token_file: Path
     env: pytest.MonkeyPatch
+    #: A token a refusal case plants in place of the one the role's service account would hold.
+    token: str | None = None
 
     def s3(self, role: str = ROLE_ARN) -> Any:
         """A botocore S3 client as a pod with IRSA builds one: the web identity token file and the
@@ -87,8 +109,12 @@ class Running:
         )
 
     def session(self, role: str = ROLE_ARN) -> botocore.session.Session:
+        """The pod's IRSA environment for `role`: its service account's own token."""
+        subject = {ROLE_ARN: SUBJECT, CLICKHOUSE_ROLE_ARN: CLICKHOUSE_SUBJECT}.get(role, SUBJECT)
+        token_file = self.token_file.with_name(f"token-{subject.rsplit(':', 1)[1]}")
+        token_file.write_text(self.token or mint_token(ISSUER_SECRET, sub=subject))
         self.env.setenv("AWS_ROLE_ARN", role)
-        self.env.setenv("AWS_WEB_IDENTITY_TOKEN_FILE", str(self.token_file))
+        self.env.setenv("AWS_WEB_IDENTITY_TOKEN_FILE", str(token_file))
         self.env.setenv("AWS_ENDPOINT_URL_STS", self.endpoint)
         return botocore.session.get_session()
 
@@ -146,16 +172,40 @@ class FakeStores:
         self.access_key: str | None = None
 
     def _s3(self) -> Any:
-        """ClickHouse's S3 client as the role, by its pod's web identity, its credentials kept
-        until they expire (as ClickHouse keeps them)."""
+        """ClickHouse's S3 client as **its own** role, by its pod's web identity (never the process's
+        environment, which is the runner's). As ClickHouse 25.8 does, measured on osprey-p9: an STS
+        refusal leaves it no credentials, and it writes anonymously (refused); a session kept is
+        renewed when S3 says it expired (`_renewing`)."""
         if self.client is None:
-            frozen = self.aws.session().get_credentials().get_frozen_credentials()
-            self.access_key = frozen.access_key
-            self.client = botocore.session.get_session().create_client(
-                "s3", region_name=REGION, endpoint_url=self.aws.endpoint, config=PATH_STYLE,
-                aws_access_key_id=frozen.access_key, aws_secret_access_key=frozen.secret_key,
-                aws_session_token=frozen.token)  # fmt: skip
+            sts = botocore.session.get_session().create_client(
+                "sts", region_name=REGION, endpoint_url=self.aws.endpoint,
+                config=Config(signature_version=UNSIGNED, retries={"max_attempts": 1}))  # fmt: skip
+            try:
+                found = sts.assume_role_with_web_identity(
+                    RoleArn=CLICKHOUSE_ROLE_ARN, RoleSessionName="clickhouse",
+                    WebIdentityToken=mint_token(ISSUER_SECRET, sub=CLICKHOUSE_SUBJECT),
+                )["Credentials"]  # fmt: skip
+                self.access_key = found["AccessKeyId"]
+                self.client = botocore.session.get_session().create_client(
+                    "s3", region_name=REGION, endpoint_url=self.aws.endpoint, config=PATH_STYLE,
+                    aws_access_key_id=found["AccessKeyId"], aws_secret_access_key=found["SecretAccessKey"],
+                    aws_session_token=found["SessionToken"])  # fmt: skip
+            except ClientError:
+                self.access_key = None
+                self.client = botocore.session.get_session().create_client(
+                    "s3", region_name=REGION, endpoint_url=self.aws.endpoint,
+                    config=Config(signature_version=UNSIGNED, s3={"addressing_style": "path"},
+                                  retries={"max_attempts": 1}))  # fmt: skip
         return self.client
+
+    def _renewing(self, act: Any) -> Any:
+        try:
+            return act(self._s3())
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") != "ExpiredToken":
+                raise
+            self.client = None  # renewed, as ClickHouse renews an expired session
+            return act(self._s3())
 
     def __call__(self, request: urllib.request.Request, timeout: float) -> bytes:
         url = request.full_url
@@ -182,19 +232,23 @@ class FakeStores:
         assert len(arguments) == 1, "the runner never hands ClickHouse a key"
         assert arguments[0].startswith(REGIONAL + "/"), arguments[0]
         bucket, _, prefix = arguments[0].removeprefix(REGIONAL + "/").partition("/")
-        s3 = self._s3()
-        try:
-            if body.startswith("BACKUP"):
-                # ClickHouse sends no encryption header: the bucket's default (its key) applies.
-                # As ClickHouse 25.8 does: its lock first, removed at the end (refused without
-                # s3:DeleteObject on it, measured on osprey-p9), then the backup's own files.
-                s3.put_object(Bucket=bucket, Key=prefix + ".lock", Body=b"")
-                s3.put_object(Bucket=bucket, Key=prefix + ".backup", Body=b"<config/>")
-                s3.put_object(Bucket=bucket, Key=prefix + "data/ospreyflow/events/all_1_1_0/data.bin", Body=b"rows")
-                s3.delete_object(Bucket=bucket, Key=prefix + ".lock")
-                return b"0b1d-backup-id\tBACKUP_CREATED\n"
+
+        def backup(s3: Any) -> bytes:
+            # ClickHouse sends no encryption header: the bucket's default (its key) applies.
+            # As ClickHouse 25.8 does: its lock first, removed at the end (refused without
+            # s3:DeleteObject on it, measured on osprey-p9), then the backup's own files.
+            s3.put_object(Bucket=bucket, Key=prefix + ".lock", Body=b"")
+            s3.put_object(Bucket=bucket, Key=prefix + ".backup", Body=b"<config/>")
+            s3.put_object(Bucket=bucket, Key=prefix + "data/ospreyflow/events/all_1_1_0/data.bin", Body=b"rows")
+            s3.delete_object(Bucket=bucket, Key=prefix + ".lock")
+            return b"0b1d-backup-id\tBACKUP_CREATED\n"
+
+        def restore(s3: Any) -> bytes:
             s3.get_object(Bucket=bucket, Key=prefix + ".backup")["Body"].read()
             return b"0b1d-restore-id\tRESTORED\n"
+
+        try:
+            return bytes(self._renewing(backup if body.startswith("BACKUP") else restore))
         except Exception as error:  # what ClickHouse says: its code, S3's words, the query
             said = getattr(error, "response", {}).get("Error", {})
             text = (f"Code: 499. DB::Exception: {said.get('Code')}: {said.get('Message')}. "
@@ -210,7 +264,7 @@ def run(aws: Running, tmp_path: Path) -> tuple[pb.Settings, pb.Bucket, pb.Stores
         "OSPREY_BACKUP_BUCKET": BUCKET, "OSPREY_BACKUP_KMS_KEY": KEY_ARN, "AWS_REGION": REGION,
         "AWS_ENDPOINT_URL_S3": aws.endpoint, "OSPREY_BACKUP_ARCADEDB_FOLDER": str(folder),
         "OSPREY_BACKUP_ARCADEDB_HOST": "arcadedb-0.arcadedb-headless",
-        "ARCADEDB_ROOT_PASSWORD": "pw", "CLICKHOUSE_USER": "osprey", "CLICKHOUSE_PASSWORD": "pw",
+        "ARCADEDB_ROOT_PASSWORD": "pw", "CLICKHOUSE_USER": "backup", "CLICKHOUSE_PASSWORD": "pw",
     })  # fmt: skip
     aws.session()  # the pod's IRSA environment
     fake = FakeStores(aws, folder)
@@ -221,10 +275,14 @@ def _objects(aws: Running) -> list[str]:
     return [m["key"] for m in aws.stand_in.listing(BUCKET)]
 
 
-def _deny_kms(aws: Running, *kept: str) -> None:
-    role = aws.stand_in.roles[ROLE_ARN]
-    aws.stand_in.roles[ROLE_ARN] = Role(arn=role.arn, policies=[role_policy(kms_actions=kept)],
-                                        issuer_secret=role.issuer_secret, subject=role.subject)  # fmt: skip
-    aws.stand_in.sessions.clear()
+def _deny_kms(aws: Running, *kept: str, role: str = ROLE_ARN) -> None:
+    """`role`'s KMS actions narrowed to `kept`; its sessions already running meet the new policy,
+    as on AWS."""
+    account = {ROLE_ARN: backups.SERVICE_ACCOUNT, CLICKHOUSE_ROLE_ARN: backups.CLICKHOUSE_SERVICE_ACCOUNT}[role]
+    found = aws.stand_in.roles[role]
+    found.policies = [role_policy(account, kms_actions=kept)]
+    for session in aws.stand_in.sessions.values():
+        if session.arn.startswith(role.replace(":role/", ":assumed-role/").replace("iam::", "sts::") + "/"):
+            session.policies = found.policies
 
 

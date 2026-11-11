@@ -34,11 +34,10 @@ def has_the_diff(fixture: str = "development") -> bool:
 def values(fixture: str = "development") -> dict[str, Any]:
     """The render's values, with the backups as the diff writes them."""
     found: dict[str, Any] = yaml.safe_load(artefacts(fixture)["values.yaml"])
-    if "backups" not in found:
+    if "backups" not in found:  # P9_render.diff not applied: the one hook it adds, called here
         cfg = config(fixture)
         assert cfg.cloud_platform is not None
-        platform = load_platform(cfg.cloud_platform.platform)
-        found["backups"] = backups.backups_values(cfg, platform, found["workloads"], found["environment"])
+        backups.add_backups(cfg, load_platform(cfg.cloud_platform.platform), found)
     return found
 
 
@@ -48,7 +47,8 @@ def terraform(fixture: str = "development") -> str:
         return files["terraform/backups.tf"]
     cfg = config(fixture)
     assert cfg.cloud_platform is not None
-    return backups.backups_terraform(cfg, load_platform(cfg.cloud_platform.platform))
+    found: dict[str, Any] = yaml.safe_load(files["values.yaml"])
+    return backups.add_backups(cfg, load_platform(cfg.cloud_platform.platform), found)["terraform/backups.tf"]
 
 
 def target(fixture: str = "development") -> Target:

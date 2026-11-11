@@ -99,6 +99,9 @@ class Settings:
     #: The Job's name, `<cronjob>-<scheduled minute>`, which names the set (`set_of`).
     job_name: str | None = None
     claims_wait: float = CLAIMS_WAIT
+    #: The workloads a restore refuses to run beside (`app.kubernetes.io/name`), by the restore's
+    #: own service account's right to list pods; none given, none asked (the offline tests).
+    writers: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
@@ -134,6 +137,7 @@ class Settings:
             claims_folder=Path(env.get("OSPREY_BACKUP_CLAIMS_FOLDER", "/claims")),
             job_name=env.get("OSPREY_BACKUP_JOB") or None,
             claims_wait=float(env.get("OSPREY_BACKUP_CLAIMS_WAIT", str(CLAIMS_WAIT))),
+            writers=tuple(n for n in env.get("OSPREY_BACKUP_WRITERS", "").split(",") if n),
         )
 
     @property
@@ -149,12 +153,18 @@ class Settings:
 # ---------------------------------------------------------------------------------------------
 
 
+#: The service a botocore operation belongs to, for a refusal's words (a KMS refusal reaches us as
+#: S3's, since S3 asks KMS on our behalf).
+_SERVICE = {"AssumeRoleWithWebIdentity": "STS"}
+
+
 def _said(error: Exception) -> str:
-    """S3's own code and words for a refusal (botocore's `ClientError`), or the error's."""
+    """The refusing service's own code and words (botocore's `ClientError`), or the error's."""
     response = getattr(error, "response", None)
     if isinstance(response, dict) and "Error" in response:
         found = response["Error"]
-        return f"S3 refused it ({found.get('Code')}: {found.get('Message')})"
+        service = _SERVICE.get(str(getattr(error, "operation_name", "")), "S3")
+        return f"{service} refused it ({found.get('Code')}: {found.get('Message')})"
     return f"{type(error).__name__}: {error}"
 
 
@@ -218,26 +228,21 @@ class Bucket:
             raise
         return size, digest.hexdigest()
 
-    def put_tree(self, key: str, folder: Path) -> tuple[int, str, int]:
-        """`folder` (its top-level lost+found left out) as a gzipped tar, streamed up in parts;
-        its size, SHA-256 and the number of entries."""
+    def put_tree(self, key: str, folder: Path) -> tuple[int, str, dict[str, Any]]:
+        """`folder` (its top-level lost+found left out) as a gzipped tar, streamed up in parts; its
+        size, SHA-256 and what was taken. A live claim moves under it (the drop folder above all):
+        a file gone before it is opened is left out and counted, and one that shrinks while read is
+        kept at its new length and named, so a busy folder never fails the part."""
         bucket = self.settings.bucket
         upload_id = self.client.create_multipart_upload(Bucket=bucket, Key=key, **self._sse())[
             "UploadId"
         ]
         writer = _PartWriter(self.client, bucket, key, upload_id)
-        entries = 0
-
-        def counted(info: tarfile.TarInfo) -> tarfile.TarInfo:
-            nonlocal entries
-            entries += 1
-            return info
-
+        taken: dict[str, Any] = {"entries": 0, "gone": 0, "changed": []}
         try:
             with tarfile.open(fileobj=writer, mode="w|gz") as tar:  # type: ignore[call-overload]
-                for entry in sorted(folder.iterdir()):
-                    if entry.name != LOST_FOUND:
-                        tar.add(entry, arcname=entry.name, filter=counted)
+                for path in _tree(folder):
+                    _add(tar, path, path.relative_to(folder).as_posix(), taken)
             writer.finish()
             self.client.complete_multipart_upload(
                 Bucket=bucket, Key=key, UploadId=upload_id, MultipartUpload={"Parts": writer.parts}
@@ -248,7 +253,31 @@ class Bucket:
             except Exception:  # noqa: BLE001, S110 - the first refusal is the one reported
                 pass
             raise
-        return writer.size, writer.digest.hexdigest(), entries
+        return writer.size, writer.digest.hexdigest(), taken
+
+    def listing(self, prefix: str) -> list[dict[str, Any]]:
+        """Each object under `prefix`: its key, size and ETag (a part this role may list but not
+        read, ClickHouse's own, is checked by these)."""
+        found: list[dict[str, Any]] = []
+        token: str | None = None
+        while True:
+            extra = {"ContinuationToken": token} if token else {}
+            page = self.client.list_objects_v2(Bucket=self.settings.bucket, Prefix=prefix, **extra)
+            found += [{"key": i["Key"], "bytes": i["Size"], "etag": i["ETag"].strip('"')}
+                      for i in page.get("Contents", [])]  # fmt: skip
+            if not page.get("IsTruncated"):
+                return found
+            token = page["NextContinuationToken"]
+
+    def digest_of(self, key: str) -> tuple[int, str]:
+        """An object's size and SHA-256, read through and never written anywhere."""
+        body = self.client.get_object(Bucket=self.settings.bucket, Key=key)["Body"]
+        digest = hashlib.sha256()
+        size = 0
+        for chunk in iter(lambda: body.read(1024 * 1024), b""):
+            digest.update(chunk)
+            size += len(chunk)
+        return size, digest.hexdigest()
 
     def get_to(self, key: str, path: Path) -> tuple[int, str]:
         body = self.client.get_object(Bucket=self.settings.bucket, Key=key)["Body"]
@@ -274,6 +303,53 @@ class Bucket:
             if not page.get("IsTruncated"):
                 return
             token = page["NextContinuationToken"]
+
+
+def _tree(folder: Path) -> Iterator[Path]:
+    """Every entry under `folder`, parents first, its top-level lost+found left out; an entry gone
+    while it is walked is passed over (os.walk's own way)."""
+    for top in sorted(folder.iterdir()):
+        if top.name == LOST_FOUND:
+            continue
+        yield top
+        if top.is_dir() and not top.is_symlink():
+            for root, dirs, files in os.walk(top):
+                dirs.sort()
+                for name in [*sorted(dirs), *sorted(files)]:
+                    yield Path(root) / name
+
+
+class _AtMost:
+    """A file read for exactly `size` bytes: one that shrank while read is padded, and said so."""
+
+    def __init__(self, file: Any, size: int) -> None:
+        self.file, self.left, self.short = file, size, False
+
+    def read(self, n: int = -1) -> bytes:
+        want = self.left if n < 0 else min(n, self.left)
+        data = self.file.read(want)
+        if len(data) < want:
+            self.short = True
+            data += b"\0" * (want - len(data))
+        self.left -= len(data)
+        return bytes(data)
+
+
+def _add(tar: tarfile.TarFile, path: Path, name: str, taken: dict[str, Any]) -> None:
+    try:
+        if path.is_file() and not path.is_symlink():
+            with path.open("rb") as file:  # opened: a delete after this keeps its content
+                info = tar.gettarinfo(arcname=name, fileobj=file)
+                reader = _AtMost(file, info.size)
+                tar.addfile(info, reader)
+                if reader.short:
+                    taken["changed"].append(name)
+        else:
+            tar.add(path, arcname=name, recursive=False)
+    except FileNotFoundError:
+        taken["gone"] += 1
+        return
+    taken["entries"] += 1
 
 
 class _PartWriter:
@@ -479,6 +555,13 @@ def take(
     started = tick()
     set_id = set_of(settings.job_name) if settings.job_name else stamp(now)
     prefix = f"sets/{set_id}/"
+    try:
+        finished = prefix + MANIFEST in set(bucket.keys(prefix))
+    except Exception as error:  # noqa: BLE001 - reported in words
+        raise BackupRefused("backup", f"read set {set_id}", _said(error)) from error
+    if finished:
+        # A Job of a slot run again (by hand, or its retry) never writes over a finished set.
+        raise BackupRefused("backup", f"take set {set_id}", "that set is already finished")
     manifest: dict[str, Any] = {
         "set": set_id,
         "bucket": settings.bucket,
@@ -507,9 +590,18 @@ def take(
     analytics_started = tick()
     url = f"{settings.s3_base}/{prefix}clickhouse/"
     backup_id = stores.clickhouse_backup(url)
+    try:
+        # ClickHouse's own part, as its files' names, sizes and ETags (this role may list it, never
+        # read it): what a restore checks before it drops anything.
+        files = bucket.listing(f"{prefix}clickhouse/")
+    except Exception as error:  # noqa: BLE001 - reported in words
+        raise BackupRefused("clickhouse", "list its part", _said(error)) from error
+    if not any(f["key"].endswith("/.backup") for f in files):
+        raise BackupRefused("clickhouse", "BACKUP … TO S3", "its part holds no .backup file")
     manifest["clickhouse"] = {
         "database": settings.clickhouse_database,
         "prefix": f"{prefix}clickhouse/",
+        "files": files,
         "backup_id": backup_id,
         "cluster": settings.clickhouse_cluster,
         "seconds": round(tick() - analytics_started, 1),
@@ -592,12 +684,12 @@ def take_claims(settings: Settings, bucket: Bucket) -> dict[str, Any]:
             raise BackupRefused("claims", f"read {name}", f"{folder} is not mounted in this pod")
         key = f"{prefix}claims/{name}.tar.gz"
         try:
-            size, digest, entries = bucket.put_tree(key, folder)
+            size, digest, taken = bucket.put_tree(key, folder)
         except Exception as error:  # noqa: BLE001 - reported in words
             raise BackupRefused(
                 "claims", f"upload {name} to s3://{settings.bucket}/{key}", _said(error)
             ) from error
-        part[name] = {"key": key, "bytes": size, "sha256": digest, "entries": entries}
+        part[name] = {"key": key, "bytes": size, "sha256": digest, **taken}
     try:
         bucket.put_bytes(f"{prefix}claims/{MANIFEST}", json.dumps(part, indent=2).encode())
     except Exception as error:  # noqa: BLE001 - reported in words
@@ -641,9 +733,103 @@ def latest(bucket: Bucket) -> str:
     return finished[-1]
 
 
-def fetch_graph(bucket: Bucket, set_id: str, folder: Path) -> Path:
-    """The set's ArcadeDB zip into `folder`, checked against its manifest before it is used."""
+def verify_set(bucket: Bucket, set_id: str) -> dict[str, Any]:
+    """**Every part of the set checked before anything is replaced** (the orchestrator's ruling 3):
+    the manifest there (a finished set), ArcadeDB's zip and each claim by size and SHA-256, read
+    through and kept nowhere, and ClickHouse's part by each file's name, size and ETag. A part
+    missing (expired, say) or changed refuses the restore with nothing touched. Returns the
+    manifest."""
     manifest = manifest_of(bucket, set_id)
+    problems: list[str] = []
+
+    def check(what: str, key: str, size: int, sha256: str) -> None:
+        try:
+            found = bucket.digest_of(key)
+        except Exception as error:  # noqa: BLE001 - reported in words
+            problems.append(f"{what} ({key}): {_said(error)}")
+            return
+        if found != (size, sha256):
+            problems.append(
+                f"{what} ({key}) is {found[0]} bytes, SHA-256 {found[1][:12]}…; "
+                f"the manifest says {size}, {sha256[:12]}…"
+            )
+
+    graph = manifest["arcadedb"]
+    check("ArcadeDB's zip", graph["key"], graph["bytes"], graph["sha256"])
+    analytics = manifest["clickhouse"]
+    if not analytics.get("files"):
+        problems.append("ClickHouse's part has no file list in the manifest")
+    else:
+        try:
+            now = {f["key"]: f for f in bucket.listing(analytics["prefix"])}
+        except Exception as error:  # noqa: BLE001 - reported in words
+            now = {}
+            problems.append(f"ClickHouse's part ({analytics['prefix']}): {_said(error)}")
+        for file in analytics["files"]:
+            there = now.get(file["key"])
+            if there is None:
+                problems.append(f"ClickHouse's {file['key']} is missing")
+            elif (there["bytes"], there["etag"]) != (file["bytes"], file["etag"]):
+                problems.append(f"ClickHouse's {file['key']} is not the file the set wrote")
+    for name, part in sorted((manifest.get("claims") or {}).items()):
+        check(f"the claim {name}", part["key"], part["bytes"], part["sha256"])
+    if problems:
+        raise BackupRefused(
+            "restore", f"verify set {set_id}", "; ".join(problems) + "; nothing was touched"
+        )
+    return manifest
+
+
+def _pods(selector: str) -> list[dict[str, Any]]:
+    """The namespace's pods matching `selector`, by this pod's own service account (its Role: get
+    and list pods, nothing else)."""
+    import ssl
+
+    account = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    namespace = (account / "namespace").read_text().strip()
+    request = urllib.request.Request(
+        f"https://kubernetes.default.svc/api/v1/namespaces/{namespace}/pods?"
+        + urllib.parse.urlencode({"labelSelector": selector}),
+        headers={"Authorization": f"Bearer {(account / 'token').read_text().strip()}"},
+    )
+    context = ssl.create_default_context(cafile=str(account / "ca.crt"))
+    with urllib.request.urlopen(request, timeout=30, context=context) as answer:  # noqa: S310
+        items: list[dict[str, Any]] = json.loads(answer.read())["items"]
+    return items
+
+
+def writers_stopped(
+    settings: Settings, pods: Callable[[str], list[dict[str, Any]]] = _pods
+) -> None:
+    """A restore refuses while anything that writes runs (the orchestrator's ruling 4): ArcadeDB,
+    the Conduit, the workers and the report sync, in every shape. A pod finished (Succeeded,
+    Failed) is not running."""
+    if not settings.writers:
+        return
+    selector = f"app.kubernetes.io/name in ({','.join(settings.writers)})"
+    try:
+        found = pods(selector)
+    except Exception as error:  # noqa: BLE001 - reported in words
+        raise BackupRefused(
+            "restore", "see what runs", f"the pods could not be listed: {error}"
+        ) from error
+    finished = ("Succeeded", "Failed")
+    running = sorted(
+        p["metadata"]["name"] for p in found if (p.get("status") or {}).get("phase") not in finished
+    )
+    if running:
+        raise BackupRefused(
+            "restore",
+            "see what runs",
+            f"{', '.join(running)} still running: stop ArcadeDB, the Conduit, the workers and the "
+            "report sync first (the recovery runbook); nothing was touched",
+        )
+
+
+def fetch_graph(bucket: Bucket, set_id: str, folder: Path) -> Path:
+    """The set's ArcadeDB zip into `folder`, checked against its manifest before it is used; the
+    whole set verified first."""
+    manifest = verify_set(bucket, set_id)
     graph = manifest["arcadedb"]
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{graph['database']}.zip"
@@ -670,7 +856,7 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
     against the manifest, unpacked beside the claim's contents (refusing any entry outside it),
     and only then the old contents, but for lost+found, replaced. Run with every pod that mounts
     the claims stopped."""
-    manifest = manifest_of(bucket, set_id)
+    manifest = verify_set(bucket, set_id)
     claims = manifest.get("claims")
     if not claims:
         raise BackupRefused("claims", f"restore set {set_id}", "the set holds no claims part")
@@ -717,8 +903,12 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
     return restored
 
 
-def restore_analytics(settings: Settings, bucket: Bucket, stores: Stores, set_id: str) -> None:
-    manifest = manifest_of(bucket, set_id)
+def restore_analytics(settings: Settings, bucket: Bucket, stores: Stores, set_id: str,
+                      pods: Callable[[str], list[dict[str, Any]]] = _pods) -> None:  # fmt: skip
+    """ClickHouse's database replaced from the set, only once nothing writes and the whole set is
+    verified: ClickHouse is dropped only for a set it can be restored from."""
+    writers_stopped(settings, pods)
+    manifest = verify_set(bucket, set_id)
     url = f"{settings.s3_base}/{manifest['clickhouse']['prefix']}"
     stores.clickhouse_restore(url)
 
@@ -737,6 +927,10 @@ def main(argv: list[str] | None = None) -> int:
     analytics = commands.add_parser("restore-analytics", help="ClickHouse's RESTORE from a set")
     analytics.add_argument("--set", default="latest")
     commands.add_parser("backup-claims", help="the claims run: each claim into its slot's set")
+    verify = commands.add_parser(
+        "verify", help="a restore's first step: nothing writing, every part checked"
+    )
+    verify.add_argument("--set", default="latest")
     restore_claims = commands.add_parser("restore-claims", help="a set's claims put back")
     restore_claims.add_argument("--set", default="latest")
     args = parser.parse_args(argv)
@@ -758,6 +952,11 @@ def main(argv: list[str] | None = None) -> int:
             set_id = latest(bucket) if args.set == "latest" else args.set
             path = fetch_graph(bucket, set_id, args.to)
             print(f"restore: set {set_id}'s ArcadeDB zip at {path}, checked against its manifest")
+        elif args.command == "verify":
+            set_id = latest(bucket) if args.set == "latest" else args.set
+            writers_stopped(settings)
+            verify_set(bucket, set_id)
+            print(f"restore: set {set_id} verified, every part; nothing writing")
         elif args.command == "backup-claims":
             part = take_claims(settings, bucket)
             print(
@@ -766,6 +965,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "restore-claims":
             set_id = latest(bucket) if args.set == "latest" else args.set
+            writers_stopped(settings)
             names = fetch_claims(bucket, set_id, settings.claims_folder)
             print(f"restore: {', '.join(names)} put back from set {set_id}")
         elif args.command == "restore-analytics":

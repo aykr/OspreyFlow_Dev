@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 import pytest
 import yaml
@@ -56,10 +57,13 @@ def test_each_secret_the_backup_reads_is_one_the_terraform_writes(fixture: str) 
 
 
 def test_the_backup_pod_is_given_no_other_secret() -> None:
-    """Not the whole Secret (`envFrom`): the two passwords it uses, by name (Amendment 1 item 3)."""
+    """Not the whole Secret (`envFrom`): the two passwords it uses, by name (Amendment 1 item 3):
+    ArcadeDB's and ClickHouse's backup user's, never the deployment's own ClickHouse user's."""
     values = rendered.values()
     secret_items = [e for e in values["backups"]["env"] if "secret" in e]
-    assert sorted(e["secret"] for e in secret_items) == ["ARCADEDB_ROOT_PASSWORD", "CLICKHOUSE_PASSWORD"]
+    assert sorted(e["secret"] for e in secret_items) == ["ARCADEDB_ROOT_PASSWORD", backups.CLICKHOUSE_BACKUP_PASSWORD]
+    env = {e["name"]: e.get("value") for e in values["backups"]["env"]}
+    assert env["CLICKHOUSE_USER"] == backups.CLICKHOUSE_BACKUP_USER != values["environment"]["CLICKHOUSE_USER"]
 
 
 def test_the_backup_runs_in_the_conduits_image_from_the_profiles_registry() -> None:
@@ -69,34 +73,95 @@ def test_the_backup_runs_in_the_conduits_image_from_the_profiles_registry() -> N
     assert values["backups"]["serviceAccountName"] == backups.SERVICE_ACCOUNT != api["serviceAccountName"]
 
 
-def test_the_backup_role_trusts_its_own_service_account_for_sts_alone() -> None:
+@pytest.mark.parametrize("account", list(backups.ROLE_SUFFIX))
+def test_each_backup_role_trusts_its_own_service_account_for_sts_alone(account: str) -> None:
     text = rendered.terraform()
-    trust = re.search(r'data "aws_iam_policy_document" "backup_trust" \{(.*?)\n\}', text, re.S)
+    ref = backups.ROLE_SUFFIX[account].replace("-", "_")
+    trust = re.search(rf'data "aws_iam_policy_document" "{ref}_trust" \{{(.*?)\n\}}', text, re.DOTALL)
     assert trust is not None
-    assert f"system:serviceaccount:${{var.namespace}}:{backups.SERVICE_ACCOUNT}" in trust.group(1)
-    assert '"sts.amazonaws.com"' in trust.group(1)
-    assert "AssumeRoleWithWebIdentity" in trust.group(1)
+    assert f'"system:serviceaccount:${{var.namespace}}:{account}"' in trust.group(1)
+    assert '"${var.eks_oidc_issuer}:sub"' in trust.group(1) and '"${var.eks_oidc_issuer}:aud"' in trust.group(1)
+    assert '"sts.amazonaws.com"' in trust.group(1) and "AssumeRoleWithWebIdentity" in trust.group(1)
+    assert trust.group(1).count('test     = "StringEquals"') == 2
 
 
-def test_the_terraform_writes_the_policies_the_stand_in_holds() -> None:
-    """Each statement of the two policies is a statement block of its document, actions,
-    resources and every condition, so the stand-in's refusals are the platform's."""
+def _documents() -> list[tuple[str, dict[str, Any]]]:
+    bucket, key = "${aws_s3_bucket.backups.arn}", "${aws_kms_key.backups.arn}"
+    roles = ["${aws_iam_role.backup.arn}", "${aws_iam_role.backup_clickhouse.arn}"]
+    policies = backups.role_policies(bucket, key, "eu-west-2")
+    return [
+        ("backups_bucket", backups.bucket_policy(bucket, key, roles)),
+        ("backups_key", backups.key_policy("arn:aws:iam::${data.aws_caller_identity.backups.account_id}:root",
+                                           roles, "eu-west-2")),
+        ("backup_policy", policies[backups.SERVICE_ACCOUNT]),
+        ("backup_clickhouse_policy", policies[backups.CLICKHOUSE_SERVICE_ACCOUNT]),
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(("document", "policy"), _documents(), ids=[d for d, _ in _documents()])
+def test_the_terraform_writes_the_policies_the_stand_in_holds(document: str, policy: dict[str, Any]) -> None:
+    """Each statement of each policy is a statement block of its document, actions, resources and
+    every condition, so the stand-in's refusals are the platform's."""
     text = rendered.terraform()
-    for document, policy in (
-        ("backups_bucket", backups.bucket_policy("${aws_s3_bucket.backups.arn}", "${aws_kms_key.backups.arn}",
-                                                 "${aws_iam_role.backup.arn}")),
-        ("backup_role", backups.role_policy("${aws_s3_bucket.backups.arn}", "${aws_kms_key.backups.arn}")),
-    ):  # fmt: skip
-        block = re.search(rf'data "aws_iam_policy_document" "{document}" \{{(.*?)\n\}}', text, re.S)
-        assert block is not None, document
-        statements = block.group(1).count("statement {")
-        assert statements == len(policy["Statement"]), document
-        for statement in policy["Statement"]:
-            actions = statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
-            assert json.dumps(actions) in block.group(1), (document, actions)
-            for operator, keys in statement.get("Condition", {}).items():
-                for key in keys:
-                    assert f'"{operator}"' in block.group(1) and f'"{key}"' in block.group(1)
+    block = re.search(rf'data "aws_iam_policy_document" "{document}" \{{(.*?)\n\}}', text, re.DOTALL)
+    assert block is not None, document
+    assert block.group(1).count("statement {") == len(policy["Statement"]), document
+    for statement in policy["Statement"]:
+        actions = statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
+        assert json.dumps(actions) in block.group(1), (document, actions)
+        for operator, keys in statement.get("Condition", {}).items():
+            for key in keys:
+                assert f'"{operator}"' in block.group(1) and f'"{key}"' in block.group(1)
+
+
+def test_each_role_reaches_its_own_prefix_alone() -> None:
+    """The orchestrator's ruling 1(b): ClickHouse's role, `sets/*/clickhouse/*`; the runner's, the
+    graph's zip, the claims and the manifest. Neither holds the other's."""
+    policies = backups.role_policies("arn:aws:s3:::b", "arn:aws:kms:eu-west-2:1:key/k", "eu-west-2")
+
+    def objects(account: str) -> set[str]:
+        return {r for s in policies[account]["Statement"] if "s3:PutObject" in s["Action"] for r in s["Resource"]}
+
+    assert objects(backups.CLICKHOUSE_SERVICE_ACCOUNT) == {"arn:aws:s3:::b/sets/*/clickhouse/*"}
+    assert objects(backups.SERVICE_ACCOUNT) == {
+        "arn:aws:s3:::b/sets/*/arcadedb/*", "arn:aws:s3:::b/sets/*/claims/*", "arn:aws:s3:::b/sets/*/manifest.json"}
+    for account in policies:
+        kms = next(s for s in policies[account]["Statement"] if s["Action"][0].startswith("kms:"))
+        assert kms["Condition"] == {"StringEquals": {"kms:ViaService": "s3.eu-west-2.amazonaws.com"}}
+
+
+def test_the_keys_own_policy_lets_the_account_administer_the_roles_use_and_nobody_delete() -> None:
+    """The orchestrator's ruling 7: the account's administrators never use the key and nobody
+    schedules its deletion (section 9 of the decommission replaces the policy first); the two roles
+    use it through S3 in the region alone."""
+    roles = ["arn:aws:iam::1:role/r1", "arn:aws:iam::1:role/r2"]
+    policy = backups.key_policy("arn:aws:iam::1:root", roles, "eu-west-2")
+    by_sid = {s["Sid"]: s for s in policy["Statement"]}
+    administer = by_sid["Administer"]
+    assert administer["Principal"] == {"AWS": ["arn:aws:iam::1:root"]}
+    assert not [a for a in administer["Action"] if a in ("kms:*", "kms:Decrypt", "kms:Encrypt", "kms:ScheduleKeyDeletion")
+                or a.startswith(("kms:GenerateDataKey", "kms:ReEncrypt", "kms:Schedule"))]  # fmt: skip
+    use = by_sid["UseThroughS3"]
+    assert use["Principal"] == {"AWS": roles} and use["Condition"]["StringEquals"]["kms:ViaService"] == "s3.eu-west-2.amazonaws.com"
+    deny = by_sid["NeverScheduledForDeletion"]
+    assert (deny["Effect"], deny["Principal"], deny["Action"]) == ("Deny", "*", ["kms:ScheduleKeyDeletion"])
+    assert re.search(r"policy\s*=\s*data\.aws_iam_policy_document\.backups_key\.json", rendered.terraform())
+
+
+def test_clickhouses_own_user_is_refused_the_buckets_and_the_backup_user_holds_them() -> None:
+    """The orchestrator's ruling 1(a), after `osprey` read and overwrote sets through `s3()` on kind:
+    the deployment's own user refused S3, URL and BACKUP; `backup` the runner's alone."""
+    values = rendered.values()
+    deployment_user = values["environment"]["CLICKHOUSE_USER"]
+    users = values["files"][backups.CLICKHOUSE_USERS_FILE]
+    own = re.search(rf"<{deployment_user}>(.*?)</{deployment_user}>", users, re.DOTALL)
+    assert own is not None and "<query>REVOKE S3, URL, BACKUP ON *.*</query>" in own.group(1)
+    backup = re.search(r"<backup>(.*?)</backup>", users, re.DOTALL)
+    assert backup is not None and f'from_env="{backups.CLICKHOUSE_BACKUP_PASSWORD}"' in backup.group(1)
+    assert "GRANT BACKUP, CLUSTER, S3 ON *.*" in backup.group(1) and "URL" not in backup.group(1)
+    clickhouse = next(w for w in values["workloads"] if w["name"] == "clickhouse")
+    assert {"key": backups.CLICKHOUSE_USERS_FILE, "mountPath": "/etc/clickhouse-server/users.d/backup-users.xml"} in clickhouse["files"]
+    assert backups.CLICKHOUSE_BACKUP_PASSWORD in values["secrets"]["keys"]
 
 
 def test_the_bucket_is_encrypted_by_its_own_key() -> None:
@@ -119,51 +184,59 @@ def test_the_key_and_the_bucket_outlive_a_destroy_of_the_namespace() -> None:
 
 def test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod() -> None:
     """ClickHouse 25.8 takes no session token in `BACKUP … TO S3()` (Code 42 on osprey-p9), so it
-    writes as the backup role by its own pod's web identity: the role's service account, and the
+    writes as its own backup role by its own pod's web identity: that role's service account, and the
     region its STS client is built for (without AWS_DEFAULT_REGION it asked sts.us-east-1, which the
     platform's egress does not reach, and wrote anonymously, refused)."""
     found = rendered.values()
     clickhouse = next(w for w in found["workloads"] if w["name"] == "clickhouse")
-    assert clickhouse["serviceAccountName"] == backups.SERVICE_ACCOUNT
+    assert clickhouse["serviceAccountName"] == backups.CLICKHOUSE_SERVICE_ACCOUNT
     env = {e["name"]: e.get("value") for e in clickhouse["env"]}
     assert env["AWS_DEFAULT_REGION"] == env["AWS_REGION"] == "eu-west-2"
-    # The Conduit's and the workers' own role stays theirs: no other workload is given the backups'.
-    others = [w["name"] for w in found["workloads"]
-              if w.get("serviceAccountName") == backups.SERVICE_ACCOUNT and w["name"] != "clickhouse"]  # fmt: skip
+    # No other workload is given either backup role's account.
+    others = [w["name"] for w in found["workloads"] if w.get("serviceAccountName") in backups.ROLE_SUFFIX
+              and w["name"] != "clickhouse"]  # fmt: skip
     assert others == []
 
 
 def test_the_backup_roles_only_delete_is_clickhouses_own_lock_file() -> None:
-    """The orchestrator's rulings of 11 November 2026: ClickHouse runs as the backup role, so the role
-    holds no delete but one. ClickHouse 25.8's BACKUP removes its own `.lock` at its end and fails
-    without that (measured on osprey-p9), so it may delete `sets/*/clickhouse/.lock` and nothing
-    else: never a set's data or manifest, never an object version."""
+    """The orchestrator's rulings of 11 November 2026: no delete but one. ClickHouse 25.8's BACKUP
+    removes its own `.lock` at its end and fails without that (measured on osprey-p9), so ClickHouse's
+    role may delete `sets/*/clickhouse/.lock` and nothing else; the runner's role, nothing; neither
+    an object version."""
     bucket = "arn:aws:s3:::b"
-    policy = backups.role_policy(bucket, "arn:aws:kms:eu-west-2:1:key/k")
-    deletes = [(a, s["Resource"]) for s in policy["Statement"] for a in s["Action"]
-               if "Delete" in a or a in ("s3:*", "*") or a.endswith(":*")]  # fmt: skip
-    assert deletes == [("s3:DeleteObject", [f"{bucket}/sets/*/clickhouse/.lock"])]
+    policies = backups.role_policies(bucket, "arn:aws:kms:eu-west-2:1:key/k", "eu-west-2")
+
+    def deletes(account: str) -> list[tuple[str, list[str]]]:
+        return [(a, s["Resource"]) for s in policies[account]["Statement"] for a in s["Action"]
+                if "Delete" in a or a in ("s3:*", "*") or a.endswith(":*")]  # fmt: skip
+
+    assert deletes(backups.CLICKHOUSE_SERVICE_ACCOUNT) == [("s3:DeleteObject", [f"{bucket}/sets/*/clickhouse/.lock"])]
+    assert deletes(backups.SERVICE_ACCOUNT) == []
     text = rendered.terraform()
-    role = re.search(r'data "aws_iam_policy_document" "backup_role" \{(.*?)\n\}', text, re.DOTALL)
-    assert role is not None
-    assert re.findall(r'"s3:Delete\w*"', role.group(1)) == ['"s3:DeleteObject"']
-    assert '"${aws_s3_bucket.backups.arn}/sets/*/clickhouse/.lock"' in role.group(1)
+    for document in ("backup_policy", "backup_clickhouse_policy"):
+        role = re.search(rf'data "aws_iam_policy_document" "{document}" \{{(.*?)\n\}}', text, re.DOTALL)
+        assert role is not None
+        assert "DeleteObjectVersion" not in role.group(1)
+    assert len(re.findall(r'"s3:DeleteObject"', text.split('data "aws_iam_policy_document" "backups_bucket"')[0])) == 0
 
 
-def test_the_bucket_keeps_no_versions_so_a_delete_hides_nothing() -> None:
-    """Not versioned: a delete of the lock removes the lock, and no delete marker can stand in front
-    of a set's data (the role could not place one on anything else anyway)."""
+def test_the_bucket_is_versioned_so_an_overwrite_erases_nothing() -> None:
+    """The orchestrator's ruling 2: every overwrite keeps the previous version until the lifecycle
+    rule expires it, and no role holds DeleteObjectVersion; ClickHouse's lock is the one object a role
+    may delete, so a delete marker can stand on nothing else."""
     text = rendered.terraform()
-    assert "aws_s3_bucket_versioning" not in text
-    assert "versioning" not in text.lower()
+    versioning = re.search(r'resource "aws_s3_bucket_versioning" "backups" \{(.*?)\n\}', text, re.DOTALL)
+    assert versioning is not None and re.search(r'status\s*=\s*"Enabled"', versioning.group(1))
+    assert "DeleteObjectVersion" not in text
 
 
 def test_the_sets_expire_by_the_buckets_lifecycle_rule() -> None:
     text = rendered.terraform()
-    rule = re.search(r'id\s*=\s*"expire-sets"(.*?)\n    \}\n  \}', text, re.DOTALL)
+    rule = re.search(r'id\s*=\s*"expire-sets"(.*?)\n  \}', text, re.DOTALL)
     assert rule is not None, text
     assert re.search(r'prefix\s*=\s*"sets/"', rule.group(1))
     assert re.search(rf"days\s*=\s*{backups.EXPIRE_DAYS}\b", rule.group(1))
+    assert re.search(rf"noncurrent_days\s*=\s*{backups.EXPIRE_DAYS}\b", rule.group(1))
     assert backups.EXPIRE_DAYS >= 30, "a month of failed runs before the last good set expires"
 
 

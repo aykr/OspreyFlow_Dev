@@ -219,7 +219,9 @@ def test_a_part_reaching_outside_its_claim_is_refused(aws: Running, run: Any, cl
     aws.stand_in.put(BUCKET, f"sets/{set_id}/manifest.json", json.dumps(manifest).encode(), KEY_ARN)
     with pytest.raises(pb.BackupRefused, match="outside"):
         pb.fetch_claims(bucket, set_id, tmp_path / "restored")
-    assert not (tmp_path / "outside.txt").exists()
+    # A `../` entry unpacked from the claim's staging folder would land inside the claim itself, or
+    # beside it: neither, nor anywhere else under the test's folder.
+    assert not list(tmp_path.rglob("outside.txt"))
 
 
 def test_a_set_without_a_claims_part_is_refused_by_a_claims_restore(aws: Running, run: Any, tmp_path: Path) -> None:
@@ -250,3 +252,32 @@ def test_main_runs_each_part_and_fails_the_job_on_a_missing_claims_part(
     assert "claims" in said and "20261111T021500Z" in said and "unfinished" in said
     monkeypatch.setenv("OSPREY_BACKUP_JOB", _job("ospreyflow-backup-claims", SLOT))
     assert pb.main(["backup-claims"]) == 0
+
+
+def test_a_file_gone_before_it_is_read_is_left_out_and_counted(
+    aws: Running, run: Any, claims: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The drop folder moves while the part is taken: a file removed between the listing and its
+    read is passed over and counted, and the part is still written."""
+    settings, _, _, _ = run
+    late = _with_claims(settings, claims, _job("ospreyflow-backup-claims", SLOT))
+    walked = pb._tree
+
+    def walk_then_remove(folder: Path) -> Any:
+        for path in walked(folder):
+            if path.name == "people.csv":
+                path.unlink()
+            yield path
+
+    monkeypatch.setattr(pb, "_tree", walk_then_remove)
+    part = pb.take_claims(late, pb.Bucket(late))
+    assert part["ingest"]["gone"] == 1 and part["ingest"]["changed"] == []
+    with tarfile.open(fileobj=io.BytesIO(aws.stand_in.read(BUCKET, part["ingest"]["key"])), mode="r:gz") as tar:
+        names = tar.getnames()
+    assert "ingest/drop/nightly/people.csv" not in names
+    assert "ingest/uploads/case-1/witness statement.pdf" in names
+
+
+def test_a_file_that_shrinks_while_read_is_kept_whole_length_and_named() -> None:
+    reader = pb._AtMost(io.BytesIO(b"abc"), 5)
+    assert reader.read(4) + reader.read() == b"abc\0\0" and reader.short

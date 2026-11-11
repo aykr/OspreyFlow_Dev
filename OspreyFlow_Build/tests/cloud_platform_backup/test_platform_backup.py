@@ -20,11 +20,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from harness import cloud_platform_backups as backups
 from services.api import platform_backup as pb
 
 from tests.cloud_platform_backup.conftest import (
     BUCKET,
+    CLICKHOUSE_ROLE_ARN,
+    ISSUER,
     KEY_ARN,
+    PROVIDER,
     REGION,
     REGIONAL,
     ROLE_ARN,
@@ -70,38 +74,42 @@ def test_without_the_kms_permission_the_backup_is_refused_in_words_and_no_set_is
 
 
 def test_clickhouse_refused_by_kms_leaves_the_set_unfinished_and_says_so(aws: Running, run: Any) -> None:
-    """ArcadeDB's upload names its key (granted); ClickHouse relies on the bucket's default, and
-    the same missing permission refuses it there."""
+    """ClickHouse writes by its own role and the bucket's default key: its role without
+    kms:GenerateDataKey refuses it there, after ArcadeDB's part was written by the runner's."""
     settings, bucket, stores, _ = run
-    original = bucket.put_file
-
-    def then_deny(key: str, path: Path) -> tuple[int, str]:
-        done = original(key, path)
-        _deny_kms(aws, "kms:Decrypt")
-        return done
-
-    bucket.put_file = then_deny  # type: ignore[method-assign]
-    bucket_session = pb.Bucket(settings)
-    bucket.session = bucket_session.session
+    _deny_kms(aws, "kms:Decrypt", role=CLICKHOUSE_ROLE_ARN)
     with pytest.raises(pb.BackupRefused) as refused:
         pb.take(settings, bucket, stores)
     assert refused.value.store == "clickhouse"
     assert "kms:GenerateDataKey" in refused.value.reason
-    assert [s.complete for s in pb.sets(bucket_session)] == [False]
+    assert [s.complete for s in pb.sets(bucket)] == [False]
 
 
-def test_clickhouses_expired_session_refuses_its_backup_in_words(aws: Running, run: Any) -> None:
-    """ClickHouse keeps the role's credentials until they expire; a session the platform has
-    ended is refused at ClickHouse's own write, and the set is left unfinished."""
+def test_clickhouse_renews_an_expired_session_and_the_set_is_written(aws: Running, run: Any) -> None:
+    """Measured on osprey-p9: with every session ended, ClickHouse takes a new one by its pod's
+    identity (as the runner does), and the set is written."""
     settings, bucket, stores, fake = run
-    first = pb.take(settings, bucket, stores, now=dt.datetime(2026, 11, 11, 2, 15, tzinfo=dt.UTC))
-    assert fake.access_key is not None
-    aws.stand_in.expire(fake.access_key)
+    pb.take(settings, bucket, stores, now=dt.datetime(2026, 11, 11, 2, 15, tzinfo=dt.UTC))
+    first_key = fake.access_key
+    aws.stand_in.expire()
+    renewed = pb.Bucket(settings)  # the runner's next pod: a new session of its own
+    second = pb.take(settings, renewed, stores, now=dt.datetime(2026, 11, 12, 2, 15, tzinfo=dt.UTC))
+    assert fake.access_key not in (None, first_key), "a new session, not the expired one"
+    assert [s.set_id for s in pb.sets(renewed) if s.complete][-1] == second["set"]
+
+
+def test_clickhouse_refused_a_new_session_is_refused_and_never_writes_anonymously(aws: Running, run: Any) -> None:
+    """A role that cannot be renewed (its trust another account's): STS refuses ClickHouse, which then
+    has no credentials and writes unsigned, refused (as measured on kind), and the set is unfinished."""
+    settings, bucket, stores, fake = run
+    role = aws.stand_in.roles[CLICKHOUSE_ROLE_ARN]
+    role.trust = backups.trust_policy(PROVIDER, ISSUER, "system:serviceaccount:ospreyflow-dev:another-account")
     with pytest.raises(pb.BackupRefused) as refused:
-        pb.take(settings, bucket, stores, now=dt.datetime(2026, 11, 12, 2, 15, tzinfo=dt.UTC))
-    assert refused.value.store == "clickhouse"
-    assert "ExpiredToken" in refused.value.reason
-    assert [s.set_id for s in pb.sets(bucket) if s.complete] == [first["set"]]
+        pb.take(settings, bucket, stores)
+    assert refused.value.store == "clickhouse" and "AccessDenied" in refused.value.reason
+    assert fake.access_key is None, "no session was granted"
+    assert ("AccessDenied", "Not authorized to perform sts:AssumeRoleWithWebIdentity") in aws.stand_in.refusals
+    assert not [s for s in pb.sets(bucket) if s.complete]
 
 
 def test_a_statement_handing_clickhouse_a_session_is_refused_as_clickhouse_refuses_it(run: Any) -> None:
@@ -120,10 +128,10 @@ def test_a_bucket_policy_refusing_the_role_refuses_the_backup(aws: Running, run:
     settings, bucket, stores, _ = run
     policy = aws.stand_in.buckets[BUCKET].policy
     assert policy is not None
-    policy["Statement"][-1]["Condition"]["ArnNotEquals"]["aws:PrincipalArn"] = ROLE_ARN + "-other"
+    policy["Statement"][-1]["Condition"]["ArnNotEquals"]["aws:PrincipalArn"] = [ROLE_ARN + "-other"]
     with pytest.raises(pb.BackupRefused) as refused:
         pb.take(settings, bucket, stores)
-    assert refused.value.store == "arcadedb"
+    assert refused.value.store == "backup" and "read set" in refused.value.step
     assert "AccessDenied" in refused.value.reason
 
 
@@ -226,3 +234,106 @@ def test_a_refused_part_aborts_the_upload(aws: Running, run: Any, monkeypatch: p
     with pytest.raises(Exception, match="kms:Decrypt"):
         pb.Bucket(settings).put_file("sets/x/arcadedb/big.zip", big)
     assert aws.stand_in.uploads == {}
+
+
+# ---- the restore verifies before it destroys (the orchestrator's ruling 3) ----------------------
+
+
+def test_a_missing_clickhouse_part_leaves_arcadedb_and_clickhouse_untouched(
+    aws: Running, run: Any, tmp_path: Path
+) -> None:
+    """Every part is checked before anything is replaced: with ClickHouse's `.backup` gone (expired,
+    say), the graph is not fetched, nothing is dropped, and each step says which part and why."""
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    aws.stand_in.delete(BUCKET, f"{manifest['clickhouse']['prefix']}.backup")
+    sent = len(fake.statements)
+    for step in (lambda: pb.verify_set(bucket, manifest["set"]),
+                 lambda: pb.fetch_graph(bucket, manifest["set"], tmp_path / "restore"),
+                 lambda: pb.restore_analytics(settings, bucket, stores, manifest["set"])):  # fmt: skip
+        with pytest.raises(pb.BackupRefused) as refused:
+            step()
+        assert "ClickHouse's" in refused.value.reason and ".backup is missing" in refused.value.reason
+        assert "nothing was touched" in refused.value.reason
+    assert fake.statements[sent:] == [], "no DROP, no RESTORE sent to ClickHouse"
+    assert not (tmp_path / "restore" / "ospreyflow.zip").exists()
+
+
+def test_a_changed_clickhouse_file_is_never_restored(aws: Running, run: Any) -> None:
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    aws.stand_in.put(BUCKET, f"{manifest['clickhouse']['prefix']}.backup", b"<another/>", KEY_ARN)
+    with pytest.raises(pb.BackupRefused, match="is not the file the set wrote"):
+        pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    assert not [s for s in fake.statements if s.startswith("DROP")]
+
+
+def test_the_manifest_records_clickhouses_part_by_file(run: Any) -> None:
+    settings, bucket, stores, _ = run
+    manifest = pb.take(settings, bucket, stores)
+    files = {f["key"].rsplit("/clickhouse/", 1)[1]: f for f in manifest["clickhouse"]["files"]}
+    assert set(files) == {".backup", "data/ospreyflow/events/all_1_1_0/data.bin"}, "the lock is gone by then"
+    assert all(f["bytes"] > 0 and f["etag"] for f in files.values())
+
+
+def test_a_finished_slot_is_never_taken_again(run: Any) -> None:
+    """A Job of a slot run again (its retry, or by hand) never writes over a finished set."""
+    settings, bucket, stores, _ = run
+    when = dt.datetime(2026, 11, 11, 2, 15, tzinfo=dt.UTC)
+    pb.take(settings, bucket, stores, now=when)
+    with pytest.raises(pb.BackupRefused, match="already finished"):
+        pb.take(settings, bucket, stores, now=when)
+
+
+# ---- the restore refuses while writers run (the orchestrator's ruling 4) ------------------------
+
+
+def _pod(name: str, phase: str) -> dict[str, Any]:
+    return {"metadata": {"name": name}, "status": {"phase": phase}}
+
+
+@pytest.mark.parametrize("phase", ["Running", "Pending"])
+def test_a_restore_refuses_while_a_writer_runs_and_touches_nothing(run: Any, phase: str) -> None:
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    guarded = pb.Settings(**{**settings.__dict__, "writers": ("arcadedb", "api", "worker", "report-sync")})
+    asked: list[str] = []
+
+    def pods(selector: str) -> list[dict[str, Any]]:
+        asked.append(selector)
+        return [_pod("api-7d9c-xk2", phase), _pod("arcadedb-0", "Succeeded")]
+
+    sent = len(fake.statements)
+    with pytest.raises(pb.BackupRefused) as refused:
+        pb.restore_analytics(guarded, bucket, stores, manifest["set"], pods=pods)
+    assert "api-7d9c-xk2 still running" in refused.value.reason and "arcadedb-0" not in refused.value.reason
+    assert asked == ["app.kubernetes.io/name in (arcadedb,api,worker,report-sync)"]
+    assert fake.statements[sent:] == []
+
+
+def test_a_restore_goes_on_once_the_writers_are_stopped(run: Any) -> None:
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    guarded = pb.Settings(**{**settings.__dict__, "writers": ("arcadedb", "api")})
+    pb.restore_analytics(guarded, bucket, stores, manifest["set"], pods=lambda _: [_pod("api-1", "Succeeded")])
+    assert fake.statements[-1].startswith("RESTORE DATABASE")
+
+
+def test_pods_it_cannot_list_refuse_the_restore(run: Any) -> None:
+    settings, bucket, stores, _ = run
+    guarded = pb.Settings(**{**settings.__dict__, "writers": ("api",)})
+
+    def refused(_: str) -> list[dict[str, Any]]:
+        raise urllib.error.URLError("forbidden")
+
+    with pytest.raises(pb.BackupRefused, match="could not be listed"):
+        pb.writers_stopped(guarded, refused)
+
+
+def test_an_sts_refusal_is_named_as_sts_s() -> None:
+    from botocore.exceptions import ClientError
+
+    error = ClientError({"Error": {"Code": "AccessDenied", "Message": "Not authorized"}}, "AssumeRoleWithWebIdentity")
+    assert pb._said(error) == "STS refused it (AccessDenied: Not authorized)"
+    error = ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "PutObject")
+    assert pb._said(error).startswith("S3 refused it")
