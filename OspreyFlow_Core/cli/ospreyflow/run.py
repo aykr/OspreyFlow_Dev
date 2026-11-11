@@ -19,8 +19,9 @@ _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
 #: Advice that names a variable is not a secret (ADR-114 Amendment 8: a private repository is read
 #: with `GITHUB_TOKEN`), but a name followed by a word cannot be told from a name followed by its
 #: value (`GH_TOKEN hunter2`), so only **the producers' own fixed phrases** pass:
-#: `harness.release`'s two lines for a private repository and `harness.apply`'s unset sign-in secret (the orchestrator's
-#: confirmation of b2feedf, item 1). Any other line naming one stays hidden.
+#: `harness.release`'s two lines for a private repository and `harness.apply`'s unset sign-in
+#: secret (the orchestrator's confirmation of b2feedf, item 1). Any other line naming one stays
+#: hidden.
 _NAMED_ONLY = re.compile(
     r"\bor (?:GITHUB_TOKEN|GH_TOKEN) on this machine cannot read it\b"
     r"|\bset (?:GITHUB_TOKEN|GH_TOKEN) to (?:one|a token) that can read it\b"
