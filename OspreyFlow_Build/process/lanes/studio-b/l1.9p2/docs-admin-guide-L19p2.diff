@@ -1,3 +1,5 @@
+# Applied at merge, after cloud-platform-L19p2.diff. Then make the admin guide's PDF and its manifest entry, as P7b's guide diff did:
+#   cd OspreyFlow_Build && python -m tools.docs_pdf --write   (headless Chromium; keep only administration-guide.pdf and its manifest.json entry)
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 index 4786779..47bb4b0 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
@@ -66,10 +68,23 @@ index a314134..7748cae 100644
      "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
      "governance.organisation_provider": "Small on a server of your own: the organisation's identity "
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index da310d7..fd38732 100644
+index da310d7..38637ba 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
-@@ -2574,6 +2574,17 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
+ <!-- document-control:begin -->
+ ## Document control
+ 
+-**Version 1.82** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
++**Version 1.83** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+ 
+ | Version | Date | What changed |
+ | --- | --- | --- |
++| 1.83 | 2026-11-11 | Appendix A from L1.9 part 2 (ADR-140 Amendment 21): `cloud_platform.connector_sources`, the S3 buckets and Athena workgroups a cloud-platform deployment declares; a constrained list's items named by their type. |
+ | 1.82 | 2026-11-11 | Appendix A from P7b as merged (ADR-148 Amendment 5): `cloud_platform.shape` (standard or poc, poc a development namespace's only); `cloud_platform.connector_hosts` as host or host:port, a bare host meaning 443, so a SQL connection names its port here; and `deployment.highest_marking`'s cloud-platform default, OFFICIAL-SENSITIVE. |
+ | 1.81 | 2026-11-11 | §6a after its review. §6a.7: the token check, not the Conduit, is what is built, since neither the Conduit's settings nor the profile pass it a mapping yet; the mapping's shape said not to be an `osprey.yaml` block; what fails to load in full (a GUID in lower case, a list in a clearance or unit table, an empty table, scope or `groups_claim`); `sub` required too; a group overage refused only where a group table is used, and its remedy; `acct` optional; guests among the shapes untried against a real tenant. §6a.8: the first administrator named in the settings, refused at render when there is none; Entra's egress line struck (no record yet decides it). §6a.2: room above the totals for set-up jobs and rolling updates. §6a.3: `gateway.tf` makes the gateway's service account too. §6a.5 and §10.1: an engine's way out also needs the new values installed (`helm upgrade`). §6a.6: three synthetic deployments. |
+ | 1.80 | 2026-11-11 | §6a brought into line with P11 part 2 as merged (76980f2, ADR-135 Amendment 8): the model gateway rendered by default on the `cloud-platform` profile, not only while an engine is enabled, so development's requests come to about 4 CPU (3.95, from a render of the synthetic development deployment) and its memory limits to about 34 GiB; `gateway.tf`, the gateway's own IAM role for Bedrock in eu-west-2 alone, while a Bedrock engine is declared; the gateway's service account (`default`, or `ospreyflow-gateway` under that role); an engine's host allowed out only while it is declared at render; struck from *Coming*. |
+@@ -2574,6 +2575,17 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
  | `cloud_platform.tls_secret` | str or none | none | The platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them |
  | `cloud_platform.connector_hosts` | list of str | — | The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both |
