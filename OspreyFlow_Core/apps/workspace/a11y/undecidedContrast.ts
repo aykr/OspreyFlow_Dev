@@ -161,6 +161,8 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     const hides = (e: Element, x: number, y: number) => {
       const s = getComputedStyle(e);
       if (!opaque(e) || s.backgroundClip !== "border-box") return false;
+      // A painted ::before or ::after is hit as its element and may lie elsewhere in the paint order.
+      if (pseudoPaints(e, "::before") || pseudoPaints(e, "::after")) return false;
       for (let up: Element | null = e; up; up = up.parentElement) {
         const u = getComputedStyle(up);
         if (u.filter !== "none" || u.backdropFilter !== "none" || u.mixBlendMode !== "normal") return false;
@@ -329,10 +331,17 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
           }
           // Clipped only where the hit test misses the words' own box there and an ancestor that clips
           // its overflow has the point outside its padding box too; a miss for any other reason (a
-          // modal's inertness, a rotation, pointer events kept off) is a cover, never hidden.
+          // modal's inertness, a rotation, pointer events kept off) is a cover, never hidden. An ancestor
+          // counts only while nothing between it and the words is positioned out of its flow (absolute
+          // or fixed, whose containing block may lie beyond it) and only as a block box (an inline one's
+          // client box is empty); past either, every ancestor is left out, so the miss is a cover.
           if (holder && !stack.includes(holder)) {
-            const clipped = chainOf.slice(1).some((a) => {
+            let flowing = true;
+            const clipped = chainOf.slice(1).some((a, i) => {
+              const below = chainOf[i] as Element;
+              if (/absolute|fixed/.test(getComputedStyle(below).position)) flowing = false;
               const c = getComputedStyle(a);
+              if (!flowing || /^inline/.test(c.display) || c.display === "contents") return false;
               if (c.overflowX === "visible" && c.overflowY === "visible") return false;
               const b = a.getBoundingClientRect();
               const left = b.left + a.clientLeft;

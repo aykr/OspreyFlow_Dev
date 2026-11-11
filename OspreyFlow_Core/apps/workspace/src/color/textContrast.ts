@@ -279,14 +279,24 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
     // over everything there, or under the words' first j elements and over the rest (j from 0, straight
     // under the words, to the chain's length, straight on the page). Every combination is measured and
     // the worst counts.
-    const places = sample.chain.length + 3;
+    // Two places either side of an element that lays nothing at the point (a clear background, full
+    // opacity, no shape under it) give one figure, so only the first of each run is laid.
+    const bare = (i: number) => {
+      const l = sample.chain[i];
+      if (!l || parseFloat(l.opacity) !== 1 || (sample.under?.[p] ?? []).some((u) => u.at === i)) return false;
+      if (!(l.covers[p] ?? true)) return true;
+      const c = parseColour(l.backgroundColor);
+      return c !== null && c[3] === 0 && l.backgroundImage === "none";
+    };
+    const indices = [0, ...sample.chain.map((_, i) => i + 1).filter((j) => !bare(j - 1))];
+    const places = indices.length + 2;
     if (places ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
     for (let combination = 0; combination < places ** cast.length; combination += 1) {
       const place = cast.map((_, i) => Math.floor(combination / places ** i) % places);
       const laid = new Map<number, Rgba[]>();
       cast.forEach((shadow, i) => {
-        const at = (place[i] ?? 0) - 2;
-        if (at >= 0) laid.set(at, [...(laid.get(at) ?? []), shadow]);
+        const at = indices[(place[i] ?? 0) - 2];
+        if (at !== undefined) laid.set(at, [...(laid.get(at) ?? []), shadow]);
       });
       const measured = atPoint(sample, fg, page, p, laid, cast.filter((_, i) => place[i] === 1));
       if (typeof measured === "string") return measured;
@@ -314,15 +324,25 @@ function normalCdf(z: number): number {
 /**
  * The share of a shadow's colour painted at its point, 0 to 1. CSS Backgrounds 3 blurs the shadow's
  * shape by a Gaussian whose standard deviation is half the blur radius; over a rectangle that is the
- * product of one CDF difference per axis. The shape's rounded corners are taken square, which can only
- * overstate the paint near a corner.
+ * product of one CDF difference per axis, with `SHADOW_MARGIN` laid on for what Chromium paints past it.
+ * The shape's rounded corners are taken square, which can only overstate the paint near a corner.
  */
 export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }: ShadowAt): number {
   if (!(blur > 0)) return x >= left && x <= right && y >= top && y <= bottom ? 1 : 0;
   const sigma = blur / 2;
+  // Past three standard deviations from the shape the browser half sends nothing, and nothing is laid.
+  const far = 3 * sigma;
+  if (x < left - far || x > right + far || y < top - far || y > bottom + far) return 0;
   const across = (v: number, lo: number, hi: number) => normalCdf((hi - v) / sigma) - normalCdf((lo - v) / sigma);
-  return Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom));
+  return Math.min(1, Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom)) + SHADOW_MARGIN);
 }
+
+/**
+ * Laid on every blurred shadow's coverage within its reach: Chromium's own blur, read from its pixels on
+ * the test server (rules-b's T3b red record, the review round), comes to at most 0.0136 of the colour
+ * more than the Gaussian of half the blur anywhere from inside the shape to twice the blur past it.
+ */
+const SHADOW_MARGIN = 0.015;
 
 /** The text's worst ratio at point `p` on its own surfaces, with each shadow in `laid` at index j laid
  * under the chain's first j elements (straight on the page past the last), and `above` over everything

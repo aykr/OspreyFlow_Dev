@@ -328,11 +328,14 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
 
   it("paints the colour's full alpha inside a sharp shadow, half at a blurred edge, and nothing far past it", () => {
     expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [-10, -10, 10, 10], 0))).toBeCloseTo(1, 6);
-    // On one edge of a long blurred shadow: half of the Gaussian lies inside.
-    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [0, -1000, 1000, 1000], 24))).toBeCloseTo(0.5, 5);
+    // On one edge of a long blurred shadow: half of the Gaussian lies inside, and 0.015 is laid on for
+    // what Chromium's own blur paints past the Gaussian (measured from its pixels).
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [0, -1000, 1000, 1000], 24))).toBeCloseTo(0.515, 5);
     // σ is half the blur radius (CSS Backgrounds 3): a blur of 24 is σ 12, so 12px out is Φ(−1).
-    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [12, -1000, 1000, 1000], 24))).toBeCloseTo(0.158655, 4);
-    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [60, -1000, 1000, 1000], 24))).toBeLessThan(1e-6);
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [12, -1000, 1000, 1000], 24))).toBeCloseTo(0.158655 + 0.015, 4);
+    // Past three standard deviations (36px), nothing.
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [37, -1000, 1000, 1000], 24))).toBe(0);
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [35, -1000, 1000, 1000], 24))).toBeGreaterThan(0.015);
     expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [1, -10, 10, 10], 0))).toBe(0);
   });
 
@@ -345,10 +348,10 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
   });
 
   it("takes the worst of the shadow under the words, over them and away", () => {
-    // Light words on black at an edge of a blurred white shadow (alpha 0.5 there): under, the page lightens
+    // Light words on black at an edge of a blurred white shadow (alpha 0.515 there, with the measured margin): under, the page lightens
     // and the words lose; over, both lighten; the worst counts.
     const ink: Rgba = [200, 200, 200, 1];
-    const shadow: Rgba = [255, 255, 255, 0.5];
+    const shadow: Rgba = [255, 255, 255, 0.515];
     const black: Rgba = [0, 0, 0, 1];
     const under = ratioOf(over(ink, over(shadow, black)), over(shadow, black));
     const above = ratioOf(over(shadow, ink), over(shadow, black));
@@ -363,7 +366,7 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
     expect(j.ratio as number).toBeCloseTo(Math.min(under, above, none), 4);
     // A black shadow on that black page: laid under the words it changes nothing, so only the shadow
     // laid over them, darkening the words alone, finds their worst.
-    const dark: Rgba = [0, 0, 0, 0.5];
+    const dark: Rgba = [0, 0, 0, 0.515];
     const darkened = judge(
       sample({
         color: "rgb(200, 200, 200)",
@@ -394,6 +397,16 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
     );
     expect(between).toBeLessThan(above - 0.05);
     expect(j.ratio as number).toBeCloseTo(between, 4);
+  });
+
+  it("lays shadows only where a layer paints, so a deep tree of clear wrappers stays measurable", () => {
+    // 25 clear wrappers over a white page under three faint shadows: one place per painting layer, not
+    // 28 to the third (the lane-reviewer's second pass).
+    const wrappers = Array.from({ length: 25 }, () => layer());
+    const faint = at("rgba(0, 0, 0, 0.05)", [-10, -10, 10, 10], 0);
+    const j = judge(sample({ chain: [...wrappers, layer({ backgroundColor: WHITE })], shadows: [[faint, faint, faint]] }));
+    expect(j.ratio).not.toBeNull();
+    expect(j.why).toBe("");
   });
 
   it("fails a shadow colour it cannot read, and more shadows at a point than it will combine", () => {
