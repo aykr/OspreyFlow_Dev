@@ -1,3 +1,7 @@
+# Taken before items 1 and 3's code, on 489cc4b with the new tests, the schema and the new fixture in the worktree.
+# command: pytest -q -rf tests/harness/test_cloud_sources_render.py (closed offline ports)
+# All eleven fail from one cause, nothing rendered yet (no row, no setting, no statements function): this records only that the
+# tests could fail. Each check's own reason is shown by the plants, red-p*.txt, at the commit holding the code.
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks

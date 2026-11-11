@@ -1,3 +1,6 @@
+# Taken before item 4's code, on f298deb (the plan not yet committed) with the new tests in the worktree (the fix then committed as 489cc4b).
+# command: pytest -q -rf tests/connectors/test_cloud_clients.py tests/connectors/test_s3_connector.py (closed offline ports)
+# Each fails for its own reason: pyarrow's 301 and 400 worded generically; an empty listing in another region read as an empty folder.
 FAILED ../OspreyFlow_Build/tests/connectors/test_cloud_clients.py::test_pyarrow_s_answer_for_another_region_is_worded_and_never_followed[moved]
 FAILED ../OspreyFlow_Build/tests/connectors/test_cloud_clients.py::test_an_empty_listing_in_another_region_is_told_so_not_read_as_an_empty_folder[moved]
 FAILED ../OspreyFlow_Build/tests/connectors/test_cloud_clients.py::test_an_empty_listing_in_another_region_is_told_so_not_read_as_an_empty_folder[wrong_region]

@@ -135,6 +135,10 @@ class RecordedAthena:
     #: Tables whose objects the role may not read (their location not in its policy): each read
     #: fails as an execution, as Athena reads a table's objects as the caller.
     unreadable_data: set[str] = field(default_factory=set)
+    #: The role's own `s3:GetObject` resources (`arn:aws:s3:::bucket/folder/*`), as the render makes
+    #: them from the declaration: when given, a table is kept at `s3://synthetic-lake/<db>/<table>/`
+    #: and fails as an execution unless one of them covers it, as Athena reads it as the role.
+    granted_objects: list[str] | None = None
     #: Every QueryString sent to StartQueryExecution, in order.
     sent: list[str] = field(default_factory=list)
     #: Every operation asked, in order.
@@ -254,7 +258,11 @@ class RecordedAthena:
                 execution.outcome = "table_not_found"
                 execution.fill = {"table": f"{in_catalog}.{db}.{table}"}
                 return
-            if table in self.unreadable_data:
+            location = f"arn:aws:s3:::synthetic-lake/{db}/{table}/"
+            ungranted = self.granted_objects is not None and not any(
+                location.startswith(g.removesuffix("*")) for g in self.granted_objects
+            )
+            if table in self.unreadable_data or ungranted:
                 execution.outcome, execution.fill = "table_data_denied", {"table": table}
                 return
             if execution.table is None:

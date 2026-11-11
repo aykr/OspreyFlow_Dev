@@ -463,6 +463,20 @@ NOT_DECLARED = (
 )
 
 
+UNREADABLE_DECLARATION = (
+    "This deployment's declared S3 and Athena sources (OSPREY_CONNECTOR_SOURCES) cannot be read: "
+    "re-render from osprey.yaml's cloud_platform.connector_sources and run helm upgrade; nothing "
+    "was read"
+)
+#: A SQL or API connection to a declared S3 or Athena host, which would pass the allow-list and the
+#: egress row while skipping the declaration's bucket and folder rule (the lane review).
+SOURCE_HOST_BY_ANOTHER_KIND = (
+    "{host} is a declared S3 or Athena source's host: it is read through an S3 or Athena "
+    "connection, held to its declared bucket, folder and databases, never through a {kind} "
+    "connection; nothing was read"
+)
+
+
 def declared_sources(environ: Mapping[str, str] | None = None) -> ConnectorSources | None:
     """What the cloud-platform render declared (`OSPREY_CONNECTOR_SOURCES`), none declared when it
     is not set; `None` on every other profile, which renders no namespace egress (part 1's
@@ -471,7 +485,14 @@ def declared_sources(environ: Mapping[str, str] | None = None) -> ConnectorSourc
     if environ.get("OSPREY_PROFILE", "") != "cloud-platform":
         return None
     text = environ.get("OSPREY_CONNECTOR_SOURCES", "").strip()
-    return ConnectorSources.model_validate_json(text) if text else ConnectorSources()
+    if not text:
+        return ConnectorSources()
+    try:
+        return ConnectorSources.model_validate_json(text)
+    except ValueError as unreadable:  # pydantic's ValidationError is one
+        # Fails closed, in words, never a 500 (the lane review): the render writes it, so an
+        # unreadable one is a hand edit; nothing is read until it is rendered again.
+        raise ConnectorRefused(UNREADABLE_DECLARATION) from unreadable
 
 
 def _s3_declared(settings: S3ConnectionSettings, made: ConnectorSources) -> bool:
@@ -500,6 +521,13 @@ def refuse_undeclared(settings: object, environ: Mapping[str, str] | None = None
     save, at *Test connection* and before every read (ADR-140 Amendment 21). Fails closed: nothing
     declared refuses every one."""
     if not isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
+        found = connection_host(settings)
+        if found is None:
+            return
+        made = declared_sources(environ)
+        bare = found[1].strip().strip("[]").rstrip(".").lower()
+        if made is not None and bare in made.hosts():
+            raise ConnectorRefused(SOURCE_HOST_BY_ANOTHER_KIND.format(host=bare, kind=found[0]))
         return
     made = declared_sources(environ)
     if made is None:
@@ -597,6 +625,9 @@ async def read_rows(
 ) -> ReadRows:
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
+    # Before anything is asked of anyone: an S3 or Athena source the render declared, and no other
+    # kind to a declared source's host (ADR-140 Amendment 21).
+    refuse_undeclared(settings)
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
         # Off the event loop: getaddrinfo blocks (the independent review of L1.6, in L1.8).
         addresses = await asyncio.to_thread(readers.sql_addresses, settings.host)
@@ -624,8 +655,6 @@ async def read_rows(
         )  # fmt: skip
     if connection.kind == "json" and isinstance(read, JsonRead):
         return read_json(_json_files(dataset_id, read.pattern, root), read)
-    if isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
-        refuse_undeclared(settings)  # before anything is asked of S3 or Athena
     if isinstance(settings, S3ConnectionSettings) and isinstance(read, S3Read):
         # The host on the egress allow-list first (ADR-148 decision 7), then the read, each off the
         # event loop: both block.

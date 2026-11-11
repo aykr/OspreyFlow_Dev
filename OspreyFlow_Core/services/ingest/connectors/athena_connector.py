@@ -470,7 +470,9 @@ def without_identities(words: str) -> str:
 #: The parser's own reason for a statement that does not parse: its line and column first.
 _PARSER = re.compile(r"^line [0-9]+:[0-9]+: ")
 #: Athena's reason for a table's objects the role may not read (AWS's troubleshooting guide).
-_DATA_DENIED = re.compile(r"^(Permission denied on S3 path|Access Denied \(Service: Amazon S3)")
+#: Only this shape: an S3 denial on the results location ("Access denied when writing output …")
+#: is the results', never the tables' (the lane review).
+_DATA_DENIED = re.compile(r"^Permission denied on S3 path: ")
 TABLE_DATA_DENIED = (
     "Athena could not read the table's data (access denied): the deployment's cloud role may read "
     "only the table locations osprey.yaml declares (cloud_platform.connector_sources.athena's "

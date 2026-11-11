@@ -496,3 +496,14 @@ def test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words() ->
     words = str(refused.value)
     assert words == athena_connector.TABLE_DATA_DENIED
     assert "synthetic-lake" not in words and "s3://" not in words
+
+
+def test_a_results_location_refusal_is_never_blamed_on_the_table_locations() -> None:
+    """Athena's denial on writing its results is the results location's: it keeps Athena's own
+    words, never `TABLE_DATA_DENIED`'s, which name `table_locations` (the lane review)."""
+    athena = _athena()
+    with pytest.raises(ConnectorRefused) as refused:
+        _read(athena, AthenaRead(table="visits.visit_bookings"),
+              settings=_settings(results_location="s3://forbidden-results/out/"))  # fmt: skip
+    assert str(refused.value).startswith("Athena could not run the query: Access denied when")
+    assert "table_locations" not in str(refused.value)

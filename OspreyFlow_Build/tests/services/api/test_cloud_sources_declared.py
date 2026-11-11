@@ -151,3 +151,44 @@ def test_another_profile_is_not_held_to_a_declaration(
     monkeypatch.setenv("OSPREY_PROFILE", "small")
     monkeypatch.delenv("OSPREY_CONNECTOR_SOURCES", raising=False)
     assert _save(world, kind).status_code == 201
+
+
+@KINDS
+def test_an_unreadable_declaration_refuses_in_words_never_a_500(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """A hand-edited `OSPREY_CONNECTOR_SOURCES` the schema refuses: every path refused in words, fail
+    closed, nothing read (the lane review: a pydantic error escaped as a 500 with no words)."""
+    _render_made(monkeypatch, DECLARED)
+    connection_id = _save(world, kind).json()["id"]
+    source = _register(world, "ds-a", connection_id, "author_a", kind).json()
+    asked = _reads(world)
+    monkeypatch.setenv("OSPREY_CONNECTOR_SOURCES", '{"s3": [{"bucket": "*"}]}')
+    saved = _save(world, kind)
+    assert saved.status_code == 422
+    assert "cannot be read" in saved.json()["detail"]["detail"]
+    tested = world.client.post(f"/v1/admin/connections/{connection_id}/test", headers=_as("admin"))
+    assert tested.status_code == 200 and tested.json()["ok"] is False
+    assert "cannot be read" in tested.json()["words"]
+    again = world.client.post(f"/v1/datasets/ds-a/sources/{source['id']}/read",
+                              headers=_as("author_a"))  # fmt: skip
+    assert again.status_code == 422
+    assert again.json()["detail"]["detail"] == READ_REFUSED_FOR_AUTHORS
+    assert _reads(world) == asked
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    ["https://synthetic-exports.s3.eu-west-2.amazonaws.com/", "https://athena.eu-west-2.amazonaws.com/",
+     "https://SYNTHETIC-EXPORTS.s3.eu-west-2.amazonaws.com./"],
+)  # fmt: skip
+def test_an_api_connection_to_a_declared_source_s_host_is_refused(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, base_url: str
+) -> None:
+    """The declared hosts are on the Conduit's allow-list and its egress row, so an API connection
+    to one would pass both while skipping the declaration's bucket and folder rule (the lane
+    review): it is refused, naming the kind to use."""
+    _render_made(monkeypatch, DECLARED)
+    made = _save(world, "api", {"kind": "api", "base_url": base_url})
+    assert made.status_code == 422, made.text
+    assert "is a declared S3 or Athena source's host" in made.json()["detail"]["detail"]

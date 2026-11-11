@@ -1,3 +1,6 @@
+# Taken before item 4's Athena code, on f298deb (the plan not yet committed) with item 4's S3 fix and the new tests in the worktree (committed as 489cc4b).
+# command: pytest -q -rf tests/connectors/test_athena_connector.py (closed offline ports)
+# refused_at_start: worded 'Athena refused the request: …'; the table's data: Athena's own words, not typed.
     @pytest.mark.parametrize("at_start", [False, True], ids=["failed_execution", "refused_at_start"])
 FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_query_that_does_not_parse_is_refused_in_the_same_words_either_way[refused_at_start]
 FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words

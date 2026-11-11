@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-index 4786779..50d5eb2 100644
+index 4786779..47bb4b0 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 +++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 @@ -2301,6 +2301,17 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
@@ -14,17 +14,44 @@ index 4786779..50d5eb2 100644
 +| `cloud_platform.connector_sources.athena` | list of section | — | One workgroup, its region, its databases, its results location (the role's only write) and its tables' locations. |
 +| `cloud_platform.connector_sources.athena.workgroup` | str | required | The workgroup's name |
 +| `cloud_platform.connector_sources.athena.region` | str | required | The workgroup's region (eu-west-2) |
-+| `cloud_platform.connector_sources.athena.databases` | list of Annotated[str, FieldInfo(annotation=NoneType, required=True, metadata=[_PydanticGeneralMetadata(pattern='^[a-z0-9_]{1,128}$')])] | required | The Glue databases a connection may read |
++| `cloud_platform.connector_sources.athena.databases` | list of str | required | The Glue databases a connection may read |
 +| `cloud_platform.connector_sources.athena.results_location` | str | required | Where Athena writes each query's results (s3://bucket/folder/): the only place the role may write. A folder, never a bucket's top |
-+| `cloud_platform.connector_sources.athena.table_locations` | list of Annotated[str, FieldInfo(annotation=NoneType, required=True, metadata=[MaxLen(max_length=1024), _PydanticGeneralMetadata(pattern='^s3://[a-z0-9][a-z0-9-]{1,61}[a-z0-9]/([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}/){0,20}$')])] | — | Where the databases' tables keep their objects (s3://bucket/folder/), read by Athena as the namespace's role: read-only, and never reached by the Conduit |
++| `cloud_platform.connector_sources.athena.table_locations` | list of str | — | Where the databases' tables keep their objects (s3://bucket/folder/), read by Athena as the namespace's role: read-only, and never reached by the Conduit |
  | `network` | section | — | The address the deployment answers at, and what it publishes. |
  | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
  | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |
+diff --git a/OspreyFlow_Build/tests/test_admin_guide.py b/OspreyFlow_Build/tests/test_admin_guide.py
+index b50b75f..53c8a0a 100644
+--- a/OspreyFlow_Build/tests/test_admin_guide.py
++++ b/OspreyFlow_Build/tests/test_admin_guide.py
+@@ -72,3 +72,13 @@ def test_every_answers_file_setting_is_in_the_guide(name: str, key: str) -> None
+ def test_every_server_setting_is_in_the_guide(name: str, key: str) -> None:
+     """ADR-114 Amendment 33's `server:` is checked by its own list, not `_SECTIONS`."""
+     assert f"`server.{key}`" in GUIDES[name], f"server.{key} is not in {name}"
++
++
++def test_a_constrained_list_item_is_named_by_its_type_never_by_pydantic_s_internals() -> None:
++    """`list[Annotated[str, Field(pattern=…)]]` reads "list of str" (L1.9 part 2's lane review: the
++    guide printed `Annotated[str, FieldInfo(…)]` for `connector_sources.athena.databases`)."""
++    from tools.admin_guide_options import reference
++
++    printed = reference()
++    assert "FieldInfo" not in printed and "Annotated[" not in printed
++    assert "| `cloud_platform.connector_sources.athena.databases` | list of str |" in printed
 diff --git a/OspreyFlow_Build/tools/admin_guide_options.py b/OspreyFlow_Build/tools/admin_guide_options.py
-index a314134..7d4d2bc 100644
+index a314134..7748cae 100644
 --- a/OspreyFlow_Build/tools/admin_guide_options.py
 +++ b/OspreyFlow_Build/tools/admin_guide_options.py
-@@ -95,6 +95,13 @@ SECTIONS = {
+@@ -52,6 +52,8 @@ def _type_name(annotation: Any) -> str:
+         return annotation.__name__
+     origin = typing.get_origin(annotation)
+     arguments = typing.get_args(annotation)
++    if origin is typing.Annotated:
++        return _type_name(arguments[0])  # its constraints are the schema's, not the reader's
+     if origin is typing.Literal:
+         return " \\| ".join(f"`{value}`" for value in arguments)
+     if origin in (typing.Union, types.UnionType):
+@@ -95,6 +97,13 @@ SECTIONS = {
      "cluster.hosts": "One machine.",
      "cloud_platform": "A namespace on a shared Kubernetes platform (profile cloud-platform only): "
      "the platform's settings file, the namespace, its registry, and what its egress may reach.",
@@ -39,7 +66,7 @@ index a314134..7d4d2bc 100644
      "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
      "governance.organisation_provider": "Small on a server of your own: the organisation's identity "
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index da310d7..18b1d2a 100644
+index da310d7..fd38732 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
 @@ -2574,6 +2574,17 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
@@ -54,9 +81,9 @@ index da310d7..18b1d2a 100644
 +| `cloud_platform.connector_sources.athena` | list of section | — | One workgroup, its region, its databases, its results location (the role's only write) and its tables' locations. |
 +| `cloud_platform.connector_sources.athena.workgroup` | str | required | The workgroup's name |
 +| `cloud_platform.connector_sources.athena.region` | str | required | The workgroup's region (eu-west-2) |
-+| `cloud_platform.connector_sources.athena.databases` | list of Annotated[str, FieldInfo(annotation=NoneType, required=True, metadata=[_PydanticGeneralMetadata(pattern='^[a-z0-9_]{1,128}$')])] | required | The Glue databases a connection may read |
++| `cloud_platform.connector_sources.athena.databases` | list of str | required | The Glue databases a connection may read |
 +| `cloud_platform.connector_sources.athena.results_location` | str | required | Where Athena writes each query's results (s3://bucket/folder/): the only place the role may write. A folder, never a bucket's top |
-+| `cloud_platform.connector_sources.athena.table_locations` | list of Annotated[str, FieldInfo(annotation=NoneType, required=True, metadata=[MaxLen(max_length=1024), _PydanticGeneralMetadata(pattern='^s3://[a-z0-9][a-z0-9-]{1,61}[a-z0-9]/([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}/){0,20}$')])] | — | Where the databases' tables keep their objects (s3://bucket/folder/), read by Athena as the namespace's role: read-only, and never reached by the Conduit |
++| `cloud_platform.connector_sources.athena.table_locations` | list of str | — | Where the databases' tables keep their objects (s3://bucket/folder/), read by Athena as the namespace's role: read-only, and never reached by the Conduit |
  | `network` | section | — | The address the deployment answers at, and what it publishes. |
  | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
  | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |

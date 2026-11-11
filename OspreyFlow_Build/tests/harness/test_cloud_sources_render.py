@@ -114,8 +114,8 @@ def _statements() -> list[dict[str, Any]]:
 READS = {"s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject", "athena:StartQueryExecution",
          "athena:GetQueryExecution", "athena:GetQueryResults", "athena:StopQueryExecution",
          "athena:GetNamedQuery", "athena:GetWorkGroup", "glue:GetDatabase", "glue:GetTable",
-         "glue:GetTables", "glue:GetPartition", "glue:GetPartitions",
-         "s3:ListMultipartUploadParts"}  # fmt: skip
+         "glue:GetTables", "glue:GetPartition", "glue:GetPartitions", "glue:BatchGetPartition",
+         "s3:ListMultipartUploadParts", "s3:ListBucketMultipartUploads"}  # fmt: skip
 WRITES = {"s3:PutObject", "s3:AbortMultipartUpload"}
 
 
@@ -143,32 +143,93 @@ def test_the_role_s_statements_are_read_only_and_scoped() -> None:
     tf = _artefacts(_raw())["terraform/connector_sources.tf"]
     assert '"*"' not in tf
     assert "aws_iam_role.service.name" in tf  # the account the Conduit already has (P7b's IRSA)
+    # Named for this file: a `current` may already be in the namespace folder (the lane review).
+    assert 'data "aws_caller_identity" "osprey_connector_sources"' in tf
+
+
+def test_a_listing_condition_never_holds_an_action_that_carries_no_prefix() -> None:
+    """`s3:prefix` is set only on a listing: a statement giving ListBucket under it gives nothing
+    else, and the bucket's location and uploads (which Athena asks of its results' and tables'
+    buckets, and which carry no prefix) are given in a statement with no condition (the lane
+    review: under the condition, IAM would never have granted them)."""
+    statements = _statements()
+    for statement in statements:
+        if "condition" in statement:
+            assert statement["actions"] == ["s3:ListBucket"], statement
+    for bucket in ("synthetic-athena-results", "synthetic-lake"):
+        located = [s for s in statements if "s3:GetBucketLocation" in s["actions"]
+                   and s["resources"] == [f"arn:aws:s3:::{bucket}"]]  # fmt: skip
+        assert located and all("condition" not in s for s in located), bucket
+    results = next(s for s in statements if s["sid"] == "AthenaResultsBucket0")
+    assert results["actions"] == ["s3:GetBucketLocation", "s3:ListBucketMultipartUploads"]
+    for sid, folder in (("AthenaResultsList0", "out/"), ("AthenaTablesList0x0", "visits/")):
+        listing = next(s for s in statements if s["sid"] == sid)
+        assert listing["condition"]["values"] == [folder, f"{folder}*"], sid
 
 
 @pytest.mark.parametrize(
-    "planted",
+    ("planted", "why"),
     [
-        {"sid": "Planted", "actions": ["s3:GetObject"], "resources": ["*"]},
-        {"sid": "Planted", "actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::*"]},
-        {"sid": "Planted", "actions": ["s3:PutObject"],
-         "resources": ["arn:aws:s3:::synthetic-exports/client-a/*"]},
-        {"sid": "Planted", "actions": ["s3:DeleteObject"],
-         "resources": ["arn:aws:s3:::synthetic-athena-results/out/*"]},
+        ({"actions": ["s3:GetObject"], "resources": ["*"]}, "names a wildcard resource"),
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::*"]},
+         "names a wildcard resource"),
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::synthetic-export?/client-a/*"]},
+         "names a wildcard resource"),
+        ({"actions": ["s3:PutObject"], "resources": ["arn:aws:s3:::synthetic-exports/client-a/*"]},
+         "writes outside a declared results_location"),
+        ({"actions": ["s3:DeleteObject"],
+          "resources": ["arn:aws:s3:::synthetic-athena-results/out/*"]}, "gives s3:DeleteObject"),
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::synthetic-other/*"]},
+         "names the bucket synthetic-other, which is not declared"),
+        ({"actions": ["s3:GetObject"], "resources": ["arn:aws:s3:::synthetic-exports/client-b/*"]},
+         "reads synthetic-exports outside its declared folders"),
+        ({"actions": ["s3:ListBucket"], "resources": ["arn:aws:s3:::synthetic-exports"]},
+         "lists synthetic-exports beyond its declared folders"),
+        ({"actions": ["glue:GetTable"],
+          "resources": [f"arn:aws:glue:eu-west-2:{terraform._ACCOUNT}:table/payroll/*"]},
+         "names the database payroll, which is not declared"),
     ],
 )  # fmt: skip
 def test_a_wide_statement_is_refused_by_the_render(
-    planted: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    planted: dict[str, Any], why: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Planted where the render takes the statements (`connector_source_statements`), in the shape
-    it returns them: a `*` resource, every bucket, a write on a source, a delete on the results."""
+    it returns them; each refused by its own branch, named in the words (the lane review: a match on
+    the setting's name alone could not tell which branch refused)."""
     made = terraform.connector_source_statements
 
     def wider(config: OspreyConfig) -> list[dict[str, Any]]:
-        return [*made(config), planted]
+        return [*made(config), {"sid": "Planted", **planted}]
 
     monkeypatch.setattr(terraform, "connector_source_statements", wider)
-    with pytest.raises(CloudPlatformNotRenderable, match="connector_sources"):
+    with pytest.raises(CloudPlatformNotRenderable, match=re.escape(f"statement Planted {why}")):
         _artefacts(_raw())
+
+
+def test_a_table_location_not_declared_is_athena_s_refusal_in_typed_words() -> None:
+    """The orchestrator's Q3: a table whose objects lie outside every declared `table_locations` is
+    not in the role's policy, so Athena (reading them as the role) fails the execution. The recorded
+    Athena is given the role's own GetObject resources, rendered from the declaration, and refuses a
+    table whose location none covers; the reader words it, naming `table_locations`."""
+    from services.ingest.connectors import athena_connector
+
+    from ..connectors.athena_fixture import RecordedAthena
+    from ..connectors.test_athena_connector import BOOKINGS, COLUMNS, _read
+
+    granted = [r for st in _statements() if st["actions"] == ["s3:GetObject"]
+               for r in st["resources"]]  # fmt: skip
+    athena = RecordedAthena(
+        tables={"visits": {"visit_bookings": (COLUMNS, BOOKINGS)},
+                "payroll": {"salaries": (COLUMNS, BOOKINGS)}},
+        granted_objects=granted,
+    )  # fmt: skip
+    from schemas.sources import AthenaConnectionSettings, AthenaRead
+
+    settings = AthenaConnectionSettings(region="eu-west-2", databases=["visits", "payroll"])
+    assert _read(athena, AthenaRead(table="visits.visit_bookings"), settings=settings).rows
+    with pytest.raises(athena_connector.ConnectorRefused) as refused:
+        _read(athena, AthenaRead(table="payroll.salaries"), settings=settings)
+    assert str(refused.value) == athena_connector.TABLE_DATA_DENIED
 
 
 def test_nothing_is_rendered_with_no_source_declared() -> None:
