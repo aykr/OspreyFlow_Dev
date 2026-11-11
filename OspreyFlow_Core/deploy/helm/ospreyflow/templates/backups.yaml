@@ -1,0 +1,137 @@
+{{- /*
+ADR-148 decision 13, as built in Amendment 7 (P9): the scheduled, encrypted backup of ArcadeDB and
+ClickHouse to the deployment's backups bucket, by the backup role (IRSA: its own service account,
+no stored key), and the restore Job, rendered only when a set is named.
+
+Rendered from `backups` in the values (`profile: cloud-platform` alone writes it; empty, a
+cluster's render is unchanged):
+
+  schedule, image, serviceAccountName, resources, deadlineSeconds, env (each item as a workload's),
+  arcadedb: {pod, backupsClaim, databasesClaim, database, image, resources}
+  restore: {set}   # given only to run a restore, e.g.
+                   # helm template … --set backups.restore.set=<id> --show-only templates/backups.yaml
+
+The CronJob's pod mounts ArcadeDB's backups claim (ReadWriteOnce), so it runs on the node of the
+pod that holds it (a required affinity to that one pod), and asks that pod, by name, for its
+backup. One run at a time (`Forbid`): two would ask ArcadeDB for two backups into one claim.
+*/ -}}
+{{- with .Values.backups }}
+{{- $root := $ }}
+{{- $b := . }}
+{{- $ctx := dict "name" "backup" "root" $root }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ospreyflow-backup
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  concurrencyPolicy: Forbid
+  # A run missed by more than an hour (the cluster down, say) is skipped, not run late beside the next.
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" $ctx | nindent 8 }}
+    spec:
+      # A refused backup is reported, not retried until the platform's quota runs out.
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
+      template:
+        metadata:
+          labels:
+            {{- include "ospreyflow.labels" $ctx | nindent 12 }}
+            ospreyflow.io/egress: "true"
+        spec:
+          restartPolicy: Never
+          {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 10 }}
+          containers:
+            {{- include "ospreyflow.container" (dict "w" (dict "name" "backup" "image" $b.image
+                  "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "backup")
+                  "env" $b.env "envFrom" true "resources" $b.resources
+                  "claims" (list (dict "name" "arcadedb-backups" "mountPath" "/arcadedb-backups")))
+                "root" $root) | nindent 12 }}
+          volumes:
+            - name: arcadedb-backups
+              persistentVolumeClaim:
+                claimName: {{ $b.arcadedb.backupsClaim }}
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      statefulset.kubernetes.io/pod-name: {{ $b.arcadedb.pod }}
+                  topologyKey: kubernetes.io/hostname
+{{- with $b.restore }}
+{{- if .set }}
+---
+# The restore of set {{ .set }} (Amendment 7): applied by hand with ArcadeDB stopped (its StatefulSet
+# at no copies), never by `helm upgrade`, which would start it again under the restore. The zip
+# is fetched and checked against its manifest; ArcadeDB's own restore writes it into the
+# database's claim; ClickHouse restores from the set while it runs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "ospreyflow-restore-%s" (.set | lower) | trunc 63 }}
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "restore" "root" $root) | nindent 4 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" (dict "name" "restore" "root" $root) | nindent 8 }}
+        ospreyflow.io/egress: "true"
+    spec:
+      restartPolicy: Never
+      {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 6 }}
+      initContainers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "fetch-graph" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "fetch-graph" "--set" .set "--to" "/restore")
+              "env" $b.env "envFrom" true "resources" $b.resources
+              "scratch" (list (dict "mountPath" "/restore")))
+            "root" $root) | nindent 8 }}
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-graph" "image" $b.arcadedb.image
+              "command" (list "sh" "-c" (printf "rm -rf /home/arcadedb/databases/%s && cd /home/arcadedb && ./bin/restore.sh -f file:///restore/%s.zip -d /home/arcadedb/databases/%s" $b.arcadedb.database $b.arcadedb.database $b.arcadedb.database))
+              "resources" $b.arcadedb.resources
+              "scratch" (list (dict "mountPath" "/restore"))
+              "claims" (list (dict "name" "arcadedb-databases" "mountPath" "/home/arcadedb/databases")))
+            "root" $root) | nindent 8 }}
+      containers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-analytics" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-analytics" "--set" .set)
+              "env" $b.env "envFrom" true "resources" $b.resources)
+            "root" $root) | nindent 8 }}
+      volumes:
+        - name: scratch-0
+          emptyDir: {}
+        - name: arcadedb-databases
+          persistentVolumeClaim:
+            claimName: {{ $b.arcadedb.databasesClaim }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/* The backup's and the restore's pod: who it runs as, and its service account. */}}
+{{- define "ospreyflow.backupPod" -}}
+serviceAccountName: {{ .b.serviceAccountName }}
+{{- with .root.Values.imagePullSecrets }}
+imagePullSecrets: {{ toJson . }}
+{{- end }}
+{{- with .root.Values.podSecurity }}
+# ADR-148 decision 3: one numeric non-root user, and the claims given to its group.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: {{ .user }}
+  runAsGroup: {{ .group }}
+  fsGroup: {{ .group }}
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+{{- end }}
+{{- end -}}
