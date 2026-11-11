@@ -25,3 +25,13 @@ what the owner must correct on the page shared with the client, which shows Laur
 - A version row for each change, and the PDF remade.
 
 Send "built" for each filled part. It merges in parts, without the owner, under Amendment 8 decision 7.
+
+**Queued for the next part (orchestrator, 11 November 2026).** Write these only once their own step has merged:
+- **P10 part 2 (admin), for §6a.8's Coming list:** "Reports (report sync and Superset dashboards) on the Cloud
+  Platform: they signed in through Keycloak, so they are not rendered there until a later step gives them Entra ID's
+  sign-in. Setting reporting.sync or reporting.superset on this profile is refused at render with words saying so."
+- **P7b, carried to docs:** spec 10 §6a.5 and the admin guide's secrets table (about lines 1144–1145 and 1200)
+  still describe one allow-egress and Superset, the Glass and the recogniser reading `ospreyflow-secrets` whole.
+  P7b replaced both with per-workload rows and named keys.
+- **P12 part 2, carried to docs:** §10.1 says nothing of Admin › Models' read-only extraction-engine row, or of how
+  to change the engine (osprey.yaml, re-render, the platform team applies).
