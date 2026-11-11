@@ -796,8 +796,15 @@ def _files_up_to_date_staged(directory: Path, repo_root: Path) -> dict[str, bool
         # What must restart, kept before anything moves (with what an earlier run left undone).
         earlier = _pending(directory)
         changed = {k: bool(v) or earlier.get(k, False) for k, v in changed.items()}
-        (directory / "state").mkdir(exist_ok=True)
-        _keep_pending(directory, changed)
+        try:
+            (directory / "state").mkdir(exist_ok=True)
+            _keep_pending(directory, changed)
+        except PermissionError:
+            state = directory / "state"
+            raise RefreshFailed(
+                f"This account cannot write {state} (a run under sudo can leave it root's), so "
+                "nothing was changed. Give the folder back to this account, then run this again."
+            ) from None
         files = sorted(
             (p for p in stage.iterdir() if p.is_file()), key=lambda p: p.name == "deployment.env"
         )

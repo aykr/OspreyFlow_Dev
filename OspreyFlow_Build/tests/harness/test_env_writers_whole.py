@@ -294,3 +294,13 @@ def test_put_back_keeps_a_symlinked_deployment_env_a_link(tmp_path: Path, link_i
     update._put_back(directory, point)
     assert env.is_symlink() is link_it
     assert env.read_text(encoding="utf-8") == OLD
+
+
+def test_the_rollback_point_is_private_before_the_secrets_are_copied_in(tmp_path: Path) -> None:
+    """`_keep_rollback_point` copies deployment.env in with `copy2`, which keeps its 600 only once
+    the copy is done: the folder itself is 700 from the start, so no other account ever reads the
+    copy part made (the orchestrator's review of ad4bef7, minor)."""
+    env = _deployment(tmp_path)
+    point = update._keep_rollback_point(env.parent, "v0.5.0", "abc123")
+    assert point.stat().st_mode & 0o777 == 0o700
+    assert (point / "deployment.env").stat().st_mode & 0o777 == 0o600

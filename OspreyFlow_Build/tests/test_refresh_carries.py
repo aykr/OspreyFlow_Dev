@@ -371,3 +371,22 @@ def test_a_lock_this_account_cannot_make_is_said_in_words(deployment: Path) -> N
         deployment.parent.chmod(0o755)
     words = str(refused.value)
     assert str(lock) in words and "nothing was changed" in words
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes any folder")
+def test_a_state_folder_this_account_cannot_write_is_said_in_words(deployment: Path) -> None:
+    """`state/` left another account's by a run under sudo: the pending record cannot be kept,
+    which is said in words naming the folder before anything moves, never a PermissionError
+    traceback (the orchestrator's review of ad4bef7, minor)."""
+    _after_the_gateway_database(deployment)
+    state = deployment / "state"
+    state.mkdir(exist_ok=True)
+    before = {p.name: p.read_bytes() for p in deployment.iterdir() if p.is_file()}
+    state.chmod(0o555)
+    try:
+        with pytest.raises(refresh.RefreshFailed) as refused:
+            refresh.files_up_to_date(_checkout(deployment))
+    finally:
+        state.chmod(0o755)
+    assert str(state) in str(refused.value) and "nothing was changed" in str(refused.value)
+    assert {p.name: p.read_bytes() for p in deployment.iterdir() if p.is_file()} == before

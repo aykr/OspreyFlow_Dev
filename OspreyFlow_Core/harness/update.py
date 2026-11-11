@@ -388,7 +388,10 @@ _KEPT_DIRECTORIES = ("keycloak-theme",)
 
 def _keep_rollback_point(directory: Path, version: str, commit: str) -> Path:
     point = directory / "rollback" / f"{version}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
-    point.mkdir(parents=True)
+    # Private before anything is copied in: `copy2` gives deployment.env's copy its 600 only once it
+    # is done (the orchestrator's review of ad4bef7).
+    point.mkdir(parents=True, mode=0o700)
+    point.chmod(0o700)  # whatever the umask took off
     for item in directory.iterdir():
         if item.is_file():
             shutil.copy2(item, point / item.name)
