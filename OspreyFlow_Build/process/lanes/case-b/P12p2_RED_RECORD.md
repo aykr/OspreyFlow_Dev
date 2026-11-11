@@ -256,3 +256,11 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
    `tests/test_release_local_matrix.py` reads `release.yml`'s matrix and holds `SERVICES` to it. With `P12p2_CI.diff`
    applied (as at merge) 2 passed; without it, 1 failed (the release's matrix has no Laurium yet), so the two land
    together.
+2. **Laurium's image, built, scanned and started for the first time** (`p12p2_image.sh`, the test server, offline):
+   built from its own folder; **trivy, as P12p2_CI.diff's job, failed first: 3 HIGH** — not in Laurium's packages
+   (installed: urllib3 2.8.0, setuptools 84.2.1) but **in pip 26.2.2's own vendored copies** (`pip/_vendor/vendor.txt`:
+   setuptools 70.3.0, CVE-2025-47273; urllib3 2.7.0, CVE-2026-97687 and -97689), from the base image
+   (`gates/c235226.laurium-image-1-trivy-found.txt`, `…-where-trivy-looked.txt`). **Fixed in Laurium's Dockerfile:** pip
+   uninstalls itself last (the service never runs it). Then **trivy 0 HIGH or CRITICAL; started with no network and
+   its gateway's address alone, as 10001:10001, `/healthz` 200 after about 6 s** (`gates/c235226.laurium-image-2.txt`).
+   Core's image scans gain `trivy-image-laurium` in `check` as `P12p2_core_makefile.diff` (Core's Makefile).
