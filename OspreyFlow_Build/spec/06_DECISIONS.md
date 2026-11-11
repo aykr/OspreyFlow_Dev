@@ -28406,6 +28406,12 @@ own place (ADR-145 decision 11).
    `"<run> failed: <the error's text>"`, is served the fixed fallback ("A scheduled load of yours
    did not run as planned. …") instead, so no error's text reaches the Glass in the seven days after
    an upgrade either (the merger's review). Every `_Refused` names its kind; none is defaulted.
+   **Acting as the owner, which outcomes pause** (Amendment 3 point 3; the merger's round-4 review): an
+   owner revoked, or the identity provider reached and refusing (an account it no longer knows, an
+   exchange it refuses, a token that fails verification: `PrincipalExchangeRefused`), is *refused for
+   rights* and counts toward the three that pause; an identity provider not reached is *the sign-in
+   service did not answer* and does not count; any other fault (a store's, a bug) is *failed* and does
+   not count.
 
 **Tests.** Live, against Postgres, each reader made as the route makes it: `test_schedule_notices_needs_you.py`
 (another person, an administrator, a team lead and an unknown principal read and count none of the

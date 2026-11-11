@@ -2,6 +2,9 @@
 # down and released after. The four files by name, through stack_lease.sh remote rules; nothing skipped:
 # test_schedule_notices_needs_you 5 passed, test_schedule_executor 51, test_schedule_notice 1, test_needs_you 14.
 # 71 passed, 0 failed, 0 skipped. The plants under the same lease: hyg/3-schedule-notices-red.txt, round 4.
+# 6f4a6d4 itself is unreachable since the branch was reordered to keep the schema commit at its head:
+# its code is 3c2644a's plus the schema commit (feat(schemas): ScheduleNoticeEntry …), byte-identical
+# outside process/ records; round 5's head is named in REPORT.md.
 
 Running on ospreyflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261111T052453Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -v ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py ../OspreyFlow_Build/tests/services/api/test_needs_you.py
 ============================= test session starts ==============================

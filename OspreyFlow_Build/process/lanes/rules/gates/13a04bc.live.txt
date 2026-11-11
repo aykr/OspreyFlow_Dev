@@ -3,7 +3,7 @@
 # (test_needs_you, test_schedule_executor, test_schedule_notice and test_route_rights pass in it).
 # CORRECTED after the merger's review: an earlier version of this line also named test_schedule_notices_needs_you,
 # which was NOT in this selection (live_select reaches it through no import; see the argument list below). Its
-# live runs are the plant driver's (pre-rebase) and the named run at the final head, gates/<head>.live-named.txt:
+# live runs are the plant driver's (pre-rebase) and the named run at the final head, gates/6f4a6d4.live-named.txt (round 4) and round 5's, named in REPORT.md:
 # - the server's known failures, L2.11 RED_RECORD §11: test_golden_set and the phase 6 and 8 scenarios (no model or
 #   recogniser server); test_apply_env (its preflight refused on ports); resolve/test_trigger (stack a's default ports);
 # - test_statelessness_clickhouse.py: needs stack a, switched off on this machine (the orchestrator's note, 9 November);

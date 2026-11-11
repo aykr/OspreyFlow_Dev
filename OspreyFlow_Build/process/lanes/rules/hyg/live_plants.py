@@ -22,7 +22,22 @@ EXECUTOR_TEST = (
     "::test_a_graph_store_error_never_reaches_the_owners_words"
 )
 _EXECUTOR = "../OspreyFlow_Build/tests/services/api/test_schedule_executor.py"
-PAUSE_TEST = f"{_EXECUTOR}::test_a_failed_exchange_is_told_failed_and_never_pauses_the_schedule"
+PAUSE_TEST = (
+    f"{_EXECUTOR}::test_a_fault_acting_as_the_owner_is_told_failed_and_never_pauses_the_schedule"
+)
+REFUSED_TEST = (
+    f"{_EXECUTOR}::test_an_owner_the_identity_provider_no_longer_knows_pauses_on_the_third_slot"
+)
+REFUSED_CLAUSE = (
+    "        except PrincipalExchangeRefused as error:\n"
+    "            # The identity provider was reached and refused: an account it no longer knows, an\n"
+    "            # exchange it refused, a token that fails verification. A fact about the owner, so it\n"
+    "            # counts toward the three that pause (Amendment 3 point 3; Amendment 19).\n"
+    "            raise _Refused(\n"
+    '                f"the identity provider refused to act as the schedule\'s owner, {owner_id}",\n'
+    '                kind="refused_rights",\n'
+    "            ) from error\n"
+)
 QUOTA_SLOT_TEST = f"{_EXECUTOR}::test_a_quota_refusal_tells_its_owner_in_the_quota_sentence"
 QUOTA_FILE_TEST = f"{_EXECUTOR}::test_a_quota_refused_file_tells_its_owner_the_quota_sentence"
 SELECT = "SELECT {_COLUMNS}, count(*) OVER () AS total FROM alerts "
@@ -50,9 +65,15 @@ PLANTS: list[tuple[str, Path, str, str, str]] = [
     ("the error's text put back into the words", SCHEDULER,
      "notice_words(self._due(recipe, latest), failure_kind(error))",
      'f"{self._due(recipe, latest)} failed: {error}"', EXECUTOR_TEST),
-    ("a failed exchange counted toward the three that pause", SCHEDULER,
-     "                about_the_owner=False,  # never one of the three that pause (Amendment 3)\n",
+    ("a fault acting as the owner counted toward the three that pause", SCHEDULER,
+     "                about_the_owner=False,  # nothing about the owner, so never counted (Amendment 19)\n",
      "", PAUSE_TEST),
+    ("the identity provider's refusal left to the catch-all, so it never pauses", SCHEDULER,
+     REFUSED_CLAUSE, "", REFUSED_TEST),
+    ("the identity provider's refusal not counted toward the three", SCHEDULER,
+     '                kind="refused_rights",\n            ) from error\n        except Exception',
+     ('                kind="refused_rights",\n                about_the_owner=False,\n'
+      '            ) from error\n        except Exception'), REFUSED_TEST),
     ("the quota refusal at a slot told in another kind", SCHEDULER,
      'notice_words(self._due(recipe, latest), "refused_quota")',
      'notice_words(self._due(recipe, latest), "failed")', QUOTA_SLOT_TEST),
@@ -77,7 +98,9 @@ def main() -> int:
     for label, path, old, new, target in PLANTS:
         text = path.read_text()
         if old == new or text.count(old) != 1:
-            print(f"# --- plant ({label}): NOT PLANTED, no single site, or the plant changes nothing")
+            print(
+                f"# --- plant ({label}): NOT PLANTED, no single site, or the plant changes nothing"
+            )
             ok = False
             continue
         keep = path.with_suffix(".keep")
