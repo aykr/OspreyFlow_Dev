@@ -1,9 +1,9 @@
 """The backups' AWS side as P9's Terraform makes it (ADR-148 Amendment 7), on the S3 stand-in
 (`tests/fixtures/cloud_platform/s3_standin.py`), which refuses what S3, STS and KMS refuse.
 
-`backup_policies` is the role's policy and the bucket's, in the shape the rendered `backups.tf`
-writes them (`P9_render.diff`'s `test_the_backup_policies_are_the_stand_ins` holds the two to one
-another), so a refusal here is the refusal the platform would give for the same request.
+The role's policy and the bucket's are `harness.cloud_platform_backups`' own, the one source the
+rendered `backups.tf` is written from, so a refusal here is the refusal the platform would give for
+the same request.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import botocore.session
 import pytest
 from botocore.config import Config
 
+from harness import cloud_platform_backups as backups
 from tests.fixtures.cloud_platform.s3_standin import Server, StandIn, mint_token, serve
 
 ACCOUNT = "123456789012"
@@ -30,45 +31,20 @@ SUBJECT = "system:serviceaccount:ospreyflow-dev:ospreyflow-backup"
 ISSUER_SECRET = "the-cluster-oidc-issuer"
 
 
-def role_policy(*, kms_actions: tuple[str, ...] = ("kms:GenerateDataKey", "kms:Decrypt")) -> dict[str, Any]:
-    """The backup role's own policy: the backups bucket and its key, nothing else."""
-    statements: list[dict[str, Any]] = [
-        {"Effect": "Allow", "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
-         "Resource": [f"arn:aws:s3:::{BUCKET}"]},
-        {"Effect": "Allow",
-         "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
-         "Resource": [f"arn:aws:s3:::{BUCKET}/*"]},
-    ]  # fmt: skip
+def role_policy(*, kms_actions: tuple[str, ...] = tuple(backups.KMS_ACTIONS)) -> dict[str, Any]:
+    """The backup role's own policy as `backups.tf` writes it, its KMS actions narrowed for a
+    case that takes one away."""
+    policy = backups.role_policy(f"arn:aws:s3:::{BUCKET}", KEY_ARN)
+    statements = [s for s in policy["Statement"] if not s["Action"][0].startswith("kms:")]
     if kms_actions:
         statements.append({"Effect": "Allow", "Action": list(kms_actions), "Resource": [KEY_ARN]})
-    return {"Version": "2012-10-17", "Statement": statements}
+    return {**policy, "Statement": statements}
 
 
 def bucket_policy() -> dict[str, Any]:
-    """The backups bucket's policy: TLS only, SSE-KMS by its own key only, and its objects the
-    backup role's alone (the Conduit's role, which holds every other bucket, is refused here)."""
-    return {
-        "Version": "2012-10-17",
-        "Statement": [
-            {"Sid": "TLSOnly", "Effect": "Deny", "Principal": "*", "Action": "s3:*",
-             "Resource": [f"arn:aws:s3:::{BUCKET}", f"arn:aws:s3:::{BUCKET}/*"],
-             "Condition": {"Bool": {"aws:SecureTransport": "false"}}},
-            {"Sid": "KMSOnly", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
-             "Resource": [f"arn:aws:s3:::{BUCKET}/*"],
-             # A header that names another encryption. No header is the bucket's default (its
-             # key): `StringNotEqualsIfExists` would deny that too, as IAM reads it, so `Null`.
-             "Condition": {"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"},
-                           "Null": {"s3:x-amz-server-side-encryption": "false"}}},
-            {"Sid": "ItsOwnKey", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
-             "Resource": [f"arn:aws:s3:::{BUCKET}/*"],
-             "Condition": {"StringNotEquals": {"s3:x-amz-server-side-encryption-aws-kms-key-id": KEY_ARN},
-                           "Null": {"s3:x-amz-server-side-encryption-aws-kms-key-id": "false"}}},
-            {"Sid": "BackupRoleOnly", "Effect": "Deny", "Principal": "*",
-             "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
-             "Resource": [f"arn:aws:s3:::{BUCKET}", f"arn:aws:s3:::{BUCKET}/*"],
-             "Condition": {"ArnNotEquals": {"aws:PrincipalArn": ROLE_ARN}}},
-        ],
-    }  # fmt: skip
+    """The backups bucket's policy as `backups.tf` writes it (TLS only; SSE-KMS by its own key
+    only; its objects the backup role's alone)."""
+    return backups.bucket_policy(f"arn:aws:s3:::{BUCKET}", KEY_ARN, ROLE_ARN)
 
 
 def standin_config(
