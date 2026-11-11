@@ -1,0 +1,520 @@
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run src/admin/sections/Connections.test.tsx
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /root/osprey-srv/studio-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/admin/sections/Connections.test.tsx (6 tests | 1 failed) 702ms
+   ❯ Connections (6)
+     ✓ is a tab for administer_system alone, lists the built-in Files, and names a new one 234ms
+     ✓ names a SQL connection with its datasets and its secret by name, and nothing else 119ms
+     ✓ never sends a secret's field holding anything but a name, which may be the value itself 90ms
+     ✓ refuses a SQL or API connection bound to no dataset, before sending it 63ms
+     × names an S3 bucket and Athena with no field for a key or a secret, and sends none 152ms
+     ✓ lists what a connection reads, its secret's name, its datasets by name, and tests it 43ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/admin/sections/Connections.test.tsx > Connections > names an S3 bucket and Athena with no field for a key or a secret, and sends none
+TestingLibraryElementError: Unable to find a label with the text of: Catalog
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<section[39m
+      [33maria-label[39m=[32m"Admin"[39m
+      [33mclass[39m=[32m"admin-place"[39m
+    [36m>[39m
+      [36m<h2[39m
+        [33mclass[39m=[32m"value admin-place__title"[39m
+      [36m>[39m
+        [0mAdmin[0m
+      [36m</h2>[39m
+      [36m<div>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mRoles, teams and Authors[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"admin-place__body"[39m
+      [36m>[39m
+        [36m<nav[39m
+          [33maria-label[39m=[32m"Admin sections"[39m
+          [33mclass[39m=[32m"admin-nav"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"admin-nav__group"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"label admin-nav__heading"[39m
+            [36m>[39m
+              [0mData[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"admin-nav__list"[39m
+            [36m>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mDatasets[0m
+                [36m</button>[39m
+              [36m</li>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item admin-nav__item--current"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33maria-current[39m=[32m"page"[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mConnections[0m
+                [36m</button>[39m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"admin-nav__group"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"label admin-nav__heading"[39m
+            [36m>[39m
+              [0mRunning[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"admin-nav__list"[39m
+            [36m>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSystem[0m
+                [36m</button>[39m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"admin-nav__group"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"label admin-nav__heading"[39m
+            [36m>[39m
+              [0mPolicies[0m
+            [36m</h3>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"admin-nav__list"[39m
+            [36m>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mGrading scheme[0m
+                [36m</button>[39m
+              [36m</li>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mApproval rights (coming)[0m
+                [36m</button>[39m
+              [36m</li>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mUploads (coming)[0m
+                [36m</button>[39m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"admin-nav__group"[39m
+          [36m>[39m
+            [36m<ul[39m
+              [33mclass[39m=[32m"admin-nav__list"[39m
+            [36m>[39m
+              [36m<li[39m
+                [33mclass[39m=[32m"admin-nav__item"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"admin-nav__link"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mDemo packs[0m
+                [36m</button>[39m
+              [36m</li>[39m
+            [36m</ul>[39m
+          [36m</div>[39m
+        [36m</nav>[39m
+        [36m<div[39m
+          [33maria-labelledby[39m=[32m"admin-section-title"[39m
+          [33mclass[39m=[32m"admin-place__section"[39m
+          [33mrole[39m=[32m"region"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"value"[39m
+            [33mid[39m=[32m"admin-section-title"[39m
+            [33mstyle[39m=[32m"margin: 0px;"[39m
+            [33mtabindex[39m=[32m"-1"[39m
+          [36m>[39m
+            [0mConnections[0m
+          [36m</h3>[39m
+          [36m<section[39m
+            [33maria-label[39m=[32m"Connections"[39m
+            [33mstyle[39m=[32m"display: grid; gap: var(--sp-12); max-width: 760px;"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"label"[39m
+              [33mstyle[39m=[32m"margin: 0px;"[39m
+            [36m>[39m
+              [0mWhere sources are read from. Files, the ingest root, is built in. A SQL database, an HTTP API, JSON files, an Amazon S3 bucket or Amazon Athena are named here with the datasets whose sources may read through them; a source is registered on a connection in the Ingest Studio's Sources tab.[0m
+            [36m</p>[39m
+            [36m<table[39m
+              [33maria-label[39m=[32m"Connections of this deployment"[39m
+              [33mclass[39m=[32m"table"[39m
+            [36m>[39m
+              [36m<thead>[39m
+                [36m<tr>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [0mName[0m
+                  [36m</th>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [0mKind[0m
+                  [36m</th>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [0mReads[0m
+                  [36m</th>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [0mSecret's name[0m
+                  [36m</th>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [0mDatasets[0m
+                  [36m</th>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [0mNamed by[0m
+                  [36m</th>[39m
+                  [36m<th[39m
+                    [33mscope[39m=[32m"col"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"visually-hidden"[39m
+                    [36m>[39m
+                      [0mTest[0m
+                    [36m</span>[39m
+                  [36m</th>[39m
+                [36m</tr>[39m
+              [36m</thead>[39m
+              [36m<tbody>[39m
+                [36m<tr>[39m
+                  [36m<td>[39m
+                    [0mFiles: the ingest root[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0mFiles[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0mthe ingest root[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0m—[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0m—[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0mbuilt in[0m
+                  [36m</td>[39m
+                  [36m<td />[39m
+                [36m</tr>[39m
+                [36m<tr>[39m
+                  [36m<td>[39m
+                    [0mClient exports (synthetic)[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0mAmazon S3 bucket[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0ms3://synthetic-exports/client-a/ (eu-west-2)[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0mnone: the deployment's own cloud role[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0mPrison records[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [0madm-1[0m
+                  [36m</td>[39m
+                  [36m<td>[39m
+                    [36m<button[39m
+                      [33maria-label[39m=[32m"Test connection: Client exports (synthetic)"[39m
+                      [33mclass[39m=[32m"btn"[39m
+                    [36m>[39m
+                      [0mTest connection[0m
+                    [36m</button>[39m
+                  [36m</td>[39m
+                [36m</tr>[39m
+              [36m</tbody>[39m
+            [36m</table>[39m
+            [36m<fieldset[39m
+              [33mstyle[39m=[32m"display: grid; gap: var(--sp-8); border: 1px solid var(--border-subtle); padding: var(--sp-12);"[39m
+            [36m>[39m
+              [36m<legend[39m
+                [33mclass[39m=[32m"label"[39m
+              [36m>[39m
+                [0mName a connection[0m
+              [36m</legend>[39m
+              [36m<label[39m
+                [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"label"[39m
+                [36m>[39m
+                  [0mKind[0m
+                [36m</span>[39m
+                [36m<select[39m
+                  [33mclass[39m=[32m"select"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"files"[39m
+                  [36m>[39m
+                    [0mFiles[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"sql"[39m
+                  [36m>[39m
+                    [0mSQL database[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"api"[39m
+                  [36m>[39m
+                    [0mHTTP API[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"json"[39m
+                  [36m>[39m
+                    [0mJSON files[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"s3"[39m
+                  [36m>[39m
+                    [0mAmazon S3 bucket[0m
+                  [36m</option>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"athena"[39m
+                  [36m>[39m
+                    [0mAmazon Athena[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+              [36m</label>[39m
+              [36m<label[39m
+                [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"label"[39m
+                [36m>[39m
+                  [0mConnection name[0m
+                [36m</span>[39m
+                [36m<input[39m
+                  [33mclass[39m=[32m"input"[39m
+                  [33mmaxlength[39m=[32m"200"[39m
+                  [33mvalue[39m=[32m"Client Athena (synthetic)"[39m
+                [36m/>[39m
+              [36m</label>[39m
+              [36m<fieldset[39m
+                [33mstyle[39m=[32m"border: 0px; padding: 0px; margin: 0px; display: grid; gap: var(--sp-4);"[39m
+              [36m>[39m
+                [36m<legend[39m
+                  [33mclass[39m=[32m"label"[39m
+                [36m>[39m
+                  [0mDatasets whose sources may read through it[0m
+                [36m</legend>[39m
+                [36m<label[39m
+                  [33mstyle[39m=[32m"display: flex; gap: var(--sp-8); align-items: center;"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33mtype[39m=[32m"checkbox"[39m
+                  [36m/>[39m
+                  [0mPrison records[0m
+                [36m</label>[39m
+                [36m<label[39m
+                  [33mstyle[39m=[32m"display: flex; gap: var(--sp-8); align-items: center;"[39m
+                [36m>[39m
+                  [36m<input[39m
+                    [33mtype[39m=[32m"checkbox"[39m
+                  [36m/>[39m
+                  [0mCarrier records[0m
+                [36m</label>[39m
+              [36m</fieldset>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"caption"[39m
+                [33mid[39m=[32m"connection-cloud-role-tip"[39m
+                [33mstyle[39m=[32m"margin: 0px;"[39m
+              [36m>[39m
+                [0mRead as this deployment's own cloud role, never with a key: there is no field for one. The host is made from the region (and the bucket), and your operator must add it to the egress allow-list.[0m
+              [36m</p>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"label"[39m
+                  [36m>[39m
+                    [0mRegion[0m
+                  [36m</span>[39m
+                  [36m<input[39m
+                    [33maria-describedby[39m=[32m"connection-cloud-role-tip"[39m
+                    [33mautocomplete[39m=[32m"off"[39m
+                    [33mclass[39m=[32m"input"[39m
+                    [33mspellcheck[39m=[32m"false"[39m
+                    [33mvalue[39m=[32m"eu-west-2"[39m
+                  [36m/>[39m
+                [36m</label>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"label"[39m
+                  [36m>[39m
+                    [0mWorkgroup[0m
+                  [36m</span>[39m
+                  [36m<input[39m
+                    [33mautocomplete[39m=[32m"off"[39m
+                    [33mclass[39m=[32m"input"[39m
+                    [33mspellcheck[39m=[32m"false"[39m
+                    [33mvalue[39m=[32m"primary"[39m
+                  [36m/>[39m
+                [36m</label>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"label"[39m
+                  [36m>[39m
+                    [0mDatabases a source may read (comma-separated)[0m
+                  [36m</span>[39m
+                  [36m<input[39m
+                    [33mautocomplete[39m=[32m"off"[39m
+                    [33mclass[39m=[32m"input"[39m
+                    [33mspellcheck[39m=[32m"false"[39m
+                    [33mvalue[39m=[32m"visits, calls"[39m
+                  [36m/>[39m
+                [36m</label>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+              [36m>[39m
+                [36m<label[39m
+                  [33mstyle[39m=[32m"display: grid; gap: var(--sp-2);"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"label"[39m
+                  [36m>[39m
+                    [0mWhere Athena writes results, if the workgroup names nowhere (optional, s3://…)[0m
+                  [36m</span>[39m
+                  [36m<input[39m
+                    [33mautocomplete[39m=[32m"off"[39m
+                    [33mclass[39m=[32m"input"[39m
+                    [33mspellcheck[39m=[32m"false"[39m
+                    [33mvalue[39m=[32m""[39m
+                  [36m/>[39m
+                [36m</label>[39m
+              [36m</div>[39m
+              [36m<div>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"btn btn--primary"[39m
+                [36m>[39m
+                  [0mName the connection[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</fieldset>[39m
+            [36m<p[39m
+              [33mrole[39m=[32m"status"[39m
+            [36m>[39m
+              [0mNamed Client exports (synthetic).[0m
+            [36m</p>[39m
+          [36m</section>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</section>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText ../../node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/admin/sections/Connections.test.tsx:154:20
+    152|     // The catalog (09 §2; the orchestrator's review of L1.9, round 1,…
+    153|     // a client's own when named, and a name Athena would not take ref…
+    154|     expect((screen.getByLabelText("Catalog") as HTMLInputElement).valu…
+       |                    ^
+    155|     type("Catalog", "client catalog");
+    156|     fireEvent.click(screen.getByRole("button", { name: "Name the conne…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  09:34:53
+   Duration  1.53s (tests 49%, environment 38%, import 8%, transform 5%)
+
+
+Slowest 6 tests:
+   234 ms  src/admin/sections/Connections.test.tsx > Connections > is a tab for administer_system alone, lists the built-in Files, and names a new one
+   152 ms  src/admin/sections/Connections.test.tsx > Connections > names an S3 bucket and Athena with no field for a key or a secret, and sends none
+   119 ms  src/admin/sections/Connections.test.tsx > Connections > names a SQL connection with its datasets and its secret by name, and nothing else
+    90 ms  src/admin/sections/Connections.test.tsx > Connections > never sends a secret's field holding anything but a name, which may be the value itself
+    63 ms  src/admin/sections/Connections.test.tsx > Connections > refuses a SQL or API connection bound to no dataset, before sending it
+    43 ms  src/admin/sections/Connections.test.tsx > Connections > lists what a connection reads, its secret's name, its datasets by name, and tests it
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /root/osprey-srv/studio-b/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /root/osprey-srv/studio-b/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run src/admin/sections/Connections.test.tsx

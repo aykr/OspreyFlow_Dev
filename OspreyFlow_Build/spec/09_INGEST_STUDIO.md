@@ -335,25 +335,38 @@ are, each read **read-only** and landing as the source's one file exactly as abo
   climb out of the connection's. A listing answers a missing bucket as empty, so an empty folder is
   checked against the bucket and a missing one told so, at a read and at *Test connection* alike; the
   bucket is asked for only then, since asking needs `s3:ListBucket` on all of it, which a role limited
-  to a prefix may not hold. A store's refusal is judged by its AWS error code, never by words in a key.
-  The endpoint is named (`s3.<region>.amazonaws.com`, virtual-hosted), never taken from the environment. Rows of several objects are put together by
-  column name; a header naming a column twice is refused. A Parquet date or time is written in ISO 8601,
-  a decimal as written, a list as compact JSON; a binary column is refused.
+  to a prefix may not hold. A store's refusal is judged by its AWS error code, never by words in a key;
+  a bucket in another region than the connection names (`PermanentRedirect`, `AuthorizationHeaderMalformed`)
+  is told so, never followed there. The endpoint is named (`s3.<region>.amazonaws.com`, virtual-hosted),
+  never taken from the environment, and neither client sends a request to any host but the one the egress
+  allow-list names. The folder is listed a page at a time (botocore's `ListObjectsV2`; pyarrow's S3
+  filesystem opens the objects) and the listing **stops at 1,001 objects**, never taken whole. Rows of
+  several objects are put together by column name; a header naming a column twice is refused. A Parquet
+  date or time is written in ISO 8601, a decimal as written, a list as compact JSON; a binary column is
+  refused.
 - **Athena**: a connection names its region, workgroup, catalog, the databases its sources may read and,
   for a workgroup that names none, where Athena writes results. A source reads **a table**
   (`database.table`, made into `SELECT * FROM "database"."table"` from the two checked names: never an
   expression, rule 8) or **a named query** saved in Athena, run only if it is saved in the connection's
   workgroup, against one of its databases, and is one SELECT (or WITH … SELECT), **reading only the
-  connection's databases**: every table after FROM or JOIN, and in a FROM's comma list, unqualified (the
-  query's own database), `database.table` or `catalog.database.table` within the connection's. Anything
-  else, a second statement, a table function or a table of another database or catalog, is refused
-  **before it is sent**; what the checker does not understand is refused too (the role's IAM policy is
-  the second line, not the first). Results are paged a thousand rows at a time; a query running past 300
-  seconds is stopped and refused. A query that does not parse or names a missing table, and a role
-  Athena or Lake Formation does not grant, are refused in words, never read as no rows; Athena's own
-  words lose any ARN or access key id before they are audited or shown to an administrator.
+  connection's databases**: every relation in every FROM list, at every depth (each WITH, subquery,
+  LATERAL, UNNEST, set operation and join, and each relation after a comma, whatever came before it),
+  unqualified (the query's own database), `database.table` or `catalog.database.table` within the
+  connection's. Anything else, a second statement, a table function or a table of another database or
+  catalog, is refused **before it is sent**; the check **fails closed**: a shape it does not follow (a
+  comma it cannot attribute, a word after a relation it does not know, a join with no condition) is
+  refused too, which may refuse a legitimate query the client then saves more plainly (the role's IAM
+  policy is the second line, not the first). A string value is a string wherever a comment's marker is
+  in it, and a quoted name is never a keyword. Results are paged a thousand rows at a time; a query
+  running past 300 seconds is stopped and refused. A result naming a column twice (`SELECT a.id, b.id`),
+  or a row with more or fewer values than its columns, is refused, never written with one value in two
+  cells or a value dropped. A query that does not parse or names a missing catalog, database or table,
+  and a role Athena or Lake Formation does not grant, are refused in words, never read as no rows;
+  Athena's own words lose any ARN or access key id before they are audited or shown to an
+  administrator.
 - **The caps are the same and refused whole** (rule 2): S3's objects are listed and their sizes summed
-  before any is opened, more than 1,000 objects is refused, a Parquet object's rows are counted from its
+  before any is opened, more than 1,000 objects under the folder (of any format, hidden or not) is
+  refused from a listing stopped at the 1,001st, a Parquet object's rows are counted from its
   footer before any is read and its values measured decoded, a row group at a time, before any becomes a
   row, and each object is read only as far as the room left; Athena's rows, bytes and pages are counted
   as they come and paging stops at the cap. A read past any cap is answered with its own type,
@@ -362,12 +375,17 @@ are, each read **read-only** and landing as the source's one file exactly as abo
 - **Proved against stand-ins** (part 1): SeaweedFS for S3 (`tests/connectors/test_s3_connector_live.py`,
   the same golden files, and the server's own access-denied and missing-bucket answers), and for Athena a
   recorded fixture behind botocore's real client that refuses what Athena refuses
-  (`tests/connectors/athena_fixture.py`). The Athena fixture's answers follow AWS's API reference and were
-  not captured from Athena itself; `test_athena_connector_live.py`, run only on the client's platform,
-  confirms them. Every read path has its access-control test
+  (`tests/connectors/athena_fixture.py`), and a recorded S3 behind the deployment's own listing client
+  (`tests/connectors/s3_fixture.py`, `test_cloud_clients.py`). The fixtures' answers follow AWS's API
+  reference and were not captured from AWS itself; `test_athena_connector_live.py`, run only on the
+  client's platform, confirms Athena's. Every read path has its access-control test
   (`tests/services/api/test_cloud_connector_access.py`).
 - **Part 2** (after P7): the namespace's IAM role in the `cloud-platform` render, and each enabled
-  source's host added to the profile's egress allow policy (ADR-148 decision 7).
+  source's host added to the profile's egress allow policy (ADR-148 decision 7). **Checked there, against
+  AWS itself**, because no stand-in here can: whether Athena fails a query that does not parse, or a
+  catalog it does not hold, as an execution (modelled) or refuses it at the request; and S3's answers to
+  a bucket in another region (`PermanentRedirect`, `AuthorizationHeaderMalformed`), which SeaweedFS, having
+  no regions, never gives.
 
 ### Unstructured sources
 

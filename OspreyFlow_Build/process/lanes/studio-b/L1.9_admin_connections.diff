@@ -31,10 +31,10 @@ index f1681688..1a9d4e60 100644
    }
  }
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
-index 6d3281eb..b95e7b25 100644
+index 6d3281eb..bb2ab192 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
-@@ -560,6 +560,46 @@ test("a SQL and a JSON connection are named with their fields by keyboard", asyn
+@@ -560,6 +560,50 @@ test("a SQL and a JSON connection are named with their fields by keyboard", asyn
    registerCovered(REGISTRY, "name-a-json-connection-by-keyboard");
  });
  
@@ -67,13 +67,17 @@ index 6d3281eb..b95e7b25 100644
 +  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
 +  await page.keyboard.press("Space");
 +  await type("Databases a source may read (comma-separated)", "visits");
++  // The catalog, by keyboard too (09 §2; the orchestrator's review of L1.9, round 1, item 8).
++  await expect(page.getByRole("textbox", { name: "Catalog", exact: true })).toHaveValue("AwsDataCatalog");
++  await type("Catalog", "client_catalog", true);
 +  await press(page, "Name the connection");
 +  await expect(page.getByText("Named Client Athena (synthetic).")).toBeVisible();
 +  expect(sent).toEqual([
 +    { kind: "s3", name: "Client exports (synthetic)", datasets: ["enron"],
 +      settings: { kind: "s3", region: "eu-west-2", bucket: "synthetic-exports", prefix: "client-a/" } },
 +    { kind: "athena", name: "Client Athena (synthetic)", datasets: ["enron"],
-+      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", databases: ["visits"] } },
++      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", catalog: "client_catalog",
++                  databases: ["visits"] } },
 +  ]); // prettier-ignore
 +  registerCovered(REGISTRY, "name-an-athena-connection-by-keyboard");
 +});
@@ -82,7 +86,7 @@ index 6d3281eb..b95e7b25 100644
  // command, the dry run's, copied by keyboard; nothing on the page changes the scheme.
  test("the grading scheme is read and its change command copied by keyboard", async ({ page, context }) => {
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx
-index ba879780..8a180d47 100644
+index ba879780..79df0242 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.test.tsx
 @@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
@@ -94,7 +98,7 @@ index ba879780..8a180d47 100644
  
  afterEach(() => {
    cleanup();
-@@ -117,6 +117,46 @@ describe("Connections", () => {
+@@ -117,6 +117,55 @@ describe("Connections", () => {
      expect(posts).toEqual([]);
    });
  
@@ -130,11 +134,20 @@ index ba879780..8a180d47 100644
 +    type("Connection name", "Client Athena (synthetic)");
 +    fireEvent.click(await screen.findByRole("checkbox", { name: "Prison records" }));
 +    type("Databases a source may read (comma-separated)", "visits, calls");
++    // The catalog (09 §2; the orchestrator's review of L1.9, round 1, item 8): Athena's own by default,
++    // a client's own when named, and a name Athena would not take refused before it is sent.
++    expect((screen.getByLabelText("Catalog") as HTMLInputElement).value).toBe("AwsDataCatalog");
++    type("Catalog", "client catalog");
++    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
++    expect((await screen.findByRole("alert")).textContent).toMatch(/catalog's name/);
++    expect(posts).toHaveLength(1);
++    type("Catalog", "client_catalog");
 +    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
 +    await waitFor(() => expect(posts).toHaveLength(2));
 +    expect(posts[1]!.body).toEqual({
 +      kind: "athena", name: "Client Athena (synthetic)", datasets: ["ds-a"],
-+      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", databases: ["visits", "calls"] },
++      settings: { kind: "athena", region: "eu-west-2", workgroup: "primary", catalog: "client_catalog",
++                  databases: ["visits", "calls"] },
 +    }); // prettier-ignore
 +  });
 +
@@ -142,7 +155,7 @@ index ba879780..8a180d47 100644
      const posts = serve([FILES, TELCO]);
      open();
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx
-index f7393072..082cbdc7 100644
+index f7393072..b31b5cd0 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Connections.tsx
 @@ -6,7 +6,9 @@
@@ -156,7 +169,7 @@ index f7393072..082cbdc7 100644
  import { useEffect, useMemo, useState } from "react";
  
  import type { AdminDataset, Connection, ConnectionInput } from "../../../../../packages/schemas/generated";
-@@ -16,14 +18,25 @@ import { Select } from "../../design/primitives/Select";
+@@ -16,14 +18,27 @@ import { Select } from "../../design/primitives/Select";
  import { addConnection, listAdminConnections } from "../../ingest/sources/api";
  import { listDatasets, testConnection, type AdminApi } from "../api";
  
@@ -180,10 +193,12 @@ index f7393072..082cbdc7 100644
 +const REGION = /^[a-z]{2}(-gov)?-[a-z]+-[0-9]{1,2}$/;
 +const BUCKET = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 +const FOLDER = /^([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}\/){0,20}$/;
++/** A workgroup's or catalog's name, as Athena takes it (`schemas/sources.py`'s `ATHENA_NAME`). */
++const ATHENA_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
  const KIND_WORDS: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.id, k.label]));
  
  /** The shape a secret's name takes (`schemas/sources.py`'s `SECRET_NAME`): capitals, digits and `_`. */
-@@ -48,19 +61,37 @@ interface Fields {
+@@ -48,19 +63,38 @@ interface Fields {
    pagination: "none" | "page" | "next_link";
    pageParam: string;
    nextAt: string;
@@ -191,6 +206,7 @@ index f7393072..082cbdc7 100644
 +  bucket: string;
 +  prefix: string;
 +  workgroup: string;
++  catalog: string;
 +  databases: string;
 +  resultsLocation: string;
  }
@@ -198,7 +214,7 @@ index f7393072..082cbdc7 100644
  const EMPTY: Fields = {
    host: "", port: "5432", database: "", user: "", secret: "", tls: "verify-full", schemas: "public", ca: "",
    baseUrl: "https://", auth: "none", pagination: "none", pageParam: "page", nextAt: "",
-+  region: "eu-west-2", bucket: "", prefix: "", workgroup: "primary", databases: "", resultsLocation: "",
++  region: "eu-west-2", bucket: "", prefix: "", workgroup: "primary", catalog: "AwsDataCatalog", databases: "", resultsLocation: "",
  }; // prettier-ignore
  
 +const list = (text: string) => text.split(",").map((s) => s.trim()).filter(Boolean);
@@ -216,18 +232,20 @@ index f7393072..082cbdc7 100644
 +  if (kind === "athena") {
 +    const results = f.resultsLocation.trim() ? { results_location: f.resultsLocation.trim() } : {};
 +    return { kind, name: name.trim(), datasets,
-+      settings: { kind, region: f.region.trim(), workgroup: f.workgroup.trim(), databases: list(f.databases), ...results } } as ConnectionInput; // prettier-ignore
++      settings: { kind, region: f.region.trim(), workgroup: f.workgroup.trim(), catalog: f.catalog.trim(), databases: list(f.databases), ...results } } as ConnectionInput; // prettier-ignore
 +  }
    if (kind === "sql") {
      return {
        kind, name: name.trim(), datasets,
-@@ -92,18 +123,25 @@ export function notYet(kind: Kind, name: string, datasets: string[], f: Fields):
+@@ -92,18 +126,27 @@ export function notYet(kind: Kind, name: string, datasets: string[], f: Fields):
      return "The secret's field takes its name in capitals (such as TELCO_API), never the password or token itself.";
    if (kind === "sql" && (!f.host.trim() || !f.database.trim() || !f.user.trim())) return "Give the host, the database and the login.";
    if (kind === "api" && !/^https:\/\/[^\s/]+/.test(f.baseUrl.trim())) return "The base URL starts https:// and names its host.";
 +  if ((kind === "s3" || kind === "athena") && !REGION.test(f.region.trim())) return "Give the region as AWS names it, such as eu-west-2.";
 +  if (kind === "s3" && !BUCKET.test(f.bucket.trim())) return "Give the bucket's name: lower-case letters, digits and '-', with no dot.";
 +  if (kind === "s3" && !FOLDER.test(f.prefix.trim())) return "A folder is names each ending in '/', such as exports/, or empty for the whole bucket.";
++  if (kind === "athena" && !ATHENA_NAME.test(f.workgroup.trim())) return "Give the workgroup's name as Athena shows it, such as primary.";
++  if (kind === "athena" && !ATHENA_NAME.test(f.catalog.trim())) return "Give the catalog's name as Athena shows it, such as AwsDataCatalog.";
 +  if (kind === "athena" && list(f.databases).length === 0) return "Name the databases a source may read.";
    return null;
  }
@@ -239,7 +257,7 @@ index f7393072..082cbdc7 100644
    if (s.kind === "sql") return `${s.host}:${s.port}/${s.database}`;
    if (s.kind === "api") return s.base_url ?? "";
 +  if (s.kind === "s3") return `s3://${s.bucket}/${s.prefix ?? ""} (${s.region})`;
-+  if (s.kind === "athena") return `workgroup ${s.workgroup ?? "primary"}: ${s.databases.join(", ")} (${s.region})`;
++  if (s.kind === "athena") return `workgroup ${s.workgroup ?? "primary"}, catalog ${s.catalog ?? "AwsDataCatalog"}: ${s.databases.join(", ")} (${s.region})`;
    return "JSON files in the ingest root";
  }
  
@@ -248,7 +266,7 @@ index f7393072..082cbdc7 100644
    const s = c.settings as { secret?: string | null } | null | undefined;
    return s?.secret ? s.secret : "none";
  }
-@@ -181,9 +219,9 @@ export function Connections({ api }: { api: AdminApi }) {
+@@ -181,9 +224,9 @@ export function Connections({ api }: { api: AdminApi }) {
    return (
      <section aria-label="Connections" style={{ display: "grid", gap: "var(--sp-12)", maxWidth: 760 }}>
        <p className="label" style={{ margin: 0 }}>
@@ -261,7 +279,7 @@ index f7393072..082cbdc7 100644
        </p>
        {problem && <p role="alert">{problem}</p>}
        {connections === null && !problem && <p className="label">Reading…</p>}
-@@ -303,6 +341,27 @@ export function Connections({ api }: { api: AdminApi }) {
+@@ -303,6 +346,28 @@ export function Connections({ api }: { api: AdminApi }) {
              {fields.pagination === "next_link" && field("Where the next page's link is (a dotted path)", "nextAt")}
            </>
          )}
@@ -282,6 +300,7 @@ index f7393072..082cbdc7 100644
 +        {kind === "athena" && (
 +          <>
 +            {field("Workgroup", "workgroup")}
++            {field("Catalog", "catalog")}
 +            {field("Databases a source may read (comma-separated)", "databases")}
 +            {field("Where Athena writes results, if the workgroup names nowhere (optional, s3://…)", "resultsLocation")}
 +          </>
