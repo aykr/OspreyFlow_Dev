@@ -11,6 +11,7 @@ export default [
       "packages/schemas/generated/**",
       ".venv/**",
       "apps/workspace/dist/**",
+      "apps/workspace/a11y/plants/.variants/**", // the probe's guard-removed variants, written and deleted by a11y/plants/run.mjs
       "apps/harness/dist/**",
       "deploy/generated/**", // a deployment's rendered files, copies of what is linted at its source
       "process/prototypes/**", // the Build folder's, when linted from there (ADR-054)
