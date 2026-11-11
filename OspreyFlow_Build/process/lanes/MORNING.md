@@ -485,6 +485,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **Ruled for P10 part 2 (about 22:30), yours to overrule:** report-sync and Superset are not rendered on
       cloud-platform until their own step. Both still pointed at Keycloak, so neither could work on Entra. An explicit
       `on` is refused in words, and the profile's defaults still render.
+    - **For you, before the final push:** P12 part 2 adds Laurium's image to `release.yml` (`P12p2_CI.diff`, in
+      `.github/`, which only you apply). A test on main reads that file, so the patch must land with P12 part 2's
+      merge. I will give you the exact `git apply` line when it is merged.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
