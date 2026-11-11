@@ -138,6 +138,23 @@ def test_open_refuses_when_a_session_is_running_in_the_worktree(launcher, sessio
     assert not launcher.opened.exists()
 
 
+def test_a_session_is_seen_though_another_ends_while_it_is_asked(launcher, session_in) -> None:
+    """Found 12 November 2026: lsof exits 1 when any pid in its list has gone, as one does when a session ends
+    between pgrep and lsof; under pipefail that status hid every live session in the list, so `open` would
+    start a second session in a worktree that had one (rule 14). The fake lsof answers as the real one does
+    then: the live session's directory, and exit 1."""
+    real = shutil.which("lsof", path=os.environ["PATH"])
+    assert real, "lsof is needed for the launcher's liveness check"
+    (launcher.bin / "lsof").write_text(f'#!/bin/sh\n"{real}" "$@"\nexit 1\n')
+    (launcher.bin / "lsof").chmod(0o755)
+    launcher("setup", "studio")
+    session_in(launcher.wt / "studio" / "OspreyFlow_Core")
+    assert launcher("alive", "studio").stdout.strip() == "yes"
+    refused = launcher("open", "studio")
+    assert refused.returncode == 1, refused.stdout
+    assert not launcher.opened.exists()
+
+
 def test_a_session_in_a_sibling_folder_is_not_the_lanes(launcher, session_in) -> None:
     launcher("setup", "studio")
     sibling = launcher.wt / "studio-old"

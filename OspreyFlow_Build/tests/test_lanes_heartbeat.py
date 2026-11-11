@@ -631,3 +631,35 @@ def test_the_lane_by_lane_view_is_kept_behind_lanes(hb, tmp_path) -> None:
     assert "STUDIO: " in lanes and "VIEW 1" not in lanes
     full = hb("--lanes", "--full", **env).stdout
     assert "  done         H1     Tidy one" in full and "VIEW 1" not in full
+
+
+def test_a_view_longer_than_a_pipe_holds_is_shown_whole_never_cut_by_sigpipe(hb, tmp_path) -> None:
+    """Found 12 November 2026: under `set -o pipefail`, `printf ... | head -1` dies of SIGPIPE (141) when its
+    producer is still writing as head exits, and `show` stopped part-way, losing NEEDS YOU (the parallel test
+    run's flakes, and as likely in the owner's `watch` under load). A step table and an estimates file larger
+    than a pipe's buffer make the race certain rather than occasional."""
+    table = tmp_path / "progress.tsv"
+    table.write_text("".join(f"studio\tS{i}\tS\tbuilding\tStep {i} of a long table\n" for i in range(20000)))
+    (tmp_path / "estimates.tsv").write_text("".join(f"# as of 2026-11-12T00:{i % 60:02d}:00Z\n" for i in range(20000))
+                                           + "studio\tS1\tstep one\t~01:00\tA\n")
+    _all_beat(hb)
+    assert hb("beat", "case", "waiting-for-owner", "Q1 for the owner").returncode == 0
+    for verb in (("show",), ("show", "--full"), ("summary",)):
+        out = hb(*verb, OSPREY_PROGRESS_FILE=str(table))
+        assert out.returncode == 0, (verb, out.returncode, out.stderr[-400:])
+        if verb[0] == "show":
+            assert _needs(out) == ["case is waiting for you: Q1 for the owner"], verb
+
+
+def test_an_estimates_file_of_its_heading_alone_ends_no_view(hb, tmp_path) -> None:
+    """grep finding no row exits 1, and under pipefail that ended `show` and `summary` at the estimates
+    (12 November 2026), with NEEDS YOU never printed."""
+    table = tmp_path / "progress.tsv"
+    table.write_text("studio\tL1.5\tL\tbuilding\tExpert steps\n")
+    (tmp_path / "estimates.tsv").write_text("# as of 2026-11-12T00:00:00Z\n")
+    _all_beat(hb)
+    assert hb("beat", "case", "waiting-for-owner", "Q1 for the owner").returncode == 0
+    for verb in ("show", "summary"):
+        out = hb(verb, OSPREY_PROGRESS_FILE=str(table))
+        assert out.returncode == 0, (verb, out.returncode)
+    assert _needs(hb("show", OSPREY_PROGRESS_FILE=str(table))) == ["case is waiting for you: Q1 for the owner"]

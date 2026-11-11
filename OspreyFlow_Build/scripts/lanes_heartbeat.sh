@@ -65,7 +65,9 @@ age_s() {
   echo $(( $(now) - e ))
 }
 mins() { echo $(( $1 / 60 )); }
-field() { sed -n "s/^$1=//p" "$2" 2>/dev/null | head -1; }
+# The first value only, read whole: under pipefail a `| head -1` whose producer is still writing dies of SIGPIPE
+# (141) and ends the whole view (12 November 2026: `show` stopped part-way under the parallel test run).
+field() { sed -n "s/^$1=//p" "$2" 2>/dev/null | sed -n 1p; }
 
 beat() {
   local lane="${1:?usage: beat <lane> <state> \"<note>\"}" state="${2:?state}" note="${3:-}"
@@ -164,7 +166,7 @@ stacks_lines() {
 estimates() {
   [ -s "$ESTIMATES" ] || { echo; return 0; }
   local asof ago="" t
-  asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | head -1)"
+  asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | sed -n 1p)"
   if [ -n "$asof" ]; then
     t="$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$asof" +%s 2>/dev/null || date -u -d "$asof" +%s 2>/dev/null || echo "")"
     [ -n "$t" ] && ago=", $(( ($(date -u +%s) - t) / 60 ))m ago"
@@ -172,7 +174,7 @@ estimates() {
   echo "ESTIMATED TIME TO MERGE (the orchestrator's${asof:+, as of ${asof:11:5} UTC}$ago):"
   # Cut and padded by characters, never bytes (BSD awk and cut count bytes: an en dash cut through printed invalid
   # UTF-8, 10 November 2026): perl in UTF-8 mode, on macOS and Linux alike.
-  grep -v '^#' "$ESTIMATES" | perl -CSD -F'\t' -lane 'next if @F < 4; printf "  %-9s %-6s %-46s %s\n", $F[0], $F[1], substr($F[2], 0, 46), $F[3]'
+  { grep -v '^#' "$ESTIMATES" || true; } | perl -CSD -F'\t' -lane 'next if @F < 4; printf "  %-9s %-6s %-46s %s\n", $F[0], $F[1], substr($F[2], 0, 46), $F[3]'
   echo
 }
 
@@ -233,7 +235,7 @@ show() {
     if [ "$state" != paused ] && grep -q '^requested' "$DIR/$lane.pause" 2>/dev/null; then note="(pause requested) $note"; fi
     local account; account="$(cat "$DIR/$lane.account" 2>/dev/null || echo default)"
     local prog head steps done total merged
-    prog="$(progress_of "$lane")"; head="$(printf '%s\n' "$prog" | head -1)"; steps="$(printf '%s\n' "$prog" | tail -n +2)"
+    prog="$(progress_of "$lane")"; head="${prog%%$'\n'*}"; steps="$(printf '%s\n' "$prog" | tail -n +2)"
     done="${head%% *}"; total="${head#* }"
     merged=""
     case "$ab" in +0/*) merged="all merged" ;; +*) merged="${ab%%/*} commits not yet merged"; merged="${merged#+}" ;; esac
@@ -290,10 +292,10 @@ summary() {
   echo
   if [ -s "$DIR/.needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$DIR/.needs"; else echo "Nothing needs you."; fi
   if [ -s "$ESTIMATES" ]; then
-    local asof; asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | head -1)"
+    local asof; asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | sed -n 1p)"
     echo
     echo "REMAINING (the orchestrator's estimates${asof:+, as of ${asof:11:5} UTC}):"
-    grep -v '^#' "$ESTIMATES" | perl -CSD -F'\t' -lane 'next if @F < 4; $t = (($F[4] // "") eq "B") ? "B" : "A";
+    { grep -v '^#' "$ESTIMATES" || true; } | perl -CSD -F'\t' -lane 'next if @F < 4; $t = (($F[4] // "") eq "B") ? "B" : "A";
         $r{$t} .= sprintf("    %-10s %-7s %-40s %s\n", $F[0], $F[1], substr($F[2], 0, 40), $F[3]);
       END { print "  Demo track:\n$r{A}" =~ s/\n\z//r if $r{A}; print "  Client track:\n$r{B}" =~ s/\n\z//r if $r{B} }'
   fi

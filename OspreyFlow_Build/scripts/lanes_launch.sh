@@ -199,7 +199,9 @@ alive() {
   local dir="$WT/$1" pids
   pids="$(pgrep -f '(^|/)claude(-ayan)?( |$)' 2>/dev/null | paste -sd, - || true)"
   [ -n "$pids" ] || { echo "no"; return 1; }
-  if lsof -a -p "$pids" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' \
+  # lsof exits 1 when any pid in the list has gone (a session ending between pgrep and lsof); under pipefail
+  # that hid every live session in the list (12 November 2026), so its status is not the answer, awk's is.
+  if { lsof -a -p "$pids" -d cwd -Fn 2>/dev/null || true; } | sed -n 's/^n//p' \
       | awk -v d="$dir" '$0 == d || index($0, d "/") == 1 { found = 1 } END { exit !found }'; then
     echo "yes"; return 0
   fi
@@ -225,7 +227,7 @@ pause() {
       echo "- Branch head: $head"
       [ -n "$holder" ] && echo "- It still holds the lease on test stack $holder: bring that stack down (stack_lease.sh down $lane) and release it first."
       echo "- Uncommitted files in the worktree (reconcile them before anything else):"
-      if [ -n "$files" ]; then printf '%s\n' "$files" | head -20 | sed 's/^/    /'; else echo "    (none)"; fi
+      if [ -n "$files" ]; then printf '%s\n' "$files" | sed -n '1,20s/^/    /p'; else echo "    (none)"; fi
       echo "- Done, next and open questions: unknown; read REPORT.md and git log main..lane/$lane."
     } > "$h"
     echo "unclean $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STATE/$lane.pause"
@@ -255,7 +257,7 @@ pause_done() {
   echo "$lane paused at $step: $(git -C "$dir" log -1 --format=%h). End this session now."
 }
 
-paused_state() { sed -n 's/^state=//p' "$STATE/$1.beat" 2>/dev/null | head -1; }
+paused_state() { sed -n 's/^state=//p' "$STATE/$1.beat" 2>/dev/null | sed -n 1p; }
 
 switch() {
   local lane="$1" want="$2" waited=0
