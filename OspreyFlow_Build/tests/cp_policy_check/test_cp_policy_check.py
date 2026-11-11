@@ -354,12 +354,22 @@ def test_a_supplementary_group_outside_its_allowance_is_refused(
     assert _found(docs, registry) == [("supplementary-group", "supplementalGroups [4]")]
 
 
-def _with_a_job(development: tuple[dict[str, Any], str]) -> tuple[list[dict[str, Any]], str]:
+def _job_values(rendered: tuple[dict[str, Any], str]) -> tuple[dict[str, Any], str]:
     """The profile renders no Job today (the cluster's are the model downloads it drops), so one is
-    given in the values' `jobs`, as the API's own pod, and templated by the chart's `jobs.yaml`."""
-    values, registry = copy.deepcopy(development)
-    # As the API's pod, but reading no secret whole: `migrate` is not one of the workloads that may.
-    values["jobs"] = [{**_workload(values, "api"), "name": "migrate", "envFrom": False}]
+    given in the values' `jobs`, as the API's own pod, templated by the chart's `jobs.yaml`. As the
+    API's pod, but holding nothing of ours: `migrate` is not one of the pods that may read our
+    Secret whole or by key (point 22), nor mount a token (point 24)."""
+    values, registry = copy.deepcopy(rendered)
+    api = _workload(values, "api")
+    env = [e for e in api.get("env", []) if "secret" not in e]
+    job = {**api, "name": "migrate", "envFrom": False, "env": env, "automountToken": False}
+    job.pop("serviceAccountName", None)
+    values["jobs"] = [job]
+    return values, registry
+
+
+def _with_a_job(development: tuple[dict[str, Any], str]) -> tuple[list[dict[str, Any]], str]:
+    values, registry = _job_values(development)
     docs = helm_template(yaml.safe_dump(values))
     # The Job alone, unplanted, passes but for having no ingress policy of its own (no Job is
     # rendered on this profile; P9's bring their rows), which `_apart_from_its_ingress` sets apart.
@@ -778,18 +788,21 @@ def test_a_token_mounted_where_no_kubernetes_api_is_called_is_refused(
 
 def test_a_token_in_a_job_is_refused(rendered: tuple[dict[str, Any], str]) -> None:
     """A Job by its pod's name (its own name carries a hash of its steps)."""
-    values, registry = copy.deepcopy(rendered)
-    job = values["jobs"][0]
-    job["automountToken"] = True
+    values, registry = _job_values(rendered)
+    docs = helm_template(yaml.safe_dump(values))
+    assert not [v for v in check_manifests(docs, registry) if v.rule == "token"]
+    values["jobs"][0]["automountToken"] = True
     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
-    assert [(v.rule, v.where.split("/")[0]) for v in found] == [("token", "Job")]
+    assert [(v.rule, v.where.split("/")[0]) for v in found if v.rule != "ingress-isolation"] == [
+        ("token", "Job")
+    ]
 
 
 def test_the_irsa_pods_mount_their_tokens_and_pass(rendered: tuple[dict[str, Any], str]) -> None:
     values, registry = rendered
     docs = helm_template(yaml.safe_dump(values))
     specs = {d["metadata"]["name"]: pod_spec(d) for d in docs if d["kind"] == "Deployment"}
-    for name in ("api", "worker", "report-sync"):
+    for name in {"api", "worker", "report-sync"} & set(specs):
         assert specs[name]["automountServiceAccountToken"] is True, name
         assert specs[name]["serviceAccountName"], name
     assert specs["workspace"]["automountServiceAccountToken"] is False
