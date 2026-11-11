@@ -1,0 +1,61 @@
+diff --git a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
+index 5d53b1c..a7a4300 100644
+--- a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
++++ b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
+@@ -48,6 +48,11 @@ networkPolicy:
+ # nets}`) before the deny; empty: neither is rendered.
+ egress: {}
+ 
++# ADR-148 decision 13 (Amendment 7): the scheduled backup of ArcadeDB and ClickHouse to the
++# backups bucket by its own role, and a restore when `restore.set` names a set
++# (templates/backups.yaml has the shape). Empty: neither is rendered.
++backups: {}
++
+ # The platform's Ingress in place of Caddy: `className`, `annotations`, `rules` (each `{host,
+ # service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
+ ingress:
+diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+index b1f979c..d79d95e 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
++++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+@@ -612,6 +612,7 @@ def render_cloud_platform(
+ ) -> dict[str, str]:
+     """`values.yaml`, `versions.lock` and `terraform/*.tf`."""
+     from harness.cloud_platform.terraform import render_terraform
++    from harness.cloud_platform_backups import backups_values
+     from harness.cluster import render_cluster
+     from harness.render import service_images
+ 
+@@ -697,6 +698,8 @@ def render_cloud_platform(
+     if _cp(config).connector_hosts:
+         # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
+         environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(_cp(config).connector_hosts))
++    # Decision 13 (ADR-148 Amendment 7, P9): the backups, and ArcadeDB's claim they are read from.
++    backups = backups_values(config, platform, workloads, environment)
+     secrets = values["secrets"]
+     secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
+     secrets["defaults"] = {
+@@ -730,6 +733,7 @@ def render_cloud_platform(
+         },
+         "workloads": workloads,
+         "jobs": jobs,
++        **({"backups": backups} if backups else {}),
+     }
+     artefacts = {
+         "values.yaml": _BANNER
+diff --git a/OspreyFlow_Core/harness/cloud_platform/terraform.py b/OspreyFlow_Core/harness/cloud_platform/terraform.py
+index 25313a3..a80edac 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/terraform.py
++++ b/OspreyFlow_Core/harness/cloud_platform/terraform.py
+@@ -413,6 +413,11 @@ def render_terraform(
+             ),
+         ],  # fmt: skip
+     )
++    if values.get("backups"):
++        from harness.cloud_platform_backups import backups_terraform
++
++        # Decision 13 (ADR-148 Amendment 7, P9): the backups' bucket, key and role.
++        files["backups.tf"] = backups_terraform(config, platform)
+     account = secrets.irsa.service_account
+     files["irsa.tf"] = _file(
+         "Decision 4: the service account the Conduit, the workers and the report sync run as,\n"
