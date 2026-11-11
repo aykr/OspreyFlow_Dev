@@ -87,3 +87,11 @@ the orchestrator fetches this clone.
     layer; an image this branch does not touch).
   - `make ci`'s OpenTofu step rewrote three `.terraform.lock.hcl` files. They were restored, not committed.
 - The kind cluster was never brought up this session. No P7 gate needed it.
+- **P7 built at `1a63953d7b477e7e96843953ebd362f44de6844d`** (tree `0c9af8cfbbf102ee1ef71a92d6b9f85e75f9d706`), the
+  schemas commit at its head, on main 9bcadc6. The bar is ADR-142 Amendment 8's: the render, `cp-policy-check`
+  green and red on each planted fault, other-uid included, and `make test` and `make -k ci` with each failure
+  explained (REPORT.md). The only commit above it is this line in this log. P7a (the kind acceptance run) and
+  P9 are not started. **Stopped here**, for the orchestrator's review and merge.
+  - Nothing of this session is running.
+  - The kind cluster is down.
+  - Nothing was pushed.
