@@ -1,15 +1,16 @@
-# as of 2026-11-11T14:45Z
+# as of 2026-11-11T15:00Z
 admin	P10	part 1: merge prepared (7c33ea8), gates and the leased live selection running; part 2 next	part 1 11 Nov, ~15:30	B
 case	P9	briefed (BRIEF_P9, cut); starting once the owner confirms in its window	12 Nov	B
 platform-b	P11	round 2: every round-1 item fixed; rebase onto P7 once it merges, the JWT-shaped key check, then gates; credential step, listed for you	12 Nov, morning	B
-case-b	P12	round 2: code fixed; the leased live run against the real gateway (its blocker) and the scoped key's admin refusals, on the Mac now; credential step	11 Nov, evening	B
+case-b	P12	part 1: the live run done on a real gateway (Laurium's scoped key proven; Laurium could not read the 0.5B model's answer, recorded); records and gates, then merge; part 2 after	part 1 12 Nov	B
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
-platform	P7b	started from P7's merge (BRIEF_P7b): shape, runbooks, decommission test; final render and kind run after P11's and P12's part 2s	13 Nov	B
-docs	D2c	part 1 merged (admin guide 1.76 §6a); filled as each step lands	13 Nov	B
+platform	P7b	shape, runbooks, decommission check, the ceiling default and CPU limits built on the Mac; final render and kind run after P11's and P12's part 2s; the server is quiet for the owner's demo from 12:00 UK time on 13 Nov	14 Nov	B
+docs	D2c	part 1 merged (admin guide 1.76 §6a); part 2 from P10's merge; resuming on sol	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 4 landed (9de435c); part 5 built (9cbb4575), its review next	12 Nov	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 rules-b	T3b	the probe made platform-independent, then the server's browser gate; on the Mac now	11 Nov, evening	A
 platform-b	carries	review: seven must-fixes (three in-place deployment.env writers, the redactor hiding refusals, symlinks and put-back, the sudo lock); fixing on the Mac; rebase after P7	12 Nov, morning	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
+orchestrator	demo	osprey-demo, v0.5.0 in the GOV.UK look with the synthetic demo packs, beside osprey-small: built and backed up today; frozen until you say; checked Thursday 12 Nov by 12:00 UK; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 12:00 (the check)	A
