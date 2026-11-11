@@ -437,12 +437,25 @@ def test_summary_is_short_and_splits_the_remaining_steps_by_track(hb, tmp_path) 
     assert len(lines) <= 16, out
 
 
-def test_watch_shows_the_summary_unless_asked_for_the_full_view(hb, tmp_path) -> None:
+def test_watch_shows_the_default_view_unless_asked_for_the_full_view(hb, tmp_path) -> None:
+    """The owner, 11 November 2026: watch prints the default view (the two views, the release, housekeeping
+    and the Lanes table) on every pass, not the older summary by track; --full stays lane by lane."""
     table = _summary_fixture(tmp_path)
-    short = hb("watch", "1", OSPREY_WATCH_PASSES="1", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
-    full = hb("watch", "--full", OSPREY_WATCH_PASSES="1", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
-    assert "OSPREYFLOW ·" in short and "Test stack" not in short
-    assert "Test stack" in full and "OSPREYFLOW ·" not in full
+    env = {"OSPREY_WATCH_PASSES": "1", "OSPREY_LANES": "studio", "OSPREY_PROGRESS_FILE": str(table)}
+    default = hb("watch", "1", **env).stdout
+    for heading in ("VIEW 1 · FOUNDATION FEATURES", "VIEW 2 · DEPLOYMENT", "RELEASE", "HOUSEKEEPING", "LANES"):
+        assert heading in default, heading
+    assert "NEEDS YOU:\n  - studio has never sent a heartbeat" in default  # what needs the owner, shown each pass
+    assert "Demo track" not in default and "Client track" not in default and "Test stack" not in default
+    for args in (("--full",), ("--full", "1"), ("1", "--full")):
+        full = hb("watch", *args, **env).stdout
+        assert "Test stack" in full and "VIEW 1 · FOUNDATION FEATURES" not in full, args
+
+
+def test_the_older_summary_stays_available_as_its_own_verb(hb, tmp_path) -> None:
+    table = _summary_fixture(tmp_path)
+    out = hb("summary", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
+    assert "OSPREYFLOW ·" in out and "VIEW 1 · FOUNDATION FEATURES" not in out
 
 
 def test_an_estimate_is_cut_by_characters_never_through_one(hb, tmp_path) -> None:

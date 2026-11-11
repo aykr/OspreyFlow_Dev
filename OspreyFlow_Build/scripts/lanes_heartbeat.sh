@@ -11,10 +11,10 @@
 #                                                     release, housekeeping, and one row per lane
 #   lanes_heartbeat.sh --lanes [--full]               lane by lane (the same as `show`)
 #   lanes_heartbeat.sh show                           one table: every lane, the lease, what needs you
-#   lanes_heartbeat.sh summary                        the owner's short view: one line of totals, what needs
+#   lanes_heartbeat.sh summary                        the older short view: one line of totals, what needs
 #                                                     you, and the remaining steps by track with their times
-#   lanes_heartbeat.sh watch [seconds] [--full]       show the summary (--full: every lane) every N seconds
-#                                                     (default 300) and send a
+#   lanes_heartbeat.sh watch [seconds] [--full]       the default view and what needs you (--full: lane by
+#   lanes_heartbeat.sh watch --full [seconds]         lane) every N seconds (default 300), and send a
 #                                                     macOS notification when something newly needs you; a
 #                                                     lane blocked at its usage limit is switched to its
 #                                                     owner-written fallback account once, never otherwise
@@ -352,7 +352,8 @@ overview() {
   local lanes merges lane st note
   lanes="$(mktemp "$DIR/.overview.XXXXXX")"; merges="$(mktemp "$DIR/.merges.XXXXXX")"
   for lane in $LANES; do
-    st="$(field state "$DIR/$lane.beat")"; note="$(field note "$DIR/$lane.beat")"
+    # A lane that has never beaten has no .beat file; under pipefail that must not end the whole view.
+    st="$(field state "$DIR/$lane.beat" || true)"; note="$(field note "$DIR/$lane.beat" || true)"
     printf '%s\t%s\t%s\t%s\t%s\n' "$lane" "${st:--}" "$note" "$(account_of "$lane")" "$(where_of "$lane")" >> "$lanes"
   done
   release_merges > "$merges"
@@ -481,7 +482,14 @@ watch_loop() {
   while true; do
     clear 2>/dev/null || true
     echo "OspreyFlow lanes · $(date '+%H:%M:%S') · every ${every}s · Ctrl-C to stop"; echo
-    if [ "$view" = "--full" ]; then show; else summary; fi
+    if [ "$view" = "--full" ]; then
+      show
+    else
+      show >/dev/null   # works out what needs the owner, as the notifications below rely on
+      overview
+      echo
+      if [ -s "$DIR/.needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$DIR/.needs"; else echo "Nothing needs you."; fi
+    fi
     # notify only for lines that are new since the last pass
     if [ -s "$DIR/.needs" ]; then
       while IFS= read -r line; do
@@ -508,6 +516,6 @@ case "${1:-}" in
   nudge) shift; nudge "$@" ;;
   show) shift; show "${1:-}" ;;
   summary) summary ;;
-  watch) shift; case "${1:-}" in --full) watch_loop 300 --full ;; *) watch_loop "${1:-300}" "${2:-}" ;; esac ;;
-  *) echo "usage: lanes_heartbeat.sh [--lanes [--full]] | beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full]" >&2; exit 2 ;;
+  watch) shift; case "${1:-}" in --full) watch_loop "${2:-300}" --full ;; *) watch_loop "${1:-300}" "${2:-}" ;; esac ;;
+  *) echo "usage: lanes_heartbeat.sh [--lanes [--full]] | beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full] | watch --full [seconds]" >&2; exit 2 ;;
 esac
