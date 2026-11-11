@@ -1,0 +1,14 @@
+# Gate: the isolation proof at a4804ab on the same lease, stack c
+Running on ospreyflow-test (stack c, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261111T012412Z/log: process/lanes/admin/t1/t1p4_run.sh isolation
+..                                                                       [100%]
+============================= slowest 30 durations =============================
+7.92s call     tests/test_worker_isolation_live.py::test_two_workers_writing_the_same_names_never_see_each_other_s
+2.09s call     tests/test_worker_isolation_live.py::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red
+0.29s setup    tests/test_worker_isolation_live.py::test_two_workers_writing_the_same_names_never_see_each_other_s
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+2 passed in 10.34s
+STEP isolation: exit 0, 11 s
+OUTCOME isolation passed tests.test_worker_isolation_live::test_two_workers_writing_the_same_names_never_see_each_other_s
+OUTCOME isolation passed tests.test_worker_isolation_live::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red
+Wall time: 11 s, exit 0 (stack c, the lease admin took at 2026-11-11T00:11:10Z; set-up before it 10 s)
