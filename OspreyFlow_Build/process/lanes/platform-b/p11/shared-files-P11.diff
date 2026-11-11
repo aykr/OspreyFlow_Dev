@@ -1,0 +1,30 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 11cb21cc..e6d78700 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -38,7 +38,10 @@ const EXTRA_STATES: Record<string, string[]> = {
+   // ADR-135 Amendment 2: Admin › Models with an engine being added, a key being entered, and a
+   // local-only deployment (platform lane P1); Amendment 3: an engine's limits being set, the usage's
+   // own days drawn, and the gateway not giving its usage (P2; the usage table is on every other state).
+-  "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail"],
++  // ADR-135 Amendment 4 (P11 part 1): Bedrock chosen in the add form beside an IAM-role engine's row,
++  // and the organisation's own gateway chosen.
++  "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail",
++                          "open=add&kind=bedrock&iam=1", "open=add&kind=gateway"],  // prettier-ignore
+   // ADR-146 decisions 2 and 6: Home with Rules and Monitoring's card and an alert's row.
+   "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue"],
+   // ADR-147: Admin › Maps with a provider being added, a key being entered and an area being added
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 270afa0a..2907fae9 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -894,6 +894,9 @@ export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
+   // ADR-135 Amendment 3: an engine's limits and the gateway's usage.
+   "set-a-model-engines-limits-by-keyboard",
+   "choose-the-model-usage-period-by-keyboard",
++  // ADR-135 Amendment 4 (P11 part 1): the two engine kinds of the cloud-platform profile.
++  "add-bedrock-by-iam-role-by-keyboard",
++  "add-the-organisations-gateway-by-keyboard",
+ ] as const);
+ 
+ // ADR-147: Admin › Maps (platform lane P3).

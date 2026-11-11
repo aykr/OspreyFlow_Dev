@@ -1,0 +1,24 @@
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_signs_in_by_the_namespace_s_role_in_london_by_default
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_schema_refuses_each_shape_the_profile_does_not_allow[bedrock-by-key]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_schema_refuses_each_shape_the_profile_does_not_allow[bedrock-us]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_schema_refuses_each_shape_the_profile_does_not_allow[bedrock-ireland]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_schema_refuses_each_shape_the_profile_does_not_allow[bedrock-address]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_schema_refuses_each_shape_the_profile_does_not_allow[gateway-no-address]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_schema_refuses_each_shape_the_profile_does_not_allow[provider-by-role]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_every_models_route_refuses_a_principal_without_manage_models_for_each_kind[analyst-bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_every_models_route_refuses_a_principal_without_manage_models_for_each_kind[analyst-gateway]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_every_models_route_refuses_a_principal_without_manage_models_for_each_kind[every-other-admin-right-bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_every_models_route_refuses_a_principal_without_manage_models_for_each_kind[every-other-admin-right-gateway]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_s_token_reaches_its_credential_and_is_sent_to_its_address_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_keeps_no_key_anywhere[bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_keeps_no_key_anywhere[gateway-by-role]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_answers_through_the_gateway_pod_s_role_in_london
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_with_no_role_on_the_gateway_pod_says_so_in_words_of_the_role
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_client_gateway_by_role_is_refused_before_anything_is_sent
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_signing_in_another_way_removes_the_engine_s_key[to-the-role]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_signing_in_another_way_removes_the_engine_s_key[to-another-kind]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_command_line_moves_no_key_for_an_iam_role_engine
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_each_kind_s_limits_are_its_own_gateway_key_s[bedrock]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_each_kind_s_limits_are_its_own_gateway_key_s[gateway]
+23 failed, 2 passed, 1 warning in 4.17s
