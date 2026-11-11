@@ -168,3 +168,58 @@ def test_only_a_pod_with_an_account_of_its_own_mounts_its_token(name: str) -> No
     gateway = {"litellm"} if name == "production-bedrock" else set()
     irsa = {"api", "worker", "report-sync"} & {p["name"] for p in pods}  # the poc's has no sync
     assert {"api", "worker"} <= irsa and mounted == irsa | gateway
+
+
+# ---- each host on its own ports (Amendment 5 point 21, the final review's item 5) ----------------
+
+
+def _with(**cloud: Any) -> OspreyConfig:
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    nets = raw["cloud_platform"]["egress_nets"]
+    for host, net in cloud.pop("nets", {}).items():
+        nets[host] = [net]
+    raw.update(cloud.pop("top", {}))
+    raw["cloud_platform"].update(cloud)
+    return OspreyConfig.model_validate(raw)
+
+
+def _hosts(config: OspreyConfig) -> dict[str, list[int]]:
+    values = yaml.safe_load(render(config, resolver=_resolver).artefacts["values.yaml"])
+    return {h["host"]: h["ports"] for h in values["egress"]["hosts"]}
+
+
+def test_each_host_is_reached_on_its_own_ports() -> None:
+    """S3 and STS on 443; the mail server on `mail.port`; a connector host on its `host:port`, a
+    bare one on 443, and one given twice with two ports on both. The Conduit's allow-list keeps
+    the hosts alone."""
+    mail = {"host": "smtp.example.org", "port": 2525, "from_address": "osprey@example.org"}
+    config = _with(
+        connector_hosts=["db.example.org:5432", "api.example.org", "db.example.org:1433"],
+        nets={"smtp.example.org": "198.18.4.0/24", "db.example.org": "198.18.5.0/24",
+              "api.example.org": "198.18.6.0/24"},
+        top={"mail": mail},
+    )  # fmt: skip
+    hosts = _hosts(config)
+    assert hosts["s3.eu-west-2.amazonaws.com"] == [443]
+    assert hosts["sts.eu-west-2.amazonaws.com"] == [443]
+    assert hosts["smtp.example.org"] == [2525]
+    assert hosts["db.example.org"] == [1433, 5432]
+    assert hosts["api.example.org"] == [443]
+    values = yaml.safe_load(render(config, resolver=_resolver).artefacts["values.yaml"])
+    assert values["environment"]["OSPREY_CONNECTOR_EGRESS"] == "api.example.org,db.example.org"
+
+
+def test_the_managed_stores_are_reached_on_their_own_ports() -> None:
+    """RDS's and ElastiCache's, and the OpenSearch domain's 443 where the Terraform makes one (not
+    in the poc shape, which takes no OpenSearch)."""
+    assert _values("development")["egress"]["managedPorts"] == [443, 5432, 6379]
+    assert _values("poc")["egress"]["managedPorts"] == [5432, 6379]
+
+
+@pytest.mark.parametrize(
+    "entry", ["db.example.org:0", "db.example.org:65536", "db.example.org:54x2",
+              "db.example.org:", ":5432", "db.example.org:+5432"],
+)  # fmt: skip
+def test_a_connector_host_s_port_that_is_not_a_port_is_refused(entry: str) -> None:
+    with pytest.raises(ValueError, match="host:port with a port from 1 to 65535"):
+        _with(connector_hosts=[entry], nets={"db.example.org": "198.18.5.0/24"})

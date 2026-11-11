@@ -66,6 +66,9 @@ egress:
     connectors: [api, worker]
   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
   managed: [api, worker, report-sync, superset, keycloak, litellm]
+  # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
+  # 443 is added when the deployment searches with it.
+  managed_ports: [5432, 6379]
   # Which of the namespace's own workloads each one calls, from the addresses its environment names
   # (the Glass the Conduit; the Conduit its stores, the identity provider, the gateway, the
   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.

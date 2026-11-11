@@ -205,6 +205,9 @@ class EgressHosts(_Strict):
     #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
     others: list[str] = Field(default_factory=list)
     managed: list[str] = Field(default_factory=list)
+    #: The managed stores' ports (RDS, ElastiCache); the OpenSearch domain's 443 is added when the
+    #: deployment searches with it.
+    managed_ports: list[int] = Field(default_factory=list)
     paths: dict[str, list[str]] = Field(default_factory=dict)
 
     @field_validator("reach")

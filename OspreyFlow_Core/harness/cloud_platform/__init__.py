@@ -54,6 +54,7 @@ from schemas.deployment import (
     OspreyConfig,
     Profile,
     SearchBackend,
+    connector_address,
 )
 
 #: ADR-148 decision 3: the one numeric user every pod runs as.
@@ -416,30 +417,45 @@ def _read_from_the_platform(
             ]
 
 
-def _host(address: str) -> str | None:
+def _address(address: str) -> tuple[str | None, int]:
+    """An address's host and port, in one parse: its own port, or its scheme's (80 for http, 443
+    otherwise). The one place a host and its port are read from an address (point 21)."""
     from urllib.parse import urlsplit
 
-    return urlsplit(re.sub(r"\{[^}]*\}", "x", address)).hostname
+    parts = urlsplit(re.sub(r"\{[^}]*\}", "x", address))
+    return parts.hostname, parts.port or (80 if parts.scheme == "http" else 443)
+
+
+def _host(address: str) -> str | None:
+    return _address(address)[0]
+
+
+def engine_address(
+    name: str, kind: str, api_base: str | None, region: str | None, profile: ProfileSettings
+) -> tuple[str | None, int]:
+    """The one host a model engine's calls reach, and its port: its address's, its kind's
+    (Bedrock's runtime in its region, `egress.engine_kind_hosts`), or its provider's own
+    (`egress.engine_hosts`), the last two on 443."""
+    if api_base:
+        return _address(api_base)
+    if kind in profile.egress.engine_kind_hosts:
+        # A kind that names no address (Bedrock): by its kind, its region's (P11).
+        return profile.egress.engine_kind_hosts[kind].format(region=region), 443
+    return profile.egress.engine_hosts.get(name), 443
 
 
 def engine_host(
     name: str, kind: str, api_base: str | None, region: str | None, profile: ProfileSettings
 ) -> str | None:
-    """The one host a model engine's calls reach: its address's, its kind's (Bedrock's runtime in
-    its region, `egress.engine_kind_hosts`), or its provider's own (`egress.engine_hosts`)."""
-    if api_base:
-        return _host(api_base)
-    if kind in profile.egress.engine_kind_hosts:
-        # A kind that names no address (Bedrock): by its kind, its region's (P11).
-        return profile.egress.engine_kind_hosts[kind].format(region=region)
-    return profile.egress.engine_hosts.get(name)
+    """The one host a model engine's calls reach (`engine_address`'s)."""
+    return engine_address(name, kind, api_base, region, profile)[0]
 
 
-def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
-    """Each enabled engine's host, refused in words when one cannot be known."""
-    hosts = []
+def _engine_addresses(config: OspreyConfig, profile: ProfileSettings) -> list[tuple[str, int]]:
+    """Each enabled engine's host and port, refused in words when its host cannot be known."""
+    addresses = []
     for provider in config.models.enabled_providers:
-        host = engine_host(
+        host, port = engine_address(
             provider.name, provider.kind, provider.api_base, provider.region, profile
         )
         if host is None:
@@ -447,8 +463,13 @@ def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
                 f"the model engine {provider.name!r} names no api_base, so its traffic's host is "
                 "not known and cannot be allowed"
             )
-        hosts.append(host)
-    return hosts
+        addresses.append((host, port))
+    return addresses
+
+
+def engine_hosts(config: OspreyConfig, profile: ProfileSettings) -> list[str]:
+    """Each enabled engine's host, refused in words when one cannot be known."""
+    return [host for host, _ in _engine_addresses(config, profile)]
 
 
 def _egress_hosts(
@@ -462,27 +483,48 @@ def _egress_hosts(
 def _egress_hosts_by_kind(
     config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
 ) -> dict[str, list[str]]:
+    """Each kind's hosts (`_egress_addresses_by_kind`'s, without their ports)."""
+    return {kind: sorted({host for host, _ in addresses}) for kind, addresses
+            in _egress_addresses_by_kind(config, platform, profile).items()}  # fmt: skip
+
+
+def _host_ports(addresses: dict[str, list[tuple[str, int]]]) -> dict[str, list[int]]:
+    """Each host's ports, whichever kinds reach it: a host given twice with two ports has both."""
+    ports: dict[str, set[int]] = {}
+    for host, port in (a for kind in addresses.values() for a in kind):
+        ports.setdefault(host, set()).add(port)
+    return {host: sorted(held) for host, held in ports.items()}
+
+
+def _egress_addresses_by_kind(
+    config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
+) -> dict[str, list[tuple[str, int]]]:
     """Each host the namespace reaches: the profile's `egress.always` (S3, the bucket, and STS,
     IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
     (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
     mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
-    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)"""
-    kinds: dict[str, list[str]] = {
-        "always": [host.format(region=platform.aws_region) for host in profile.egress.always],
-        "identity": [host.format(region=platform.aws_region) for host in profile.egress.identity],
-        "engines": engine_hosts(config, profile), "maps": [], "mail": [], "connectors": [],
+    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)
+    Each with its port (Amendment 5 point 21): an AWS service's 443, an address's own or its
+    scheme's, the mail server's `mail.port`, a connector host's `host:port` or 443."""
+    region = platform.aws_region
+    kinds: dict[str, list[tuple[str, int]]] = {
+        "always": [(host.format(region=region), 443) for host in profile.egress.always],
+        "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
+        "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
     }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:
         if map_provider.proxy == "none":
             continue  # fetched by the browser, never from the namespace
         for address in (map_provider.source or "", map_provider.endpoint or ""):
-            if address.startswith(("http://", "https://")) and (host := _host(address)):
-                kinds["maps"].append(host)
+            if address.startswith(("http://", "https://")):
+                host, port = _address(address)
+                if host:
+                    kinds["maps"].append((host, port))
     if config.mail is not None:
-        kinds["mail"].append(config.mail.host)
-    kinds["connectors"] += _cp(config).connector_hosts
-    return {kind: sorted(set(hosts)) for kind, hosts in kinds.items()}
+        kinds["mail"].append((config.mail.host, config.mail.port))
+    kinds["connectors"] += [connector_address(e) for e in _cp(config).connector_hosts]
+    return {kind: sorted(set(addresses)) for kind, addresses in kinds.items()}
 
 
 def egress_policy(
@@ -500,8 +542,10 @@ def egress_policy(
     # Every pod that has a row: the workloads, and the pods rendered outside them (`others`: P9's
     # backup and restore, by their pods' names), which admit nothing and reach what their rows give.
     rows = [*workloads, *({"name": name} for name in others)]
-    by_kind = _egress_hosts_by_kind(config, platform, profile)
-    hosts = sorted({h for hs in by_kind.values() for h in hs})
+    addresses = _egress_addresses_by_kind(config, platform, profile)
+    by_kind = {kind: sorted({host for host, _ in held}) for kind, held in addresses.items()}
+    ports = _host_ports(addresses)
+    hosts = sorted(ports)
     missing = [host for host in hosts if not given.get(host)]
     if missing:
         raise CloudPlatformNotRenderable(
@@ -513,9 +557,20 @@ def egress_policy(
         "kind": platform.egress.kind,
         "dnsNamespace": platform.egress.dns_namespace,
         "managedNets": list(platform.egress.managed_nets),
-        "hosts": [{"host": host, "nets": list(given[host])} for host in hosts],
+        "managedPorts": _managed_ports(config, profile),
+        "hosts": [{"host": host, "nets": list(given[host]), "ports": ports[host]}
+                  for host in hosts],  # fmt: skip
         "workloads": _egress_by_workload(by_kind, profile, rows),
     }
+
+
+def _managed_ports(config: OspreyConfig, profile: ProfileSettings) -> list[int]:
+    """The managed stores' ports (Amendment 5 point 21): RDS's and ElastiCache's, and the
+    OpenSearch domain's 443 when the deployment searches with OpenSearch."""
+    ports = set(profile.egress.managed_ports)
+    if config.components.search is SearchBackend.OPENSEARCH:
+        ports.add(443)
+    return sorted(ports)
 
 
 def _egress_by_workload(
@@ -924,7 +979,9 @@ def render_cloud_platform(
     environment.update(install.settings)
     if _cp(config).connector_hosts:
         # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
-        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(_cp(config).connector_hosts))
+        # Hosts alone: the Conduit's allow-list matches a host; the port is the egress policy's.
+        hosts = {connector_address(e)[0] for e in _cp(config).connector_hosts}
+        environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(hosts))
     secrets = values["secrets"]
     secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
     secrets["defaults"] = {

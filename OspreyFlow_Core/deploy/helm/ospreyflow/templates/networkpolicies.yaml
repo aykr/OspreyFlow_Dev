@@ -1,5 +1,10 @@
 {{- if or .Values.workloads .Values.jobs }}
 {{- $perWorkload := dig "workloads" list (.Values.egress | default dict) }}
+{{- /* ADR-148 Amendment 5 points 21 and 23: on a shared platform each workload's egress (Calico's)
+     and ingress are its own (below), so the namespace-wide policy is not rendered at all: its egress
+     half would open every pod to every pod and every namespace's DNS the moment the deny's order
+     stopped running first. */}}
+{{- if not $perWorkload }}
 ---
 # ADR-114 Amendment 7 on Kubernetes: a pod reaches the deployment's own pods and the cluster's DNS,
 # and nothing else; anything from outside reaches nothing but the proxy.
@@ -13,17 +18,12 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/part-of: ospreyflow
-  {{- /* ADR-148 Amendment 5 point 23: on a shared platform each workload's ingress is its own (below). */}}
-  {{- if $perWorkload }}
-  policyTypes: ["Egress"]
-  {{- else }}
   policyTypes: ["Ingress", "Egress"]
   ingress:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: ospreyflow
-  {{- end }}
   egress:
     - to:
         - podSelector:
@@ -37,6 +37,7 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
+{{- end }}
 {{- if dig "openEgress" true (.Values.networkPolicy | default dict) }}
 ---
 # What a configured feature needs a route out for — the cloud's managed stores, a model provider,
@@ -103,8 +104,10 @@ spec:
         namespaceSelector: {{ printf "kubernetes.io/metadata.name == '%s'" .dnsNamespace | quote }}
         ports: [53]
 {{- $nets := dict }}
-{{- range .hosts }}{{ $_ := set $nets .host .nets }}{{ end }}
+{{- $hostPorts := dict }}
+{{- range .hosts }}{{ $_ := set $nets .host .nets }}{{ $_ := set $hostPorts .host .ports }}{{ end }}
 {{- $managed := .managedNets }}
+{{- $managedPorts := .managedPorts }}
 {{- range .workloads }}
 {{- if or .toPods .toKubeApi .managed .hosts }}
 ---
@@ -139,15 +142,20 @@ spec:
           namespace: default
     {{- end }}
     {{- if .managed }}
+    # The managed stores, on their own ports.
     - action: Allow
+      protocol: TCP
       destination:
         nets: {{ toJson $managed }}
+        ports: {{ toJson $managedPorts }}
     {{- end }}
     {{- range .hosts }}
-    # {{ . }}
+    # {{ . }}, on its own ports.
     - action: Allow
+      protocol: TCP
       destination:
         nets: {{ toJson (get $nets .) }}
+        ports: {{ toJson (get $hostPorts .) }}
     {{- end }}
 {{- end }}
 {{- end }}
