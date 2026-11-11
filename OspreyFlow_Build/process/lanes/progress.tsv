@@ -82,7 +82,7 @@ rules	lists	S	todo	Live files remove the screening lists they load; ADR-146: one
 rules-b	T3b	S	review	The contrast probe's limits (SVG surfaces, shadows, points); Show as BPMN's task-box contrast
 platform-b	carries	M	building	The chart's quoted checksums; ADR-114 Am 39's edge cases (crash flags, ownership, atomic writes, stale stage, shell values); the lockout's words
 studio	carries	S	todo	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19)
-docs	D2d	S	review	The rule editor and the one queue in the user and admin guides (user 1.44, admin 1.70), with their PDFs
+docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (user 1.46, admin 1.72), with their PDFs; merged f262e7b after two reviews
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape
 platform	P7b	M	todo	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks, each run on kind; its kind run is the client install's acceptance
 platform	P9b	S	todo	After the client's install: alerts, the PodDisruptionBudgets' drain test, the volume-expansion procedure

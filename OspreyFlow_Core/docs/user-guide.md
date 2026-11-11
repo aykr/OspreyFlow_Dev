@@ -15,10 +15,13 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.43** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
+**Version 1.46** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.46 | 2026-11-11 | The second look at 1.45. §7.10: lists are imported in the Ingest Studio by a data engineer, or anyone holding Load screening lists and Edit pipelines; who here sees a refresh's counts. Captions 23 and 26 say that their pictures still show the former Lists and Watches tabs, to be retaken |
+| 1.45 | 2026-11-11 | The review of 1.44, against the code. §7.6: *Make live*, *Approve* and *Reject* need Deploy rules and Rules and Monitoring itself, so an Analyst, not a Data Engineer; *Deploy the sentence* needs Deploy rules and Keep watches. §7.1, §7.2, §7.4, §7.9 and §7.10: a rule kept just for its author is listed as a *Watched pattern*, and a template or pattern rule kept so raises medium alerts whatever its template's severity, stated as a known issue. §7.4: *Retire*, *Use* and *Deploy* need Deploy rules. §7.10: the screening lists are shown read-only under *What raises alerts*, and imported, mapped and refreshed in the Ingest Studio's *2 Sources*. Captions 23, 24 and 26 recaptioned |
+| 1.44 | 2026-11-11 | Rules' L2.10 and L2.11 as built (ADR-146 Amendment 6). §7.1: the place's four tabs, the one queue's five kinds and its filters. §7.2: a rule's own severity; who sees an alert, *‹Team› only* among them. §7.3: What fired it, Open the board, the lead's Give to and Suppress until…. §7.4 and §7.5: what raises alerts, hotlists and watched patterns there, Save as a watch, Watch for this, drawn items' watches. §7.6: the rule editor: a dataset chosen once, the sentence, Preview, Save the draft, Test on the last 30 days, Make live (Deploy rules), the second person by the dataset's setting, Show as BPMN; no whole-deployment rule. §7.11 and §7.12 brought in line |
 | 1.43 | 2026-11-10 | Describes v0.5.0. §7: the alerts journey, the rule editor included, built and no longer *coming*; the section is still to be rewritten for it. |
 | 1.42 | 2026-11-10 | Rules' L2.10, case's L3.6 and L3.H1 as built, no longer *coming*. §4: a rule's alerts routed to one team, read by its members and the home case's Authors, given out or suppressed by its lead. §5.14: a drawn item's watch, the *Drawn items* alert when a load meets it, and the load result's count |
 | 1.41 | 2026-11-10 | Admin's L2.7 as built. §3: Home's *What you can do, and what you answer for*, with *Why can I do this?*; *Needs you* in the top bar. |
@@ -830,77 +833,168 @@ To ask in words for a pattern rather than an answer, use **Ask to search** in th
 > **Alerts are worked in Rules and Monitoring**, the fourth place (key `R`), which the Analyst and
 > Rule author roles open. Its tabs are **Alerts**, **What raises alerts**, **Held rows** and
 > **Changes**. An alert has its own address, and **Open the evidence** saves a private view of the
-> case and opens it with **← Back to the alert**. The alerts journey (one queue, what raises
-> alerts, watches, team routing, *Raise an alert* and the rule editor) is built, and the v0.5.0
-> release notes describe it; this section is still to be rewritten for it. Where it says
-> *Monitoring*, read Rules and Monitoring.
+> case and opens it with **← Back to the alert**. Every alert you may see is in one queue (7.1);
+> rules are written on a dataset in the rule editor (7.6), tested, then made live.
 
 ### 7.1 The Rules and Monitoring place
 
 ![Rules and Monitoring: the alerts, with a hotlist alert open](images/user/09-monitoring.png)
 
-**Rules and Monitoring** (key `R`) is the place for alerts. Its tabs are **Alerts**, **What raises
-alerts**, **Held rows** and **Changes**. **Connection strength** is not here: it is in the Glass's rail
-(section 5). What follows describes the alerts themselves, which the rewrite named above keeps.
+**Rules and Monitoring** (key `R`) is the place for alerts. It works on the case you have open. With
+none open, it says "Open a case to see its alerts and what raises them." Its tabs are:
 
-**The queue holds every kind of alert you may see**, in one list:
+- **Alerts**: the one queue, with the alert you open beside it (§7.3);
+- **What raises alerts**: every rule and watch, the rule editor, the templates, your hotlists and
+  watched patterns, and the screening lists the rules read (§7.4 to §7.6);
+- **Held rows**: the rows a rule held before they loaded. You see it as an Editor or Author of the case;
+- **Changes**: the rule audit. You see it as an Author of the case, or as an administrator.
 
-- **rule alerts**, raised by the case's rules — structuring, rapid movement, circular flow, screening
-  matches, shared contact details, unverified customers, and patterns drawn by analysts;
-- **hotlist alerts**, when data touches an identifier on a hotlist (section 7.5);
-- **watched-pattern alerts**, when a monitor's saved pattern matches new data.
+**Connection strength** is not here: it is in the Glass's rail (section 5).
+
+**One queue holds every alert you may see.** **Kind** names its five kinds:
+
+- **Rules**: raised by the case's rules — structuring, rapid movement, circular flow, screening
+  matches, shared contact details, unverified customers, drawn patterns and rules written as sentences
+  for the case;
+- **Hotlists**: data touched an identifier on a hotlist (§7.5);
+- **Watched patterns**: a saved pattern matched new data (§7.5), or a rule kept just for you raised
+  an alert, whether written as a sentence or made from a template or a saved pattern (§7.2's known
+  issue);
+- **Raised by an analyst**: someone chose **Raise an alert…** in the Query builder. One raised to a
+  dataset is headed "Dataset alert";
+- **Drawn items**: a load wrote something that looks like an item drawn on a board (§7.5).
 
 **An alert concerning anything you cannot see is neither shown nor counted**, whatever its kind.
 
-Each row says its **severity**, what kind it is and what it found, then where it stands (open, or
-claimed and by whom), **who may see it**, how long it has waited ("2 hours old") and when it was raised.
-The most severe come first, then the newest. **Show**, **Kind** and **Severity** above the list choose
-which alerts to list; the choice is made by the server, so a count always means what it says.
+Above the list, five choices say which alerts to list:
+
+- **Whose alerts**: **All, suppressed included**, **Mine**, **My teams'** or **Unassigned**. Only
+  **All, suppressed included** lists an alert that is suppressed (§7.3);
+- **Older than, in days**: a number of days, or blank for any age;
+- **Show**: **Open, claimed and closing**, **Closed** or **All**;
+- **Kind**: **Every kind**, or one of the five above;
+- **Severity**: **Any**, **High**, **Medium** or **Low**.
+
+The server makes the choice, so a count ("4 alerts you can see.") always means what it says.
+
+Each row says its **severity**, what it is ("Hotlist", "Watched pattern", "A load met a drawn item", or
+what a rule looks for, such as "Structuring") and what it found. Under that it says where it stands (open, claimed and
+by whom, closing or closed), **who may see it** (§7.2), how long it has waited ("2 hours old") and
+when it was raised. A suppressed alert also says "Suppressed until", the date and why. An alert
+whose load was reverted says "Taken back: the load that raised it was reverted". The most severe
+come first, then the newest.
 
 ### 7.2 Severity and who sees an alert
 
-Every alert is **high**, **medium** or **low**. Until rules can set their own (a later release), each
-kind has its own:
+Every alert is **high**, **medium** or **low**. A rule written as a sentence, in the rule editor or
+just for you, sets its own **Severity** (§7.6). So does whoever chooses **Raise an alert…**. Every
+other alert takes its kind's:
 
 | Alert | Severity |
 | --- | --- |
 | A hotlist match | High |
-| A screening match | High |
-| Shared contact details | Low |
-| Any other rule, and a watched pattern | Medium |
+| A screening match (a case's rule from the template) | High |
+| Shared contact details (a case's rule from the template) | Low |
+| Any other template's case rule, a watched pattern, a drawn item | Medium |
+| A rule made from a template or a saved pattern, kept just for you | Medium, whatever its template |
+
+Each template says, on **What raises alerts**, what a case's rule made from it raises: "Raises
+medium-severity alerts."
+
+**Known issue: a rule kept just for you is listed as a watched pattern.** Every alert from a rule kept
+just for you is listed as **Watched pattern**, under **Kind: Watched patterns**, not under **Rules**. A
+rule just for you written as a sentence keeps the severity it sets. One made from a template or a saved
+pattern on **What raises alerts** (which keeps every rule made there just for you, §7.4) is **medium**,
+whatever its template says: a screening match from it, high from a case's rule, is medium, and shared
+contact details, low from a case's rule, are medium too. A rule for the case, written in the rule
+editor (§7.6), is not affected.
 
 Who may see an alert is shown on its row:
 
-- **The case team**: a rule alert reaches every member of the case.
+- **The case team**: a rule's alert, and one raised to the case, reaches every member of the case.
+  One raised to a dataset ("The dataset: everyone with a case on it sees it") is in the queue of that
+  dataset's home case.
+- **Team ‹name› only**: a rule whose **Alert goes to** names a team (§7.6). Only that team's members
+  who hold the case, and the Authors of the dataset's home case, read it. This is enforced in the
+  query that reads the queue, not by hiding rows: to anyone else, the alert is not there and is not
+  counted.
 - **Shared with team …**: a watched pattern's alert, and a hotlist's alert when its owner has shared
   it, reach the owner and the people of the owner's **unit** (the unit your administrator gave your
   account).
-- **Only its owner**: a hotlist kept to its owner, and an alert raised before teams existed.
+- **Only its owner**: a hotlist kept to its owner; a drawn item's alert, which reaches whoever drew
+  the item; a rule kept just for you; and an alert raised before teams existed.
 
 ### 7.3 Working an alert, and closing it
 
-Open one to see why it was raised and what it concerns; **Show on the canvas** draws them. **Claim** it
-to work on it (**Release** gives it back). A rule alert can also be **given to** a member of the case:
-choose them by name under **Give to**, then **Give**. *Give to* lists the case's Editors and Authors who
-are people; an account a service or a loading script uses is never offered. An alert shared with a team, or its owner's alone,
-is claimed by someone who can see it, never given to another person.
+Open an alert to see **What fired it**, in words, and what it concerns: the people and things it
+cites, or the transactions, with when, from, to and the amount. A rule's alert says when it was
+raised: "as the data loaded (before it was committed)" or "after the data loaded". What fired a
+hotlist alert is in §7.5.
 
-**Closing needs a reason, in two parts.** Choose one **closing reason** — **True match**, **False
-positive**, **Duplicate**, **No further action** or **Referred** (the arrow keys move between them) —
-and say why in words; **Close the alert** stays unavailable until you have done both, and words of only
-spaces are refused. **True match** confirms the node it raised; every other reason leaves it a
-suggestion. OspreyFlow accepts no reason outside this list. Triage needs Editor; a Viewer reads. **Closing a high-severity
-alert needs a second person** (§7.12): closing it proposes the close, and another member approves it.
+- **Open the evidence** saves a private view of the case with what the alert cites, and opens it with
+  **← Back to the alert**. Anyone who reads the alert may use it.
+- **Open the board**, on a drawn item's alert, opens the board the item is drawn on.
+- **Show on the canvas** draws what it concerns on the case's canvas.
+- **Claim** it to work on it. **Release** gives it back.
+- **Give to**: an alert for the case team can be given to a member of the case. Choose them by name
+  under **Give to**, then **Give**. *Give to* lists the case's Editors and Authors who are people; an
+  account a service or a loading script uses is never offered.
+
+**A team's own alerts** (*Team ‹name› only*) have a lead. The team's lead, or their cover while the
+cover lasts, sees **As the team's lead** on each:
+
+- **Give to** a member of the team, then **Give to the member**;
+- **Suppress until** a date at most 90 days ahead, with why in words, then **Suppress until…**. The
+  alert "stays open, in All, and counted open; it ends by itself on that day." **What raises alerts**
+  lists it under its rule: "One alert suppressed until", the date, who and why.
+
+An alert shared with a team, or its owner's alone, is claimed by someone who can see it, never given
+to another person.
+
+**Closing needs a reason, in two parts.** Under **Close this alert**, choose one **closing reason** —
+**True match**, **False positive**, **Duplicate**, **No further action** or **Referred** (the arrow
+keys move between them) — and say why in words. **Close the alert** stays unavailable until you have
+done both, and says what is missing ("To close it, choose a closing reason and say why, in words.").
+Words of only spaces are refused. **True match** confirms what the alert found; every other reason
+leaves it a suggestion. OspreyFlow accepts no reason outside this list.
+
+Working alerts needs Editor or Author in the case; a Viewer reads. **Closing a high-severity alert
+that someone else may see needs a second person** (§7.12): the button reads **Propose the close**, and
+another member approves it.
 
 ### 7.4 Rules and templates
 
-The **Rules** tab shows the rules judging this case; an Author deploys and retires them. Above the
-form, **Templates** lists the typologies as named starting points (the four new AML templates are in
-§7.9), grouped by the work they
-serve (anti-money-laundering transaction monitoring, KYC, any case), each with what it looks for and
-the severity of its alerts. **Use** fills the form with the template's defaults and puts you on the
-rule's name; change anything, then **Deploy**. Everyone in the case sees the templates; only an Author
-has **Use**. A rule can also be written as a sentence (§7.6).
+**What raises alerts** opens with **Every rule and watch**: one table of the case's rules and watches,
+with its **Name**, **Maker**, **Source** (Rule or Watch), **Dataset**, **Owner**, **Draft or live**,
+**Expires**, **Last fired**, **Alerts, 30 days** and **Not of interest** (the share closed as not of
+interest). Each of the first six columns has a filter. "Counts are of the alerts you can see."
+
+Under it, each rule says what it looks for, how it runs and where it stands:
+
+- how it runs: "Runs after each load commits", "Judges each load before it commits", "Runs on a
+  schedule" (§7.11) or "Runs when its screening list refreshes", the last two "as its author";
+- where it stands: *active*, *a draft: not live*, *a draft, waiting for a second person's approval to
+  go live*, or *retired*.
+
+Each rule has **Versions** (§7.12), and a scheduled rule or one on a list's refresh has **Schedule and
+runs**. A rule written in the rule editor also has **Open in the rule editor**, offered to the case's
+Authors (§7.6). An Author of the case who holds **Deploy rules** retires a live rule with **Retire**:
+in the built-in roles, an Analyst. A rule for the case is written in the rule editor.
+
+**Templates** lists the typologies as named starting points (the four AML templates are in §7.9),
+grouped by the work they serve (anti-money-laundering transaction monitoring, KYC, any case), each with
+what it looks for and the severity a case's rule made from it raises. **Use** fills **Deploy a rule** with the template's
+defaults and puts you on the rule's name; change anything, then **Deploy**. A rule from a saved pattern
+is made in the same form: choose the **Typology** *Drawn pattern (from the Query builder)*, then the
+**Saved pattern**.
+
+**A rule made here runs just for you.** The form says so: "This rule raises alerts for you; to share
+it with the case, write it in the rule editor." Its alerts reach you alone. **Known issue:** they are
+listed as **Watched pattern** and are **medium**, whatever the template's severity (§7.2). Everyone in
+the case sees the templates; **Use** and **Deploy** need an Author of the case who holds **Deploy
+rules** and opens Rules and Monitoring (in the built-in roles, an Analyst), and anyone else reads "A
+case Author deploys and retires rules." *Coming:* a template or pattern rule becoming the case's draft, to test and make
+live in the rule editor.
 
 The money-flow templates (structuring, rapid movement, circular flow) judge each load's movements with
 the movements around them, and only those whose two accounts the rule's author may see, in the rule's
@@ -910,86 +1004,157 @@ own dataset: a movement between accounts hidden from them shapes no finding.
 
 ![Watches: hotlists, monitors, and the alerts they raise](images/user/13-watches.png)
 
-The Monitoring place's **Watches** tab keeps a **hotlist** of identifiers — a phone number, an email address, an account
-number — each with a review date: any data that touches one raises an alert. An account number is
-matched however its spaces are written: `GB58 LOYD 3096 1700 7099 43` and `GB58LOYD30961700709943` are
-the same account. A **monitor** runs a saved pattern against new data.
-Both watch only their case's data. Under them, the **Alert inbox** lists what your hotlists and
-monitors raised; **Jump into investigation** starts a case from an alert. There is no separate
-Watches place on the left rail: open **Monitoring**, then **Watches**.
+**Your watches are kept on What raises alerts**, under the rules, and their alerts are in the one
+queue on **Alerts**. There is no Watches tab and no separate inbox.
 
-**Who its alerts reach.** Each hotlist says who its alerts reach in the Monitoring queue: **Only me**,
-or **Me and my team**. A new hotlist starts from your deployment's choice (only you, unless your
-administrator has chosen otherwise); change it when you make the hotlist, or later on its row. A
-hotlist made before this choice existed reaches only you until you change it. Where your deployment
-fixes the choice, the panel says so ("Alerts reach only you. The deployment sets this.") and offers
-none. A match on data you cannot see is never shared with your team. An alert
-whose evidence you cannot see says only that a match fired.
+- **Hotlists** keep identifiers — a phone number, an email address, an account number — each with a
+  **Review date**. Any data that touches one raises an alert. Type the **Identifier**, choose the date
+  and **Who its alerts reach**, then **Add to hotlist**. An account number is matched however its
+  spaces are written: `GB58 LOYD 3096 1700 7099 43` and `GB58LOYD30961700709943` are the same account.
+  If OspreyFlow cannot read the text as a phone number or other known kind, it is "kept as written:
+  matches only this exact text".
+- **Watched patterns** run a saved pattern against new data. Choose a saved pattern, then **Turn into
+  monitor**. Each runs as data loads, and on its own as you choose: "Daily at 06:00, and as data
+  loads", "Weekly, and as data loads" or "Only as data loads".
 
-**A hotlist alert explains itself.** In **Watches**, under **Alert inbox**, a hotlist alert is headed
-"Hotlist alert" and reads, for example:
+**From the Glass.** In the Query builder, **Save as a watch** on a saved pattern makes a watched
+pattern of the case's dataset: "Saved as a watch: it runs as data loads and daily, and is kept in
+Rules and Monitoring › What raises alerts." In the Inspector, **Watch for this** on an entity that
+carries an identifier adds it to your hotlist, reviewed in 90 days: "Watching for ‹identifier›: you
+are alerted when it appears in data you may see."
 
-- "Hotlist: 07700 900640 · review by 31 Jan 2027": the identifier **as you typed it**, and the
-  hotlist's review date. If OspreyFlow could not read the text as a phone number or other known kind,
-  it was kept as written, and the line says "(kept as written)".
-- "Matched: Endpoint +447700900640": the type and name of what it matched.
-- "From: pid_seized_comms_batch2.csv, row 3; pid_pin_calls.csv, 2,013 rows": the files the matched record
-  came from, and the row in each, or how many rows. Up to five files are named, in the order they were
-  first seen; the rest are counted, "and 3 more files", not cut. Where a source has no row, it counts
-  records instead.
+**Drawn items.** Drawing an item on a board sets a watch for it on the case's dataset; there is no
+button. When a load writes something that looks like the drawn item (the same identifier, or a
+similar name of the same type), an alert, "A load met a drawn item", lands in the queue for whoever
+drew it, with **Open the board**. The Studio's load result says "This load raised 2 alerts on your
+drawn items: they are in Rules and Monitoring › Alerts". *Coming:* a screen listing your drawn
+watches, and a drawn link matching.
+
+**Who a hotlist's alerts reach.** Each hotlist says who its alerts reach: **Only me**, or **Me and my
+team**. A new hotlist starts from your deployment's choice (only you, unless your administrator has
+chosen otherwise); change it when you make the hotlist, or later on its row ("Alerts from ‹identifier›
+now reach your team too."). A hotlist made before this choice existed reaches only you until you
+change it. Where your deployment fixes the choice, the panel says so ("Alerts reach only you. The
+deployment sets this.") and offers none. A match on data you cannot see is never shared with your
+team.
+
+**A hotlist alert explains itself.** Open it in the queue, and under **What fired it** it reads, for
+example:
+
+- "Your hotlist entry 07700 900640, reviewed by 31 Jan 2027, 00:00": the identifier **as you typed
+  it**, and the hotlist's review date. An identifier kept as written says "(kept as written)". Only
+  the hotlist's owner sees this line.
+- "+447700900640 (Endpoint): pid_seized_comms_batch2.csv, row 3; pid_pin_calls.csv, 2013 rows": the
+  name and type of what it matched, then the files the matched record came from, and the row in each,
+  or how many rows. The files are named in the order they were first seen; the rest are counted, "and
+  3 more files", not cut. Where a source has no row, it counts records instead.
 
 **Row numbers count data rows from 1**: the first row after the header is row 1, so "row 3" is the
 third data row, the fourth line of the file. The Inspector's source, a link's details, Verify's
-rejected rows and held rows count the same way. Where two loads of a file
-with the same name matched, each is listed. **Jump into investigation** is as it was. Raw rule and node
-identifiers are no longer shown.
+rejected rows and held rows count the same way. Where two loads of a file with the same name matched,
+each is listed. Raw rule and node identifiers are not shown.
 
-Only the hotlist's owner sees the identifier and review date, and an alert on another analyst's hotlist
-is not listed to you. An alert about something you can no longer see says only "A match fired — no
-evidence visible to you." If the matched record was removed from your view between the two reads, the
-alert says "Evidence no longer available." and cannot be jumped into. **Where a matched record belongs
-to data this case does not read**, the alert names its type and name and says "its sources are in data
-this case does not read", with no file and no row (section 5.6): a file name is as much a source as a
-row.
+An alert on another analyst's hotlist is listed to you only when its owner shares it with your team.
+**Where a matched record belongs to data this case does not read**, the alert names its name and type
+and says "read from data this case does not read", with no file and no row (section 5.6): a file name
+is as much a source as a row.
 
-### 7.6 A rule written as a sentence
+### 7.6 The rule editor: a rule written as a sentence
 
 ![A rule written as a sentence, its drawn pattern, and its preview on the last 90 days](images/user/22-rule-sentences.png)
 
-On the **Rules** tab, **Write a rule as a sentence** builds a rule from blanks, read as one sentence:
-*When a* subject *whose* conditions, *and is* related to something, *how often*, *then* raise an alert.
-Every blank is a choice from a list made from the deployment's ontology — its types, their properties
-and its link types — so there is nothing to type that could fail to be understood.
+On **What raises alerts**, **Write a rule on a dataset** is the rule editor. A case Author writes the
+case's rules there; anyone else reads "A case Author writes the case's rules." Writing and testing a
+rule need **Write rules** (the **Rule author** role) as well as the case's Author level.
+
+**1. The dataset.** Choose **The dataset this rule watches** from the case's own datasets (a composite
+says "(composite)"), then **Choose the dataset**. "It is chosen once and never changed." The editor
+then says "Watching ‹dataset›. Its conditions are offered from this dataset's own model."
+
+**2. The sentence.** **Write a rule as a sentence** builds the rule from blanks, read as one sentence:
+*When a* subject *whose* conditions, *and is* related to something, *how often*, *how strongly
+connected*, *then* raise an alert. Every blank is a choice from a list made from the dataset's model —
+its types, their properties and its link types — so there is nothing to type that could fail to be
+understood.
 
 - **Subject.** A type, grouped as people, objects, locations, events and organisations.
 - **Whose.** Up to five conditions on the subject's properties: *is*, *is one of*, *is above*, *is
   below*, *is within a time window*, or, for a location, *is within a drawn area* (entered by its four
   corners). A property marked highly sensitive is never offered.
-- **And is.** Optionally: *linked by* a link type to something; *within* 1 to 4 *steps of* something
-  of a type; *at a location in a drawn area*; *on one of my hotlists*; or, for a person or an
-  organisation, *on a screening list* at a name match you choose.
+- **And is.** Optionally: *linked by a link type to* something; *within a number of steps of*
+  something of a type; *at a location in a drawn area*; *on one of my hotlists*; or, for a person or
+  an organisation, *on a screening list*: choose the **Screening list**, from those the dataset may
+  read, and the name match you need (**Name match at least**).
+- **How often.** Optionally, a number of times, a total amount or a first time, within some days
+  (§7.7).
 - **How strongly connected.** Optionally: *the connection strength* between the subject and something
   it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1, or *on
   the client's scale* a raw sum up to 10 (met only under client parity); or *the
   shared-attribute rarity* between it and another of its type *reaches* a figure, per dataset or across
   the case's datasets (§5.12). Both are read from the stored graph, so the rule runs after commit or on
   a schedule, and both are worked out as you, the rule's author, may see them.
-- **Then.** The alert's severity; whether it goes to the case team or is labelled for your team; and
-  when the rule runs — after each load commits, or before it. Before commit you also choose what a hit
-  does: load with its alert, or hold its rows for a reviewer in **Held rows**. A rule that names a link
-  runs after commit, since a link is read from the stored graph.
-- **For.** *just me* (the alerts reach you alone, like a monitor's), *this case*, or — for an
-  administrator — *the whole deployment*, which watches every case's loads.
 
-**Show the drawn pattern** shows the same rule as the Query builder would draw it. Once deployed, the
-pattern is saved among your patterns, and you can open and change it there: the rule follows the
-pattern as it now reads. **Read a saved pattern as a sentence** goes the other way, from a pattern
-you drew to a sentence. A pattern a sentence cannot say (more than one link, or a pinned node) is
-refused in words.
+**3. Then.**
 
-Deploying needs a name. A case Editor may deploy a rule *just for me*; a case Author deploys one for
-the case; only an administrator, who is also the case's Author, deploys one for the whole deployment.
-A sentence that names something the ontology does not declare is refused, naming the blank.
+- **Severity**: low, medium or high.
+- **For**: *this case*.
+- **Alert goes to**: *the case team*, or a team by name (*‹Team› only*, §7.2). Before you save, the
+  editor says who will see its alerts: "Its alerts will appear in Alerts, seen by this case's team.",
+  or "… seen by the 6 members of ‹Team› who hold this case and the home case's Authors."
+- **Runs**: *after each load commits*; *before each load commits*, when you also choose what **A hit**
+  does: *loads with its alert*, or *holds its rows for review* in **Held rows**; *on a schedule*
+  (§7.11); or, for a rule on a screening list, *when a screening list refreshes*. A rule that names a
+  link runs after commit: "A link is read from the stored graph, so this rule runs after each load
+  commits."
+
+**4. Look before you save.** **Show the drawn pattern** shows the same rule as the Query builder would
+draw it. **Preview on the last 90 days** says "It would have raised 12 alerts in the last 90 days.",
+lists the first few, and says "Counted as you, over what you may see. Nothing was raised or written."
+
+**5. Save the draft.** Give it a **Name**, then **Save the draft**. "‹name› is a draft: it does not run
+until it is made live."
+
+**6. Test on the last 30 days.** It says "It would have raised 3 alerts in the last 30 days. Counted as
+you, over what you may see. Nothing was raised." The count is yours alone: anyone else reads only
+that the draft was tested, and when ("This draft was tested on 10/11/2026."). Until then the editor
+says "A rule goes live only once this draft is tested." Saving the draft again needs a new test.
+
+**7. Make live.** **Make live** needs **Deploy rules** (`deploy_rules`) and Rules and Monitoring
+itself, which opens to whoever works alerts or writes rules: in the built-in roles, an Analyst. A Data
+Engineer holds Deploy rules but cannot open this place. A Rule author opens it but does not hold Deploy
+rules, and is not offered the button. The Super user preset gives both. The rule goes live at once ("‹name› is live."), unless its dataset asks for a
+second person (its **Promotion of drawn items** setting is *Second person reviews*): then the editor
+says "‹dataset› asks for a second person: making it live waits for another Author to approve it." The
+rule reads *a draft, waiting for a second person's approval to go live*, and another Author of the
+case who holds Deploy rules and opens this place (an Analyst) chooses **Approve**, or **Reject** with a
+reason. Neither the draft's author
+nor whoever asked for it to go live may approve it.
+
+**Changing a rule.** **Open in the rule editor**, on a case rule's row, opens it on its own dataset, at
+its draft if it has one. A live rule runs as it stands while its draft waits: "‹name› runs as it
+stands; this draft of it goes live only once tested and made live." A live rule runs as the person who
+saved its draft. They must still hold Write rules or Deploy rules, or it raises nothing and says why.
+
+**Show as BPMN**, once a draft is saved, opens the rule read-only as BPMN 2.0: a start event, a
+business-rule task that calls the rule's DMN decision table, and an end event. **Close** or Escape
+shuts it. Exporting and importing these files is done through the API; the screen has no button
+for either.
+
+Every step is in the rule's **Versions** and on the **Changes** tab; a scheduled rule has **Schedule
+and runs** (§7.11). No one is offered a rule for the whole deployment.
+
+**A rule just for you.** Under the editor, **Write a rule as a sentence** again offers the same blanks,
+for *just me*: "A rule just for you: fill each blank from the lists. Preview it on the last 90 days
+before you deploy it. A rule for the case is written above, on its dataset." Its alerts reach you
+alone, listed as **Watched pattern** (§7.2). It runs after each load commits or on a schedule. An
+Editor or Author of the case who holds **Deploy rules** and **Keep watches** (in the built-in roles, an
+Analyst) deploys it with **Deploy the sentence**; anyone else reads "A case Editor deploys a rule for themselves; a case
+Author deploys one for the case."
+
+**Patterns and sentences.** Once deployed, a rule's drawn pattern is saved among your patterns, to open
+in the Query builder. **Read a saved pattern as a sentence** goes the other way, from a pattern you
+drew to a sentence. A pattern a sentence cannot say (more than one link, or a pinned node) is refused
+in words. A sentence that names something the model does not declare is refused, naming the blank.
 
 ### 7.7 How often: frequency and amount conditions
 
@@ -1016,7 +1181,7 @@ Frequency conditions are counted over the 90 days.
 
 ### 7.9 The AML templates: jurisdiction, cash, dormancy and velocity
 
-![The Rules tab: the AML templates, and the form filled from "High-risk jurisdiction"](images/user/24-aml-templates.png)
+![What raises alerts: the AML templates, and the form filled from "High-risk jurisdiction"](images/user/24-aml-templates.png)
 
 Four templates watch a case's money movements (its *transacted* links), each with settings you choose
 and no formula to write:
@@ -1035,16 +1200,18 @@ and no formula to write:
   days; measured by the number of movements or by the amount moved. An account with nothing in those
   days before has no rate to rise from and raises nothing.
 
-Each raises a medium-severity alert in the queue, in words: the movement, the accounts and what made it
-a finding. They judge only movements and accounts you could see as the rule's deployer: a movement
+Each raises a medium-severity alert in the queue (listed under **Rules** from a case's rule, and as a
+**Watched pattern** from one kept just for you, §7.2), in words: the movement, the accounts and what
+made it a finding. They judge only movements and accounts you could see as the rule's deployer: a movement
 hidden from them neither wakes a dormant account nor adds to a rate. The last two compare an account
 with its own stored past, so they run after each load commits.
 
 ### 7.10 Screening lists, re-screened when they change
 
-![The Lists tab: each list's version, entries, last update and state, the latest refreshes, and subscribing](images/user/23-screening-lists.png)
+![The former Lists tab, before the lists moved to the Ingest Studio (this picture is to be retaken): each list's version, entries, last update and state, the latest refreshes, and subscribing](images/user/23-screening-lists.png)
 
-The **Lists** tab shows each sanctions, PEP or adverse-media list the deployment screens against: the
+**What raises alerts** shows, read-only, each sanctions, PEP or adverse-media list the deployment
+screens against: the
 list it is (OFAC, the FCDO's UK Sanctions List, the UN or EU consolidated list, OpenSanctions, or HM
 Treasury OFSI's, which closed on 28 January 2026 and is marked "Closed list"), its version, how
 many entries it holds, when it last changed, its licence, and its state — up to date, not yet read, or
@@ -1054,8 +1221,9 @@ left as it was, and says so.
 When a list changes, OspreyFlow re-screens every customer in every case that has a **Screening on
 onboarding** rule (§7.4) against **the entries that changed only** — those added and those whose names,
 date of birth or country changed. An entry that did not change was screened when it arrived, so it
-raises nothing again. Each new match raises a high-severity screening alert in that case's queue,
-naming the customer and the list entry, with its score. Like every screening match, it is a suggestion:
+raises nothing again. Each new match raises a screening alert in that case's queue, naming the
+customer and the list entry, with its score: high from a case's rule, and medium, as a **Watched
+pattern**, from a rule kept just for its author (§7.2's known issue). Like every screening match, it is a suggestion:
 the link between the customer and the listed party is inferred until a person confirms it, by closing
 the alert as a **True match** (§7.3). Customers are screened as the rule's deployer and within the case's
 datasets, so no one is screened, or alerted on, outside what that person may see.
@@ -1066,10 +1234,13 @@ non-commercial use only; OpenSanctions is CC BY-NC 4.0, and screening in a busin
 which needs its own data licence. Until a licence is confirmed, these connectors read OspreyFlow's
 synthetic lists only.
 
-Administrators and data engineers subscribe to a list and refresh it from this tab (the administration
-guide, §9.5, says how), and may have it refreshed every day or every week; the **Schedule** column
-says when, or "By hand only". They see how many customers each refresh re-screened, and the alerts it
-raised, **in their own unit only**. Everyone else sees the lists, not those numbers.
+Lists are not added or refreshed here: "Screening lists are imported, mapped and refreshed in the
+Ingest Studio's Sources. This tab shows them; it no longer adds or refreshes one." A data engineer does
+that in the Ingest Studio's **2 Sources**, under **Screening lists** — or anyone holding both **Load
+screening lists** and **Edit pipelines** — and may have a list refreshed every day or every week (the
+administration guide, §9.5, says how); the **Schedule** column says when, or "By hand only". Someone
+here who also holds Load screening lists sees how many customers each refresh re-screened, and the
+alerts it raised, **in their own unit only**. Everyone else sees the lists, not those numbers.
 
 ### 7.11 A rule that runs on a schedule
 
@@ -1081,8 +1252,8 @@ the hour (UK time). At each run the rule looks at what is already stored over th
 as you see it, and raises an alert for each new finding, once.
 
 - **It runs as you**, its author, never as the system: it judges only what you may see, and only
-  while you may still sign in, deploy rules and are still an Author of the case (an Editor, for a rule
-  just for you).
+  while you may still sign in, still hold Write rules or Deploy rules, and are still an Author of the
+  case (an Editor, for a rule just for you).
 - **Schedule and runs**, under the rule, says when it runs next and what each run did: how many
   alerts it raised, or why it did not run, in words. A run the deployment missed while it was down is
   said too; after downtime only the latest run happens.
@@ -1093,16 +1264,17 @@ as you see it, and raises an alert for each new finding, once.
 
 ### 7.12 A second person's approval
 
-![A rule for the whole deployment waiting for a second person, and a high-severity alert whose close waits for approval](images/user/26-second-person.png)
+![A high-severity alert whose close waits for a second person's approval (taken before the tabs of §7.1: it still shows the former Lists and Watches tabs, and is to be retaken)](images/user/26-second-person.png)
 
-Two decisions need a second person with the right, and the person who proposed one can never approve
+These decisions need a second person with the right, and the person who proposed one can never approve
 it.
 
-**A rule for the whole deployment** (§7.6) — deploying it, changing it or retiring it. A new one is
+**A rule for the whole deployment**, made before the rule editor (§7.6 offers none now) — deploying it, changing it or retiring it. A new one is
 listed as *not running: waiting for a second person's approval*, with who proposed it; a change or a
 retirement waits beside the rule, which runs as it stood until then. Another administrator who is an
 Author of the case sees **Approve** and **Reject** (with a reason); a rejected rule never runs. A rule
-for one case, or just for you, is not held up: it runs as soon as it is deployed or changed.
+for one case waits for a second person only where its dataset asks for one, at **Make live** (§7.6); a
+rule just for you is not held up: it runs as soon as it is deployed or changed.
 
 **Closing a high-severity alert** that someone else may see. Choosing a closing reason, writing why
 and **Propose the close** proposes the close: the alert stays in the queue as *Closing*, with your reason. Another

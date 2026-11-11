@@ -1,4 +1,4 @@
-# as of 2026-11-11T12:45Z
+# as of 2026-11-11T13:00Z
 platform	P7	round 2: every round-1 item fixed; five small must-fixes (two untested check branches, the reds recorded, the uploads claim) on the Mac now, then gates; merges without you (Am 8)	11 Nov, ~17:00	B
 admin	P10	round 2: every code item fixed; gates at 5ef24c6 running on the server (the orchestrator); access step, listed for you after	11 Nov, ~16:00	B
 case	P9	cut: encrypted S3 backup, one timed restore; briefed when P7 merges (a fresh session)	12 Nov	B
@@ -12,6 +12,5 @@ platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 4 landed (9de435c); part 5 built (9cbb4575), its review next	12 Nov	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 rules-b	T3b	the probe made platform-independent, then the server's browser gate; on the Mac now	11 Nov, evening	A
-docs	D2d	both reviews' fixes done (5037f48); its server gates running, then merge	11 Nov, ~15:00	A
 platform-b	carries	after P11 (chart quoting first); rulings owed (a shell value held, two amendment numbers)	12 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
