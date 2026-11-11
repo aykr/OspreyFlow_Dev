@@ -736,7 +736,7 @@ def one_refresh(directory: Path) -> Iterator[None]:
 
 #: The restarts a files pass found needed, kept in the deployment's `state/` from before its files
 #: move until `start --build` has done them, so a run that dies in between loses none.
-PENDING_RESTARTS = "refresh-pending.json"
+PENDING_RESTARTS = update.PENDING_RESTARTS
 
 
 def _pending(directory: Path) -> dict[str, bool]:
@@ -814,7 +814,8 @@ def _files_up_to_date_staged(directory: Path, repo_root: Path) -> dict[str, bool
                 # Whole or not at all, through a link to its target, the old file's owner kept
                 # under sudo, the folder flushed (`harness.atomic`, as every writer of
                 # deployment.env).
-                replace_whole(target, path.read_bytes(), mode=path.stat().st_mode & 0o7777)
+                mode = 0o600 if path.name == "deployment.env" else path.stat().st_mode & 0o7777
+                replace_whole(target, path.read_bytes(), mode=mode)
         for path in stage.iterdir():
             if path.is_dir() and path.name in _STAGED_FOLDERS:
                 shutil.copytree(path, directory / path.name, symlinks=True, dirs_exist_ok=True)

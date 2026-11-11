@@ -168,14 +168,38 @@ def test_a_symlinked_deployment_env_stays_a_link_and_is_replaced_whole(deploymen
     _after_the_gateway_database(deployment)
     elsewhere = deployment.parent / "secrets-kept-elsewhere.env"
     (deployment / "deployment.env").rename(elsewhere)
+    # A line the files pass writes back, so the file certainly changes (the orchestrator's review
+    # of c5209b1: the witness was asserted only if it happened to).
+    lines = elsewhere.read_text(encoding="utf-8").splitlines()
+    elsewhere.write_text(
+        "".join(x + "\n" for x in lines if not x.startswith("OSPREY_EXTRACTION_MODEL=")),
+        encoding="utf-8",
+    )
     (deployment / "deployment.env").symlink_to(elsewhere)
     witness = deployment.parent / "witness.env"
     os.link(elsewhere, witness)
     before = elsewhere.read_bytes()
     refresh.files_up_to_date(_checkout(deployment))
     assert (deployment / "deployment.env").is_symlink()
-    if elsewhere.read_bytes() != before:  # changed: replaced, never rewritten under the old inode
-        assert witness.read_bytes() == before
+    assert b"OSPREY_EXTRACTION_MODEL=" in elsewhere.read_bytes()  # changed, through the link
+    assert witness.read_bytes() == before  # replaced, never rewritten under the old inode
+
+
+def test_deployment_env_moved_into_place_is_600(deployment: Path) -> None:
+    """Every other writer of deployment.env makes it 600 (ADR-137 decision 2); refresh's move kept
+    the staged copy's mode, so a 644 file stayed readable by every account (the orchestrator's
+    review of c5209b1, minors)."""
+    _after_the_gateway_database(deployment)
+    env = deployment / "deployment.env"
+    lines = env.read_text(encoding="utf-8").splitlines()
+    env.write_text(
+        "".join(x + "\n" for x in lines if not x.startswith("OSPREY_EXTRACTION_MODEL=")),
+        encoding="utf-8",
+    )
+    env.chmod(0o644)
+    refresh.files_up_to_date(_checkout(deployment))
+    assert b"OSPREY_EXTRACTION_MODEL=" in env.read_bytes()
+    assert env.stat().st_mode & 0o777 == 0o600
 
 
 def test_the_lock_is_held_through_the_build_and_the_restarts(

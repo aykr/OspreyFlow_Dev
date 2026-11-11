@@ -124,6 +124,9 @@ def check(directory: Path, repo_root: Path, *, github_api: str = GITHUB_API) -> 
 Run = Callable[[Sequence[str]], tuple[int, str]]
 
 
+#: The restarts a files pass found needed, kept in the deployment's `state/` until done (refresh
+#: writes it, `start --build` and `update` clear it after their restarts; ADR-114 Amendment 39).
+PENDING_RESTARTS = "refresh-pending.json"
 #: The open lock an `update` hands its `--files-only` child, by descriptor number: the child is a
 #: process of its own, and would otherwise find its own parent's lock held and refuse.
 LOCK_FD_VARIABLE = "OSPREYFLOW_REFRESH_LOCK_FD"
@@ -586,7 +589,7 @@ def _apply_update(
                 _ok(host, up, "start the release")
         # Every restart the files called for is done: the files pass's record of them, kept until
         # now so an update killed before its restarts leaves them owed (ADR-114 Amendment 39).
-        (directory / "state" / "refresh-pending.json").unlink(missing_ok=True)
+        (directory / "state" / PENDING_RESTARTS).unlink(missing_ok=True)
         verify_running(host, directory, prepared.lock, prepared.image_ids)
     except store_volumes.StoresNotMoved as failed:
         print(
