@@ -743,7 +743,7 @@ def test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads() ->
     """The platform's controller closes a quiet connection after 60 s and refuses a body over
     1 MiB by default: the Glass's delta stream and its uploads need the Glass's own proxy's
     timeouts (1h) and the Conduit's upload cap (512 MiB). This holds the annotation alone: with
-    ModSecurity on, the controller's own 12.5 MiB body limit still refuses first (ADR-148 Amendment
+    ModSecurity on, its own body limits are expected to refuse first, unmeasured (ADR-148 Amendment
     1 item 12, an open question for the platform team)."""
     annotations = _values(_config())["ingress"]["annotations"]
     assert annotations[NGINX + "proxy-read-timeout"] == "3600"
@@ -803,6 +803,19 @@ def test_the_ingress_reads_the_upload_cap_as_the_conduit_does(
 
     monkeypatch.setenv(UPLOAD_CAP_VARIABLE, raw)
     assert upload_cap_bytes({UPLOAD_CAP_VARIABLE: raw}) == max_upload_bytes()
+
+
+def test_an_unset_or_empty_upload_cap_is_the_conduit_s_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unset, or given with no value (YAML's `~`, read as None), the cap is the Conduit's default,
+    never a traceback."""
+    from harness.cloud_platform import UPLOAD_CAP_VARIABLE, upload_cap_bytes
+    from services.api.ingest_sources import max_upload_bytes
+
+    monkeypatch.delenv(UPLOAD_CAP_VARIABLE, raising=False)
+    assert upload_cap_bytes({}) == max_upload_bytes()
+    assert upload_cap_bytes({UPLOAD_CAP_VARIABLE: None}) == max_upload_bytes()
 
 
 # ---- resources (the independent review of P7, item 11) -------------------------------------------

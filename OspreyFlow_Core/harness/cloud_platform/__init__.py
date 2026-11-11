@@ -483,7 +483,7 @@ def upload_cap_bytes(environment: dict[str, Any], path: Path | None = None) -> i
     is read as the Conduit's `max_upload_bytes` reads it: a value that is not a whole number above
     0 is the default (and never `0m`, which nginx reads as no limit at all)."""
     try:
-        given = int(environment.get(UPLOAD_CAP_VARIABLE, ""))
+        given = int(str(environment.get(UPLOAD_CAP_VARIABLE, "")))  # text, as the Conduit reads it
     except ValueError:
         given = 0
     if given > 0:
