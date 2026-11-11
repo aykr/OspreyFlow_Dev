@@ -34404,23 +34404,37 @@ orchestrator asked. Amendment 1 stands except where point 6 corrects it.
      team reads.
    - No block ends the reader's shell (`exit`), each block parses as shell, and the rehearsal's
      blocks call neither the AWS command line nor Terraform. Each of these is a test.
+   - **Every command runs with a namespace tenant's rights.** Nothing cluster-wide is listed or
+     changed: no volume objects, and no listing of every kind there is. The namespace is listed
+     one kind at a time, for the kinds the deployment makes. The disks are read from the account
+     by the namespace tag the EBS CSI driver gives each one, in a block of the platform's
+     (`test_no_command_needs_more_than_a_namespace_s_rights`).
+   - **The install** renders the plan unpinned, signs in to the registry (the platform's block),
+     runs `ospreyflow images push`, renders again pinned, so the values name ours by the digest
+     the registry holds (decision 8), then installs the chart. It ends with the sign-in step,
+     `python -m harness.cloud_platform.identity`, which does what the cluster's own install does
+     once Keycloak answers. It gives the identity provider the deployment's settings together
+     with our Secret, since the realm's sign-in reads ConfigMap settings (the dashboards' address
+     among them), then makes the first administrator, `admin`, and prints the one-time code they
+     sign in with once. P10's sign-in replaces it.
    - **The decommission removes what `helm uninstall` keeps:**
      - each StatefulSet's claims, selected by the release's label, which the StatefulSet
        controller gives every claim it makes;
-     - the shared claims, by name, then a wait until no volume is held for the namespace;
+     - the shared claims, by name;
      - our Secret.
    - **It then empties what the namespace's Terraform cannot remove while it holds anything**,
      before the pull request that removes those resources: every bucket, of every object and
-     every version (`media` is versioned), and every ECR repository the render names (they have
-     no `force_delete`).
-   - Its last block runs the decommission check (`harness.cloud_platform.decommission_check`).
-     The check names anything of the deployment's still in the namespace, any volume kept after
-     one of its claims, anything in the Terraform state, and its buckets. An IAM role or policy and
-     a KMS key alias in the state are named as such, since each outlives the namespace (the render
-     makes no KMS key today). Each leftover is planted in the shape its source prints it, red
-     first (`tests/cp_policy_check/test_cp_decommission_check.py`).
-   - The install's sign-in step is `python -m harness.cloud_platform.identity`, the cluster's own
-     identity step, until P10's sign-in replaces it.
+     every version (`media` is versioned), and every ECR repository the render names, a hundred
+     images a call (they have no `force_delete`).
+   - **Its last block runs the decommission check** (`harness.cloud_platform.decommission_check`).
+     The check names anything of the deployment's still in the namespace (by the chart's label,
+     Helm's release annotation, our Secret's and the kept claims' names, and each StatefulSet's
+     claims), and any disk made for one of its claims. In the Terraform state it counts only the
+     resources the rendered `terraform/` declares: the namespace's folder holds the platform's
+     own resources too, which are listed as left alone. An IAM role or policy, and a KMS key
+     alias, are named as such, since each outlives the namespace (the render makes no KMS key
+     today). Each leftover is planted in the shape its source prints it, each branch red alone
+     (`tests/cp_policy_check/test_cp_decommission_check.py`).
 8. **The profile's ceiling** (decision 10; Amendment 2's carry for P7, closed here). On this
    profile a deployment that names no `deployment.highest_marking` is held to OFFICIAL-SENSITIVE,
    not the handling scheme's highest; one that names its own keeps it
@@ -34428,6 +34442,10 @@ orchestrator asked. Amendment 1 stands except where point 6 corrects it.
    SECRET).
    The orchestrator accepted this default, and with it that the poc shape's kind run seeds only the
    packs declared at or below OFFICIAL-SENSITIVE (HMP, declared SECRET, is not among them).
+   `deployment.highest_marking`'s own description now says so, and with it both settings
+   appendices. The poc shape's lock names only the images its pods run, so it has no Keeper of its
+   own (`test_the_lock_names_only_the_images_a_poc_pod_runs`), and `make cp-policy-check` holds
+   every poc container to a CPU limit (point 5) in Helm's own output.
 9. **`ospreyflow images push`'s refusal**, with no render to push, names a command that works as
    given from `OspreyFlow_Core` (`PYTHONPATH=.:packages .venv/bin/python -m harness.render`). A test
    runs the command its words give.
@@ -34456,9 +34474,14 @@ and ResourceQuota the namespace carries, and in particular whether the quota set
 the LimitRange a default CPU limit. Until then the standard shape names no CPU limit (point 6).
 
 **Left, and why.**
-- The acceptance scenarios on kind in the poc shape, and the final render they run, come after
-  P11's and P12's part 2s land, since the shape renders what they leave. Under point 8's ceiling
-  the run seeds only packs declared at or below OFFICIAL-SENSITIVE.
+- The acceptance scenarios on kind in the poc shape, both runbooks run end to end there (the
+  install's blocks, then the decommission's, with the decommission check green at the end), and
+  the final render they run, all come after P11's and P12's part 2s land, since the shape renders
+  what they leave. Under point 8's ceiling the run seeds only packs declared at or below
+  OFFICIAL-SENSITIVE. Until then each runbook is proven by its tests, not by a run.
+- `scripts/seed_internal.py` checks a pack against the ceiling it reads from `deployment.env`, which
+  this profile has none of, so before seeding it judges against the scheme's highest. Only the
+  engine's refusal at each write holds the ceiling there. Carried to the seeds' owner.
 - Carried by name:
   - the standard shape's OpenSearch domain (`opensearch.tf`), which no pod reads
     (`opensearch-output`), left unchanged by the orchestrator's ruling;
