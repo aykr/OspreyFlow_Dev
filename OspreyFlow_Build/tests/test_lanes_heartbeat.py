@@ -452,6 +452,25 @@ def test_watch_shows_the_default_view_unless_asked_for_the_full_view(hb, tmp_pat
         assert "Test stack" in full and "VIEW 1 · FOUNDATION FEATURES" not in full, args
 
 
+def test_the_default_view_opens_with_the_overall_count_of_steps(hb, tmp_path) -> None:
+    """The owner, 11 November 2026: the default view (and so watch) gives the overall count of steps, the same
+    figures `show`'s OVERALL line gives, before the two views."""
+    table = tmp_path / "progress.tsv"
+    table.write_text(
+        "studio\tL1.5\tL\tdone\tExpert steps\n"
+        "studio\tL1.6\tL\tdone\tSchedules\n"
+        "platform\tP7\tL\tbuilding\tThe profile\n"
+        "case\tP9\tM\treview\tBackups\n"
+        "admin\tT1\tS\ttodo\tFaster runs\n"
+    )
+    out = hb(OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
+    line = "OVERALL: 2 of 5 steps done · 1 in review · 1 building · 1 not started"
+    assert line in out
+    assert out.index(line) < out.index("VIEW 1 · FOUNDATION FEATURES")
+    watched = hb("watch", "1", OSPREY_WATCH_PASSES="1", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
+    assert line in watched
+
+
 def test_the_older_summary_stays_available_as_its_own_verb(hb, tmp_path) -> None:
     table = _summary_fixture(tmp_path)
     out = hb("summary", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout

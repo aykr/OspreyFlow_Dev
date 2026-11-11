@@ -426,7 +426,10 @@ sub k { "$_[0][0]\t$_[0][1]" }
 my $asof = ""; if (open(my $h, "<", $ENV{P_EST})) { while (<$h>) { $asof = $1 if /^# as of \S*T(\d\d:\d\d)/ } }
 print "OSPREYFLOW · $ENV{P_CLOCK}\n";
 print "Client-install chain expected to finish merging: ", ($rel{chain} // "unknown"),
-  ($asof ? " (estimates as of $asof UTC)" : ""), "\n\n";
+  ($asof ? " (estimates as of $asof UTC)" : ""), "\n";
+{ my %c; $c{$_->[3]}++ for @prog;   # the same figures as `show`'"'"'s OVERALL line (the owner, 11 November 2026)
+  printf "OVERALL: %d of %d steps done · %d in review · %d building · %d not started\n\n",
+    $c{done} // 0, scalar @prog, $c{review} // 0, $c{building} // 0, $c{todo} // 0 }
 
 print "VIEW 1 · FOUNDATION FEATURES\n\n";
 for my $f ("Ingest Studio", "Four places, the Glass and Admin", "Cases and drawing boards", "Rules and alerting",
