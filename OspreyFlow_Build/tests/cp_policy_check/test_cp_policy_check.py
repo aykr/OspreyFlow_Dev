@@ -76,7 +76,10 @@ def test_the_render_passes(rendered: tuple[dict[str, Any], str]) -> None:
     docs = helm_template(yaml.safe_dump(values))
     assert check_manifests(docs, registry) == []
     kinds = {d["kind"] for d in docs}
-    assert {"Ingress", "PodDisruptionBudget", "StatefulSet"} <= kinds
+    assert {"Ingress", "StatefulSet"} <= kinds
+    # Disruption budgets in the standard shape; none in the poc shape (ADR-148 Amendment 5).
+    shape = yaml.safe_load(values["files"]["osprey.yaml"])["cloud_platform"].get("shape")
+    assert ("PodDisruptionBudget" in kinds) is (shape != "poc")
 
 
 def test_the_render_is_valid_kubernetes(rendered: tuple[dict[str, Any], str]) -> None:
