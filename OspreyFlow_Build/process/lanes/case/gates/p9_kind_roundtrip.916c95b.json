@@ -1,0 +1,68 @@
+{
+  "backup": {
+    "set": "20261111T162300Z",
+    "seconds": 6.9,
+    "objects": 17,
+    "bytes": 9597637,
+    "not_under_the_key": [],
+    "claims_part": [
+      "sets/20261111T162300Z/claims/ingest.tar.gz",
+      "sets/20261111T162300Z/claims/manifest.json"
+    ],
+    "log": [
+      "[pod/ospreyflow-backup-29906903-fp8b6/backup] backup: set 20261111T162300Z written in 1.0 s (ArcadeDB 87479 bytes; ClickHouse b8a67818-e6e7-4fd4-9a43-a8924b4d4e14)",
+      "[pod/ospreyflow-backup-claims-29906903-48sdv/backup-claims] backup-claims: set 20261111T162300Z's claims part written: ingest 7695101 bytes"
+    ]
+  },
+  "destroyed": {
+    "arcadedb": "ArcadeDB /api/v1/command/ospreyflow: 404 b'{\"error\":\"Database not found\",\"requestId\":\"3112fc1333aac22-430\",\"exception\":\"com.arcadedb.exception.DatabaseNotAvaila",
+    "clickhouse": "ClickHouse: 404 b'{\\n\\t\"meta\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"data\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"rows\": 0,\\n\\n\\t\"exception\": \"Code: 81. DB::Exception: Database ospreyflow does not e",
+    "claims": {
+      "files": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "seeded": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restored": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restore_seconds": {
+    "stopped": 31.4,
+    "ospreyflow-restore-20261111t162300z": 9.3,
+    "ospreyflow-restore-claims-20261111t162300z": 9.4,
+    "started": 23.8,
+    "total": 64.6
+  },
+  "match": true,
+  "at": "2026-11-11T16:24:35+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "stack c, held by case (P9 restore timing on osprey-p9, no stack started), since 2026-11-11T16:22:44Z; server load at start: 10.20 10.37 14.73"
+  }
+}

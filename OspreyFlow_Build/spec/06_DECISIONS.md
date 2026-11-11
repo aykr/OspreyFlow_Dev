@@ -33760,6 +33760,122 @@ passed, not skipped.
 - New: a backstop refusal after raw staging leaves that load's raw and resolved rows staged, on any load.
 - New: a staged run refused for a cause other than the ceiling keeps its step tables.
 
+### ADR-148, Amendment 7 (11 November 2026) — backups on the `cloud-platform` profile as built (P9, cut)
+
+Status: accepted. Written in the case lane at step P9 (cut, ADR-142 Amendment 8 decision 4), reserved 11 November.
+It records decision 13 as built: the scheduled, encrypted backup of ArcadeDB and ClickHouse (and, in the poc shape,
+Amendment 5's claim of its own) to S3 by the namespace's role, with no stored key; one restore rehearsed and timed;
+the orchestrator's rulings of 11 November on the claims part, the role's delete and the decommission. Moved to P9b:
+the alerts, the PodDisruptionBudgets' drain test and the volume-expansion procedure.
+
+**Context.** Decision 13 says what is backed up and that it is encrypted. It does not say how a pod reaches
+ArcadeDB's backup file on a ReadWriteOnce claim, or how ClickHouse writes to S3 with no key, or what a set is.
+Rule 15 asks for a stand-in that refuses what S3, STS and KMS refuse, and for each refusal to be shown red.
+The first design passed every offline case and was refused by the real ClickHouse at its first kind run.
+
+**Decision.**
+1. **A set** is `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`: ArcadeDB's zip (`arcadedb/<database>.zip`),
+   ClickHouse's own backup (`clickhouse/`), the claims part (`claims/<name>.tar.gz` and its `manifest.json`) in the
+   poc shape, then the set's `manifest.json`, **written last**, with every part's size and SHA-256. A set without
+   it is unfinished, is never restored from, and is never the "latest". A restore checks each part against the
+   manifest before anything is replaced (`services/api/platform_backup.py`).
+2. **ArcadeDB.** Its `backups` folder is a claim of its own (`backups-arcadedb-0`, the databases claim's size),
+   not a scratch folder. The CronJob's pod mounts it, placed on `arcadedb-0`'s node by a required pod affinity,
+   and asks that pod by name for `BACKUP DATABASE`. It uploads the zip encrypted by the bucket's key and removes
+   it from the claim. One run at a time (`Forbid`); a run missed by an hour is skipped.
+3. **ClickHouse writes as the backup role, by its own pod.** ClickHouse 25.8's `BACKUP … TO S3()` takes one
+   argument or three, never a session token: `S3(url, key, secret, token)` is refused, "Backup S3 requires 1 or 3
+   arguments" (Code 42, measured on osprey-p9). The first design handed it the role's temporary credentials in the
+   statement, and an offline fake that took four arguments passed every case (rule 15's second example). So
+   ClickHouse's pod runs as the backup role's service account (IRSA), and the statement names only the regional
+   address (`S3('https://s3.<region>.amazonaws.com/<bucket>/sets/<id>/clickhouse/')`). No key, secret or token is
+   ever in a statement or ClickHouse's query log. Its pod is given **`AWS_DEFAULT_REGION`**. Without it,
+   ClickHouse's web identity client asked `sts.us-east-1`, outside the namespace's egress, got nothing, and wrote
+   anonymously (403). That was measured both ways; `AWS_REGION`, `AWS_ENDPOINT_URL_STS` and the regional S3 URL
+   did not change it. An expired session is renewed: with every session ended, ClickHouse and the runner each
+   took a new one by their pods' identity, and the set was written (measured). A role that cannot be renewed (its
+   trust another account's) is refused at the runner's STS call and at ClickHouse's BACKUP.
+4. **The role** (`<namespace>-backup`, trusted for `system:serviceaccount:<namespace>:ospreyflow-backup` and
+   `sts.amazonaws.com` alone) holds the backups bucket and its key: get, put, list, abort a multipart upload,
+   `kms:GenerateDataKey` and `kms:Decrypt`. **Its one delete is ClickHouse's own lock,
+   `sets/*/clickhouse/.lock`** (the orchestrator's grant). ClickHouse 25.8's BACKUP removes the lock at its end
+   and fails without the delete ("Access Denied … while removing object … .lock", measured on three slots), and
+   BACKUP and RESTORE both passed with that delete alone (measured). The role can erase no set: sets expire by
+   the bucket's lifecycle rule (`expire-sets`, 35 days, a month of failed runs before the last good set goes),
+   and the bucket keeps no versions. A write-only role or object lock is P9b's.
+5. **Encryption.** A bucket of its own, `<prefix>backups`, with SSE-KMS by a customer key of its own
+   (`alias/<namespace>-backups`, rotated) as its default. Its policy refuses plain HTTP, another encryption,
+   another key, and every principal but the backup role. Public access is blocked; unfinished uploads are
+   aborted after seven days. **The key and the bucket are kept from a destroy (`prevent_destroy`).** A destroy
+   would otherwise schedule the key's deletion while the bucket, not empty, still held its sets, so thirty days
+   later every set would be data nobody can read (spec 05 §6.1). All of it is written once in
+   `harness/cloud_platform_backups.py`, for the Terraform (`backups.tf`) and the stand-in alike.
+6. **The poc shape's claims** (Amendment 5's `ospreyflow-ingest`; the orchestrator's design ruling). A second
+   CronJob, `ospreyflow-backup-claims`, on the same schedule, runs beside the shared folders' pods (a required pod
+   affinity to `ospreyflow.io/shared`): those pods may be on another node than `arcadedb-0`, and both claims are
+   ReadWriteOnce. It streams each claim, read-only, its top-level `lost+found` left out, into the same set. **Both
+   runs name the set by their Job's name, the schedule slot** (`<cronjob>-<scheduled minute>`, `set_of`), never
+   by looking for an open set. A slow or overlapping run can therefore never join another slot's set. The main
+   run waits for the claims part for at most three hours, then fails in words and leaves the set unfinished. A
+   claims run never adds to a finished set. The restore of the claims is a Job of its own, run with the pods that
+   mount them stopped. It unpacks beside the claim with tarfile's `data` filter (an entry outside the claim is
+   refused) and only then replaces the claim's contents, `lost+found` kept.
+7. **The restore** is rendered only for a named set (`--set backups.restore.set=<id> --show-only
+   templates/backups.yaml`) and applied by hand, never by `helm upgrade`, with ArcadeDB at no copies (and, in the
+   poc shape, the Conduit, the workers and the report sync). It runs `fetch-graph` (the zip, checked), ArcadeDB's
+   own `restore.sh` into the databases claim, then ClickHouse's `RESTORE … FROM S3` as its own role, and the
+   claims Job beside it. The backup's pods read their own settings and two passwords, never the whole Secret.
+8. **The decommission** (the orchestrator's ruling): the backups bucket and its key are the decommission's one
+   named exception. They are kept, taken out of the Terraform state before the removal (`prevent_destroy` holds
+   only while their file is there). The decommission check reports them as "kept: the backups (retention)" and
+   still fails on anything else. Step 2's last backup is written into that bucket by the deployment's own two
+   runs. The client removes the bucket's policy, its objects and the bucket, then schedules the key's deletion,
+   when the retention they agree ends. Sent to the platform lane as `process/lanes/case/P9_decommission.diff`.
+
+**The stand-in** (`tests/fixtures/cloud_platform/s3_standin.py`) refuses what S3, STS and KMS refuse:
+- a wrong signature, an unknown key, a skewed clock, an expired or tokenless session;
+- an untrusted web identity (HS256 by a shared secret, or the cluster's own RS256 keys and issuer on kind);
+- a bucket policy's deny, an action the role is not given, and a write without `kms:GenerateDataKey` or a read
+  without `kms:Decrypt`, naming the key.
+
+Two of its own faults were found on kind. It ended every session at a policy change, which AWS does not do, and
+which ClickHouse's kept session met as an unknown key. Its listening backlog of 5, with TLS handshakes on the
+accepting thread, timed out ClickHouse's parallel part uploads. Both are fixed, the first red first.
+
+**Measured** (osprey-p9: kind v0.27, Calico 3.29, `gp2-expand` by local-path, two nodes at 4 GB each; ArcadeDB
+26.10.1, ClickHouse 25.8.33.6; the stand-in as a pod; synthetic seed of 5,000 vertices, 1,000 edges, 200,000
+ClickHouse rows and 301 files on the Ingest claim):
+
+- **The timed round trip, under lease c** (the case lane's, for this run alone, no stack started; load 10.2
+  at its start): backup 6.9 s; restore 64.6 s end to end (stopping 31.4 s, the two restore Jobs 9.4 s in
+  parallel, starting 23.8 s). Every count and sum, and the claim's tree hash, were equal to the seed's, and every
+  object was under the key (`gates/p9_kind_roundtrip.916c95b.json`; the recovery runbook's table).
+- **The refusals on kind** (`gates/p9_kind_reds.916c95b.{json,log}`): the bucket's policy for another role, and the
+  role without `kms:GenerateDataKey`, refused at ArcadeDB's upload in S3's words. Every session expired was renewed
+  (the set written). An unrenewable role was refused at the runner's `AssumeRoleWithWebIdentity` and at
+  ClickHouse's BACKUP. A missing claims part left the set unfinished after the bounded wait, and its restore was
+  refused, "no finished set".
+- **The delete, both ways** (not under a lease; the outcome, not a time): with no delete, BACKUP refused on three
+  slots ("Access Denied … while removing object … .lock"); with the lock's delete alone, BACKUP and RESTORE passed
+  (set 20261111T161600Z).
+- The red record: 21 plants, 21 red (`gates/p9_reds.916c95b.log`).
+
+**Consequences.**
+- `P9_render.diff` (platform's): the render calls `backups_values` and `backups_terraform`; `values.yaml` gains
+  `backups: {}`. The render gives ArcadeDB a third claim template, which Kubernetes refuses to change in place.
+  An existing deployment's ArcadeDB StatefulSet is therefore orphaned (`--cascade=orphan`) and `arcadedb-0`
+  restarted once.
+- ClickHouse's pod holds the backup role: it can read and write sets and delete its lock. A write-only role or
+  object lock is P9b's.
+- The three parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it
+  stopped (the recovery runbook).
+- Carried to P9b: the alert on a failed or missing run (a failed Job; a set unfinished), the drain test and
+  the volume expansion; the client's retention, which sets `EXPIRE_DAYS` and the decommission's kept bucket.
+
+**Tests.** `tests/cloud_platform_backup/` (the stand-in's refusals, the runner, the claims part, the render, the
+chart on the server's Helm); `process/lanes/case/gates/p9_reds.py` (21 plants at their real call sites, each red);
+`process/lanes/case/gates/p9_kind.{sh,py}` (the round trip, the timed restore and the refusals on kind).
+
 ### ADR-110, Amendment 20 (11 November 2026) — a fault acting as a schedule's owner: the ledger keeps refused with the notice kind failed; the error's text stays in the log alone, and Am 19 point 5's 'ledger' does not hold for this branch
 
 Status: written 11 November 2026 by the merger, at rules-hyg's merge (373b3dd), on the orchestrator's ruling of
