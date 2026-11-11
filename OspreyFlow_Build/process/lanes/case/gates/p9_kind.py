@@ -24,7 +24,6 @@ import copy
 import datetime as dt
 import json
 import os
-import re
 import secrets
 import subprocess
 import sys
@@ -1081,7 +1080,55 @@ class Run:
         finished = self.finished_sets()
         assert finished, "a finished set first (the round trip), so RESTORE has a part to read"
         restore_url = f"{base}/sets/{finished[-1]}/clickhouse/"
-        out = self.probe(f"""
+        # A whole ClickHouse backup put under ArcadeDB's and the claims' prefixes (the stand-in's
+        # own store, removed after): there, a refusal can only be the role's access, since a
+        # missing backup and a refused one read alike to ClickHouse (BACKUP_NOT_FOUND, round 3).
+        copies = self.copy_part(finished[-1])
+        try:
+            out = self._osprey_queries(base, restore_url, copies)
+        finally:
+            self.remove_copies(copies)
+        self._judge_osprey(out, record_as)
+
+    def copy_part(self, set_id: str) -> list[str]:
+        prefixes = [f"sets/{set_id}/arcadedb/p9-bound/", f"sets/{set_id}/claims/p9-bound/"]
+        self._standin_store(
+            "src = f'sets/{a[0]}/clickhouse/'\n"
+            "n = 0\n"
+            "for m in [json.loads(p.read_text()) for p in root.glob('*.json')]:\n"
+            "    if m['key'].startswith(src):\n"
+            "        for prefix in a[1:]:\n"
+            "            key = prefix + m['key'][len(src):]\n"
+            "            path = root / hashlib.sha256(key.encode()).hexdigest()\n"
+            "            path.write_bytes((root / hashlib.sha256(m['key'].encode()).hexdigest()).read_bytes())\n"
+            "            path.with_suffix('.json').write_text(json.dumps({**m, 'key': key}))\n"
+            "        n += 1\n"
+            "assert n, 'no ClickHouse part to copy'\n",
+            [set_id, *prefixes],
+        )
+        return prefixes
+
+    def remove_copies(self, prefixes: list[str]) -> None:
+        self._standin_store(
+            "for p in list(root.glob('*.json')):\n"
+            "    if json.loads(p.read_text())['key'].startswith(tuple(a)):\n"
+            "        p.with_suffix('').unlink(missing_ok=True); p.unlink()\n",
+            prefixes,
+        )
+        left = [o["key"] for o in self.bucket_objects() if o["key"].startswith(tuple(prefixes))]
+        assert not left, left
+
+    def _standin_store(self, code: str, args: list[str]) -> None:
+        kubectl(
+            "-n", STANDIN_NS, "exec", "-i", "deployment/s3-standin", "--", "/app/.venv/bin/python", "-c",
+            "import hashlib, json, pathlib, sys\n"
+            f"root = pathlib.Path('/data/{self.bucket()}')\n"
+            "a = json.loads(sys.stdin.read())\n" + code,
+            stdin=json.dumps(args),
+        )  # fmt: skip
+
+    def _osprey_queries(self, base: str, restore_url: str, copies: list[str]) -> str:
+        return self.probe(f"""
 print("user:", ch("SELECT currentUser()").strip())
 for name, q in [
     ("read a set's manifest", "SELECT count() FROM s3('{base}/sets/*/manifest.json', 'RawBLOB')"),
@@ -1089,8 +1136,8 @@ for name, q in [
     ("write over a set", "INSERT INTO FUNCTION s3('{base}/sets/probe/arcadedb/ospreyflow.zip', 'RawBLOB') SELECT 'overwritten'"),
     ("url() to another host", "SELECT count() FROM url('https://{STANDIN_HOST}:{STANDIN_PORT}/', 'RawBLOB')"),
     ("RESTORE a set's ClickHouse part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored FROM S3('{restore_url}')"),
-    ("RESTORE from ArcadeDB's part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored_a FROM S3('{base}/sets/{finished[-1]}/arcadedb/')"),
-    ("RESTORE from the claims' part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored_c FROM S3('{base}/sets/{finished[-1]}/claims/')"),
+    ("RESTORE from ArcadeDB's part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored_a FROM S3('{base}/{copies[0]}')"),
+    ("RESTORE from the claims' part", "RESTORE DATABASE ospreyflow AS p9_osprey_restored_c FROM S3('{base}/{copies[1]}')"),
     ("the S3 table engine", "CREATE TABLE ospreyflow.p9_s3_engine (x String) ENGINE = S3('{base}/sets/probe/x', 'RawBLOB')"),
     ("s3Cluster", "SELECT count() FROM s3Cluster('osprey', '{base}/sets/*/manifest.json', 'RawBLOB')"),
     ("icebergS3", "SELECT count() FROM icebergS3('{base}/sets/probe/')"),
@@ -1102,6 +1149,8 @@ for name, q in [
     except RuntimeError as e:
         print("REFUSED", name, "->", str(e)[:260])
 """)
+
+    def _judge_osprey(self, out: str, record_as: str) -> None:
         lines = [
             line for line in out.splitlines() if line.startswith(("ACCEPTED", "REFUSED", "user:"))
         ]
@@ -1114,13 +1163,13 @@ for name, q in [
         accepted = [line.split(" -> ")[0].removeprefix("ACCEPTED ") for line in lines
                     if line.startswith("ACCEPTED")]  # fmt: skip
         # The bound on the one acceptance (Amendment 7 point 4): RESTORE reaches only what
-        # ClickHouse's own role reaches, so from ArcadeDB's or the claims' part S3 itself refuses
-        # it, by access (not because no backup is there, which a role reaching `sets/*` would say).
+        # ClickHouse's own role reaches, so a whole backup under ArcadeDB's or the claims' prefix
+        # is refused it (and restored, by a role planted to reach `sets/*`: osprey_bound_red).
         bound = {
             name: next((line for line in refused if line.startswith(f"REFUSED {name} ->")), "")
             for name in BOUND
         }
-        outside = [n for n, line in bound.items() if not re.search("access ?denied", line, re.I)]
+        outside = [n for n, line in bound.items() if not line]
         self.probe(
             "for d in ('p9_osprey_restored', 'p9_osprey_restored_a', 'p9_osprey_restored_c'):\n"
             "    ch(f'DROP DATABASE IF EXISTS {d} SYNC')"
@@ -1134,8 +1183,8 @@ for name, q in [
         if accepted != [PINNED_ACCEPTANCE] or outside or egress.endswith("REACHED"):
             raise SystemExit(
                 "FAIL: the deployment's user, or ClickHouse's egress, reaches what it must not: "
-                f"accepted {accepted} (only {[PINNED_ACCEPTANCE]} is ruled), RESTORE not refused by "
-                f"S3's access from {outside}, egress {egress}"
+                f"accepted {accepted} (only {[PINNED_ACCEPTANCE]} is ruled), RESTORE not refused "
+                f"from {outside}, egress {egress}"
             )
         print(
             f"PASS the deployment's user is refused all {len(refused)} but the ruled RESTORE of "
@@ -1159,7 +1208,8 @@ for name, q in [
             red, said = False, "the check passed with ClickHouse's role reaching every set"
         except SystemExit as e:
             said = str(e)
-            red = "RESTORE not refused by S3's access from ['RESTORE from ArcadeDB" in said
+            # Red for its stated reason: the two outside ClickHouse's prefix accepted, nothing else new.
+            red = sorted(self.record.get("osprey_accepted", [])) == sorted([PINNED_ACCEPTANCE, *BOUND])
         finally:
             self.configure(self.standin_config())
         self.record = {"osprey_bound_red": {"red": red, "said": said,
@@ -1222,7 +1272,9 @@ for name, q in [
         # 1. The bucket's policy written for another role: the backup role is refused by the bucket.
         expect(
             "bucket-policy",
-            ("read set", "AccessDenied"),
+            # The upload, since round 3: the bucket policy no longer refuses others ListBucket
+            # (HeadBucket, Terraform's read), so the set's read goes through and its first write is refused.
+            ("upload to", "AccessDenied"),
             main_only(),
             self.standin_config(
                 bucket_policy=backups.bucket_policy(arn, KEY_ARN, [OTHER_ROLE_ARN])
