@@ -117,7 +117,6 @@ def run(aws: Running, tmp_path: Path) -> tuple[pb.Settings, pb.Bucket, pb.Stores
         "AWS_ENDPOINT_URL_S3": aws.endpoint, "OSPREY_BACKUP_ARCADEDB_FOLDER": str(folder),
         "OSPREY_BACKUP_ARCADEDB_HOST": "arcadedb-0.arcadedb-headless",
         "ARCADEDB_ROOT_PASSWORD": "pw", "CLICKHOUSE_USER": "osprey", "CLICKHOUSE_PASSWORD": "pw",
-        "OSPREY_BACKUP_KEEP": "2",
     })  # fmt: skip
     aws.session()  # the pod's IRSA environment
     fake = FakeStores(aws, folder)
@@ -258,19 +257,15 @@ def test_the_settings_missing_are_named() -> None:
         pb.Settings.from_env({"AWS_REGION": REGION})
 
 
-def test_pruning_keeps_the_newest_finished_sets_and_never_the_last(aws: Running, run: Any) -> None:
+def test_the_newest_finished_set_is_the_latest_and_an_unfinished_one_never_is(aws: Running, run: Any) -> None:
     _, bucket, _, _ = run
     for set_id, finished in [("20261101T020000Z", True), ("20261102T020000Z", False),
-                             ("20261103T020000Z", True), ("20261104T020000Z", True),
-                             ("20261105T020000Z", False)]:  # fmt: skip
+                             ("20261103T020000Z", True), ("20261104T020000Z", False)]:  # fmt: skip
         bucket.put_bytes(f"sets/{set_id}/arcadedb/ospreyflow.zip", b"z")
         if finished:
             bucket.put_bytes(f"sets/{set_id}/manifest.json", b"{}")
-    assert pb.prune(bucket, keep=2) == ["20261101T020000Z", "20261102T020000Z"]
-    # The one still running (unfinished, newest) is never removed.
-    assert [s.set_id for s in pb.sets(bucket)] == ["20261103T020000Z", "20261104T020000Z", "20261105T020000Z"]
-    assert pb.prune(bucket, keep=0) == ["20261103T020000Z"]
-    assert pb.latest(bucket) == "20261104T020000Z"
+    assert [s.complete for s in pb.sets(bucket)] == [True, False, True, False]
+    assert pb.latest(bucket) == "20261103T020000Z"
 
 
 def test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set(aws: Running, run: Any, tmp_path: Path) -> None:

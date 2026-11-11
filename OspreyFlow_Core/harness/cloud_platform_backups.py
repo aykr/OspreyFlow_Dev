@@ -32,10 +32,26 @@ SERVICE_ACCOUNT = "ospreyflow-backup"
 #: The secret the namespace's Terraform writes the bucket's name and the key's ARN into.
 OUTPUT_SECRET = "ospreyflow-backup-output"
 OUTPUT_KEYS = {"bucket": "bucket", "kms_key": "kms_key_arn"}
-#: Daily at 02:15 UTC; the sets kept (ADR-148 Amendment 7: the client's retention is to be
-#: agreed, so a proposal, not a measurement).
+#: Daily at 02:15 UTC; each set expires by the bucket's lifecycle rule after EXPIRE_DAYS, never by
+#: the role, which holds no delete (the orchestrator's ruling of 11 November 2026). Thirty-five
+#: days: a month of failed runs before the last good set goes, for the alert (P9b) to be heard. The
+#: client's retention is to be agreed; a proposal, not a measurement.
 SCHEDULE = "15 2 * * *"
-KEEP = 14
+EXPIRE_DAYS = 35
+#: The backups bucket's name after the deployment's prefix (`<prefix>backups`).
+BUCKET_SUFFIX = "backups"
+#: What a decommission keeps (the orchestrator's ruling of 11 November 2026): the bucket and its
+#: key, so no decommission makes a retained set unreadable. Its role, service account and Secret
+#: go; the client deletes the bucket, then the key, when the retention they agree ends.
+KEPT_AT_DECOMMISSION = (
+    "aws_kms_key.backups",
+    "aws_kms_alias.backups",
+    "aws_s3_bucket.backups",
+    "aws_s3_bucket_public_access_block.backups",
+    "aws_s3_bucket_server_side_encryption_configuration.backups",
+    "aws_s3_bucket_lifecycle_configuration.backups",
+    "aws_s3_bucket_policy.backups",
+)
 #: ArcadeDB's `BACKUP DATABASE` folder, given a claim of its own on this profile so the CronJob's
 #: pod can read the zip (as a scratch folder, no other pod could).
 ARCADEDB_BACKUPS = "/home/arcadedb/backups"
@@ -43,7 +59,9 @@ ARCADEDB_BACKUPS = "/home/arcadedb/backups"
 #: does not hold the next night's (`concurrencyPolicy: Forbid`).
 DEADLINE_SECONDS = 6 * 3600
 
-OBJECT_ACTIONS = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"]
+#: No delete: ClickHouse runs as this role, and no set is ever erased by it (sets expire by the
+#: bucket's lifecycle rule).
+OBJECT_ACTIONS = ["s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload"]
 BUCKET_ACTIONS = ["s3:ListBucket", "s3:GetBucketLocation"]
 KMS_ACTIONS = ["kms:GenerateDataKey", "kms:Decrypt"]
 
@@ -155,7 +173,6 @@ def backups_values(
          "secretKeyRef": {"name": OUTPUT_SECRET, "key": OUTPUT_KEYS["bucket"]}},
         {"name": "OSPREY_BACKUP_KMS_KEY",
          "secretKeyRef": {"name": OUTPUT_SECRET, "key": OUTPUT_KEYS["kms_key"]}},
-        {"name": "OSPREY_BACKUP_KEEP", "value": str(KEEP)},
         # The pod whose claim the CronJob mounts, by name: the Service would hand the request to
         # whichever copy answered, and its zip would be on another claim.
         {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},
@@ -237,7 +254,7 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                 ("target_key_id", "aws_kms_key.backups.key_id"),
             ]),
             ('resource "aws_s3_bucket" "backups"', [
-                ("bucket", '"${local.prefix}backups"'),
+                ("bucket", f'"${{local.prefix}}{BUCKET_SUFFIX}"'),
                 ("lifecycle", [("prevent_destroy", "true")]),
             ]),
             ('resource "aws_s3_bucket_public_access_block" "backups"', [
@@ -264,6 +281,12 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                     ("status", _q("Enabled")),
                     ("filter", [("prefix", '""')]),
                     ("abort_incomplete_multipart_upload", [("days_after_initiation", "7")]),
+                ]),
+                ("rule", [
+                    ("id", _q("expire-sets")),
+                    ("status", _q("Enabled")),
+                    ("filter", [("prefix", _q("sets/"))]),
+                    ("expiration", [("days", str(EXPIRE_DAYS))]),
                 ]),
             ]),
             ('data "aws_iam_policy_document" "backups_bucket"',

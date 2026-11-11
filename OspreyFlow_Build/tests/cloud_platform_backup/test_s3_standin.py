@@ -276,3 +276,13 @@ def test_the_expire_lever_ends_every_session_as_an_hour_would(aws: Running) -> N
     with pytest.raises(ClientError) as refused:
         client.put_object(Bucket=BUCKET, Key="sets/a/x", Body=b"x")
     assert _code(refused) == "ExpiredToken"
+
+
+def test_the_backup_role_is_refused_a_delete(aws: Running) -> None:
+    """Its policy as backups.tf writes it holds no delete: a set written is never erased by it."""
+    client = aws.s3()
+    client.put_object(Bucket=BUCKET, Key="sets/a/x", Body=b"x")
+    with pytest.raises(ClientError) as refused:
+        client.delete_object(Bucket=BUCKET, Key="sets/a/x")
+    assert _code(refused) == "AccessDenied"
+    assert aws.stand_in.read(BUCKET, "sets/a/x") == b"x"

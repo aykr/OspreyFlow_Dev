@@ -133,6 +133,37 @@ def test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod() -> Non
     assert others == []
 
 
+def test_the_backup_role_can_never_delete_a_set() -> None:
+    """The orchestrator's ruling of 11 November 2026: ClickHouse runs as the backup role, so the role
+    holds no delete. A ClickHouse (or a runner) turned against the bucket cannot erase the sets;
+    they expire by the bucket's lifecycle rule alone."""
+    policy = backups.role_policy("arn:aws:s3:::b", "arn:aws:kms:eu-west-2:1:key/k")
+    actions = [a for s in policy["Statement"] for a in s["Action"]]
+    assert not [a for a in actions if "Delete" in a or a in ("s3:*", "*")], actions
+    text = rendered.terraform()
+    role = re.search(r'data "aws_iam_policy_document" "backup_role" \{(.*?)\n\}', text, re.DOTALL)
+    assert role is not None and "Delete" not in role.group(1)
+
+
+def test_the_sets_expire_by_the_buckets_lifecycle_rule() -> None:
+    text = rendered.terraform()
+    rule = re.search(r'id\s*=\s*"expire-sets"(.*?)\n    \}\n  \}', text, re.DOTALL)
+    assert rule is not None, text
+    assert re.search(r'prefix\s*=\s*"sets/"', rule.group(1))
+    assert re.search(rf"days\s*=\s*{backups.EXPIRE_DAYS}\b", rule.group(1))
+    assert backups.EXPIRE_DAYS >= 30, "a month of failed runs before the last good set expires"
+
+
+def test_a_decommission_keeps_the_bucket_and_its_key_and_nothing_else_of_the_backups() -> None:
+    """What `decommission_check` reports as kept: each a resource backups.tf declares, the bucket
+    and the key among them; the role, its service account and the Secret are not."""
+    declared = set(re.findall(r'^resource "([^"]+)" "([^"]+)"', rendered.terraform(), re.MULTILINE))
+    declared_names = {f"{kind}.{name}" for kind, name in declared}
+    assert set(backups.KEPT_AT_DECOMMISSION) <= declared_names
+    assert {"aws_kms_key.backups", "aws_s3_bucket.backups"} <= set(backups.KEPT_AT_DECOMMISSION)
+    assert not [k for k in backups.KEPT_AT_DECOMMISSION if k.startswith(("aws_iam", "kubernetes_"))]
+
+
 def test_a_render_with_one_store_and_not_the_other_is_refused() -> None:
     values = rendered.values()
     workloads = [w for w in values["workloads"] if w["name"] != "clickhouse"]

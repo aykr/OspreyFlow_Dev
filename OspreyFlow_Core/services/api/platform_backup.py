@@ -55,8 +55,6 @@ from typing import Any
 #: A part of a multipart upload: S3's own minimum is 5 MiB; a part this size keeps a
 #: hundred-gigabyte zip under S3's ten-thousand-part limit.
 PART_SIZE = 64 * 1024 * 1024
-#: Sets kept unless `OSPREY_BACKUP_KEEP` says otherwise.
-KEEP = 14
 MANIFEST = "manifest.json"
 #: How long the main run waits for the claims part before leaving the set unfinished, unless
 #: `OSPREY_BACKUP_CLAIMS_WAIT` says otherwise; and how often it looks.
@@ -94,7 +92,6 @@ class Settings:
     #: The address ClickHouse reaches S3 by (path style, the bucket after it); S3's own for the
     #: region unless `AWS_ENDPOINT_URL_S3` points elsewhere (the stand-in).
     s3_endpoint: str | None
-    keep: int = KEEP
     #: The poc shape's claims of their own (`storage.claims`, e.g. `ingest`), each mounted at
     #: `claims_folder/<name>` by the claims run; none in the standard shape.
     claims: tuple[str, ...] = ()
@@ -133,7 +130,6 @@ class Settings:
             clickhouse_database=env.get("CLICKHOUSE_DATABASE", "ospreyflow"),
             clickhouse_cluster=env.get("CLICKHOUSE_CLUSTER") or None,
             s3_endpoint=env.get("AWS_ENDPOINT_URL_S3") or env.get("AWS_ENDPOINT_URL") or None,
-            keep=int(env.get("OSPREY_BACKUP_KEEP", str(KEEP))),
             claims=tuple(n for n in env.get("OSPREY_BACKUP_CLAIMS", "").split(",") if n),
             claims_folder=Path(env.get("OSPREY_BACKUP_CLAIMS_FOLDER", "/claims")),
             job_name=env.get("OSPREY_BACKUP_JOB") or None,
@@ -278,14 +274,6 @@ class Bucket:
             if not page.get("IsTruncated"):
                 return
             token = page["NextContinuationToken"]
-
-    def delete(self, keys: list[str]) -> None:
-        for start in range(0, len(keys), 1000):
-            chunk = keys[start : start + 1000]
-            self.client.delete_objects(
-                Bucket=self.settings.bucket,
-                Delete={"Objects": [{"Key": k} for k in chunk], "Quiet": True},
-            )
 
 
 class _PartWriter:
@@ -636,21 +624,6 @@ def sets(bucket: Bucket) -> list[FoundSet]:
     return [FoundSet(s, c) for s, c in sorted(seen.items())]
 
 
-def prune(bucket: Bucket, keep: int) -> list[str]:
-    """The finished sets beyond the newest `keep` removed, and every unfinished set older than
-    the oldest one kept. Returns the sets removed. Never removes the newest finished set."""
-    found = sets(bucket)
-    finished = [s.set_id for s in found if s.complete]
-    kept = finished[-max(keep, 1) :]
-    if not kept:
-        return []
-    oldest_kept = kept[0]
-    removed = [s.set_id for s in found if s.set_id not in kept and s.set_id < oldest_kept]
-    for set_id in removed:
-        bucket.delete(list(bucket.keys(f"sets/{set_id}/")))
-    return removed
-
-
 def manifest_of(bucket: Bucket, set_id: str) -> dict[str, Any]:
     try:
         manifest: dict[str, Any] = json.loads(bucket.get_bytes(f"sets/{set_id}/{MANIFEST}"))
@@ -756,7 +729,7 @@ def restore_analytics(settings: Settings, bucket: Bucket, stores: Stores, set_id
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="platform_backup", description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("backup", help="take a set, then remove the sets beyond the kept number")
+    commands.add_parser("backup", help="take a set (sets expire by the bucket's lifecycle rule)")
     commands.add_parser("sets", help="list the sets, newest last")
     fetch = commands.add_parser("fetch-graph", help="a set's ArcadeDB zip into a folder, checked")
     fetch.add_argument("--set", default="latest")
@@ -778,9 +751,6 @@ def main(argv: list[str] | None = None) -> int:
                 f"backup: set {manifest['set']} written in {manifest['seconds']} s "
                 f"(ArcadeDB {graph['bytes']} bytes; ClickHouse {analytics['backup_id']})"
             )
-            removed = prune(bucket, settings.keep)
-            if removed:
-                print(f"backup: removed {len(removed)} older set(s): {', '.join(removed)}")
         elif args.command == "sets":
             for found in sets(bucket):
                 print(f"{found.set_id}\t{'finished' if found.complete else 'unfinished'}")
