@@ -5,6 +5,8 @@ platform's rules. Red on:
 - a pod or container that may run as root: no `runAsNonRoot: true`, or no numeric `runAsUser`
   (the image's own user decides then, perhaps by name, which `runAsNonRoot` cannot check);
 - a numeric user other than 10001 (ADR-148 decision 3);
+- a group other than 10001 (`runAsGroup`, `fsGroup`), or a supplementary group, except group 0 for
+  the one image built for group 0 (Keycloak, until P10; ADR-148 Amendment 1 item 4);
 - a privileged container, one that may gain privilege, or one that keeps a capability;
 - a port below 1024 (a container's, or a Service's);
 - a `ReadWriteMany` claim, a claim's or a StatefulSet's;
@@ -44,6 +46,12 @@ UID = 10001
 
 POD_KINDS = {"Deployment", "StatefulSet", "Job", "DaemonSet", "ReplicaSet", "Pod", "CronJob"}
 
+#: The workloads allowed group 0 as a supplementary group, and why. Held here on its own, not read
+#: from the harness's `GROUP_ZERO`, so a render that widens that list is refused here.
+GROUP_ZERO_ALLOWED = {
+    "keycloak": "its image is built for any user in group 0 and builds itself at start (until P10)"
+}
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -79,6 +87,12 @@ def _containers(spec: dict[str, Any]) -> Iterator[dict[str, Any]]:
 def _pod_rules(doc: dict[str, Any], spec: dict[str, Any], registry: str) -> Iterator[Violation]:
     where = _name(doc)
     pod = spec.get("securityContext") or {}
+    if pod.get("fsGroup", UID) != UID:
+        yield Violation("other-gid", where, f"fsGroup is {pod['fsGroup']!r}, not {UID}")
+    allowed = {0} if (doc.get("metadata") or {}).get("name") in GROUP_ZERO_ALLOWED else set()
+    extra = [g for g in pod.get("supplementalGroups") or [] if g != UID and g not in allowed]
+    if extra:
+        yield Violation("supplementary-group", where, f"supplementalGroups {extra!r}")
     for volume in spec.get("volumes") or []:
         if "hostPath" in volume:
             yield Violation(
@@ -97,6 +111,9 @@ def _pod_rules(doc: dict[str, Any], spec: dict[str, Any], registry: str) -> Iter
             yield Violation("root", at, f"runAsUser is {user!r}")
         elif user != UID:
             yield Violation("other-uid", at, f"runAsUser is {user}, not {UID}")
+        group = own.get("runAsGroup", pod.get("runAsGroup"))
+        if group != UID:
+            yield Violation("other-gid", at, f"runAsGroup is {group!r}, not {UID}")
         if own.get("privileged") is True:
             yield Violation("privileged", at, "privileged: true")
         if own.get("allowPrivilegeEscalation") is not False:

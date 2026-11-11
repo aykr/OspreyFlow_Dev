@@ -297,6 +297,92 @@ def test_a_stateful_set_s_read_write_many_claim_template_is_refused(
     assert _found(docs, registry) == [("rwx", f"claim {claim['metadata']['name']}")]
 
 
+def test_a_group_other_than_10001_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    """ADR-148 Amendment 1 item 4: every pod runs as 10001:10001, the group as well as the user;
+    planted in the values the chart reads, as a deployment's own settings would carry it."""
+    values, registry = copy.deepcopy(development)
+    values["podSecurity"] = {"user": 10001, "group": 1000}
+    docs = helm_template(yaml.safe_dump(values))
+    found = {(v.rule, v.detail) for v in check_manifests(docs, registry)}
+    assert ("other-gid", "runAsGroup is 1000, not 10001") in found
+    assert ("other-gid", "fsGroup is 1000, not 10001") in found
+    assert {rule for rule, _ in found} == {"other-gid"}
+
+
+def test_a_container_s_own_group_alone_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    docs, registry = _helm(development)
+    _api_container(docs)["securityContext"]["runAsGroup"] = 0
+    assert _found(docs, registry) == [("other-gid", "runAsGroup is 0, not 10001")]
+
+
+def test_a_supplementary_group_outside_its_allowance_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """Group 0 is Keycloak's alone (its image is built for group 0, until P10): the render gives
+    it to Keycloak and passes; given to another workload, or another group to Keycloak, refused."""
+    values, registry = copy.deepcopy(development)
+    assert _workload(values, "keycloak")["supplementalGroups"] == [0]
+    _workload(values, "api")["supplementalGroups"] = [0]
+    docs = helm_template(yaml.safe_dump(values))
+    assert [(v.rule, v.where, v.detail) for v in check_manifests(docs, registry)] == [
+        ("supplementary-group", "Deployment/api", "supplementalGroups [0]")
+    ]
+    values, _ = copy.deepcopy(development)
+    _workload(values, "keycloak")["supplementalGroups"] = [0, 4]
+    docs = helm_template(yaml.safe_dump(values))
+    assert _found(docs, registry) == [("supplementary-group", "supplementalGroups [4]")]
+
+
+def _with_a_job(development: tuple[dict[str, Any], str]) -> tuple[list[dict[str, Any]], str]:
+    """The profile renders no Job today (the cluster's are the model downloads it drops), so one is
+    given in the values' `jobs`, as the API's own pod, and templated by the chart's `jobs.yaml`."""
+    values, registry = copy.deepcopy(development)
+    values["jobs"] = [{**_workload(values, "api"), "name": "migrate"}]
+    docs = helm_template(yaml.safe_dump(values))
+    assert check_manifests(docs, registry) == []  # the Job alone, unplanted, passes
+    return docs, registry
+
+
+def _a_job(docs: list[dict[str, Any]]) -> dict[str, Any]:
+    jobs = [d for d in docs if d["kind"] == "Job"]
+    assert len(jobs) == 1, jobs
+    return jobs[0]
+
+
+def test_a_job_s_pod_is_held_to_the_rules(development: tuple[dict[str, Any], str]) -> None:
+    """The chart's Jobs (`jobs.yaml`) are pods the check reads: a fault in one alone is refused."""
+    docs, registry = _with_a_job(development)
+    job = _a_job(docs)
+    job["spec"]["template"]["spec"]["containers"][0]["securityContext"]["privileged"] = True
+    found = check_manifests(docs, registry)
+    assert [(v.rule, v.where.split(" ")[0], v.detail) for v in found] == [
+        ("privileged", _name_of(job), "privileged: true")
+    ]
+
+
+def test_a_cron_job_s_pod_is_held_to_the_rules(development: tuple[dict[str, Any], str]) -> None:
+    """A CronJob's pod sits a level deeper (`jobTemplate.spec.template`); P9's scheduled backup is
+    one. Planted as Helm would emit a CronJob made from one of the chart's own Jobs."""
+    docs, registry = _with_a_job(development)
+    job = _a_job(docs)
+    job["spec"]["template"]["spec"]["containers"][0]["securityContext"]["privileged"] = True
+    cron = {
+        "apiVersion": "batch/v1",
+        "kind": "CronJob",
+        "metadata": {**job["metadata"], "name": job["metadata"]["name"] + "-nightly"},
+        "spec": {"schedule": "0 2 * * *", "jobTemplate": {"spec": job["spec"]}},
+    }
+    docs = [cron if d is job else d for d in docs]
+    found = check_manifests(docs, registry)
+    assert [(v.rule, v.where.split(" ")[0], v.detail) for v in found] == [
+        ("privileged", _name_of(cron), "privileged: true")
+    ]
+
+
+def _name_of(doc: dict[str, Any]) -> str:
+    return f"{doc['kind']}/{doc['metadata']['name']}"
+
+
 def test_main_fails_on_a_planted_fault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import tools.cp_policy_check as check
 
