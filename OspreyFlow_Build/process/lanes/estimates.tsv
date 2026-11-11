@@ -1,13 +1,13 @@
-# as of 2026-11-11T20:10Z
-admin	P10	part 1 merged (listed for you); part 2, the profile wiring, next	13 Nov	B
+# as of 2026-11-11T21:00Z
+admin	P10	part 1 merged (listed for you); part 2 building: roles in Postgres by tenant and oid (ruled, listed for you)	13 Nov	B
 case	P9	round 3: the backup password in its own Secret, verify ties a set together, ClickHouse restored beside the live one then swapped, retention the agreed total, decommission's kept bucket fixed, single-replica enforced; then gates	13 Nov, morning	B
 case-b	P12	part 2 round 1: the routing marker at the review queue's route only (email and document content stay Deep read); the Conduit's wiring tested; merges after P7b with its network row	part 2 14 Nov	B
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P7b	per-workload egress and ingress, secrets by need, P9's rows: gating now; lands after P9, before the server's quiet window at 12:00 UK on 13 Nov if P9 is in, else 14 Nov	13 Nov, before 12:00, or 14 Nov	B
-docs	D2c	part 1 merged (admin guide 1.76 §6a); part 2 from P10's merge; resuming on sol	13 Nov	B
+docs	D2c	part 2 (Entra) built at 2f21e72, review and server gates next; backups after P9	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
-admin	T1	part 4 landed (9de435c); part 5 built (9cbb4575), its review next	12 Nov	A
+admin	T1	part 5 reviewed twice, not ready: fixes queued behind P10 part 2 (T1P5_FINDINGS.md); reset split to its own step	14 Nov	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
 orchestrator	demo	osprey-demo, v0.5.0 in the GOV.UK look with the synthetic demo packs, beside osprey-small: built and backed up today; frozen until you say; checked Thursday 12 Nov by 12:00 UK; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 12:00 (the check)	A
