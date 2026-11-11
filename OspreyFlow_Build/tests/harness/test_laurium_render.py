@@ -10,7 +10,7 @@ the orchestrator's rulings of 11 November).
 - **The master key never in Laurium's pod** (decision 8): every other owned service reads the whole
   deployment Secret (`envFrom`), which holds the gateway's master key; Laurium's pod reads none of
   it. Its environment is its gateway's address alone, the gateway's in-namespace name and port.
-- **No way out of the namespace**: Laurium's pod carries no egress label.
+- **No egress label** on Laurium's pod (what it may reach is the evaluator's, below).
 
 Where its traffic may go is read from Helm's own output in `tests/harness/test_laurium_network_policy.py`
 (it needs Docker), strict-xfailed until P7b's per-workload egress and Laurium's row land: no policy
@@ -94,7 +94,9 @@ def test_lauriums_pod_reads_no_secret_and_only_its_gateway(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
-def test_lauriums_pod_has_no_way_out_and_its_resources_named(name: str) -> None:
+def test_lauriums_pod_carries_no_egress_label_and_its_resources_named(name: str) -> None:
+    """No label asks for a way out; where it may really reach is the evaluator's, in Calico's order
+    (`test_laurium_network_policy.py`), not this label's (the orchestrator's round 1)."""
     laurium = _workloads(_artefacts(_config(name, "laurium")))["laurium"]
     assert not laurium.get("egress"), "Laurium's pod is labelled to leave the namespace"
     assert not laurium.get("public")

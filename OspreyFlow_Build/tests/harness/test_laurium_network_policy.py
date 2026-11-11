@@ -301,7 +301,7 @@ def test_laurium_reaches_the_gateway_and_dns_alone(name: str) -> None:
 
 @UNTIL_P7B
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
-def test_only_the_conduit_and_the_workers_reach_laurium(name: str) -> None:
+def test_only_the_conduit_reaches_laurium(name: str) -> None:
     docs, _ = _manifests(name)
     into = {
         who: decide(docs, pod("laurium", 8000), pod(who, 8000), "Ingress")
