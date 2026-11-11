@@ -545,7 +545,7 @@ export function readFindings(json: unknown): Record<string, Record<string, Liste
         if (e.own !== null && !(typeof e.own === "number" && e.own > 0 && e.own <= 21)) bad(where, `an own ratio out of range ${String(e.own)}`);
         // Words hidden at every point are always read on their own surfaces (`judge`), so their listing
         // names that floor; with none it would excuse them whatever their colours became.
-        if (e.own === null && e.reason.startsWith("hidden at every point")) bad(where, "hidden at every point with no own ratio: a listing of it must name a floor");
+        if (e.own === null && typeof e.reason === "string" && e.reason.startsWith("hidden at every point")) bad(where, "hidden at every point with no own ratio: a listing of it must name a floor");
       } else {
         bad(where, `a ratio that is neither a number nor "unmeasurable": ${String(e.ratio)}`);
       }
