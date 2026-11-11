@@ -122,5 +122,7 @@ keyboard (rule 13) and axe in three themes.
 
 **P11 part 1 built at e28c561** (code), after my own lane-reviewer's round, all its findings fixed but the
 orchestrator's two (Q2 number, Q4 ownership). Reviews: the orchestrator's independent review is owed, and
-this is a credential step, so two rounds. Then rebase, then the gates once at that head. `make test` here
+this is a credential step, so two rounds. **Addendum:** the interim `make test` found the settings appendix
+generated from the schema out of date (`test_admin_guide.py`); regenerated in 8d2f18b, which is now the
+code head to review. Interim result and its five failures explained in `p11/REPORT.md` item 7. Then rebase, then the gates once at that head. `make test` here
 ran on an earlier head as an interim check only (`p11/make-test-py.txt`), not the gate. Nothing running.
