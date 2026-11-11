@@ -5,10 +5,11 @@ folder, with the deployment's own names already in it.
 
 Every command is in a fenced block, and the blocks are the runbook: run in order, in one shell,
 and stopped at the first command that fails. A block fenced `sh` runs wherever the runbook is
-followed; a block fenced `sh platform` only on the client's platform (the Terraform pull request
-and the AWS accounts' own commands), for which a rehearsal on a local cluster runs its stand-in
-instead and says so. `command_blocks` reads them back, so the rehearsal runs exactly the text the
-client's team reads.
+followed; a block fenced `sh platform` only on the client's platform (the Terraform pull requests,
+the registry's sign-in and the AWS accounts' own commands), for which a rehearsal on a local
+cluster runs its stand-in instead and says so. `command_blocks` reads them back, so the rehearsal
+runs exactly the text the client's team reads. Every command runs with the rights a namespace's
+tenant has: nothing cluster-wide is listed or changed (the disks are the platform team's command).
 """
 
 # ruff: noqa: E501 - the templates below are the runbooks' own text: each line is a command or a
@@ -19,13 +20,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
 from harness.cloud_platform.terraform import BUCKETS, ecr_repositories
-from schemas.deployment import OspreyConfig
+from schemas.deployment import OspreyConfig, generated_folder
 
 RELEASE = "ospreyflow"
-FOLDER = "deploy/generated/cloud-platform"
 CHART = "deploy/helm/ospreyflow"
+RENDER = '"$PY" -m harness.render --config "$CONFIG"'
 
 _FENCE = re.compile(r"^```sh( platform)?\n(.*?)^```\n", re.S | re.M)
 
@@ -39,9 +41,11 @@ def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
 def _settings(config: OspreyConfig) -> str:
     cp = config.cloud_platform
     assert cp is not None and cp.namespace is not None
+    folder = f"deploy/generated/{generated_folder(config)}"
     return f"""```sh
-export NS={cp.namespace} RELEASE={RELEASE} FOLDER={FOLDER} CHART={CHART}
-export PY="${{PY:-.venv/bin/python}}" PYTHONPATH=.:packages
+export NS={cp.namespace} RELEASE={RELEASE} FOLDER={folder} CHART={CHART}
+export CONFIG="${{CONFIG:-osprey.yaml}}" PY="${{PY:-.venv/bin/python}}" PYTHONPATH=.:packages
+export WORK="${{TMPDIR:-/tmp}}/ospreyflow-$NS" && mkdir -p "$WORK"
 test "$(kubectl config view --minify -o jsonpath='{{..namespace}}')" = "$NS" \\
   || {{ echo "kubectl's context is not the namespace $NS: kubectl config set-context --current --namespace=$NS"; false; }}
 ```
@@ -59,12 +63,15 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     )
     hosts = [r["host"] for r in values["ingress"]["rules"]]
     glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
+    host = cp.registry.split("/")[0]
     return f"""# Install: OspreyFlow in `{cp.namespace}` ({cp.shape} shape)
 
-Rendered for this deployment by `PYTHONPATH=.:packages .venv/bin/python -m harness.render` (ADR-148 Amendment 5). Run each block in order,
-from the release's `OspreyFlow_Core` folder, with `kubectl` pointed at the namespace, `helm` 3.16 or
-later, Docker (for the images) and the AWS command line signed in to the namespace's account, all in
-one shell. If a command fails, stop there: put right what it says, then run its block again.
+Rendered for this deployment by `PYTHONPATH=.:packages .venv/bin/python -m harness.render` (ADR-148
+Amendment 5). Run each block in order, in one shell, from the release's `OspreyFlow_Core` folder,
+with the deployment's `osprey.yaml` there (or `CONFIG` naming it), `kubectl` pointed at the
+namespace, `helm` 3.16 or later, Docker (for the images) and the AWS command line signed in to the
+namespace's account. If a command fails, stop there: put right what it says, then run its block
+again.
 
 ## 1. The settings and the namespace
 
@@ -76,7 +83,7 @@ kubectl auth can-i create persistentvolumeclaims -n "$NS"
 
 ## 2. The namespace's resources (the platform team's pull request)
 
-Copy `{FOLDER}/terraform/` into the namespace's folder in the environments repository and raise the
+Copy `$FOLDER/terraform/` into the namespace's folder in the environments repository and raise the
 pull request. Once it is applied, the namespace holds the managed stores' Secrets, our Secret and the
 service account the Conduit reads S3 as.
 
@@ -93,29 +100,49 @@ kubectl -n "$NS" get serviceaccount {secrets.irsa.service_account} -o name
 
 ## 3. The images
 
-Builds ours and copies the others, by digest, into `{cp.registry}`.
+Render the plan (ours are not in the registry yet, so the values are not pinned), sign in to the
+registry, then build ours and copy the others, each by its digest, into `{cp.registry}`.
+
+```sh
+{RENDER} --allow-unpinned
+```
+
+```sh platform
+aws ecr get-login-password --region {platform.aws_region} | docker login --username AWS --password-stdin {host}
+```
 
 ```sh
 ospreyflow images push --registry "{cp.registry}" --from "$FOLDER"
 ```
 
-## 4. The deployment
+## 4. The values, pinned
+
+Every image now by the digest the registry holds for it. The third-party ones keep the digest the
+plan copied, even if a tag has moved since; delete `$FOLDER/images.yaml` before step 3 to take a
+newer one.
+
+```sh
+{RENDER}
+```
+
+## 5. The deployment
 
 ```sh
 helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
 {rollouts}
 ```
 
-## 5. Sign-in
+## 6. Sign-in and the first administrator
 
 Sets the Conduit's client secret on its clients, its service account's roles and the realm's
-sign-in settings, once Keycloak answers (P10 replaces this with the client's own sign-in).
+sign-in settings, once Keycloak answers (P10 replaces this with the client's own sign-in), then makes
+the first administrator, `admin`, and prints the one-time code they sign in with once.
 
 ```sh
 "$PY" -m harness.cloud_platform.identity "$FOLDER/values.yaml"
 ```
 
-## 6. Check
+## 7. Check
 
 The doors answer through the platform's ingress ({", ".join(hosts)}).
 
@@ -130,19 +157,20 @@ def render_decommission(
     config: OspreyConfig, platform: PlatformSettings, values: dict[str, Any]
 ) -> str:
     cp = config.cloud_platform
-    assert cp is not None and cp.namespace is not None
+    assert cp is not None and cp.namespace is not None and cp.registry is not None
     secrets = platform.secrets
     own = " ".join(f"ospreyflow-{c['name']}" for c in values["storage"].get("claims", []))
     buckets = " ".join(BUCKETS)
-    assert cp.registry is not None
     repositories = " ".join(ecr_repositories(values, cp.registry))
+    kinds = " ".join(KINDS)
     return f"""# Decommission: OspreyFlow in `{cp.namespace}`
 
-Rendered for this deployment by `PYTHONPATH=.:packages .venv/bin/python -m harness.render` (ADR-148 Amendment 5). Removes everything the
-deployment made: its workloads, its volumes and their disks, its Secret, its buckets and images, and
-the namespace's resources. **It deletes the deployment's data for good**: take the last backup first.
-The namespace itself is the platform team's and stays. Run each block in order, in one shell, from
-the release's `OspreyFlow_Core` folder, as for the install; if a command fails, stop there.
+Rendered for this deployment by `PYTHONPATH=.:packages .venv/bin/python -m harness.render` (ADR-148
+Amendment 5). Removes everything the deployment made: its workloads, its claims and their disks,
+its Secret, its buckets and images, and the namespace's resources. **It deletes the deployment's
+data for good**: take the last backup first. The namespace itself, and every other resource in it,
+is the platform team's and stays. Run each block in order, in one shell, from the release's
+`OspreyFlow_Core` folder, as for the install; if a command fails, stop there.
 
 ## 1. The settings
 
@@ -150,29 +178,26 @@ the release's `OspreyFlow_Core` folder, as for the install; if a command fails, 
 ```sh
 export PREFIX="$(kubectl -n "$NS" get secret {secrets.s3.name} -o jsonpath='{{.data.{secrets.s3.keys["prefix"]}}}' | base64 -d)"
 test -n "$PREFIX" || {{ echo "no bucket prefix in {secrets.s3.name}"; false; }}
-"$PY" -c "import yaml; yaml.safe_load(open('$FOLDER/values.yaml'))" && cp "$FOLDER/values.yaml" "${{TMPDIR:-/tmp}}/ospreyflow-$NS-values.yaml"
+cp "$FOLDER/values.yaml" "$WORK/values.yaml" && rm -rf "$WORK/terraform" && cp -R "$FOLDER/terraform" "$WORK/terraform"
 ```
 
 ## 2. The workloads
 
-`helm uninstall` removes what the chart made, but keeps every volume: each store's own claims and
-the shared claims (`helm.sh/resource-policy: keep`), which hold the data.
+`helm uninstall` removes what the chart made, but keeps every claim: each store's own and the shared
+ones (`helm.sh/resource-policy: keep`), which hold the data.
 
 ```sh
 helm uninstall "$RELEASE" -n "$NS" --wait --timeout 15m || helm status "$RELEASE" -n "$NS" 2>&1 | grep -q 'not found'
 ```
 
-## 3. The volumes and their disks
+## 3. The claims
+
+The stores' claims carry the release's label (their StatefulSets' selectors); the shared ones are
+removed by name. Their disks go with them on a class that deletes them (step 7 checks).
 
 ```sh
 kubectl -n "$NS" delete pvc -l app.kubernetes.io/instance="$RELEASE" --wait --timeout=10m
 kubectl -n "$NS" delete pvc ospreyflow-shared {own} --ignore-not-found --wait --timeout=10m
-for i in $(seq 1 60); do
-  left=$(kubectl get pv -o jsonpath="{{range .items[?(@.spec.claimRef.namespace=='$NS')]}}{{.metadata.name}} {{end}}")
-  [ -z "$left" ] && break
-  sleep 10
-done
-test -z "$left" || {{ echo "volumes still held for $NS: $left (kubectl delete pv <name>, then its disk)"; false; }}
 ```
 
 ## 4. Our Secret
@@ -184,29 +209,32 @@ kubectl -n "$NS" delete secret {values["secrets"]["name"]} --ignore-not-found
 ## 5. The buckets and the images (the account's own commands)
 
 Each bucket emptied of every object and every version (`media` keeps versions), then the
-repositories emptied of their images: the namespace's Terraform cannot remove either while it holds
-anything.
+repositories emptied of their images, a hundred at a time: the namespace's Terraform cannot remove
+either while it holds anything.
 
 ```sh platform
 for b in {buckets}; do
   while :; do
     aws s3api list-object-versions --bucket "$PREFIX$b" --max-items 1000 --output json \\
-      --query '{{Objects: [Versions, DeleteMarkers][][].{{Key: Key, VersionId: VersionId}}}}' > "${{TMPDIR:-/tmp}}/versions.json"
-    grep -q '"Key"' "${{TMPDIR:-/tmp}}/versions.json" || break
-    aws s3api delete-objects --bucket "$PREFIX$b" --delete "file://${{TMPDIR:-/tmp}}/versions.json" >/dev/null
+      --query '{{Objects: [Versions, DeleteMarkers][][].{{Key: Key, VersionId: VersionId}}}}' > "$WORK/versions.json"
+    grep -q '"Key"' "$WORK/versions.json" || break
+    aws s3api delete-objects --bucket "$PREFIX$b" --delete "file://$WORK/versions.json" >/dev/null
   done
 done
 for repository in {repositories}; do
-  ids=$(aws ecr list-images --repository-name "$repository" --query 'imageIds[*]' --output json)
-  [ "$ids" = "[]" ] || aws ecr batch-delete-image --repository-name "$repository" --image-ids "$ids" >/dev/null
+  while :; do
+    ids=$(aws ecr list-images --repository-name "$repository" --max-items 100 --query 'imageIds[*]' --output json)
+    [ "$ids" = "[]" ] && break
+    aws ecr batch-delete-image --repository-name "$repository" --image-ids "$ids" >/dev/null
+  done
 done
 ```
 
 ## 6. The namespace's resources (the platform team's pull request)
 
-Remove the namespace's OspreyFlow resources from the environments repository (the files from
-`{FOLDER}/terraform/`) and raise the pull request; once it is applied, its Terraform state lists
-nothing of OspreyFlow's.
+Remove the deployment's resources (the files from `$FOLDER/terraform/`) from the namespace's folder
+in the environments repository and raise the pull request; the folder's other resources are the
+platform's and stay.
 
 ```sh platform
 echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
@@ -214,22 +242,33 @@ echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for i
 
 ## 7. Check that nothing is left
 
-Lists the namespace, the cluster's volumes, the Terraform state and the account's buckets, and names
-anything of the deployment's still there. Give `STATE` the output of `tofu state list` in the
-namespace's folder (the platform team's pipeline prints it).
+Lists the namespace (each kind the deployment makes), the disks made for its claims, the Terraform
+state and the account's buckets, and names anything of the deployment's still there. The disks are
+in the cluster's account: the platform team runs that command, or gives its output as `DISKS`. Give
+`STATE` the output of `tofu state list` in the namespace's folder (the platform team's pipeline
+prints it).
 
 ```sh platform
-aws s3api list-buckets --query 'Buckets[].Name' --output text | tr '\\t' '\\n' > "${{TMPDIR:-/tmp}}/buckets.txt"
+aws s3api list-buckets --query 'Buckets[].Name' --output text | tr '\\t' '\\n' > "$WORK/buckets.txt"
 : "${{STATE:?the output of tofu state list in the namespace folder, saved to a file}}"
-cp "$STATE" "${{TMPDIR:-/tmp}}/state.txt"
+cp "$STATE" "$WORK/state.txt"
+if [ -n "${{DISKS:-}}" ]; then cp "$DISKS" "$WORK/disks.json"; else
+  aws ec2 describe-volumes --filters "Name=tag:{DISK_NAMESPACE_TAG},Values=$NS" --output json > "$WORK/disks.json"
+fi
 ```
 
 ```sh
-kinds=$(kubectl api-resources --namespaced --verbs=list -o name | grep -v '^events' | paste -sd, -)
-kubectl -n "$NS" get "$kinds" --ignore-not-found -o json > "${{TMPDIR:-/tmp}}/objects.json"
-kubectl get pv -o json > "${{TMPDIR:-/tmp}}/volumes.json"
-"$PY" -m harness.cloud_platform.decommission_check --values "${{TMPDIR:-/tmp}}/ospreyflow-$NS-values.yaml" \\
-  --objects "${{TMPDIR:-/tmp}}/objects.json" --volumes "${{TMPDIR:-/tmp}}/volumes.json" \\
-  --state "${{TMPDIR:-/tmp}}/state.txt" --buckets "${{TMPDIR:-/tmp}}/buckets.txt" --bucket-prefix "$PREFIX"
+objects=()
+for kind in {kinds}; do
+  if kubectl api-resources -o name | grep -qx "$kind"; then
+    kubectl -n "$NS" get "$kind" -o json > "$WORK/objects-$kind.json"
+    objects+=(--objects "$WORK/objects-$kind.json")
+  fi
+done
+seen=(); [ -f "$WORK/disks.json" ] && seen+=(--disks "$WORK/disks.json")
+[ -f "$WORK/volumes.json" ] && seen+=(--volumes "$WORK/volumes.json")
+test "${{#seen[@]}}" -gt 0 || {{ echo "no listing of the disks: give DISKS, or let the platform team run step 7's first block"; false; }}
+"$PY" -m harness.cloud_platform.decommission_check --values "$WORK/values.yaml" "${{objects[@]}}" "${{seen[@]}}" \\
+  --state "$WORK/state.txt" --terraform "$WORK/terraform" --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"
 ```
 """

@@ -1,12 +1,13 @@
 """The install runbook's sign-in step (`harness/cloud_platform/identity.py`, ADR-148 Amendment 5):
-it reads the deployment's namespace and our Secret's name from the rendered values, decodes the
-Secret `kubectl` prints, and hands both to the cluster's own identity step."""
+it reads our Secret, hands the cluster's identity step the deployment's settings and the Secret
+together, as the cluster's own install does (`harness.cluster_install`, step 5: the realm's sign-in
+reads ConfigMap settings, the dashboards' address among them, and our Secret alone has none of
+them), then makes the first administrator, as the cluster's install's step 6 does."""
 
 from __future__ import annotations
 
 import base64
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -19,36 +20,84 @@ from tools.cp_policy_check import FIXTURES, _resolver
 from schemas.deployment import OspreyConfig
 
 
-def test_it_configures_the_namespace_s_identity_from_our_secret(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    config = OspreyConfig.model_validate(
-        yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
-    )
-    values = tmp_path / "values.yaml"
-    values.write_text(render(config, resolver=_resolver).artefacts["values.yaml"], encoding="utf-8")
-    asked: list[list[str]] = []
+class Kube:
+    """kubectl as the namespace's tenant sees it: our Secret, and Keycloak's admin tool."""
 
-    def kubectl(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
-        asked.append(argv)
-        data = {"OSPREY_OIDC_CLIENT_SECRET": base64.b64encode(b"s3cret").decode()}
-        return subprocess.CompletedProcess(argv, 0, json.dumps(data), "")
+    def __init__(self, made: tuple[int, str, str] = (0, "", "")) -> None:
+        self.calls: list[tuple[list[str], str | None]] = []
+        self.made = made
 
+    def run(self, argv: list[str], *, stdin: str | None = None) -> tuple[int, str, str]:
+        self.calls.append((argv, stdin))
+        if argv[3:6] == ["get", "secret", "ospreyflow-secrets"]:
+            data = {"OSPREY_OIDC_CLIENT_SECRET": base64.b64encode(b"s3cret").decode()}
+            return 0, json.dumps(data), ""
+        return self.made
+
+
+@pytest.fixture
+def values_file(tmp_path: Path) -> Path:
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    path = tmp_path / "values.yaml"
+    config = OspreyConfig.model_validate(raw)
+    path.write_text(render(config, resolver=_resolver).artefacts["values.yaml"], encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def configured(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     given: dict[str, Any] = {}
 
     def configure(_kube: Any, namespace: str, cfg: OspreyConfig, held: dict[str, str]) -> list[str]:
-        given.update(namespace=namespace, held=held, cfg=cfg)
+        given.update(namespace=namespace, held=dict(held), cfg=cfg)
         return ["configured"]
 
-    monkeypatch.setattr(subprocess, "run", kubectl)
     monkeypatch.setattr("harness.cluster_install._configure_identity", configure)
-    assert identity.main([str(values)]) == 0
-    assert asked == [["kubectl", "-n", "ospreyflow-poc", "get", "secret", "ospreyflow-secrets",
-                      "-o", "jsonpath={.data}"]]  # fmt: skip
-    assert given["namespace"] == "ospreyflow-poc"
-    assert given["held"] == {"OSPREY_OIDC_CLIENT_SECRET": "s3cret"}
-    assert given["cfg"].cloud_platform.shape == "poc"
+    return given
 
 
-def test_it_says_how_it_is_run_when_given_nothing() -> None:
+def test_identity_is_given_the_settings_and_our_secret_together(
+    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    kube = Kube()
+    assert identity.main([str(values_file)], kube=kube) == 0
+    environment = yaml.safe_load(values_file.read_text(encoding="utf-8"))["environment"]
+    assert configured["namespace"] == "ospreyflow-poc"
+    assert configured["held"]["OSPREY_OIDC_CLIENT_SECRET"] == "s3cret"
+    # Every ConfigMap setting the cluster's install would give it, not our Secret's alone.
+    assert {k: configured["held"][k] for k in environment} == environment
+    assert kube.calls[0][0] == ["kubectl", "-n", "ospreyflow-poc", "get", "secret",
+                                "ospreyflow-secrets", "-o", "jsonpath={.data}"]  # fmt: skip
+
+
+def test_the_first_administrator_is_made_and_its_code_said_once(
+    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    kube = Kube()
+    assert identity.main([str(values_file), "--email", "lead@example.org"], kube=kube) == 0
+    argv, stdin = kube.calls[-1]
+    assert argv[:6] == ["kubectl", "-n", "ospreyflow-poc", "exec", "-i", "keycloak-0"]
+    user = json.loads(stdin or "{}")
+    assert user["username"] == "admin" and user["email"] == "lead@example.org"
+    out = capsys.readouterr().out
+    assert "first administrator admin made: sign in once with the code" in out
+
+
+def test_an_administrator_already_there_is_left_unchanged(
+    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    kube = Kube(made=(1, "", "Conflict detected"))
+    assert identity.main([str(values_file)], kube=kube) == 0
+    assert "already exists; unchanged" in capsys.readouterr().out
+
+
+def test_a_refused_administrator_fails_the_step(
+    values_file: Path, configured: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    kube = Kube(made=(1, "", "forbidden"))
+    assert identity.main([str(values_file)], kube=kube) == 1
+    assert "making the first administrator: forbidden" in capsys.readouterr().err
+
+
+def test_it_says_how_it_is_run_when_given_nothing(capsys: pytest.CaptureFixture[str]) -> None:
     assert identity.main([]) == 2

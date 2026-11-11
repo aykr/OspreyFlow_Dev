@@ -645,6 +645,17 @@ def _heap_from_the_limit(pod: dict[str, Any], profile: ProfileSettings) -> None:
         pod["env"].append({"name": "ARCADEDB_OPTS_MEMORY", "value": opts})
 
 
+def _without(lock: str, services: set[str]) -> str:
+    """The lock without the entries of `services` (the poc shape's Keeper, which no pod runs), its
+    header and every other entry as written."""
+    if not services:
+        return lock
+    head, _, body = lock.partition("images:\n")
+    entries = re.split(r"(?m)^(?=- service: )", body)
+    kept = [e for e in entries if not any(e.startswith(f"- service: {s}\n") for s in services)]
+    return head + "images:\n" + "".join(kept)
+
+
 def embedded_keeper_clickhouse_config() -> str:
     """The poc shape's ClickHouse (ADR-148 Amendment 5): the cluster's configuration for one server
     (`harness.cluster.clickhouse_config`), its Keeper the server's own, a Raft of one whose log is
@@ -862,7 +873,9 @@ def render_cloud_platform(
     artefacts = {
         "values.yaml": _BANNER
         + yaml.safe_dump(out, sort_keys=False, default_flow_style=False, width=4096),
-        "versions.lock": rendered["versions.lock"],
+        "versions.lock": _without(
+            rendered["versions.lock"], {"clickhouse-keeper"} if poc else set()
+        ),
         "images.yaml": "# What `ospreyflow images push --registry` copies (ADR-148 decision 8).\n"
         + yaml.safe_dump(
             {"registry": registry, "images": [copies.plan[k] for k in sorted(copies.plan)]},

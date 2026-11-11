@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 import yaml
+from harness.cloud_platform.runbooks import command_blocks
 from harness.render import render
 from pydantic import ValidationError
 from tools.cp_policy_check import FIXTURES, _resolver
@@ -200,18 +201,55 @@ def test_the_decommission_removes_every_claim_the_render_makes(
 ) -> None:
     """`helm uninstall` keeps every claim. The runbook removes the StatefulSets' claims by the
     release's label (the StatefulSet controller gives each claim its selector's labels, the
-    release's among them) and the kept claims by name, then waits until no volume of the namespace
-    is held; the decommission check (its last block) names anything still left."""
+    release's among them) and the kept claims by name; the decommission check (its last block)
+    names anything still left, the disks among them."""
     text = runbooks["DECOMMISSION.md"]
     assert 'delete pvc -l app.kubernetes.io/instance="$RELEASE"' in text
     names = ["ospreyflow-shared", *(f"ospreyflow-{c['name']}" for c in poc["storage"]["claims"])]
     line = next(x for x in text.splitlines() if "delete pvc ospreyflow-shared" in x)
     assert all(n in line.split() for n in names), line
-    assert "spec.claimRef.namespace=='$NS'" in text
-    assert text.rstrip().endswith('--bucket-prefix "$PREFIX"\n```') or "decommission_check" in text
+    last = command_blocks(text, on_the_platform=False)[-1]
+    assert "-m harness.cloud_platform.decommission_check" in last
     assert (
         text.index("helm uninstall") < text.index("delete pvc") < text.index("decommission_check")
     )
+
+
+def test_no_command_needs_more_than_a_namespace_s_rights(runbooks: dict[str, str]) -> None:
+    """The client's team is the namespace's tenant: no block lists or changes anything cluster-wide
+    (volumes, every kind there is), and the disks are read from the account, by the claims'
+    namespace tag, in a block of the platform's (the self-review of P7b, point 2)."""
+    for name, text in runbooks.items():
+        everything = "".join(command_blocks(text, on_the_platform=True))
+        assert not re.search(r"kubectl (get|delete) (pv|persistentvolume)s?\b", everything), name
+        assert "--namespaced" not in everything, name
+        for command in re.findall(
+            r"^\s*kubectl (?!api-resources|config|auth)(.*)$", everything, re.M
+        ):
+            assert '-n "$NS"' in command, (name, command)
+    platform = "".join(command_blocks(runbooks["DECOMMISSION.md"], on_the_platform=True))
+    rehearsal = "".join(command_blocks(runbooks["DECOMMISSION.md"], on_the_platform=False))
+    assert "aws ec2 describe-volumes" in platform and "aws ec2" not in rehearsal
+
+
+def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
+    runbooks: dict[str, str],
+) -> None:
+    """Between the push and the install: the registry's sign-in before the push (the platform's
+    block), and a pinned render after it, so the values name ours by the digest the registry holds
+    (decision 8), before `helm` reads them; then the first administrator."""
+    text = runbooks["INSTALL.md"]
+    order = [
+        text.index("--allow-unpinned"),
+        text.index("aws ecr get-login-password"),
+        text.index("ospreyflow images push"),
+        text.index('-m harness.render --config "$CONFIG"\n```\n\n## 5'),
+        text.index("helm upgrade --install"),
+        text.index("-m harness.cloud_platform.identity"),
+    ]
+    assert order == sorted(order), order
+    assert "aws ecr get-login-password" in "".join(command_blocks(text, on_the_platform=True))
+    assert "aws ecr" not in "".join(command_blocks(text, on_the_platform=False))
 
 
 # ---- CPU limits (the orchestrator's D2c finding on LimitRanges) --------------------------------
@@ -261,3 +299,13 @@ def test_the_poc_shape_makes_no_opensearch_domain() -> None:
     assert "terraform/opensearch.tf" not in poc
     assert not [n for n, t in poc.items() if n.startswith("terraform/") and "opensearch" in t]
     assert "terraform/opensearch.tf" in _artefacts(_config("development"))
+
+
+def test_the_lock_names_only_the_images_a_poc_pod_runs() -> None:
+    """The self-review of P7b, point 11: the poc shape runs no Keeper of its own, so its lock names
+    none (and a pinned render need not resolve one); the standard shape's still does."""
+    lock = yaml.safe_load(_artefacts(_config())["versions.lock"])
+    services = {entry["service"] for entry in lock["images"]}
+    assert "clickhouse-keeper" not in services and "clickhouse" in services
+    standard = yaml.safe_load(_artefacts(_config("development"))["versions.lock"])
+    assert "clickhouse-keeper" in {entry["service"] for entry in standard["images"]}
