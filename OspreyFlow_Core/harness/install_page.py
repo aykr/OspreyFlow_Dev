@@ -127,7 +127,7 @@ def _providers(draft_config: Path) -> list[dict[str, str]]:
         return []
     return [
         {"name": p.name, "label": p.label or p.name, "variable": models.key_variable(p.name)}
-        for p in models.enabled_providers
+        for p in models.keyed_providers  # an IAM-role engine is given no key (ADR-135 Am 4)
     ]
 
 

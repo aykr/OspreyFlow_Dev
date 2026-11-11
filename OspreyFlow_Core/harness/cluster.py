@@ -454,6 +454,7 @@ def render_cluster(
         _render_versions_lock,
         compose_services,
         connection_secret_variables,
+        keyless_model_key_variables,
         model_key_variables,
         render_litellm_config,
     )
@@ -549,6 +550,12 @@ def render_cluster(
     # ADR-135 decision 2: a workload that reads the whole Secret (`envFrom`) has every model key
     # blanked above it; only the gateway reads one, by name.
     blanks = [{"name": key, "value": ""} for key in model_key_variables(config).values()]
+    # ADR-135 Amendment 4: an IAM-role engine's held key (from before it signed in so) is read by
+    # no workload, the gateway included.
+    keyless_blanks = [
+        {"name": key, "value": ""} for key in keyless_model_key_variables(config).values()
+    ]
+    blanks = [*blanks, *keyless_blanks]
     # ADR-140 Amendment 15 (the orchestrator's review, item 9): a connection's secret reaches the
     # Conduit alone.
     connection_blanks = [{"name": key, "value": ""} for key in connection_secret_variables(config)]
@@ -560,6 +567,11 @@ def render_cluster(
     ]
     master_blank = {"name": GATEWAY_MASTER, "value": ""}
     for workload in [*workloads, *jobs]:
+        if workload.get("envFrom") and workload["name"] == "litellm":
+            given = {e["name"] for e in workload.get("env", [])}
+            workload["env"] = [
+                *workload.get("env", []), *(b for b in keyless_blanks if b["name"] not in given),
+            ]  # fmt: skip
         if workload.get("envFrom") and workload["name"] != "litellm":
             given = {e["name"] for e in workload.get("env", [])}
             hidden = [

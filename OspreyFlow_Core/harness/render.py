@@ -303,7 +303,11 @@ def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
         key = config.models.key_variable(provider.name)
         for model in dict.fromkeys(provider.roles.values()):
             name = f"{provider.name}/{model}"
-            params: dict[str, object] = {"model": name, "api_key": f"os.environ/{key}"}
+            params: dict[str, object] = {"model": provider.route(model)}
+            if not provider.keyless:  # ADR-135 Amendment 4: an IAM-role engine names no key
+                params["api_key"] = f"os.environ/{key}"
+            if provider.region:
+                params["aws_region_name"] = provider.region
             if provider.api_base:
                 params["api_base"] = provider.api_base
             entries.append({"model_name": name, "litellm_params": params})
@@ -312,7 +316,16 @@ def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
 
 def model_key_variables(config: OspreyConfig) -> dict[str, str]:
     """Each enabled provider's name and the `deployment.env` variable its key is kept in."""
-    return {p.name: config.models.key_variable(p.name) for p in config.models.enabled_providers}
+    # An engine signed in by the namespace's IAM role has none (ADR-135 Amendment 4).
+    return {p.name: config.models.key_variable(p.name) for p in config.models.keyed_providers}
+
+
+def keyless_model_key_variables(config: OspreyConfig) -> dict[str, str]:
+    """The variable each IAM-role engine's key **would** be kept in (ADR-135 Amendment 4). It keeps
+    none, but one held from before it signed in so stays in the deployment's secrets until a move
+    removes it, so it is blanked in **every** service, the gateway too: no workload reads it."""
+    models = config.models
+    return {p.name: models.key_variable(p.name) for p in models.enabled_providers if p.keyless}
 
 
 def model_engines_env(config: OspreyConfig) -> list[str]:
@@ -335,6 +348,10 @@ def model_engines_env(config: OspreyConfig) -> list[str]:
             "contract_reference": p.contract_reference,
             # ADR-135 Amendment 2: the Conduit makes the gateway's entries, so it needs the base.
             "api_base": p.api_base,
+            # ADR-135 Amendment 4: what the engine is, how it signs in, and Bedrock's region.
+            "kind": p.kind,
+            "auth": p.auth,
+            "region": p.region,
         }
         for p in models.enabled_providers
     ]
@@ -353,19 +370,21 @@ def _keys_for_the_gateway_alone(config: OspreyConfig, services: dict[str, Any]) 
     every key. The Conduit is told instead whether each key is present, by Compose from the same
     file (`${KEY:+yes}`: "yes" or empty), so it offers analysts only an engine that has one."""
     keys = model_key_variables(config)
-    if not keys:
+    keyless = keyless_model_key_variables(config)
+    if not keys and not keyless:
         return
     for name, service in services.items():
         if name == "litellm":
             service["environment"] = {
                 **dict(service.get("environment") or {}),
                 **{key: f"${{{key}:-}}" for key in keys.values()},
+                **dict.fromkeys(keyless.values(), ""),
             }
             continue
         if "env_file" not in service:
             continue
         environment = dict(service.get("environment") or {})
-        environment.update({key: "" for key in keys.values()})
+        environment.update({key: "" for key in [*keys.values(), *keyless.values()]})
         if name == "api":
             for provider, key in keys.items():
                 environment[f"OSPREY_MODEL_KEY_PRESENT_{provider.upper()}"] = f"${{{key}:+yes}}"
