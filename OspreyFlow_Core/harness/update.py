@@ -463,6 +463,9 @@ def apply_update(
             if changed.get(flag):
                 _ok(host, [*compose, "restart", service], "start the release")
                 _ok(host, up, "start the release")
+        # Every restart the files called for is done: the files pass's record of them, kept until
+        # now so an update killed before its restarts leaves them owed (ADR-114 Amendment 39).
+        (directory / "state" / "refresh-pending.json").unlink(missing_ok=True)
         verify_running(host, directory, prepared.lock, prepared.image_ids)
     except store_volumes.StoresNotMoved as failed:
         print(

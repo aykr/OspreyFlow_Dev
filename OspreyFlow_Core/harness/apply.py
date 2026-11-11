@@ -823,12 +823,16 @@ def preflight(context: PreflightContext) -> None:
 def own_published_ports(compose_file: Path) -> set[int]:
     """The host ports the deployment's own running containers publish, as Compose itself reports
     them (`ps --format json`, each container's `Publishers`). Empty when nothing of it runs, or
-    when Docker cannot be asked — then every port is checked as on a first install. A compose file
-    Compose cannot read (a required value `deployment.env` does not hold) is refused in words before
-    it is asked, rather than read as nothing running (CARRIES, the v0.5.0 upgrade rehearsal)."""
+    when Docker cannot be asked — then every port is checked as on a first install.
+
+    **A compose file Compose cannot read** (a required value `deployment.env` does not hold: the
+    v0.5.0 upgrade rehearsal's lockout) is not asked: Docker itself is, by the project's label
+    (`docker ps`), which needs no compose file. Apply then goes on and renders the file again, which
+    keeps or mints every value it needs: it is the way out of the lockout (ADR-114 Amendment 39
+    decision 1), so it never refuses here (the lane review of the carries, items 2 and 3)."""
     missing = compose_env.unset_required(compose_file.parent)
     if missing:
-        raise ApplyFailed("preflight", compose_env.locked_out(compose_file.parent, missing))
+        return _ports_by_label(compose_env.project(compose_file.parent))
     try:
         out = _run(_compose(compose_file) + ["ps", "--format", "json"], stage="preflight")
     except ApplyFailed:
@@ -849,6 +853,21 @@ def own_published_ports(compose_file: Path) -> set[int]:
             if port:
                 found.add(port)
     return found
+
+
+def _ports_by_label(project: str) -> set[int]:
+    """The host ports a compose project's running containers publish, asked of Docker by the
+    project's label (`docker ps`, each container's `Ports`: `0.0.0.0:8090->8090/tcp, …`). Empty
+    when Docker cannot be asked."""
+    try:
+        out = _run(
+            ["docker", "ps", "--filter", f"label=com.docker.compose.project={project}",
+             "--format", "{{.Ports}}"],
+            stage="preflight",
+        )  # fmt: skip
+    except ApplyFailed:
+        return set()
+    return {int(port) for port in re.findall(r":(\d+)->", out)}
 
 
 def _services(folder: Path) -> dict[str, Any]:

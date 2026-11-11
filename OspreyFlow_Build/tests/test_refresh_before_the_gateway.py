@@ -297,6 +297,9 @@ def test_an_interrupted_move_into_place_leaves_whole_files_and_the_secrets_as_th
     moved: list[str] = []
 
     def second_fails(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+        if Path(dst).parent.name == "state":  # the pending record, written before any file moves
+            real(src, dst)
+            return
         if moved:
             raise OSError("interrupted")
         moved.append(Path(dst).name)

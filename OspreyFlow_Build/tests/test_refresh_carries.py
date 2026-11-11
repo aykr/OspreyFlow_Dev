@@ -9,18 +9,34 @@ The staged pass:
 - a stage left behind is never taken for a deployment —
   `test_a_stage_left_behind_is_never_a_deployment`;
 - two refreshes of one deployment never share a stage — `test_a_second_refresh_at_once_is_refused`;
-- a symlinked file is written through its link — `test_a_symlinked_file_is_written_through_its_link`;
-- a required value Compose would take from the shell or an `export` line is not refused —
-  `test_a_value_from_the_shell_or_an_export_line_is_held`.
+- a symlinked file is written through its link — `test_a_symlinked_file_is_written_through_its_link`,
+  and `deployment.env` replaced whole there, the link kept —
+  `test_a_symlinked_deployment_env_stays_a_link_and_is_replaced_whole`;
+- a required value on an `export` line is held — `test_a_value_on_an_export_line_is_held`; **one only
+  in the shell is not** (ADR-114 Amendment 39 decision 2; held for the orchestrator) —
+  `test_a_value_only_in_the_shell_is_not_held`.
+
+After the lane review of the carries (11 November 2026):
+- the lock covers the whole refresh, not the files pass alone —
+  `test_the_lock_is_held_through_the_build_and_the_restarts`;
+- a lock file left read-only (by a run under sudo) stops no later run —
+  `test_the_lock_file_is_opened_read_only`;
+- a stage another account left is refused in words — `test_a_stage_this_account_cannot_remove_is_said`;
+- the pending record outlives `--files-only` (for `update`), `update` clears it only once its
+  restarts are done, and a stores refusal keeps what an earlier run owed —
+  `test_files_only_leaves_the_restarts_owed`, `test_an_update_clears_the_record_after_its_restarts`,
+  `test_a_stores_refusal_keeps_what_an_earlier_run_owed`.
 """
 
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 from pathlib import Path
 
 import pytest
+from harness import atomic
 from scripts import refresh
 
 from tests.test_refresh import Recorder, Registrar
@@ -58,17 +74,16 @@ def test_a_file_moved_into_place_keeps_its_owner(
     deployment: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Under sudo a rename leaves the file root's: each file renamed into place first takes the
-    owner of the one it replaces."""
+    owner of the one it replaces. The old files are given an owner the runner is not (4242), so a
+    version that took the runner's or the staged file's owner fails."""
     _after_the_gateway_database(deployment)
-    owners = {
-        p.name: (p.stat().st_uid, p.stat().st_gid) for p in deployment.iterdir() if p.is_file()
-    }
-    given: dict[str, tuple[int, int]] = {}
-    monkeypatch.setattr(refresh.os, "geteuid", lambda: 0)
-    monkeypatch.setattr(refresh.os, "chown", lambda p, u, g: given.update({Path(p).name: (u, g)}))
+    given: list[tuple[int, int]] = []
+    monkeypatch.setattr(atomic, "_as_root", lambda: True)
+    monkeypatch.setattr(atomic, "_owner_of", lambda _target: (4242, 4343))
+    monkeypatch.setattr(atomic.os, "fchown", lambda _fd, uid, gid: given.append((uid, gid)))
     refresh.files_up_to_date(_checkout(deployment))
     assert given, "nothing was given an owner"
-    assert {name: owners[name] for name in given} == given
+    assert set(given) == {(4242, 4343)}
 
 
 def test_a_stage_left_behind_is_never_a_deployment(
@@ -110,21 +125,162 @@ def test_a_symlinked_file_is_written_through_its_link(deployment: Path) -> None:
     assert "map-settings" in elsewhere.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("where", ["the shell", "an export line"])
-def test_a_value_from_the_shell_or_an_export_line_is_held(
-    deployment: Path, monkeypatch: pytest.MonkeyPatch, where: str
-) -> None:
-    """Compose takes a required value from the shell before the env file, and reads `export NAME=v`
-    in it; so must the check, or it refuses what Compose would run."""
-    _after_the_gateway_database(deployment)
+def _without_the_salt(deployment: Path) -> Path:
     env = deployment / "deployment.env"
     lines = env.read_text(encoding="utf-8").splitlines()
     kept = [line for line in lines if not line.startswith("OSPREY_LITELLM_SALT_SECRET=")]
-    if where == "an export line":
-        kept.append("export OSPREY_LITELLM_SALT_SECRET=held-salt")
-    else:
-        monkeypatch.setenv("OSPREY_LITELLM_SALT_SECRET", "held-salt")
     env.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    return env
+
+
+def test_a_value_on_an_export_line_is_held(deployment: Path) -> None:
+    """Compose reads `export NAME=v` in the env file; so must the check, or it refuses what Compose
+    would run."""
+    _after_the_gateway_database(deployment)
+    env = _without_the_salt(deployment)
+    env.write_text(env.read_text(encoding="utf-8") + "export OSPREY_LITELLM_SALT_SECRET=s\n",
+                   encoding="utf-8")  # fmt: skip
     assert refresh._unset_required(deployment) == []
     refresh.files_up_to_date(_checkout(deployment))
-    assert os.environ.get("OSPREY_LITELLM_SALT_SECRET", "held-salt") == "held-salt"
+
+
+def test_a_value_only_in_the_shell_is_not_held(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 39 decision 2: only a value `deployment.env` holds counts, since a compose
+    file only this shell could interpolate would lock out the next `stop` or `apply` from any other
+    (CARRIES row 104 asked otherwise; held for the orchestrator, the carries' server log Q1)."""
+    _after_the_gateway_database(deployment)
+    _without_the_salt(deployment)
+    monkeypatch.setenv("OSPREY_LITELLM_SALT_SECRET", "only-in-this-shell")
+    assert refresh._unset_required(deployment) == ["OSPREY_LITELLM_SALT_SECRET"]
+
+
+def test_a_symlinked_deployment_env_stays_a_link_and_is_replaced_whole(deployment: Path) -> None:
+    _after_the_gateway_database(deployment)
+    elsewhere = deployment.parent / "secrets-kept-elsewhere.env"
+    (deployment / "deployment.env").rename(elsewhere)
+    (deployment / "deployment.env").symlink_to(elsewhere)
+    witness = deployment.parent / "witness.env"
+    os.link(elsewhere, witness)
+    before = elsewhere.read_bytes()
+    refresh.files_up_to_date(_checkout(deployment))
+    assert (deployment / "deployment.env").is_symlink()
+    if elsewhere.read_bytes() != before:  # changed: replaced, never rewritten under the old inode
+        assert witness.read_bytes() == before
+
+
+def test_the_lock_is_held_through_the_build_and_the_restarts(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _after_the_gateway_database(deployment)
+    monkeypatch.setattr(refresh.store_volumes, "move", lambda *a, **k: None)
+    lock = deployment.parent / f".{deployment.name}.refresh-lock"
+    free_when: dict[str, bool] = {}
+
+    class Probe(Recorder):
+        def __call__(self, argv: list[str]) -> None:  # type: ignore[override]
+            super().__call__(argv)
+            with lock.open("r") as other:  # another process's own open of the lock
+                try:
+                    fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    free_when[" ".join(argv[-3:])] = True
+                except BlockingIOError:
+                    free_when[" ".join(argv[-3:])] = False
+
+    refresh.refresh(_checkout(deployment), run=Probe(), register=Registrar())
+    assert free_when and not any(free_when.values()), free_when
+
+
+def test_the_lock_file_is_opened_read_only(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _after_the_gateway_database(deployment)
+    opened: list[int] = []
+    real_open = os.open
+
+    def spy(path: object, flags: int, *args: object) -> int:
+        if str(path).endswith(".refresh-lock"):
+            opened.append(flags)
+        return real_open(path, flags, *args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(refresh.os, "open", spy)
+    refresh.files_up_to_date(_checkout(deployment))
+    assert opened and all(f & (os.O_WRONLY | os.O_RDWR | os.O_APPEND) == 0 for f in opened)
+
+
+def test_a_stage_this_account_cannot_remove_is_said(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _after_the_gateway_database(deployment)
+    stage = deployment.parent / f".{deployment.name}.refresh-staging"
+    stage.mkdir()
+    (stage / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    real_rmtree = refresh.shutil.rmtree
+
+    def as_another_account(path: object, *a: object, **k: object) -> None:
+        if Path(str(path)) == stage and stage.exists() and k.get("ignore_errors"):
+            return  # root's files: nothing this account may remove
+        real_rmtree(path, *a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(refresh.shutil, "rmtree", as_another_account)
+    with pytest.raises(refresh.RefreshFailed, match="sudo rm -rf"):
+        refresh.files_up_to_date(_checkout(deployment))
+
+
+def test_files_only_leaves_the_restarts_owed(
+    deployment: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`update` takes the restarts from `--files-only`'s answer and does them after its pull and
+    the stores' move; an `update` killed before then must leave them owed, not cleared."""
+    _after_the_gateway_database(deployment)
+    assert refresh.main(["--files-only"], repo_root=_checkout(deployment)) == 0
+    said = json.loads(capsys.readouterr().out)
+    owed = json.loads((deployment / "state" / refresh.PENDING_RESTARTS).read_text("utf-8"))
+    assert said["proxy_changed"] and owed["proxy_changed"]
+
+
+def test_a_stores_refusal_keeps_what_an_earlier_run_owed(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _after_the_gateway_database(deployment)
+    (deployment / "state").mkdir(exist_ok=True)
+    record = deployment / "state" / refresh.PENDING_RESTARTS
+    record.write_text(json.dumps({"routing_changed": True}), encoding="utf-8")
+
+    def refused(*_a: object, **_k: object) -> None:
+        raise refresh.store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
+
+    monkeypatch.setattr(refresh.store_volumes, "move", refused)
+    with pytest.raises(refresh.RefreshFailed):
+        refresh.refresh(_checkout(deployment), run=Recorder(), register=Registrar())
+    assert json.loads(record.read_text(encoding="utf-8")) == {"routing_changed": True}
+
+
+def test_an_update_clears_the_record_after_its_restarts(tmp_path: Path) -> None:
+    from tests.harness.test_update_apply import _Host, _update, _with_the_model_step
+
+    fake = _Host(tmp_path)
+    _with_the_model_step(fake)  # its files pass calls for the gateway's restart
+    record = fake.directory / "state" / refresh.PENDING_RESTARTS
+    record.parent.mkdir(exist_ok=True)
+    seen_at_restart: list[bool] = []
+    real_run = fake.run
+
+    def run(argv: list[str]) -> tuple[int, str]:
+        if "restart" in argv:
+            seen_at_restart.append(record.exists())
+        return real_run(argv)
+
+    files = fake.files_up_to_date
+
+    def files_writing_the_record() -> dict[str, bool]:
+        changed = files()
+        record.write_text(json.dumps(changed), encoding="utf-8")  # as `--files-only` leaves it
+        return changed
+
+    fake.files_up_to_date = files_writing_the_record  # type: ignore[method-assign]
+    fake.run = run  # type: ignore[method-assign]
+    assert _update(fake) == 0
+    assert seen_at_restart and all(seen_at_restart)  # still owed while restarting
+    assert not record.exists()  # done, so cleared

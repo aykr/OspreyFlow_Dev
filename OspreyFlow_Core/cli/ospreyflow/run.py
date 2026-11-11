@@ -115,16 +115,35 @@ def compose(directory: Path) -> list[str]:
 _REQUIRED = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(:?)\?")
 
 
+def _read_env_file(path: Path) -> dict[str, str]:
+    """A copy of `harness.preflight.ports.read_env_file`: an env file as Compose reads it."""
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        name, sep, value = line.partition("=")
+        if not sep or not name.strip():
+            continue
+        quoted = value.strip()
+        if len(quoted) >= 2 and quoted[0] == quoted[-1] and quoted[0] in "'\"":
+            value = quoted[1:-1]
+        else:
+            # The comment's space is looked for before the value is stripped: `X= # note` is
+            # empty, as Compose reads it, not "# note" (the lane review of the carries, item 9).
+            value = re.split(r"\s#", value, maxsplit=1)[0].strip()
+        values[name.strip()] = value
+    return values
+
+
 def unset_required(directory: Path, environ: Mapping[str, str] | None = None) -> list[str]:
     """Each name the deployment's compose file requires that Compose would find without a value."""
     shell = os.environ if environ is None else environ
     compose_text = (directory / "compose.yaml").read_text(encoding="utf-8")
-    held: dict[str, str] = {}
     env_path = directory / "deployment.env"
-    for line in env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []:
-        name, sep, value = line.strip().removeprefix("export ").partition("=")
-        if sep and not name.startswith("#"):
-            held[name.strip()] = value.strip().strip("\"'")
+    held = _read_env_file(env_path) if env_path.is_file() else {}
     missing = set()
     for name, colon in _REQUIRED.findall(compose_text):
         found = shell[name] if name in shell else held.get(name)
@@ -142,8 +161,9 @@ def locked_out(directory: Path, missing: list[str]) -> str:
             break
     return (
         f"The compose file needs {', '.join(missing)}, which deployment.env does not hold, so "
-        "Docker Compose refuses every command on this deployment and nothing was changed. Put each "
-        "back in deployment.env from the deployment's last backup set (its config/deployment.env), "
-        "then run this again. To stop its containers meanwhile: docker stop $(docker ps -q "
+        "Docker Compose refuses every command on this deployment and nothing was changed. Run "
+        "`ospreyflow apply`: it renders the compose file again and keeps or mints every value it "
+        "needs (a backup set from before the value existed does not hold it). To stop its "
+        "containers meanwhile: docker stop $(docker ps -q "
         f"--filter label=com.docker.compose.project={name})"
     )

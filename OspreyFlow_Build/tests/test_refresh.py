@@ -683,8 +683,11 @@ def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
     assert changed == {"proxy_changed": True, "theme_changed": False, "routing_changed": False}
     assert "pull_and_verify qwen2.5:14b-instruct" in (out / "compose.yaml").read_text()
     # The pass above restarted nothing, so the restart it found is still owed (ADR-114 Amendment
-    # 39's pending record): `--files-only` hands it to `update`, once.
-    for owed in (True, False):
+    # 39's pending record): `--files-only` hands it to `update`, and it stays owed until `update`
+    # has done its restarts and cleared the record (the lane review of the carries, item 7).
+    for owed in (True, True, False):
+        if not owed:  # as `update` does once its restarts are done
+            (out / "state" / refresh.PENDING_RESTARTS).unlink()
         assert refresh.main(["--files-only"], repo_root=repo) == 0
         said = capsys.readouterr().out.strip().splitlines()[-1]
         assert json.loads(said) == {
