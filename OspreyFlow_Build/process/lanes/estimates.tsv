@@ -1,18 +1,18 @@
-# as of 2026-11-11T09:20Z
-platform	P7	running on the test server since 06:13; merges on render, cp-policy-check and the gates (Am 8); two review rounds on your return, then merges without you	11 Nov, ~14:00	B
-admin	P10	Entra ID claims: the mapping and access tests on the server from 07:08; profile wiring after P7; two review rounds	12 Nov	B
+# as of 2026-11-11T09:10Z
+platform	P7	built at 1a63953d (server); two independent review rounds from 09:00; merges without you if both pass and its gates are green (Am 8), listed for your review	11 Nov, ~11:00	B
+admin	P10	part 1 built at 5b0e6e1; review round 1 from 09:00 (access, two rounds); profile wiring after P7	12 Nov	B
 case	P9	cut: encrypted S3 backup, one timed restore; a fresh sol session once P7 merges	12–13 Nov	B
-platform-b	P11	part 1 (engine kinds) on the server from 07:08, two rounds; part 2 after P7	12 Nov	B
-case-b	P12	part 1 (the service and adapter) on the server since 06:30; part 2 after P7	13 Nov	B
-studio-b	L1.9	part 1 (connectors on stand-ins) on the server since 06:30, two rounds; part 2 after P7	12–13 Nov	B
+platform-b	P11	part 1 built at cec7a5e6; review round 1 from 09:00 (credential, two rounds); part 2 after P7	12 Nov	B
+case-b	P12	part 1 built at a5fa3c1b; one review round from 09:00; part 2 after P7	13 Nov	B
+studio-b	L1.9	part 1 built at b29dba44; review round 1 from 09:00 (access, two rounds); part 2 after P7	12–13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P7b	shape: poc and both runbooks; its kind run is the install's acceptance; from P7's merge	13 Nov	B
 docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where Laurium runs	13–14 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
-admin	T1	part 5 after P10's first part (the swap)	12 Nov	A
-rules	UPG-check	the real update to the published v0.5.0, on the server from 07:08	11 Nov, ~09:30	A
-rules	hyg	an access step: two rounds; studio's finding fixed on the server	11 Nov, afternoon	A
-rules-b	T3b	ready; the merger's review on your return	11 Nov, ~12:00	A
+admin	T1	part 4 landed (9de435c); part 5 built, its gates at 5541196 being explained on the server (restarted 09:04)	11 Nov, afternoon	A
+rules	UPG-check	not run: the server session stopped at 07:07 (its driver writes outside the worktree); to rerun under a lease	12 Nov	A
+rules	hyg	studio's finding fixed at 373b3dd; the merger's two rounds from 09:10	11 Nov, ~10:30	A
+rules-b	T3b	with the merger, after hyg	11 Nov, afternoon	A
 docs	D2d	the review's nine must-fixes, then merge without you (Am 8)	11 Nov, afternoon	A
 platform-b	carries	after P11 part 1 (chart quoting first)	12 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
