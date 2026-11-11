@@ -26,21 +26,6 @@ index 11ed572..b360edf 100644
    local_only: false
    provider:
      name: openai
-diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index a0e35c6..13ecfd6 100644
---- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
-+++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-@@ -627,7 +627,9 @@ def render_cloud_platform(
-     profile = load_profile()
-     production = _cp(config).environment == "production"
-     as_cluster = _as_cluster(config, platform)
--    engines = bool(config.models.enabled_providers)
-+    # The gateway is rendered while an engine is enabled, or while Laurium (which reaches every
-+    # model through it) is the extraction engine (ADR-135 Amendment 6, P12 part 2).
-+    engines = bool(config.models.enabled_providers) or config.models.extraction_engine == "laurium"
-     # The images the cluster's configuration runs: none of the stores the platform manages, and
-     # the gateway's only with an engine enabled, so the lock names nothing a pod does not run.
-     images = [
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 index 78d2c81..9e6c934 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
@@ -76,7 +61,7 @@ index a3eb4fd..fa55323 100644
      "arcadedb": [2480, 2434],
      "clickhouse": [8123, 9000, 9009],
 diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
-index f977d16..f580088 100644
+index a3aeb9d..167ad01 100644
 --- a/OspreyFlow_Core/harness/render.py
 +++ b/OspreyFlow_Core/harness/render.py
 @@ -63,6 +63,7 @@ from harness.images import (
@@ -109,7 +94,7 @@ index f977d16..f580088 100644
      # value; every one of these is a name, a path or a choice already written in osprey.yaml.
      return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"
 diff --git a/OspreyFlow_Core/services/api/model_admin.py b/OspreyFlow_Core/services/api/model_admin.py
-index 0827213..24a25c4 100644
+index 18ceeb3..547c341 100644
 --- a/OspreyFlow_Core/services/api/model_admin.py
 +++ b/OspreyFlow_Core/services/api/model_admin.py
 @@ -39,7 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
@@ -118,29 +103,29 @@ index 0827213..24a25c4 100644
  from pathlib import Path
 -from typing import Any, Protocol, cast
 +from typing import Any, Literal, Protocol, cast
+ from urllib.parse import urlsplit
  
  import asyncpg
- import httpx
-@@ -193,6 +193,8 @@ class Installed:
-     local_only: bool
-     sendable: list[str]
+@@ -251,6 +251,8 @@ class Installed:
      locals: dict[str, str | None]
+     #: What the cloud-platform render made (None on every other profile, which allows any host).
+     made: RoutesMade | None = None
 +    #: ADR-135 Amendment 9: the extraction engine the render chose (`OSPREY_EXTRACTION_ENGINE`).
 +    extraction_engine: Literal["deep_read", "laurium"] = "deep_read"
  
      @classmethod
      def from_env(cls, local: DeploymentModels, environ: Mapping[str, str]) -> Installed:
-@@ -234,6 +236,9 @@ class Installed:
-                 for c in environ.get("OSPREY_SENDABLE_HANDLING_CODES", "").split(",")
+@@ -293,6 +295,9 @@ class Installed:
                  if c.strip()
              ],
+             made=RoutesMade.from_env(environ),
 +            extraction_engine=(
 +                "laurium" if environ.get("OSPREY_EXTRACTION_ENGINE") == "laurium" else "deep_read"
 +            ),
              locals={
                  "extraction": local.extraction,
                  "vision": local.vision,
-@@ -777,6 +782,7 @@ class ModelAdmin:
+@@ -844,6 +849,7 @@ class ModelAdmin:
              sendable_handling_codes=list(self._installed.sendable),
              source="models file" if self._settings is not None else "osprey.yaml",
              engine_kinds=engine_kinds_offered(self._file.profile),

@@ -14,7 +14,7 @@ index 7df3e25..b7d35ac 100644
    "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue"],
    // ADR-147: Admin › Maps with a provider being added, a key being entered and an area being added
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx
-index a12f751..3758b56 100644
+index 71a93a8..a097ab3 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx
 @@ -59,6 +59,8 @@ const view = () => ({
@@ -27,10 +27,10 @@ index a12f751..3758b56 100644
  
  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx
-index 34349e5..501e41e 100644
+index 0a69184..ec7495f 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx
-@@ -201,3 +201,22 @@ describe("Models", () => {
+@@ -209,3 +209,22 @@ describe("Models", () => {
      expect(screen.queryByRole("button", { name: "Add an engine" })).toBeNull();
    });
  });
@@ -54,7 +54,7 @@ index 34349e5..501e41e 100644
 +  });
 +});
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx
-index 1ab4bc8..398e910 100644
+index c17b80c..99c1a1c 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx
 @@ -344,6 +344,11 @@ export function Models({ api }: { api: ModelsApi }) {
