@@ -755,8 +755,8 @@ rules, three things were not yet shown working: the Conduit and the workers runn
 Keycloak starting with group 0 (below), and the egress policies enforced. P7b's kind run is to show
 them. And nothing yet runs the identity step that a cluster's install runs once Keycloak answers
 (the Conduit's client secret set on its clients, its service account's roles), so sign-in is not
-configured on this profile until Entra ID replaces Keycloak: the Conduit's side of that is built
-(section 6a.7), the profile's is *coming* (section 6a.8).
+configured on this profile until Entra ID replaces Keycloak. The token check that reads Entra's
+claims is built (section 6a.7); nothing yet gives it a mapping, so it is *coming* (section 6a.8).
 The commands that need the platform, a cluster or Docker (`helm install`, `tofu`, the push itself,
 the policy check on your own settings) have not yet been run anywhere: they are unrun until P7b's
 kind run. The other commands below (the folder, the two renders and the push's dry run) have been run as
@@ -802,7 +802,8 @@ map:                             # required
 **The example's map is empty on this profile.** Its one provider is a local basemap file, and no
 basemap can be brought onto the platform yet (below), so copied as it is, the map shows no tiles. Name
 a remote provider instead for a map that shows, with its host's networks in `egress_nets` if the
-Conduit proxies it. Every `cloud_platform` setting is in appendix A. A map provider proxied through the Conduit also
+Conduit proxies it. Every `cloud_platform` setting is in appendix A. A map provider proxied through
+the Conduit also
 names its host's networks in `egress_nets` (section 6a.5). **Set `deployment.highest_marking`
 yourself**: a platform that hosts data up to, but not including, SECRET needs the ceiling at
 OFFICIAL-SENSITIVE, and the profile does not yet set it for you (*coming*). Without it the ceiling
@@ -847,7 +848,8 @@ platform's OpenSearch 2.x domain is made by default (`components.search` default
 but no pod is given its address yet, so it is unused. Caddy is not rendered: the platform's NGINX
 ingress is the front door, with ModSecurity on and the IP allow-list from `allow_from`. Local models
 and Whisper are not rendered, since the platform has no GPU; the model gateway (LiteLLM) is rendered
-by default, with or without an engine enabled (section 6a.3 says which identity it runs as). The Conduit's image is built without Java on this profile, so
+by default, with or without an engine enabled (section 6a.3 says which identity it runs as). The
+Conduit's image is built without Java on this profile, so
 *Admin › Maps*' **Build** says that the basemap cannot be built here; there is no way yet to bring a
 basemap built elsewhere onto the platform (*coming*), so the map uses its providers alone.
 
@@ -887,8 +889,9 @@ measurements**: no load has yet run on the platform.
 With no engine enabled and reporting off in development (the gateway's pod is rendered all the same),
 and reporting and an engine on in production, the requests come to **about 27 GiB of memory and 4 CPU
 in development**, and **about 70 GiB and 9.7 CPU in production**; the memory limits to about 34 GiB
-and 86 GiB. A ResourceQuota on requests and
-memory limits must be at least this large, or pods are left unscheduled; one on `limits.cpu` refuses
+and 86 GiB. These count each running copy alone: a set-up job (0.1 CPU and 256 MiB) and the extra copy a
+rolling update starts need room above them, so a ResourceQuota on requests and memory limits must
+be larger, or pods are left unscheduled; one on `limits.cpu` refuses
 them whatever its size, until a CPU limit is set.
 
 ### 6a.3 The namespace's Terraform, and the secrets each component reads
@@ -905,7 +908,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `opensearch.tf` | Only when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
-| `gateway.tf` | Only while a Bedrock engine is declared in `osprey.yaml`: the model gateway's own IAM role, allowed to invoke Bedrock's models in eu-west-2 (`bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream`) and nothing else, no S3 included, and trusted by the gateway's service account alone |
+| `gateway.tf` | Only while a Bedrock engine is declared in `osprey.yaml`: the model gateway's own service account and IAM role, allowed to invoke Bedrock's models in eu-west-2 (`bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream`) and nothing else, no S3 included, and trusted by the gateway's service account alone |
 | `ecr.tf` | A repository for each image, scanned on push |
 | `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password) as a sensitive variable |
 
@@ -934,7 +937,8 @@ The Conduit, the workers and the report sync run as the service account `ospreyf
 the buckets through its role. The model gateway never runs as it: with no Bedrock engine declared it
 runs as the namespace's `default` service account, under no role, and while one is declared, as its
 own (`ospreyflow-gateway` on the platform's file), under `gateway.tf`'s role. A platform file naming
-no gateway account is refused at render, in words, when a Bedrock engine is declared. A password two readers name differently (`ARCADEDB_ROOT_PASSWORD`,
+no gateway account is refused at render, in words, when a Bedrock engine is declared. A password two
+readers name differently (`ARCADEDB_ROOT_PASSWORD`,
 `CLICKHOUSE_PASSWORD`, `OIDC_TOKEN_EXCHANGE_CLIENT_SECRET`) is written from the one
 `random_password`.
 
@@ -990,8 +994,9 @@ open-egress policy is not rendered. The allow policy admits:
 - S3 and STS, on every render (the buckets, and the service account's role);
 - each model engine's host, while that engine is declared in `osprey.yaml` at render. With no engine
   declared, no engine's host is allowed. An engine disabled in *Admin › Models* keeps its host open
-  until the next render, and one first added there is refused until it is declared, rendered again and
-  the Terraform applied (section 10.1). The gateway's pod takes the namespace's egress, like every
+  until the next render is installed, and one first added there is refused until it is declared,
+  rendered again, the Terraform applied and the new values installed (section 10.1). The gateway's
+  pod takes the namespace's egress, like every
   other pod;
 - each proxied map provider's source or endpoint;
 - the mail server, when one is set, which Keycloak reaches;
@@ -1019,8 +1024,9 @@ in section 6a.9).
 
 ### 6a.6 The policy check
 
-`make cp-policy-check`, where the build's other gates run, renders **the repository's two synthetic
-deployments** (development and production), templates the chart with Helm, and fails on: a pod
+`make cp-policy-check`, where the build's other gates run, renders **the repository's three synthetic
+deployments** (development, production, and production with a Bedrock engine), templates the chart
+with Helm, and fails on: a pod
 without `runAsNonRoot` or with a user or group other than 10001 (Keycloak's group 0 apart); privilege
 or a kept capability; a port below 1024; a `ReadWriteMany` claim; a `hostPath`; an image not from the
 profile's registry; no policy denying every pod's egress, or an allowing rule with no destination, a
@@ -1041,16 +1047,17 @@ platform's own Gatekeeper constraints are not published to us, so the check does
 
 ### 6a.7 Signing in through Entra ID
 
-**Built in the Conduit's token check, not yet reachable from the profile.** The Conduit can read an
-Entra ID access token through a claim mapping (ADR-148 Amendment 6). The profile does not yet read a
-mapping from `osprey.yaml` or give one to the Conduit, and it still renders Keycloak, so a
-`cloud-platform` deployment signs in through neither yet (*coming*, section 6a.8). This section says
-what the mapping does once it is given; where its settings go in `osprey.yaml` is part of the step
-still coming.
+**The token check is built; nothing yet gives it a mapping.** The token check the Conduit uses
+can read an Entra ID access token through a claim mapping (ADR-148 Amendment 6). But neither the
+Conduit's own settings nor the profile pass it a mapping yet, and the profile still renders
+Keycloak, so a `cloud-platform` deployment signs in through neither (*coming*, section 6a.8). This
+section says what the mapping does once it is given.
 
 **The mapping.** Clearance, organisational unit and handling codes each come from **one** source,
 never both: a named token claim (a directory extension attribute, say), or a table from Entra group
-id to value. Its shape, with placeholder ids:
+id to value. Its shape, with placeholder ids, is below. **It is not an `osprey.yaml` block**: where
+these settings go in `osprey.yaml` is part of the step still coming, and nothing reads them there
+today.
 
 ```yaml
 tenant_id: 00000000-0000-4000-8000-000000000001   # the organisation's Entra tenant
@@ -1063,18 +1070,27 @@ groups_claim: groups                              # the claim holding the person
 ```
 
 A clearance or unit group grants one value; a handling-codes group grants a list, and a person's
-codes are the union of their mapped groups'. A group the table does not name grants nothing. A
-mapping that names both sources or neither, an unknown key (`clearence`), a group id or tenant that
-is not a GUID, a group granting an empty value, or a tenant with no `client_id` fails to load. A mapping other
-than the fixed claim names that Keycloak uses (`clearance`, `org_unit`,
-`receivable_handling_codes`) must name its tenant.
+codes are the union of their mapped groups'. A group the table does not name grants nothing.
+
+These fail to load:
+- a source naming both a claim and a group table, or neither;
+- an unknown key (`clearence`);
+- an empty group table, or a group granting an empty value;
+- a list in a clearance or unit table;
+- a tenant, client or group id that is not a GUID in lower case, as Entra writes it;
+- a tenant with no `client_id`;
+- a `scope` that is empty or names more than one scope;
+- an empty `groups_claim`.
+
+A mapping other than the fixed claim names that Keycloak uses (`clearance`, `org_unit`,
+`receivable_handling_codes`, and `groups` for the groups) must name its tenant.
 
 **Pinned to the tenant and to the Glass.** Every Entra tenant shares one set of signing keys, so a
 signature alone says nothing about whose token it is. With a tenant set:
 
 - the Conduit's token check refuses to start unless its `OIDC_ISSUER` and `OIDC_AUDIENCE` are set,
   and checks both on every token;
-- the token must carry `oid` and `exp`, and its `tid` must be the tenant;
+- the token must carry `sub`, `oid` and `exp`, and its `tid` must be the tenant;
 - the application it was issued to (`azp` in a v2.0 token, `appid` in a v1.0 token) must be
   `client_id`, so a token another application in the tenant obtained for this API is no session;
 - its `scp` must include `scope` as a whole word (`access_as_user_extra` does not count).
@@ -1088,13 +1104,16 @@ stays `sub`.
 - a missing clearance or unit, or a value of the wrong type;
 - groups granting two different clearances, or two different units (two granting the same one are
   fine);
-- a group overage: past 200 groups Entra leaves the list out of the token, so a person in more than
-  200 groups cannot sign in;
+- a group overage, when the mapping uses a group table: past 200 groups Entra leaves the list out
+  of the token, so such a person cannot sign in. The remedy is to have the app registration's tokens
+  carry only the groups assigned to the application. A groups list longer than 200 is also refused,
+  since Entra issues none;
 - an empty handling code, alone or in a list;
 - an `oid` that is not an object id, or another tenant's token;
 - an app-only token (no delegated `scp`, or `idtyp: app`), which is a program, not a person;
-- a guest from another directory (`acct` of `1`, or an `idp` other than the issuer). Admitting
-  guests would need a setting that does not exist.
+- a guest from another directory (`acct` of `1`, or an `idp` other than the issuer). `acct` is an
+  optional claim the app registration must ask for, so `idp` is the check that works without
+  configuration. Admitting guests would need a setting that does not exist.
 
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
 words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
@@ -1116,18 +1135,21 @@ one real token from the organisation's development tenant is to settle each:
   the real token carries.
 - **A claims-mapping policy** has its tokens signed with an application's own key, so the Conduit's
   `OIDC_JWKS_URL` must then end in `?appid=<client id>`.
+- **Guests**: that a real guest's token carries `idp` (and `acct` of `1`, where it is asked for) and
+  is refused, while a member's resolves.
 - **Access tokens, not ID tokens**: the Glass is to send an access token for this API. An ID token
   carries no `scp`, and is refused as app-only.
 
 ### 6a.8 Coming
 
-- **Sign-in through the organisation's Entra ID on the profile** (the Conduit's side is section
-  6a.7): the profile reading the claim mapping from `osprey.yaml` and giving it to the Conduit, with
-  the issuer, audience and signing keys; Entra's endpoints in the egress list; and **Keycloak not
-  rendered**, with its pod, its `id.` name, its secrets and its group 0. *Admin › People* is to keep
+- **Sign-in through the organisation's Entra ID on the profile** (the token check is section
+  6a.7): the profile reading the claim mapping from `osprey.yaml` and the Conduit passing it to the
+  token check, with the issuer, audience and signing keys; and **Keycloak not rendered**, with its
+  pod, its `id.` name, its secrets and its group 0. *Admin › People* is to keep
   each person's roles in the deployment's own Postgres, by tenant and `oid`: a person appears after
   their first sign-in or is added by `oid` beforehand, and the first administrator is named by `oid`
-  at install. Two things are not to be available on Entra at first: a scheduled run acting as its
+  in the settings, a render with none being refused. Two things are not to be available on Entra at
+  first: a scheduled run acting as its
   owner, and Superset's roles.
 - **Backups and restore**: a scheduled backup of ArcadeDB and ClickHouse to S3, encrypted, and a
   restore rehearsed on the development namespace, with its measured times.
@@ -1840,7 +1862,9 @@ render has made its way out of the namespace, and for Amazon Bedrock the gateway
 whose service account the platform's settings name as `secrets.irsa.gateway_service_account`
 (ADR-135 Amendment 8). Admin → **Models** therefore refuses, in words, to add an engine, or to move
 one to an address, that the render did not make: declare it in `osprey.yaml`, render the deployment
-again, and have the platform team apply the Terraform, then add it here. An engine a restored models
+again, have the platform team apply the Terraform, and install the new values (`helm upgrade`, which
+restarts the pods that read them), then add it here. The refusal's own words leave out installing
+the values (a known issue). An engine a restored models
 file names but the render did not make is marked *not made by the render* and is neither offered to
 analysts nor given to the gateway.
 
