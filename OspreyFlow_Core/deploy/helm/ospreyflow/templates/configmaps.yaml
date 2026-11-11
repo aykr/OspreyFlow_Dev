@@ -8,7 +8,7 @@ metadata:
     {{- include "ospreyflow.labels" (dict "name" "environment" "root" $) | nindent 4 }}
 data:
   {{- range $key, $value := .Values.environment }}
-  {{ $key }}: {{ $value | quote }}
+  {{ $key | quote }}: {{ $value | quote }}
   {{- end }}
 {{- end }}
 {{- if .Values.files }}
@@ -21,6 +21,6 @@ metadata:
     {{- include "ospreyflow.labels" (dict "name" "files" "root" $) | nindent 4 }}
 data:
   {{- range $key, $value := .Values.files }}
-  {{ $key }}: {{ $value | quote }}
+  {{ $key | quote }}: {{ $value | quote }}
   {{- end }}
 {{- end }}

@@ -98,7 +98,7 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
     {{- range .w.files }}
     - name: files
       mountPath: {{ .mountPath }}
-      subPath: {{ .key }}
+      subPath: {{ .key | quote }}
       readOnly: true
     {{- end }}
     {{- range $i, $d := .w.fileDirs }}

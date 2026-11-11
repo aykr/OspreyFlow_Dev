@@ -75,11 +75,14 @@ def test_a_checksum_that_reads_as_a_number_is_still_a_string_kubernetes_takes() 
     """The merger's find (11 November 2026): `checksum/…` annotations were the hash's first 16 hex
     characters, unquoted, so when all 16 were digits YAML read a number and Kubernetes refused the
     workload, now and then, as values changed. `{"OSPREY_PROBE":"2354"}` hashes to
-    `3625796312017304…`: the annotation must still be that string, and the chart still valid."""
+    `3625796312017304…`, and `{"probe.txt":"420"}` to `9266205751740302…`: **each** annotation must
+    still be that string, and the chart still valid (the lane review: with `files` left as rendered,
+    `checksum/files` could lose its quote and the case stay green)."""
     values = yaml.safe_load(
         render(cluster_config(AWS), resolver=_resolver).artefacts["values.yaml"]
     )
     values["environment"] = {"OSPREY_PROBE": "2354"}
+    values["files"] = {"probe.txt": "420"}
     manifests = [doc for doc in yaml.safe_load_all(helm_template(yaml.safe_dump(values))) if doc]
     annotations = [
         m["spec"]["template"]["metadata"]["annotations"]
@@ -89,12 +92,32 @@ def test_a_checksum_that_reads_as_a_number_is_still_a_string_kubernetes_takes() 
     assert annotations
     for found in annotations:
         assert found["checksum/environment"] == "3625796312017304", found
+        assert found["checksum/files"] == "9266205751740302", found
         assert all(isinstance(v, str) for v in found.values()), found
     said = _docker(
         KUBECONFORM, "-strict", "-summary", "-kubernetes-version", "1.31.0", "-",
         stdin=yaml.safe_dump_all(manifests),
     )  # fmt: skip
     assert re.search(r"Invalid: 0, Errors: 0", said), said
+
+
+def test_a_configmap_key_that_reads_as_a_bool_null_or_number_is_still_a_string() -> None:
+    """The same shape as the checksums' (the lane review's audit, item 15): an environment name or
+    a file's key is a YAML key, so `Y`, `ON`, `NULL` or `1234` unquoted reads as a bool, null or
+    number, and Kubernetes refuses a ConfigMap whose data keys are not strings; a file's key is also
+    a mount's `subPath`."""
+    values = yaml.safe_load(
+        render(cluster_config(AWS), resolver=_resolver).artefacts["values.yaml"]
+    )
+    # (`Y` is left out: PyYAML writes it bare and Helm's YAML then reads `true` in values.yaml
+    # itself, before any template; the render's own values file is a separate question, logged.)
+    values["environment"] = {**values.get("environment", {}), "ON": "2", "NULL": "3"}
+    values["files"] = {**values.get("files", {}), "1234": "four"}
+    manifests = [doc for doc in yaml.safe_load_all(helm_template(yaml.safe_dump(values))) if doc]
+    data = {m["metadata"]["name"]: m["data"] for m in manifests if m["kind"] == "ConfigMap"}
+    assert {"ON", "NULL"} <= set(data["ospreyflow-env"]), data["ospreyflow-env"].keys()
+    assert "1234" in data["ospreyflow-files"]
+    assert all(isinstance(k, str) for d in data.values() for k in d)
 
 
 def test_the_chart_holds_no_secret(manifests: list[dict[str, Any]]) -> None:
