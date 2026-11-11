@@ -1,0 +1,24 @@
+The carries' gates at c3bde33594ae445b41a12225cfe523587e373763 (rebased onto main 5a554e3, after P7), offline on
+ospreyflow-test through `stack_lease.sh offline platform-b` (closed ports, no stack, no lease), 11 November 2026.
+
+Run 20261111T141725Z: `make -k test; make -k ci; OSPREY_PORTS_SLOT=14 make harness-a11y`.
+- make test (pytest): 1 failed / 11335 passed / 26 skipped. The failure is the server's own:
+  test_webapp_preflight::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass (the GPU host case, as on every
+  run on this server). The recipe stops at pytest, so its last two lines ran separately below.
+- make -k ci: exit 2 on two targets, neither this step's:
+  - harness-a11y: "http://localhost:5893 is already used" (slot 7, platform-b's, held by orphans of an earlier
+    stopped run, as on 10 November). Re-run alone at OSPREY_PORTS_SLOT=14 in the same run: exit 0.
+  - opentofu-check: every tofu test passed (cluster 12/12 and the others), then "Failed to install provider ...
+    hashicorp/random v3.9.1: github.com: GET ... giving up after 3 attempt(s)": the server's fetch from GitHub.
+  Every other ci target passed; trivy-image-workspace passed on this run (it failed on the earlier stray run on
+  the workspace image's libxslt CVEs).
+Run 20261111T143751Z: `make live-collect`: exit 0 (every live file imports offline).
+Run 20261111T143915Z: `make -C OspreyFlow_Core test-js`: 2 failed / 3029 passed / 37 skipped; App.test.tsx's
+  hook timed out (10 s), MatrixView.test's paging case timed out (5 s), MatrixView.budget opened in 10867 ms
+  against 2500. Run 20261111T144129Z, those three files alone: App.test.tsx and MatrixView.test pass;
+  MatrixView.budget still fails at load average 29.39 (other lanes' runs): the known timing budget on a loaded
+  server. This step changes no JavaScript.
+
+Before these, run 20261111T133847Z gated the pre-rebase head dff9f55 (started before P7's merge was known; no stop
+verb, so it ran out, at the orchestrator's word): make test 2 failed (the GPU case, test_valkey_config's pinned
+VALKEY_PORT) / 10773 passed; make -k ci the libxslt CVEs (trivy-image-workspace) and harness-a11y's port 5893 only.
