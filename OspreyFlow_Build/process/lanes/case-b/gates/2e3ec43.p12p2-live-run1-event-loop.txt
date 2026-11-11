@@ -1,0 +1,545 @@
+Running on ospreyflow-test (stack b, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T180147Z/log: bash process/lanes/case-b/p12p2_live_run.sh
+
+=== the gateway, and the models it serves (18:01:48Z)
+liveliness: 200
+models: ['Systran/faster-whisper-tiny.en', 'all-minilm:22m-l6-v2-fp16', 'moondream:1.8b-v2-q4_K_M', 'qwen2.5:0.5b-instruct', 'qwen2.5:7b-instruct']
+
+=== Laurium's environment, by hash (18:01:48Z)
+Using CPython 3.13.18
+Creating virtual environment at: laurium-env/.venv
+Activate with: source laurium-env/.venv/bin/activate
+laurium-env: exit 0
+
+=== the exit case on qwen2.5:7b-instruct (three runs, each its own) (18:01:48Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py . [ 33%]
+F.                                                                       [100%]
+
+=================================== FAILURES ===================================
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[2] __________
+
+attempt = 2
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/extract_laurium/adapter.py:115: in extract
+    resp = await self._http.post(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/laurium/app.py:120: in extract
+    parsed = await extractor.chain.ainvoke(ask.text)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/runnables/base.py:3515: in ainvoke
+    input_ = await coro_with_context(part(), context, create_task=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/runnables/base.py:6014: in ainvoke
+    return await self.bound.ainvoke(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:552: in ainvoke
+    llm_result = await self.agenerate_prompt(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:1931: in agenerate_prompt
+    return await self.agenerate(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:1889: in agenerate
+    raise exceptions[0]
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:2222: in _agenerate_with_cache
+    result = await self._agenerate(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_openai/chat_models/base.py:2310: in _agenerate
+    raise e
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_openai/chat_models/base.py:2299: in _agenerate
+    raw_response = await self.async_client.with_raw_response.create(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_legacy_response.py:382: in wrapped
+    return cast(LegacyAPIResponse[R], await func(*args, **kwargs))
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/resources/chat/completions/completions.py:3414: in create
+    return await self._post(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_base_client.py:2085: in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_base_client.py:1805: in request
+    response = await self._send_request(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_client.py:738: in _send_request
+    return await async_send_request(self, request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/lib/_client_auth.py:794: in async_send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_client.py:724: in _send_with_auth_retry
+    return await async_send_with_auth_retry(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/lib/_client_auth.py:779: in async_send_with_auth_retry
+    response = await super(_owner, self)._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_base_client.py:1722: in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1817: in send
+    response = await self._send_handling_auth(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1845: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1880: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1914: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_transports/default.py:388: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/connection_pool.py:242: in handle_async_request
+    raise exc from None
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/connection_pool.py:224: in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/connection.py:96: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/http11.py:124: in handle_async_request
+    await self._response_closed()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/http11.py:228: in _response_closed
+    await self.aclose()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/http11.py:236: in aclose
+    await self._network_stream.aclose()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_backends/anyio.py:56: in aclose
+    await self._stream.aclose()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py:1499: in aclose
+    self._transport.abort()
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/selector_events.py:832: in abort
+    self._force_close(None)
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/selector_events.py:904: in _force_close
+    self._loop.call_soon(self._call_connection_lost, exc)
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:834: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:557: RuntimeError
+==================================== PASSES ====================================
+============================== slowest durations ===============================
+12.10s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+1.79s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+0.17s setup    tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+0.07s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+
+(5 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+========================= 1 failed, 2 passed in 16.27s =========================
+exit case on qwen2.5:7b-instruct: exit 1
+
+=== the exit case on qwen2.5:0.5b-instruct (three runs, each its own) (18:02:06Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py F [ 33%]
+FF                                                                       [100%]
+
+=================================== FAILURES ===================================
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[1] __________
+
+attempt = 1
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.extract_laurium.adapter.ExtractLauriumAdapter object at 0x7f730d677770>
+req = ExtractionRequest(document_id='doc-live-1', text="Extract the person's name mentioned: Owen Wilson went to the store."...d': ['name'], 'additionalProperties': False}, model='qwen2.5:0.5b-instruct', handling=None, engine=None, datasets=None)
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        try:
+            Draft202012Validator.check_schema(req.json_schema)
+        except SchemaError as exc:
+            raise InvalidExtractionSchemaError(
+                f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
+            ) from exc
+    
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
+        call = current_call()
+        tag: str | None = None
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
+    
+        body: dict[str, Any] = {
+            "document_id": req.document_id,
+            "text": req.text,
+            "json_schema": req.json_schema,
+            "model": req.model,
+            "tag": tag,
+        }
+        try:
+            resp = await self._http.post(
+                "/v1/extract", json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError:
+            raise ExtractionFailedError(
+                "Laurium's service could not be reached, or did not answer in time."
+            ) from None
+    
+        if resp.status_code != 200:
+>           raise _refusal(resp, req.model)
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+
+packages/adapters/extract_laurium/adapter.py:124: ExtractionFailedError
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[2] __________
+
+attempt = 2
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/extract_laurium/adapter.py:115: in extract
+    resp = await self._http.post(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/laurium/app.py:120: in extract
+    parsed = await extractor.chain.ainvoke(ask.text)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/runnables/base.py:3515: in ainvoke
+    input_ = await coro_with_context(part(), context, create_task=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/runnables/base.py:6014: in ainvoke
+    return await self.bound.ainvoke(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:552: in ainvoke
+    llm_result = await self.agenerate_prompt(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:1931: in agenerate_prompt
+    return await self.agenerate(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:1889: in agenerate
+    raise exceptions[0]
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_core/language_models/chat_models.py:2222: in _agenerate_with_cache
+    result = await self._agenerate(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_openai/chat_models/base.py:2310: in _agenerate
+    raise e
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/langchain_openai/chat_models/base.py:2299: in _agenerate
+    raw_response = await self.async_client.with_raw_response.create(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_legacy_response.py:382: in wrapped
+    return cast(LegacyAPIResponse[R], await func(*args, **kwargs))
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/resources/chat/completions/completions.py:3414: in create
+    return await self._post(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_base_client.py:2085: in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_base_client.py:1805: in request
+    response = await self._send_request(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_client.py:738: in _send_request
+    return await async_send_request(self, request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/lib/_client_auth.py:794: in async_send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_client.py:724: in _send_with_auth_retry
+    return await async_send_with_auth_retry(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/lib/_client_auth.py:779: in async_send_with_auth_retry
+    response = await super(_owner, self)._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/openai/_base_client.py:1722: in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1817: in send
+    response = await self._send_handling_auth(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1845: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1880: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_client.py:1914: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpx2/_transports/default.py:388: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/connection_pool.py:242: in handle_async_request
+    raise exc from None
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/connection_pool.py:224: in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/connection.py:96: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/http11.py:124: in handle_async_request
+    await self._response_closed()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/http11.py:228: in _response_closed
+    await self.aclose()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_async/http11.py:236: in aclose
+    await self._network_stream.aclose()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/httpcore2/_backends/anyio.py:56: in aclose
+    await self._stream.aclose()
+../OspreyFlow_Build/laurium-env/.venv/lib/python3.13/site-packages/anyio/_backends/_asyncio.py:1499: in aclose
+    self._transport.abort()
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/selector_events.py:832: in abort
+    self._force_close(None)
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/selector_events.py:904: in _force_close
+    self._loop.call_soon(self._call_connection_lost, exc)
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:834: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/root/.local/share/uv/python/cpython-3.13.18-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py:557: RuntimeError
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[3] __________
+
+attempt = 3
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.extract_laurium.adapter.ExtractLauriumAdapter object at 0x7f730c6eae90>
+req = ExtractionRequest(document_id='doc-live-3', text="Extract the person's name mentioned: Owen Wilson went to the store."...d': ['name'], 'additionalProperties': False}, model='qwen2.5:0.5b-instruct', handling=None, engine=None, datasets=None)
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        try:
+            Draft202012Validator.check_schema(req.json_schema)
+        except SchemaError as exc:
+            raise InvalidExtractionSchemaError(
+                f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
+            ) from exc
+    
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
+        call = current_call()
+        tag: str | None = None
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
+    
+        body: dict[str, Any] = {
+            "document_id": req.document_id,
+            "text": req.text,
+            "json_schema": req.json_schema,
+            "model": req.model,
+            "tag": tag,
+        }
+        try:
+            resp = await self._http.post(
+                "/v1/extract", json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError:
+            raise ExtractionFailedError(
+                "Laurium's service could not be reached, or did not answer in time."
+            ) from None
+    
+        if resp.status_code != 200:
+>           raise _refusal(resp, req.model)
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+
+packages/adapters/extract_laurium/adapter.py:124: ExtractionFailedError
+============================== slowest durations ===============================
+3.76s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+0.88s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+0.15s setup    tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+0.07s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+
+(5 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+============================== 3 failed in 5.96s ===============================
+exit case on qwen2.5:0.5b-instruct: exit 1
+
+=== what is left on the gateway (18:02:13Z)
+keys: [('orch-probe-2', {})]
+Wall time: 25 s, exit 0 (stack b, the lease case-b took at 2026-11-11T18:01:21Z; set-up before it 12 s)
+rc=0

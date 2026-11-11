@@ -1923,6 +1923,21 @@ class OspreyConfig(BaseModel):
                 raise ValueError(f"models.providers: {provider.name}: {refused}")
         return self
 
+    #: Set while validating a cloud-platform deployment's cluster translation (`ENGINES_AS`), so the
+    #: translation reads cloud-platform's preset.
+    _engines_as_cloud_platform: bool = PrivateAttr(default=False)
+
+    @property
+    def extraction_engine(self) -> Literal["deep_read", "laurium"]:
+        """The engine `ModelPort.extract` runs on: as named, or the profile's preset (ADR-135
+        Amendment 5 decision 2, the owner's; Amendment 9): `laurium` on `cloud-platform` (and its
+        cluster translation), `deep_read` on every other profile."""
+        named = self.models.extraction_engine
+        if named is not None:
+            return named
+        cloud = self.profile is Profile.CLOUD_PLATFORM or self._engines_as_cloud_platform
+        return "laurium" if cloud else "deep_read"
+
     @model_validator(mode="after")
     def _extraction_engine_suits_the_profile(self, info: ValidationInfo) -> OspreyConfig:
         """ADR-135 Amendments 5 and 6 (P12 part 2; the orchestrator's ruling of 11 November):
@@ -1931,11 +1946,9 @@ class OspreyConfig(BaseModel):
         engines_as = (info.context or {}).get(ENGINES_AS)
         translated = engines_as == MODEL_ROUTE_PROFILE and self.profile is Profile.CLUSTER
         profile = MODEL_ROUTE_PROFILE if translated else self.profile.value
-        if self.models.extraction_engine is None:
-            # Amendment 5 decision 2 (the owner's): the cloud-platform profile presets Laurium.
-            self.models.extraction_engine = (
-                "laurium" if profile in MODEL_ROUTE_PROFILES else "deep_read"
-            )
+        # Read, never written (the lane-reviewer's item 3): the preset is resolved by the
+        # `extraction_engine` property, so a dump of this configuration names only what was named.
+        self._engines_as_cloud_platform = translated
         if self.models.extraction_engine == "laurium" and profile not in MODEL_ROUTE_PROFILES:
             raise ValueError(
                 f"models.extraction_engine: laurium is for profile: {MODEL_ROUTE_PROFILE} "

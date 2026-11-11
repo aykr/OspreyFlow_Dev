@@ -36,7 +36,7 @@ FOLDER = Path("services") / "laurium"
 
 
 def chosen(config: OspreyConfig) -> bool:
-    return config.models.extraction_engine == "laurium"
+    return config.extraction_engine == "laurium"
 
 
 def laurium_image(api_image: str) -> str:

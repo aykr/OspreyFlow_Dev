@@ -61,28 +61,57 @@ def _with_engine(raw: dict[str, Any], engine: Any) -> dict[str, Any]:
 def test_left_unset_it_is_the_profiles_preset(profile: str, preset: str) -> None:
     raw = _raw(profile)
     raw.get("models", {}).pop("extraction_engine", None)
-    assert OspreyConfig.model_validate(raw).models.extraction_engine == preset
+    assert OspreyConfig.model_validate(raw).extraction_engine == preset
 
 
 def test_naming_deep_read_on_cloud_platform_opts_out() -> None:
     assert (
-        OspreyConfig.model_validate(
-            _with_engine(_cloud_raw(), "deep_read")
-        ).models.extraction_engine
+        OspreyConfig.model_validate(_with_engine(_cloud_raw(), "deep_read")).extraction_engine
         == "deep_read"
     )
 
 
-def test_a_cluster_translation_keeps_what_cloud_platform_chose() -> None:
-    """The translation is validated as `profile: cluster`, where unset means `deep_read`: the
-    cloud-platform choice must arrive named, not be re-derived there."""
-    chosen = OspreyConfig.model_validate(_cloud_raw()).models.model_dump(mode="json")
-    assert chosen["extraction_engine"] == "laurium"
+def test_the_real_cluster_translation_keeps_the_preset() -> None:
+    """`harness.cloud_platform._as_cluster` validates its translation as `profile: cluster` with
+    `ENGINES_AS`: the cloud-platform preset holds there too, read, not written."""
+    from harness.cloud_platform import _as_cluster
+    from harness.cloud_platform.settings import load_platform
+
+    config = OspreyConfig.model_validate(_cloud_raw())
+    assert config.cloud_platform is not None
+    translated = _as_cluster(config, load_platform(config.cloud_platform.platform))
+    assert translated.profile.value == "cluster"
+    assert translated.extraction_engine == "laurium"
+
+
+def test_the_preset_is_read_not_written_so_a_dump_round_trips() -> None:
+    """The reviewer's item 3: the set-up console saves a dump of what it validated. The preset is
+    never written into it, so a configuration that named nothing still names nothing, and read back
+    under another profile takes that profile's preset, not cloud-platform's."""
+    config = OspreyConfig.model_validate(_cloud_raw())
+    assert config.extraction_engine == "laurium"
+    dumped = config.model_dump(mode="json", exclude_none=True)
+    assert "extraction_engine" not in dumped.get("models", {})
+    small = _raw("small")
+    small["models"] = {**small.get("models", {}), **dumped.get("models", {})}
+    small["models"].pop("extraction_engine", None)
+    assert OspreyConfig.model_validate(small).extraction_engine == "deep_read"
+
+
+def test_a_shared_models_instance_is_not_changed_by_a_profile() -> None:
+    """A `ModelsConfig` given to two configurations keeps what it was given."""
+    from schemas.deployment import ModelsConfig
+
+    models = ModelsConfig()
+    cloud = _cloud_raw()
+    cloud["models"] = models
+    OspreyConfig.model_validate(cloud)
+    assert models.extraction_engine is None
 
 
 def test_laurium_is_taken_on_cloud_platform() -> None:
     config = OspreyConfig.model_validate(_with_engine(_cloud_raw(), "laurium"))
-    assert config.models.extraction_engine == "laurium"
+    assert config.extraction_engine == "laurium"
 
 
 @pytest.mark.parametrize("profile", ["local-lite", "small", "cluster"])
@@ -97,8 +126,7 @@ def test_a_cloud_platform_cluster_translation_carries_laurium() -> None:
     `ENGINES_AS`: Laurium, held to cloud-platform's rules already, is carried, not refused."""
     raw = _with_engine(_raw("cluster"), "laurium")
     assert (
-        OspreyConfig.model_validate(raw, context={ENGINES_AS: CLOUD}).models.extraction_engine
-        == "laurium"
+        OspreyConfig.model_validate(raw, context={ENGINES_AS: CLOUD}).extraction_engine == "laurium"
     )
     with pytest.raises(ValidationError, match="profile: cloud-platform"):
         OspreyConfig.model_validate(raw, context={ENGINES_AS: "small"})

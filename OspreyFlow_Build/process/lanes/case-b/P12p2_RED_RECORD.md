@@ -102,3 +102,33 @@ Set-up only: Admin shows the engine the render chose, with "chosen at set-up: ch
   element added, so no keyboard case (rule 13 covers actions). **axe in all three themes** on the test server,
   offline: the Models harness's states with `cloud=1&engine=laurium` added, **40 passed**
   (`gates/fa445e5.a11y-models-harness.txt`).
+
+## Piece 7: Laurium reads a real model's answer (leased)
+
+Stack b, taken by case-b at 18:01:21Z on the test server, up, `remote`, down, released; beside the orchestrator's
+gateway pair (LiteLLM at CI's digest with its own Postgres, keys real; Ollama with `qwen2.5:7b-instruct`, ADR-020 pin
+845dbda0ea48, the product's own extraction model, and the 0.5B conformance model), torn down by the orchestrator after.
+`test_laurium_reads_a_real_model_live.py` in Laurium's 3.13 environment through `laurium_live_adapter`, three runs each
+its own:
+
+| Run | qwen2.5:7b-instruct | qwen2.5:0.5b-instruct (the control) |
+| --- | --- | --- |
+| 2e3ec43 (`gates/2e3ec43.p12p2-live-run1-event-loop.txt`) | 2 passed, 1 failed: **"Event loop is closed" in 0.07 s**, before any model call | 3 failed, `unparseable` |
+| b21d6db (`gates/b21d6db.p12p2-live-run2.txt`) | **3 passed** (about 2–12 s a call) | 3 failed, `unparseable` |
+
+The first run's failure was the test's, not the model's: LangChain's OpenAI client caches its HTTP client across
+instances, and pytest gave each test a fresh event loop, so the second met the first's closed loop. The Conduit and
+Laurium's service each run one loop; the module now shares one (`loop_scope="module"`). Nothing was left on the gateway
+but the orchestrator's probe key. **What is not proven:** the client's own engine (not reachable from the test server;
+the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model stays, and the control above is it.
+
+## The lane-reviewer's round (13 findings must-fix and minor), as fixed
+
+- **Item 3, the preset written into the stored config:** now read, never written (`OspreyConfig.extraction_engine`, a
+  property; the validator records only a cloud-platform translation). Written first:
+  `test_the_preset_is_read_not_written_so_a_dump_round_trips`, `test_a_shared_models_instance_is_not_changed_by_a_profile`,
+  `test_the_real_cluster_translation_keeps_the_preset` (through the real `_as_cluster`): red (10 failed with the rest
+  before the property), then 18 passed. **Plant** (the preset written back into `models`): 2 failed, the round trip and
+  the shared instance.
+- **Item 4, the key in an address:** the live factory looks for Laurium's key by its hash in `/key/list`;
+  `test_live_factory_guard.py` 2 passed.
