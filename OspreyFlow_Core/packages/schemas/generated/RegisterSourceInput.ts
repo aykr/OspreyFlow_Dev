@@ -14,7 +14,7 @@ export type Owner = string | null;
 export type SetAt = string | null;
 export type Paused = boolean;
 export type PausedReason = string | null;
-export type Read = (SqlRead | ApiRead | JsonRead) | null;
+export type Read = (SqlRead | ApiRead | JsonRead | S3Read | AthenaRead) | null;
 export type Kind = "sql";
 export type Table = string;
 export type Columns = string[];
@@ -24,6 +24,12 @@ export type RecordsAt = string | null;
 export type Kind2 = "json";
 export type Pattern1 = string;
 export type RecordsAt1 = string | null;
+export type Kind3 = "s3";
+export type Folder = string;
+export type Format = "csv" | "parquet";
+export type Kind4 = "athena";
+export type Table1 = string | null;
+export type NamedQuery = string | null;
 
 export interface RegisterSourceInput {
   connection_id: ConnectionId;
@@ -79,4 +85,23 @@ export interface JsonRead {
   kind?: Kind2;
   pattern: Pattern1;
   records_at?: RecordsAt1;
+}
+/**
+ * The CSV or Parquet objects in a folder of the connection's bucket, and every folder under it,
+ * read in key order. The folder is under the connection's own prefix (checked at the read).
+ */
+export interface S3Read {
+  kind?: Kind3;
+  folder?: Folder;
+  format?: Format;
+}
+/**
+ * A table of one of the connection's databases, read whole, or a named query saved in the
+ * connection's workgroup (a SELECT, checked before it runs); never a query written here
+ * (rule 8).
+ */
+export interface AthenaRead {
+  kind?: Kind4;
+  table?: Table1;
+  named_query?: NamedQuery;
 }

@@ -1,8 +1,16 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
-export type Kind = "files" | "sql" | "api" | "json";
+export type Kind = "files" | "sql" | "api" | "json" | "s3" | "athena";
 export type Name = string;
-export type Settings = (SqlConnectionSettings | ApiConnectionSettings | JsonConnectionSettings) | null;
+export type Settings =
+  | (
+      | SqlConnectionSettings
+      | ApiConnectionSettings
+      | JsonConnectionSettings
+      | S3ConnectionSettings
+      | AthenaConnectionSettings
+    )
+  | null;
 export type Kind1 = "sql";
 export type Host = string;
 export type Port = number;
@@ -24,6 +32,19 @@ export type PageParam = string;
 export type NextAt = string | null;
 export type CaCertificate1 = string | null;
 export type Kind3 = "json";
+export type Kind4 = "s3";
+export type Region = string;
+export type Bucket = string;
+export type Prefix = string;
+export type Kind5 = "athena";
+export type Region1 = string;
+export type Workgroup = string;
+export type Catalog = string;
+/**
+ * @minItems 1
+ */
+export type Databases = [string, ...string[]];
+export type ResultsLocation = string | null;
 export type Datasets = string[];
 
 export interface ConnectionInput {
@@ -68,4 +89,29 @@ export interface ApiConnectionSettings {
  */
 export interface JsonConnectionSettings {
   kind?: Kind3;
+}
+/**
+ * An S3 bucket, read-only (L1.9; ADR-148 decisions 4 and 7). **No key and no secret**: the read
+ * signs in as the deployment's own cloud identity (on the `cloud-platform` profile, the
+ * namespace's IAM role), so nothing here could hold a credential. The host is made from the
+ * region and the bucket, never typed, and must be on the deployment's egress allow-list.
+ */
+export interface S3ConnectionSettings {
+  kind?: Kind4;
+  region: Region;
+  bucket: Bucket;
+  prefix?: Prefix;
+}
+/**
+ * Amazon Athena, read-only (L1.9): a workgroup, the catalog and the databases its sources may
+ * read. **No key and no secret**, as for S3. Athena writes each query's results to S3 itself: to
+ * the workgroup's own location, or to `results_location` when the workgroup names none.
+ */
+export interface AthenaConnectionSettings {
+  kind?: Kind5;
+  region: Region1;
+  workgroup?: Workgroup;
+  catalog?: Catalog;
+  databases: Databases;
+  results_location?: ResultsLocation;
 }

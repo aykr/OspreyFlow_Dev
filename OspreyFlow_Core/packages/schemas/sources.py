@@ -1,14 +1,16 @@
 """Connections and registered sources (`06_DECISIONS.md` ADR-140 decision 7; Amendments 4 and 13).
 
 A **connection** is where sources are read from, owned by the deployment's administrators: `files`
-(the ingest root, `OSPREY_INGEST_ROOT`), and phase 9's `sql`, `api` and `json` (Amendment 13). A
-connection **names** its secret; the secret itself is the deployment's
-(`OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`), never stored here, in a recipe or on the
-wire. A **source** is one table, file set or endpoint on a connection, registered once for a
-dataset and carrying, at the source, its handling (marking, units, the columns a row's marking is
-read from), its legal basis and its refresh policy. Every pipeline that uses it inherits those: the
-Connect gate leaves the pipeline. Editing a source's governance is a new version of the source, and
-every deployed pipeline using it then needs attention (Amendment 4, the owner's ruling).
+(the ingest root, `OSPREY_INGEST_ROOT`), phase 9's `sql`, `api` and `json` (Amendment 13), and
+L1.9's `s3` and `athena`, which hold no secret at all (each read signs in as the deployment's own
+cloud identity, ADR-148). A SQL or API connection **names** its secret; the secret itself is the
+deployment's (`OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`), never stored here, in a
+recipe or on the wire. A **source** is one table, file set or endpoint on a connection,
+registered once for a dataset and carrying, at the source, its handling (marking, units, the
+columns a row's marking is read from), its legal basis and its refresh policy. Every pipeline that
+uses it inherits those: the Connect gate leaves the pipeline. Editing a source's governance is a
+new version of the source, and every deployed pipeline using it then needs attention (Amendment 4,
+the owner's ruling).
 
 **A source's profile is never stored.** The profiler masks sample values by the reader's clearance,
 so a stored profile would show one reader what was masked for another (rule 3): it is computed for
@@ -29,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .ingest import check_source_declarations
 
-ConnectionKind = Literal["files", "sql", "api", "json"]
+ConnectionKind = Literal["files", "sql", "api", "json", "s3", "athena"]
 #: A secret is named, never given: `OSPREY_CONNECTION_SECRET_<name>` holds it (Amendment 13).
 SECRET_NAME = r"^[A-Z][A-Z0-9_]{0,63}$"
 #: A SQL table, always schema-qualified: names, never an expression (rule 8). Its schema must be
@@ -332,8 +334,84 @@ class JsonConnectionSettings(BaseModel):
     kind: Literal["json"] = "json"
 
 
+#: An AWS region's name (`eu-west-2`); the S3 and Athena hosts are made from it, never typed.
+AWS_REGION = r"^[a-z]{2}(-gov)?-[a-z]+-[0-9]{1,2}$"
+#: An S3 bucket's name, without a dot: a dotted name cannot be reached by its own host name over
+#: verified TLS (`<bucket>.s3.<region>.amazonaws.com`), so it is refused, not reached another way.
+S3_BUCKET = r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+#: A folder in a bucket: empty (the bucket's top), or names each ending in `/`. No `..`, no leading
+#: `/`, no wildcard: a name, never a pattern or an expression (rule 8).
+S3_FOLDER = r"^([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}/){0,20}$"
+#: An Athena workgroup, catalog, database or table name.
+ATHENA_NAME = r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+ATHENA_TABLE = r"^[a-z0-9_]{1,128}\.[a-z0-9_]{1,128}$"
+#: A named query's id, as Athena makes them.
+ATHENA_NAMED_QUERY = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+
+def _no_climbing(folder: str) -> str:
+    if any(part in {".", ".."} for part in folder.split("/")):
+        raise ValueError("a folder may not climb out of the bucket")
+    return folder
+
+
+class S3ConnectionSettings(BaseModel):
+    """An S3 bucket, read-only (L1.9; ADR-148 decisions 4 and 7). **No key and no secret**: the read
+    signs in as the deployment's own cloud identity (on the `cloud-platform` profile, the
+    namespace's IAM role), so nothing here could hold a credential. The host is made from the
+    region and the bucket, never typed, and must be on the deployment's egress allow-list."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["s3"] = "s3"
+    region: str = Field(pattern=AWS_REGION)
+    bucket: str = Field(pattern=S3_BUCKET)
+    #: The folder of the bucket a source on this connection may read under; the top when empty.
+    prefix: str = Field(default="", max_length=1024, pattern=S3_FOLDER)
+
+    @field_validator("prefix")
+    @classmethod
+    def _inside(cls, value: str) -> str:
+        return _no_climbing(value)
+
+    @field_validator("bucket")
+    @classmethod
+    def _not_an_address(cls, value: str) -> str:
+        if value.startswith("xn--") or value.endswith("-s3alias"):
+            raise ValueError("a bucket's own name, not an access point's or an encoded one")
+        return value
+
+    def host(self) -> str:
+        """The one host a read of this bucket reaches (virtual-hosted, as the SDK sends it)."""
+        return f"{self.bucket}.s3.{self.region}.amazonaws.com"
+
+
+class AthenaConnectionSettings(BaseModel):
+    """Amazon Athena, read-only (L1.9): a workgroup, the catalog and the databases its sources may
+    read. **No key and no secret**, as for S3. Athena writes each query's results to S3 itself: to
+    the workgroup's own location, or to `results_location` when the workgroup names none."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["athena"] = "athena"
+    region: str = Field(pattern=AWS_REGION)
+    workgroup: str = Field(default="primary", pattern=ATHENA_NAME)
+    catalog: str = Field(default="AwsDataCatalog", pattern=ATHENA_NAME)
+    databases: list[Annotated[str, Field(pattern=r"^[a-z0-9_]{1,128}$")]] = Field(min_length=1)
+    results_location: str | None = Field(
+        default=None, max_length=1024, pattern=r"^s3://" + S3_BUCKET[1:-1] + "/" + S3_FOLDER[1:]
+    )
+
+    def host(self) -> str:
+        return f"athena.{self.region}.amazonaws.com"
+
+
 ConnectionSettings = Annotated[
-    SqlConnectionSettings | ApiConnectionSettings | JsonConnectionSettings,
+    SqlConnectionSettings
+    | ApiConnectionSettings
+    | JsonConnectionSettings
+    | S3ConnectionSettings
+    | AthenaConnectionSettings,
     Field(discriminator="kind"),
 ]
 
@@ -431,7 +509,43 @@ class JsonRead(BaseModel):
         return value
 
 
-SourceRead = Annotated[SqlRead | ApiRead | JsonRead, Field(discriminator="kind")]
+class S3Read(BaseModel):
+    """The CSV or Parquet objects in a folder of the connection's bucket, and every folder under it,
+    read in key order. The folder is under the connection's own prefix (checked at the read)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["s3"] = "s3"
+    folder: str = Field(default="", max_length=1024, pattern=S3_FOLDER)
+    format: Literal["csv", "parquet"] = "csv"
+
+    @field_validator("folder")
+    @classmethod
+    def _inside(cls, value: str) -> str:
+        return _no_climbing(value)
+
+
+class AthenaRead(BaseModel):
+    """A table of one of the connection's databases, read whole, or a named query saved in the
+    connection's workgroup (a SELECT, checked before it runs); never a query written here
+    (rule 8)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["athena"] = "athena"
+    table: str | None = Field(default=None, pattern=ATHENA_TABLE)
+    named_query: str | None = Field(default=None, pattern=ATHENA_NAMED_QUERY)
+
+    @model_validator(mode="after")
+    def _one_of_the_two(self) -> AthenaRead:
+        if (self.table is None) == (self.named_query is None):
+            raise ValueError("an Athena source reads a table or a named query, one of the two")
+        return self
+
+
+SourceRead = Annotated[
+    SqlRead | ApiRead | JsonRead | S3Read | AthenaRead, Field(discriminator="kind")
+]
 
 
 class ConnectorRead(BaseModel):
@@ -555,7 +669,8 @@ class GovernanceEdited(BaseModel):
 
 ALL_MODELS: list[type[BaseModel]] = [
     SqlConnectionSettings, ApiConnectionSettings, JsonConnectionSettings, ConnectionTest,
-    SqlRead, ApiRead, JsonRead, ConnectorRead,
+    S3ConnectionSettings, AthenaConnectionSettings,
+    SqlRead, ApiRead, JsonRead, S3Read, AthenaRead, ConnectorRead,
     Connection, ConnectionInput, SourceRefresh, SourceTable, RegisterSourceInput,
     SourceGovernanceInput, SourceLineage, GovernanceEdited,
 ]  # fmt: skip
