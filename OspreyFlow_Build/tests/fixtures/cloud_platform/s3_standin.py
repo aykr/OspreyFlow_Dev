@@ -15,12 +15,14 @@ refusal here is one AWS gives, with its own code and its own words:
   policy or the bucket's wins; otherwise either may allow; nothing allows by default
   (`AccessDenied`). The conditions modelled are the ones our Terraform writes (`Bool`,
   `StringEquals`/`StringNotEquals` and their `IfExists`, `Null`, `ArnEquals`/`ArnNotEquals`).
-- **SSE-KMS asks KMS**: a write to a bucket encrypted by a customer key needs
+- **SSE-KMS asks KMS**, as KMS judges it with the key's own policy where the config gives one
+  (`keys`: an explicit deny wins, a grant naming the role is enough, the root's delegates to IAM):
+  a write to a bucket encrypted by a customer key needs
   `kms:GenerateDataKey` on that key, a read or a multipart completion `kms:Decrypt`, as S3 asks
   on the caller's behalf (`AccessDenied`, naming the KMS action and the key).
 
-**Not modelled, and said so**: a KMS key's own key policy (the account's IAM is taken as
-delegated, the default key policy), an STS session policy, virtual-host addressing (path style
+**Not modelled, and said so**: a key with no policy in the config is taken as having the default
+key policy (the account's IAM delegated); an STS session policy, virtual-host addressing (path style
 only), versioning, object lock and presigned URLs (refused, `AccessDenied`). A chunked upload's
 per-chunk signatures are not checked; its seed signature is.
 
@@ -229,6 +231,8 @@ class StandIn:
     users: dict[str, Principal] = field(default_factory=dict)
     roles: dict[str, Role] = field(default_factory=dict)
     buckets: dict[str, Bucket] = field(default_factory=dict)
+    #: Each KMS key's own policy, by its ARN (a key not here has the default key policy).
+    keys: dict[str, dict[str, Any]] = field(default_factory=dict)
     sessions: dict[str, Principal] = field(default_factory=dict)
     uploads: dict[str, Upload] = field(default_factory=dict)
     #: Whether the connection in front is TLS (`aws:SecureTransport`): set when the stand-in
@@ -276,6 +280,7 @@ class StandIn:
                     del self.sessions[key]
                 else:
                     session.policies = role.policies
+        stand_in.keys = {k["arn"]: k["policy"] for k in config.get("keys", [])}
         stand_in.buckets.clear()
         for bucket in config.get("buckets", []):
             stand_in.buckets[bucket["name"]] = Bucket(
@@ -467,16 +472,34 @@ class StandIn:
 
     def kms(self, principal: Principal, action: str, key_arn: str) -> None:
         """S3 asks KMS on the caller's behalf (`kms:ViaService` is S3 in the region); KMS's refusal
-        comes back as S3's `AccessDenied`. S3's own AWS-managed key needs no grant of the caller's."""
+        comes back as S3's `AccessDenied`. S3's own AWS-managed key needs no grant of the caller's.
+        A key with its own policy (`keys` in the config) is judged as KMS judges it: an explicit
+        deny in either policy wins; the key policy naming the role is enough alone; the key policy
+        naming the account's root delegates to the role's IAM policy, for that action only; else
+        refused. A key with none is the default key policy's: the role's IAM policy alone."""
         if key_arn == AWS_MANAGED_S3_KEY:
             return
-        context = {"aws:PrincipalArn": _role_of(principal.arn), "kms:ViaService": f"s3.{self.region}.amazonaws.com"}
-        verdict = evaluate(principal.policies, action, key_arn, context)
+        role = _role_of(principal.arn)
+        context = {"aws:PrincipalArn": role, "kms:ViaService": f"s3.{self.region}.amazonaws.com"}
+        iam = evaluate(principal.policies, action, key_arn, context)
+        key_policy = self.keys.get(key_arn)
+        if key_policy is None:
+            verdict, kind = iam, "identity-based"
+        else:
+            root = re.sub(r":(role|assumed-role)/.*$", ":root", role).replace("arn:aws:sts::", "arn:aws:iam::")
+            named = evaluate([key_policy], action, key_arn, context, principal=role)
+            delegated = evaluate([key_policy], action, key_arn, context, principal=root)
+            if "deny" in (named, iam):
+                verdict, kind = "deny", "identity-based" if iam == "deny" else "resource-based"
+            elif named == "allow" or (delegated == "allow" and iam == "allow"):
+                verdict, kind = "allow", ""
+            else:
+                verdict, kind = "none", "resource-based" if delegated != "allow" else "identity-based"
         if verdict != "allow":
             reason = (
-                "with an explicit deny in an identity-based policy"
+                f"with an explicit deny in a {kind} policy"
                 if verdict == "deny"
-                else "because no identity-based policy allows the " + action + " action"
+                else f"because no {kind} policy allows the " + action + " action"
             )
             raise Refused(
                 403,

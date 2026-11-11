@@ -67,7 +67,7 @@ def bucket_policy() -> dict[str, Any]:
 
 def standin_config(
     *, role: dict[str, Any] | None = None, bucket: dict[str, Any] | None = None,
-    clickhouse_role: dict[str, Any] | None = None,
+    clickhouse_role: dict[str, Any] | None = None, key_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The stand-in as the namespace's Terraform makes the AWS side: each role trusted by its own
     trust document as rendered (`backups.trust_policy`), given its own policy."""
@@ -88,6 +88,9 @@ def standin_config(
              "policies": [{"Statement": [{"Effect": "Allow", "Action": ["s3:*", "kms:*"], "Resource": "*"}]}]},
         ],
         "buckets": [{"name": BUCKET, "kms_key": KEY_ARN, "policy": bucket or bucket_policy()}],
+        # The key's own policy as backups.tf writes it.
+        "keys": [{"arn": KEY_ARN, "policy": key_policy or backups.key_policy(
+            f"arn:aws:iam::{ACCOUNT}:root", [ROLE_ARN, CLICKHOUSE_ROLE_ARN], REGION)}],
     }  # fmt: skip
 
 
@@ -287,13 +290,20 @@ def _objects(aws: Running) -> list[str]:
 
 
 def _deny_kms(aws: Running, *kept: str, role: str = ROLE_ARN) -> None:
-    """`role`'s KMS actions narrowed to `kept`; its sessions already running meet the new policy,
-    as on AWS."""
+    """`role`'s KMS actions narrowed to `kept`, in the key's own policy (which grants the roles the key
+    directly, so a role's IAM policy alone never decides) and in its IAM policy alike; its sessions
+    already running meet the new policies, as on AWS."""
     account = {ROLE_ARN: backups.SERVICE_ACCOUNT, CLICKHOUSE_ROLE_ARN: backups.CLICKHOUSE_SERVICE_ACCOUNT}[role]
     found = aws.stand_in.roles[role]
     found.policies = [role_policy(account, kms_actions=kept)]
     for session in aws.stand_in.sessions.values():
         if session.arn.startswith(role.replace(":role/", ":assumed-role/").replace("iam::", "sts::") + "/"):
             session.policies = found.policies
+    policy = backups.key_policy(f"arn:aws:iam::{ACCOUNT}:root", [r for r in (ROLE_ARN, CLICKHOUSE_ROLE_ARN) if r != role], REGION)
+    use = next(s for s in policy["Statement"] if s["Sid"] == "UseThroughS3")
+    if kept:
+        policy["Statement"].append({**use, "Sid": "UseThroughS3Narrowed", "Principal": {"AWS": [role]},
+                                    "Action": list(kept)})  # fmt: skip
+    aws.stand_in.keys[KEY_ARN] = policy
 
 

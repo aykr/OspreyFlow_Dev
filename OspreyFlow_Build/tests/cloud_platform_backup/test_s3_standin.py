@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import botocore.session
 import pytest
+from harness import cloud_platform_backups as backups
 from botocore.exceptions import ClientError
 
 from tests.cloud_platform_backup.conftest import (
+    ACCOUNT,
     BUCKET,
     CONDUIT_ROLE_ARN,
     ISSUER_SECRET,
@@ -23,6 +25,7 @@ from tests.cloud_platform_backup.conftest import (
     Running,
     later,
     role_policy,
+    _deny_kms,
     standin_config,
 )
 from tests.fixtures.cloud_platform.s3_standin import Role, mint_token
@@ -136,7 +139,7 @@ def test_a_token_for_another_audience_is_refused_by_sts(aws: Running) -> None:
 
 
 def test_without_kms_generate_data_key_a_write_is_refused_naming_the_key(aws: Running) -> None:
-    aws.stand_in.roles[ROLE_ARN] = _with_policy(aws.stand_in.roles[ROLE_ARN], role_policy(kms_actions=("kms:Decrypt",)))
+    _deny_kms(aws, "kms:Decrypt")
     with pytest.raises(ClientError) as refused:
         aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
     assert _code(refused) == "AccessDenied"
@@ -146,9 +149,7 @@ def test_without_kms_generate_data_key_a_write_is_refused_naming_the_key(aws: Ru
 
 def test_without_kms_decrypt_a_read_and_a_multipart_completion_are_refused(aws: Running) -> None:
     aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
-    aws.stand_in.roles[ROLE_ARN] = _with_policy(
-        aws.stand_in.roles[ROLE_ARN], role_policy(kms_actions=("kms:GenerateDataKey",)))  # fmt: skip
-    aws.stand_in.sessions.clear()
+    _deny_kms(aws, "kms:GenerateDataKey")
     s3 = aws.s3()
     with pytest.raises(ClientError) as refused:
         s3.get_object(Bucket=BUCKET, Key="sets/a/arcadedb/x")
@@ -282,7 +283,7 @@ def test_a_policy_changed_by_the_lever_judges_the_sessions_already_running(aws: 
     client = aws.s3()
     client.put_object(Bucket=BUCKET, Key="sets/a/arcadedb/before", Body=b"x")
     sessions = dict(aws.stand_in.sessions)
-    assert _lever(aws, "/_standin/configure", standin_config(role=role_policy(kms_actions=("kms:Decrypt",)))) == 204
+    assert _lever(aws, "/_standin/configure", standin_config(key_policy=_key_policy_without(ROLE_ARN))) == 204
     with pytest.raises(ClientError) as refused:
         client.put_object(Bucket=BUCKET, Key="sets/a/arcadedb/after", Body=b"x")
     assert _code(refused) == "AccessDenied"
@@ -356,3 +357,37 @@ def test_a_request_signed_for_another_region_is_refused(aws: Running) -> None:
         client.list_objects_v2(Bucket=BUCKET)
     assert _code(refused) == "AuthorizationHeaderMalformed"
     assert "expecting 'eu-west-2'" in refused.value.response["Error"]["Message"]
+
+
+def _key_policy_without(role: str) -> dict[str, object]:
+    return backups.key_policy(f"arn:aws:iam::{ACCOUNT}:root",
+                              [r for r in (ROLE_ARN, CLICKHOUSE_ROLE_ARN) if r != role], REGION)  # fmt: skip
+
+
+def test_a_role_the_keys_own_policy_leaves_out_is_refused_whatever_its_iam_says(aws: Running) -> None:
+    """KMS as AWS runs it (the lane-reviewer's round 2): the key's own policy names the roles; one it
+    leaves out is refused though its IAM policy grants the key."""
+    aws.stand_in.keys[KEY_ARN] = _key_policy_without(ROLE_ARN)
+    with pytest.raises(ClientError) as refused:
+        aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
+    assert _code(refused) == "AccessDenied"
+    assert "no resource-based policy allows the kms:GenerateDataKey action" in refused.value.response["Error"]["Message"]
+
+
+def test_the_keys_own_grant_is_enough_without_the_roles_iam(aws: Running) -> None:
+    """And the other way: a role the key's policy names uses the key with no KMS in its IAM policy."""
+    found = aws.stand_in.roles[ROLE_ARN]
+    found.policies = [role_policy(kms_actions=())]
+    aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
+    assert aws.stand_in.meta(BUCKET, "sets/a/arcadedb/x")["kms_key"] == KEY_ARN
+
+
+def test_the_key_used_other_than_through_s3_is_refused(aws: Running) -> None:
+    """`kms:ViaService` in the key's own policy: the stand-in's KMS is asked by S3, so it is S3 in the
+    region; a key policy naming another service refuses."""
+    policy = backups.key_policy(f"arn:aws:iam::{ACCOUNT}:root", [ROLE_ARN, CLICKHOUSE_ROLE_ARN], "us-east-1")
+    aws.stand_in.keys[KEY_ARN] = policy
+    aws.stand_in.roles[ROLE_ARN].policies = [role_policy(kms_actions=())]
+    with pytest.raises(ClientError) as refused:
+        aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
+    assert _code(refused) == "AccessDenied"
