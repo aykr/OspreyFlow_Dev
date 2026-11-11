@@ -35347,13 +35347,17 @@ review rounds, listed for the owner.*
      (`people_store_unavailable`), never a principal with no roles. The socket closes with 1013. Every read path that
      resolves a session goes through it.
    - **Disable** is the store's flag. The construction path refuses a disabled person (401) from their next request.
+   - **The delta socket outlives the request that opened it**, so it asks the store too: at connect (a ticket minted
+     before a change is refused before the snapshot is sent) and before every message. It closes 1008 when the person
+     is disabled, no longer recorded, or their roles changed (they sign in again, and the one construction path builds
+     their principal afresh), and 1013 when the store cannot answer. Found by the lane's own review.
    - **The synchronous `resolve`** refuses an Entra mapping, and `principal_from_claims` refuses an Entra principal
      with no stored person. Each guard is shown red alone.
 2. **Who appears in Admin › People.**
    - A person is recorded, with no roles, at their first sign-in.
    - An administrator may add one by object id ahead of it (`POST /v1/admin/people/by-object-id`, behind
      `manage_people`, audited as `add_person_by_object_id`). Graph gives object ids (Amendment 6 point 6). The id is
-     validated as an object id, and one already recorded is a 409.
+     validated as an object id, and one already recorded is a 409 that names it.
    - The first administrators are named by object id at install (`cloud_platform.claims.first_administrators`,
      rendered as `OSPREY_FIRST_ADMINISTRATORS`) and given the Admin role once. Taking it away later is not undone at
      the next start.
@@ -35375,20 +35379,32 @@ review rounds, listed for the owner.*
    - `tid` the tenant;
    - no delegated `scp` (a person's token is 403), and `idtyp` `app` where present;
    - its client in `azp` or `appid` (the same if both), an application id that is neither the Glass's nor this API's
-     own.
+     own. The mapping carries the API's own application id (`api_client_id`), so on v1.0 tokens, whose audience is the
+     `api://` URI, the API's registration is still refused.
 
    Under Keycloak's handling a token carrying `tid` is refused. The verifier is judged by the resolver's own mapping.
 6. **Every reader of a role or principal on the profile goes through `principal_auth`**, or is not rendered there:
    - `harness/webapp_auth.py` (the set-up console's `/admin`) and `harness/oidc.py` (the realm's sign-in) refuse an
      Entra token (one carrying `tid`). Neither is a cloud-platform workload.
-   - Superset (`SUPERSET_SIGN_IN=entra`, rendered) reads no token role, so everyone is Gamma until Superset's own step
-     (CARRIES).
+   - **Report sync and Superset are not on this profile until their own step** (the orchestrator's ruling (a), 11
+     November 2026). Both signed in through Keycloak: report sync with a client-credentials token, which the Entra
+     resolver refuses as no person's, and Superset through Keycloak as its OAuth provider. Both are off by default, so
+     the bare profile renders. An explicit `reporting.sync` or `reporting.superset` is refused in words naming the
+     later step (CARRIES). Superset's own configuration still reads no token role when told `SUPERSET_SIGN_IN=entra`,
+     so its step starts from everyone Gamma.
    - The Glass shows and gates on `GET /v1/me`, the resolved principal: id, clearance, unit, roles and codes, its own
      only. It fails closed: while `/v1/me` is asked, or when it does not answer, there is no clearance, no role, no
      account menu and no `isAdministrator`.
    - No ID-token role or access claim is read anywhere in the Glass. A source check over `apps/workspace/src` is
      shown red on each shape.
    - The display principal's id is the Conduit's (the object id), never Entra's pairwise `sub`.
+   - A person disabled in this deployment is told so ("Your account is disabled in this deployment. Ask an
+     administrator."), only when the Conduit's 401 carries `principal_auth`'s own words exactly, and no renewal is
+     tried. Any other refusal keeps its own words. A test holds the two languages' words equal.
+   - `harness/verify.py`'s resolver uses the Keycloak mapping. The deploy's verify stage is no cloud-platform
+     workload.
+   - ADR-106's display names (`PrincipalNameDirectory`) have no source on Entra and show the object id. Carried: the
+     people store's names could serve it (CARRIES).
 7. **The profile** (platform's files, applied from the lane's diff):
    - **`cloud_platform.claims`** names, and the render refuses without it:
      - the tenant;
@@ -35399,7 +35415,8 @@ review rounds, listed for the owner.*
      - the first administrators;
      - `claims_mapping_policy`.
 
-     `principal_auth.ClaimMapping` must read it, or the render refuses in words.
+     `principal_auth.ClaimMapping` must read it, or the render refuses in words. The rendered mapping carries the
+     Glass's and the API's application ids.
    - **The issuer, audience and keys follow the version**:
      - v2.0: `login.microsoftonline.com/<tid>/v2.0`, with the API's id as the audience;
      - v1.0: `sts.windows.net/<tid>/`, with its `api://` URI as the audience.
@@ -35407,11 +35424,14 @@ review rounds, listed for the owner.*
      The keys are `…/discovery[/v2.0]/keys`, with `?appid=<api_client_id>` under a claims-mapping policy.
    - **Keycloak is not rendered**: not its workload, its database step, its realm and theme files, its door, its
      group 0, nor its resources, secrets (`OSPREY_KEYCLOAK_*`, `OIDC_TOKEN_EXCHANGE_CLIENT_SECRET`) or settings
-     (`OIDC_TOKEN_EXCHANGE_*`, `OIDC_ADMIN_USERS_URL`, `OSPREY_IDENTITY_ORIGIN`). `cp-policy-check`'s
-     `GROUP_ZERO_ALLOWED` is empty.
+     (`OIDC_TOKEN_EXCHANGE_*`, `OIDC_ADMIN_USERS_URL`, `OSPREY_IDENTITY_ORIGIN`). No rendered value names Keycloak or
+     the `id.` host (the deployment's own `osprey.yaml`, mounted as written, keeps its settings' defaults).
+     `cp-policy-check`'s `GROUP_ZERO_ALLOWED` is empty.
+   - **The P7b runbook's identity step** (Entra's app registrations in place of Keycloak's) is this lane's, sent as a
+     diff with the render diff regenerated on P7b (the orchestrator's ruling, 11 November 2026).
    - **The Glass's `deployment.json`** carries `sign_in` (Entra's authority, the Glass's registration, and `openid
-     <api_id_uri>/<scope>`) in place of the realm's address, only on this profile. Every other profile's file is as
-     it was.
+     <api_id_uri>/<scope>`) in place of the realm's address, only on this profile. Every other profile's file is byte
+     for byte as main rendered it (a golden from main's own module).
    - **Egress.** `login.microsoftonline.com` is the one host P10 adds to `egress.always` (the Conduit reads Entra's
      keys). Its networks are the deployment's (`egress_nets`), or the render is refused (the docs lane's gap (a)).
 8. **The carries of part 1, settled.**
@@ -35436,6 +35456,7 @@ Tests:
 - `tests/harness/test_cloud_platform_entra.py`;
 - `apps/workspace/src/admin/PeopleEntra.test.tsx`;
 - `src/auth/resolvedPrincipal.test.ts`;
-- `App.test.tsx`'s ADR-148 block.
+- `src/auth/disabledAccount.test.ts` and `tests/services/api/test_disabled_words_match_the_glass.py`;
+- `App.test.tsx`'s two ADR-148 blocks.
 
 Planted faults: `process/lanes/admin/P10_P2_RED_RECORD.md`.
