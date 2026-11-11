@@ -1,7 +1,8 @@
 P9 (case) for the platform lane (ADR-142 Amendment 8 decision 3; ADR-148 Amendment 7). Apply with `git apply` from the
-repository root, after P9 merges, then `P9_rows.diff`. Three files: `render_cloud_platform`'s one hook,
-`values.yaml`'s `backups: {}`, and platform's own render test, which must now expect ClickHouse's pod to run as its
-backup role's service account. Refreshed on main after P7b landed (3673660): the hook's context moved, and three of
+repository root, after P9 merges, then `P9_rows.diff`. Four files: `render_cloud_platform`'s one hook,
+`values.yaml`'s `backups: {}`, and platform's own render and egress tests, which must now expect ClickHouse's pod to
+run as its backup role's service account. Lands with P9 in this order (the orchestrator's): this diff, `P9_rows.diff`, then
+`P9_decommission.diff`. Refreshed on main after P7b landed (3673660): the hook's context moved, and three of
 platform's tests now written after P9 follow it (below).
 
 **Platform's five conditions (the orchestrator's message of 11 November), checked with this diff applied:**
@@ -30,12 +31,12 @@ platform's tests now written after P9 follow it (below).
 - `test_only_the_readers_are_given_the_managed_stores_details`: a store's details, not P9's Secret of its own
   (ClickHouse's backup user's password, `ospreyflow-clickhouse-backup`).
 - `test_only_a_pod_with_an_account_of_its_own_mounts_its_token` (Amendment 5 point 24): ClickHouse the one stated
-  exception, an account of its own and its token not mounted. **For platform to rule on:** ClickHouse calls no
-  Kubernetes API, and cp-policy-check's own `token` rule says IRSA's webhook gives a pod its role's web identity by
-  the account alone, so P9 sets `automountToken: false` itself (no longer left to where the hook runs, which is after
-  the render's token step); `TOKEN_ALLOWED` stays as it is. Not measured on EKS by this lane (kind's patch projects
-  the web identity token by hand): if the webhook needs the default token, the ruling is to mount it and list
-  ClickHouse in `TOKEN_ALLOWED`.
+  exception, an account of its own and its token not mounted. **Ruled by the orchestrator (11 November):** keep
+  `automountToken: false` and `TOKEN_ALLOWED` as it is. ClickHouse calls no Kubernetes API, and EKS's pod identity
+  webhook injects its own projected token, `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` whatever
+  `automountServiceAccountToken` says. P9 sets the value itself (no longer left to where the hook runs, which is
+  after the render's token step). Not measured on EKS by this lane (kind's patch projects the token by hand): the
+  measurement is on CARRIES' live-checks row (`P9_carries.diff`).
 A fourth, `test_every_secret_the_values_read_is_one_the_terraform_writes`, failed on P9's side (backups.tf wrote its
 Secret's key quoted, which platform's reader does not take): fixed on the branch, the key bare.
 

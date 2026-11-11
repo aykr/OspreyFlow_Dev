@@ -33970,7 +33970,9 @@ average 10 to 15), so each time is what that cluster did then, not a service lev
   Two more found there: backups.tf wrote its Secret's key quoted, which platform's reader does not take (now bare);
   and the hook runs after the render's token step, so P9 sets ClickHouse's `automountToken: false` itself (it calls
   no Kubernetes API; IRSA's webhook gives its web identity by the account alone, not measured on EKS here), with
-  platform's token test given ClickHouse as its one exception in `P9_render.diff`, for platform to rule on.
+  platform's token test given ClickHouse as its one exception in `P9_render.diff`. Ruled by the orchestrator
+  (11 November): kept so, `TOKEN_ALLOWED` unchanged (EKS's webhook injects its own projected token whatever
+  `automountServiceAccountToken` says); the measurement on EKS is on CARRIES' live-checks row.
 - The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
   (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).
 - **Left, to P9b:** the alert on a failed or missing run; object lock or a write-only role; the drain test and the
