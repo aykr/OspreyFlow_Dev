@@ -51,9 +51,10 @@ def test_each_secret_the_backup_reads_is_one_the_terraform_writes(fixture: str) 
     for item in rendered.values(fixture)["backups"]["env"]:
         ref = item.get("secretKeyRef")
         if ref:
-            assert ref["name"] == backups.OUTPUT_SECRET
-            block = re.search(r'resource "kubernetes_secret" "ospreyflow_backup_output" \{(.*?)\n\}', text, re.S)
-            assert block and re.search(rf"\b{ref['key']}\s*=", block.group(1)), ref
+            assert ref["name"] in (backups.OUTPUT_SECRET, backups.BACKUP_SECRET), ref
+            resource = ref["name"].replace("-", "_")
+            block = re.search(rf'resource "kubernetes_secret" "{resource}" \{{(.*?)\n\}}', text, re.S)
+            assert block and re.search(rf'\b"?{ref["key"]}"?\s*=', block.group(1)), ref
 
 
 def test_the_backup_pod_is_given_no_other_secret() -> None:
@@ -61,7 +62,9 @@ def test_the_backup_pod_is_given_no_other_secret() -> None:
     ArcadeDB's and ClickHouse's backup user's, never the deployment's own ClickHouse user's."""
     values = rendered.values()
     secret_items = [e for e in values["backups"]["env"] if "secret" in e]
-    assert sorted(e["secret"] for e in secret_items) == ["ARCADEDB_ROOT_PASSWORD", backups.CLICKHOUSE_BACKUP_PASSWORD]
+    assert [e["secret"] for e in secret_items] == ["ARCADEDB_ROOT_PASSWORD"]
+    own = [e for e in values["backups"]["env"] if (e.get("secretKeyRef") or {}).get("name") == backups.BACKUP_SECRET]
+    assert [e["name"] for e in own] == ["CLICKHOUSE_PASSWORD"]
     env = {e["name"]: e.get("value") for e in values["backups"]["env"]}
     assert env["CLICKHOUSE_USER"] == backups.CLICKHOUSE_BACKUP_USER != values["environment"]["CLICKHOUSE_USER"]
 
@@ -161,7 +164,7 @@ def test_clickhouses_own_user_is_refused_the_buckets_and_the_backup_user_holds_t
     assert "GRANT BACKUP, CLUSTER, S3 ON *.*" in backup.group(1) and "URL" not in backup.group(1)
     clickhouse = next(w for w in values["workloads"] if w["name"] == "clickhouse")
     assert {"key": backups.CLICKHOUSE_USERS_FILE, "mountPath": "/etc/clickhouse-server/users.d/backup-users.xml"} in clickhouse["files"]
-    assert backups.CLICKHOUSE_BACKUP_PASSWORD in values["secrets"]["keys"]
+    assert backups.CLICKHOUSE_BACKUP_PASSWORD not in values["secrets"]["keys"], "a Secret of its own"
 
 
 def test_the_bucket_is_encrypted_by_its_own_key() -> None:
@@ -250,6 +253,28 @@ def test_a_decommission_keeps_the_bucket_and_its_key_and_nothing_else_of_the_bac
     assert set(backups.KEPT_AT_DECOMMISSION) <= declared_names
     assert {"aws_kms_key.backups", "aws_s3_bucket.backups"} <= set(backups.KEPT_AT_DECOMMISSION)
     assert not [k for k in backups.KEPT_AT_DECOMMISSION if k.startswith(("aws_iam", "kubernetes_"))]
+
+
+@pytest.mark.parametrize("fixture", rendered.fixtures())
+def test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password(fixture: str) -> None:
+    """The lane-reviewer's round-2 blocker: the shared Secret is loaded whole (`envFrom`) by the
+    Conduit, the workers, the report sync and the workspace, so the backup user's password is never
+    one of its keys; it is a Secret of its own, which ClickHouse and the backup's own pods alone name."""
+    values = rendered.values(fixture)
+    assert backups.CLICKHOUSE_BACKUP_PASSWORD not in values["secrets"]["keys"]
+    assert backups.CLICKHOUSE_BACKUP_PASSWORD not in values["secrets"].get("defaults", {})
+
+    def readers(items: list[dict[str, Any]]) -> set[str]:
+        return {w["name"] for w in items for e in w.get("env", [])
+                if (e.get("secretKeyRef") or {}).get("name") == backups.BACKUP_SECRET
+                or e.get("secret") == backups.CLICKHOUSE_BACKUP_PASSWORD}  # fmt: skip
+
+    assert readers(values["workloads"] + values.get("jobs", [])) == {"clickhouse"}
+    assert {e["secretKeyRef"]["name"] for e in values["backups"]["env"]
+            if e["name"] == "CLICKHOUSE_PASSWORD"} == {backups.BACKUP_SECRET}  # fmt: skip
+    text = rendered.terraform(fixture)
+    assert f'resource "kubernetes_secret" "{backups.BACKUP_SECRET.replace("-", "_")}"' in text
+    assert 'resource "random_password" "clickhouse_backup"' in text
 
 
 def test_a_render_with_one_store_and_not_the_other_is_refused() -> None:

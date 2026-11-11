@@ -951,6 +951,67 @@ class Run:
             f"PASS round trip: set {set_id} restored in {times['total']} s, counts and the claim equal"
         )
 
+    def restore_refused(self) -> None:
+        """The orchestrator's ruling, on kind: with no path from the restore's pods to the cluster's
+        API (P9 renders no Calico policy of its own; P7b's row is to come), the restore's `verify`
+        cannot list the pods and refuses, "cannot confirm the writers are stopped", touching nothing.
+        Everything that writes is stopped first, as the runbook says, so only that can refuse it."""
+        assert self.helm_script
+        self.shared_pod()
+        if not self.finished_sets():  # the stand-in's objects go with its pod: a set of its own first
+            self.seed()
+            ok, _, _ = self.backup()
+            assert ok, "the backup this check restores failed"
+        before = self.counts()
+        set_id = self.finished_sets()[-1]
+        kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=0")
+        self.stop_shared()
+        kubectl(
+            "-n", self.ns, "wait", "--for=delete", "pod/arcadedb-0", "--timeout=300s", check=False
+        )
+        documents = [
+            d for d in yaml.safe_load_all(sh("bash", self.helm_script, "restore-job", set_id)) if d
+        ]
+        jobs = [d for d in documents if d["kind"] == "Job"]
+        said: list[str] = []
+        try:
+            for job in jobs:
+                self.irsa(job["spec"]["template"]["spec"], self.values()["backups"]["image"])
+                job["metadata"]["namespace"] = self.ns
+                kubectl(
+                    "-n",
+                    self.ns,
+                    "delete",
+                    "job",
+                    job["metadata"]["name"],
+                    "--ignore-not-found",
+                    "--wait=true",
+                )
+                apply(job)
+            for job in jobs:
+                ok, logs = self.wait_job(job["metadata"]["name"], timeout=600)
+                said += [line for line in logs.splitlines() if "refused" in line]
+                assert not ok, (
+                    f"{job['metadata']['name']} ran without confirming the writers were stopped"
+                )
+        finally:
+            kubectl("-n", self.ns, "scale", "statefulset/arcadedb", "--replicas=1")
+            self.shared_pod()
+            kubectl("-n", self.ns, "rollout", "status", "statefulset/arcadedb", "--timeout=900s")
+            kubectl(
+                "-n", self.ns, "wait", "--for=condition=Ready", "pod/arcadedb-0", "--timeout=900s"
+            )
+        after = self.counts()
+        self.record.update({"set": set_id, "refused": said, "untouched": after == before})
+        self.save("restore_refused")
+        if not (
+            said
+            and all("cannot confirm the writers are stopped" in s for s in said)
+            and after == before
+        ):
+            raise SystemExit("FAIL: the restore did not refuse closed, or something was touched")
+        print("PASS the restore refused closed in both Jobs; the stores untouched")
+
     def osprey_sources(self) -> None:
         """The orchestrator's blocker, after the fix: as the deployment's own ClickHouse user, each of
         the four that were accepted on 11 November (a set's manifest read, ArcadeDB's zip read, a set
@@ -1272,6 +1333,7 @@ def main() -> None:
             "roundtrip",
             "reds",
             "osprey_sources",
+            "restore_refused",
         ],
     )
     parser.add_argument("--state", type=Path, required=True)

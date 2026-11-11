@@ -42,9 +42,14 @@ ROLE_SUFFIX = {SERVICE_ACCOUNT: "backup", CLICKHOUSE_SERVICE_ACCOUNT: "backup-cl
 #: The secret the namespace's Terraform writes the bucket's name and the key's ARN into.
 OUTPUT_SECRET = "ospreyflow-backup-output"
 OUTPUT_KEYS = {"bucket": "bucket", "kms_key": "kms_key_arn"}
-#: ClickHouse's backup user, used by the runner alone, and its password's key in our Secret.
+#: ClickHouse's backup user, used by the runner alone. Its password is **a Secret of its own**
+#: (backups.tf), never a key of the shared Secret, which the Conduit, the workers, the report sync
+#: and the workspace load whole (`envFrom`): ClickHouse and the backup's own pods alone name it (the
+#: lane-reviewer's round-2 blocker). CLICKHOUSE_BACKUP_PASSWORD: the variable ClickHouse reads.
 CLICKHOUSE_BACKUP_USER = "backup"
 CLICKHOUSE_BACKUP_PASSWORD = "OSPREY_CLICKHOUSE_BACKUP_PASSWORD"
+BACKUP_SECRET = "ospreyflow-clickhouse-backup"
+BACKUP_SECRET_KEY = "password"
 CLICKHOUSE_USERS_FILE = "clickhouse-backup-users.xml"
 #: Daily at 02:15 UTC; each set expires by the bucket's lifecycle rule after EXPIRE_DAYS, and an
 #: object overwritten keeps its previous version for as long (the bucket is versioned), never by
@@ -218,6 +223,7 @@ def clickhouse_users(deployment_user: str) -> str:
     <{deployment_user}>
       <grants>
         <query>GRANT ALL ON *.*</query>
+        <query>REVOKE ACCESS MANAGEMENT, NAMED COLLECTION ADMIN ON *.*</query>
         <query>REVOKE S3, URL, BACKUP ON *.*</query>
       </grants>
     </{deployment_user}>
@@ -246,7 +252,10 @@ def clickhouse_writes_as_its_backup_role(clickhouse: dict[str, Any], region: str
     clickhouse["env"] = [e for e in clickhouse.get("env", []) if e["name"] not in names] + [
         {"name": "AWS_REGION", "value": region},
         {"name": "AWS_DEFAULT_REGION", "value": region},
-        {"name": CLICKHOUSE_BACKUP_PASSWORD, "secret": CLICKHOUSE_BACKUP_PASSWORD},
+        {
+            "name": CLICKHOUSE_BACKUP_PASSWORD,
+            "secretKeyRef": {"name": BACKUP_SECRET, "key": BACKUP_SECRET_KEY},
+        },
     ]
     clickhouse["files"] = [
         *clickhouse.get("files", []),
@@ -300,7 +309,8 @@ def backups_values(
         *_env_from(environment, ["CLICKHOUSE_HOST", "CLICKHOUSE_HTTP_PORT", "CLICKHOUSE_CLUSTER"]),
         # ClickHouse's backup user, the runner's alone (the deployment's own is refused BACKUP).
         {"name": "CLICKHOUSE_USER", "value": CLICKHOUSE_BACKUP_USER},
-        {"name": "CLICKHOUSE_PASSWORD", "secret": CLICKHOUSE_BACKUP_PASSWORD},
+        {"name": "CLICKHOUSE_PASSWORD",
+         "secretKeyRef": {"name": BACKUP_SECRET, "key": BACKUP_SECRET_KEY}},
     ]  # fmt: skip
     return {
         "schedule": SCHEDULE,
@@ -335,8 +345,6 @@ def add_backups(
     values["backups"] = found
     deployment_user = str(values["environment"].get("CLICKHOUSE_USER", "default"))
     values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(deployment_user)
-    secrets = values["secrets"]
-    secrets["keys"] = sorted({*secrets["keys"], CLICKHOUSE_BACKUP_PASSWORD})
     return {"terraform/backups.tf": backups_terraform(config, platform)}
 
 
@@ -490,6 +498,12 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                 ("policy", "data.aws_iam_policy_document.backups_bucket.json"),
             ]),
             *roles,
+            # The backup user's password, a Secret of its own (never the shared one, loaded whole by
+            # the Conduit and the workers): ClickHouse and the backup's pods alone name it.
+            ('resource "random_password" "clickhouse_backup"',
+             [("length", "32"), ("special", "false")]),
+            _secret(BACKUP_SECRET,
+                    {_q(BACKUP_SECRET_KEY): "random_password.clickhouse_backup.result"}),
             _secret(OUTPUT_SECRET, {
                 OUTPUT_KEYS["bucket"]: "aws_s3_bucket.backups.bucket",
                 OUTPUT_KEYS["kms_key"]: "aws_kms_key.backups.arn",
