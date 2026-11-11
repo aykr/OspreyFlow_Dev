@@ -184,3 +184,15 @@ async def test_the_store_refuses_a_read_for_another_tenant(world) -> None:
     with pytest.raises(IdentityAdminRefused):
         await world.store.person(OTHER_TENANT, OID, SEEN)
     assert await world.store.rows() == []
+
+
+async def test_the_sockets_read_is_this_tenants_and_records_nobody(world) -> None:
+    """`standing`, which an open delta socket asks before each message: the stored roles and flag,
+    another tenant's same object id never read (rule 3), and nobody recorded by asking."""
+    await world.other.seed_first_administrators([OID])
+    assert await world.store.standing(OID) is None
+    assert await world.store.rows() == []
+    await world.store.seed_first_administrators([OID])
+    await EntraPeopleAdmin(world.store).set_enabled(OID, False)
+    stored = await world.store.standing(OID)
+    assert stored is not None and (stored.roles, stored.disabled) == ((ADMIN_ROLE,), True)

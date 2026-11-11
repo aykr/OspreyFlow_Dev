@@ -421,6 +421,18 @@ PLANTS = [
         ],
         [f"{PEOPLE}::test_the_rest_of_what_entra_holds_is_refused_in_words[remove]"],
     ),
+    Plant(
+        "the socket's read takes any tenant's row for an object id",
+        EP,
+        [
+            (
+                '"SELECT roles, disabled FROM entra_people WHERE tenant_id = $1 AND oid = $2",',
+                '"SELECT roles, disabled FROM entra_people WHERE ($1::text IS NOT NULL) AND oid = $2",',
+            )
+        ],
+        [f"{PEOPLE_LIVE}::test_the_sockets_read_is_this_tenants_and_records_nobody"],
+        live=True,
+    ),
     # --- the service identity ---
     Plant(
         "a service identity's tenant not pinned",
