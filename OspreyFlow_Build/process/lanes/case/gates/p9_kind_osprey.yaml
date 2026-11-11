@@ -1,0 +1,27 @@
+# P9's kind deployment (process/lanes/case/gates/p9_kind.sh): the cloud-platform profile on the `kind`
+# platform settings, its images in the cluster's own registry (the driver sets `registry` to the port
+# `up` found free). Synthetic. Only ArcadeDB, ClickHouse and its Keeper are deployed from the render
+# (p9_kind.py's `render`), with the backups.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+network:
+  public_origin: https://ospreyflow.p9.test
+cloud_platform:
+  platform: kind
+  namespace: ospreyflow-dev
+  environment: development
+  registry: localhost:5002
+# The map the Conduit reads at start (the render refuses a profile without one): tier 1, synthetic.
+map:
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "\xA9 OpenStreetMap contributors"
