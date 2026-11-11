@@ -219,6 +219,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    - **When you are up:** answer or deny docs' prompt. Then tell it that the v0.5.0 step was done on
      `lane/docs-v050`, and that it should rebase onto main and go back to the decks. The deck review's text is in
      `process/lanes/docs/` or with me.
+   - **The decks are rebuilt (05:50).** Review fixes 1–14 are made and the rule-editor slides filled; the stale-wording
+     check is at 0 hits. They are in `OspreyFlow_presentations/`, outside the repository. Three are yours to look at:
+     - the Pitch's v0.4.12 headline and [10] move to v0.5.0 once the tag exists;
+     - the prison script v5.3, Appendix E item 8: main has no Delete for a board;
+     - AE slide 11 and the prison editor slide's subtitle are the tightest fits.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
