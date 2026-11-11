@@ -32145,9 +32145,15 @@ Superset.
     and each container's resources are rows of `harness/cloud_platform/profile.yaml`, read and checked
     at render; an image of ours with no row is refused in words. A platform's own settings file may
     also come from a folder named in `OSPREY_PLATFORM_FOLDERS` (the kind platform is a test fixture).
-12. **The Ingress in front of the Glass** keeps its delta stream (a WebSocket) open and takes its
-    uploads: the controller's read and send timeouts are the Glass's own proxy's (1 h) and its body
-    size the Conduit's upload cap (512 MiB), each read from its source at render, never copied.
+12. **The Ingress in front of the Glass** keeps its delta stream (a WebSocket) open, and its own
+    body-size annotation does not refuse an upload the Conduit takes: the controller's read and send
+    timeouts are the Glass's own proxy's (1 h) and its `proxy-body-size` the Conduit's upload cap
+    (512 MiB), each read from its source at render, never copied. That is the annotation alone, not
+    a promise that a 512 MiB upload arrives: with ModSecurity on (the client's platform file turns
+    it on, `SecRuleEngine On`), ingress-nginx's bundled `modsecurity.conf` refuses any request body
+    over 12.5 MiB (`SecRequestBodyLimit 13107200`, `SecRequestBodyLimitAction Reject`) before
+    nginx's own limit is reached, so on that platform an upload over 12.5 MiB is refused at the
+    door until the platform team answers the open question below.
 13. **Resources**: every container names a CPU and memory request and a memory limit (no CPU limit),
     so a namespace's LimitRange never caps it by default, and ArcadeDB's heap is three quarters of
     its memory limit. The sizes are proposals, unmeasured on the platform.
@@ -32171,7 +32177,14 @@ them; kubeconform is run with `-ignore-missing-schemas`, so Calico's objects are
 whether Gatekeeper admits `supplementalGroups` (Keycloak's group 0); whether the controller's admission
 accepts the `modsecurity-snippet` annotation (some installs refuse snippets); whether the platform's
 certificate covers the `id.` and `bi.` names two labels below the deployment's (item 5); and whether
-the cluster runs node-local DNS (its address is outside `dnsNamespace`, which the allow policy names).
+the cluster runs node-local DNS (its address is outside `dnsNamespace`, which the allow policy names). Whether the controller's ModSecurity may take a larger `SecRequestBodyLimit` for this
+Ingress (in the `modsecurity-snippet`, if snippets are admitted) or exempt the upload paths, since its
+bundled 12.5 MiB limit refuses the Conduit's larger uploads (item 12); until it is answered, an
+upload over 12.5 MiB on the client's platform is refused. And what ResourceQuota the namespace is
+given: the render's requests total about 27 GiB of memory and 3.7 CPU in development (one of each
+store) and about 70 GiB and 9.7 CPU in production (ArcadeDB ×3, ClickHouse ×2, Keeper ×3), limits
+about 33 GiB and 86 GiB (item 13's unmeasured proposals); a quota below them leaves pods unscheduled,
+and the sizes, or the quota, change before the first install.
 
 ### ADR-143, Amendment 5 (9 November 2026) — promotion and a removed case's layer as built (L3.4)
 
