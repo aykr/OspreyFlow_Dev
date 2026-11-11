@@ -742,7 +742,9 @@ NGINX = "nginx.ingress.kubernetes.io/"
 def test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads() -> None:
     """The platform's controller closes a quiet connection after 60 s and refuses a body over
     1 MiB by default: the Glass's delta stream and its uploads need the Glass's own proxy's
-    timeouts (1h) and the Conduit's upload cap (512 MiB)."""
+    timeouts (1h) and the Conduit's upload cap (512 MiB). This holds the annotation alone: with
+    ModSecurity on, the controller's own 12.5 MiB body limit still refuses first (ADR-148 Amendment
+    1 item 12, an open question for the platform team)."""
     annotations = _values(_config())["ingress"]["annotations"]
     assert annotations[NGINX + "proxy-read-timeout"] == "3600"
     assert annotations[NGINX + "proxy-send-timeout"] == "3600"
@@ -786,6 +788,21 @@ def test_a_deployment_s_own_upload_cap_is_the_ingress_s() -> None:
     from harness.cloud_platform import UPLOAD_CAP_VARIABLE, upload_cap_bytes
 
     assert upload_cap_bytes({UPLOAD_CAP_VARIABLE: str(100 * 1024 * 1024)}) == 100 * 1024 * 1024
+
+
+@pytest.mark.parametrize("raw", ["104857600", "0", "-1", "lots", " 7 "])
+def test_the_ingress_reads_the_upload_cap_as_the_conduit_does(
+    raw: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The round-2 review of P7: the render read the deployment's setting as a bare `int`, so `0`
+    (which the Conduit reads as its default) became `proxy-body-size: 0m`, which nginx reads as no
+    limit at all, and `lots` stopped the render. The Conduit's own reading (`max_upload_bytes`) is
+    the one the Ingress follows, for every shape the setting can take."""
+    from harness.cloud_platform import UPLOAD_CAP_VARIABLE, upload_cap_bytes
+    from services.api.ingest_sources import max_upload_bytes
+
+    monkeypatch.setenv(UPLOAD_CAP_VARIABLE, raw)
+    assert upload_cap_bytes({UPLOAD_CAP_VARIABLE: raw}) == max_upload_bytes()
 
 
 # ---- resources (the independent review of P7, item 11) -------------------------------------------

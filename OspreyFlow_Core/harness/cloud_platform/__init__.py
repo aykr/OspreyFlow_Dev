@@ -479,9 +479,15 @@ def _constant_int(node: ast.expr) -> int:
 
 def upload_cap_bytes(environment: dict[str, Any], path: Path | None = None) -> int:
     """The Conduit's upload cap: the deployment's own setting if it gives one, else the Conduit's
-    default (`_DEFAULT_MAX_UPLOAD_BYTES` in `ingest_sources.py`, read from its source)."""
-    if UPLOAD_CAP_VARIABLE in environment:
-        return int(environment[UPLOAD_CAP_VARIABLE])
+    default (`_DEFAULT_MAX_UPLOAD_BYTES` in `ingest_sources.py`, read from its source). The setting
+    is read as the Conduit's `max_upload_bytes` reads it: a value that is not a whole number above
+    0 is the default (and never `0m`, which nginx reads as no limit at all)."""
+    try:
+        given = int(environment.get(UPLOAD_CAP_VARIABLE, ""))
+    except ValueError:
+        given = 0
+    if given > 0:
+        return given
     path = path or CONDUIT_UPLOADS
     for node in ast.parse(path.read_text(encoding="utf-8")).body:
         if isinstance(node, ast.Assign) and any(
@@ -570,8 +576,9 @@ def _resources(profile: ProfileSettings, name: str) -> dict[str, Any]:
     }
 
 
-def arcadedb_heap_gib(profile: ProfileSettings) -> int:
-    """ArcadeDB's `-Xmx`, whole GiB, from its container's memory limit."""
+def arcadedb_heap_gib_from_limit(profile: ProfileSettings) -> int:
+    """ArcadeDB's `-Xmx`, whole GiB, from its container's memory limit (not from a profile's floor,
+    as `harness.profiles.arcadedb_heap_gib` reads it for the other profiles)."""
     limit = _bytes(_resources(profile, "arcadedb")["limits"]["memory"])
     heap = int(limit * profile.arcadedb_heap_fraction // 1024**3)
     if heap < 1:
@@ -585,7 +592,7 @@ def arcadedb_heap_gib(profile: ProfileSettings) -> int:
 def _heap_from_the_limit(pod: dict[str, Any], profile: ProfileSettings) -> None:
     from harness.profiles import ARCADEDB_INITIAL_HEAP_GIB
 
-    heap = arcadedb_heap_gib(profile)
+    heap = arcadedb_heap_gib_from_limit(profile)
     opts = f"-Xms{min(ARCADEDB_INITIAL_HEAP_GIB, heap)}G -Xmx{heap}G -XX:+ExitOnOutOfMemoryError"
     pod["env"] = [
         {"name": e["name"], "value": opts} if e["name"] == "ARCADEDB_OPTS_MEMORY" else e
