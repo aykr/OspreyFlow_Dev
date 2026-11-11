@@ -74,6 +74,9 @@ PLANTS: list[tuple[str, str, str | list[str], str | list[str], list[str]]] = [
     ("ingress-isolation: a Calico ingress Allow beyond a selector passes (round 2)", CHECK,
      '            if rule.get("action") == "Allow" and set(source) != {"selector"}:\n', "            if False:\n",
      [T_CP + "test_a_calico_ingress_allow_beyond_a_selector_is_refused"]),
+    ("ingress-isolation: a Calico policy with no types read as no ingress policy (round 2, self-review 2)", CHECK,
+     '    return bool(spec.get("ingress")) or not spec.get("egress")\n', "    return False\n",
+     [T_CP + "test_a_calico_ingress_allow_in_a_policy_with_no_types_is_refused"]),
     ("chart: ospreyflow-public rendered behind the platform's Ingress", C + "deploy/helm/ospreyflow/templates/networkpolicies.yaml",
      '{{- if not (dig "enabled" false (.Values.ingress | default dict)) }}\n', "{{- if true }}\n",
      [T_CP + "test_the_render_passes"]),
@@ -91,7 +94,8 @@ PLANTS: list[tuple[str, str, str | list[str], str | list[str], list[str]]] = [
     ("ingress: the deployment's upload cap read as a bare int (round 2: 0 became 0m, no limit)", INIT,
      "    if given > 0:\n        return given\n",
      "    if UPLOAD_CAP_VARIABLE in environment:\n        return int(environment[UPLOAD_CAP_VARIABLE])\n",
-     [T_R + "test_the_ingress_reads_the_upload_cap_as_the_conduit_does"]),
+     [T_R + "test_the_ingress_reads_the_upload_cap_as_the_conduit_does",
+      T_R + "test_an_unset_or_empty_upload_cap_is_the_conduit_s_default"]),
     ("ingress: the upload cap's source bound at import (the defect the test found)", INIT,
      "def upload_cap_bytes(environment: dict[str, Any], path: Path | None = None) -> int:\n",
      "def upload_cap_bytes(environment: dict[str, Any], path: Path | None = CONDUIT_UPLOADS) -> int:\n",
@@ -212,9 +216,13 @@ def main() -> int:
         # Each failure's own text (its assertion or error lines), in full: the record shows why it failed.
         reasons = [line for line in done.stdout.splitlines() if line.startswith("E ")]
         summary = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else done.stderr[-200:]
-        if done.returncode == 0 or not failed:
+        # RED only if every listed test failed (a test id is a prefix of its parametrised cases' ids).
+        unfailed = [t for t in tests if not any(line.split(" ")[1].startswith(t) for line in failed)]
+        if done.returncode == 0 or not failed or unfailed:
             not_red += 1
             print(f"NOT RED  {what}\n    {summary}")
+            for test in unfailed:
+                print(f"    did not fail: {test}")
         else:
             print(f"RED      {what}  [{relative}]\n    {summary}")
             for line in failed:

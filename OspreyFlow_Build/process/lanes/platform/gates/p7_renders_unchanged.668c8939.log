@@ -1,0 +1,125 @@
+# p7_renders_unchanged.py --helm --base-tar (git archive a7bb34a OspreyFlow_Core, made on the Mac) a7bb34a, against this tree at
+# 668c8939 (tree 6873b70b), test server through stack_lease.sh offline platform (no stack, no lease; Docker for Helm), 11 November 2026.
+# Exit 1, by design: the cluster's helm template text differs from main's in two template comments and the quoted checksum
+# annotations (round 1, item 6); parsed as Kubernetes reads it, each is the same (the "helm template, parsed" lines).
+Running on ospreyflow-test (stack offline, osprey-runs/platform/OspreyFlow_Core/), logged at osprey-runs/platform.meta/runs/20261111T124547Z/log: .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_renders_unchanged.py --helm --base-tar=../OspreyFlow_Build/p7-base-a7bb34a.tar a7bb34a
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+DIFFERS  cluster-aws  helm template
+--- 
++++ 
+@@ -58,3 +58,5 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# The one door: the proxy, from anywhere.
++# The one door: the proxy, from anywhere. Not on a shared platform (ADR-148 decision 2), where the
++# platform's ingress controller is the door and `ospreyflow-from-ingress` admits it alone: a policy
++# admitting every address, there, would open any pod later labelled public to other tenants.
+ apiVersion: networking.k8s.io/v1
+@@ -592,5 +594,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "1c85ca2791871c56"
++        checksum/environment: "3dbe42d09d88a1b2"
+     spec:
+@@ -662,5 +665,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "1c85ca2791871c56"
++        checksum/environment: "3dbe42d09d88a1b2"
+     spec:
+@@ -770,5 +774,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "1c85ca2791871c56"
++        checksum/environment: "3dbe42d09d88a1b2"
+     spec:
+@@ -826,5 +831,6 @@
+same  cluster-aws  helm template, parsed
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+DIFFERS  cluster-azure  helm template
+--- 
++++ 
+@@ -58,3 +58,5 @@
+ # Source: ospreyflow/templates/networkpolicies.yaml
+-# The one door: the proxy, from anywhere.
++# The one door: the proxy, from anywhere. Not on a shared platform (ADR-148 decision 2), where the
++# platform's ingress controller is the door and `ospreyflow-from-ingress` admits it alone: a policy
++# admitting every address, there, would open any pod later labelled public to other tenants.
+ apiVersion: networking.k8s.io/v1
+@@ -649,5 +651,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "52a8c4cd40d16f91"
++        checksum/environment: "31072734ee84b7e3"
+     spec:
+@@ -719,5 +722,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "52a8c4cd40d16f91"
++        checksum/environment: "31072734ee84b7e3"
+     spec:
+@@ -827,5 +831,6 @@
+       annotations:
+-        # A changed configuration restarts what reads it.
+-        checksum/files: <checksum>
+-        checksum/environment: <checksum>
++        # A changed configuration restarts what reads it. Quoted: sixteen hex digits can be all
++        # digits, or digits round one `e`, which YAML reads as a number, and an annotation is text.
++        checksum/files: "52a8c4cd40d16f91"
++        checksum/environment: "31072734ee84b7e3"
+     spec:
+@@ -883,5 +888,6 @@
+same  cluster-azure  helm template, parsed
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+p7_renders_unchanged: 2 artefact(s) differ from a7bb34a
+Wall time: 7 s, exit 1 (no stack, no lease; set-up before it 27 s)
