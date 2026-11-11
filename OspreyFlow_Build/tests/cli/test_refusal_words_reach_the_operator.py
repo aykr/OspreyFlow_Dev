@@ -3,8 +3,8 @@ orchestrator's review of c5209b1, item 2; ADR-114 Amendment 39).
 
 The CLI streams every child's output through `run.Redactor`, which hides any line naming
 `password|secret|token`. Refresh's refusals name the variables Compose requires
-(`OSPREY_POSTGRES_PASSWORD`, `OSPREY_LITELLM_SALT_SECRET`) and Amendment 39's own words said "it keeps
-every secret", so `ospreyflow start --build` and `ospreyflow update` showed the operator only
+(`OSPREY_POSTGRES_PASSWORD`, `OSPREY_LITELLM_SALT_SECRET`) and Amendment 39's own words said "it
+keeps every secret", so `ospreyflow start --build` and `ospreyflow update` showed the operator only
 "[a line naming a secret was hidden]" where the route out should have been.
 
 Each case runs the real child (`python -m scripts.refresh`, or `harness.update`'s own printed lines)
@@ -44,11 +44,10 @@ def _child_env(directory: Path) -> dict[str, str]:
 
 
 def _start_build(directory: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
-    """What `ospreyflow start --build` runs (main.py `_start`), through what main.py runs it with."""
+    """What `ospreyflow start --build` runs (main.py `_start`), through what main.py runs it
+    with."""
     runner = SubprocessRunner(Redactor(directory / "deployment.env"))
-    code = runner(
-        [sys.executable, "-m", "scripts.refresh"], env=_child_env(directory), cwd=CORE
-    )
+    code = runner([sys.executable, "-m", "scripts.refresh"], env=_child_env(directory), cwd=CORE)
     return code, capsys.readouterr().out
 
 

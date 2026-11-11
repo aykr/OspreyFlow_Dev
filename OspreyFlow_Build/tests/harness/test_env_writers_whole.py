@@ -135,7 +135,8 @@ def test_no_module_writes_an_env_file_in_place() -> None:
     unexpected = _tree_writes() - ALLOWED
     assert not unexpected, (
         "these write deployment.env (or a folder's files by name) in place; send them through "
-        f"harness.atomic.replace_whole, or list a fresh copy in ALLOWED with its reason: {unexpected}"
+        "harness.atomic.replace_whole, or list a fresh copy in ALLOWED with its reason: "
+        f"{unexpected}"
     )
 
 

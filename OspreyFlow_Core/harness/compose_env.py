@@ -69,5 +69,6 @@ def locked_out(
         f"command on this deployment and nothing was changed. Run `ospreyflow apply{named}`: it "
         "renders the compose file again and keeps or mints every value it needs (a backup set "
         "from before the value existed does not hold it). To stop its containers meanwhile: "
-        f"docker ps -q --filter label=com.docker.compose.project={project(directory)} | xargs -r docker stop"
+        "docker ps -q --filter "
+        f"label=com.docker.compose.project={project(directory)} | xargs -r docker stop"
     )

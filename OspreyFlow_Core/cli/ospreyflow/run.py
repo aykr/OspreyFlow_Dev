@@ -20,7 +20,8 @@ _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
 #: private repository is read with `GITHUB_TOKEN`). Its value, and every other line, stays hidden.
 _NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)\b(?!\s*[=:])")
 #: The CLI's own modules' refusal words (`refresh: …`, `ospreyflow: …`; ADR-114 Amendment 39), which
-#: name the variables Compose requires and never a value (CARRIES, the orchestrator's review item 2).
+#: name the variables Compose requires and never a value (CARRIES, the orchestrator's review,
+#: item 2).
 _OUR_WORDS = re.compile(r"^(?:refresh|ospreyflow): ")
 #: In our own words, a variable's NAME in prose: upper case, and followed by a comma, a full stop,
 #: a closing mark, the end of the line or a joining word, never by `=`, `:`, a quote or a value.
@@ -193,5 +194,6 @@ def locked_out(
         f"command on this deployment and nothing was changed. Run `ospreyflow apply{named}`: it "
         "renders the compose file again and keeps or mints every value it needs (a backup set "
         "from before the value existed does not hold it). To stop its containers meanwhile: "
-        f"docker ps -q --filter label=com.docker.compose.project={name} | xargs -r docker stop"
+        "docker ps -q --filter "
+        f"label=com.docker.compose.project={name} | xargs -r docker stop"
     )

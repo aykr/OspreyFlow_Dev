@@ -69,9 +69,7 @@ def test_each_verb_names_the_missing_value_and_what_to_do(
     assert not any("compose" in argv for argv in rig.captured)
 
 
-def test_switch_stops_another_locked_out_deployment_by_its_label(
-    rig: Rig, tmp_path: Path
-) -> None:
+def test_switch_stops_another_locked_out_deployment_by_its_label(rig: Rig, tmp_path: Path) -> None:
     rig.install_deployment()
     other = _other_deployment(tmp_path / "second", "osprey-govuk")
     (other / "compose.yaml").write_text(LOCKED.replace("osprey-upg", "osprey-govuk"), "utf-8")
