@@ -1,0 +1,11 @@
+head bbd5721 with every p10p2/*.diff applied (9); stack_lease.sh offline admin (no stack)
+24.96s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+===== 2 failed, 11996 passed, 27 skipped, 91 warnings in 419.20s (0:06:59) =====
+make: *** [Makefile:166: test] Error 1
+
+Read (admin, 11 November 2026, 22:12Z): 11,996 passed, 2 failed, both the server's, as other lanes' gates record them:
+- test_webapp_preflight's GPU case (the server has a GPU, which the test assumes it has not; every lane's server gate);
+- test_render_memory's OpenSearch case, red alone too (run 20261111T220924Z), and in case's 27cc275, case-b's 5571caa7
+  and admin's own T1 part 4 gates before this step.

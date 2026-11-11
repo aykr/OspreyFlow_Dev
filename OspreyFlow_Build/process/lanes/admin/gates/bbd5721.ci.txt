@@ -1,0 +1,125 @@
+head bbd5721 with every p10p2/*.diff applied (9); stack_lease.sh offline admin (no stack)
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/InstallScreens.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/InstallingScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ModeScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ModelsScreen.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ModelsScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/PreflightScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ProfileScreen.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ProfileScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ReviewScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/vite.config.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/index.html'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/package.json'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/vitest.config.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/a11y'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/scripts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/a11y/installPage.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/a11y/playwright.config.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/actions.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/console_fixed_host.py'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/install-harness.html'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/install-harness.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/playwright.config.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/ports.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/registryCoverage.test.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/setup-harness.html'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/setup-harness.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/keyboard/setup-screens.spec.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/scripts/stamp.mjs'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/App.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/InstallApp.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/InstallApp.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/SummaryRail.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/SummaryRail.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/app.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/main.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/store.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/api'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/api/client.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/api/types.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/CloudScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ComponentsScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/DemoPacksScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/DomainScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/FoldersScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/GeospatialScreen.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/GeospatialScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/GovernanceScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/InstallScreens.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/InstallingScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ModeScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ModelsScreen.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ModelsScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/PreflightScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ProfileScreen.test.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ProfileScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/harness/src/screens/ReviewScreen.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/theme/theme.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/design/tokens.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/design/primitives.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/theme/theme.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/design/tokens.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/design/primitives.css'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/welcome/statement.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/brand/brand.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/brand/brand.ts'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/theme/ThemeToggle.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/package.json'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/design/primitives/IconButton.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/theme/ThemeToggle.tsx'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/package.json'
+[WebServer] file watcher error: EMFILE: too many open files, watch '/root/osprey-runs/admin/OspreyFlow_Core/apps/workspace/src/design/primitives/IconButton.tsx'
+  34 passed (23.8s)
+licence-check: 80 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+licence-check: 355 packages, all allowed.
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+============================== 8 passed in 2.23s ===============================
+Success! 9 passed, 0 failed.
+Success! 11 passed, 0 failed.
+Success! 12 passed, 0 failed.
+Success! 11 passed, 0 failed.
+1 chart(s) linted, 0 chart(s) failed
+============================= 54 passed in 12.38s ==============================
+development.yaml: 29 manifests, 0 violation(s)
+production-bedrock.yaml: 29 manifests, 0 violation(s)
+production.yaml: 29 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+================== 155 passed, 1 warning in 123.68s (0:02:03) ==================
+schemas-check: 601 generated types match committed output.
+authorized-query-check: 162 files under services/api, no offenders.
+demo-guide-check: 12 registered demo(s), all documented.
+domain-model-coverage-check: 104 class(es), 0 allowlisted, no new drift.
+route-coverage-check: 419 route(s), 0 allowlisted, no new drift.
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+test-file-coverage-check: 989 test file(s), 0 allowlisted, no new drift.
+doc-citations-check: 2576 file(s) scanned, every cited path exists.
+================ 17 passed, 2 skipped, 743 deselected in 2.13s =================
+0.24s call     tests/test_stack_lease.py::test_live_all_and_base_are_passed_to_the_selector
+============================= 128 passed in 23.55s =============================
+adr-reservations-check: every heading above the baseline is reserved.
+============================= 10 passed in 15.38s ==============================
+no-branches-check: 1632 files, no branch named.
+============================== 12 passed in 1.22s ==============================
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+============================== 28 passed in 1.44s ==============================
+
+Read (admin, 11 November 2026, 22:12Z): make -k ci green at bbd5721 with the nine diffs applied: no target failed
+(core-check's lint, typecheck and trivy; cp-policy-check 0 violations on the three fixtures and its 155 tests, helm's
+among them; route-coverage-check no new drift; test-file-coverage-check no new drift; schemas-check 601 types).
