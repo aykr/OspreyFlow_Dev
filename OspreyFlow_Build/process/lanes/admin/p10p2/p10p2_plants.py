@@ -347,6 +347,78 @@ PLANTS = [
         [f"{PEOPLE_LIVE}::test_first_administrators_are_seeded_once_and_a_removal_stands"],
         live=True,
     ),
+    # --- the delta socket (the lane review's finding 1) ---
+    Plant(
+        "an open socket's next message admitted without asking the store",
+        APP,
+        [
+            (
+                "        if await _socket_standing(app_, raw) is not None:\n            return None\n",
+                "",
+            )
+        ],
+        [
+            f"{PEOPLE}::test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[disabled-mid-socket]",
+            f"{PEOPLE}::test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[roles-taken-away]",
+        ],
+    ),
+    Plant(
+        "a person disabled here still stands at the socket",
+        APP,
+        [("    if stored is None or stored.disabled:\n", "    if stored is None:\n")],
+        [f"{PEOPLE}::test_a_socket_stands_only_while_the_store_says_so[disabled]"],
+    ),
+    Plant(
+        "a store that cannot answer leaves the socket open",
+        APP,
+        [("        return status.WS_1013_TRY_AGAIN_LATER\n", "        return None\n")],
+        [
+            f"{PEOPLE}::test_a_socket_stands_only_while_the_store_says_so[store-down]",
+            f"{PEOPLE}::test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[store-down]",
+        ],
+    ),
+    Plant(
+        "a ticket minted before a disable admitted at connect",
+        APP,
+        [
+            (
+                "    if (refused := await _socket_standing(websocket.app, raw)) is not None:\n"
+                "        await websocket.close(code=refused)\n        return\n",
+                "",
+            )
+        ],
+        [f"{PEOPLE}::test_the_stream_asks_the_store_before_its_first_send"],
+    ),
+    Plant(
+        "a duplicate object id answered in a sign-in name's words",
+        EP,
+        [
+            (
+                """        try:
+            return await self.store.add(oid, by)
+        except PersonExistsError:
+            raise PersonActionRefused(
+                "person_exists", f"{oid} is already in People: give them roles there."
+            ) from None""",
+                "        return await self.store.add(oid, by)",
+            )
+        ],
+        [f"{PEOPLE}::test_adding_a_person_already_recorded_is_refused"],
+    ),
+    Plant(
+        "a removal on Entra answered as if made",
+        EP,
+        [
+            (
+                """        raise _refused(
+            "A person is not removed here""",
+                """        return None  # type: ignore[return-value]
+        raise _refused(
+            "A person is not removed here""",
+            )
+        ],
+        [f"{PEOPLE}::test_the_rest_of_what_entra_holds_is_refused_in_words[remove]"],
+    ),
     # --- the service identity ---
     Plant(
         "a service identity's tenant not pinned",
@@ -380,6 +452,12 @@ PLANTS = [
         SI,
         [off('        if "tid" in claims:\n')],
         [f"{SERVICE}::test_an_entra_token_under_keycloaks_handling_is_refused[our-tenant]"],
+    ),
+    Plant(
+        "the API's own registration taken for an orchestrator on v1.0 tokens",
+        SI,
+        [("            self._mapping.api_client_id,\n", "")],
+        [f"{SERVICE}::test_on_v1_tokens_this_apis_own_registration_is_no_orchestrator"],
     ),
     # --- the realm's readers (readers.diff) ---
     Plant(
@@ -478,6 +556,21 @@ PLANTS = [
         ],
         [f"{RENDER}::test_keycloaks_deployment_file_is_as_it_was"],
     ),
+    Plant(
+        "report sync or Superset rendered on cloud-platform",
+        "harness/cloud_platform/__init__.py",
+        [off("    if config.reporting.sync or config.reporting.superset:\n")],
+        [
+            f"{RENDER}::test_report_sync_or_superset_switched_on_is_refused_naming_its_step[sync]",
+            f"{RENDER}::test_report_sync_or_superset_switched_on_is_refused_naming_its_step[superset]",
+        ],
+    ),
+    Plant(
+        "one of the realm's settings dropped from the list the render strips",
+        "harness/cloud_platform/__init__.py",
+        [('"OIDC_ADMIN_USERS_URL",\n', "")],
+        [f"{RENDER}::test_the_realms_settings_are_gone_and_entras_are_rendered"],
+    ),
     # --- the Glass (glass-sign-in.diff) ---
     Plant(
         "Entra's sign-in taken from an authority that is not Entra's",
@@ -529,6 +622,35 @@ PLANTS = [
         ],
         [
             "vitest:apps/workspace/src/admin/PeopleEntra.test.tsx::says Entra holds the accounts and offers add by object id, never invite, access, reset or remove"
+        ],
+    ),
+    Plant(
+        "the disabled refusal shown as a misconfiguration",
+        "apps/workspace/src/App.tsx",
+        [("    if (refusal && (await isDisabledRefusal(refusal))) {\n", "    if (false) {\n")],
+        [
+            "vitest:apps/workspace/src/App.test.tsx::the Conduit's disabled refusal is shown in its own words, not as a misconfiguration"
+        ],
+    ),
+    Plant(
+        "the disabled words found inside other words",
+        "apps/workspace/src/auth/disabledAccount.ts",
+        [
+            (
+                "    return body.detail === CONDUIT_DISABLED_DETAIL;\n",
+                '    return typeof body.detail === "string" && body.detail.includes(CONDUIT_DISABLED_DETAIL);\n',
+            )
+        ],
+        [
+            "vitest:apps/workspace/src/auth/disabledAccount.test.ts::never from the words inside other words"
+        ],
+    ),
+    Plant(
+        "the source check blind to an alias of the profile",
+        "apps/workspace/src/auth/resolvedPrincipal.test.ts",
+        [("  return aliases.some(", "  return false && aliases.some(")],
+        [
+            "vitest:apps/workspace/src/auth/resolvedPrincipal.test.ts::catches const c = user.profile; return c.roles;"
         ],
     ),
 ]
