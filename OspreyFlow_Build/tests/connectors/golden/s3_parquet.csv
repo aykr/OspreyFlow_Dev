@@ -1,0 +1,4 @@
+call_id,caller,duration_s,charged,cost,started_at,call_date,tags,note
+C-001,07700900001,62,true,0.25,2026-10-01T09:30:00+00:00,2026-10-01,"[""night"",""roaming""]",
+C-002,07700900002,0,false,0.00,2026-10-01T10:00:05+00:00,2026-10-01,[],"Synthetic, quoted"
+C-003,07700900003,3601,true,12.50,2026-10-02T23:59:59+00:00,2026-10-02,"[""long""]",

@@ -57,6 +57,12 @@ dependencies = [
     # GPL-2.0-or-later`; taken under Apache-2.0, which the licence gate admits as the OR's allowed
     # alternative.
     "dulwich>=1.2.21",
+    # The Studio's Athena connector (L1.9; ADR-148): AWS's own client for Athena's API, its
+    # request signing and its credential chain (on the `cloud-platform` profile, the namespace's
+    # IAM role for service accounts), so nothing signs a request by hand. Apache-2.0; already in
+    # uv.lock at 1.43.114 through cloudpathlib's extra; its own dependencies are jmespath (MIT),
+    # python-dateutil and urllib3 (already here). S3 reads go through pyarrow's own filesystem.
+    "botocore>=1.43.114",
 ]
 
 [dependency-groups]
@@ -88,6 +94,11 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "asyncpg.*"
+ignore_missing_imports = true
+
+# The Athena connector (L1.9): botocore ships no type stubs or py.typed marker.
+[[tool.mypy.overrides]]
+module = ["botocore", "botocore.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

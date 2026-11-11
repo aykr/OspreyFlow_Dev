@@ -29,8 +29,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import asyncpg
+import botocore.session
 import httpx
+import pyarrow.fs as pa_fs
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import BotoCoreError, ClientError
 from services.ingest.connectors import reads
+from services.ingest.connectors.athena_connector import read_athena
+from services.ingest.connectors.athena_connector import refused_request as athena_refused
 from services.ingest.connectors.reads import (
     ConnectorRefused,
     ReadRows,
@@ -40,6 +46,7 @@ from services.ingest.connectors.reads import (
     read_json,
     write_snapshot,
 )
+from services.ingest.connectors.s3_connector import ObjectStore, read_s3, refused_by_store
 from services.ingest.connectors.sql_connector import (
     Connect,
     Reach,
@@ -51,11 +58,15 @@ from services.ingest.connectors.sql_connector import (
 from schemas.sources import (
     ApiConnectionSettings,
     ApiRead,
+    AthenaConnectionSettings,
+    AthenaRead,
     Connection,
     ConnectionTest,
     IpAddress,
     JsonRead,
     Network,
+    S3ConnectionSettings,
+    S3Read,
     SourceTable,
     SqlConnectionSettings,
     SqlRead,
@@ -104,6 +115,31 @@ def resolve_host(host: str) -> list[str]:
     return found
 
 
+def cloud_s3_store(settings: S3ConnectionSettings) -> ObjectStore:
+    """The bucket, through pyarrow's S3 filesystem signed in as the deployment's own cloud identity
+    (L1.9; ADR-148): given no key, the SDK's own chain finds it (on the `cloud-platform` profile,
+    the namespace's IAM role for service accounts). Never given one: no connection holds a key.
+    Virtual-hosted, so the one host it reaches is `settings.host()`, the one the egress check
+    names."""
+    store: ObjectStore = pa_fs.S3FileSystem(
+        region=settings.region, scheme="https", access_key=None, secret_key=None,
+        allow_bucket_creation=False, allow_bucket_deletion=False,
+        connect_timeout=10, request_timeout=30,
+    )  # fmt: skip
+    return store
+
+
+def cloud_athena_client(settings: AthenaConnectionSettings) -> Any:
+    """botocore's Athena client, signed in as the deployment's own cloud identity (no key given,
+    so botocore's own chain finds it) and sent to `settings.host()` alone, the host the egress check
+    names, whatever an environment variable says."""
+    return botocore.session.get_session().create_client(
+        "athena", region_name=settings.region, endpoint_url=f"https://{settings.host()}",
+        config=BotoConfig(connect_timeout=10, read_timeout=30,
+                          retries={"max_attempts": 3, "mode": "standard"}),
+    )  # fmt: skip
+
+
 @dataclass
 class Readers:
     """What a read reaches, so a test can stand a fixture in for each (rule 15: each refuses what
@@ -117,6 +153,10 @@ class Readers:
     #: Where a connection may reach (`refuse_host`). A fixture on this machine (the leased stack's
     #: Postgres) stands one in that admits it; that is named wherever it is used.
     host_check: Callable[[str, str, Collection[str]], object] | None = None
+    #: A bucket and an Athena client for a cloud connection (L1.9). A test stands in SeaweedFS with
+    #: its own test credentials, or the recorded Athena; a deployment's sign in as its own identity.
+    s3_store: Callable[[S3ConnectionSettings], ObjectStore] = cloud_s3_store
+    athena_client: Callable[[AthenaConnectionSettings], Any] = cloud_athena_client
 
     def hosts(self) -> Collection[str]:
         return egress_allow_list() if self.allowed_hosts is None else self.allowed_hosts
@@ -307,6 +347,8 @@ def connection_host(settings: object) -> tuple[str, str] | None:
         return "sql", settings.host
     if isinstance(settings, ApiConnectionSettings):
         return "api", urlsplit(settings.base_url).hostname or ""
+    if isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
+        return settings.kind, settings.host()
     return None
 
 
@@ -425,6 +467,15 @@ async def read_rows(
         )  # fmt: skip
     if connection.kind == "json" and isinstance(read, JsonRead):
         return read_json(_json_files(dataset_id, read.pattern, root), read)
+    if isinstance(settings, S3ConnectionSettings) and isinstance(read, S3Read):
+        # The host on the egress allow-list first (ADR-148 decision 7), then the read, each off the
+        # event loop: both block.
+        await asyncio.to_thread(readers.check, "s3", settings.host())
+        return await asyncio.to_thread(read_s3, readers.s3_store(settings), settings, read)
+    if isinstance(settings, AthenaConnectionSettings) and isinstance(read, AthenaRead):
+        await asyncio.to_thread(readers.check, "athena", settings.host())
+        client = readers.athena_client(settings)
+        return await asyncio.to_thread(read_athena, client, settings, read)
     raise ConnectorRefused(
         f"the source's read is not one a {connection.kind} connection takes; nothing was read"
     )
@@ -507,4 +558,30 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
                 "declared in osprey.yaml's connectors.secrets",
             )
         return ConnectionTest(ok=True, words="The host is allowed and the secret is set.")
+    if isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
+        try:
+            return await asyncio.to_thread(_check_cloud, settings, readers)
+        except ConnectorRefused as refused:
+            return ConnectionTest(ok=False, words=str(refused))
     return ConnectionTest(ok=True, words="Files in the ingest folder: nothing to sign in to.")
+
+
+def _check_cloud(
+    settings: S3ConnectionSettings | AthenaConnectionSettings, readers: Readers
+) -> ConnectionTest:
+    """*Test connection* for S3 (the prefix listed, one level, nothing opened) and Athena (the
+    workgroup asked for), signed in as the deployment's own identity (L1.9)."""
+    if isinstance(settings, S3ConnectionSettings):
+        base = f"{settings.bucket}/{settings.prefix}".rstrip("/")
+        try:
+            readers.s3_store(settings).get_file_info(
+                pa_fs.FileSelector(base, recursive=False, allow_not_found=True)
+            )
+        except OSError as error:
+            raise refused_by_store(error) from error
+        return ConnectionTest(ok=True, words="The bucket answered, and its folder can be listed.")
+    try:
+        readers.athena_client(settings).get_work_group(WorkGroup=settings.workgroup)
+    except (ClientError, BotoCoreError) as error:
+        raise athena_refused(error) from error
+    return ConnectionTest(ok=True, words="Athena answered, and the workgroup is there.")

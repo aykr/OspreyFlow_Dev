@@ -1,0 +1,4 @@
+booking_id,prisoner_ref,visitor,booked_for,notes
+B-0001,SYN-P-001,Alex Fictional,2026-10-01 14:00:00.000,
+B-0002,SYN-P-002,"Sam Example, Jr",2026-10-02 10:30:00.000,"first visit; ""escorted"""
+B-0003,SYN-P-001,,2026-10-03 09:00:00.000,visitor withdrawn
