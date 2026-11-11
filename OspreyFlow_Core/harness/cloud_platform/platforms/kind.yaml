@@ -1,6 +1,6 @@
 # A kind cluster on the test server, set up to the client platform's rules (ADR-148 Consequences:
 # Calico's deny policy, no ReadWriteMany class), for P7's proof before a namespace exists
-# (`OspreyFlow_Build/process/lanes/platform/gates/p7_kind.sh`). Never a deployment's settings.
+# (the platform lane's kind script, in the build record). Never a deployment's settings.
 name: kind
 aws_region: eu-west-2
 ingress:
