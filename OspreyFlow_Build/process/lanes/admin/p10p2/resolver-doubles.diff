@@ -1,0 +1,326 @@
+diff --git a/OspreyFlow_Build/tests/connectors/test_sql_connector_live.py b/OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
+index aa63ae9..c7ed1b2 100644
+--- a/OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
++++ b/OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
+@@ -414,6 +414,9 @@ HANDLING = {
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_add_by_identifiers_route.py b/OspreyFlow_Build/tests/services/api/test_add_by_identifiers_route.py
+index 3771f28..a877d03 100644
+--- a/OspreyFlow_Build/tests/services/api/test_add_by_identifiers_route.py
++++ b/OspreyFlow_Build/tests/services/api/test_add_by_identifiers_route.py
+@@ -55,6 +55,9 @@ PATH = "/v1/investigations/case-e/working-set/add-by-identifiers"
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return ANALYST
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_admin_dataset_cases.py b/OspreyFlow_Build/tests/services/api/test_admin_dataset_cases.py
+index ca73738..9985b38 100644
+--- a/OspreyFlow_Build/tests/services/api/test_admin_dataset_cases.py
++++ b/OspreyFlow_Build/tests/services/api/test_admin_dataset_cases.py
+@@ -64,6 +64,9 @@ CONTENTS = ("Drawn suspect Kestrel", "07700 900123", "Blue Transit van")
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py b/OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py
+index fa8de72..8b2ada1 100644
+--- a/OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py
+@@ -61,6 +61,9 @@ def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool =
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return TOKENS[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_audit_section_routes.py b/OspreyFlow_Build/tests/services/api/test_audit_section_routes.py
+index 12d051f..8eafbe6 100644
+--- a/OspreyFlow_Build/tests/services/api/test_audit_section_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_audit_section_routes.py
+@@ -53,6 +53,9 @@ def _token(pid: str, roles: list[str], unit: str = "unit-1") -> None:
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return TOKENS[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_boards.py b/OspreyFlow_Build/tests/services/api/test_boards.py
+index f41328f..65b08e1 100644
+--- a/OspreyFlow_Build/tests/services/api/test_boards.py
++++ b/OspreyFlow_Build/tests/services/api/test_boards.py
+@@ -98,6 +98,9 @@ GRADE = {"source": "B", "intelligence": "2", "handling": "1"}
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_case_views.py b/OspreyFlow_Build/tests/services/api/test_case_views.py
+index e1c848d..57c5abe 100644
+--- a/OspreyFlow_Build/tests/services/api/test_case_views.py
++++ b/OspreyFlow_Build/tests/services/api/test_case_views.py
+@@ -63,6 +63,9 @@ CASES = {CASE: LEVELS, OTHER: {"bob": AccessLevel.AUTHOR, "alice": AccessLevel.E
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_cloud_connector_access.py b/OspreyFlow_Build/tests/services/api/test_cloud_connector_access.py
+index c1bbe7c..0ce1a49 100644
+--- a/OspreyFlow_Build/tests/services/api/test_cloud_connector_access.py
++++ b/OspreyFlow_Build/tests/services/api/test_cloud_connector_access.py
+@@ -57,6 +57,9 @@ CASES = {"a-1": {"case-a": ["ds-a"]}, "b-1": {"case-b": ["ds-b"]}, "adm-1": {}}
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_composite_read_only.py b/OspreyFlow_Build/tests/services/api/test_composite_read_only.py
+index 30e2fa8..962f0f0 100644
+--- a/OspreyFlow_Build/tests/services/api/test_composite_read_only.py
++++ b/OspreyFlow_Build/tests/services/api/test_composite_read_only.py
+@@ -159,6 +159,9 @@ def _without(monkeypatch: pytest.MonkeyPatch, *checks: str) -> None:
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return ROLED
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_composite_schedules.py b/OspreyFlow_Build/tests/services/api/test_composite_schedules.py
+index 696b4d9..3cc3b81 100644
+--- a/OspreyFlow_Build/tests/services/api/test_composite_schedules.py
++++ b/OspreyFlow_Build/tests/services/api/test_composite_schedules.py
+@@ -388,7 +388,12 @@ async def _case_route(
+     sites, held, recipes = _Sites(), _HeldRows(), _Recipes()
+     saved = {k: getattr(app_module.app.state, k, None)
+              for k in ("principal_resolver", "datasets", "investigations")}  # fmt: skip
+-    app_module.app.state.principal_resolver = SimpleNamespace(resolve=lambda token: OWNER)
++    async def _owner(token: str) -> Principal:
++        return OWNER
++
++    app_module.app.state.principal_resolver = SimpleNamespace(
++        resolve=lambda token: OWNER, resolve_principal=_owner
++    )
+     app_module.app.state.datasets = store
+     app_module.app.state.investigations = investigations
+     recipe = _recipe(case.id)
+diff --git a/OspreyFlow_Build/tests/services/api/test_connection_binding.py b/OspreyFlow_Build/tests/services/api/test_connection_binding.py
+index 0c4abcb..3f8ae0f 100644
+--- a/OspreyFlow_Build/tests/services/api/test_connection_binding.py
++++ b/OspreyFlow_Build/tests/services/api/test_connection_binding.py
+@@ -62,6 +62,9 @@ def _telco(request: httpx.Request) -> httpx.Response:
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_connector_private_hosts.py b/OspreyFlow_Build/tests/services/api/test_connector_private_hosts.py
+index 38d0bc9..5910794 100644
+--- a/OspreyFlow_Build/tests/services/api/test_connector_private_hosts.py
++++ b/OspreyFlow_Build/tests/services/api/test_connector_private_hosts.py
+@@ -168,6 +168,9 @@ PEOPLE = {"admin": Principal(id="adm-1", clearance="SECRET", org_unit="unit-1",
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_connector_routes.py b/OspreyFlow_Build/tests/services/api/test_connector_routes.py
+index b3578bb..93f9695 100644
+--- a/OspreyFlow_Build/tests/services/api/test_connector_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_connector_routes.py
+@@ -76,6 +76,9 @@ def _telco(request: httpx.Request) -> httpx.Response:
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_dataset_model_routes.py b/OspreyFlow_Build/tests/services/api/test_dataset_model_routes.py
+index 5c2647b..f05fe87 100644
+--- a/OspreyFlow_Build/tests/services/api/test_dataset_model_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_dataset_model_routes.py
+@@ -70,6 +70,9 @@ MODEL_ROUTES = [
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_dataset_scope.py b/OspreyFlow_Build/tests/services/api/test_dataset_scope.py
+index 00faac8..4142eba 100644
+--- a/OspreyFlow_Build/tests/services/api/test_dataset_scope.py
++++ b/OspreyFlow_Build/tests/services/api/test_dataset_scope.py
+@@ -64,6 +64,9 @@ PROVENANCE = Provenance(
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return ANALYST
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_dataset_sources.py b/OspreyFlow_Build/tests/services/api/test_dataset_sources.py
+index 67fd566..57e0c99 100644
+--- a/OspreyFlow_Build/tests/services/api/test_dataset_sources.py
++++ b/OspreyFlow_Build/tests/services/api/test_dataset_sources.py
+@@ -75,6 +75,9 @@ CASES = {
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_explore_routes.py b/OspreyFlow_Build/tests/services/api/test_explore_routes.py
+index 8e5ebe9..218f70a 100644
+--- a/OspreyFlow_Build/tests/services/api/test_explore_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_explore_routes.py
+@@ -39,6 +39,9 @@ ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", rol
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return ANALYST
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_grading_setting.py b/OspreyFlow_Build/tests/services/api/test_grading_setting.py
+index ebecbc6..f115029 100644
+--- a/OspreyFlow_Build/tests/services/api/test_grading_setting.py
++++ b/OspreyFlow_Build/tests/services/api/test_grading_setting.py
+@@ -56,6 +56,9 @@ def test_a_scheme_the_conduit_does_not_know_stops_it_rather_than_guessing(
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return Principal(id=token, clearance="OFFICIAL", org_unit="unit-1", roles=[])
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_home_cases.py b/OspreyFlow_Build/tests/services/api/test_home_cases.py
+index a3a8558..7f4c2e5 100644
+--- a/OspreyFlow_Build/tests/services/api/test_home_cases.py
++++ b/OspreyFlow_Build/tests/services/api/test_home_cases.py
+@@ -68,6 +68,9 @@ ROBOT = "service-account-loader"
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_list_connector_routes.py b/OspreyFlow_Build/tests/services/api/test_list_connector_routes.py
+index b2295d7..79ca2e1 100644
+--- a/OspreyFlow_Build/tests/services/api/test_list_connector_routes.py
++++ b/OspreyFlow_Build/tests/services/api/test_list_connector_routes.py
+@@ -61,6 +61,9 @@ MAPPING = (GOLDEN / "blank_client_list.mapping.json").read_text()
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return PEOPLE[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_needs_you.py b/OspreyFlow_Build/tests/services/api/test_needs_you.py
+index 621eafe..7fdc70f 100644
+--- a/OspreyFlow_Build/tests/services/api/test_needs_you.py
++++ b/OspreyFlow_Build/tests/services/api/test_needs_you.py
+@@ -66,6 +66,9 @@ def _token(account: PersonAccount) -> None:
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return TOKENS[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_person_ownership_route.py b/OspreyFlow_Build/tests/services/api/test_person_ownership_route.py
+index 5503862..a4ab34d 100644
+--- a/OspreyFlow_Build/tests/services/api/test_person_ownership_route.py
++++ b/OspreyFlow_Build/tests/services/api/test_person_ownership_route.py
+@@ -56,6 +56,9 @@ PROPOSAL_LABEL = "A proposed link type in the case Kestrel, waiting for a decisi
+ 
+ 
+ class _Resolver:
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return TOKENS[token]
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py b/OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py
+index abacf75..e4b1940 100644
+--- a/OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py
++++ b/OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py
+@@ -63,6 +63,9 @@ class _Accounts:
+     def __init__(self) -> None:
+         self.by_token: dict[str, Principal] = {}
+ 
++    async def resolve_principal(self, token: str) -> Principal:
++        return self.resolve(token)
++
+     def resolve(self, token: str) -> Principal:
+         return self.by_token[token]
+ 
