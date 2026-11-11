@@ -48,7 +48,7 @@ def _tofu(folder: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.mark.parametrize(
-    "fixture", ["development", "production", "production+opensearch", "production-bedrock"]
+    "fixture", ["development", "production", "production+opensearch", "production-bedrock", "poc"]
 )
 def test_the_terraform_is_formatted_and_valid(tmp_path: Path, fixture: str) -> None:
     """`production-bedrock` renders the gateway's own account and role (P11 part 2)."""
