@@ -55,6 +55,21 @@ CONFIGS = {
     },
 }  # fmt: skip
 
+#: P7b: the cloud-platform profile's standard shape, its two synthetic fixtures as `make
+#: cp-policy-check` renders them, unchanged but for the one intended difference there (below).
+for _shape in ("development", "production"):
+    CONFIGS[f"cloud-platform-{_shape}"] = json.loads(json.dumps(__import__("yaml").safe_load(
+        (CORE.parent / "OspreyFlow_Build" / "tests" / "fixtures" / "cloud_platform" / f"{_shape}.yaml")
+        .read_text(encoding="utf-8"))))  # fmt: skip
+
+#: The cloud-platform profile's ceiling (ADR-148 Amendment 5 point 8): OFFICIAL-SENSITIVE where the
+#: deployment names none, where the base held the scheme's highest. Forgiven there alone.
+CEILING = re.compile(r'(OSPREY_HIGHEST_MARKING:? ?=?("?))SECRET(\2)$', re.M)
+
+
+def intended(name: str, text: str) -> str:
+    return CEILING.sub(r"\1OFFICIAL-SENSITIVE\3", text) if name.startswith("cloud-platform-") else text
+
 DRIVER = r"""
 import hashlib, json, sys
 from schemas.deployment import OspreyConfig
@@ -155,6 +170,7 @@ def main(base: str, helm: bool = False, base_tar: str | None = None) -> int:
     for name in CONFIGS:
         for artefact in sorted(set(before[name]) | set(after[name])):
             a, b = before[name].get(artefact), after[name].get(artefact)
+            a = intended(name, a) if a is not None else None
             same = a is not None and b is not None and normalised(a) == normalised(b)
             print(f"{'same' if same else 'DIFFERS'}  {name}  {artefact}")
             if not same:
