@@ -197,6 +197,8 @@ Follows merges, never runs ahead of them for the guides:
   - **The welcome pages, the website and the GOV.UK theme's wording**, brought into line with one
     another and with the guides (the owner, 8 November: they diverge in places).
   - The website marks unbuilt features *coming*. This is **D2a**.
+- **Closed, 11 November 2026 (the owner): the decks are rationalised outside the build.** `OspreyFlow_presentations/` is
+  no lane's from now on; `D2B/CAPTURES_*.md` stays the list of screenshots still owed. The original entry follows for the record.
 - **D2b, the decks** (the owner, 8 November 2026): once the rule editor (L2.11) and drawing boards (L3.3) are
   merged and captured in the default and GOV.UK themes, every deck in `OspreyFlow_presentations/` updated for
   the rules engine (the Rules place and its editor), drawing boards and the one alert queue: the Product

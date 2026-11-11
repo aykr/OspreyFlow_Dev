@@ -392,6 +392,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       each paused at a safe point with a HANDOFF.md and resumed there; platform, platform-b and case-b stay on
       `ayan` so their runs are not broken; new lanes start on `sol` until the split holds. The orphan `vite` on the
       server's port 5893 (platform-b's, 18 h old) stopped at your word.
+    - **P12's live run on a real gateway (CI's pinned LiteLLM and Ollama, stood up on the server and torn down):**
+      Laurium's scoped key is proven (a chat call works; key and model admin routes refuse it). **Laurium could not
+      read the pinned 0.5B model's answer, 3 of 3** (the LiteLLM adapter's same case passed). Ruled on recommendation:
+      that one case is a strict expected failure on the conformance model only, recorded as "Laurium has not yet read
+      any real model's answer"; P12 part 2's exit gains a leased case on the client's own engine; D2c says so until it
+      passes. Overrule if you want a stronger pinned model or Laurium held back.
+    - **Your word, about 15:00:** D2b (the decks) closed, outside the build; `OspreyFlow_presentations/` left alone;
+      `D2B/CAPTURES_*.md` kept as the screenshots still owed. A v0.5.0 demo deployment in the GOV.UK look for your
+      demo on Friday 13 November, frozen and backed up, checked Thursday by midday; the test server quiet from 12:00
+      UK time on Friday until you say the demo is over.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
