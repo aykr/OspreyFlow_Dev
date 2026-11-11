@@ -1,0 +1,57 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T184029Z/log: bash -c uptime; cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_admin_guide.py; echo "py: exit $?"; cd apps/workspace && npx vitest run src/matrix/MatrixView.budget.test.tsx; echo "budget: exit $?"
+ 18:40:30 up 16 days,  3:18,  6 users,  load average: 2.60, 5.59, 10.23
+........................................................................ [ 76%]
+......................                                                   [100%]
+============================= slowest 30 durations =============================
+4.17s call     tests/test_lanes_heartbeat.py::test_watch_notifies_once_per_new_line_not_on_every_pass
+0.73s call     tests/test_lanes_heartbeat.py::test_the_lane_by_lane_view_is_kept_behind_lanes
+0.58s call     tests/test_lanes_heartbeat.py::test_the_default_view_fits_one_screen_and_names_each_lanes_current_step
+0.48s call     tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines
+0.44s call     tests/test_lanes_heartbeat.py::test_only_what_needs_the_owner_is_under_needs_you
+0.42s call     tests/test_lanes_heartbeat.py::test_an_estimate_is_cut_by_characters_never_through_one
+0.36s call     tests/test_lanes_heartbeat.py::test_a_needs_line_reads_the_same_ten_minutes_later
+0.34s call     tests/test_lanes_heartbeat.py::test_each_test_stack_is_shown_with_its_holder
+0.28s setup    tests/test_lanes_heartbeat.py::test_an_unknown_state_is_refused
+0.27s call     tests/test_lanes_heartbeat.py::test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_beats
+0.24s call     tests/test_lanes_heartbeat.py::test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[2-True]
+0.24s call     tests/test_lanes_heartbeat.py::test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners
+0.23s call     tests/test_lanes_heartbeat.py::test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[0-False]
+0.22s call     tests/test_lanes_heartbeat.py::test_a_waiting_for_owner_beat_needs_you
+0.22s call     tests/test_lanes_heartbeat.py::test_fresh_working_lanes_need_nothing
+0.22s call     tests/test_lanes_heartbeat.py::test_watch_shows_the_summary_unless_asked_for_the_full_view
+0.22s call     tests/test_lanes_heartbeat.py::test_a_lane_at_its_usage_limit_names_its_account_for_the_owner
+0.22s call     tests/test_lanes_heartbeat.py::test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled
+0.21s call     tests/test_lanes_heartbeat.py::test_a_waiting_beat_that_names_no_owner_is_the_orchestrators
+0.21s call     tests/test_lanes_heartbeat.py::test_the_lanes_shown_by_default_are_the_six_of_amendment_3
+0.21s call     tests/test_lanes_heartbeat.py::test_the_default_view_says_each_state_in_plain_words
+0.21s call     tests/test_lanes_heartbeat.py::test_a_stack_b_lease_older_than_its_limit_is_the_orchestrators
+0.20s call     tests/test_lanes_heartbeat.py::test_a_lease_older_than_its_limit_is_the_orchestrators
+0.20s call     tests/test_lanes_heartbeat.py::test_the_default_view_lists_only_steps_not_done_with_counts
+0.20s call     tests/test_lanes_heartbeat.py::test_the_default_views_lanes_table_names_each_lanes_step_and_next
+0.20s call     tests/test_lanes_heartbeat.py::test_a_working_beat_older_than_the_quiet_limit_is_the_orchestrators
+0.19s call     tests/test_lanes_heartbeat.py::test_the_default_view_shows_its_blocks_in_the_owners_order
+0.17s call     tests/test_lanes_heartbeat.py::test_show_prints_the_orchestrators_estimates_with_their_age
+0.17s call     tests/test_lanes_heartbeat.py::test_show_prints_no_estimates_section_without_the_file
+0.16s call     tests/test_lanes_heartbeat.py::test_a_lane_that_never_beat_needs_you
+94 passed in 13.79s
+py: exit 0
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 4045[2mms[22m[39m
+   [32m✓[39m MatrixView at 50,000 nodes and 250,000 links [2m(1)[22m
+     [33m[2m✓[22m[39m opens inside §5's first-frame budget, drawing one page of each table and saying so[33m 4043[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 18:40:45
+[2m   Duration [22m 5.03s[2m (tests 82%, environment 11%, transform 4%, import 3%)[22m
+
+
+Slowest 1 tests:
+  4043 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+budget: exit 0
+Wall time: 20 s, exit 0 (no stack, no lease; set-up before it 13 s)
