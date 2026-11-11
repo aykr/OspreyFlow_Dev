@@ -117,9 +117,9 @@ restore; every plant removed, `grep -c PLANT` 0 after each). Offline, closed por
 
 | Plant | Fault | Red |
 |---|---|---|
-| O1 | the three in-place writers (as at c5209b1) | `test_env_writers_whole.py`: the scan names all three; each writer's hard-link witness saw the rewrite (5 failed) |
-| O2 | the Redactor hiding our own words (as at c5209b1; then `if False:` for the new branch) | `test_refusal_words_reach_the_operator.py`: start --build's two refusals and update's line hidden (5 failed); planted, 3 failed |
-| O3 | `FilesHeld` skipping a symlink (as at c5209b1) | `test_refresh.py::…symlinked_file_through_its_link[compose.yaml, deployment.env]`: the target kept the refresh's bytes |
+| O1 | the three in-place writers (as at c5209b1) | `test_env_writers_whole.py`: the scan named all three (before `ALLOWED` gained `_put_back`, which then hid it: see L2); each writer's hard-link witness saw the rewrite (5 failed) |
+| O2 | the Redactor hiding our own words (as at c5209b1; then `if False:` for the new branch) | `test_refusal_words_reach_the_operator.py`: start --build's two refusals and update's line hidden (5 failed); planted, 3 failed: the gateway and update cases named no variable, so passed without the branch (see L3) |
+| O3 | `FilesHeld` skipping a symlink (as at c5209b1) | `test_refresh.py::…symlinked_file_through_its_link[compose.yaml, deployment.env]`: the target kept the refresh's bytes. **The test was then lost** (the round set aside with `git diff`, `checkout` and `apply` brought back only `store_volumes.py`) and committed without it; restored at L1 |
 | O4 | the owner taken from the staged file (`_owner_of(Path(staged))`) | with the path-keyed stand-in, both owner cases red; with c5209b1's any-path stand-in, the same plant **passed** |
 | O5 | the lock made under umask 077, an unreadable lock (as at c5209b1) | `…lock_file_is_644_whatever_the_umask`: 600; `…cannot_open_is_said_in_words`: PermissionError |
 | O6 | backup, restore, update, demo add, repair-sign-in unguarded (as at c5209b1) | `cli/test_compose_lockout.py`: those five red; map, grading, models green already (guarded, now tested) |
@@ -133,4 +133,17 @@ restore; every plant removed, `grep -c PLANT` 0 after each). Offline, closed por
 `test_the_lock_file_is_opened_read_only` failed on the Mac before any change of this round (its spy
 took no `dir_fd`, which macOS's `rmtree` passes); fixed with the round. `start --build` is left out of
 the lockout case on purpose: it hands to refresh, whose own refusal O2 holds.
+
+### Carries, after my own lane review of the round (11 November 2026, on the Mac, offline)
+
+| Plant | Fault | Red |
+|---|---|---|
+| L1 | `FilesHeld` skipping a symlink, planted back (`and not path.is_symlink()`) | the restored `test_refresh.py` case, both parameters |
+| L2 | `_put_back`'s own `shutil.copy2(item, directory / item.name)` put back on the real tree | the gate (`test_no_module_writes_an_env_file_in_place`, `test_the_gate_flags_c5209b1_s_put_back_copy`): `ALLOWED` now names the helper that refuses an env file, not `_put_back` |
+| L3 | the Redactor's branch removed (`if False:`) | the update case, now driven by the real `--files-only` child naming `OSPREY_POSTGRES_PASSWORD`, red with the rest (5 failed) |
+| L4 | the name-in-prose rule (as at c5209b1's round) | four lines shown with a value: `OSPREY_POSTGRES_PASSWORD is hunter2`, `…, hunter2`, `(OSPREY_X_SECRET) hunter2`, a child's `… was hunter2` |
+| L5 | the shell clause after "deployment.env does not hold" | `…shell_sets_empty_is_said_to_be_the_shell_s`: the file was said to lack a value it held |
+| L6 | `start --build` unguarded for a shell-emptied value | `test_start_build_refuses_a_value_the_shell_sets_empty`: refresh ran |
+| L7 | the lock's creation unguarded | `test_a_lock_this_account_cannot_make_is_said_in_words`: PermissionError |
+| L8 | update's arguments matched as whole tokens | `test_an_update_that_asks_no_compose_is_not_refused[--make-bundle=b.tar]`: refused |
 

@@ -30,8 +30,10 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
    `up` and the restarts, and by `update` from before its backup through the files step, the pull,
    the stores' move, `up`, the restarts and any rollback. `update` hands its open lock to its
    `--files-only` child by descriptor (`OSPREYFLOW_REFRESH_LOCK_FD`), believed only when it is that
-   very file and flocks. A second run is refused in words; a lock this account cannot open is said in
-   words naming it and `sudo rm`; a stage that a run under another account left and this one cannot
+   very file and flocks. `update` holds it from the moment it starts, its question to the operator
+   included. A second run is refused in words; a lock this account cannot open is said in words
+   naming it and `sudo rm`, and one it cannot make (the folder another account's, a read-only file
+   system) is said in words naming the folder; a stage that a run under another account left and this one cannot
    remove is refused in words naming it.
 3. **The restarts a files pass finds are owed until done** (`state/refresh-pending.json`, written
    whole): kept by `--files-only` for `update`, which clears it once its restarts are done; cleared by
@@ -52,14 +54,20 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
    not hold it) and how to stop the containers meanwhile by the project's label
    (`docker ps -q --filter label=… | xargs -r docker stop`, which runs nothing when none is up);
    `switch` stops another such deployment by its label. **Not refused there:** `doctor` (it must run
-   to say what is wrong), `start --build` (it hands to refresh, which refuses such a file in its own
-   words), `update --check` and `--make-bundle` (neither asks Compose), `demo list`.
+   to say what is wrong), `update --check`, `--make-bundle[=FILE]` and `--help` (none asks
+   Compose), `demo list`. `start --build` refuses there only a value this shell sets empty, which
+   refresh's own check (deployment.env alone) cannot see; a value deployment.env lacks it leaves to
+   refresh, which refuses it in its own words, now shown. The words say "which this shell sets
+   empty" for a value the file holds, never that the file lacks it.
 6a. **The operator sees refresh's and update's refusals**: the CLI's redactor hides a line naming
    `password|secret|token`, and these name the variables Compose requires. A line in our own words
-   (`refresh: …`, `ospreyflow: …`) is shown when every such word in it is a variable's name in prose
-   (upper case, followed by a comma, a full stop, a closing mark, the end of the line or a joining
-   word), never followed by `=`, `:`, a quote or a value; any other line naming a secret stays hidden.
-   The gateway refusal says "keeps every value deployment.env holds", no longer "every secret".
+   (`refresh: …`, `ospreyflow: …`) has its variable names passed **only inside our two fixed
+   phrases**: "A, B, which deployment.env does not hold" and "A, which this shell sets empty
+   (Compose reads the shell before deployment.env: unset A first)", the names upper case alone. A
+   name anywhere else in the line, and any other line naming a secret, stays hidden, so a child's
+   text update embeds (its last line) is shown only when it holds no secret word outside those
+   phrases. The gateway refusal says "keeps every value deployment.env holds", no longer "every
+   secret".
 7. **The chart's values-derived keys are quoted**: the `checksum/*` annotations, ConfigMap data keys
    and a file's `subPath` (a key reading as a number, bool or null broke the render or the workload).
 
@@ -81,3 +89,16 @@ order; none holds a secret); the CLI's and the preflight's other two env readers
 `.deployment.env.*.writing` left by a `SIGKILL` part way through a write is staged with the rest (in
 the `700` stage, removed with it) rather than removed; `harness.compose_env.locked_out` has no
 product caller of its own (it is the source the CLI's copy is held to by the parity test).
+From my own lane review of the round: **only refresh and update take the lock**, so `apply` (its
+own stores' move and writes), plain `start` and `switch` (`_stores_named`), `restore` and
+`repair-sign-in` can still act beside an update; `harness/update.py` now imports `fcntl` at its top,
+so it too is POSIX-only (it is imported by refresh and, lazily, by `apply` for a release install);
+the scan sees `write_text`, `write_bytes`, `open` and `os.open` for writing and `shutil`'s copies,
+not `copytree` or `os.fdopen`, and keys refresh's stage edits by function, so a call of those on the
+live folder would not be seen; `store_volumes`' put-back rewrites the rollback points' copies in
+place; refresh would write `deployment.env` in place if a compose file mounted `./deployment.env`;
+a file the staged pass creates new is moved into place with the umask's mode (under sudo with 077 a
+new mounted file would be `600`); `replace_whole` needs a symlinked `deployment.env`'s target folder
+writable, which an in-place write did not. **`OSPREYFLOW_REFRESH_LOCK_FD` and the lock's name
+(`.<deployment>.refresh-lock` beside the resolved folder) are a contract** between one release's
+`update` and the next release's `--files-only` child: kept stable, or changed with both sides.
