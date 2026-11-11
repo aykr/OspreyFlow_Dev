@@ -82,6 +82,37 @@ runs, all red, none missed (`P10_P1_RED_RECORD.md`, `gates/p10_plants_72d8719.tx
 `ruff format --check` and `mypy` are clean on the branch's diff (mypy also over `services/api/auth.py` and
 `harness/verify.py`). The gates follow below.
 
+**Gates at `5b0e6e1`** (main `459ae1d` unchanged, so no rebase). Both were run here directly, without a lease, on
+the offline ports, as the brief says.
+- **`make test`** (`gates/p10_5b0e6e1.test.txt`): 10,894 passed, 2 failed, 13 skipped, in 1,619 s (serial). Both
+  failures come from the environment, and neither test imports `principal_auth`:
+  - `test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly` reads `VALKEY_PORT=59993` from
+    the offline-port environment (got 59993, expected 6379). Part 4's handoff names this case (it must clear
+    `VALKEY_DB`/`VALKEY_PORT`).
+  - `test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass`: this server has a GPU,
+    so the preflight reported `pass` instead of `skip`.
+  
+  `live-collect` and `test-js` did not run, because make stops at the first failed recipe line.
+  - `live-collect` was then run on its own and passed (`gates/p10_5b0e6e1.live-collect.txt`).
+  - `test-js` was not run. The diff touches no JavaScript.
+- **`make -k ci`** (`gates/p10_5b0e6e1.ci.txt`): one target failed. `trivy-image-workspace` found two HIGH CVEs in
+  the nginx base image's `libxslt` 1.1.43-r3, fixed upstream in r4 (CVE-2026-87636, CVE-2026-9947). The image's
+  layers were all cached, and the P10 diff touches neither the workspace nor its Dockerfile. Every other target
+  passed: lint, typecheck, the other image scans, `harness-a11y`, every check and the bundle. `opentofu-check`'s
+  `tofu init` rewrote three `.terraform.lock.hcl` files; they were restored and are not committed.
+- **Not run:** a live check. P10 part 1 adds no live file and touches no store; `test_route_rights.py` is
+  unaffected (no route changed).
+
+**P10 part 1 built at `5b0e6e1`.** It reached built after two lane-reviewer rounds, with every finding fixed or
+carried with its test named. It is an access step, so it keeps two review rounds with the orchestrator when they
+are back (ADR-142 Amendment 8, point 7). Before ready-to-merge, part 1 needs:
+- the orchestrator's review;
+- an ADR-148 amendment number;
+- the owner's answer on roles. That answer is for part 2, but it bears on whether part 1's "no roles on Entra"
+  stands.
+
+The branch is left as gated.
+
 **Decisions taken** (the owner may overrule):
 1. *Groups granting more than one clearance: the lowest, or refused?* `spec/` is silent. **Refused** (and the
    same for two organisational units): `principal_auth` holds no marking scheme to order clearances by, so
