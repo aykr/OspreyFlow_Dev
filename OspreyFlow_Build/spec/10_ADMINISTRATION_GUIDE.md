@@ -847,7 +847,7 @@ platform's OpenSearch 2.x domain is made by default (`components.search` default
 but no pod is given its address yet, so it is unused. Caddy is not rendered: the platform's NGINX
 ingress is the front door, with ModSecurity on and the IP allow-list from `allow_from`. Local models
 and Whisper are not rendered, since the platform has no GPU; the model gateway (LiteLLM) is rendered
-only while a model engine is enabled. The Conduit's image is built without Java on this profile, so
+by default, with or without an engine enabled (section 6a.3 says which identity it runs as). The Conduit's image is built without Java on this profile, so
 *Admin › Maps*' **Build** says that the basemap cannot be built here; there is no way yet to bring a
 basemap built elsewhere onto the platform (*coming*), so the map uses its providers alone.
 
@@ -881,12 +881,13 @@ measurements**: no load has yet run on the platform.
 | Keycloak (until Entra ID) | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
 | The report sync, when reporting is on | 1 | 2 | 0.1 | 256 MiB | 512 MiB |
 | Superset, when reporting is on | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
-| The model gateway (LiteLLM), while an engine is enabled | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
+| The model gateway (LiteLLM) | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
 | Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
-With nothing that reaches out enabled in development, and reporting and an engine on in production,
-the requests come to **about 27 GiB of memory and 3.7 CPU in development**, and **about 70 GiB and 9.7
-CPU in production**; the memory limits to about 33 GiB and 86 GiB. A ResourceQuota on requests and
+With no engine enabled and reporting off in development (the gateway's pod is rendered all the same),
+and reporting and an engine on in production, the requests come to **about 27 GiB of memory and 4 CPU
+in development**, and **about 70 GiB and 9.7 CPU in production**; the memory limits to about 34 GiB
+and 86 GiB. A ResourceQuota on requests and
 memory limits must be at least this large, or pods are left unscheduled; one on `limits.cpu` refuses
 them whatever its size, until a CPU limit is set.
 
@@ -904,6 +905,7 @@ leaves it unchanged and `tofu validate` accepts it.
 | `opensearch.tf` | Only when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
+| `gateway.tf` | Only while a Bedrock engine is declared in `osprey.yaml`: the model gateway's own IAM role, allowed to invoke Bedrock's models in eu-west-2 (`bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream`) and nothing else, no S3 included, and trusted by the gateway's service account alone |
 | `ecr.tf` | A repository for each image, scanned on push |
 | `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password) as a sensitive variable |
 
@@ -929,7 +931,10 @@ its keys set blank in their own environment, so they never see them:
 | ClickHouse Keeper | Nothing |
 
 The Conduit, the workers and the report sync run as the service account `ospreyflow`, which reaches
-the buckets through its role. A password two readers name differently (`ARCADEDB_ROOT_PASSWORD`,
+the buckets through its role. The model gateway never runs as it: with no Bedrock engine declared it
+runs as the namespace's `default` service account, under no role, and while one is declared, as its
+own (`ospreyflow-gateway` on the platform's file), under `gateway.tf`'s role. A platform file naming
+no gateway account is refused at render, in words, when a Bedrock engine is declared. A password two readers name differently (`ARCADEDB_ROOT_PASSWORD`,
 `CLICKHOUSE_PASSWORD`, `OIDC_TOKEN_EXCHANGE_CLIENT_SECRET`) is written from the one
 `random_password`.
 
@@ -968,7 +973,7 @@ signed in to, stops the push. Signing in is yours, never the command's.
 
 **Known issue: the third-party images are copied by tag.** An unpinned render pins nothing, so its
 plan names each third-party image by its tag (ArcadeDB, ClickHouse, ClickHouse Keeper, Keycloak's
-`26.0`, which moves, and Postgres; the gateway, when it is rendered, alone by its digest). The pinned render then
+`26.0`, which moves, and Postgres; the gateway alone by its digest). The pinned render then
 looks each digest up again. If a tag moved in between, the values pin a digest the registry's copy
 does not have, and the pod does not start. Push and render again soon after one another, and check
 that each pinned third-party image is in the registry before installing.
@@ -983,7 +988,11 @@ open-egress policy is not rendered. The allow policy admits:
 - the cluster's DNS (in `kube-system`) and the namespace's own pods;
 - the platform's managed networks, where RDS, ElastiCache and OpenSearch answer;
 - S3 and STS, on every render (the buckets, and the service account's role);
-- each enabled model engine's host;
+- each model engine's host, while that engine is declared in `osprey.yaml` at render. With no engine
+  declared, no engine's host is allowed. An engine disabled in *Admin › Models* keeps its host open
+  until the next render, and one first added there is refused until it is declared, rendered again and
+  the Terraform applied (section 10.1). The gateway's pod takes the namespace's egress, like every
+  other pod;
 - each proxied map provider's source or endpoint;
 - the mail server, when one is set, which Keycloak reaches;
 - each host in `cloud_platform.connector_hosts`, which a SQL or API connection may reach: the same list
@@ -1123,7 +1132,6 @@ one real token from the organisation's development tenant is to settle each:
 - **Backups and restore**: a scheduled backup of ArcadeDB and ClickHouse to S3, encrypted, and a
   restore rehearsed on the development namespace, with its measured times.
 - **The volume-expansion and upgrade runbooks** for ArcadeDB and ClickHouse.
-- **The model gateway rendered by default.**
 - **Laurium, the extraction service**, in the profile, with its egress line.
 - **The S3 and Athena connections' role and egress lines** in the namespace.
 - **A basemap on the platform**: the tiles bucket, and a basemap built elsewhere brought onto it.
