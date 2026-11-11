@@ -1,10 +1,10 @@
-# as of 2026-11-11T21:00Z
+# as of 2026-11-11T21:10Z
 admin	P10	part 1 merged (listed for you); part 2 building: roles in Postgres by tenant and oid (ruled, listed for you)	13 Nov	B
-case	P9	round 3: the backup password in its own Secret, verify ties a set together, ClickHouse restored beside the live one then swapped, retention the agreed total, decommission's kept bucket fixed, single-replica enforced; then gates	13 Nov, morning	B
-case-b	P12	part 2 round 1: the routing marker at the review queue's route only (email and document content stay Deep read); the Conduit's wiring tested; merges after P7b with its network row	part 2 14 Nov	B
+case	P9	round 3 done short of built (kind green, 68 of 68 reds, 71 s round trip); rebases after P7b, then gates and merge	12 Nov	B
+case-b	P12	part 2 accepted after three rounds; paused until P7b, then rebase and merge with the owner's release.yml patch; Laurium stays the preset (owner)	12 Nov	B
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
-platform	P7b	per-workload egress and ingress, secrets by need, P9's rows: gating now; lands after P9, before the server's quiet window at 12:00 UK on 13 Nov if P9 is in, else 14 Nov	13 Nov, before 12:00, or 14 Nov	B
+platform	P7b	ready after its final review's 8 fixes; the orchestrator's re-check and merged-tree gates running; lands tonight, ahead of P9	11 Nov, tonight	B
 docs	D2c	parts 1 and 2 merged (guide 1.81); backups after P9, the profile side after P10 part 2	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5 reviewed twice, not ready: fixes queued behind P10 part 2 (T1P5_FINDINGS.md); reset split to its own step	14 Nov	A
