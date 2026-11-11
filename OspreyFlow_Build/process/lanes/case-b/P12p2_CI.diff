@@ -1,0 +1,54 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 20487ac..bfe8595 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -388,6 +388,23 @@ jobs:
+           ignore-unfixed: true
+           exit-code: "1"
+ 
++  # ADR-135 Amendment 6 (P12 part 2): Laurium's own image, built from its folder alone, scanned as every image of ours.
++  trivy-image-laurium:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - run: docker build -f services/laurium/Dockerfile -t ospreyflow/laurium:ci services/laurium
++      - uses: aquasecurity/trivy-action@v0.24.0
++        with:
++          version: v0.76.1
++          trivyignores: OspreyFlow_Core/.trivyignore
++          image-ref: ospreyflow/laurium:ci
++          scan-type: image
++          scanners: vuln
++          severity: HIGH,CRITICAL
++          ignore-unfixed: true
++          exit-code: "1"
++
+   schemas-check:
+     runs-on: ubuntu-latest
+     steps:
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 91ac74e..3f4b306 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -92,6 +92,12 @@ jobs:
+             # itself once released — baking the exact commit every other image in this matrix was
+             # built from is what makes a pull-mode render's owned-image tag match what got pushed.
+             build_args: "OSPREY_BUILT_FROM_SHA=${{ github.sha }}"
++          # ADR-135 Amendment 6 (P12 part 2): Laurium's image, beside the Conduit's (the same registry and
++          # commit, `harness.laurium.laurium_image`), built from its own folder alone.
++          - service: laurium
++            dockerfile: services/laurium/Dockerfile
++            context: services/laurium
++            build_args: ""
+     steps:
+       - uses: actions/checkout@v4
+ 
+@@ -112,7 +118,7 @@ jobs:
+             -f ${{ matrix.dockerfile }} \
+             ${{ matrix.build_args && format('--build-arg {0}', matrix.build_args) || '' }} \
+             -t ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ github.sha }} \
+-            .
++            ${{ matrix.context || '.' }}
+ 
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
