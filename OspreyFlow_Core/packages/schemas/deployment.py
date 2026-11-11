@@ -288,6 +288,17 @@ EngineKind = Literal["provider", "gateway", "bedrock"]
 EngineAuth = Literal["key", "iam_role"]
 #: ADR-135 Amendment 4 (b): Bedrock in the client's London region, and nowhere else.
 BEDROCK_REGION = "eu-west-2"
+#: ADR-135 Amendment 7 decision 1: Amendment 4's engine kinds and their rules are the
+#: `cloud-platform` profile's (ADR-148) alone. On every other profile an engine is a provider by its
+#: name and key, exactly as before Amendment 4 (an engine named `bedrock` included). Named by value:
+#: the profile's own `Profile` member is P7's.
+MODEL_ROUTE_PROFILE = "cloud-platform"
+MODEL_ROUTE_PROFILES: frozenset[str] = frozenset({MODEL_ROUTE_PROFILE})
+#: ADR-135 Amendment 7 decision 2: a Bedrock model is named by its own id (`anthropic.…`). An
+#: inference profile's id puts a geography before it (`eu.`, `us.`, `apac.`, `global.`, …) and may
+#: send the call outside London; AWS's own guide says not to rely on the prefix alone to tell where
+#: it goes, so any id with a part before the provider's is refused, and so is an ARN.
+_BEDROCK_MODEL_ID = re.compile(r"[a-z0-9-]+\.[^.\s:]+(:[^.\s]+)?")
 
 
 class ModelProviderConfig(BaseModel):
@@ -328,19 +339,20 @@ class ModelProviderConfig(BaseModel):
     )
     kind: EngineKind = Field(
         default="provider",
-        description="ADR-135 Amendment 4: provider (a hosted provider LiteLLM knows by name), "
-        "gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon "
-        "Bedrock in London). Default: provider.",
+        description="ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by "
+        "name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible "
+        "AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.",
     )
     auth: EngineAuth | None = Field(
         default=None,
-        description="ADR-135 Amendment 4: key (entered in Admin › Models, kept by the model "
-        "gateway alone) or iam_role (the namespace's IAM role: no key is stored). Default: "
-        "iam_role for bedrock, else key.",
+        description="ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the "
+        "model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM "
+        "role: no key is stored). Default: iam_role for bedrock, else key.",
     )
     region: str | None = Field(
         default=None,
-        description="Bedrock's region: eu-west-2 (London) only, and the default for bedrock.",
+        description="Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and "
+        "the default for bedrock.",
     )
 
     @field_validator("name")
@@ -413,56 +425,22 @@ class ModelProviderConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _signs_in_as_its_kind_allows(self) -> ModelProviderConfig:
-        """ADR-135 Amendment 4: Bedrock by the namespace's IAM role in London, with no stored key
-        and no address of its own; the client's gateway at its address, by a token or the role; any
-        other provider by its key. Each refusal names the field, never a value."""
+    def _signs_in_as_its_kind_does(self) -> ModelProviderConfig:
+        """ADR-135 Amendment 4's defaults, on any profile: Bedrock signs in by the namespace's IAM
+        role in London, any other kind by its key. **What each profile allows is not decided
+        here** but by `engine_refusal`, which every reader of an engine calls with the
+        deployment's profile (ADR-135 Amendment 7 decision 1)."""
         if self.auth is None:
             self.auth = "iam_role" if self.kind == "bedrock" else "key"
-        if self.kind == "bedrock":
-            if self.auth != "iam_role":
-                raise ValueError(
-                    "Bedrock is reached by the namespace's IAM role, so no key is kept for it; "
-                    "choose the IAM role"
-                )
-            if self.api_base is not None:
-                raise ValueError(
-                    "Bedrock is reached at its own London address; an engine of this kind takes "
-                    "no address"
-                )
-            if self.region is None:
-                self.region = BEDROCK_REGION
-            if self.region != BEDROCK_REGION:
-                raise ValueError(
-                    f"Bedrock is used in London only ({BEDROCK_REGION}); no other region is allowed"
-                )
-            return self
-        if self.name == "bedrock":
-            # LiteLLM routes a provider by its name, so a `bedrock` provider would reach Bedrock by
-            # a stored key and in no fixed region: Bedrock is reached only as its own kind.
-            raise ValueError(
-                "bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; "
-                "choose that kind of engine"
-            )
-        if self.region is not None:
-            raise ValueError("only a Bedrock engine takes a region")
-        if self.kind == "gateway" and self.api_base is None:
-            raise ValueError("your organisation's AI gateway needs its address (https://…)")
-        if self.kind == "gateway" and self.auth == "iam_role":
-            # Held (platform-b server log, Q1): LiteLLM's OpenAI-compatible route sends no request
-            # without a token, and how the client's gateway takes the namespace's identity is not
-            # yet known. Refused rather than offered to analysts and failing every call.
-            raise ValueError(
-                "your organisation's AI gateway signs in by a token for now: signing in by the "
-                "namespace's IAM role waits for your gateway's owners to say how it accepts the "
-                "role"
-            )
-        if self.kind == "provider" and self.auth == "iam_role":
-            raise ValueError(
-                "only your organisation's AI gateway or Bedrock sign in by the namespace's IAM "
-                "role; a provider signs in by its key"
-            )
+        if self.kind == "bedrock" and self.region is None:
+            self.region = BEDROCK_REGION
         return self
+
+    @property
+    def plain(self) -> bool:
+        """A provider by its key with no region: the only engine there was before Amendment 4, and
+        the only one any profile but `cloud-platform` takes."""
+        return self.kind == "provider" and self.auth == "key" and self.region is None
 
     @property
     def keyless(self) -> bool:
@@ -474,6 +452,105 @@ class ModelProviderConfig(BaseModel):
         OpenAI-compatible route, Bedrock through its own, any other provider by its name."""
         prefix = {"gateway": "openai", "bedrock": "bedrock"}.get(self.kind, self.name)
         return f"{prefix}/{model}"
+
+
+def engine_kinds_offered(profile: str) -> list[EngineKind]:
+    """The kinds of engine *Admin › Models* offers on `profile` (ADR-135 Amendment 7 decision 1)."""
+    if profile in MODEL_ROUTE_PROFILES:
+        return ["provider", "gateway", "bedrock"]
+    return ["provider"]
+
+
+def _address_refusal(address: str) -> str | None:
+    """ADR-135 Amendment 7 decision 3: an address is an address alone. A key pasted into it, before
+    the host (`https://<key>@host`) or after it (`?api-key=<key>`, `#…`), would be kept in the
+    models file, the gateway's entries and the audit, and shown in *Admin › Models*."""
+    parts = urlsplit(address)
+    if "@" in parts.netloc:
+        return (
+            "the address carries a name or key before its host (https://…@…); give the address "
+            "alone, and the key or token with Enter key"
+        )
+    if parts.query or parts.fragment or "?" in address or "#" in address:
+        return (
+            "the address carries a query or fragment (?… or #…), where a key is often pasted; "
+            "give the address alone, and the key or token with Enter key"
+        )
+    return None
+
+
+def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
+    """What `profile` refuses in `provider`, in fixed words that name a field and never quote a
+    value, or None (ADR-135 Amendment 7). Called by every reader of an engine with the deployment's
+    profile: `OspreyConfig` (`osprey.yaml`), the Conduit's start (`Installed.from_env`), the models
+    file (`ModelSettingsFile.load`) and each change in *Admin › Models* (`ModelAdmin._validated`).
+
+    **Off `cloud-platform`**, an engine is a provider by its key, as before Amendment 4: an engine
+    named `bedrock` is LiteLLM's Bedrock provider by its key there, as it always was (ADR-135
+    decision 1). **On `cloud-platform`**, Amendment 4's rules: Bedrock by the namespace's IAM role
+    in London, by a model's own id; the client's gateway at its address alone, by a token; no
+    engine named `bedrock` but Bedrock; no label shaped like a key."""
+    if profile not in MODEL_ROUTE_PROFILES:
+        if provider.plain:
+            return None
+        return (
+            "your organisation's AI gateway, Amazon Bedrock in London and signing in by the "
+            f"namespace's IAM role are for profile: {MODEL_ROUTE_PROFILE} (ADR-135 Amendment 4); "
+            "on this deployment an engine is a provider, reached by its name and its key"
+        )
+    if provider.label and _looks_like_a_key(provider.label):
+        return (
+            "the label looks like a key; it is shown to analysts, so give the engine's name in "
+            "words, and the key or token with Enter key"
+        )
+    if provider.api_base is not None and (refused := _address_refusal(provider.api_base)):
+        return refused
+    if provider.kind == "bedrock":
+        if provider.auth != "iam_role":
+            return (
+                "Bedrock is reached by the namespace's IAM role, so no key is kept for it; choose "
+                "the IAM role"
+            )
+        if provider.api_base is not None:
+            return (
+                "Bedrock is reached at its own London address; an engine of this kind takes no "
+                "address"
+            )
+        if provider.region != BEDROCK_REGION:
+            return f"Bedrock is used in London only ({BEDROCK_REGION}); no other region is allowed"
+        for role, model in provider.roles.items():
+            if not _BEDROCK_MODEL_ID.fullmatch(model):
+                return (
+                    f"Bedrock is used in London only: the {role} model is not a model's own id "
+                    "(such as anthropic.…). A cross-region inference profile's id (eu.…, us.…, "
+                    "apac.…, global.…) or an ARN may send the call outside London"
+                )
+        return None
+    if provider.name == "bedrock":
+        # LiteLLM routes a provider by its name, so a `bedrock` provider would reach Bedrock by a
+        # stored key and in no fixed region: on this profile Bedrock is reached only as its kind.
+        return (
+            "bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; "
+            "choose that kind of engine"
+        )
+    if provider.region is not None:
+        return "only a Bedrock engine takes a region"
+    if provider.kind == "gateway" and provider.api_base is None:
+        return "your organisation's AI gateway needs its address (https://…)"
+    if provider.kind == "gateway" and provider.auth == "iam_role":
+        # Held (platform-b server log, Q1): LiteLLM's OpenAI-compatible route sends no request
+        # without a token, and how the client's gateway takes the namespace's identity is not yet
+        # known. Refused rather than offered to analysts and failing every call.
+        return (
+            "your organisation's AI gateway signs in by a token for now: signing in by the "
+            "namespace's IAM role waits for your gateway's owners to say how it accepts the role"
+        )
+    if provider.kind == "provider" and provider.auth == "iam_role":
+        return (
+            "only your organisation's AI gateway or Bedrock sign in by the namespace's IAM role; a "
+            "provider signs in by its key"
+        )
+    return None
 
 
 def provider_key_variable(provider: str, *, single: bool = False) -> str:
@@ -1571,6 +1648,14 @@ class OspreyConfig(BaseModel):
                 "a managed Valkey or search is for profile: cluster; Small runs its own on the "
                 "server"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _engines_suit_the_profile(self) -> OspreyConfig:
+        """ADR-135 Amendment 7 decision 1: each engine as this profile allows (`engine_refusal`)."""
+        for provider in self.models.enabled_providers:
+            if refused := engine_refusal(provider, self.profile.value):
+                raise ValueError(f"models.providers: {provider.name}: {refused}")
         return self
 
     @model_validator(mode="after")

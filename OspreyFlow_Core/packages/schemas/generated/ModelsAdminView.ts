@@ -21,15 +21,15 @@ export type PrivacyContract = boolean;
  */
 export type ContractReference = string | null;
 /**
- * ADR-135 Amendment 4: provider (a hosted provider LiteLLM knows by name), gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
+ * ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
  */
 export type Kind = "provider" | "gateway" | "bedrock";
 /**
- * ADR-135 Amendment 4: key (entered in Admin › Models, kept by the model gateway alone) or iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key.
+ * ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key.
  */
 export type Auth = ("key" | "iam_role") | null;
 /**
- * Bedrock's region: eu-west-2 (London) only, and the default for bedrock.
+ * Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock.
  */
 export type Region = string | null;
 export type KeyState = "set" | "none" | "lost" | "iam_role";
@@ -44,6 +44,7 @@ export type Engines = AdminEngine[];
 export type LocalOnly = boolean;
 export type SendableHandlingCodes = string[];
 export type Source = "osprey.yaml" | "models file";
+export type EngineKinds = ("provider" | "gateway" | "bedrock")[];
 
 /**
  * `GET /v1/admin/models`.
@@ -55,6 +56,7 @@ export interface ModelsAdminView {
   local_only: LocalOnly;
   sendable_handling_codes: SendableHandlingCodes;
   source: Source;
+  engine_kinds?: EngineKinds;
   [k: string]: unknown;
 }
 /**

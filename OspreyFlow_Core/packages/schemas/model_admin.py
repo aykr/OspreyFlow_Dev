@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
-from schemas.deployment import ModelProviderConfig
+from schemas.deployment import EngineKind, ModelProviderConfig
 
 #: `iam_role`: the engine signs in by the namespace's IAM role (ADR-135 Amendment 4), so it has no
 #: key to set, lose or remove.
@@ -38,6 +38,11 @@ ConnectionOutcome = Literal[
     "gateway_token",
     "key_refused",
     "model_not_offered",
+    # ADR-135 Amendment 7 decision 5: Bedrock's model access not granted, its sign-in expired, and a
+    # client gateway's 4xx in a shape that is not OpenAI's.
+    "model_not_enabled",
+    "sign_in_expired",
+    "request_refused",
     "cooling_down",
     "rate_limited",
     "unreachable",
@@ -45,6 +50,8 @@ ConnectionOutcome = Literal[
 
 
 BudgetPeriod = Literal["day", "month"]
+#: What every profile but `cloud-platform` offers (ADR-135 Amendment 7 decision 1).
+_PROVIDER_ONLY: tuple[EngineKind, ...] = ("provider",)
 
 
 class EngineLimits(BaseModel):
@@ -95,6 +102,9 @@ class ModelsAdminView(BaseModel):
     #: Where the settings come from: `osprey.yaml` until the first change here, then the
     #: models file.
     source: Literal["osprey.yaml", "models file"]
+    #: The kinds of engine this deployment's profile takes (ADR-135 Amendment 7 decision 1): a
+    #: provider alone, or on `cloud-platform` also the client's gateway and Bedrock in London.
+    engine_kinds: list[EngineKind] = Field(default_factory=lambda: list(_PROVIDER_ONLY))
 
 
 class EngineInput(BaseModel):
