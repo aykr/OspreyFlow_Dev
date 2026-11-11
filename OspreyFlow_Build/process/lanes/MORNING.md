@@ -503,6 +503,19 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **The heartbeat's `watch` now prints the default view** (d507f9c). Restart your monitor to see it:
         `OspreyFlow_Build/scripts/lanes_heartbeat.sh watch 60`.
       - **Studio-b started L1.9 part 2** on sol (S3 and Athena on cloud-platform; ADR-140 Amendment 21).
+      - **The overall step count is now in the default view** (cd66ed7).
+      - **L1.9 part 2 is ready** (17c243a9), and my independent review of it is running. Three lane-tool tests
+        failed under `-n auto` in studio-b's run but pass alone. They are timing failures in my own tools,
+        to look at after the merges.
+      - **P9 rebased onto P7b.** Its check of the egress rows against its pods found three mismatches:
+        - restore-claims needed kube-api for the writers check;
+        - restore had an ArcadeDB row it never uses;
+        - the backup needed its Secret key named.
+
+        Platform's side lands as `P9_rows.diff`, after `P9_render.diff`.
+      - **My ruling, which you can overrule:** ClickHouse keeps `automountToken: false`. EKS's IRSA webhook
+        injects its own token whatever that setting says. It is unmeasured on EKS and is on the live-checks
+        CARRIES row.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
