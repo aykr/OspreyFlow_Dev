@@ -1,41 +1,47 @@
-# D2c part 1: the render commands of administration guide §6a, run on the Mac (no Docker, no stack, no lease), 2026-11-11T13:59:17Z, at b24380c plus the working tree's §6a. osprey.yaml is §6a.1's example, extracted from the guide. Output folder given as --out-root <scratch>/out (the guide's default is deploy/generated/).
+# D2c part 1: administration guide §6a's commands, run literally at a28ae4c (2026-11-11T14:11:33Z) on the Mac: Docker off, no stack, no lease.
+# Where: a temporary detached worktree of a28ae4c (removed afterwards), in its OspreyFlow_Core, so this lane's own osprey.yaml is untouched. osprey.yaml there is §6a.1's yaml block, extracted from a28ae4c's guide; each $ line is extracted from a28ae4c's guide and run verbatim with sh -c, its exit code its own.
+# python: this lane's OspreyFlow_Core/.venv. ospreyflow: that checkout's own CLI (python -m ospreyflow.main), since the CLI installed on this Mac does not import (httpx).
 
-## 0. The example without its map: section (the defect the review found), refused
-harness.cloud_platform.CloudPlatformNotRenderable: the Conduit reads its basemaps from osprey.yaml's map: section at start and cannot start without one, and this profile has no install to write it: declare map:
+$ mkdir -p deploy/generated/cloud-platform/terraform
+(exit 0)
 
-## 1. Without the terraform folder first (the known issue), the first render stops
-FileNotFoundError: [Errno 2] No such file or directory: '<scratch>/run/out/cloud-platform/terraform/ecr.tf'
+$ PYTHONPATH=.:packages python -m harness.render --config osprey.yaml --allow-unpinned
+  deploy/generated/cloud-platform/terraform/variables.tf
+  deploy/generated/cloud-platform/values.yaml
+  deploy/generated/cloud-platform/versions.lock
+(exit 0)
 
-## 2. As §6a.1 says: mkdir -p .../terraform, then the unpinned render
-render: cloud-platform, 11 artefact(s), 2026-11-11T13:59:18Z
-  <scratch>/run/out/cloud-platform/images.yaml
-  <scratch>/run/out/cloud-platform/terraform/ecr.tf
-  <scratch>/run/out/cloud-platform/terraform/elasticache.tf
-  <scratch>/run/out/cloud-platform/terraform/irsa.tf
-  <scratch>/run/out/cloud-platform/terraform/opensearch.tf
-  <scratch>/run/out/cloud-platform/terraform/rds.tf
-  <scratch>/run/out/cloud-platform/terraform/s3.tf
-  <scratch>/run/out/cloud-platform/terraform/secrets.tf
-  <scratch>/run/out/cloud-platform/terraform/variables.tf
-  <scratch>/run/out/cloud-platform/values.yaml
-  <scratch>/run/out/cloud-platform/versions.lock
+$ aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+(not run: signs in to a real registry)
 
-## 3. §6a.4 step 3: ospreyflow images push --dry-run (this worktree's CLI; the installed one does not import here)
+$ ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform --dry-run
 would copy arcadedata/arcadedb:26.10.1 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/arcadedata/arcadedb:26.10.1
 would copy clickhouse/clickhouse-keeper:25.8.33.6 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-keeper:25.8.33.6
 would copy clickhouse/clickhouse-server:25.8.33.6 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-server:25.8.33.6
 would copy quay.io/keycloak/keycloak:26.0 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/keycloak/keycloak:26.0
-would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:b24380c1fba2e4f0b9f84aefc7212722051df086
-would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:b24380c1fba2e4f0b9f84aefc7212722051df086
-would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:b24380c1fba2e4f0b9f84aefc7212722051df086
-would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:b24380c1fba2e4f0b9f84aefc7212722051df086
-would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:b24380c1fba2e4f0b9f84aefc7212722051df086
-would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:b24380c1fba2e4f0b9f84aefc7212722051df086
-would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:b24380c1fba2e4f0b9f84aefc7212722051df086
-would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:b24380c1fba2e4f0b9f84aefc7212722051df086
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
 would copy postgres:16.4 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/postgres:16.4
+(exit 0)
 
-## 4. §6a.4 step 4, the pinned render: refused here, as it must be before a push (needs the registry's copies and Docker)
-harness.render.UnpinnedImagesError: refusing to write versions.lock without a digest for: ghcr.io/ospreyflow/workspace:b24380c1fba2e4f0b9f84aefc7212722051df086, ghcr.io/ospreyflow/api:b24380c1fba2e4f0b9f84aefc7212722051df086, ghcr.io/ospreyflow/ner:b24380c1fba2e4f0b9f84aefc7212722051df086, ghcr.io/ospreyflow/worker:b24380c1fba2e4f0b9f84aefc7212722051df086 — pull them yourself, check https://github.com/aykr/OspreyFlow/releases for a published release with a matching digest, or pass --allow-unpinned (a developer flag, never the customer remedy) to mark them 'unresolved' explicitly
+$ ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform
+(not run: the real push needs the namespace's registry and Docker)
 
-## Not run here: aws ecr / docker login, the real push, helm install, tofu, make cp-policy-check and python -m tools.cp_policy_check (helm is not on this Mac, Docker is off). The kind run of these is P7b's.
+$ PYTHONPATH=.:packages python -m harness.render --config osprey.yaml
+  File "<checkout>/OspreyFlow_Core/harness/cluster.py", line 580, in render_cluster
+    raise UnpinnedImagesError(pin.unresolved)
+harness.render.UnpinnedImagesError: refusing to write versions.lock without a digest for: ghcr.io/ospreyflow/workspace:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c, ghcr.io/ospreyflow/api:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c, ghcr.io/ospreyflow/ner:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c, ghcr.io/ospreyflow/worker:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c — pull them yourself, check https://github.com/aykr/OspreyFlow/releases for a published release with a matching digest, or pass --allow-unpinned (a developer flag, never the customer remedy) to mark them 'unresolved' explicitly
+(exit 1)
+
+$ PYTHONPATH=.:packages:<build folder> python -m tools.cp_policy_check --config osprey.yaml
+tools.helm_chart.HelmFailed: helm template failed: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+
+(exit 1, <build folder> given: it needs Docker, which is off here; unrun until P7b's kind run)
+
+# The pinned render's refusal is the guide's own order: it renders only after the real push (step 3), which was not run.
