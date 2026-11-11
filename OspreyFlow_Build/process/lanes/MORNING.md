@@ -417,6 +417,8 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       (expiry by the bucket's lifecycle; object lock in P9b). **On decommission, the backups bucket and its key are
       kept by default** (the one named exception, so a retained backup never becomes unreadable), with the commands to
       delete them when the client's retention ends; the decommission check reports them as kept, not as left over.
+      Refined, measured on kind (three slots): ClickHouse 25.8's BACKUP must remove its own lock file at the end, so
+      the role may delete `sets/*/clickhouse/.lock` and nothing else; a set's data and manifest stay undeletable by it.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
