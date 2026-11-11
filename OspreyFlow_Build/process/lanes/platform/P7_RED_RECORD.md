@@ -45,3 +45,26 @@ asserts that branch's own words, so a neighbouring branch cannot satisfy it.
 | Ours built for the platform's nodes | no `--platform` | `…::test_ours_are_built_for_the_platform_s_nodes` |
 | A managed detail only to a container that read it on the cluster (init containers, Keycloak, LiteLLM included) | `reader=True` for every pod: the workspace given the database's password | `tests/harness/test_cloud_platform_render.py::test_only_the_readers_are_given_the_managed_stores_details` |
 | The cluster's Helm output unchanged | a YAML comment the shared claim's template emitted into the cluster's manifests (`gates/p7_renders_unchanged.helm-red.log`) | `gates/p7_renders_unchanged.py --helm main`: 0 differences after (`gates/p7_renders_unchanged.helm.log`) |
+
+## On the test server, 11 November 2026 (after the rebase onto main 9bcadc6)
+
+Recorded on the test server (Linux, Docker; Helm `alpine/helm:3.16.3` in a container), offline on the closed
+ports 59991–59994, no lane stack, no kind cluster. Each plant made alone in the working tree, the whole of its
+test file run (so a neighbouring test cannot be the one that fires), the plant removed, `git status` showing
+the harness and the check unchanged afterwards. The plant is in the code under test; each test's fault reaches
+it the way the real call site does (the chart's values through Helm's own output for the check; a deployment
+rendered through `render_cloud_platform` for the harness).
+
+| Rule or fix | Plant | Test | Red (only this test failed in its file) |
+| --- | --- | --- | --- |
+| `cp-policy-check` refuses a numeric user other than 10001 (ADR-148 decision 3; reviewer point 16) | `elif user != UID:` → `elif False and user != UID:` | `tests/cp_policy_check/test_cp_policy_check.py::test_a_user_other_than_10001_is_refused` | `('other-uid', 'runAsUser is 1000, not 10001') in set()`; 1 failed, 28 passed |
+| No `map:` refused in words | `if config.map is None:` → `if False and …` | `tests/harness/test_cloud_platform_render.py::test_a_deployment_without_a_map_is_refused_in_words` | `DID NOT RAISE CloudPlatformNotRenderable`; 1 failed, 58 passed |
+| `GRANT <owner> TO CURRENT_USER` before `CREATE DATABASE … OWNER` (PG16, no superuser) | the `_grant_what_it_owns(container)` call removed | `…::test_a_database_s_owner_is_granted_to_the_login_that_makes_it[development]`, `[production]` | `AssertionError: keycloak-db`; 2 failed, 57 passed |
+| The lock names only the images a pod runs | `and (engines or i.service not in GATEWAY)` removed | `…::test_the_lock_names_only_the_images_a_rendered_pod_runs[development]` | `locked but never run: ['litellm']`; 1 failed, 58 passed (production's fixture enables an engine, so its gateway runs) |
+| An image with neither tag nor digest refused | `if not digest:` → `if False and not digest:` | `…::test_an_image_with_neither_a_tag_nor_a_digest_is_refused` | `DID NOT RAISE`; 1 failed, 58 passed |
+| Two sources for one copy refused | `if held.get("source") != …` → `if False and …` | `…::test_two_sources_copied_to_one_target_are_refused` | `DID NOT RAISE`; 1 failed, 58 passed |
+| Bucket names carry the Terraform's suffix | `aws_s3_bucket`'s name back to `"${var.namespace}-${each.key}"` | `…::test_bucket_names_are_unique_beyond_the_namespace_s_name` | `AssertionError` on `s3.tf`; 1 failed, 58 passed (a first attempt at this plant was a syntax error of mine, which failed the whole file at import; it proves nothing and is not counted) |
+
+Green before the plants, and again at the head after them: `make cp-policy-check` (the target as `P7_ci_makefile.diff` adds it, applied in the working
+tree only): `development.yaml: 32 manifests, 0 violation(s)`, `production.yaml: 37 manifests, 0 violation(s)`,
+then 91 passed (the check's tests, the rendered Terraform's and the render's).

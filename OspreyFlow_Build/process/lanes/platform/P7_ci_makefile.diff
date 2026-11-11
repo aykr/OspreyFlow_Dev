@@ -1,8 +1,8 @@
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-index 92642fb..7ada9a4 100644
+index 47fc94c7..aaced659 100644
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -371,6 +371,17 @@ jobs:
+@@ -376,6 +376,17 @@ jobs:
        # OspreyFlow_Build/tools/schemas_check.py shells out to node_modules/.bin/json2ts.
        - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.schemas_check
  
@@ -21,15 +21,15 @@ index 92642fb..7ada9a4 100644
      runs-on: ubuntu-latest
      steps:
 diff --git a/OspreyFlow_Build/Makefile b/OspreyFlow_Build/Makefile
-index 2cfcbf8..2329fc7 100644
+index 35a1a6f3..05c48815 100644
 --- a/OspreyFlow_Build/Makefile
 +++ b/OspreyFlow_Build/Makefile
 @@ -4,7 +4,7 @@
  # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
  # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
  # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
--.PHONY: publish-user-repo ci lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle
-+.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle
+-.PHONY: publish-user-repo ci lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
++.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
  
  CORE := ../OspreyFlow_Core
  BUILD := $(CURDIR)
@@ -42,7 +42,7 @@ index 2cfcbf8..2329fc7 100644
  
  # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
  # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
-@@ -193,6 +193,14 @@ chart-check:
+@@ -200,6 +200,14 @@ chart-check:
  	$(HELM) lint /chart
  	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py ../OspreyFlow_Build/tests/harness/test_proxy_health.py
  
