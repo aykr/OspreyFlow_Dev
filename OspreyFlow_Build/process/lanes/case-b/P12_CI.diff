@@ -2,86 +2,14 @@ diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
 index 47fc94c7..6281cc9d 100644
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -221,6 +221,8 @@ jobs:
-     steps:
-       - uses: actions/checkout@v4
-       - run: docker build -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
-+      # ADR-135 Amendment 6: an image without Laurium carries no LangChain, spaCy or Laurium.
-+      - run: PYTHONPATH=../OspreyFlow_Build python3 -m tools.no_langchain_check --image ospreyflow/ingest:ci
-       - uses: aquasecurity/trivy-action@v0.24.0
-         with:
-           version: v0.76.1
-@@ -259,6 +261,8 @@ jobs:
-     steps:
-       - uses: actions/checkout@v4
-       - run: docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
-+      # ADR-135 Amendment 6: an image without Laurium carries no LangChain, spaCy or Laurium.
-+      - run: PYTHONPATH=../OspreyFlow_Build python3 -m tools.no_langchain_check --image ospreyflow/harness:ci
-       - uses: aquasecurity/trivy-action@v0.24.0
-         with:
-           version: v0.76.1
-@@ -282,6 +286,8 @@ jobs:
-       # over a Temurin 21.0.1 image on the test server (process/lanes/platform/gates/).
-       - uses: astral-sh/setup-uv@v3
-       - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.java_runtime_check --image ospreyflow/api:ci
-+      # ADR-135 Amendment 6: an image without Laurium carries no LangChain, spaCy or Laurium.
-+      - run: PYTHONPATH=../OspreyFlow_Build python3 -m tools.no_langchain_check --image ospreyflow/api:ci
-       - uses: aquasecurity/trivy-action@v0.24.0
-         with:
-           version: v0.76.1
-@@ -302,6 +308,8 @@ jobs:
-     steps:
-       - uses: actions/checkout@v4
-       - run: docker build -f services/ner/Dockerfile -t ospreyflow/ner:ci .
-+      # ADR-135 Amendment 6: an image without Laurium carries no LangChain, spaCy or Laurium.
-+      - run: PYTHONPATH=../OspreyFlow_Build python3 -m tools.no_langchain_check --image ospreyflow/ner:ci
-       - uses: aquasecurity/trivy-action@v0.24.0
-         with:
-           version: v0.76.1
-@@ -319,6 +327,8 @@ jobs:
-     steps:
-       - uses: actions/checkout@v4
-       - run: docker build -f services/worker/Dockerfile -t ospreyflow/worker:ci .
-+      # ADR-135 Amendment 6: an image without Laurium carries no LangChain, spaCy or Laurium.
-+      - run: PYTHONPATH=../OspreyFlow_Build python3 -m tools.no_langchain_check --image ospreyflow/worker:ci
-       - uses: aquasecurity/trivy-action@v0.24.0
-         with:
-           version: v0.76.1
-@@ -336,6 +346,8 @@ jobs:
-     steps:
-       - uses: actions/checkout@v4
-       - run: docker build -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
-+      # ADR-135 Amendment 6: an image without Laurium carries no LangChain, spaCy or Laurium.
-+      - run: PYTHONPATH=../OspreyFlow_Build python3 -m tools.no_langchain_check --image ospreyflow/report-sync:ci
-       - uses: aquasecurity/trivy-action@v0.24.0
-         with:
-           version: v0.76.1
-@@ -347,6 +359,48 @@ jobs:
+@@ -347,6 +347,30 @@ jobs:
            ignore-unfixed: true
            exit-code: "1"
 
-+  # services/laurium/Dockerfile: Laurium's own Python 3.13 service (ADR-135 Amendment 6), built from
-+  # its own folder alone; the image's build runs its licence gate. Same scan as the others
-+  # (Amendment 5 decision 6).
-+  trivy-image-laurium:
-+    runs-on: ubuntu-latest
-+    steps:
-+      - uses: actions/checkout@v4
-+      - run: docker build -t ospreyflow/laurium:ci services/laurium
-+      - uses: aquasecurity/trivy-action@v0.24.0
-+        with:
-+          version: v0.76.1
-+          trivyignores: OspreyFlow_Core/.trivyignore
-+          image-ref: ospreyflow/laurium:ci
-+          scan-type: image
-+          scanners: vuln
-+          severity: HIGH,CRITICAL
-+          ignore-unfixed: true
-+          exit-code: "1"
-+
 +  # ADR-135 Amendment 6: Laurium's service code (Laurium 0.6.0, LangChain) on Python 3.13, its own
-+  # environment built by hash, and ModelPort.extract's suite on both engines, all through the gateway's
-+  # measured stand-in served over HTTP. The Conduit's own runs skip the Laurium cases, with the reason.
++  # environment built by hash, ModelPort.extract's refusals on both engines and its findings reaching the
++  # review queue pending, all through the gateway's measured stand-in served over HTTP. The Conduit's own
++  # runs skip the Laurium cases, with the reason.
 +  laurium-service:
 +    runs-on: ubuntu-latest
 +    timeout-minutes: 20

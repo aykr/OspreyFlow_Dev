@@ -29,12 +29,21 @@ RECORDED_T = f"{B}/licence_check/test_recorded_licence_evidence.py"
 NOLC_T = f"{B}/test_no_langchain_check.py"
 SERVICE_T = f"{B}/conformance/model_port/test_laurium_service.py"
 SUITE_T = f"{B}/conformance/model_port/test_suite_extract.py"
+PENDING_T = f"{B}/conformance/model_port/test_laurium_findings_pending.py"
+REVIEW = "services/api/review.py"
+HTTP = "../OspreyFlow_Build/tests/conformance/model_port/stand_in_http.py"
+#: The real store's own write, promoting: what rule 5 forbids, at the one place a candidate is written.
+PROMOTE = ("                status=CandidateStatus.PENDING,\n                owning_unit=principal.org_unit,",
+           "                status=CandidateStatus.ACCEPTED,\n                owning_unit=principal.org_unit,")
+#: Decision 8: a call for the deployment's own models, or outside the routing, sent with the master key.
+MASTER_KEY = ("            token = laurium_key(self._master)\n", "            token = self._master\n")
 
 S = "services/laurium/settings.py"
 M = "services/laurium/schema_map.py"
 G = "services/laurium/licence_gate.py"
 APP = "services/laurium/app.py"
 A = "packages/adapters/extract_laurium/adapter.py"
+KEYS = "packages/adapters/extract_laurium/keys.py"
 LC = "../OspreyFlow_Build/tools/licence_check.py"
 NL = "../OspreyFlow_Build/tools/no_langchain_check.py"
 
@@ -93,6 +102,12 @@ OFFLINE: list[Plant] = [
      [SCHEMA_T]),
     ("a combinator beside a type given as the type alone", M,
      [("    if combined:\n", "    if False:\n")], [SCHEMA_T]),
+    # Rule 15's second clause (the orchestrator's review, 11 November): each case now has `required`,
+    # so it reaches its own refusal; this one was refused at the top level before `_type` ran.
+    ("an enum of anything but strings given to Laurium", M,
+     [("        if kind != \"string\" or not values or not all(isinstance(v, str) for v in values):\n"
+       "            raise UnsupportedSchema(f\"{name!r}: only an enum of strings is supported\")\n", "")],
+     [SCHEMA_T]),
     # --- the thin adapter (decision 3) ---
     ("the request's schema not checked before the call", A,
      [("            Draft202012Validator.check_schema(req.json_schema)\n", "            pass\n")],
@@ -100,9 +115,23 @@ OFFLINE: list[Plant] = [
     ("the answer trusted without the request's schema", A,
      [("            Draft202012Validator(req.json_schema).validate(data)\n", "            pass\n")],
      [ADAPTER_T]),
-    ("an engine's call sent with the master key", A,
-     [("                token = engine_key(self._master, call.engine)\n", "                pass\n")],
+    ("an engine's call sent without its own key", A,
+     [("                    token = engine_key(self._master, call.engine)\n", "                    pass\n")],
      [ADAPTER_T]),
+    ("a call for the deployment's own models sent with the master key", A, [MASTER_KEY], [ADAPTER_T]),
+    ("Laurium's key derived from an empty master key", KEYS,
+     [("    if not master.strip():\n        raise ValueError(\"no master key: Laurium's key",
+       "    if False:\n        raise ValueError(\"no master key: Laurium's key")],
+     [ADAPTER_T]),
+    ("Laurium's key made for every model", KEYS,
+     [("    if not models:\n        raise ValueError(", "    if False:\n        raise ValueError(")],
+     [ADAPTER_T]),
+    ("Laurium's key derived as an engine's", KEYS,
+     [('_LABEL = b"osprey-service:laurium"', '_LABEL = b"osprey-engine:laurium"'),
+      ('    return "sk-osprey-laurium-" + hmac', '    return "sk-osprey-" + hmac')],
+     [ADAPTER_T]),
+    # Rule 5 (the orchestrator's review, item 6): the real store's write, promoting.
+    ("the review queue's write promoting a finding", REVIEW, [PROMOTE], [FINDINGS_T]),
     ("an engine's call sent untagged", A, [('            "tag": tag,\n', '            "tag": None,\n')],
      [ADAPTER_T]),
     ("a limit's refusal not read as a limit", A,
@@ -147,10 +176,16 @@ OFFLINE: list[Plant] = [
      [GATE_T]),
     # --- no LangChain without Laurium (decision 1) ---
     ("Laurium's folder left in the Conduit's context unnoticed", NL,
-     [('    if not any(line.rstrip("/") == "services/laurium" for line in lines):',
-       "    if False:")], [NOLC_T]),
-    ("Laurium put back into the Conduit's context by a negation unnoticed", NL,
-     [('    if any(line.startswith("!") and "laurium" in line for line in lines):', "    if False:")],
+     [("    if kept:\n", "    if False:\n")], [NOLC_T]),
+    ("only the folder's own spelling read, not the matcher (as it was)", NL,
+     [("    kept = [path for path in _laurium_files(core) if not spec.match_file(path)]",
+       '    kept = [] if "services/laurium" in text.splitlines() else ["services/laurium"]')],
+     [NOLC_T]),
+    ("a file a negation puts back not looked at", NL,
+     [('_LAURIUM_FILES = ("Dockerfile", "requirements.txt", "requirements.in", "app.py")',
+       '_LAURIUM_FILES = ("Dockerfile", "requirements.txt", "requirements.in")')], [NOLC_T]),
+    ("the source leg run in an image step", NL,
+     [("    problems = [] if args.image else source_problems()", "    problems = source_problems()")],
      [NOLC_T]),
     ("LangChain or Laurium in the Conduit's lock unnoticed", NL,
      [("if _FORBIDDEN_IN_SOURCE.match(n))", "if False)")], [NOLC_T]),
@@ -199,6 +234,21 @@ LAURIUM: list[Plant] = [
     ("a description's braces left single, through the real prompt", M,
      [('        out[name] = words.replace("{", "{{").replace("}", "}}")', "        out[name] = words")],
      [SERVICE_T, SUITE_T]),
+    # Item 4 of the orchestrator's review: another host refused at the call that picks it. Without
+    # `openai_api_base`, Laurium's `create_llm` leaves the OpenAI client at its own default host.
+    ("the gateway not given to Laurium's chat model", APP,
+     [("        openai_api_base=SETTINGS.gateway_url,\n", "")], [SERVICE_T]),
+    ("the lookup letting another name resolve (the fixture itself)", HTTP,
+     [("        refused.append(host.decode() if isinstance(host, bytes) else str(host))\n"
+       "        raise socket.gaierror(socket.EAI_NONAME, \"Name or service not known\")\n",
+       "        return real(host, *args, **kwargs)\n")], [SERVICE_T]),
+    # Item 1: the `/v1` base the settings accept, as LiteLLM serves it.
+    ("the gateway's /v1 route not served (the stand-in as it was)", HTTP,
+     [('_V1_ALIASES = ("/v1/chat/completions",)', "_V1_ALIASES = ()")], [SERVICE_T, PENDING_T]),
+    # Item 7: the master key never crosses into Laurium's container.
+    ("a call for the deployment's own models sent with the master key", A, [MASTER_KEY], [SERVICE_T]),
+    # Item 6: rule 5 through the real service and the real store's write.
+    ("the review queue's write promoting a finding", REVIEW, [PROMOTE], [PENDING_T]),
 ]
 
 #: No bytecode is written while a plant is in: found running this, a plant that changed `0.14.0` to

@@ -34071,8 +34071,12 @@ licences are proprietary or absent.
    LangSmith tracing turned on, which would send every prompt to LangSmith's own host; a library's debug log of each
    request (`OPENAI_LOG`); and any `OSPREY_LAURIUM_*` setting it does not know. Every spelling of a name is read,
    since the libraries read either case. The OpenAI client's own retries are off: a refused call is answered once. The adapter passes the call's engine and job (Amendment 3), so the call carries its
-   tag and goes with the engine's own gateway key, and per-dataset egress, limits, usage and audit apply exactly as
-   for Deep read.
+   tag and goes with a scoped key (decision 8), and per-dataset egress, limits, usage and audit apply exactly as
+   for Deep read. **A hazard for part 2:** every proxy setting (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+   `OPENAI_PROXY`, in any case) is refused at start, so the service cannot be deployed behind an egress proxy
+   as it stands; a profile whose gateway is reached only through a proxy needs that decided (a proxy named by
+   the render and refused for every host but the gateway, or the gateway reached directly) before part 2
+   renders it.
 5. **Laurium's failures arrive as failures.** Laurium's `BatchExtractor` catches a row's failure (a refused key,
    an unknown model, output it cannot parse) and returns the row with every field `None`; through the service that
    would be an empty finding standing for a refusal. The service builds Laurium's `BatchExtractor` (its prompt,
@@ -34080,7 +34084,9 @@ licences are proprietary or absent.
 6. **The domain model mapped to Laurium's schema, and back.** The request's JSON Schema (from the extraction
    profile, `services/extract/profile.build_schema`) is mapped to Laurium's `{field: type}` schema with Pydantic
    types (an object's properties, arrays, enums as `Literal`, strings, integers, numbers, booleans); a shape
-   outside that subset (a combinator, a reference, a list of types) is refused before any model call. A constraint
+   outside that subset (a combinator, a reference, a list of types) is refused before any model call. Every entity
+   type of the default ontology and of the `fibo` and `niem` packs maps and round-trips, each alone and all
+   together (`tests/services/laurium/test_schema_map.py`). A constraint
    within a type (`minLength`, `pattern`, bounds) is not given to Laurium's model, which its types cannot carry; the
    adapter checks every answer against the whole schema (decision 3). Laurium's output comes back as `ExtractionResult.data` in
    the request's own shape, so `services/extract/candidates.py` locates each finding's span in the document and
@@ -34094,10 +34100,24 @@ licences are proprietary or absent.
    declares what its evidence was for (no readable licence, or MIT's own text): a release declaring a GPL, an LGPL
    or anything else is judged afresh. The deployment's notices carry the Ministry of Justice's copyright notices for `laurium` and
    `arrow-pd-parser`.
+8. **The gateway's master key never crosses into Laurium's container** (the orchestrator's ruling of 11 November
+   on P12 part 1's review, on its recommendation; recorded for the owner, and it makes P12 part 1 a credential
+   step). The master key is admin on the gateway, and Laurium's image runs 126 third-party packages. The adapter
+   sends the service a scoped virtual key for every call: a hosted engine's own key (Amendment 3), or for the
+   deployment's own models and a call outside the routing **Laurium's own key**
+   (`adapters/extract_laurium/keys.py`), made like the engines' keys (an HMAC of its own label under the master
+   key, never stored), held on the gateway with `models` naming the deployment's own models alone, tagged
+   `metadata.osprey_service: laurium` so the engines' stale-key sweep leaves it alone, with no admin right. An
+   empty master key is refused before any call. Making the key at start, and replacing it when the master key
+   rotates, are part 2's, with the render that starts the service.
 
-**Consequences.** `ModelPort.extract`'s conformance suite runs on both adapters
-(`tests/conformance/model_port/test_suite_extract.py`), proven through the gateway's stand-in
-(`adapters/model_litellm/stand_in.py`) served over HTTP as the gateway, with the stand-in's refusals unchanged. D2c
+**Consequences.** `ModelPort.extract`'s refusals run on both adapters through the gateway's measured stand-in
+served over HTTP as `litellm` (`tests/conformance/model_port/test_suite_extract.py`), which answers whatever it
+is told to, whatever the prompt says, and so proves nothing of a model's answer to Laurium's prompt. The contract's
+own cases run on both through `ModelPort`'s suite (`test_suite.py`, Laurium registered in
+`registry.MODEL_PORT_ADAPTERS`, `extract` only), against a stack's real LiteLLM and the pinned conformance model:
+**as of 11 November that leased run has not been taken** (this session could not take a lease;
+`process/lanes/case-b/SERVER_LOG.md`), so Laurium has not yet met a real gateway or model. D2c
 records that Laurium runs in its own container, not inside the Conduit and Workers as the page shared with the
 client shows. Part 2 (after P7 and P11 part 1) renders the service in the
 `cloud-platform` profile with its egress line, presets it in that profile's pack, and adds the setting to *Admin ›
@@ -34109,5 +34129,12 @@ Models*.
 empty finding: that file's refused cases through the stand-in. A schema outside the subset:
 `tests/services/laurium/test_schema_map.py`. An image without Laurium carrying LangChain:
 `tests/test_no_langchain_check.py` (planted). A fourth package admitted by the recorded entries, or one of the three at another version:
-`tests/licence_check/test_recorded_licence_evidence.py`. Laurium's findings auto-accepted:
-`tests/adapters/extract_laurium/test_findings_inferred.py`.
+`tests/licence_check/test_recorded_licence_evidence.py`. A call bound for any host but the gateway (Laurium's
+chat model without `openai_api_base`): `test_laurium_service.py`, every other name refused at the lookup and named.
+The master key sent to the service: `tests/adapters/extract_laurium/test_adapter.py`, read off every byte the
+adapter sends. Laurium's findings auto-accepted: `tests/adapters/extract_laurium/test_findings_inferred.py`
+(the fake service) and `tests/conformance/model_port/test_laurium_findings_pending.py` (the real service
+in-process), each through `run_extraction` and the real `ExtractionCandidateStore`'s own `pending` write, down to
+the row its `INSERT` sends; asyncpg's pool under the store is stood in for (refusing a NULL where the store's table
+says NOT NULL, values that do not match the statement, a repeated id), so **what they do not prove is Postgres's
+own acceptance of the row**, which is `tests/services/api/test_review_store.py`'s, live.
