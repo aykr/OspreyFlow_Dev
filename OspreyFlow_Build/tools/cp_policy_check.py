@@ -218,6 +218,82 @@ def _too_wide(net: str) -> str:
     return too_wide_for_egress(net) or ""
 
 
+#: ADR-148 Amendment 5 point 22: who may read our Secret whole, and the keys each workload that may
+#: not is allowed by name. Held here on its own, as the group-0 list is, not read from the harness's
+#: `profile.yaml`, so a render that widens either is refused here.
+SECRET = "ospreyflow-secrets"
+WHOLE_SECRET_ALLOWED = frozenset({"api", "worker", "report-sync"})
+NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
+    "workspace": frozenset(),
+    "ner": frozenset(),
+    "superset": frozenset({"SUPERSET_SECRET_KEY", "SUPERSET_OIDC_CLIENT_SECRET",
+                           "SUPERSET_GUEST_TOKEN_SECRET", "SUPERSET_EMBEDDER_PASSWORD",
+                           "REPORT_MART_READER_PASSWORD"}),
+}  # fmt: skip
+
+
+def _whole_secret(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violation]:
+    """Amendment 5 point 22: our Secret (the stores' passwords, the gateway's master key) whole
+    only to the workloads that read it whole, and to the Glass, the recogniser and the dashboards
+    only the keys each reads, by name."""
+    workload = str((doc.get("metadata") or {}).get("name"))
+    for container in _containers(spec):
+        at = f"{_name(doc)}/{container.get('name')}"
+        for source in container.get("envFrom") or []:
+            if (source.get("secretRef") or {}).get("name") == SECRET:
+                if workload not in WHOLE_SECRET_ALLOWED:
+                    yield Violation("whole-secret", at, f"reads {SECRET} whole")
+        allowed = NAMED_SECRET_ALLOWED.get(workload)
+        if allowed is None:
+            continue
+        for variable in container.get("env") or []:
+            ref = (variable.get("valueFrom") or {}).get("secretKeyRef") or {}
+            if ref.get("name") == SECRET and ref.get("key") not in allowed:
+                yield Violation("whole-secret", at, f"is given {SECRET}'s {ref.get('key')}")
+
+
+def _is_dns(rule: dict[str, Any]) -> bool:
+    """A rule to the cluster's DNS alone: a namespace selector and port 53, nothing else."""
+    destination = rule.get("destination") or {}
+    return (
+        rule.get("protocol") in {"UDP", "TCP"}
+        and set(destination) == {"namespaceSelector", "ports"}
+        and destination.get("ports") == [53]
+    )
+
+
+def _wide_egress(doc: dict[str, Any]) -> Iterator[Violation]:
+    """ADR-148 Amendment 5 point 21: egress is each workload's own. Under a Calico policy that
+    selects every pod, the only Allow is DNS: anything more would give every pod, the Glass and the
+    recogniser among them, what one workload needs."""
+    if not _is_calico(doc):
+        return
+    spec = doc.get("spec") or {}
+    if spec.get("selector", "all()").replace(" ", "") != "all()":
+        return
+    for rule in spec.get("egress") or []:
+        if rule.get("action") == "Allow" and not _is_dns(rule):
+            yield Violation("wide-egress", _name(doc), f"every pod allowed: {rule}")
+
+
+#: A pod selector that selects every pod of the deployment's, or every pod there is.
+_EVERY_POD: tuple[dict[str, Any], ...] = (
+    {},
+    {"matchLabels": {"app.kubernetes.io/part-of": "ospreyflow"}},
+)
+
+
+def _wide_ingress(doc: dict[str, Any]) -> Iterator[Violation]:
+    """ADR-148 Amendment 5 point 23: a pod admits, in the namespace, only the workloads whose paths
+    name it; an ingress rule admitting every pod of the deployment's (or every pod) is refused."""
+    if not _is_kubernetes_policy(doc) or not _admits_ingress(doc.get("spec") or {}):
+        return
+    for rule in (doc.get("spec") or {}).get("ingress") or []:
+        for peer in rule.get("from") or []:
+            if set(peer) == {"podSelector"} and (peer["podSelector"] or {}) in _EVERY_POD:
+                yield Violation("wide-ingress", _name(doc), f"admits every pod: {peer}")
+
+
 def _egress_rules(doc: dict[str, Any]) -> Iterator[Violation]:
     """Decision 7: no one rule opens the namespace's egress."""
     where = _name(doc)
@@ -329,7 +405,10 @@ def check_manifests(
         spec = pod_spec(doc)
         if spec is not None:
             found += _pod_rules(doc, spec, registry)
+            found += _whole_secret(doc, spec)
         found += _egress_rules(doc)
+        found += _wide_egress(doc)
+        found += _wide_ingress(doc)
         kind = doc.get("kind")
         if kind == "PersistentVolumeClaim" and _claims_rwx(
             (doc.get("spec") or {}).get("accessModes")

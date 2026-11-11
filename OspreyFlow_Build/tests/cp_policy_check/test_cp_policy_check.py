@@ -407,6 +407,13 @@ def _name_of(doc: dict[str, Any]) -> str:
 # `networkPolicy.openEgress`), then templated, so each fault is the policy Helm would apply.
 
 
+def _given_to_the_conduit(values: dict[str, Any], host: str) -> None:
+    """A host is rendered in the policy of each workload that reaches it (Amendment 5 point 21):
+    planted as the render gives one to the Conduit."""
+    api = next(w for w in values["egress"]["workloads"] if w["name"] == "api")
+    api.setdefault("hosts", []).append(host)
+
+
 @pytest.mark.parametrize(
     ("net", "why"),
     [
@@ -421,6 +428,7 @@ def test_a_host_s_network_that_opens_egress_is_refused(
 ) -> None:
     values, registry = copy.deepcopy(development)
     values["egress"]["hosts"].append({"host": "api.example.org", "nets": [net]})
+    _given_to_the_conduit(values, "api.example.org")
     [(rule, detail)] = _found(helm_template(yaml.safe_dump(values)), registry)
     assert rule == "open-egress" and detail.startswith(why)
 
@@ -438,7 +446,9 @@ def test_a_platform_s_widest_networks_pass(development: tuple[dict[str, Any], st
     """The cap's own edge: a /16 (the client's shared VPC is one) and a /48 pass."""
     values, registry = copy.deepcopy(development)
     values["egress"]["hosts"].append({"host": "a.example.org", "nets": ["10.1.0.0/16"]})
+    _given_to_the_conduit(values, "a.example.org")
     values["egress"]["hosts"].append({"host": "b.example.org", "nets": ["2001:db8:1::/48"]})
+    _given_to_the_conduit(values, "b.example.org")
     assert _found(helm_template(yaml.safe_dump(values)), registry) == []
 
 
@@ -448,7 +458,7 @@ def test_an_allow_rule_with_no_destination_is_refused(
     """Calico's Allow with no destination allows every address; planted as a template edit would
     emit it, in the allow policy before the deny."""
     docs, registry = _helm(development)
-    allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-allow-egress")
+    allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-egress-api")
     allow["spec"]["egress"].append({"action": "Allow", "protocol": "TCP"})
     [(rule, detail)] = _found(docs, registry)
     assert rule == "open-egress" and detail.startswith("an Allow rule with no destination")
@@ -508,7 +518,8 @@ def test_a_dropped_internal_policy_leaves_pods_open_and_is_refused(
     development: tuple[dict[str, Any], str],
 ) -> None:
     docs, registry = _helm(development)
-    docs = [d for d in docs if (d.get("metadata") or {}).get("name") != "ospreyflow-internal"]
+    # Each workload's own ingress policy (Amendment 5 point 23); the Conduit's dropped.
+    docs = [d for d in docs if (d.get("metadata") or {}).get("name") != "ospreyflow-ingress-api"]
     found = _isolation(docs, registry)
     assert {rule for rule, _, _ in found} == {"ingress-isolation"}
     # The doors stay selected by the controller's policy; every other pod is left open.
@@ -529,15 +540,15 @@ def test_a_widened_ingress_policy_is_refused(development: tuple[dict[str, Any], 
     assert detail.startswith("admits namespaces all")
 
     docs, registry = _helm(development)
-    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
+    internal = _doc(docs, "NetworkPolicy", "ospreyflow-ingress-api")
     internal["spec"]["ingress"][0]["from"].append(
         {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "other-tenant"}}}
     )
     [(rule, where, _)] = _isolation(docs, registry)
-    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/ospreyflow-internal")
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/ospreyflow-ingress-api")
 
     docs, registry = _helm(development)
-    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
+    internal = _doc(docs, "NetworkPolicy", "ospreyflow-ingress-api")
     internal["spec"]["ingress"][0]["from"].append({"ipBlock": {"cidr": "10.0.0.0/8"}})
     [(rule, where, detail)] = _isolation(docs, registry)
     assert (rule, detail) == ("ingress-isolation", "admits {'cidr': '10.0.0.0/8'}")
@@ -569,7 +580,7 @@ def test_the_public_policy_admitting_every_address_is_refused(
 def _with_calico_ingress(docs: list[dict[str, Any]], source: dict[str, Any]) -> None:
     """The allow policy given Calico ingress, as a template edit would emit it: `Ingress` added to
     its types and one Allow rule from `source`."""
-    allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-allow-egress")
+    allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-egress-api")
     allow["spec"]["types"] = ["Egress", "Ingress"]
     allow["spec"]["ingress"] = [{"action": "Allow", "protocol": "TCP", "source": source}]
 
@@ -592,7 +603,7 @@ def test_a_calico_ingress_allow_beyond_a_selector_is_refused(
     docs, registry = _helm(development)
     _with_calico_ingress(docs, source)
     [(rule, where, detail)] = _isolation(docs, registry)
-    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/default.ospreyflow-allow-egress")
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/default.ospreyflow-egress-api")
     assert detail.startswith("a Calico rule admitting beyond the namespace's own pods")
 
 
@@ -603,7 +614,7 @@ def test_a_calico_ingress_allow_in_a_policy_with_no_types_is_refused(
     rules without `types` are applied (the round-2 self-review, point 2). Planted as a new Calico
     policy a template might emit, ingress rules and no `types`."""
     docs, registry = _helm(development)
-    allow = copy.deepcopy(_doc(docs, "NetworkPolicy", "default.ospreyflow-allow-egress"))
+    allow = copy.deepcopy(_doc(docs, "NetworkPolicy", "default.ospreyflow-egress-api"))
     allow["metadata"]["name"] = "default.ospreyflow-allow-ingress"
     allow["spec"] = {
         "tier": "default", "order": 100, "selector": "all()",
