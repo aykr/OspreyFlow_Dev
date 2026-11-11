@@ -35261,12 +35261,17 @@ stand. Record: `process/lanes/case-b/P12p2_RED_RECORD.md`.
    renders Laurium. **The owner's question stands in MORNING:** keep the preset, or `deep_read` until point 7's open
    item closes.
 2. **Laurium serves document extraction into the review queue alone** (the orchestrator's ruling on the lane reviewer's
-   item 2, a rule 11 gap): `services.api.review.run_extraction`, whose findings arrive *inferred*, sets a marker
-   (`adapters.extract_laurium.composed.laurium_reads`), and only inside it does `extract` go to Laurium. Questions, Ask
-   to search, email extraction and a document's content stay with Deep read: Ask to search's schema writes an untyped
-   `items`, which Laurium's subset refuses, and Questions joins every document into one call. Composed **inside** the
-   routes (`services.api.laurium_start.routed_model`), so Laurium's calls keep their engine, its key and the dataset
-   egress rules.
+   item 2, a rule 11 gap; the orchestrator's round 1 on P12 part 2): `services.api.review.run_extraction` takes
+   `laurium_may_read` (default false) and sets the marker (`adapters.extract_laurium.composed.laurium_reads`) only when
+   it is true; **the review queue's route (`run_extraction_route`) alone passes it**, and only inside the marker does
+   `extract` go to Laurium. Questions, Ask to search, email extraction and a document's content (the last two also
+   call `run_extraction`, without the flag) stay with Deep read: Ask to search's schema writes an untyped `items`,
+   which Laurium's subset refuses, and Questions joins every document into one call. Composed **inside** the routes
+   (`services.api.laurium_start.routed_model`), so Laurium's calls keep their engine, its key and the dataset egress
+   rules. **No screen reaches Laurium today** (the orchestrator's round 2): the flagged route has no caller in the
+   Glass, whose model extraction is a document's content and email extraction, both Deep read. So on the
+   cloud-platform profile, with the preset, **Laurium is rendered and runs while no analyst action reaches it, until a
+   screen calls the review queue's route**; the preset's question goes back to the owner with this.
 3. **The render.** Laurium is a service only when chosen (`harness/laurium.py`): its own image beside the Conduit's,
    so `ospreyflow images push` copies it; its port; **no `env_file`, so on a cluster no `envFrom` of the deployment's
    Secret** (which holds the gateway's master key and every store's password): its environment is its gateway's address
@@ -35297,7 +35302,9 @@ stand. Record: `process/lanes/case-b/P12p2_RED_RECORD.md`.
 7. **The exit: Laurium reads a real model's answer.** Leased on stack b (11 November, 18:01 UTC) beside the
    orchestrator's pinned gateway (LiteLLM with its own database) and Ollama: **`qwen2.5:7b-instruct`, the product's own
    extraction model, 3 of 3**; the 0.5B conformance model 0 of 3, the control (part 1's strict xfail on it stays,
-   narrowed to its unparseable refusal alone). **The client's own engine is proven at their install (20 November): P12's
+   narrowed to its unparseable refusal alone). What ran: that gateway directly, Laurium's own code in-process, a
+   one-string schema, its key from `put_laurium_key`; **not** the rendered route, Laurium's image, the Conduit, or the
+   review queue's real schema (`process/lanes/case-b/P12p2_RED_RECORD.md`). **The client's own engine is proven at their install (20 November): P12's
    last open item**, and D2c says so.
 
 **Consequences.** Laurium's prompt asks for its format in the prompt alone; a model that does not follow it (the 0.5B)
@@ -35308,7 +35315,9 @@ constrained decoding (`response_format: json_schema` bound on Laurium's chat mod
 (the round trip and a shared `ModelsConfig` planted red). Laurium's render and no Secret in its pod:
 `tests/harness/test_laurium_render.py` (`env_file` planted red). The review queue's extraction alone:
 `tests/adapters/extract_laurium/test_laurium_reads_findings_alone.py` (the marker left out, and every caller sent, each
-red). The composition inside the routes, the key at start never stopping the Conduit, the client closed:
+red); no other call site, email extraction and a document's content at theirs and every module by scan:
+`tests/adapters/extract_laurium/test_laurium_call_sites.py` (the marker back inside `run_extraction`, the route not
+passing it, and a planted `laurium_reads()` in `questions.py`, each red). The composition inside the routes, the key at start never stopping the Conduit, the client closed:
 `tests/services/api/test_laurium_start.py` (the reversed wrapping planted red). The sweep, every page first:
 `tests/adapters/extract_laurium/test_laurium_at_start.py`. Admin read-only:
 `tests/services/api/test_admin_models_extraction_engine.py` and `Models.test.tsx`. The platform's rules with Laurium

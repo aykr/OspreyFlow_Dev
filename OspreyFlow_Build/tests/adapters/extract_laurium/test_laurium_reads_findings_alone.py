@@ -1,7 +1,7 @@
 """Laurium serves document extraction into the review queue alone (`06_DECISIONS.md` ADR-135
 Amendment 9; the orchestrator's ruling of 11 November on the lane-reviewer's item 2, a rule 11 gap):
-`services.api.review.run_extraction`, whose findings arrive *inferred*, sets the marker
-(`adapters.extract_laurium.composed.laurium_reads`) and only inside it does `LauriumExtracts` send
+`services.api.review.run_extraction`, when the review queue's route passes `laurium_may_read`, sets
+the marker (`adapters.extract_laurium.composed.laurium_reads`), and only inside it does `LauriumExtracts` send
 `extract` to Laurium. Every other caller of `ModelPort.extract` (Questions, Ask to search, email
 extraction, a document's content) stays with Deep read: Ask to search's schema writes an untyped
 `items`, which Laurium's mapper refuses, and Questions joins every document into one call.

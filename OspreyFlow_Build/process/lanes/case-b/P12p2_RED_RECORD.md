@@ -114,7 +114,7 @@ its own:
 | Run | qwen2.5:7b-instruct | qwen2.5:0.5b-instruct (the control) |
 | --- | --- | --- |
 | 2e3ec43 (`gates/2e3ec43.p12p2-live-run1-event-loop.txt`) | 2 passed, 1 failed: **"Event loop is closed" in 0.07 s**, before any model call | 3 failed: 2 `unparseable`, 1 "Event loop is closed" (the same harness fault; corrected from "3 unparseable", the orchestrator's round 1) |
-| b21d6db (`gates/b21d6db.p12p2-live-run2.txt`) | **3 passed** (about 2–12 s a call) | 3 failed, `unparseable` |
+| b21d6db (`gates/b21d6db.p12p2-live-run2.txt`) | **3 passed** (1.84–3.65 s a call; corrected from "about 2–12 s", round 2) | 3 failed, `unparseable` |
 
 The first run's failure was the test's, not the model's: LangChain's OpenAI client caches its HTTP client across
 instances, and pytest gave each test a fresh event loop, so the second met the first's closed loop. The Conduit and
@@ -239,3 +239,16 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
    `tests/harness/test_laurium_render.py`, `tests/harness/test_laurium_cp_policy.py`. All three green, or the merge
    stops: Laurium reaches the gateway on 4000 and DNS and nothing else; only the Conduit reaches it; its pod mounts no
    token; P7b's rules (`token`, `wide-egress`, `whole-secret` among them) hold with Laurium rendered on three shapes.
+6. **Stale words corrected:** Amendment 9 point 2 (what `run_extraction` does now, and `test_laurium_call_sites` named
+   among the tests that would fail), `composed.py`'s marker comment, `test_laurium_reads_findings_alone.py`'s opening,
+   and `deployment.py`'s "never unset" (stored as written; read from `OspreyConfig.extraction_engine`).
+7. **What the live case ran, exactly** (stack b, 18:01 UTC, b21d6db): the orchestrator's LiteLLM at CI's digest
+   **directly** (127.0.0.1:24000 on the server), **Laurium's own code in-process** in its 3.13 environment
+   (`laurium_live_adapter`: the service's ASGI app, its every call over real HTTP to that gateway as `litellm`),
+   **a one-string schema** (`{name: string}`, the conformance case's request), and **Laurium's key made by
+   `put_laurium_key`** for that model alone. **What did not run:** the route the cloud-platform render makes (Laurium's
+   pod to the rendered gateway Service), **Laurium's image**, **the Conduit** (its routed model, the marker, the key at
+   start), and **the review queue's real schema** (`build_schema(ExtractionProfile(...))`). The rerun with that schema
+   on qwen2.5 7B under a lease needs the gateway pair again: **carried**.
+8. **No screen reaches Laurium:** said plainly in Amendment 9 point 2 (the flagged route has no Glass caller; the
+   Glass's model extraction is a document's content and email, both Deep read). The preset is unchanged.

@@ -685,7 +685,8 @@ class ModelsConfig(BaseModel):
     #: the LiteLLM adapter; Laurium is its own service, rendered only when chosen, on
     #: `cloud-platform` alone (`OspreyConfig._extraction_engine_suits_the_profile`). Left unset,
     #: the profile's preset (Amendment 5 decision 2; Amendment 9): `laurium` on `cloud-platform`,
-    #: `deep_read` on every other; never unset after validation.
+    #: `deep_read` on every other. Stored as written (unset stays unset, so a dump round-trips); the
+    #: effective engine is read from `OspreyConfig.extraction_engine`.
     extraction_engine: Literal["deep_read", "laurium"] | None = Field(
         default=None,
         description="ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, "

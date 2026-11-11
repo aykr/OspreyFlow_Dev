@@ -35,10 +35,10 @@ URL = "OSPREY_LAURIUM_URL"
 DEEP_READ, LAURIUM = "deep_read", "laurium"
 
 
-#: Set by the one caller Laurium serves (Amendment 9; the orchestrator's ruling of 11 November):
-#: document extraction into the review queue (`services.api.review.run_extraction`). Every other
-#: caller of `extract` (Questions, Ask to search, email extraction, a document's content) is outside
-#: it and stays with Deep read.
+#: Set by `services.api.review.run_extraction` only when its caller passes `laurium_may_read`, which
+#: the review queue's route alone does (Amendment 9 point 2). Every other caller of `extract`
+#: (Questions, Ask to search, and email extraction and a document's content, which call
+#: `run_extraction` without the flag) is outside it and stays with Deep read.
 _LAURIUM_READS: ContextVar[bool] = ContextVar("laurium_reads", default=False)
 
 
