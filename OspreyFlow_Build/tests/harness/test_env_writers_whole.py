@@ -39,10 +39,10 @@ ALLOWED = {
     # The rollback point is made new for each update (mkdir(parents=True), never exists before):
     # a copy into it creates a file; it replaces nothing.
     ("harness/update.py", "_keep_rollback_point", "point / item.name"),
-    # Put-back's copy of every file but a `*.env` one, which never holds a secret and is written in
-    # place so that a container mounting it on its own keeps seeing it; its `*.env` branch goes
-    # through `replace_whole`, held by `test_update_s_put_back_replaces_deployment_env_...` below.
-    ("harness/update.py", "_put_back", "directory / item.name"),
+    # Put-back's one copy in place, of a file that holds no secret (a container mounting it on its
+    # own keeps seeing it); the helper refuses a `*.env` name (`test_the_put_back_copy_refuses_...`).
+    # A copy in `_put_back` itself, as c5209b1 had, is not allowed (`test_the_gate_flags_...`).
+    ("harness/update.py", "_copy_not_a_secret", "directory / item.name"),
     # The refresh's stage is made new and 700 for each run (ADR-114 Am 39); a copy into it creates a
     # file, and what moves into place goes through `replace_whole`.
     ("scripts/refresh.py", "_files_up_to_date_staged", "stage / path.name"),
@@ -184,6 +184,34 @@ def test_the_scan_flags_an_open_for_writing_and_an_os_open() -> None:
     )
     found = {function for _, function, _ in in_place_writes(planted, "x.py")}
     assert found == {"a", "b", "c"}
+
+
+def _unexpected(source: str, relative: str) -> set[tuple[str, str, str]]:
+    """What the gate itself reports for `source`: its writes, less `ALLOWED`."""
+    return in_place_writes(source, relative) - ALLOWED
+
+
+def test_the_gate_flags_c5209b1_s_put_back_copy() -> None:
+    """The gate, not only the extractor: `_put_back`'s own copy of every file, as c5209b1 had it,
+    is reported though the helper's copy of the same shape is allowed."""
+    real = (CORE / "harness" / "update.py").read_text(encoding="utf-8")
+    planted = real.replace(
+        "            _copy_not_a_secret(item, directory)\n",
+        "            shutil.copy2(item, directory / item.name)\n",
+    )
+    assert planted != real
+    assert _unexpected(planted, "harness/update.py") == {
+        ("harness/update.py", "_put_back", "directory / item.name")
+    }
+    assert _unexpected(real, "harness/update.py") == set()
+
+
+def test_the_put_back_copy_refuses_an_env_file(tmp_path: Path) -> None:
+    source = tmp_path / "point" / "deployment.env"
+    source.parent.mkdir()
+    source.write_text(OLD, encoding="utf-8")
+    with pytest.raises(ValueError, match="replaced whole"):
+        update._copy_not_a_secret(source, tmp_path)
 
 
 # Each writer at its own call site.

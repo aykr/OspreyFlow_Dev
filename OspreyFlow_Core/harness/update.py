@@ -405,7 +405,16 @@ def _put_back(directory: Path, point: Path) -> None:
             # deployment.env goes through harness.atomic).
             replace_whole(directory / item.name, item.read_bytes(), mode=0o600)
         else:
-            shutil.copy2(item, directory / item.name)
+            _copy_not_a_secret(item, directory)
+
+
+def _copy_not_a_secret(item: Path, directory: Path) -> None:
+    """A put-back file that holds no secret, copied in place so that a container mounting it on its
+    own keeps seeing it. Refuses an env file, which must go through `replace_whole`: the one copy
+    the scan of every writer allows (`tests/harness/test_env_writers_whole.py`)."""
+    if item.name.endswith(".env"):
+        raise ValueError(f"{item.name} holds secrets: it is replaced whole, never copied in place")
+    shutil.copy2(item, directory / item.name)
 
 
 def _conflicts(host: Host, repo: Path, tag: str) -> list[str]:
