@@ -249,6 +249,8 @@ def test_a_role_trusting_the_clusters_keys_takes_its_signed_token_and_refuses_an
     public = _json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
     role = aws.stand_in.roles[ROLE_ARN]
     role.jwks, role.issuer = {"keys": [{**public, "kid": "k1"}]}, "https://kubernetes.default.svc"
+    role.trust = backups.trust_policy(f"arn:aws:iam::{ACCOUNT}:oidc-provider/kubernetes.default.svc",
+                                      "kubernetes.default.svc", role.subject)  # fmt: skip
 
     def token(signer: rsa.RSAPrivateKey, issuer: str = "https://kubernetes.default.svc") -> str:
         import time
@@ -390,4 +392,14 @@ def test_the_key_used_other_than_through_s3_is_refused(aws: Running) -> None:
     aws.stand_in.roles[ROLE_ARN].policies = [role_policy(kms_actions=())]
     with pytest.raises(ClientError) as refused:
         aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
+    assert _code(refused) == "AccessDenied"
+
+
+def test_a_token_of_another_issuer_is_refused_by_the_trust_though_signed_by_a_trusted_key(aws: Running) -> None:
+    """The trust's federated principal is one cluster's issuer: a token naming another issuer meets no
+    statement, whoever signed it (the orchestrator's round 2, item 14)."""
+    aws.token = mint_token(ISSUER_SECRET, sub="system:serviceaccount:ospreyflow-dev:ospreyflow-backup",
+                           iss="https://oidc.eks.eu-west-2.amazonaws.com/id/ANOTHER")  # fmt: skip
+    with pytest.raises(ClientError) as refused:
+        aws.s3().list_objects_v2(Bucket=BUCKET)
     assert _code(refused) == "AccessDenied"

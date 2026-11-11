@@ -511,21 +511,24 @@ class StandIn:
 
 def _trusted(trust: dict[str, Any], claims: dict[str, Any]) -> bool:
     """Whether a trust document lets this token assume its role, as STS reads one: an Allow of
-    `sts:AssumeRoleWithWebIdentity` whose conditions hold, `<issuer>:sub` and `<issuer>:aud` being
-    the token's (each `aud` it names tried, as IAM tries a multi-valued key)."""
+    `sts:AssumeRoleWithWebIdentity` whose `Principal.Federated` is the OIDC provider **of the token's
+    own issuer** (`…:oidc-provider/<iss without its scheme>`), and whose conditions hold, with
+    `<issuer>:sub` and `<issuer>:aud` being the token's (each `aud` it names tried, as IAM tries a
+    multi-valued key). A token of another issuer meets no statement."""
+    issuer = str(claims.get("iss", "")).removeprefix("https://")
     for statement in trust.get("Statement", []):
         if statement.get("Effect") != "Allow":
             continue
         if "sts:AssumeRoleWithWebIdentity" not in _listed(statement.get("Action", [])):
             continue
+        federated = _listed((statement.get("Principal") or {}).get("Federated", []))
+        if not issuer or not any(str(f).endswith(f":oidc-provider/{issuer}") for f in federated):
+            continue
         conditions = statement.get("Condition", {})
-        issuers = {k.rsplit(":", 1)[0] for keys in conditions.values() for k in keys if ":" in k}
         for aud in _listed(claims.get("aud")) or [None]:
-            context = {}
-            for issuer in issuers:
-                context[f"{issuer}:sub"] = str(claims.get("sub"))
-                if aud is not None:
-                    context[f"{issuer}:aud"] = str(aud)
+            context = {f"{issuer}:sub": str(claims.get("sub"))}
+            if aud is not None:
+                context[f"{issuer}:aud"] = str(aud)
             if _condition_holds(conditions, context):
                 return True
     return False
@@ -549,12 +552,16 @@ def _unb64url(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
+#: The issuer the tests' tokens name, as an EKS cluster's OIDC issuer is named.
+TEST_ISSUER = "https://oidc.eks.eu-west-2.amazonaws.com/id/0A1B2C3D"
+
+
 def mint_token(issuer_secret: str, *, sub: str, aud: str = "sts.amazonaws.com", seconds: int = 3600,
-               now: dt.datetime | None = None) -> str:  # fmt: skip
+               now: dt.datetime | None = None, iss: str = TEST_ISSUER) -> str:  # fmt: skip
     """A web identity token as the cluster's issuer signs one (HS256 by the stand-in's secret)."""
     now = now or _now()
     header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
-    payload = _b64url(json.dumps({"sub": sub, "aud": aud, "iat": int(now.timestamp()),
+    payload = _b64url(json.dumps({"sub": sub, "aud": aud, "iss": iss, "iat": int(now.timestamp()),
                                   "exp": int(now.timestamp()) + seconds}).encode())  # fmt: skip
     signature = hmac.new(issuer_secret.encode(), f"{header}.{payload}".encode(), hashlib.sha256)
     return f"{header}.{payload}.{_b64url(signature.digest())}"

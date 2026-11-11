@@ -92,29 +92,56 @@ def _documents() -> list[tuple[str, dict[str, Any]]]:
     bucket, key = "${aws_s3_bucket.backups.arn}", "${aws_kms_key.backups.arn}"
     roles = ["${aws_iam_role.backup.arn}", "${aws_iam_role.backup_clickhouse.arn}"]
     policies = backups.role_policies(bucket, key, "eu-west-2")
+    trust = {
+        account: backups.trust_policy("${var.eks_oidc_provider_arn}", "${var.eks_oidc_issuer}",
+                                      f"system:serviceaccount:${{var.namespace}}:{account}")
+        for account in backups.ROLE_SUFFIX
+    }  # fmt: skip
     return [
         ("backups_bucket", backups.bucket_policy(bucket, key, roles)),
         ("backups_key", backups.key_policy("arn:aws:iam::${data.aws_caller_identity.backups.account_id}:root",
                                            roles, "eu-west-2")),
         ("backup_policy", policies[backups.SERVICE_ACCOUNT]),
         ("backup_clickhouse_policy", policies[backups.CLICKHOUSE_SERVICE_ACCOUNT]),
+        ("backup_trust", trust[backups.SERVICE_ACCOUNT]),
+        ("backup_clickhouse_trust", trust[backups.CLICKHOUSE_SERVICE_ACCOUNT]),
     ]  # fmt: skip
+
+
+def _statement_blocks(block: str) -> list[str]:
+    return [s for s in re.split(r"\n  statement \{", block)[1:]]
 
 
 @pytest.mark.parametrize(("document", "policy"), _documents(), ids=[d for d, _ in _documents()])
 def test_the_terraform_writes_the_policies_the_stand_in_holds(document: str, policy: dict[str, Any]) -> None:
-    """Each statement of each policy is a statement block of its document, actions, resources and
-    every condition, so the stand-in's refusals are the platform's."""
+    """Each statement of each policy, the trusts among them, is its own statement block, in order,
+    with its effect, actions, resources, principals and every condition's test, key and values: what
+    the stand-in judges (built by the same functions, `harness.cloud_platform_backups`) is what the
+    Terraform writes, never a reading of the HCL."""
     text = rendered.terraform()
     block = re.search(rf'data "aws_iam_policy_document" "{document}" \{{(.*?)\n\}}', text, re.DOTALL)
     assert block is not None, document
-    assert block.group(1).count("statement {") == len(policy["Statement"]), document
-    for statement in policy["Statement"]:
-        actions = statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
-        assert json.dumps(actions) in block.group(1), (document, actions)
+    statements = _statement_blocks(block.group(1))
+    assert len(statements) == len(policy["Statement"]), document
+
+    def listed(value: Any) -> str:
+        return json.dumps(value if isinstance(value, list) else [value])
+
+    for written, statement in zip(statements, policy["Statement"], strict=True):
+        assert f'effect = {json.dumps(statement["Effect"])}' in re.sub(r"\s+=", " =", written)
+        assert listed(statement["Action"]) in written, (document, statement["Action"])
+        if "Resource" in statement:
+            assert listed(statement["Resource"]) in written, (document, statement["Resource"])
+        principal = statement.get("Principal")
+        if principal == "*":
+            assert 'type        = "*"' in written and 'identifiers = ["*"]' in written
+        elif isinstance(principal, dict):
+            for kind, who in principal.items():
+                assert f'type        = "{kind}"' in written and f"identifiers = {listed(who)}" in written, document
         for operator, keys in statement.get("Condition", {}).items():
-            for key in keys:
-                assert f'"{operator}"' in block.group(1) and f'"{key}"' in block.group(1)
+            for key, value in keys.items():
+                condition = (f'test     = "{operator}"\n      variable = "{key}"\n      values   = {listed(value)}')
+                assert condition in written, (document, operator, key)
 
 
 def test_each_role_reaches_its_own_prefix_alone() -> None:

@@ -28,7 +28,7 @@ from botocore.exceptions import ClientError
 from harness import cloud_platform_backups as backups
 from services.api import platform_backup as pb
 
-from tests.fixtures.cloud_platform.s3_standin import Role, Server, StandIn, mint_token, serve
+from tests.fixtures.cloud_platform.s3_standin import TEST_ISSUER, Role, Server, StandIn, mint_token, serve
 
 ACCOUNT = "123456789012"
 REGION = "eu-west-2"
@@ -41,7 +41,7 @@ SUBJECT = f"system:serviceaccount:ospreyflow-dev:{backups.SERVICE_ACCOUNT}"
 CLICKHOUSE_SUBJECT = f"system:serviceaccount:ospreyflow-dev:{backups.CLICKHOUSE_SERVICE_ACCOUNT}"
 ISSUER_SECRET = "the-cluster-oidc-issuer"
 #: The cluster's OIDC issuer as IAM names it (no scheme), and its provider.
-ISSUER = "oidc.eks.eu-west-2.amazonaws.com/id/0A1B2C3D"
+ISSUER = TEST_ISSUER.removeprefix("https://")
 PROVIDER = f"arn:aws:iam::{ACCOUNT}:oidc-provider/{ISSUER}"
 BUCKET_ARN = f"arn:aws:s3:::{BUCKET}"
 
