@@ -97,7 +97,9 @@ async function serve(page: Page, opts: { canManage?: boolean } = {}) {
       return json(r, [{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" },
                       { id: "c-sql", kind: "sql", name: "NOMIS replica (synthetic)", created_by: "adm-1", created_at: "" },
                       { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "adm-1", created_at: "" },
-                      { id: "c-json", kind: "json", name: "Bookings files", created_by: "adm-1", created_at: "" }]);  // prettier-ignore
+                      { id: "c-json", kind: "json", name: "Bookings files", created_by: "adm-1", created_at: "" },
+                      { id: "c-s3", kind: "s3", name: "Client exports (synthetic)", created_by: "adm-1", created_at: "" },
+                      { id: "c-athena", kind: "athena", name: "Client Athena (synthetic)", created_by: "adm-1", created_at: "" }]);  // prettier-ignore
     }
     if (path === "/v1/datasets/ds-a/sources" && method === "POST") {
       if (body?.connection_id !== "files" && (body?.read as Body | null)?.kind !== String(body?.connection_id).slice(2)) return json(r, { detail: { detail: "A source on a sql connection needs its own read." } }, 422);
@@ -317,6 +319,48 @@ test("a source is registered through a JSON connection by its read", async ({ pa
   expect(sent?.body).toMatchObject({ connection_id: "c-json", location: "bookings",
     read: { kind: "json", pattern: "bookings-*.json", records_at: "records" } });  // prettier-ignore
   registerCovered(REGISTRY, "register-a-source-through-a-json-connection-by-keyboard");
+});
+
+// L1.9 (ADR-148; rule 13): an S3 folder and its objects' format, Athena's table and a named query,
+// each chosen and typed by keyboard alone.
+test("a source is registered through an S3 connection by its folder and format", async ({ page }) => {
+  const state = await serve(page);
+  await registerThrough(page, "c-s3", async () => {
+    await typeInto(page, /^Source name$/, "Visit exports");
+    await typeInto(page, /^Folder under the connection's/, "visits/2026");
+    await tabTo(page, /^The objects' format$/);
+    await page.getByRole("combobox", { name: "The objects' format" }).selectOption("parquet");
+  });
+  const sent = state.asked.find((a) => a.method === "POST" && a.path === "/v1/datasets/ds-a/sources");
+  expect(sent?.body).toMatchObject({ connection_id: "c-s3", location: "visit_exports",
+    read: { kind: "s3", folder: "visits/2026/", format: "parquet" } });  // prettier-ignore
+  registerCovered(REGISTRY, "register-a-source-through-an-s3-connection-by-keyboard");
+});
+
+test("a source is registered through an Athena connection by its table", async ({ page }) => {
+  const state = await serve(page);
+  await registerThrough(page, "c-athena", async () => {
+    await typeInto(page, /^Source name$/, "Visit bookings");
+    await typeInto(page, /^Table \(database\.table\)$/, "visits.visit_bookings");
+  });
+  const sent = state.asked.find((a) => a.method === "POST" && a.path === "/v1/datasets/ds-a/sources");
+  expect(sent?.body).toMatchObject({ connection_id: "c-athena", location: "visit_bookings",
+    read: { kind: "athena", table: "visits.visit_bookings", named_query: null } });  // prettier-ignore
+  registerCovered(REGISTRY, "register-a-source-through-an-athena-table-by-keyboard");
+});
+
+test("a source is registered through an Athena connection by a named query", async ({ page }) => {
+  const state = await serve(page);
+  await registerThrough(page, "c-athena", async () => {
+    await typeInto(page, /^Source name$/, "Recent bookings");
+    await tabTo(page, /^Read$/);
+    await page.getByRole("combobox", { name: "Read", exact: true }).selectOption("named_query");
+    await typeInto(page, /^Named query's id$/, "0f3c6a7e-1b2d-4c5e-8f90-a1b2c3d4e5f6");
+  });
+  const sent = state.asked.find((a) => a.method === "POST" && a.path === "/v1/datasets/ds-a/sources");
+  expect(sent?.body).toMatchObject({ connection_id: "c-athena", location: "recent_bookings",
+    read: { kind: "athena", table: null, named_query: "0f3c6a7e-1b2d-4c5e-8f90-a1b2c3d4e5f6" } });  // prettier-ignore
+  registerCovered(REGISTRY, "register-a-source-through-an-athena-named-query-by-keyboard");
 });
 
 test("a dataset unsubscribes from a list, and no longer reads it", async ({ page }) => {

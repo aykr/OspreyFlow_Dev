@@ -6,7 +6,9 @@
 // takes it, so none is ever sent or answered. A secret's field that holds anything other than a name
 // is refused here before it is sent, and the Conduit refuses it again without answering it back
 // (`test_admin_connection_fields.py`). Which hosts may be reached is the operator's, not Admin's
-// (`connectors.private_hosts`, the egress allow-list), so this screen only says so.
+// (`connectors.private_hosts`, the egress allow-list), so this screen only says so. An Amazon S3 bucket
+// or Amazon Athena (L1.9; ADR-148) is read as the deployment's own cloud role: it names no secret at
+// all, and the form has no field one could be typed into.
 import { useEffect, useMemo, useState } from "react";
 
 import type { AdminDataset, Connection, ConnectionInput } from "../../../../../packages/schemas/generated";
@@ -16,14 +18,25 @@ import { Select } from "../../design/primitives/Select";
 import { addConnection, listAdminConnections } from "../../ingest/sources/api";
 import { listDatasets, testConnection, type AdminApi } from "../api";
 
-type Kind = "files" | "sql" | "api" | "json";
+type Kind = "files" | "sql" | "api" | "json" | "s3" | "athena";
 
 const KINDS: { id: Kind; label: string }[] = [
   { id: "files", label: "Files" },
   { id: "sql", label: "SQL database" },
   { id: "api", label: "HTTP API" },
   { id: "json", label: "JSON files" },
+  { id: "s3", label: "Amazon S3 bucket" },
+  { id: "athena", label: "Amazon Athena" },
 ];
+
+/** L1.9 (ADR-148): an S3 or Athena connection signs in as the deployment's own cloud role, so it has no
+ * field for a key or a secret, and says so. */
+export const CLOUD_ROLE_TIP =
+  "Read as this deployment's own cloud role, never with a key: there is no field for one. The host is made from the region (and the bucket), and your operator must add it to the egress allow-list.";
+/** The shapes the Conduit takes (`schemas/sources.py`): a region, a bucket without a dot, a folder. */
+const REGION = /^[a-z]{2}(-gov)?-[a-z]+-[0-9]{1,2}$/;
+const BUCKET = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+const FOLDER = /^([A-Za-z0-9_][A-Za-z0-9_.=-]{0,199}\/){0,20}$/;
 const KIND_WORDS: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.id, k.label]));
 
 /** The shape a secret's name takes (`schemas/sources.py`'s `SECRET_NAME`): capitals, digits and `_`. */
@@ -48,12 +61,21 @@ interface Fields {
   pagination: "none" | "page" | "next_link";
   pageParam: string;
   nextAt: string;
+  region: string;
+  bucket: string;
+  prefix: string;
+  workgroup: string;
+  databases: string;
+  resultsLocation: string;
 }
 
 const EMPTY: Fields = {
   host: "", port: "5432", database: "", user: "", secret: "", tls: "verify-full", schemas: "public", ca: "",
   baseUrl: "https://", auth: "none", pagination: "none", pageParam: "page", nextAt: "",
+  region: "eu-west-2", bucket: "", prefix: "", workgroup: "primary", databases: "", resultsLocation: "",
 }; // prettier-ignore
+
+const list = (text: string) => text.split(",").map((s) => s.trim()).filter(Boolean);
 
 /** What the form sends: the kind's own settings, the secret by name, and nothing a secret's value
  * could be in. */
@@ -61,6 +83,15 @@ export function connectionBody(kind: Kind, name: string, datasets: string[], f: 
   const ca = f.ca.trim() ? { ca_certificate: f.ca.trim() } : {};
   if (kind === "files") return { kind, name: name.trim() } as ConnectionInput;
   if (kind === "json") return { kind, name: name.trim(), datasets, settings: { kind } } as ConnectionInput;
+  if (kind === "s3") {
+    return { kind, name: name.trim(), datasets,
+      settings: { kind, region: f.region.trim(), bucket: f.bucket.trim(), prefix: f.prefix.trim() } } as ConnectionInput; // prettier-ignore
+  }
+  if (kind === "athena") {
+    const results = f.resultsLocation.trim() ? { results_location: f.resultsLocation.trim() } : {};
+    return { kind, name: name.trim(), datasets,
+      settings: { kind, region: f.region.trim(), workgroup: f.workgroup.trim(), databases: list(f.databases), ...results } } as ConnectionInput; // prettier-ignore
+  }
   if (kind === "sql") {
     return {
       kind, name: name.trim(), datasets,
@@ -92,18 +123,25 @@ export function notYet(kind: Kind, name: string, datasets: string[], f: Fields):
     return "The secret's field takes its name in capitals (such as TELCO_API), never the password or token itself.";
   if (kind === "sql" && (!f.host.trim() || !f.database.trim() || !f.user.trim())) return "Give the host, the database and the login.";
   if (kind === "api" && !/^https:\/\/[^\s/]+/.test(f.baseUrl.trim())) return "The base URL starts https:// and names its host.";
+  if ((kind === "s3" || kind === "athena") && !REGION.test(f.region.trim())) return "Give the region as AWS names it, such as eu-west-2.";
+  if (kind === "s3" && !BUCKET.test(f.bucket.trim())) return "Give the bucket's name: lower-case letters, digits and '-', with no dot.";
+  if (kind === "s3" && !FOLDER.test(f.prefix.trim())) return "A folder is names each ending in '/', such as exports/, or empty for the whole bucket.";
+  if (kind === "athena" && list(f.databases).length === 0) return "Name the databases a source may read.";
   return null;
 }
 
 function where(c: Connection): string {
-  const s = c.settings as { kind?: string; host?: string; port?: number; database?: string; base_url?: string } | null | undefined;
+  const s = c.settings;
   if (!s) return c.kind === "files" ? "the ingest root" : "";
   if (s.kind === "sql") return `${s.host}:${s.port}/${s.database}`;
   if (s.kind === "api") return s.base_url ?? "";
+  if (s.kind === "s3") return `s3://${s.bucket}/${s.prefix ?? ""} (${s.region})`;
+  if (s.kind === "athena") return `workgroup ${s.workgroup ?? "primary"}: ${s.databases.join(", ")} (${s.region})`;
   return "JSON files in the ingest root";
 }
 
 function secretOf(c: Connection): string {
+  if (c.kind === "s3" || c.kind === "athena") return "none: the deployment's own cloud role";
   const s = c.settings as { secret?: string | null } | null | undefined;
   return s?.secret ? s.secret : "none";
 }
@@ -181,9 +219,9 @@ export function Connections({ api }: { api: AdminApi }) {
   return (
     <section aria-label="Connections" style={{ display: "grid", gap: "var(--sp-12)", maxWidth: 760 }}>
       <p className="label" style={{ margin: 0 }}>
-        Where sources are read from. Files, the ingest root, is built in. A SQL database, an HTTP API or JSON files are named
-        here with the datasets whose sources may read through them; a source is registered on a connection in the Ingest
-        Studio&apos;s Sources tab.
+        Where sources are read from. Files, the ingest root, is built in. A SQL database, an HTTP API, JSON files, an Amazon
+        S3 bucket or Amazon Athena are named here with the datasets whose sources may read through them; a source is
+        registered on a connection in the Ingest Studio&apos;s Sources tab.
       </p>
       {problem && <p role="alert">{problem}</p>}
       {connections === null && !problem && <p className="label">Reading…</p>}
@@ -301,6 +339,27 @@ export function Connections({ api }: { api: AdminApi }) {
             </label>
             {fields.pagination === "page" && field("Page parameter", "pageParam")}
             {fields.pagination === "next_link" && field("Where the next page's link is (a dotted path)", "nextAt")}
+          </>
+        )}
+        {(kind === "s3" || kind === "athena") && (
+          <>
+            <p id="connection-cloud-role-tip" className="caption" style={{ margin: 0 }}>
+              {CLOUD_ROLE_TIP}
+            </p>
+            {field("Region", "region", { tip: "", tipId: "connection-cloud-role-tip" })}
+          </>
+        )}
+        {kind === "s3" && (
+          <>
+            {field("Bucket", "bucket")}
+            {field("Folder sources may read under (empty for the whole bucket)", "prefix")}
+          </>
+        )}
+        {kind === "athena" && (
+          <>
+            {field("Workgroup", "workgroup")}
+            {field("Databases a source may read (comma-separated)", "databases")}
+            {field("Where Athena writes results, if the workgroup names nowhere (optional, s3://…)", "resultsLocation")}
           </>
         )}
         {(kind === "sql" || kind === "api") && (

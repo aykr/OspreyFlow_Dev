@@ -27,12 +27,33 @@ export function fileNameOf(name: string): string {
     .slice(0, 63);
 }
 
-type ReadFields = { table: string; columns: string; path: string; recordsAt: string; pattern: string };
-const EMPTY_READ: ReadFields = { table: "", columns: "", path: "", recordsAt: "", pattern: "" };
+type ReadFields = {
+  table: string;
+  columns: string;
+  path: string;
+  recordsAt: string;
+  pattern: string;
+  /** L1.9: an S3 folder under the connection's own, its objects' format; Athena's table or named query. */
+  folder: string;
+  format: "csv" | "parquet";
+  athena: "table" | "named_query";
+  namedQuery: string;
+};
+export const EMPTY_READ: ReadFields = {
+  table: "", columns: "", path: "", recordsAt: "", pattern: "", folder: "", format: "csv", athena: "table", namedQuery: "",
+}; // prettier-ignore
 
 /** The source's read, in the shape the Conduit takes; `null` while a field it needs is missing. */
 export function readOf(kind: string, f: ReadFields): RegisterSourceInput["read"] | null {
   const recordsAt = f.recordsAt.trim() || null;
+  if (kind === "s3") {
+    const folder = f.folder.trim();
+    return { kind: "s3", folder: folder && !folder.endsWith("/") ? `${folder}/` : folder, format: f.format };
+  }
+  if (kind === "athena") {
+    if (f.athena === "table") return f.table.trim() ? { kind: "athena", table: f.table.trim(), named_query: null } : null;
+    return f.namedQuery.trim() ? { kind: "athena", table: null, named_query: f.namedQuery.trim().toLowerCase() } : null;
+  }
   if (kind === "sql") {
     if (!f.table.trim()) return null;
     const columns = f.columns.split(",").map((c) => c.trim()).filter(Boolean);
@@ -171,6 +192,51 @@ export function RegisterSourceWizard({
               <span className="label">File names to read (* and ? match)</span>
               <Input value={read.pattern} onChange={(e) => setRead({ ...read, pattern: e.target.value })} placeholder="bookings-*.json" />
             </label>
+          )}
+          {kind === "s3" && (
+            <>
+              <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+                <span className="label">Folder under the connection&apos;s (empty for all of it)</span>
+                <Input value={read.folder} onChange={(e) => setRead({ ...read, folder: e.target.value })} placeholder="visits/2026/" />
+              </label>
+              <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+                <span className="label">The objects&apos; format</span>
+                <Select value={read.format} onChange={(e) => setRead({ ...read, format: e.target.value as ReadFields["format"] })}>
+                  <option value="csv">CSV</option>
+                  <option value="parquet">Parquet</option>
+                </Select>
+              </label>
+              <p className="caption" style={{ margin: 0 }}>
+                Every object of that format in the folder and the folders under it is read, in name order. A read past the size cap is
+                refused whole, never cut short.
+              </p>
+            </>
+          )}
+          {kind === "athena" && (
+            <>
+              <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+                <span className="label">Read</span>
+                <Select value={read.athena} onChange={(e) => setRead({ ...read, athena: e.target.value as ReadFields["athena"] })}>
+                  <option value="table">A table, whole</option>
+                  <option value="named_query">A named query saved in Athena</option>
+                </Select>
+              </label>
+              {read.athena === "table" ? (
+                <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+                  <span className="label">Table (database.table)</span>
+                  <Input value={read.table} onChange={(e) => setRead({ ...read, table: e.target.value })} placeholder="visits.visit_bookings" />
+                </label>
+              ) : (
+                <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+                  <span className="label">Named query&apos;s id</span>
+                  <Input value={read.namedQuery} onChange={(e) => setRead({ ...read, namedQuery: e.target.value })} />
+                </label>
+              )}
+              <p className="caption" style={{ margin: 0 }}>
+                A named query runs only if it is one SELECT, saved in the connection&apos;s workgroup. Results are read a thousand rows a
+                page; a read past the size cap is refused whole.
+              </p>
+            </>
           )}
           {(kind === "api" || kind === "json") && (
             <label style={{ display: "grid", gap: "var(--sp-2)" }}>

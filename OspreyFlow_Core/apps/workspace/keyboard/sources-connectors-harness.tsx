@@ -68,6 +68,9 @@ if (params.get("serve") === "1") {
       { id: "c-sql", kind: "sql", name: "NOMIS replica (synthetic)", created_by: "adm-1", created_at: "" },
       { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "adm-1", created_at: "" },
       { id: "c-json", kind: "json", name: "Bookings files", created_by: "adm-1", created_at: "" },
+      // L1.9: an S3 bucket and Athena (`&connection=c-s3&step=1`, `&connection=c-athena&step=1`).
+      { id: "c-s3", kind: "s3", name: "Client exports (synthetic)", created_by: "adm-1", created_at: "" },
+      { id: "c-athena", kind: "athena", name: "Client Athena (synthetic)", created_by: "adm-1", created_at: "" },
     ],
     "/v1/datasets/ds-a/source-files": { root: "/in", files: [] },
     "/v1/datasets/ds-a/sources/src-bookings/profile": { columns: [], rows_sampled: 0 },
