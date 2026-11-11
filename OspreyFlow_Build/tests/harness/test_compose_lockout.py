@@ -98,3 +98,48 @@ def test_the_words_name_the_values_never_hold_one_and_point_to_apply(tmp_path: P
         assert "label=com.docker.compose.project=osprey-upg" in words
         assert "Q7Z4" not in words and "backup set's" not in words
     assert compose_env.locked_out(folder, missing) == cli_run.locked_out(folder, missing)
+
+
+# The orchestrator's review of c5209b1, minors: the words for a named deployment, a value emptied
+# by the shell, and a stop that works with no container running.
+
+
+def test_the_words_name_a_deployment_kept_by_name(tmp_path: Path) -> None:
+    kept = tmp_path / "deployments"
+    kept.mkdir()
+    folder = _deployment(kept, "HELD=1\n")
+    missing = compose_env.unset_required(folder, {})
+    for words in (
+        compose_env.locked_out(folder, missing, {}),
+        cli_run.locked_out(folder, missing, {}),
+    ):
+        assert "`ospreyflow apply --name osprey-upg`" in words
+
+
+def test_a_value_the_shell_sets_empty_is_said_to_be_the_shell_s(tmp_path: Path) -> None:
+    """Compose takes the shell's value over deployment.env's, so an empty one in the shell is what
+    locks it out, whatever the file holds; "deployment.env does not hold" would send the operator
+    to a file that does."""
+    folder = _deployment(tmp_path, "HELD=1\nREQUIRED_EMPTY_REFUSED=held\nREQUIRED_UNSET_ONLY=x\n")
+    held_elsewhere = compose_env.unset_required(folder, {})
+    shell = {name: "set" for name in held_elsewhere} | {"REQUIRED_EMPTY_REFUSED": ""}
+    missing = compose_env.unset_required(folder, shell)
+    assert missing == ["REQUIRED_EMPTY_REFUSED"]
+    for words in (
+        compose_env.locked_out(folder, missing, shell),
+        cli_run.locked_out(folder, missing, shell),
+    ):
+        assert "REQUIRED_EMPTY_REFUSED is set empty in this shell" in words
+        assert "unset REQUIRED_EMPTY_REFUSED" in words
+
+
+def test_the_stop_meanwhile_runs_nothing_when_no_container_is_up(tmp_path: Path) -> None:
+    """`docker stop $(docker ps -q …)` with nothing running is `docker stop` with no argument,
+    which Docker refuses; `xargs -r` runs nothing then."""
+    folder = _deployment(tmp_path, "HELD=1\n")
+    words = compose_env.locked_out(folder, compose_env.unset_required(folder, {}), {})
+    assert (
+        "docker ps -q --filter label=com.docker.compose.project=osprey-upg | xargs -r docker stop"
+        in words
+    )
+    assert "$(" not in words

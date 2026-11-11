@@ -61,7 +61,8 @@ def test_each_verb_names_the_missing_value_and_what_to_do(
     words = said.out + said.err
     assert "OSPREY_POSTGRES_PASSWORD" in words and "ospreyflow apply" in words, words
     assert (
-        "docker stop $(docker ps -q --filter label=com.docker.compose.project=osprey-upg)" in words
+        "docker ps -q --filter label=com.docker.compose.project=osprey-upg | xargs -r docker stop"
+        in words
     )
     assert "Is Docker running" not in words
     assert rig.runner.argvs() == []  # Compose was never asked

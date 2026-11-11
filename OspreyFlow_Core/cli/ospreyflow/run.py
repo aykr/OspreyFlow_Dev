@@ -173,14 +173,25 @@ def project(directory: Path) -> str:
     return name
 
 
-def locked_out(directory: Path, missing: list[str]) -> str:
+def locked_out(
+    directory: Path, missing: list[str], environ: Mapping[str, str] | None = None
+) -> str:
     """`harness.compose_env.locked_out`'s words."""
     name = project(directory)
+    shell = os.environ if environ is None else environ
+    emptied = [name for name in missing if name in shell]
+    where = "which deployment.env does not hold"
+    if emptied:
+        names = ", ".join(emptied)
+        where += (
+            f" ({names} {'is' if len(emptied) == 1 else 'are'} set empty in this shell, which "
+            f"Compose reads before deployment.env: unset {names} first)"
+        )
+    named = f" --name {directory.name if directory.parent.name == 'deployments' else 'default'}"
     return (
-        f"The compose file needs {', '.join(missing)}, which deployment.env does not hold, so "
-        "Docker Compose refuses every command on this deployment and nothing was changed. Run "
-        "`ospreyflow apply`: it renders the compose file again and keeps or mints every value it "
-        "needs (a backup set from before the value existed does not hold it). To stop its "
-        "containers meanwhile: docker stop $(docker ps -q "
-        f"--filter label=com.docker.compose.project={name})"
+        f"The compose file needs {', '.join(missing)}, {where}, so Docker Compose refuses every "
+        f"command on this deployment and nothing was changed. Run `ospreyflow apply{named}`: it "
+        "renders the compose file again and keeps or mints every value it needs (a backup set "
+        "from before the value existed does not hold it). To stop its containers meanwhile: "
+        f"docker ps -q --filter label=com.docker.compose.project={name} | xargs -r docker stop"
     )
