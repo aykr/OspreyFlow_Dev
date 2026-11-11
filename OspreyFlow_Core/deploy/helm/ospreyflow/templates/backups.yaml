@@ -63,6 +63,30 @@ subjects:
   - kind: ServiceAccount
     name: {{ $b.serviceAccountName }}
     namespace: {{ $root.Release.Namespace }}
+{{- if $root.Values.egress }}
+---
+# The restore's writers check asks the cluster's API (the Role above); the namespace's egress is
+# denied by default (ADR-148 decision 7), the API server included. The restore's own pods alone may
+# reach it, by the `kubernetes` Service, before the deny.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: default.ospreyflow-restore-to-the-api
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  tier: default
+  order: 150
+  selector: "app.kubernetes.io/name in {'restore', 'restore-claims'}"
+  types: ["Egress"]
+  egress:
+    - action: Allow
+      protocol: TCP
+      destination:
+        services:
+          name: kubernetes
+          namespace: default
+{{- end }}
 ---
 apiVersion: batch/v1
 kind: CronJob

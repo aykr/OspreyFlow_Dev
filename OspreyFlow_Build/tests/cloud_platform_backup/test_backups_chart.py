@@ -237,3 +237,15 @@ def test_a_refused_run_is_never_retried() -> None:
     docs = _docs(_with_claims(rendered.values()))
     for name in ("ospreyflow-backup", "ospreyflow-backup-claims"):
         assert _exactly(docs, "CronJob", name)["spec"]["jobTemplate"]["spec"]["backoffLimit"] == 0
+
+
+def test_the_restore_alone_may_reach_the_clusters_api_before_the_egress_deny() -> None:
+    """The writers check lists pods through the API, which the namespace's deny-egress refuses: one
+    Calico policy, ordered before the deny, for the restore's pods to the `kubernetes` Service."""
+    docs = _docs(rendered.values())
+    policy = _exactly(docs, "NetworkPolicy", "default.ospreyflow-restore-to-the-api")
+    deny = _exactly(docs, "NetworkPolicy", "default.ospreyflow-deny-egress")
+    assert policy["spec"]["order"] < deny["spec"]["order"]
+    assert policy["spec"]["selector"] == "app.kubernetes.io/name in {'restore', 'restore-claims'}"
+    assert policy["spec"]["egress"] == [{"action": "Allow", "protocol": "TCP",
+                                         "destination": {"services": {"name": "kubernetes", "namespace": "default"}}}]  # fmt: skip

@@ -43,6 +43,7 @@ REGION = "eu-west-2"
 KEY_ARN = f"arn:aws:kms:{REGION}:{ACCOUNT}:key/0f9e8d7c-0009-4000-8000-000000000009"
 ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/ospreyflow-dev-backup"
 OTHER_ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/ospreyflow-dev-service"
+CLICKHOUSE_ROLE_ARN = f"arn:aws:iam::{ACCOUNT}:role/ospreyflow-dev-backup-clickhouse"
 STANDIN_NS = "platform-managed"
 STANDIN_HOST = f"s3-standin.{STANDIN_NS}.svc.cluster.local"
 STANDIN_PORT = 9443
@@ -129,12 +130,9 @@ class Run:
 
         result = render(config, resolver=resolver, allow_unpinned=True)
         values = yaml.safe_load(result.artefacts["values.yaml"])
-        if "backups" not in values:  # P9_render.diff not applied: the same call it makes
+        if "backups" not in values:  # P9_render.diff not applied: the one hook it adds
             assert config.cloud_platform is not None
-            platform = load_platform(config.cloud_platform.platform)
-            values["backups"] = backups.backups_values(
-                config, platform, values["workloads"], values["environment"]
-            )
+            backups.add_backups(config, load_platform(config.cloud_platform.platform), values)
         values["workloads"] = [w for w in values["workloads"] if w["name"] in KEPT]
         values["jobs"] = []
         # The poc shape's Ingest root on a claim of its own, as P7b's render writes it (not on main
@@ -201,31 +199,34 @@ class Run:
         bucket_policy: dict[str, Any] | None = None,
         trusted_account: str | None = None,
     ) -> dict[str, Any]:
+        """The AWS side as the namespace's Terraform makes it: each role trusted by its own trust
+        document as rendered (`backups.trust_policy`, the cluster's issuer for the provider's),
+        verified by the cluster's own keys, and given its own policy."""
         from harness import cloud_platform_backups as backups
 
         arn = f"arn:aws:s3:::{self.bucket()}"
         jwks = json.loads(kubectl("get", "--raw", "/openid/v1/jwks"))
         issuer = json.loads(kubectl("get", "--raw", "/.well-known/openid-configuration"))["issuer"]
+        provider = f"arn:aws:iam::{ACCOUNT}:oidc-provider/{issuer.removeprefix('https://')}"
+        policies = backups.role_policies(arn, KEY_ARN, REGION)
+        roles = []
+        for role_arn, account in ((ROLE_ARN, backups.SERVICE_ACCOUNT),
+                                  (CLICKHOUSE_ROLE_ARN, backups.CLICKHOUSE_SERVICE_ACCOUNT)):  # fmt: skip
+            subject = f"system:serviceaccount:{self.ns}:{trusted_account or account}"
+            roles.append({
+                "arn": role_arn, "issuer_secret": "unused: the cluster's keys are the trust",
+                "subject": subject, "jwks": jwks, "issuer": issuer,
+                "trust": backups.trust_policy(provider, issuer.removeprefix("https://"), subject),
+                "policies": [(role_policy if role_arn == ROLE_ARN and role_policy else policies[account])],
+            })  # fmt: skip
         return {
             "region": REGION,
-            "roles": [
-                {
-                    "arn": ROLE_ARN,
-                    "issuer_secret": "unused: the cluster's keys are the trust",
-                    "subject": f"system:serviceaccount:{self.ns}:{trusted_account or backups.SERVICE_ACCOUNT}",
-                    "jwks": jwks,
-                    "issuer": issuer,
-                    "policies": [role_policy or backups.role_policy(arn, KEY_ARN)],
-                }
-            ],
-            "buckets": [
-                {
-                    "name": self.bucket(),
-                    "kms_key": KEY_ARN,
-                    "policy": bucket_policy or backups.bucket_policy(arn, KEY_ARN, ROLE_ARN),
-                }
-            ],
-        }
+            "roles": roles,
+            "buckets": [{
+                "name": self.bucket(), "kms_key": KEY_ARN,
+                "policy": bucket_policy or backups.bucket_policy(arn, KEY_ARN, [ROLE_ARN, CLICKHOUSE_ROLE_ARN]),
+            }],
+        }  # fmt: skip
 
     def standin(self) -> None:
         ca = self.state / "standin-ca"
@@ -466,19 +467,25 @@ class Run:
                         }
                     ),
                 },
-                {
-                    "apiVersion": "v1",
-                    "kind": "ServiceAccount",
-                    "metadata": {
-                        "name": backups.SERVICE_ACCOUNT,
-                        "namespace": self.ns,
-                        "annotations": {"eks.amazonaws.com/role-arn": ROLE_ARN},
-                    },
-                },
+                *(
+                    {
+                        "apiVersion": "v1",
+                        "kind": "ServiceAccount",
+                        "metadata": {
+                            "name": account,
+                            "namespace": self.ns,
+                            "annotations": {"eks.amazonaws.com/role-arn": role_arn},
+                        },
+                    }
+                    for account, role_arn in (
+                        (backups.SERVICE_ACCOUNT, ROLE_ARN),
+                        (backups.CLICKHOUSE_SERVICE_ACCOUNT, CLICKHOUSE_ROLE_ARN),
+                    )
+                ),
             ]
         )
 
-    def irsa(self, pod: dict[str, Any], image: str) -> None:
+    def irsa(self, pod: dict[str, Any], image: str, role_arn: str = ROLE_ARN) -> None:
         """What EKS's pod identity webhook adds to a pod of the role's service account, and the
         stand-in's endpoints and CA: to each container of the Conduit's image."""
         volumes = pod.setdefault("volumes", [])
@@ -501,7 +508,7 @@ class Run:
                 {"name": "standin-ca", "secret": {"secretName": "standin-ca"}},
             ]
         env = [
-            {"name": "AWS_ROLE_ARN", "value": ROLE_ARN},
+            {"name": "AWS_ROLE_ARN", "value": role_arn},
             {"name": "AWS_WEB_IDENTITY_TOKEN_FILE", "value": f"{TOKEN_DIR}/token"},
             {"name": "AWS_STS_REGIONAL_ENDPOINTS", "value": "regional"},
             {"name": "AWS_ENDPOINT_URL_S3", "value": STANDIN},
@@ -571,7 +578,7 @@ class Run:
         ]
         # ClickHouse runs as the backup role (the render's serviceAccountName): what EKS's webhook
         # adds for that, and the AWS names as the stand-in inside its pod.
-        self.irsa(pod, container["image"])
+        self.irsa(pod, container["image"], CLICKHOUSE_ROLE_ARN)
         address = kubectl(
             "-n", STANDIN_NS, "get", "service", "s3-standin", "-o", "jsonpath={.spec.clusterIP}"
         ).strip()
@@ -679,8 +686,10 @@ class Run:
                 "metadata": {
                     "name": "p9-shared",
                     "namespace": self.ns,
+                    # The Conduit's labels, as the restore's writers check finds the Conduit.
                     "labels": {
                         "app.kubernetes.io/part-of": "ospreyflow",
+                        "app.kubernetes.io/name": "api",
                         "ospreyflow.io/shared": "true",
                     },
                 },
@@ -885,10 +894,12 @@ class Run:
     # -- the runs ---------------------------------------------------------------------------------
 
     def lease(self) -> dict[str, str]:
-        """The lease this run was taken under (rule 14), as the caller names it in P9_LEASE (the
-        line `stack_lease.sh status` printed for it); none is said so."""
-        named = os.environ.get("P9_LEASE")
-        return {"lease": named} if named else {"lease": "none: not a timing run"}
+        """The lease this run was taken under (rule 14), as `stack_lease.sh remote` mirrors it: its
+        own info file under OSPREY_LEASE_DIR, read here, never named by the caller. An offline run's
+        lease directory is empty, and that is said so."""
+        folder = Path(os.environ.get("OSPREY_LEASE_DIR", "/nonexistent"))
+        found = {p.parent.name: p.read_text().strip() for p in sorted(folder.glob("*/info"))}
+        return found or {"lease": f"none ({folder} holds no lease): not a timing run"}
 
     def save(self, run: str) -> None:
         self.record["at"] = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
@@ -938,6 +949,43 @@ class Run:
             )
         print(
             f"PASS round trip: set {set_id} restored in {times['total']} s, counts and the claim equal"
+        )
+
+    def osprey_sources(self) -> None:
+        """The orchestrator's blocker, after the fix: as the deployment's own ClickHouse user, each of
+        the four that were accepted on 11 November (a set's manifest read, ArcadeDB's zip read, a set
+        overwritten, url() to another host) is refused; and ClickHouse's own pod reaches no outside
+        address (its egress, platform's policy)."""
+        base = f"https://{AWS_NAMES[0]}/{self.bucket()}"
+        out = self.probe(f"""
+print("user:", ch("SELECT currentUser()").strip())
+for name, q in [
+    ("read a set's manifest", "SELECT count() FROM s3('{base}/sets/*/manifest.json', 'RawBLOB')"),
+    ("read ArcadeDB's zip", "SELECT length(raw_blob) FROM s3('{base}/sets/*/arcadedb/ospreyflow.zip', 'RawBLOB') LIMIT 1"),
+    ("write over a set", "INSERT INTO FUNCTION s3('{base}/sets/probe/arcadedb/ospreyflow.zip', 'RawBLOB') SELECT 'overwritten'"),
+    ("url() to another host", "SELECT count() FROM url('https://{STANDIN_HOST}:{STANDIN_PORT}/', 'RawBLOB')"),
+]:
+    try:
+        print("ACCEPTED", name, "->", ch(q).strip()[:120])
+    except RuntimeError as e:
+        print("REFUSED", name, "->", str(e)[:260])
+""")
+        lines = [
+            line for line in out.splitlines() if line.startswith(("ACCEPTED", "REFUSED", "user:"))
+        ]
+        egress = kubectl("-n", self.ns, "exec", "clickhouse-0", "--", "sh", "-c",
+                         "wget -T 5 -q -O /dev/null http://1.1.1.1/ && echo REACHED || echo REFUSED",
+                         check=False).strip()  # fmt: skip
+        self.record["osprey_sources"] = lines
+        self.record["clickhouse_egress_to_1.1.1.1"] = egress
+        refused = [line for line in lines if line.startswith("REFUSED")]
+        self.save("osprey_sources")
+        if len(refused) != 4 or egress.endswith("REACHED"):
+            raise SystemExit(
+                "FAIL: the deployment's user, or ClickHouse's egress, still reaches what it must not"
+            )
+        print(
+            "PASS the deployment's user is refused all four; ClickHouse reaches no outside address"
         )
 
     def reds(self) -> None:
@@ -993,12 +1041,14 @@ class Run:
         # 1. The bucket's policy written for another role: the backup role is refused by the bucket.
         expect(
             "bucket-policy",
-            ("arcadedb", "AccessDenied"),
+            ("read set", "AccessDenied"),
             main_only(),
-            self.standin_config(bucket_policy=backups.bucket_policy(arn, KEY_ARN, OTHER_ROLE_ARN)),
+            self.standin_config(
+                bucket_policy=backups.bucket_policy(arn, KEY_ARN, [OTHER_ROLE_ARN])
+            ),
         )
         # 2. The role without kms:GenerateDataKey: S3 refuses the encrypted write, naming the action.
-        policy = backups.role_policy(arn, KEY_ARN)
+        policy = backups.role_policies(arn, KEY_ARN, REGION)[backups.SERVICE_ACCOUNT]
         for statement in policy["Statement"]:
             statement["Action"] = [a for a in statement["Action"] if a != "kms:GenerateDataKey"]
         expect(
@@ -1026,29 +1076,51 @@ class Run:
             f"{'PASS' if results[-1]['as_expected'] else 'FAIL'} expired sessions renewed: set {renewed}"
         )
         # 3b. An expired role that cannot be renewed (its trust no longer the backup's service
-        # account): refused at the runner's own STS call, and at ClickHouse's BACKUP, its words kept.
+        # accounts): refused at the runner's own STS call, and at ClickHouse's BACKUP sent by the
+        # runner's own `clickhouse_backup`; that ClickHouse was refused **by STS** (not writing
+        # anonymously by choice) is read from the stand-in's own log of its pod's call.
         untrusting = self.standin_config(trusted_account="another-account")
-        self.configure(untrusting)
-        self.lever("/_standin/expire")
-        try:
-            said = (
-                self.probe(
-                    "try:\n"
-                    f"    ch(\"BACKUP DATABASE ospreyflow ON CLUSTER osprey TO S3('https://{AWS_NAMES[0]}/{self.bucket()}/sets/unrenewable/clickhouse/')\")\n"
-                    "    print('ACCEPTED')\n"
-                    "except RuntimeError as e:\n"
-                    "    print('REFUSED', e)\n"
-                )
-                .strip()
-                .splitlines()[-1]
+        expect(
+            "unrenewable-role",
+            ("STS refused it", "AssumeRoleWithWebIdentity"),
+            main_only(),
+            untrusting,
+        )
+        address = kubectl(
+            "-n", self.ns, "get", "pod", "clickhouse-0", "-o", "jsonpath={.status.podIP}"
+        ).strip()
+        clickhouse_call = (
+            "import sys\n"
+            "from services.api.platform_backup import BackupRefused, Settings, Stores\n"
+            "s = Settings.from_env()\n"
+            "try:\n"
+            "    Stores(s).clickhouse_backup(f'{s.s3_base}/sets/unrenewable/clickhouse/')\n"
+            "except BackupRefused as r:\n"
+            "    print(f'clickhouse refused: {r}'); sys.exit(1)\n"
+            "print('ACCEPTED')\n"
+        )
+
+        def clickhouse_unrenewable(slot: int) -> tuple[bool, str]:
+            self.lever("/_standin/expire")  # ClickHouse's session ends; it must ask STS again
+            self.start_from_cron(
+                f"p9-unrenewable-{slot}", command=["/app/.venv/bin/python", "-c", clickhouse_call]
             )
-        finally:
-            self.configure(good)
-        expect("unrenewable-role", ("AssumeRoleWithWebIdentity",), main_only(), untrusting)
-        results[-1]["clickhouse_said"] = said
-        results[-1]["as_expected"] = results[-1]["as_expected"] and said.startswith("REFUSED")
+            return self.wait_job(f"p9-unrenewable-{slot}")
+
+        expect(
+            "unrenewable-role-clickhouse",
+            ("clickhouse refused",),
+            clickhouse_unrenewable,
+            untrusting,
+        )
+        sts_log = [line for line in kubectl("-n", STANDIN_NS, "logs", "deployment/s3-standin", "--tail=400").splitlines()
+                   if line.startswith(address + " ") and '"POST / ' in line]  # fmt: skip
+        results[-1]["clickhouse_sts_calls"] = sts_log[-3:]
+        results[-1]["as_expected"] = results[-1]["as_expected"] and any(
+            " 403 " in line for line in sts_log
+        )
         print(
-            f"{'PASS' if said.startswith('REFUSED') else 'FAIL'} ClickHouse unrenewable: {said[:300]}"
+            f"{'PASS' if results[-1]['as_expected'] else 'FAIL'} ClickHouse refused by STS: {sts_log[-2:]}"
         )
         # 4. No claims part (the claims run never ran): the main run waits its bounded time, fails
         # in words and leaves the set unfinished; a restore of that set is refused.
@@ -1199,6 +1271,7 @@ def main() -> None:
             "counts",
             "roundtrip",
             "reds",
+            "osprey_sources",
         ],
     )
     parser.add_argument("--state", type=Path, required=True)
