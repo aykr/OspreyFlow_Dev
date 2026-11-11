@@ -577,15 +577,21 @@ def git(*args: str, check: bool = True) -> str:
 def main() -> int:
     only_live = "--only-live" in sys.argv
     live = "--live" in sys.argv or only_live
-    if git("status", "--porcelain", "--", "OspreyFlow_Core", "OspreyFlow_Build/tests").strip():
+    # The live plants are in the branch's own `entra_people.py`: no diff is applied for them, and the
+    # server's copy of the worktree (`stack_lease.sh remote`) is no git checkout.
+    diffs = [] if only_live else DIFFS
+    if (
+        not only_live
+        and git("status", "--porcelain", "--", "OspreyFlow_Core", "OspreyFlow_Build/tests").strip()
+    ):
         print("refused: the tree has uncommitted changes")
         return 2
-    for diff in DIFFS:
+    for diff in diffs:
         git("apply", str(diff))
     originals: dict[str, str] = {}
     reds = missed = faults = runs = 0
     try:
-        rc, tail = run_pytest(CONTROL)
+        rc, tail = run_pytest([PEOPLE_LIVE] if only_live else CONTROL)
         print(
             f"control (diffs applied, no plant): {'green' if rc == 0 else 'RED'} (exit {rc}) — {tail}"
         )
@@ -644,7 +650,7 @@ def main() -> int:
     finally:
         for target, text in originals.items():
             (CORE / target).write_text(text)
-        for diff in reversed(DIFFS):
+        for diff in reversed(diffs):
             git("apply", "-R", str(diff))
     rc, tail = run_pytest(CONTROL[:4])
     print(f"control (restored, branch alone): {'green' if rc == 0 else 'RED'} (exit {rc}) — {tail}")
