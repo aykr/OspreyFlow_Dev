@@ -1,7 +1,8 @@
-"""`ModelPort.extract`'s two engines for its suite (`06_DECISIONS.md` ADR-135 Amendments 5 and 6):
-the LiteLLM adapter (Deep read) and Laurium's. Kept apart from `tests/conformance/registry.py`, which
-imports every port's adapters, so Laurium's own 3.13 environment, which carries none of them, can run
-the suite; the registry re-exports `MODEL_EXTRACT_ADAPTERS`.
+"""`ModelPort.extract`'s two engines for its refusals through the gateway's stand-in
+(`test_suite_extract.py`; `06_DECISIONS.md` ADR-135 Amendments 5 and 6): the LiteLLM adapter (Deep
+read) and Laurium's. Kept apart from `tests/conformance/registry.py`, which imports every port's
+adapters, so Laurium's own 3.13 environment, which carries none of them, can run it. The live suite's
+extract cases run on both through `registry.MODEL_PORT_ADAPTERS` (`test_suite.py`).
 
 Each factory's `context(gateway)` takes the gateway's measured stand-in, which every adapter reaches
 over real HTTP as the gateway (`stand_in_http`), so both are held to one contract through one gateway
@@ -47,17 +48,21 @@ async def _litellm(gateway: Any) -> AsyncIterator[ModelPort]:
 
 @asynccontextmanager
 async def _laurium(gateway: Any) -> AsyncIterator[ModelPort]:
+    """`gateway.master_key` is the key the adapter is configured with; Laurium's own key is held on
+    the gateway by its real master key (`held_by`, where a case plants another), as the deployment
+    makes it."""
     from .laurium_in_process import laurium_service
 
-    with laurium_service(gateway) as transport:
+    with laurium_service(getattr(gateway, "held_by", gateway)) as running:
         adapter = ExtractLauriumAdapter(
             LauriumConfig(base_url="http://laurium", gateway_key=gateway.master_key),
-            transport=transport,
+            transport=running.transport,
         )
         try:
             yield adapter  # type: ignore[misc]
         finally:
             await adapter.aclose()
+        assert running.refused == [], f"Laurium's service asked for {running.refused}"
 
 
 MODEL_EXTRACT_ADAPTERS: list[ExtractAdapterFactory] = [

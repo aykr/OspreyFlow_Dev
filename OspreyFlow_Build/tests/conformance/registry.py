@@ -123,15 +123,49 @@ class ModelAdapterFactory:
 
     label: str
     context: Callable[[], AbstractAsyncContextManager[ModelPort]]
+    #: The `ModelPort` operations the adapter implements; a case for another is skipped, saying so.
+    offers: frozenset[str] = frozenset({"extract", "embed", "transcribe", "describe_image"})
+    #: A module the adapter's other side needs where this environment has it not: skipped, saying so.
+    needs: str | None = None
 
     def __str__(self) -> str:  # pytest parametrize id
         return self.label
+
+    def require(self, operation: str) -> None:
+        """Skip the calling case, with the reason, if this adapter cannot be asked `operation` here."""
+        import pytest
+
+        if operation not in self.offers:
+            pytest.skip(f"{self.label} implements {', '.join(sorted(self.offers))} only")
+        if self.needs:
+            pytest.skip(f"{self.label} needs {self.needs}, installed only in its own environment")
 
 
 def _model_litellm_factories() -> list[ModelAdapterFactory]:
     from adapters.model_litellm.testing import model_litellm_adapter
 
     return [ModelAdapterFactory(label="model_litellm", context=model_litellm_adapter)]
+
+
+def _model_laurium_factories() -> list[ModelAdapterFactory]:
+    """ADR-135 Amendment 6: Laurium's adapter, `extract` only, over its real service in-process, every
+    call to the stack's real LiteLLM and the pinned conformance model. Laurium runs only in its own
+    3.13 environment (`make laurium-service`); in the Conduit's, its cases skip with that reason."""
+    from adapters.model_litellm import CONFORMANCE_MODEL
+
+    def _context() -> AbstractAsyncContextManager[ModelPort]:
+        from tests.conformance.model_port.laurium_in_process import laurium_live_adapter
+
+        return laurium_live_adapter(CONFORMANCE_MODEL)  # type: ignore[return-value]
+
+    return [
+        ModelAdapterFactory(
+            label="extract_laurium",
+            context=_context,
+            offers=frozenset({"extract"}),
+            needs=None if importlib.util.find_spec("laurium") else "laurium",
+        )
+    ]
 
 
 @dataclass(frozen=True)
@@ -253,9 +287,8 @@ COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = [
     *_compute_rustworkx_factories(),
     *_compute_graphology_tier1_factories(),
 ]
-MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = _model_litellm_factories()
-#: ADR-135 Amendment 6: `ModelPort.extract`'s suite over both engines, through the gateway's
-#: stand-in. Its factories live in `model_port/extract_engines.py`, which imports no other port's
-#: adapters, so Laurium's own 3.13 environment can run the suite.
-from tests.conformance.model_port.extract_engines import MODEL_EXTRACT_ADAPTERS  # noqa: E402,F401
+MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = [
+    *_model_litellm_factories(),
+    *_model_laurium_factories(),
+]
 MEDIA_STORE_ADAPTERS: list[MediaStoreFactory] = _media_store_factories()

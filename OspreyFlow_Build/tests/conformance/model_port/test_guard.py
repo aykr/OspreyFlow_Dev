@@ -23,6 +23,14 @@ def test_model_port_extract_suite_imports_cleanly() -> None:
     assert suite_imports_cleanly("tests.conformance.model_port.test_suite_extract")
 
 
+def test_the_model_port_suite_holds_both_extraction_engines() -> None:
+    """ADR-135 Amendment 6: Laurium is registered for `test_suite.py`'s own extract cases, live,
+    and offers `extract` alone, so every other case skips it saying so, never silently."""
+    by_label = {str(f): f for f in MODEL_PORT_ADAPTERS}
+    assert list(by_label) == ["model_litellm", "extract_laurium"]
+    assert by_label["extract_laurium"].offers == frozenset({"extract"})
+
+
 def test_the_extract_suite_holds_both_engines() -> None:
     """ADR-135 Amendment 6: Deep read's adapter and Laurium's, one suite for both."""
     from tests.conformance.model_port.extract_engines import MODEL_EXTRACT_ADAPTERS

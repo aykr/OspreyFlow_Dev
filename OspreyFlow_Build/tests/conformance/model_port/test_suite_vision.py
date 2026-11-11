@@ -28,6 +28,7 @@ pytestmark = pytest.mark.parametrize("factory", MODEL_PORT_ADAPTERS, ids=str)
 async def test_describe_image_returns_data_conforming_to_the_requested_schema(
     factory: ModelAdapterFactory,
 ) -> None:
+    factory.require("describe_image")
     schema = {
         "type": "object",
         "properties": {"dominant_color": {"type": "string"}},

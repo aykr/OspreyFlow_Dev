@@ -1,13 +1,15 @@
-"""`ModelPort.extract`'s conformance suite on both engines (`06_DECISIONS.md` ADR-135 Amendments 5
-and 6): the LiteLLM adapter (Deep read) and Laurium's (`adapters/extract_laurium` and its service),
-parametrised over `MODEL_EXTRACT_ADAPTERS`.
+"""`ModelPort.extract`'s refusals on both engines (`06_DECISIONS.md` ADR-135 Amendments 5 and 6): the
+LiteLLM adapter (Deep read) and Laurium's (`adapters/extract_laurium` and its service), parametrised
+over `MODEL_EXTRACT_ADAPTERS`, through the gateway's measured stand-in served over real HTTP as the
+gateway (`stand_in_http`).
 
-Both reach the gateway's measured stand-in over real HTTP as the gateway (`stand_in_http`), so the
-two are held to one contract through one gateway that grants and refuses as the pinned LiteLLM does
-(rule 15's second worked example). The stand-in answers as a model would, with the text it was
-given; what is proved is the contract (schema in, schema-conforming output out, a malformed schema
-refused before any model call, a refusal never an empty finding), not extraction quality, as
-`test_suite.py`'s own extract cases prove it against the real proxy and the pinned model.
+**Only what the real gateway and model cannot be made to do on demand is here**: an answer that breaks
+the schema's type or one of its constraints, a gateway that refuses the token, a model with no route.
+The stand-in answers whatever it is told to, whatever the prompt says, so it proves nothing of a
+model's answer to Laurium's prompt. The contract's own cases (a conforming answer from the pinned
+model, a malformed schema refused before any call) are `test_suite.py`'s, run on both engines
+through `registry.MODEL_PORT_ADAPTERS` against the stack's real LiteLLM and the pinned conformance
+model.
 
 The Laurium case needs Laurium's service code, installed only in its own 3.13 environment; in the
 Conduit's environment it is skipped with that reason (the `laurium-service` CI job runs it).
@@ -20,7 +22,7 @@ from typing import Any
 import pytest
 
 from adapters.model_litellm import CONFORMANCE_MODEL
-from adapters.model_litellm.errors import ExtractionFailedError, InvalidExtractionSchemaError
+from adapters.model_litellm.errors import ExtractionFailedError
 from adapters.model_litellm.stand_in import StandInGateway
 from schemas.model import ExtractionRequest
 from tests.conformance.model_port.extract_engines import (
@@ -66,29 +68,6 @@ def _request(**changes: Any) -> ExtractionRequest:
     return ExtractionRequest(**fields)
 
 
-async def test_extract_returns_data_conforming_to_the_requested_schema(
-    factory: ExtractAdapterFactory,
-) -> None:
-    gateway = _gateway('{"name": "Owen Wilson"}')
-    async with factory.context(gateway) as adapter:
-        result = await adapter.extract(_request())
-    assert result.document_id == "doc-1"
-    assert result.model == CONFORMANCE_MODEL
-    assert result.data == {"name": "Owen Wilson"}
-    assert result.engine is None
-    assert gateway.asked == [CONFORMANCE_MODEL]
-
-
-async def test_extract_rejects_a_malformed_schema_before_calling_the_model(
-    factory: ExtractAdapterFactory,
-) -> None:
-    gateway = _gateway('{"name": "Owen Wilson"}')
-    async with factory.context(gateway) as adapter:
-        with pytest.raises(InvalidExtractionSchemaError):
-            await adapter.extract(_request(json_schema={"type": "not-a-real-json-schema-type"}))
-    assert gateway.asked == []
-
-
 async def test_extract_never_returns_an_answer_that_does_not_fit_the_schema(
     factory: ExtractAdapterFactory,
 ) -> None:
@@ -96,6 +75,7 @@ async def test_extract_never_returns_an_answer_that_does_not_fit_the_schema(
     async with factory.context(gateway) as adapter:
         with pytest.raises(ExtractionFailedError):
             await adapter.extract(_request())
+    assert gateway.asked  # refused for the answer, after the model was asked
 
 
 async def test_extract_checks_the_answer_against_every_constraint_of_the_schema(
@@ -108,14 +88,15 @@ async def test_extract_checks_the_answer_against_every_constraint_of_the_schema(
     async with factory.context(gateway) as adapter:
         with pytest.raises(ExtractionFailedError):
             await adapter.extract(_request(json_schema=schema))
+    assert gateway.asked
 
 
 async def test_extract_through_a_gateway_that_refuses_its_token_is_a_failure(
     factory: ExtractAdapterFactory,
 ) -> None:
     gateway = _gateway('{"name": "Owen Wilson"}')
-    gateway.master_key = "sk-another-master-the-adapter-does-not-hold"
-    async with factory.context(_with_key(gateway, MASTER)) as adapter:
+    held = _with_key(gateway, "sk-another-master-the-gateway-does-not-hold")
+    async with factory.context(held) as adapter:
         with pytest.raises(ExtractionFailedError):
             await adapter.extract(_request())
     assert gateway.asked == []
@@ -131,12 +112,13 @@ async def test_extract_of_a_model_the_gateway_has_no_route_for_is_a_failure(
 
 
 class _with_key:  # noqa: N801
-    """The gateway as the adapter is configured for it: `master_key` is what the adapter sends,
-    while the gateway itself holds another, so its token is refused."""
+    """The gateway as the adapter is configured for it: `master_key` is what the adapter holds, while
+    the gateway itself (`held_by`) holds another, so every key the adapter sends or derives is
+    refused."""
 
     def __init__(self, gateway: StandInGateway, sent: str) -> None:
-        self._gateway = gateway
+        self.held_by = gateway
         self.master_key = sent
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._gateway, name)
+        return getattr(self.held_by, name)

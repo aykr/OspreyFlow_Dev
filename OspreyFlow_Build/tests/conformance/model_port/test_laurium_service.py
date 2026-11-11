@@ -32,7 +32,16 @@ from adapters.model_litellm.usage import calling, engine_key, usage_tag  # noqa:
 from adapters.model_litellm.stand_in import StandInGateway, StandInProvider  # noqa: E402
 from schemas.model import ExtractionRequest  # noqa: E402
 
-from .laurium_in_process import MASTER, MODEL, import_app, laurium_service, stand_in  # noqa: E402
+from adapters.extract_laurium.keys import laurium_key  # noqa: E402
+
+from .laurium_in_process import (  # noqa: E402
+    BASE,
+    MASTER,
+    MODEL,
+    import_app,
+    laurium_service,
+    stand_in,
+)
 from .stand_in_http import resolve_litellm_here, serve  # noqa: E402
 
 SCHEMA = {
@@ -54,15 +63,19 @@ def _request(**changes: Any) -> ExtractionRequest:
     return ExtractionRequest(**fields)
 
 
-async def _extract(gateway: StandInGateway, req: ExtractionRequest, key: str = MASTER) -> Any:
-    with laurium_service(gateway) as transport:
+async def _extract(
+    gateway: StandInGateway, req: ExtractionRequest, key: str = MASTER, *, base: str = BASE
+) -> Any:
+    with laurium_service(gateway, base=base) as running:
         adapter = ExtractLauriumAdapter(
-            LauriumConfig(base_url="http://laurium", gateway_key=key), transport=transport
+            LauriumConfig(base_url="http://laurium", gateway_key=key), transport=running.transport
         )
         try:
             return await adapter.extract(req)
         finally:
             await adapter.aclose()
+            # Decision 4, read at the lookup: the service asked for no host but the gateway's.
+            assert running.refused == [], f"Laurium's service asked for {running.refused}"
 
 
 # --- at start ------------------------------------------------------------------------------------
@@ -105,6 +118,42 @@ async def test_a_finding_comes_back_through_the_gateway() -> None:
     result = await _extract(gateway, _request())
     assert result.data == {"name": "Owen Wilson"}
     assert gateway.asked == [MODEL]
+    # Decision 8: granted as Laurium's own scoped key, never the master key.
+    assert [token for token, _ in gateway.received] == [laurium_key(MASTER)]
+
+
+@pytest.mark.parametrize("base", ["/v1", ""])
+async def test_every_model_call_goes_to_the_gateway_and_no_other_host(base: str) -> None:
+    """Decision 4 at the call that picks the host: Laurium's `create_llm` given the gateway as
+    `openai_api_base`, at either base the settings accept. Every other name is refused at the
+    lookup and kept, so a call bound anywhere else is seen here, never sent."""
+    gateway = stand_in()
+    with laurium_service(gateway, base=base) as running:
+        adapter = ExtractLauriumAdapter(
+            LauriumConfig(base_url="http://laurium", gateway_key=MASTER),
+            transport=running.transport,
+        )
+        try:
+            result = await adapter.extract(_request())
+        except ExtractionFailedError:
+            result = None  # read below: which host was asked comes first
+        finally:
+            await adapter.aclose()
+    assert running.refused == []  # a call bound elsewhere names its host here
+    assert running.paths == [f"POST {base}/chat/completions"]
+    assert result is not None and result.data == {"name": "Owen Wilson"}
+
+
+def test_the_lookup_refuses_every_name_but_the_gateways() -> None:
+    """Rule 15: the fixture the test above relies on refuses another name, as asked, and keeps it."""
+    import socket
+
+    with resolve_litellm_here() as refused:
+        assert socket.getaddrinfo("litellm", 80)
+        for name in ("api.openai.com", b"api.anthropic.com", "localhost", "127.0.0.1"):
+            with pytest.raises(socket.gaierror):
+                socket.getaddrinfo(name, 443)
+    assert refused == ["api.openai.com", "api.anthropic.com", "localhost", "127.0.0.1"]
 
 
 async def test_an_unparseable_answer_is_a_failure_after_three_tries_never_an_empty_finding() -> None:
@@ -115,18 +164,23 @@ async def test_an_unparseable_answer_is_a_failure_after_three_tries_never_an_emp
 
 
 async def test_a_model_the_gateway_has_no_route_for_is_a_failure() -> None:
+    """Laurium's key names the deployment's own models alone, so the gateway refuses another model
+    on the key (403, `key_model_access_denied`, measured) before it looks for a route."""
     gateway = stand_in()
     with pytest.raises(ExtractionFailedError) as caught:
         await _extract(gateway, _request(model="no-such-model"))
-    assert "HTTP 400" in str(caught.value)
-    assert "Invalid model name" not in str(caught.value)
+    assert "HTTP 403" in str(caught.value)
+    assert "only access models" not in str(caught.value)
 
 
 async def test_a_wrong_gateway_key_is_a_failure_that_never_repeats_it() -> None:
+    """The gateway's 401 names the last four characters of the key it was sent (measured): here the
+    key derived from a master key the gateway does not hold."""
     gateway = stand_in()
     with pytest.raises(ExtractionFailedError) as caught:
         await _extract(gateway, _request(), key="sk-wrong-key-WXYZ")
-    assert "HTTP 401" in str(caught.value) and "WXYZ" not in str(caught.value)
+    sent = laurium_key("sk-wrong-key-WXYZ")
+    assert "HTTP 401" in str(caught.value) and sent[-4:] not in str(caught.value)
 
 
 async def test_a_model_the_provider_does_not_offer_is_model_unavailable() -> None:
@@ -187,8 +241,8 @@ async def test_the_gateway_unreachable_is_a_failure() -> None:
 
 async def test_the_real_service_refuses_a_call_without_the_gateways_token() -> None:
     gateway = stand_in()
-    with laurium_service(gateway) as transport:
-        async with httpx.AsyncClient(transport=transport, base_url="http://laurium") as client:
+    with laurium_service(gateway) as running:
+        async with httpx.AsyncClient(transport=running.transport, base_url="http://laurium") as client:
             resp = await client.post("/v1/extract", json=_request().model_dump(mode="json"))
     assert (resp.status_code, resp.json()) == (401, {"refusal": "no_gateway_token"})
     assert gateway.asked == []

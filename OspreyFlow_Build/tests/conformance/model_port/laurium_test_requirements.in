@@ -1,0 +1,28 @@
+# Laurium's test environment, never its image (ADR-135 Amendment 6): Python 3.13 with
+# OspreyFlow_Core/services/laurium/requirements.txt installed by hash, then laurium_test_requirements.txt,
+# compiled from this file with hashes and installed with --require-hashes --no-deps:
+#
+#   uv pip compile --python-version 3.13 --python-platform x86_64-manylinux_2_28 --only-binary :all: \
+#     --generate-hashes -c OspreyFlow_Core/services/laurium/requirements.txt \
+#     -o OspreyFlow_Build/tests/conformance/model_port/laurium_test_requirements.txt \
+#     OspreyFlow_Build/tests/conformance/model_port/laurium_test_requirements.in
+#
+# What the Build suite's own conftest needs, and the Conduit code the tests reach: the review queue's
+# store (`services.api.review`, asyncpg) for Laurium's findings reaching it `pending`. Versions are the
+# Conduit lock's (OspreyFlow_Core/uv.lock), so both environments test with the same ones.
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pyjwt==2.15.1
+cryptography==50.0.2
+python-ulid==4.0.1
+asyncpg==0.32.0
+jsonschema==4.26.0
+# services.extract's own imports, reached through the review queue (knowledge adapters, temporal).
+pyproj==3.8.0
+phonenumbers==9.0.41
+# tests/conformance/registry.py builds every port's factories at import, so ModelPort's own suite
+# (test_suite.py, with Laurium registered in MODEL_PORT_ADAPTERS) can be collected here. pyarrow is
+# Laurium's own pin (services/laurium/requirements.txt), not the Conduit lock's.
+duckdb==1.5.6
+networkx==3.7
+rustworkx==0.18.1
