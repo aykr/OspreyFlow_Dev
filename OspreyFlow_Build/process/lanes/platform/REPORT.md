@@ -1,32 +1,36 @@
-# Platform lane · P7b · report (11 November 2026, the Mac; built, the kind run left for after P11 and P12 part 2)
+# Platform lane · P7b · report (11 November 2026, the Mac; after the orchestrator's review; the kind run waits for P11/P12 part 2)
 
-**Ready to merge at `21e7891fafcf8cf7ff84008b913ac925d93e5be9`** (tree `19bd638f`), rebased on main 2733de4 (P11 part 1) at the orchestrator's word,
-the two schemas commits at its head; the commit above it holds this report, the server log and the gates' outputs
-alone. The rebase touched `spec/06_DECISIONS.md` alone (P11's ADR-135 Amendment 7 and this step's ADR-148 Amendment 5,
-both kept); the patch is otherwise line for line 8b46eda0's. Re-run at the head: `tests/cp_policy_check` 140 passed,
-`cp-policy-check` 0 violations on all three fixtures, 34 plants 34 red, the renders 0 differences from 2733de4
-(`gates/21e7891f.rebase-rerun.txt`, `gates/p7b_reds.21e7891f.log`, `gates/p7_renders_unchanged.21e7891f.log`). The
-full `make test` and `make -k ci` below are 8b46eda0's. Nothing of mine is running; nothing pushed.
+**Ready to merge at `f353827bcbed6b580ff2ec19cdbc7d1ef97c852b`** (tree `dfef4603`), on main ff0e07d, the three schemas
+commits at its head; the commit above it holds this report, the server log and the gates' outputs alone. Every run went
+through `stack_lease.sh offline platform` (no stack, no lease; `OSPREY_PORTS_SLOT=6`). Nothing running; nothing pushed.
 
 | Exit criterion | State | Proof |
 | --- | --- | --- |
-| `cp-policy-check` green on both shapes | Met: development, production and poc, 0 violations | `gates/8b46eda0.ci.txt` (`poc.yaml: 25 manifests, 0 violation(s)`) |
-| …red on each planted fault in the poc render | Met: every planted fault test runs on development and poc; 34 plants, 34 red | `test_cp_policy_check.py`, `gates/p7b_reds.957b8805.log` |
-| Decommission leaves nothing behind, red first | Check built, each branch red alone (Terraform the render declares, disks by tag, the tenant's kinds, buckets) | `test_cp_decommission_check.py` |
-| Install and decommission runbooks run end to end on kind | **Not yet**: with the acceptance run, after P11/P12 part 2 (Am 5 "Left"); proven by tests until then | `test_cloud_platform_poc.py` (parse, rights, order, platform blocks) |
-| Acceptance scenarios on kind (poc) | **Not yet**, same reason; packs at or below OFFICIAL-SENSITIVE only | Am 5 point 8 |
-| Other renders and the standard shape unchanged | Met: 0 differences beyond the two forgiven (ceiling; `shape: standard` in the config's copy) | `gates/p7_renders_unchanged.957b8805.log` (main moved since by docs alone) |
+| `cp-policy-check` green on both shapes | Met: development, production, poc, 0 violations | `gates/f353827b.ci.txt` |
+| …red on each planted fault in the poc render | Met: 47 plants, 47 red (the check, the runbooks, the shape, the ceiling, the render folder) | `gates/f353827b.reds-renders-guide.txt` |
+| Decommission leaves nothing behind, red first | Check built: Terraform-made Secrets and roles named ours, disks by account, region, namespace and claim, the tenant's kinds; the backups kept by P9's diff at merge (Am 5 point 20) | `test_cp_decommission_check.py` |
+| Runbooks end to end on kind; acceptance on kind | **Not yet**: after P11/P12 part 2; until then syntax, order and rights only | Am 5 "Left" |
+| Other renders and the standard shape unchanged | Met: 0 differences from ff0e07d beyond the ceiling | same |
 
-**Gates at 8b46eda0.** `make test`: 2 failed, 11350 passed: the GPU preflight case (the server has a GPU), and
-`test_admin_guide`'s appendix on main's guide, which is green with `P7b_admin_guide.diff` applied (61 passed, checked on
-fc32dce). `make -k ci`: one failure, `harness-a11y`'s install page timing out once (33 of 34). Rerun alone at the same head
-it passed 34 of 34 (`gates/8b46eda0.harness-a11y.txt`); this branch changes no screen. The workspace scan is clean now.
+**Gates at f353827b.** `make test`: 4 failed, 11629 passed. Each is a known cause:
+- the GPU preflight case (the server has a GPU);
+- `test_admin_guide`'s appendix, which `P7b_admin_guide.diff` makes green (61 passed);
+- `test_render_memory`'s OpenSearch case, main's own (in CARRIES);
+- `test_lanes_heartbeat`'s timing, which passed 5 of 5 alone earlier.
 
-**Reviews.** Own lane-reviewer: 9 must-fixes and 6 minors, every one fixed or carried (Am 5; friction row). Orchestrator:
-five findings folded in (ceiling, refusal words, LimitRange, first render's folder, digest carried forward), two ruled
-(no poc OpenSearch; the gateway is P11 part 2's). **Carried:** the standard shape's OpenSearch domain; the gateway for an
-engine added in Admin; `scripts/seed_internal.py`'s ceiling from `deployment.env` (the seeds' owner).
+`make -k ci`: one failure, `harness-a11y`, two screens timing out under a load average of 15. Rerun alone it passed 34 of 34
+(`gates/f353827b.harness-a11y.txt`), and this branch changes no screen.
 
-**Requests:** ratify the two `packages/schemas` commits and spec/10's appendix with them; mark ADR-148 Am 5's reservation
-written; apply `P7b_admin_guide.diff` at merge (docs adds its version row). **Decision taken:** "a scratch volume for
-Ingest" as the Ingest root's own claim (the orchestrator agreed). No questions for the owner.
+**Reviews.** My own lane-reviewer: 9 must-fixes; the orchestrator's: 8 must-fixes and minors. All are fixed or carried
+(ADR-148 Am 5, points 13-20; friction row).
+
+**Decisions taken:**
+- "A scratch volume for Ingest" is the Ingest root's own claim (agreed).
+- The kept backups come through case's `P9_decommission.diff` at merge, in place of this branch's flags (agreed: P9,
+  then P7b, then the diff; its 66 tests pass on these files). `backup/platform-p7b-with-kept-hooks` is kept until then.
+
+**Carried:** the standard shape's OpenSearch domain; the Admin-added engine's gateway (P11 part 2); the seeds' ceiling
+(CARRIES, studio-b); the identity step against a real Keycloak; the kind rehearsal's stand-ins for the platform's blocks.
+
+**Requests:** apply `P7b_admin_guide.diff` at merge with docs' version row; mark Am 5 written. P9's module stays beside
+`harness/cloud_platform/`, on five conditions I check at its "built". No questions for the owner.

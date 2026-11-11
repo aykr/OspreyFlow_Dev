@@ -161,3 +161,8 @@ the orchestrator fetches this clone.
 - Rebased onto 2733de4 (P11 part 1) at the orchestrator's word: one conflict, `spec/06_DECISIONS.md`'s end (both amendments
   kept). Re-run at 21e7891f: tests/cp_policy_check 140 passed, cp-policy-check 0 violations, 34/34 red, renders 0 differences.
   **P7b ready to merge at `21e7891fafcf8cf7ff84008b913ac925d93e5be9`** (tree `19bd638f9052cbea952ce9c83b8481064d62cf0e`).
+- After the orchestrator's review: gates at e1cd1d58 on 1d97ea9 (make -k ci green; make test's OpenSearch case, main's
+  own), then the kept-backups hooks dropped for case's diff at merge, and rebased onto ff0e07d (main's render.py moved).
+  At f353827b: 47/47 red, renders 0 differences, the guide 61 passed with the diff, make test 4 known, make -k ci's
+  harness-a11y timing out under load average 15, then 34/34 alone. All in `gates/`.
+  **P7b ready to merge at `f353827bcbed6b580ff2ec19cdbc7d1ef97c852b`** (tree `dfef4603d04c9c5b8ef77050f6dafde43f700d56`).
