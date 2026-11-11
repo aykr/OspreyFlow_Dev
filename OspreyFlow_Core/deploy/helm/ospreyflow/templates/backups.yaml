@@ -273,6 +273,8 @@ spec:
 {{/* The backup's and the restore's pod: who it runs as, and its service account. */}}
 {{- define "ospreyflow.backupPod" -}}
 serviceAccountName: {{ .b.serviceAccountName }}
+# Its own account's token, for its own role (IRSA) and the restore's writers check (P7b's `token` rule).
+automountServiceAccountToken: true
 {{- with .root.Values.imagePullSecrets }}
 imagePullSecrets: {{ toJson . }}
 {{- end }}

@@ -264,3 +264,20 @@ def test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_repla
     names = [c["name"] for c in pod["initContainers"]]
     assert names[names.index("restore-graph") - 1] == "writers"
     assert pod["initContainers"][names.index("writers")]["command"][-1] == "writers"
+
+
+def test_each_of_p9s_pods_runs_as_its_own_account_with_its_token() -> None:
+    """P7b's `token` rule: the backup, the claims run and both restores each name their own service
+    account and mount its token (their role, IRSA, and the restore's writers check); P9 renders no other
+    pod."""
+    values = _with_claims(rendered.values())
+    values["backups"]["restore"] = {"set": "20261111T021500Z"}
+    docs = [d for d in _docs(values) if d["kind"] in ("CronJob", "Job")]
+    names = {d["metadata"]["name"] for d in docs}
+    assert names == {"ospreyflow-backup", "ospreyflow-backup-claims", "ospreyflow-restore-20261111t021500z",
+                     "ospreyflow-restore-claims-20261111t021500z"}  # fmt: skip
+    for doc in docs:
+        pod = pod_spec(doc)
+        assert pod is not None
+        assert pod["serviceAccountName"] == "ospreyflow-backup", doc["metadata"]["name"]
+        assert pod["automountServiceAccountToken"] is True, doc["metadata"]["name"]

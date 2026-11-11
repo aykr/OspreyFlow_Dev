@@ -243,6 +243,8 @@ runner.PLANTS = [
     ("the restore rendered beyond one copy", RENDER,
      '        "restorable": int(arcadedb.get("replicas", 1)) == 1\n        and int(clickhouse.get("replicas", 1)) == 1,',
      '        "restorable": True,', [TH + "test_a_restore_beyond_one_copy_of_each_store_is_refused_naming_p9b"]),
+    ("a backup pod without its account's token mounted", CHART, "automountServiceAccountToken: true",
+     "automountServiceAccountToken: false", [TH + "test_each_of_p9s_pods_runs_as_its_own_account_with_its_token"]),
     ("the writers not checked again before ArcadeDB's databases are replaced", CHART,
      '"name" "writers" "image" $b.image', '"name" "writers-unused" "image" $b.image',
      [TH + "test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_replaced"]),
