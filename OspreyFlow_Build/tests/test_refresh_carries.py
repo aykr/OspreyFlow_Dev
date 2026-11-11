@@ -21,8 +21,8 @@ import os
 from pathlib import Path
 
 import pytest
-
 from scripts import refresh
+
 from tests.test_refresh import Recorder, Registrar
 from tests.test_refresh_before_the_gateway import (  # noqa: F401 - the fixture, by name
     _after_the_gateway_database,
@@ -60,7 +60,9 @@ def test_a_file_moved_into_place_keeps_its_owner(
     """Under sudo a rename leaves the file root's: each file renamed into place first takes the
     owner of the one it replaces."""
     _after_the_gateway_database(deployment)
-    owners = {p.name: (p.stat().st_uid, p.stat().st_gid) for p in deployment.iterdir() if p.is_file()}
+    owners = {
+        p.name: (p.stat().st_uid, p.stat().st_gid) for p in deployment.iterdir() if p.is_file()
+    }
     given: dict[str, tuple[int, int]] = {}
     monkeypatch.setattr(refresh.os, "geteuid", lambda: 0)
     monkeypatch.setattr(refresh.os, "chown", lambda p, u, g: given.update({Path(p).name: (u, g)}))

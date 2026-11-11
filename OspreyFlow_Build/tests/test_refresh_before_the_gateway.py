@@ -205,7 +205,7 @@ def test_a_required_secret_the_deployment_does_not_hold_is_refused_and_nothing_c
             line + "\n"
             for line in env.read_text().splitlines()
             if not line.startswith("OSPREY_LITELLM_SALT_SECRET=")
-        ),  # fmt: skip
+        ),
         encoding="utf-8",
     )
     before = _hashes(deployment)
@@ -250,7 +250,7 @@ def test_compose_itself_accepts_the_refreshed_project(deployment: Path) -> None:
             str(deployment / "deployment.env"),
             "config",
             "-q",
-        ],  # fmt: skip
+        ],
         capture_output=True,
         text=True,
         timeout=60,

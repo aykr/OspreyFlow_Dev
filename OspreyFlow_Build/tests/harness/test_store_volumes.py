@@ -179,7 +179,7 @@ IMAGES: dict[str, dict[str, Any]] = {
             "/home/arcadedb/log",
             "/home/arcadedb/replication",
         ],
-    },  # fmt: skip
+    },
     "valkey/valkey:8.0": {"id": "sha256:valkey", "volumes": []},
     "opensearchproject/opensearch:2.17.1": {"id": "sha256:search", "volumes": []},
     "osprey/api:local": {"id": "sha256:api", "volumes": []},
