@@ -236,33 +236,57 @@ kubectl -n "$NS" delete secret {values["secrets"]["name"]} --ignore-not-found
 ## 6. The buckets and the images (the account's own commands)
 
 Each bucket emptied of every object version and every delete marker (`media` keeps versions), five
-hundred keys a call, then each repository emptied of its images, a hundred a call: the namespace's
-Terraform cannot remove either while it holds anything. A listing that fails stops the step.
+hundred keys a call (the listing sliced to five hundred, since `--max-items` counts the versions
+alone), then each repository emptied of its images, a hundred a call, the tagged ones (buildx's
+indexes) before the untagged ones they hold: the namespace's Terraform cannot remove either while it
+holds anything. Each block stops on a listing that fails, a call that answers with per-key errors or
+failures, and a listing that comes back the same after a delete, and ends on whether it stopped.
 
 ```bash platform
 failed=
 for b in {buckets}; do
   for kind in Versions DeleteMarkers; do
+    : > "$WORK/versions.last.json"
     while :; do
       if ! aws s3api list-object-versions --region "$REGION" --bucket "$PREFIX$b" --max-items 500 --output json \\
-          --query "{{Objects: $kind[].{{Key: Key, VersionId: VersionId}}}}" > "$WORK/versions.json"; then
+          --query "{{Objects: $kind[:500].{{Key: Key, VersionId: VersionId}}}}" > "$WORK/versions.json"; then
         echo "listing $PREFIX$b's $kind failed: stopped"; failed=1; break 3
       fi
       grep -q '"Key"' "$WORK/versions.json" || break
-      aws s3api delete-objects --region "$REGION" --bucket "$PREFIX$b" --delete "file://$WORK/versions.json" >/dev/null \\
-        || {{ echo "deleting from $PREFIX$b failed: stopped"; failed=1; break 3; }}
+      if cmp -s "$WORK/versions.json" "$WORK/versions.last.json"; then
+        echo "$PREFIX$b's $kind are the same after a delete: stopped"; failed=1; break 3
+      fi
+      cp "$WORK/versions.json" "$WORK/versions.last.json"
+      if ! errors=$(aws s3api delete-objects --region "$REGION" --bucket "$PREFIX$b" --delete "file://$WORK/versions.json" \\
+          --query 'length(Errors || `[]`)' --output text); then
+        echo "deleting from $PREFIX$b failed: stopped"; failed=1; break 3
+      fi
+      [ "$errors" = "0" ] || {{ echo "deleting from $PREFIX$b: $errors key(s) refused: stopped"; failed=1; break 3; }}
     done
   done
 done
 test -z "$failed"
+```
+
+```bash platform
+failed=
 for repository in {repositories}; do
-  while :; do
-    if ! ids=$(aws ecr list-images --region "$REGION" --repository-name "$repository" --max-items 100 --query 'imageIds[*]' --output json); then
-      echo "listing $repository's images failed: stopped"; failed=1; break 2
-    fi
-    [ "$ids" = "[]" ] && break
-    aws ecr batch-delete-image --region "$REGION" --repository-name "$repository" --image-ids "$ids" >/dev/null \\
-      || {{ echo "deleting $repository's images failed: stopped"; failed=1; break 2; }}
+  for status in TAGGED UNTAGGED; do
+    last=
+    while :; do
+      if ! ids=$(aws ecr list-images --region "$REGION" --repository-name "$repository" --filter "tagStatus=$status" \\
+          --max-items 100 --query 'imageIds[*]' --output json); then
+        echo "listing $repository's images failed: stopped"; failed=1; break 3
+      fi
+      [ "$ids" = "[]" ] && break
+      [ "$ids" = "$last" ] && {{ echo "$repository's images are the same after a delete: stopped"; failed=1; break 3; }}
+      last=$ids
+      if ! refused=$(aws ecr batch-delete-image --region "$REGION" --repository-name "$repository" --image-ids "$ids" \\
+          --query 'length(failures)' --output text); then
+        echo "deleting $repository's images failed: stopped"; failed=1; break 3
+      fi
+      [ "$refused" = "0" ] || {{ echo "deleting $repository's images: $refused refused: stopped"; failed=1; break 3; }}
+    done
   done
 done
 test -z "$failed"
@@ -289,7 +313,8 @@ there.
   deployment's files in a module of their own.
 - The disks are in the cluster's account: the platform team runs that line with its own credentials
   and names its account as `CLUSTER_ACCOUNT` (the check refuses a listing from any other account or
-  region), or gives its output as `DISKS`.
+  region), or gives its output as `DISKS` in the form this block writes (`describe-volumes`' answer
+  with the `Account` and `Region` it was asked in; the check refuses any other).
 
 ```bash platform
 : "${{STATE:?the output of tofu state list in the namespace folder, saved to a file}}"
@@ -301,6 +326,9 @@ for b in {buckets}; do
   else echo "$PREFIX$b could not be checked: $out"; failed=1; fi
 done
 test -z "$failed"
+```
+
+```bash platform
 : "${{CLUSTER_ACCOUNT:?the AWS account that holds the cluster disks}}"
 if [ -n "${{DISKS:-}}" ]; then cp "$DISKS" "$WORK/disks.json"; else
   aws ec2 describe-volumes --region "$REGION" --filters "Name=tag:{DISK_NAMESPACE_TAG},Values=$NS" --output json > "$WORK/disks-listed.json"

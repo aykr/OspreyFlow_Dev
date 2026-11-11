@@ -225,7 +225,7 @@ def check(
                 Leftover(
                     f"disk/{volume}",
                     f"the disk of claim {tags.get(DISK_CLAIM_TAG, '?')} is kept: "
-                    f"aws ec2 delete-volume --volume-id {volume}",
+                    f"aws ec2 delete-volume --region {region} --volume-id {volume}",
                 )
             )
     for volume in (volumes or {}).get("items") or []:
@@ -254,7 +254,9 @@ def check(
         if bucket and bucket.startswith(bucket_prefix):
             found.items.append(
                 Leftover(
-                    f"bucket/{bucket}", f"empty it, then delete it: aws s3 rb s3://{bucket} --force"
+                    f"bucket/{bucket}",
+                    "empty it of every version and delete marker as DECOMMISSION.md's step 6 does, "
+                    f"then: aws s3api delete-bucket --region {region} --bucket {bucket}",
                 )
             )
     return found

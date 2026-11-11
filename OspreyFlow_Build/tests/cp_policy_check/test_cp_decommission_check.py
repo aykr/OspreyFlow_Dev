@@ -204,7 +204,7 @@ def test_a_disk_kept_after_its_claim_is_named(
     given["disks"]["Volumes"].append(_disk("vol-0abc", NAMESPACE, "databases-arcadedb-0"))
     [item] = _check(values, terraform, given).items
     assert item.what == "disk/vol-0abc"
-    assert "aws ec2 delete-volume --volume-id vol-0abc" in item.why
+    assert "aws ec2 delete-volume --region eu-west-2 --volume-id vol-0abc" in item.why
 
 
 def test_a_volume_object_kept_after_its_claim_is_named_where_it_may_be_listed(
@@ -361,3 +361,14 @@ def test_only_the_deployment_s_place_in_the_state_is_its_own(
     given["module"] = module
     found = _check(values, terraform, given)
     assert [i.what for i in found.items] == ([f"terraform/{address}"] if ours else [])
+
+
+def test_a_left_bucket_s_removal_names_its_region_and_step_6(
+    values: dict[str, Any], terraform: dict[str, str]
+) -> None:
+    """`rb --force` cannot empty a versioned bucket; the removal points back to step 6."""
+    given = _clean()
+    given["buckets"] += f"{PREFIX}media\n"
+    [item] = _check(values, terraform, given).items
+    assert "step 6" in item.why
+    assert f"aws s3api delete-bucket --region {REGION} --bucket {PREFIX}media" in item.why

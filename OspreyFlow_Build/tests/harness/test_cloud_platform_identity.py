@@ -103,3 +103,30 @@ def test_a_refused_administrator_fails_the_step(
 
 def test_it_says_how_it_is_run_when_given_nothing(capsys: pytest.CaptureFixture[str]) -> None:
     assert identity.main([]) == 2
+
+
+def test_the_sign_in_step_s_port_forward_is_the_namespace_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The identity step reaches Keycloak through the cluster install's own port-forward, which runs
+    as the namespace's tenant (`kubectl -n <namespace>`), never cluster-wide."""
+    import subprocess
+
+    from harness.cluster_install import SystemKube
+
+    asked: list[list[str]] = []
+
+    class Refused(Exception):
+        pass
+
+    def popen(argv: list[str], **_: Any) -> Any:
+        asked.append(argv)
+        raise Refused
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    with (
+        pytest.raises(Refused),
+        SystemKube().port_forward("ospreyflow-poc", "service/keycloak", 8080),
+    ):
+        pass
+    assert asked[0][:4] == ["kubectl", "-n", "ospreyflow-poc", "port-forward"]
