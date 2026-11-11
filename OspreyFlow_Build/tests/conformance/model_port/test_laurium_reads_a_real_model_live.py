@@ -30,6 +30,10 @@ from .laurium_in_process import laurium_live_adapter
 MODEL = os.environ.get("OSPREY_LAURIUM_LIVE_MODEL", "")
 
 pytestmark = [
+    # One event loop for the module, as the Conduit and Laurium's service each run one: LangChain's
+    # OpenAI client caches its HTTP client across instances, so a test on a fresh loop met the last
+    # test's closed one ("Event loop is closed", run 2 of the first leased run; not the model's).
+    pytest.mark.asyncio(loop_scope="module"),
     pytest.mark.skipif(
         not (MODEL and os.environ.get("LITELLM_PORT") and os.environ.get("LITELLM_API_KEY")),
         reason="live: set LITELLM_HOST/PORT/API_KEY (the pinned gateway with its own database) and "
