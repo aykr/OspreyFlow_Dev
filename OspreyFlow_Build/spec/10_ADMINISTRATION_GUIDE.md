@@ -750,14 +750,21 @@ nothing**: the set-up console does not offer it, and `ospreyflow install` does n
 decisions are ADR-148's.
 
 **Not yet installable end to end.** What is built is the render, the chart and its policy check.
-Sign-in through the organisation's Entra ID, backups and restore, and the shared folders moved off
-the one volume are *coming* (each named below). Nothing here has yet run in the platform's own
-namespace; the chart has run on a local kind cluster set to the platform's rules, where the Conduit,
-the workers and the egress policies were not yet shown working (P7a's acceptance run will show them).
+Nothing here has run in the platform's own namespace. On a local kind cluster set to the platform's
+rules, three things were not yet shown working: the Conduit and the workers running as user 10001,
+Keycloak starting with group 0 (below), and the egress policies enforced. P7b's kind run is to show
+them. And nothing yet runs the identity step that a cluster's install runs once Keycloak answers
+(the Conduit's client secret set on its clients, its service account's roles), so sign-in is not
+configured on this profile until Entra ID replaces Keycloak (*coming*, section 6a.7).
+The commands that need the platform or a cluster (`helm install`, `tofu`, the push itself) have
+not yet been run anywhere; they are to be shown on a kind cluster in P7b's run. The render commands
+below have been run as written.
 
 ### 6a.1 What is rendered
 
-Give the profile in `osprey.yaml`:
+Give the profile in `osprey.yaml`. The `map:` section is **required**: the Conduit reads its
+basemaps from it at start, and this profile has no install to write one, so a render without it is
+refused ("declare map:").
 
 ```yaml
 profile: cloud-platform
@@ -776,22 +783,49 @@ cloud_platform:
     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
 deployment:
   highest_marking: OFFICIAL-SENSITIVE
+map:                             # required
+  default: osm-local
+  providers:
+  - id: osm-local
+    label: OpenStreetMap
+    kind: vector
+    licence: {id: ODbL, redistributable: true, client_scope: open}
+    source: file:///data/tiles/osm-local.pmtiles
+    variables: {}
+    proxy: none
+    style: bundled:osprey-dark
+    attribution: "© OpenStreetMap contributors"
 ```
 
-Every `cloud_platform` setting is in appendix A. **Set `deployment.highest_marking` yourself**: a
-platform that hosts data up to, but not including, SECRET needs the ceiling at OFFICIAL-SENSITIVE,
-and the profile does not yet set it for you (*coming*: ADR-148 decision 10's default for this
-profile). Without it the ceiling is the scheme's highest, SECRET.
+Every `cloud_platform` setting is in appendix A. A map provider proxied through the Conduit also
+names its host's networks in `egress_nets` (section 6a.5). **Set `deployment.highest_marking`
+yourself**: a platform that hosts data up to, but not including, SECRET needs the ceiling at
+OFFICIAL-SENSITIVE, and the profile does not yet set it for you (*coming*). Without it the ceiling
+is the scheme's highest, SECRET.
 
-Then, in `OspreyFlow_Core`, `PYTHONPATH=.:packages python -m harness.render --config osprey.yaml` writes
-`deploy/generated/cloud-platform/`:
+Then, in `OspreyFlow_Core`:
+
+```
+mkdir -p deploy/generated/cloud-platform/terraform
+PYTHONPATH=.:packages python -m harness.render --config osprey.yaml --allow-unpinned
+```
+
+**Make the `terraform` folder first**: the render does not make it, and the first render into a new
+folder stops with `No such file or directory: …/terraform/ecr.tf` (a known issue). The render writes
+`deploy/generated/cloud-platform/` (`deploy/generated/<deployment.name>/` when the deployment has a
+name):
 
 | File | What it is |
 | --- | --- |
 | `values.yaml` | Our Helm chart's values for the namespace: `helm install ospreyflow <chart> -n <namespace> -f values.yaml`. It holds no secret |
-| `versions.lock` | Every image, pinned by its digest |
+| `versions.lock` | Every image and its digest; an image not yet resolved is marked `unresolved` |
 | `images.yaml` | What `ospreyflow images push` copies into the registry (section 6a.4) |
 | `terraform/*.tf` | The namespace's AWS and Kubernetes resources, in the environments repository's folder shape, for a person to raise as a pull request (section 6a.3) |
+| `osprey.yaml` | A copy of the settings it was rendered from |
+
+Until our own images are in the registry, a render without `--allow-unpinned` is refused, naming the
+images it has no digest for. **Never install the values of an unpinned render**: section 6a.4 ends
+with the render to install.
 
 **A platform is a settings file**, `harness/cloud_platform/platforms/<name>.yaml`: its ingress class
 and annotations, the controller's namespace, its storage class, its egress policy kind and the
@@ -802,18 +836,19 @@ own file is `client.yaml`.
 **What runs, and what the platform gives instead.** ArcadeDB and ClickHouse (with ClickHouse Keeper)
 run in the namespace as StatefulSets on the platform's `gp2-expand` class, with a disruption budget
 allowing one copy down at a time and two minutes for ArcadeDB to close its databases. Postgres is RDS
-PostgreSQL 16, Valkey is ElastiCache (Redis 7), SeaweedFS is S3, and OpenSearch is the platform's
-OpenSearch 2.x, each reached over TLS. Caddy is not rendered: the platform's NGINX ingress is the
-front door, with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are
-not rendered, since the platform has no GPU; the model gateway (LiteLLM) is rendered only while a
-model engine is enabled. The Conduit's image is built without Java on this profile, so *Admin ›
-Maps*' **Build** says that the basemap cannot be built here; there is no way yet to bring a basemap
-built elsewhere onto the platform (*coming*), so the map uses its providers alone.
+PostgreSQL 16 and Valkey is ElastiCache (Redis 7), each reached over TLS; SeaweedFS is S3. The
+platform's OpenSearch 2.x domain is made by default (`components.search` defaults to `opensearch`),
+but no pod is given its address yet, so it is unused. Caddy is not rendered: the platform's NGINX
+ingress is the front door, with ModSecurity on and the IP allow-list from `allow_from`. Local models
+and Whisper are not rendered, since the platform has no GPU; the model gateway (LiteLLM) is rendered
+only while a model engine is enabled. The Conduit's image is built without Java on this profile, so
+*Admin › Maps*' **Build** says that the basemap cannot be built here; there is no way yet to bring a
+basemap built elsewhere onto the platform (*coming*), so the map uses its providers alone.
 
 **Every pod runs as user and group 10001**, non-root, with no privilege escalation, every capability
 dropped and seccomp's runtime default; every Dockerfile of ours is `USER 10001:10001`. One exception
-until Entra ID replaces it: Keycloak's pod adds group 0 as a supplementary group, which its image
-needs to build itself at start.
+until Entra ID replaces it: Keycloak's pod adds group 0 as a supplementary group, since its image
+builds itself at start into a folder owned by group 0. That it starts this way is not yet shown.
 
 **The shared folders, for now**, are one ReadWriteOnce volume on the platform's class, and every pod
 that mounts it is placed on the same node. Moving uploads, staging, tiles and the settings files off
@@ -821,9 +856,12 @@ it, and the recipes repository off the shared disk, is *coming*.
 
 ### 6a.2 What the namespace asks for
 
-Each container asks for its CPU and memory and has a memory limit; none has a CPU limit, so a
-namespace's LimitRange never caps one by default. ArcadeDB's Java heap is three quarters of its memory
-limit. **These sizes are proposals, not measurements**: no load has yet run on the platform.
+Each container asks for its CPU and memory and has a memory limit. **None names a CPU limit**, on
+purpose: a CPU limit throttles a store's compaction and the Conduit's bursts. So a LimitRange in the
+namespace with a default CPU limit puts that limit on every container, and a ResourceQuota counting
+`limits.cpu` refuses every pod that names none: both are questions for the platform's team (section
+6a.8). ArcadeDB's Java heap is three quarters of its memory limit. **These sizes are proposals, not
+measurements**: no load has yet run on the platform.
 
 | Component | Copies, development | Copies, production | CPU asked for | Memory asked for | Memory limit |
 | --- | --- | --- | --- | --- | --- |
@@ -835,70 +873,99 @@ limit. **These sizes are proposals, not measurements**: no load has yet run on t
 | ClickHouse | 1 | 2 | 1 | 8 GiB | 8 GiB |
 | ClickHouse Keeper | 1 | 3 | 0.1 | 512 MiB | 512 MiB |
 | Keycloak (until Entra ID) | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
-| The report sync, Superset | When reporting is on | 2 each | 0.1, 0.25 | 256 MiB, 1 GiB | 512 MiB, 2 GiB |
-| The model gateway (LiteLLM) | When an engine is enabled | 1 | 0.25 | 512 MiB | 1 GiB |
+| The report sync, when reporting is on | 1 | 2 | 0.1 | 256 MiB | 512 MiB |
+| Superset, when reporting is on | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
+| The model gateway (LiteLLM), while an engine is enabled | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
+| Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
-Together, with nothing that reaches out enabled in development and reporting and an engine on in
-production, the requests come to **about 27 GiB of memory and 3.7 CPU in development**, and **about
-70 GiB and 9.7 CPU in production**; the limits to about 33 GiB and 86 GiB. Ask the platform's team
-for a ResourceQuota at least this large: below it, pods are left unscheduled.
+With nothing that reaches out enabled in development, and reporting and an engine on in production,
+the requests come to **about 27 GiB of memory and 3.7 CPU in development**, and **about 70 GiB and 9.7
+CPU in production**; the memory limits to about 33 GiB and 86 GiB. A ResourceQuota on requests and
+memory limits must be at least this large, or pods are left unscheduled; one on `limits.cpu` refuses
+them whatever its size, until a CPU limit is set.
 
 ### 6a.3 The namespace's Terraform, and the secrets each component reads
 
 The Terraform is plain AWS and Kubernetes resources, not the platform's own modules, and each file
 says what it makes, so a reviewer may swap a block for one of the platform's modules. `tofu fmt`
-leaves it unchanged and `tofu validate` accepts it. The platform gives it the namespace, the VPC, the
-subnets and the cluster's OIDC provider (`namespace`, `vpc_id`, `subnet_ids`,
-`eks_oidc_provider_arn`, `eks_oidc_issuer`); the platform's state holds the passwords it makes.
+leaves it unchanged and `tofu validate` accepts it.
 
 | File | What it makes |
 | --- | --- |
+| `variables.tf` | What the platform gives the namespace: `namespace`, `vpc_id`, `subnet_ids`, `eks_oidc_provider_arn` and `eks_oidc_issuer`. The providers, the backend and the tags are the namespace folder's own |
 | `rds.tf` | RDS PostgreSQL 16, encrypted, reached over TLS, and the secret `rds-postgresql-instance-output` |
 | `elasticache.tf` | ElastiCache (Redis 7), TLS and a token, and the secret `elasticache-redis` |
-| `opensearch.tf` | The OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
+| `opensearch.tf` | Only when `components.search` is `opensearch`: the OpenSearch domain, encrypted, HTTPS only, inside the VPC, and the secret `opensearch-output` |
 | `s3.tf` | The buckets, private and encrypted, named from a prefix, and the secret `s3-bucket-output` |
 | `irsa.tf` | The service account `ospreyflow` and its IAM role, given the buckets, so no S3 key exists anywhere |
 | `ecr.tf` | A repository for each image, scanned on push |
 | `secrets.tf` | Our own Secret, `ospreyflow-secrets`: each password made here (`random_password`), and each key a person holds (a model engine's, a connection's, the mail server's password) as a sensitive variable |
 
-**The managed stores' details are read by name from those secrets**, and only by the pods that read
-the stores. No such detail is in a file, in `values.yaml` or in our own Secret.
+**The platform's Terraform state holds every secret here**: the passwords it makes, and each key a
+person holds, which is a sensitive variable with no default written into the Secret's data. How the
+environments repository's pipeline is given those variables is a question for the platform's team
+(section 6a.8).
+
+**The managed stores' details are read by name from their secrets**, and only by the pods that read
+the stores. No such detail is in a file, in `values.yaml` or in our own Secret. The pods that take the
+whole environment (the ConfigMap `ospreyflow-env` and the Secret `ospreyflow-secrets`) have some of
+its keys set blank in their own environment, so they never see them:
 
 | Component | Reads |
 | --- | --- |
-| The Conduit, the workers, the report sync, Superset | `rds-postgresql-instance-output` (`rds_instance_address`, `rds_instance_port`, `database_username`, `database_password`, `database_name`), `elasticache-redis` (`primary_endpoint_address`, `port`, `auth_token`), `s3-bucket-output` (`bucket_prefix`), and the whole of `ospreyflow-secrets` with the settings in the ConfigMap `ospreyflow-env` |
-| The Glass, named-entity extraction | `ospreyflow-secrets` and `ospreyflow-env` whole; no managed store's detail |
+| The Conduit | `rds-postgresql-instance-output` (`rds_instance_address`, `rds_instance_port`, `database_username`, `database_password`, `database_name`), `elasticache-redis` (`primary_endpoint_address`, `port`, `auth_token`) and `s3-bucket-output` (`bucket_prefix`); `ospreyflow-env` and `ospreyflow-secrets`, with every model engine's key and the gateway's salt (`OSPREY_LITELLM_SALT_SECRET`) and database password (`OSPREY_LITELLM_DB_PASSWORD`) blank. It alone keeps the gateway's master key (`OSPREY_LITELLM_MASTER_SECRET`, for its admin API) and the connections' secrets |
+| The workers, the report sync, Superset | The same three managed secrets and the same keys; `ospreyflow-env` and `ospreyflow-secrets` with, besides the Conduit's blanks, the gateway's master key and the connections' secrets blank |
+| The Glass, named-entity extraction | `ospreyflow-env` and `ospreyflow-secrets` with the same blanks as the workers; no managed store's detail |
 | ArcadeDB | `OSPREY_ARCADEDB_PASSWORD`, `OSPREY_ARCADEDB_CLUSTER_TOKEN` |
 | ClickHouse | `OSPREY_CLICKHOUSE_PASSWORD` |
 | Keycloak, and its database's set-up | `OSPREY_KEYCLOAK_ADMIN`, `OSPREY_KEYCLOAK_ADMIN_PASSWORD`, `OSPREY_KEYCLOAK_DB_PASSWORD`; `rds-postgresql-instance-output`'s address, user and password |
-| The model gateway, and its database's set-up | `OSPREY_LITELLM_DB_PASSWORD`, `OSPREY_LITELLM_MASTER_SECRET`, `OSPREY_LITELLM_SALT_SECRET`, `OSPREY_MODEL_PROVIDER_KEY`; `rds-postgresql-instance-output`'s address, user and password |
+| The model gateway, and its database's set-up | `OSPREY_LITELLM_DB_PASSWORD`, `OSPREY_LITELLM_MASTER_SECRET`, `OSPREY_LITELLM_SALT_SECRET`, and each enabled engine's key (`OSPREY_MODEL_KEY_<NAME>`, or `OSPREY_MODEL_PROVIDER_KEY` for a single `models.provider`); `rds-postgresql-instance-output`'s address, user and password |
 | ClickHouse Keeper | Nothing |
 
 The Conduit, the workers and the report sync run as the service account `ospreyflow`, which reaches
-the buckets through its role. Applying the pull request asks for each sensitive variable: a key a
-person holds is given then, and is in no file. A password two readers name differently (`ARCADEDB_ROOT_PASSWORD`,
+the buckets through its role. A password two readers name differently (`ARCADEDB_ROOT_PASSWORD`,
 `CLICKHOUSE_PASSWORD`, `OIDC_TOKEN_EXCHANGE_CLIENT_SECRET`) is written from the one
-`random_password`. The OpenSearch domain is made, but no pod is given its address yet.
+`random_password`.
 
 ### 6a.4 Images into the namespace's registry
 
-```
-PYTHONPATH=.:packages python -m harness.render --config osprey.yaml --allow-unpinned
-aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.eu-west-2.amazonaws.com
-ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --dry-run
-ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com
-PYTHONPATH=.:packages python -m harness.render --config osprey.yaml
-```
+In this order:
 
-Render first: the plan, `images.yaml`, names every image. Until ours are in the registry the render is
-refused unless `--allow-unpinned` is given. `ospreyflow images push` builds our images from this
-checkout for the platform's nodes (`linux/amd64` unless `--platform` says otherwise, so a Mac with an
-Apple chip does not push an arm64 image) and pushes them, and copies each third-party image by its
-digest (`docker buildx imagetools create`), so the copy is the image the values pin. `--dry-run`
-says each step and runs none; `--from <folder>` reads another render's plan. A repository the
-namespace's Terraform did not make, or a registry you have not signed in to, stops the push. Signing
-in is yours, never the command's. Render again afterwards: our images are then pinned by the digest
-the registry gives its copy.
+1. **The unpinned render** (section 6a.1). Its `images.yaml` names every image.
+2. **Apply `ecr.tf`'s pull request first**: it makes a repository for each image, and a registry makes
+   none on push.
+3. **Sign in, then push**, on a computer with Docker, from the checkout you rendered in:
+
+   ```
+   aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+   ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform --dry-run
+   ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform
+   ```
+
+4. **Render again, pinned**, on the same computer, with Docker running:
+
+   ```
+   PYTHONPATH=.:packages python -m harness.render --config osprey.yaml
+   ```
+
+   This is the render to install: every image is pinned by its digest, ours by the digest the
+   registry gave its copy.
+
+`ospreyflow images push` builds our images from this checkout for the platform's nodes
+(`linux/amd64` unless `--platform` says otherwise, so a Mac with an Apple chip does not push an arm64
+image) and pushes them, and copies each third-party image (`docker buildx imagetools create`).
+`--dry-run` says each step and runs none. `--registry` must be the render's `cloud_platform.registry`,
+or the command refuses. Give `--from` with the render's folder: without it the command reads
+`deploy/generated/cloud-platform/` in the checkout it finds, which is not the render's folder when the
+deployment has a name. A repository the namespace's Terraform did not make, or a registry you have not
+signed in to, stops the push. Signing in is yours, never the command's.
+
+**Known issue: the third-party images are copied by tag.** An unpinned render pins nothing, so its
+plan names each third-party image by its tag (ArcadeDB, ClickHouse, ClickHouse Keeper, Keycloak's
+`26.0`, which moves, and Postgres; the gateway, when it is rendered, alone by its digest). The pinned render then
+looks each digest up again. If a tag moved in between, the values pin a digest the registry's copy
+does not have, and the pod does not start. Push and render again soon after one another, and check
+that each pinned third-party image is in the registry before installing.
 
 ### 6a.5 What the namespace may reach
 
@@ -917,44 +984,48 @@ open-egress policy is not rendered. The allow policy admits:
   disagree.
 
 Calico's open-source policy matches networks, not names, so each of those hosts names its networks
-in `cloud_platform.egress_nets` (or, for S3 and STS, the platform's file names them), and a host
-without them is refused at render, in words naming it. **No network wider than /16** (IPv4) or /48
-(IPv6), and never a default route, is accepted. Entra ID's endpoints join the list with Entra ID
-(*coming*); the S3 and Athena connections' own role and egress lines are *coming* too.
+in `cloud_platform.egress_nets`, and a host without them is refused at render, in words naming it.
+For S3 and STS a platform's file may name them instead (its `egress.service_nets`); the platform's
+file names none yet, so each deployment names them. **No network wider than /16** (IPv4) or /48
+(IPv6), and never a default route, is accepted.
 
 **Narrow the managed networks.** The platform's file names its whole shared VPC, `172.20.0.0/16`, as
 the managed stores' network, so every pod may reach every address in it, other tenants' managed
 stores included. Narrow it to our stores' own subnets once the platform's team give them.
 
-**Ingress** is the platform's controller alone: every pod admits only the namespace's own pods and the
-controller's namespace. The Ingress serves the Glass, `id.` (Keycloak, until Entra ID) and, when
-reporting is on, `bi.` (Superset) at `network.public_origin`'s names. Its read and send timeouts are an hour, for the Glass's
-live updates, and its body-size limit is the Conduit's upload cap, 512 MiB; ModSecurity may refuse an
-upload long before that (the first open question below).
+**Ingress** is the platform's controller and the namespace's own pods. Every pod admits the
+namespace's own pods; the Ingress's backends (the Glass, Keycloak and Superset) also admit the
+controller's namespace, on their own ports. The Ingress serves the Glass, `id.` (Keycloak, until
+Entra ID) and, when reporting is on, `bi.` (Superset) at `network.public_origin`'s names. Its read
+and send timeouts are an hour, for the Glass's live updates, and its body-size limit is the
+Conduit's upload cap, 512 MiB; ModSecurity may refuse an upload long before that (the first question
+in section 6a.8).
 
 ### 6a.6 The policy check
 
-`make cp-policy-check` renders both environments, templates the chart with Helm and fails on: a pod
+`make cp-policy-check`, where the build's other gates run, renders **the repository's two synthetic
+deployments** (development and production), templates the chart with Helm, and fails on: a pod
 without `runAsNonRoot` or with a user or group other than 10001 (Keycloak's group 0 apart); privilege
 or a kept capability; a port below 1024; a `ReadWriteMany` claim; a `hostPath`; an image not from the
 profile's registry; no policy denying every pod's egress, or an allowing rule with no destination, a
 default route or a network wider than the cap; a pod no ingress policy selects, or an ingress rule
 admitting anything but the namespace's own pods and the controller's namespace; a container without
 its requests and memory limit; a volume's group walked at every start; and a Dockerfile of ours not
-`USER 10001:10001`. The platform's own Gatekeeper constraints are not published to us, so the check
-does not run them.
+`USER 10001:10001`. **A pass there says nothing about your own deployment**: run the same check on your
+own settings, in the same place, with `python -m tools.cp_policy_check --config osprey.yaml`. The
+platform's own Gatekeeper constraints are not published to us, so the check does not run them.
 
 ### 6a.7 Coming
 
-- **Sign-in through the organisation's Entra ID**, its claims for clearance, organisational unit and
-  handling codes mapped in the profile, and no Keycloak. Until then Keycloak is rendered, and the
-  identity step a cluster's install runs once Keycloak answers (the Conduit's client secret on its
-  clients, its service account's roles) is run by nothing on this profile.
+- **Sign-in through the organisation's Entra ID**: its claims for clearance, organisational unit and
+  handling codes mapped in the profile, its endpoints in the egress list, and no Keycloak.
 - **Backups and restore**: a scheduled backup of ArcadeDB and ClickHouse to S3, encrypted, and a
   restore rehearsed on the development namespace, with its measured times.
 - **The volume-expansion and upgrade runbooks** for ArcadeDB and ClickHouse.
-- **The model gateway rendered by default**, the model host allowed only while an engine is enabled.
-- **The extraction service** in the profile, with its egress line.
+- **The model gateway rendered by default.**
+- **Laurium, the extraction service**, in the profile, with its egress line.
+- **The S3 and Athena connections' role and egress lines** in the namespace.
+- **A basemap on the platform**: the tiles bucket, and a basemap built elsewhere brought onto it.
 - **The shared folders, the settings files and the recipes repository** off the one volume.
 - **The marking ceiling** set to OFFICIAL-SENSITIVE by the profile itself.
 
@@ -972,14 +1043,24 @@ None stops the render; each is the team's to answer before the first install.
    annotation at all (some installs refuse snippets) is part of the same question.
 2. **The ResourceQuota** the namespace is given (section 6a.2).
 3. **Calico's version**, and whether its policies take a tier: the render names them `default.`, as
-   Calico 3.28 and later store them.
+   Calico 3.28 and later store them. The build's schema check (kubeconform) skips the schemas it
+   does not have, so Calico's objects are not checked against one.
 4. **Gatekeeper and `supplementalGroups`**: whether it admits Keycloak's group 0.
 5. **Certificate coverage**: whether the platform's certificate covers the `id.` and `bi.` names, two
    labels below the deployment's own. If not, name a certificate in `cloud_platform.tls_secret`.
 6. **Node-local DNS**: whether the cluster runs it, since its address is outside `kube-system`, which
    the allow policy names.
+
+Added in this guide, beyond ADR-148's own list:
+
 7. **The managed stores' subnets**, to narrow `172.20.0.0/16` (section 6a.5), and the networks of S3's
    gateway endpoint and STS, for the platform's file.
+8. **The namespace's LimitRange**: its default CPU limit, if any, which every container here would
+   take, and whether the ResourceQuota counts `limits.cpu`, which would refuse every pod here
+   (section 6a.2).
+9. **The sensitive variables**: how the environments repository's pipeline is given a key a person
+   holds (a model engine's, a connection's, the mail server's password), since the Terraform takes
+   each as a sensitive variable with no default, and its state then holds it (section 6a.3).
 
 ## 7. The answers file, `install.yaml`
 
