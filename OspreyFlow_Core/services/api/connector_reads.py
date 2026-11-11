@@ -22,7 +22,7 @@ import re
 import socket
 import threading
 import time
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,6 +56,7 @@ from services.ingest.connectors.sql_connector import (
     tcp_reaches,
 )
 
+from schemas.deployment import ConnectorSources
 from schemas.sources import (
     ApiConnectionSettings,
     ApiRead,
@@ -441,10 +442,79 @@ def connection_host(settings: object) -> tuple[str, str] | None:
 
 def refuse_connection_hosts(settings: object) -> None:
     """At save: the host refused if it is, or resolves, inside the deployment. The allow-list is
-    not asked yet: an operator may add the host after the administrator names it."""
+    not asked yet: an operator may add the host after the administrator names it. On the
+    cloud-platform profile an S3 or Athena connection is refused unless the render made its way
+    out (`refuse_undeclared`)."""
+    refuse_undeclared(settings)
     found = connection_host(settings)
     if found is not None:
         refuse_host(found[0], found[1], allowed_hosts=None)
+
+
+#: ADR-140 Amendment 21: the words for an S3 or Athena connection the cloud-platform render made no
+#: way out (nor IAM read) for, as Admin › Models words an engine the render did not make (ADR-135
+#: Amendment 8).
+NOT_DECLARED = (
+    "On this deployment an {kind} connection reaches only a source the render made a way out of "
+    "the namespace for, and the namespace's role a read of, and it made none for {what}. Declare "
+    "it in "
+    "osprey.yaml's cloud_platform.connector_sources, re-render, run helm upgrade and have the "
+    "platform team apply the Terraform; then it can be enabled here."
+)
+
+
+def declared_sources(environ: Mapping[str, str] | None = None) -> ConnectorSources | None:
+    """What the cloud-platform render declared (`OSPREY_CONNECTOR_SOURCES`), none declared when it
+    is not set; `None` on every other profile, which renders no namespace egress (part 1's
+    allow-list alone holds there)."""
+    environ = os.environ if environ is None else environ
+    if environ.get("OSPREY_PROFILE", "") != "cloud-platform":
+        return None
+    text = environ.get("OSPREY_CONNECTOR_SOURCES", "").strip()
+    return ConnectorSources.model_validate_json(text) if text else ConnectorSources()
+
+
+def _s3_declared(settings: S3ConnectionSettings, made: ConnectorSources) -> bool:
+    return any(
+        d.bucket == settings.bucket and d.region == settings.region
+        and settings.prefix.startswith(d.prefix)  # each ends in `/`, so a sibling never matches
+        for d in made.s3
+    )  # fmt: skip
+
+
+def _athena_declared(settings: AthenaConnectionSettings, made: ConnectorSources) -> bool:
+    """Its workgroup and region, every database among the declared ones, the default catalog (the
+    one whose Glue entries the role may read), and its results location the declared one or left
+    to the workgroup."""
+    return any(
+        d.workgroup == settings.workgroup and d.region == settings.region
+        and set(settings.databases) <= set(d.databases)
+        and settings.catalog == "AwsDataCatalog"
+        and settings.results_location in (None, d.results_location)
+        for d in made.athena
+    )  # fmt: skip
+
+
+def refuse_undeclared(settings: object, environ: Mapping[str, str] | None = None) -> None:
+    """An S3 or Athena connection the cloud-platform render did not declare refused in words, at
+    save, at *Test connection* and before every read (ADR-140 Amendment 21). Fails closed: nothing
+    declared refuses every one."""
+    if not isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
+        return
+    made = declared_sources(environ)
+    if made is None:
+        return
+    if isinstance(settings, S3ConnectionSettings):
+        if _s3_declared(settings, made):
+            return
+        what = (f"the bucket {settings.bucket} in {settings.region}"
+                + (f" under {settings.prefix}" if settings.prefix else ""))  # fmt: skip
+        raise ConnectorRefused(NOT_DECLARED.format(kind="S3", what=what))
+    if _athena_declared(settings, made):
+        return
+    what = (f"the workgroup {settings.workgroup} in {settings.region} with the databases "
+            f"{', '.join(settings.databases)}")  # fmt: skip
+    raise ConnectorRefused(NOT_DECLARED.format(kind="Athena", what=what))
 
 
 def source_file(dataset_id: str, name: str, root: Path | None = None) -> Path:
@@ -554,6 +624,8 @@ async def read_rows(
         )  # fmt: skip
     if connection.kind == "json" and isinstance(read, JsonRead):
         return read_json(_json_files(dataset_id, read.pattern, root), read)
+    if isinstance(settings, S3ConnectionSettings | AthenaConnectionSettings):
+        refuse_undeclared(settings)  # before anything is asked of S3 or Athena
     if isinstance(settings, S3ConnectionSettings) and isinstance(read, S3Read):
         # The host on the egress allow-list first (ADR-148 decision 7), then the read, each off the
         # event loop: both block.
@@ -619,6 +691,12 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     """*Test connection*: a SQL login signed in over TLS and found read-only; an API's host on the
     allow-list and its secret set. Nothing is read."""
     settings = connection.settings
+    try:
+        # First: on the cloud-platform profile its allow-list is rendered from the same
+        # declaration, so this is the refusal whose words say what to do (ADR-140 Amendment 21).
+        refuse_undeclared(settings)
+    except ConnectorRefused as refused:
+        return ConnectionTest(ok=False, words=str(refused))
     found = connection_host(settings)
     addresses: list[str] | None = None
     if found is not None:
