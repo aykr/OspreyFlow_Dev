@@ -227,3 +227,56 @@ blur 60: fitted sigma 31.17 (blur/2 = 30.00, 0.2887*blur+0.5 = 17.82); alpha at 
 
   12 passed (15.2s)
 Wall time: 16 s, exit 0 (no stack, no lease; set-up before it 11 s)
+
+# The lane-reviewer's second pass: run 20261111T133014Z (slot 13), at the tree committed next. Each row below 'new' is the new probe with one branch removed. The σ check and Kestrel's five repeats ran in 20261111T132837Z, below.
+
+Running 4 tests using 1 worker
+
+## menu over half (the words' own 13:1 on the visible half)
+  new: - (passes)
+  without the look-ahead: tspan[dy="0"]: not measurable: over or under span (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  a miss always hidden: - (passes)
+  without the empty-stack cover: - (passes)
+  without the pseudo guard: - (passes)
+
+## raised ::after over half of the words (their own 13:1)
+  new: tspan[dy="0"]: not measurable: over or under div.zz-under (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  without the look-ahead: tspan[dy="0"]: not measurable: over or under div.zz-under (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  a miss always hidden: tspan[dy="0"]: not measurable: over or under div.zz-under (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  without the empty-stack cover: tspan[dy="0"]: not measurable: over or under div.zz-under (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  without the pseudo guard: - (passes)
+
+## the derive cell missed by the hit test
+  new: tr:nth-child(2) > td:nth-child(6): not measurable: over or under td missed by the browser's hit test (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  without the look-ahead: tr:nth-child(2) > td:nth-child(6): not measurable: over or under td missed by the browser's hit test (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  a miss always hidden: tr:nth-child(2) > td:nth-child(6): not measurable: hidden at every point, under an opaque element over the words or clipped (axe: elmPartiallyObscured) [own surfaces unread] ("+44 7700 900719")
+  without the empty-stack cover: tr:nth-child(2) > td:nth-child(6): not measurable: over or under td missed by the browser's hit test (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  without the pseudo guard: tr:nth-child(2) > td:nth-child(6): not measurable: over or under td missed by the browser's hit test (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+
+## the task label's words past the viewport (their own 13:1)
+  new: tspan[dy="0"]: not measurable: over or under nothing the browser hit-tests (a point outside the viewport) (axe: imgNode) [own surfaces 1.19:1] ("If a Person meets and more words and mor")
+  without the look-ahead: tspan[dy="0"]: not measurable: over or under nothing the browser hit-tests (a point outside the viewport) (axe: imgNode) [own surfaces 1.19:1] ("If a Person meets and more words and mor")
+  a miss always hidden: tspan[dy="0"]: not measurable: over or under nothing the browser hit-tests (a point outside the viewport) (axe: imgNode) [own surfaces 1.19:1] ("If a Person meets and more words and mor")
+  without the empty-stack cover: tspan[dy="0"]: not measurable: over or under circle.show-as-bpmn__end (axe: imgNode) [own surfaces 1.19:1] ("If a Person meets and more words and mor")
+  without the pseudo guard: tspan[dy="0"]: not measurable: over or under nothing the browser hit-tests (a point outside the viewport) (axe: imgNode) [own surfaces 1.19:1] ("If a Person meets and more words and mor")
+
+  4 passed (8.8s)
+Wall time: 10 s, exit 0 (no stack, no lease; set-up before it 10 s)
+
+# Run 20261111T132837Z (slot 13): the σ check pixel by pixel (white box, black shadow, spread = blur; d is the signed distance past the shape's edge at each pixel's centre), and places' GOV.UK open menu judged five times
+## run 1
+  .govuk-notification-banner__content > .btn "Case: Kestrel": passes 17.15
+## run 2
+  .govuk-notification-banner__content > .btn "Case: Kestrel": passes 17.15
+## run 3
+  .govuk-notification-banner__content > .btn "Case: Kestrel": passes 17.15
+## run 4
+  .govuk-notification-banner__content > .btn "Case: Kestrel": passes 17.15
+## run 5
+  .govuk-notification-banner__content > .btn "Case: Kestrel": passes 17.15
+blur 4: d=-3.5: 0.961, d=0.5: 0.408, d=2.5: 0.114, d=4.5: 0.012; the model short by at most 0.5: 0.0126, 0.52: 0.0070, 0.55: 0.0181, 0.6: 0.0390
+blur 8: d=-7.5: 0.973, d=0.5: 0.455, d=4.5: 0.141, d=8.5: 0.016; the model short by at most 0.5: 0.0124, 0.52: 0.0083, 0.55: 0.0194, 0.6: 0.0397
+blur 16: d=-15.5: 0.976, d=0.5: 0.478, d=8.5: 0.153, d=16.5: 0.020; the model short by at most 0.5: 0.0129, 0.52: 0.0093, 0.55: 0.0189, 0.6: 0.0396
+blur 24: d=-23.5: 0.976, d=0.5: 0.486, d=12.5: 0.157, d=24.5: 0.020; the model short by at most 0.5: 0.0132, 0.52: 0.0083, 0.55: 0.0194, 0.6: 0.0397
+blur 40: d=-39.5: 0.980, d=0.5: 0.494, d=20.5: 0.161, d=40.5: 0.020; the model short by at most 0.5: 0.0129, 0.52: 0.0092, 0.55: 0.0201, 0.6: 0.0406
+blur 60: d=-59.5: 0.980, d=0.5: 0.494, d=30.5: 0.165, d=60.5: 0.024; the model short by at most 0.5: 0.0136, 0.52: 0.0091, 0.55: 0.0197, 0.6: 0.0405

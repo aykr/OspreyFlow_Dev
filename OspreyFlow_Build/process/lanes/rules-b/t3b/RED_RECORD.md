@@ -149,9 +149,10 @@ All browser runs were local, in the orchestrator's slot (`OSPREY_PORTS_SLOT=9`),
 2. *A filter, blend or mask on a cover's ancestor:* fixed, as the second change above. Plants: a mask that clears the cover, and a cover in a blended wrapper. Both red.
 3. *Hidden at every point passing:* fixed, as the first change above (H2′).
 4. *Three placements are not the worst:* a shadow is now laid at every place in the words' chain, as well as away and over everything. A search over random colours found a case where only "between the layers" is the worst (1.04:1, against 1.13:1 over everything). It is a unit case, and S7 is red.
-5. *σ unchecked:* measured from Chromium's pixels on the server. The fitted σ is 2.08, 4.15, 8.30, 12.46, 20.76 and 31.17 for blurs of 4 to 60px: about 0.52 × blur. That is against the model's 0.5 × blur, and the Skia figure the reviewer half-remembered (0.29 × blur + 0.5) is refuted.
-   - At half the blur the measured alpha is 0.157, the model's 0.159. At the whole blur it is 0.020, the model's 0.023.
-   - So the model matches to within 0.003 and slightly overstates the tail. σ stays at blur / 2.
+5. *σ unchecked:* measured from Chromium's pixels on the server. A first fit (run 20261111T130711Z) put σ at about 0.52 × blur, which refutes the Skia figure the reviewer half-remembered (0.29 × blur + 0.5).
+   - **Corrected in the second pass:** my first reading of that fit, "the model slightly overstates the tail", was wrong. The samples sat at pixel centres, and there the model fell short (0.149 against 0.157 measured at 12.5px for a blur of 24). The reviewer caught it.
+   - Measured again pixel by pixel, inside the shape and out (run 20261111T132837Z): the Gaussian of blur / 2 is at most 0.0136 of the colour short anywhere, for every blur from 4 to 60px.
+   - So the coverage now carries a margin of 0.015 within 3σ (S8 red without it).
 6. *An empty hit test:* now a cover.
 7. *A smooth scroll restore:* every restore is instant.
 8. *`1e-06px`:* read with its exponent.
@@ -169,3 +170,27 @@ All browser runs were local, in the orchestrator's slot (`OSPREY_PORTS_SLOT=9`),
 - 4 were the GOV.UK brand's `data-brand` not set within 5s, before the probe ran. All 4 passed on the retake.
 - 3 were places' open menu, "over or under button.menu-panel__item". A menu's items lie over its opaque panel, so the probe now looks through everything over the words for a cover that hides them (8bd3eef).
 - On the retake, places' GOV.UK look gave "hidden at every point" for its two listed menu findings. Their listings now give that reason (owner shell).
+
+### The second review pass (896bbf7)
+
+The lane-reviewer's second pass on 8bd3eef left three must-fixes, and found the σ reading wrong (item 5 above, corrected there).
+- **The clip test walked DOM ancestors, not containing blocks.** An ancestor now counts as clipping only while nothing between it and the words is positioned out of flow (absolute or fixed), and only as a block box. Past either, a miss is a cover. This fails closed and is read, not planted: no plant could tell the two apart, because the words' miss is then a cover either way.
+- **Three branches had no red record.** They are recorded below, with one more the reviewer suspected.
+- **The placement cap with a deep tree:** a shadow is now laid only where a layer paints. 25 clear wrappers under three shadows stay measurable (S9 red, which lays at every place).
+- **Places' GOV.UK "Case: Kestrel":** it was gone in the full run at 8bd3eef but matched in the targeted retake. At 896bbf7's tree it measured 17.15:1 in 5 runs of 5 (20261111T132837Z), so its listing comes off.
+
+**Red at the real call site** (run 20261111T133014Z, slot 13). Each plant was run against the new probe and against the probe with one branch removed.
+- **The look-ahead:** a menu (an opaque panel with a clear item and words of its own) over half of "If a Person meets".
+  - New: it passes, with the visible half at its own 13:1.
+  - Without the look-ahead: red, "over or under span".
+- **The pseudo guard:** an element whose opaque box lies under the dialog raises a translucent `::after` over half of the words.
+  - New: red, "over or under div.zz-under".
+  - Without the guard: it **passes silently**. The guard carries it.
+- **A hit-test miss as a cover:** `pointer-events: none !important` on the derive cell.
+  - New: red, "td missed by the browser's hit test".
+  - With every miss taken as hidden: red too, as "hidden at every point". Both fail closed, and the reasons differ.
+- **The empty stack:** the task label run out past the viewport.
+  - New: red, "nothing the browser hit-tests (a point outside the viewport)".
+  - Without the branch: red through another cover (the drawing's end circle). The plant shows the branch's own reason but does not tell the two apart.
+
+**Unit plants at 896bbf7** (36 cases), each red: S1 (4), S2, S3, S4, S5, S6, S7, S8 (no margin: 2), S9 (every place: 1), H1 (2) and H2.
