@@ -251,3 +251,13 @@ def test_a_cpu_limit_below_its_request_is_refused_in_words(monkeypatch: pytest.M
     monkeypatch.setattr(cp, "load_profile", lambda: low)
     with pytest.raises(CloudPlatformNotRenderable, match="CPU limit 50m is below its request"):
         _artefacts(_config())
+
+
+def test_the_poc_shape_makes_no_opensearch_domain() -> None:
+    """The orchestrator's ruling: no pod reads the domain (`opensearch-output`), and it is a paid
+    domain on the client's own install, so the poc shape's Terraform makes none; the standard
+    shape's is carried (ADR-148 Amendment 5, "Left")."""
+    poc = _artefacts(_config())
+    assert "terraform/opensearch.tf" not in poc
+    assert not [n for n, t in poc.items() if n.startswith("terraform/") and "opensearch" in t]
+    assert "terraform/opensearch.tf" in _artefacts(_config("development"))

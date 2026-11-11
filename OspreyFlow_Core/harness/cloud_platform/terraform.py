@@ -242,7 +242,8 @@ def render_terraform(
             ),
         ],  # fmt: skip
     )
-    if config.components.search is SearchBackend.OPENSEARCH:
+    # ADR-148 Amendment 5: no domain in the poc shape, which nothing reads and the client pays for.
+    if config.components.search is SearchBackend.OPENSEARCH and cp.shape != "poc":
         files["opensearch.tf"] = _file(
             "Decision 4: the platform's OpenSearch 2.x, encrypted, HTTPS only, inside the VPC,\n"
             "reached on 443 from the namespace's networks alone and answering the bucket role's\n"
