@@ -1,0 +1,37 @@
+diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
+index ab518d8..3ab401b 100644
+--- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
++++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
+@@ -2152,6 +2152,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+ | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |
+ | `models.transcription` | `Systran/faster-whisper-tiny.en` | `Systran/faster-whisper-tiny.en` | The local model that transcribes a video's speech. |
+ | `models.embedding` | `all-minilm:22m-l6-v2-fp16` | `all-minilm:22m-l6-v2-fp16` | The local model that turns text into vectors. |
++| `models.extraction_engine` | `deep_read` \| `laurium` or none | none | ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, laurium (its own service, every call through the gateway). Left unset: laurium on cloud-platform (its preset), deep_read on every other profile. |
+ | `governance` | section | — | Identity, handling, ontology and the marking shown on screen. |
+ | `governance.identity_provider` | str | `keycloak` | The identity provider people sign in through. |
+ | `governance.handling_scheme` | str | `uk-law-enforcement` | The handling scheme every item is marked under. |
+diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
+index 5f9e704..1f0c805 100644
+--- a/OspreyFlow_Core/docs/administration-guide.md
++++ b/OspreyFlow_Core/docs/administration-guide.md
+@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
+ <!-- document-control:begin -->
+ ## Document control
+ 
+-**Version 1.78** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
++**Version 1.79** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+ 
+ | Version | Date | What changed |
+ | --- | --- | --- |
++| 1.79 | 2026-11-11 | Appendix A: `models.extraction_engine`, Deep read or Laurium, Laurium on the `cloud-platform` profile alone and its preset there when left unset; *Admin › Models* shows it, read-only (P12 part 2, ADR-135 Amendment 9). |
+ | 1.78 | 2026-11-11 | §10.1: on the `cloud-platform` profile *Admin › Models* refuses an engine the render did not make (declare it, re-render, have the platform team apply the Terraform); `secrets.irsa.gateway_service_account`; Bedrock signs in by the gateway's own IAM role (P11 part 2, ADR-135 Amendment 8). |
+ | 1.77 | 2026-11-11 | Appendix A: `models.provider(s).kind`, `auth` and `region`, the client's gateway and Bedrock by the IAM role on the `cloud-platform` profile (P11 part 1, ADR-135 Amendment 7). |
+ | 1.76 | 2026-11-11 | §6a's re-check: the policy check on your own settings in its working form, which needs Docker (Helm's own image) and is unrun until P7b's kind run; the example's map said to be empty on this profile; a named deployment's `terraform` folder; the chart, not the render, makes the two Calico policies (`default.`); which commands ran, and where. |
+@@ -2421,6 +2422,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+ | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |
+ | `models.transcription` | `Systran/faster-whisper-tiny.en` | `Systran/faster-whisper-tiny.en` | The local model that transcribes a video's speech. |
+ | `models.embedding` | `all-minilm:22m-l6-v2-fp16` | `all-minilm:22m-l6-v2-fp16` | The local model that turns text into vectors. |
++| `models.extraction_engine` | `deep_read` \| `laurium` or none | none | ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, laurium (its own service, every call through the gateway). Left unset: laurium on cloud-platform (its preset), deep_read on every other profile. |
+ | `governance` | section | — | Identity, handling, ontology and the marking shown on screen. |
+ | `governance.identity_provider` | str | `keycloak` | The identity provider people sign in through. |
+ | `governance.handling_scheme` | str | `uk-law-enforcement` | The handling scheme every item is marked under. |
