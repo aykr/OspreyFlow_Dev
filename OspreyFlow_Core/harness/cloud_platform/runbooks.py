@@ -61,7 +61,7 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
     return f"""# Install: OspreyFlow in `{cp.namespace}` ({cp.shape} shape)
 
-Rendered by `ospreyflow render` for this deployment (ADR-148 Amendment 5). Run each block in order,
+Rendered for this deployment by `PYTHONPATH=.:packages .venv/bin/python -m harness.render` (ADR-148 Amendment 5). Run each block in order,
 from the release's `OspreyFlow_Core` folder, with `kubectl` pointed at the namespace, `helm` 3.16 or
 later, Docker (for the images) and the AWS command line signed in to the namespace's account, all in
 one shell. If a command fails, stop there: put right what it says, then run its block again.
@@ -138,7 +138,7 @@ def render_decommission(
     repositories = " ".join(ecr_repositories(values, cp.registry))
     return f"""# Decommission: OspreyFlow in `{cp.namespace}`
 
-Rendered by `ospreyflow render` for this deployment (ADR-148 Amendment 5). Removes everything the
+Rendered for this deployment by `PYTHONPATH=.:packages .venv/bin/python -m harness.render` (ADR-148 Amendment 5). Removes everything the
 deployment made: its workloads, its volumes and their disks, its Secret, its buckets and images, and
 the namespace's resources. **It deletes the deployment's data for good**: take the last backup first.
 The namespace itself is the platform team's and stays. Run each block in order, in one shell, from

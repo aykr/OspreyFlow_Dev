@@ -13,6 +13,8 @@ What a mistake would do, and the case that catches it (rule 12):
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import yaml
 from harness.render import load_config, render
@@ -186,3 +188,28 @@ def test_ours_are_built_for_the_platform_s_nodes(rig: Rig, plan: dict[str, objec
     assert rig("images", "push", "--registry", REGISTRY, "--platform", "linux/arm64") == 0
     builds = [c.argv for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]]
     assert all(argv[argv.index("--platform") + 1] == "linux/arm64" for argv in builds)
+
+
+def test_no_plan_is_refused_with_a_command_that_renders_it(tmp_path: Path) -> None:
+    """The refusal's words name a command that works as given, from OspreyFlow_Core (the
+    orchestrator's D2c finding 3: `python -m harness.render` alone fails without the packages on
+    its path)."""
+    import shlex
+    import subprocess
+
+    from ospreyflow.home import CommandRefused
+    from ospreyflow.images import read_plan
+
+    with pytest.raises(CommandRefused) as refused:
+        read_plan(tmp_path)
+    words = str(refused.value)
+    command = words.split("from OspreyFlow_Core: ", 1)[1]
+    environment, *argv = shlex.split(command)
+    name, _, value = environment.partition("=")
+    core = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
+    done = subprocess.run(
+        [*argv, "--help"], cwd=core, env={"PATH": "/usr/bin:/bin", name: value},
+        capture_output=True, text=True, check=False, timeout=120,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr
+    assert "usage: python -m harness.render" in done.stdout

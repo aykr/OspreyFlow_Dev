@@ -25,8 +25,8 @@ def read_plan(product: Path, folder: Path | None = None) -> dict[str, Any]:
     path = (folder / "images.yaml") if folder is not None else product / PLAN
     if not path.is_file():
         raise CommandRefused(
-            f"No image plan at {path}: render the cloud-platform profile first "
-            "(python -m harness.render)."
+            f"No image plan at {path}: render the cloud-platform profile first, from "
+            "OspreyFlow_Core: PYTHONPATH=.:packages .venv/bin/python -m harness.render"
         )
     plan: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
     return plan
