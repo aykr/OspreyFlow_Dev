@@ -14,8 +14,8 @@ What it holds to:
 - **the gateway rendered with it** (every call Laurium makes goes through the gateway), and it
   starts after the gateway is healthy.
 
-Where it may reach is the network policies' (`deploy/helm/ospreyflow/templates/laurium-policy.yaml`):
-the gateway's port and DNS, nothing else.
+Where it may reach is its network policies' (the chart's `templates/laurium-policy.yaml`): the
+gateway's port and DNS, nothing else.
 """
 
 from __future__ import annotations
