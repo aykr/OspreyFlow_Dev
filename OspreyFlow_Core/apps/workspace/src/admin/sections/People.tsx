@@ -20,10 +20,12 @@ import { Button, Input, Select } from "../../design/primitives";
 import {
   disablePlan,
   enablePerson,
+  addPersonByObjectId,
   invitePerson,
   linkOrganisation,
   listArrivals,
   listPeople,
+  signInKind,
   listRoles,
   nameAnAuthor,
   peopleRows,
@@ -389,6 +391,7 @@ function PersonRow({
   onSaved,
   onDelivered,
   onRemoved,
+  entra = false,
 }: {
   api: AdminApi;
   person: PersonAccount;
@@ -398,6 +401,8 @@ function PersonRow({
   onSaved: (p: PersonAccount) => void;
   onDelivered: (d: SignInDelivery) => void;
   onRemoved: (p: PersonAccount) => void;
+  /** Entra ID holds the account: access, sign-in and removal are Entra's, not offered here. */
+  entra?: boolean;
 }) {
   const customIds = new Set(ctx.custom.map((c) => `role:${c.id}`));
   const [chosen, setChosen] = useState(
@@ -505,9 +510,11 @@ function PersonRow({
             >
               Super user
             </Button>
-            <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
-              Access
-            </Button>
+            {!entra && (
+              <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
+                Access
+              </Button>
+            )}
             {person.enabled ? (
               <Button aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
                 Disable…
@@ -517,20 +524,22 @@ function PersonRow({
                 Enable
               </Button>
             )}
-            <Button
-              aria-label={`Reset sign-in for ${person.username}`}
-              onClick={() =>
-                void resetSignIn(api, person.id)
-                  .then((delivery) => {
-                    onSaved(delivery.person);
-                    onDelivered(delivery);
-                  })
-                  .catch((e: Error) => setSaid(e.message))
-              }
-            >
-              Reset sign-in
-            </Button>
-            {!person.system_account && (
+            {!entra && (
+              <Button
+                aria-label={`Reset sign-in for ${person.username}`}
+                onClick={() =>
+                  void resetSignIn(api, person.id)
+                    .then((delivery) => {
+                      onSaved(delivery.person);
+                      onDelivered(delivery);
+                    })
+                    .catch((e: Error) => setSaid(e.message))
+                }
+              >
+                Reset sign-in
+              </Button>
+            )}
+            {!entra && !person.system_account && (
               <Button aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
                 Remove
               </Button>
@@ -696,6 +705,47 @@ function Arrivals({
         </tbody>
       </table>
     </section>
+  );
+}
+
+/** ADR-148 Amendment 8: Entra ID holds the accounts. */
+export const ENTRA_PEOPLE_WORDS =
+  "People sign in with their organisation's Entra ID account; their clearance, unit and handling codes come " +
+  "from Entra. Here you give them roles, add them by object id before they first sign in, and disable them.";
+
+/** A person added by their Entra object id (Graph gives it) ahead of their first sign-in, with no roles.
+ * The Conduit checks the id and refuses one already here. */
+function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: PersonAccount) => void }) {
+  const [objectId, setObjectId] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <form
+      aria-label="Add a person by object id"
+      style={{ display: "grid", gap: "var(--sp-8)", maxWidth: "32rem" }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void addPersonByObjectId(api, objectId.trim())
+          .then((added) => {
+            setProblem(null);
+            setObjectId("");
+            onAdded(added);
+          })
+          .catch((e: Error) => setProblem(e.message));
+      }}
+    >
+      <h4 className="value" style={{ margin: 0 }}>Add a person by object id</h4>
+      <p className="label" style={{ margin: 0 }}>
+        Their Entra object id, from the Entra admin centre or Graph. They are added with no roles; give them roles below,
+        and they hold them from their first sign-in.
+      </p>
+      <Input aria-label="Entra object id" value={objectId} onChange={(event) => setObjectId(event.target.value)} />
+      <div>
+        <Button type="submit" disabled={!objectId.trim()}>
+          Add
+        </Button>
+      </div>
+      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+    </form>
   );
 }
 
@@ -889,6 +939,10 @@ export function People({ api }: { api: AdminApi }) {
   const [arrivals, setArrivals] = useState<OrganisationArrival[]>([]);
   const [arrivalsProblem, setArrivalsProblem] = useState<string | null>(null);
   const [joined, setJoined] = useState<string | null>(null);
+  const [added, setAdded] = useState<PersonAccount | null>(null);
+  // ADR-148 Amendment 8: Entra ID's words and form only when the Conduit says so; otherwise today's (an
+  // invite refused on Entra is the Conduit's refusal, in its words).
+  const [entra, setEntra] = useState(false);
   const scheme = useScheme(api);
   // The roles and the case levels are the row's context; either failing leaves the rest working.
   const readContext = () => {
@@ -908,6 +962,9 @@ export function People({ api }: { api: AdminApi }) {
   useEffect(() => {
     listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
     listArrivals(api).then(setArrivals).catch((e: Error) => setArrivalsProblem(e.message));
+    signInKind(api)
+      .then((k) => setEntra(k?.kind === "entra"))
+      .catch(() => setEntra(false));
     readContext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken]);
@@ -920,6 +977,16 @@ export function People({ api }: { api: AdminApi }) {
         A role grants what a person may do, never what they may see: that stays their clearance and the cases they are given.
         Other grants (single rights, older roles) are kept as they are.
       </p>
+      {entra && (
+        <p className="label" style={{ margin: 0 }}>
+          {ENTRA_PEOPLE_WORDS}
+        </p>
+      )}
+      {added && (
+        <p role="status" style={{ margin: 0 }}>
+          {`${added.id} was added with no roles. Give them roles below; they hold them from their first sign-in.`}
+        </p>
+      )}
       {delivered && <Delivered delivery={delivered} />}
       {joined && (
         <p role="status" style={{ margin: 0 }}>
@@ -969,6 +1036,7 @@ export function People({ api }: { api: AdminApi }) {
               ctx={ctx}
               onSaved={saved}
               onDelivered={setDelivered}
+              entra={entra}
               onRemoved={(gone) => {
                 setRemoved(gone);
                 setPeople((current) => (current ?? []).filter((x) => x.id !== gone.id));
@@ -977,14 +1045,24 @@ export function People({ api }: { api: AdminApi }) {
           ))}
         </tbody>
       </table>
-      <InviteForm
-        api={api}
-        scheme={scheme}
-        onInvited={(delivery) => {
-          setDelivered(delivery);
-          setPeople((current) => [...(current ?? []), delivery.person]);
-        }}
-      />
+      {entra ? (
+        <AddByObjectIdForm
+          api={api}
+          onAdded={(person) => {
+            setAdded(person);
+            setPeople((current) => [...(current ?? []), person]);
+          }}
+        />
+      ) : (
+        <InviteForm
+          api={api}
+          scheme={scheme}
+          onInvited={(delivery) => {
+            setDelivered(delivery);
+            setPeople((current) => [...(current ?? []), delivery.person]);
+          }}
+        />
+      )}
     </>
   );
 }
