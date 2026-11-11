@@ -46,9 +46,14 @@ import httpx
 import yaml
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
-from adapters.model_litellm.connection import check_connection
+from adapters.model_litellm.connection import WORDS, check_connection
 from adapters.model_litellm.usage import engine_key, usage_tag
-from schemas.deployment import ModelProviderConfig, ModelsConfig
+from schemas.deployment import (
+    ModelProviderConfig,
+    ModelsConfig,
+    engine_kinds_offered,
+    engine_refusal,
+)
 from schemas.model_admin import (
     AdminEngine,
     ConnectionTestResult,
@@ -105,13 +110,41 @@ class ModelSettings(BaseModel):
     limits: dict[str, EngineLimits] = Field(default_factory=dict)
 
 
+#: The fields Amendment 4 added to an engine. Off `cloud-platform` every engine is a plain provider
+#: and they are not written, so the models file and the Conduit's environment there are as before.
+_KIND_FIELDS = ("kind", "auth", "region")
+
+
+def plain_dump(provider: ModelProviderConfig) -> dict[str, Any]:
+    """An engine as written down: Amendment 4's fields left out for a plain provider by its key."""
+    dumped = provider.model_dump(mode="json")
+    if provider.plain:
+        for name in _KIND_FIELDS:
+            dumped.pop(name, None)
+    return dumped
+
+
+def refused_on(providers: Sequence[ModelProviderConfig], profile: str) -> str | None:
+    """The first engine `profile` refuses, in words naming it (ADR-135 Amendment 7 decision 1)."""
+    for provider in providers:
+        if refused := engine_refusal(provider, profile):
+            return f"{provider.name}: {refused}"
+    return None
+
+
 class ModelSettingsFile:
-    def __init__(self, folder: Path) -> None:
+    def __init__(self, folder: Path, *, profile: str = "") -> None:
         self.path = folder / SETTINGS_FILE
+        #: The deployment's profile (`OSPREY_PROFILE`, rendered into `deployment.env` for every
+        #: profile), which decides which engines the file may hold (ADR-135 Amendment 7).
+        self.profile = profile
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] = os.environ) -> ModelSettingsFile:
-        return cls(Path(environ.get("OSPREY_MODEL_SETTINGS_DIR", DEFAULT_SETTINGS_DIR)))
+        return cls(
+            Path(environ.get("OSPREY_MODEL_SETTINGS_DIR", DEFAULT_SETTINGS_DIR)),
+            profile=environ.get("OSPREY_PROFILE", ""),
+        )
 
     def stamp(self) -> float | None:
         """When the file last changed, or None where there is none: a Conduit replica reads it again
@@ -125,12 +158,17 @@ class ModelSettingsFile:
         if not self.path.is_file():
             return None
         raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
-        return ModelSettings.model_validate(raw)
+        settings = ModelSettings.model_validate(raw)
+        if refused := refused_on(settings.providers, self.profile):
+            raise ValueError(f"the models file {self.path} holds an engine refused here: {refused}")
+        return settings
 
     def save(self, settings: ModelSettings) -> None:
         """Atomic, and `600` from the moment it exists (a temporary file renamed over the old)."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        text = yaml.safe_dump(settings.model_dump(mode="json"), sort_keys=False)
+        dumped = settings.model_dump(mode="json")
+        dumped["providers"] = [plain_dump(p) for p in settings.providers]
+        text = yaml.safe_dump(dumped, sort_keys=False)
         fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".models-", suffix=".yaml")
         try:
             os.fchmod(fd, 0o600)
@@ -184,6 +222,8 @@ class Installed:
                 )
             )
             present[name] = environ.get(f"OSPREY_MODEL_KEY_PRESENT_{name.upper()}", "") == "yes"
+        if refused := refused_on(providers, environ.get("OSPREY_PROFILE", "")):
+            raise ValueError(f"OSPREY_MODEL_ENGINES names an engine refused here: {refused}")
         return cls(
             providers=providers,
             defaults=dict(cast(dict[str, str], _json("OSPREY_MODEL_DEFAULTS", {}))),
@@ -519,12 +559,6 @@ _EDITABLE = (
 )  # fmt: skip
 
 
-def _where_the_key_goes(provider: ModelProviderConfig) -> tuple[object, ...]:
-    """What decides where an engine's key is sent, or whether it has one (ADR-135 Amendment 2
-    decision 1, the owner's ruling; Amendment 4): its address, its kind, how it signs in and its
-    region. A change to any of them removes the key."""
-    return (provider.api_base or None, provider.kind, provider.auth, provider.region)
-
 
 #: A value that may be named in a refusal: shaped like a provider or a job (lower-case, short),
 #: never like a key. Everything else a person sent is replaced by "…" in what the Conduit says back.
@@ -590,12 +624,49 @@ class _Exclusive:
             self._lock.release()
 
 
-#: *Test the connection*'s words where an engine signed in by the namespace's IAM role is refused
-#: (ADR-135 Amendment 4): there is no key to enter again, so the words name the role instead.
-ROLE_REFUSED_WORDS: dict[str, str] = {
-    "bedrock": (
+#: *Test the connection*'s words for the two kinds of the `cloud-platform` profile (ADR-135
+#: Amendment 7 decision 5), by kind and outcome; any other is `connection.WORDS`'. Bedrock has no
+#: key to enter again, so its words name the role, the model's access or the credentials' renewal;
+#: the client's gateway may refuse by its token or by its own policy, which the status cannot tell
+#: apart, so its words name both.
+KIND_WORDS: dict[tuple[str, str], str] = {
+    ("bedrock", "key_refused"): (
         "Bedrock refused the namespace's IAM role: the model gateway has no role, or the role "
         "may not use this model in London. Ask your platform team to check the role's permissions."
+    ),
+    ("bedrock", "model_not_enabled"): (
+        "Bedrock accepted the namespace's IAM role but has not enabled this model for the "
+        "account: access is granted model by model (Bedrock's Model access, in London, "
+        "eu-west-2). Ask your platform team to enable it; this is the model's access, not the "
+        "role's permissions."
+    ),
+    ("bedrock", "sign_in_expired"): (
+        "Bedrock refused the namespace's IAM role's credentials as expired: the model gateway's "
+        "pod did not renew them. Ask your platform team to check the gateway's service account, "
+        "then restart the gateway."
+    ),
+    ("bedrock", "model_not_offered"): (
+        "Bedrock does not offer this model on demand in London (eu-west-2) by this id. A "
+        "cross-region inference profile is not used, as it may send the call outside London: "
+        "choose a model Bedrock offers on demand in London."
+    ),
+    ("gateway", "key_refused"): (
+        "Your organisation's AI gateway refused the call: its token may be wrong, or its own "
+        "policy may not allow this model. Check both with the gateway's owners; enter the token "
+        "again only if it has changed."
+    ),
+    ("gateway", "model_not_offered"): (
+        "Your organisation's AI gateway does not offer this model to this token. Check the model "
+        "name with the gateway's owners."
+    ),
+    ("gateway", "rate_limited"): (
+        "Your organisation's AI gateway is limiting these calls (rate or quota). Try again later, "
+        "or ask the gateway's owners about its limits."
+    ),
+    ("gateway", "request_refused"): (
+        "Your organisation's AI gateway refused the request in a form OspreyFlow does not read "
+        "(not an OpenAI-compatible answer): something in front of it may have refused it. Check "
+        "the address and the model name with the gateway's owners."
     ),
 }
 
@@ -705,6 +776,7 @@ class ModelAdmin:
             local_only=self._installed.local_only,
             sendable_handling_codes=list(self._installed.sendable),
             source="models file" if self._settings is not None else "osprey.yaml",
+            engine_kinds=engine_kinds_offered(self._file.profile),
         )
 
     @property
@@ -852,6 +924,9 @@ class ModelAdmin:
             words = "; ".join(str(e.get("msg", "")).removeprefix("Value error, ")
                               for e in invalid.errors(include_input=False))  # fmt: skip
             raise ModelAdminRefused(redacted(words, sent)) from None
+        # ADR-135 Amendment 7 decision 1: what this deployment's profile takes.
+        if refused := refused_on(settings.providers, self._file.profile):
+            raise ModelAdminRefused(redacted(refused, sent))
         return settings
 
     def _save(self, settings: ModelSettings) -> None:
@@ -933,9 +1008,11 @@ class ModelAdmin:
             self._save(proposed)
 
         await self._change(by, "engine_added", provider.name, work)
+        # A plain provider's entry is as before Amendment 4: its kind fields are not named.
+        named = [f for f in _EDITABLE if not (provider.plain and f in _KIND_FIELDS)]
         await self._audited(
             by, "engine_added", provider.name,
-            {f: {"from": None, "to": _plain(getattr(provider, f))} for f in _EDITABLE},
+            {f: {"from": None, "to": _plain(getattr(provider, f))} for f in named},
         )  # fmt: skip
 
     async def edit_engine(self, by: str, name: str, provider: ModelProviderConfig) -> str | None:
@@ -960,7 +1037,9 @@ class ModelAdmin:
             proposed = self._validated(current.model_copy(
                 update={"providers": [provider if p.name == name else p
                                       for p in current.providers]}, deep=True), sent)  # fmt: skip
-            if _where_the_key_goes(before) != _where_the_key_goes(provider):
+            # Only the address decides where a key goes: the kind is fixed above, each kind has
+            # one sign-in and Bedrock one region (ADR-135 Amendment 7 decision 4).
+            if (before.api_base or None) != (provider.api_base or None):
                 await self._gateway.delete_credential(name)
                 moved.append(True)
                 kept = {k: v for k, v in proposed.keys.items() if k != name}
@@ -980,25 +1059,12 @@ class ModelAdmin:
         }
         await self._audited(by, "engine_edited", name, changes)
         if moved:
-            if (before.api_base or None) != (provider.api_base or None):
-                await self._audited(
-                    by, "key_removed", name, outcome="done: the engine's address changed"
-                )
-                return (
-                    f"{provider.label or name}'s address changed, so its key was removed: the key "
-                    "is never sent to an address it was not entered for. Enter it again."
-                )
             await self._audited(
-                by, "key_removed", name, outcome="done: how the engine signs in changed"
+                by, "key_removed", name, outcome="done: the engine's address changed"
             )
-            if provider.keyless:
-                return (
-                    f"{provider.label or name} now signs in by the namespace's IAM role, so its "
-                    "key was removed: no key is kept for it."
-                )
             return (
-                f"How {provider.label or name} signs in changed, so its key was removed: the key "
-                "is never sent anywhere it was not entered for. Enter it again."
+                f"{provider.label or name}'s address changed, so its key was removed: the key "
+                "is never sent to an address it was not entered for. Enter it again."
             )
         return None
 
@@ -1161,11 +1227,19 @@ class ModelAdmin:
                 self._gateway.http, gateway_model_name(provider.name, model),
                 tag=usage_tag(provider.name, "test"),
             )
-            words = check.words
-            if provider.keyless and check.outcome == "key_refused":
-                words = ROLE_REFUSED_WORDS.get(provider.kind, words)
+            outcome = check.outcome
+            if (
+                provider.kind == "gateway"
+                and outcome == "unreachable"
+                and check.status is not None
+                and 400 <= check.status < 500
+            ):
+                # The client's gateway answered with a 4xx the classifier does not read (not
+                # OpenAI's shape): it was reached, and refused (Amendment 7 decision 5).
+                outcome = "request_refused"
+            words = KIND_WORDS.get((provider.kind, outcome), WORDS[outcome])
             result = ConnectionTestResult(
-                engine=name, outcome=check.outcome, ok=check.ok, words=words
+                engine=name, outcome=outcome, ok=check.ok, words=words
             )
         await self._audited(by, "connection_tested", name, outcome=result.outcome)
         return result

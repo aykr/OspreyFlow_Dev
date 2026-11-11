@@ -188,15 +188,13 @@ def test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_k
     env = _env_lines(rendered.artefacts["deployment.env"])
     engines = json.loads(env["OSPREY_MODEL_ENGINES"])
     # ADR-136: each with its contract mark (none here) and no reference; ADR-135 Amendment 2: and
-    # its base, since the Conduit makes the gateway's entries; Amendment 4: its kind, how it signs
-    # in and Bedrock's region.
-    signs_in = {"kind": "provider", "auth": "key", "region": None}
+    # its base, since the Conduit makes the gateway's entries.
     assert engines == [
         {"name": "gemini", "label": "Gemini", "roles": {"extraction": "gemini/gemini-2.5-flash"},
-         "privacy_contract": False, "contract_reference": None, "api_base": None, **signs_in},
+         "privacy_contract": False, "contract_reference": None, "api_base": None},
         {"name": "openai", "label": "OpenAI",
          "roles": {"extraction": "openai/gpt-4o-mini", "vision": "openai/gpt-4o"},
-         "privacy_contract": False, "contract_reference": None, "api_base": None, **signs_in},
+         "privacy_contract": False, "contract_reference": None, "api_base": None},
     ]  # fmt: skip
     assert json.loads(env["OSPREY_MODEL_DEFAULTS"]) == {"extraction": "gemini"}
     assert env["OSPREY_SENDABLE_HANDLING_CODES"] == "P"

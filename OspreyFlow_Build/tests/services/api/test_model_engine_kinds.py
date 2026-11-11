@@ -1,7 +1,11 @@
 """*Admin › Models*' two engine kinds for the `cloud-platform` profile (`06_DECISIONS.md` ADR-135
-Amendment 4, P11 part 1): **the client's own OpenAI-compatible AI gateway** (its address, and a
-token or the namespace's IAM role) and **Bedrock in London by the namespace's IAM role**, with no
-key stored for either IAM-role kind.
+Amendment 4, as built: Amendment 7, P11 part 1): **the client's own OpenAI-compatible AI gateway**
+(its address alone, and a token) and **Bedrock in London by the namespace's IAM role**, with no key
+stored for an IAM-role engine.
+
+**On that profile alone** (Amendment 7 decision 1, the orchestrator's ruling of 11 November): on
+every other profile an engine is a provider by its name and key exactly as before Amendment 4, an
+engine named `bedrock` included, and the two kinds are neither offered nor taken.
 
 P1's and P2's access and key tests, run on both kinds, through the real app, the real right check
 and the real logger, against the stand-in gateway whose client gateway and Bedrock refuse as the
@@ -10,10 +14,13 @@ real services do (`tests/adapters/model_litellm/test_stand_in_engine_kinds.py`, 
 - rule 4: every `/v1/admin/models` route refuses a principal without `manage_models`, for an engine
   of each kind;
 - the key: a planted token for the client gateway appears in no response, log, audit entry, models
-  file or gateway row in plaintext; a key sent for an IAM-role engine is refused and kept nowhere;
+  file or gateway row in plaintext, pasted where a real paste lands (the address's userinfo or
+  query, the label, the reference); a key sent for an IAM-role engine is refused and kept nowhere;
 - **no stored key** for an IAM-role engine: no credential, no key in its entries, no key record,
-  and nothing the command line moves;
-- signing in another way, or changing the kind, removes the engine's key as an address change does;
+  nothing the command line moves, and no static AWS key on the gateway's workload;
+- **London only**, the model's id included (Amendment 7 decision 2);
+- *Test the connection*'s words for each refusal the two kinds give;
+- changing the address removes the engine's key; the kind is fixed once added;
 - the engine's own limits (P2) on both kinds.
 """
 
@@ -22,12 +29,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+import yaml
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from harness.apply import ApplyFailed, _keys_for_new_providers, provider_secret_lines
@@ -45,10 +53,12 @@ from services.api.model_admin import (
 from services.api.model_keys import move_keys
 from services.api.model_routing import routes_from_env
 
+import schemas.deployment as deployment
 from adapters.model_litellm.stand_in import (
     StandInBedrock,
     StandInClientGateway,
     StandInGateway,
+    StandInProvider,
 )
 from schemas.deployment import ModelProviderConfig, ModelsConfig, OspreyConfig
 from schemas.domain import Principal
@@ -60,6 +70,10 @@ PLANTED = "gw-PLANTED-model-token-Q7Z4-do-not-leak"
 BASE = "https://ai-gateway.client.example/v1"
 ROLE = "arn:aws:iam::000000000000:role/osprey-gateway"
 CLAUDE = "anthropic.claude-3-haiku-20240307-v1:0"
+GEMINI_KEY = "g-key-for-the-stand-in-0001"
+CLOUD = "cloud-platform"
+#: Every profile but `cloud-platform` (P7's member of `Profile` is not on this branch).
+OTHER_PROFILES = ["local-lite", "small", "cluster"]
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="u", roles=["osprey-admin"])
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="u", roles=["analyst"])
@@ -78,38 +92,53 @@ GATEWAY = {"name": "acme", "label": "Acme AI gateway", "kind": "gateway", "api_b
 GATEWAY_BY_ROLE = {**GATEWAY, "auth": "iam_role"}
 BEDROCK = {"name": "bedrock", "label": "Bedrock (London)", "kind": "bedrock",
            "roles": {"extraction": CLAUDE}}  # fmt: skip
+GEMINI = {"name": "gemini", "roles": {"extraction": "g-flash"}}
+#: An engine named `bedrock` as every profile took it before Amendment 4: LiteLLM's Bedrock provider
+#: by its key (ADR-135 decision 1).
+BEDROCK_BY_KEY = {"name": "bedrock", "roles": {"extraction": CLAUDE}}
 KINDS = {"gateway": GATEWAY, "bedrock": BEDROCK}
 
 #: Every name a stored key could go by in a LiteLLM entry.
 KEY_PARAMS = {"api_key", "litellm_credential_name", "aws_access_key_id", "aws_secret_access_key",
               "aws_session_token", "aws_bearer_token_bedrock"}  # fmt: skip
+#: The static AWS credentials botocore would prefer to the pod's own identity, were any given.
+STATIC_AWS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 
 
 class World:
     def __init__(
         self, tmp_path: Path, *, role: str | None = ROLE,
-        declared: list[ModelProviderConfig] | None = None,
+        declared: list[ModelProviderConfig] | None = None, profile: str = CLOUD,
+        key_present: dict[str, bool] | None = None,
     ) -> None:  # fmt: skip
         self.folder = tmp_path / "model-settings"
+        self.client_gateway = StandInClientGateway(TOKEN, frozenset({"gpt-4o-mini"}))
+        self.bedrock = StandInBedrock(frozenset({ROLE}), frozenset({CLAUDE}))
         self.gateway = StandInGateway(
             master_key=MASTER,
             salt_key="salt-one",
-            providers={},
-            client_gateways={BASE: StandInClientGateway(TOKEN, frozenset({"gpt-4o-mini"}))},
-            bedrock=StandInBedrock(frozenset({ROLE}), frozenset({CLAUDE})),
+            providers={
+                "gemini": StandInProvider(GEMINI_KEY, frozenset({"g-flash"})),
+                # Before Amendment 4 (and on every profile but cloud-platform), `bedrock` is a
+                # provider reached by its key, like any other.
+                "bedrock": StandInProvider(GEMINI_KEY, frozenset({CLAUDE})),
+            },
+            client_gateways={BASE: self.client_gateway},
+            bedrock=self.bedrock if profile == CLOUD else None,
             workload_role=role,
         )
         self.audit = InMemoryModelAdminAudit()
         self.installed = Installed(
-            providers=declared or [], defaults={}, key_present={}, local_only=False,
-            sendable=["O"],
+            providers=declared or [], defaults={}, key_present=key_present or {},
+            local_only=False, sendable=["O"],
             locals={"extraction": "qwen2.5:7b-instruct", "vision": None, "transcription": None,
                     "embedding": "all-minilm:22m-l6-v2-fp16"},
         )  # fmt: skip
         http = httpx.AsyncClient(base_url="http://litellm:4000", transport=self.gateway.transport(),
                                  headers={"Authorization": f"Bearer {MASTER}"})  # fmt: skip
         self.admin = ModelAdmin(
-            installed=self.installed, settings_file=ModelSettingsFile(self.folder),
+            installed=self.installed,
+            settings_file=ModelSettingsFile(self.folder, profile=profile),
             gateway=GatewayAdmin(http), audit=self.audit,
         )  # fmt: skip
 
@@ -124,31 +153,171 @@ class World:
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> Iterator[World]:
-    w = World(tmp_path)
-    app.state.model_admin = w.admin
-    app.dependency_overrides[get_principal] = lambda: ADMIN
-    yield w
+def serve() -> Iterator[Callable[[World], TestClient]]:
+    def served(w: World) -> TestClient:
+        app.state.model_admin = w.admin
+        app.dependency_overrides[get_principal] = lambda: ADMIN
+        return TestClient(app)
+
+    yield served
     app.dependency_overrides.clear()
     app.state.model_admin = None
 
 
 @pytest.fixture
-def client(world: World) -> TestClient:
-    return TestClient(app)
+def world(tmp_path: Path) -> World:
+    return World(tmp_path)
+
+
+@pytest.fixture
+def client(world: World, serve: Callable[[World], TestClient]) -> TestClient:
+    return serve(world)
 
 
 def _as(principal: Principal) -> None:
     app.dependency_overrides[get_principal] = lambda: principal
 
 
-# --- the schema ---------------------------------------------------------------------------------
+def _refusal(response: httpx.Response) -> str:
+    return str(response.json()["detail"]["detail"])
+
+
+# --- every other profile: exactly as before Amendment 4 (Amendment 7 decision 1) -----------------
+
+#: A models file as *Admin › Models* wrote it before Amendment 4, naming `bedrock` as a provider.
+MODELS_FILE_BEFORE = {
+    "providers": [{"name": "bedrock", "label": "Bedrock", "roles": {"extraction": CLAUDE},
+                   "api_base": None, "privacy_contract": False, "contract_reference": None}],
+    "defaults": {"extraction": "bedrock"},
+    "keys": {"bedrock": {"set_at": "2026-11-01T09:00:00Z", "set_by": "admin-1", "lost": False}},
+    "limits": {},
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("profile", OTHER_PROFILES)
+def test_a_models_file_naming_bedrock_loads_off_the_cloud_platform_profile_as_before(
+    tmp_path: Path, profile: str
+) -> None:
+    folder = tmp_path / "model-settings"
+    folder.mkdir()
+    (folder / "models.yaml").write_text(yaml.safe_dump(MODELS_FILE_BEFORE), encoding="utf-8")
+    # The Conduit's own reader, from its own environment, as the Models service makes it at start.
+    settings = ModelSettingsFile.from_env(
+        {"OSPREY_MODEL_SETTINGS_DIR": str(folder), "OSPREY_PROFILE": profile}
+    ).load()
+    assert settings is not None
+    engine = settings.providers[0]
+    assert (engine.name, engine.kind, engine.auth, engine.region) == (
+        "bedrock", "provider", "key", None,
+    )  # fmt: skip
+    assert engine.route("m") == "bedrock/m" and not engine.keyless
+
+
+@pytest.mark.parametrize("profile", OTHER_PROFILES)
+def test_off_the_cloud_platform_profile_bedrock_is_a_provider_by_its_key_as_before(
+    tmp_path: Path, serve: Callable[[World], TestClient], profile: str
+) -> None:
+    w = World(tmp_path, profile=profile)
+    client = serve(w)
+    added = client.post("/v1/admin/models/engines", json={"provider": BEDROCK_BY_KEY})
+    assert added.status_code == 200, added.text
+    keyed = client.put("/v1/admin/models/engines/bedrock/key", json={"key": GEMINI_KEY})
+    assert keyed.status_code == 200
+    params = w.params(f"bedrock/{CLAUDE}")
+    assert params["model"] == f"bedrock/{CLAUDE}"
+    assert params["litellm_credential_name"] == "osprey-bedrock"
+    assert "aws_region_name" not in params
+    view = client.get("/v1/admin/models").json()
+    assert view["engines"][0]["key_state"] == "set"
+    assert view["engine_kinds"] == ["provider"]
+
+
+@pytest.mark.parametrize("profile", OTHER_PROFILES)
+@pytest.mark.parametrize(
+    "body",
+    [GATEWAY, BEDROCK, {**GEMINI, "auth": "iam_role"}, {**GEMINI, "region": "eu-west-2"}],
+    ids=["gateway", "bedrock", "provider-by-role", "provider-with-a-region"],
+)
+def test_off_the_cloud_platform_profile_the_two_kinds_are_neither_offered_nor_taken(
+    tmp_path: Path, serve: Callable[[World], TestClient], profile: str, body: dict[str, Any]
+) -> None:
+    w = World(tmp_path, profile=profile)
+    client = serve(w)
+    assert client.get("/v1/admin/models").json()["engine_kinds"] == ["provider"]
+    refused = client.post("/v1/admin/models/engines", json={"provider": body})
+    assert refused.status_code == 422, refused.text
+    assert "profile: cloud-platform" in _refusal(refused)
+    assert w.gateway.entry_for(f"{body['name']}/{next(iter(body['roles'].values()))}") is None
+    assert w.models_file() == ""
+
+
+@pytest.mark.parametrize("profile", OTHER_PROFILES)
+def test_the_conduit_starts_off_the_cloud_platform_profile_on_a_declared_bedrock_provider(
+    profile: str,
+) -> None:
+    # `OSPREY_MODEL_ENGINES` as the render wrote it before Amendment 4.
+    environ = {
+        "OSPREY_PROFILE": profile,
+        "OSPREY_MODEL_ENGINES": json.dumps([{
+            "name": "bedrock", "label": "Bedrock", "roles": {"extraction": f"bedrock/{CLAUDE}"},
+            "privacy_contract": False, "contract_reference": None, "api_base": None,
+        }]),  # fmt: skip
+        "OSPREY_MODEL_KEY_PRESENT_BEDROCK": "yes",
+    }
+    installed = Installed.from_env(LOCALS, environ)
+    taken = [(p.name, p.kind, p.auth) for p in installed.providers]
+    assert taken == [("bedrock", "provider", "key")]
+    assert installed.key_present == {"bedrock": True}
+
+
+def test_osprey_yaml_off_the_cloud_platform_profile_takes_bedrock_by_key_and_refuses_the_kinds(
+) -> None:  # fmt: skip
+    from tests.harness.test_cluster_render import cluster_config
+
+    def models(*providers: dict[str, Any]) -> dict[str, Any]:
+        return {"local_only": False, "sendable_handling_codes": ["P"], "providers": list(providers)}
+
+    taken = cluster_config(models=models(BEDROCK_BY_KEY))
+    assert taken.models.providers[0].plain
+    for kind in (BEDROCK, GATEWAY):
+        with pytest.raises(ValidationError, match="profile: cloud-platform"):
+            cluster_config(models=models(kind))
+
+
+def test_off_the_cloud_platform_profile_the_models_file_and_render_are_written_as_before(
+    tmp_path: Path, serve: Callable[[World], TestClient]
+) -> None:
+    w = World(tmp_path, profile="small")
+    client = serve(w)
+    assert client.post("/v1/admin/models/engines", json={"provider": GEMINI}).status_code == 200
+    written = yaml.safe_load(w.models_file())
+    assert set(written["providers"][0]) == {
+        "name", "label", "roles", "api_base", "privacy_contract", "contract_reference",
+    }  # fmt: skip
+    added = next(e for e in w.audit.entries if e.action == "engine_added")
+    assert not {"kind", "auth", "region"} & set(added.changes)
+    config = engines_config()
+    engines = json.loads(dict(line.split("=", 1) for line in model_engines_env(config))
+                         ["OSPREY_MODEL_ENGINES"])  # fmt: skip
+    assert all(not {"kind", "auth", "region"} & set(e) for e in engines)
+
+
+def test_on_the_cloud_platform_profile_the_three_kinds_are_offered(client: TestClient) -> None:
+    offered = client.get("/v1/admin/models").json()["engine_kinds"]
+    assert offered == ["provider", "gateway", "bedrock"]
+
+
+# --- the cloud-platform profile's refusals (Amendment 7), at Admin › Models' own route ----------
 
 
 def test_bedrock_signs_in_by_the_namespace_s_role_in_london_by_default() -> None:
     engine = ModelProviderConfig.model_validate(BEDROCK)
     assert (engine.auth, engine.region, engine.api_base) == ("iam_role", "eu-west-2", None)
     assert ModelProviderConfig.model_validate(GATEWAY).auth == "key"
+
+
+def _bedrock_model(model: str) -> dict[str, Any]:
+    return {**BEDROCK, "roles": {"extraction": model}}
 
 
 @pytest.mark.parametrize(
@@ -160,24 +329,66 @@ def test_bedrock_signs_in_by_the_namespace_s_role_in_london_by_default() -> None
         ({**BEDROCK, "api_base": BASE}, "address"),
         ({**GATEWAY, "api_base": None}, "address"),
         ({**GATEWAY, "region": "eu-west-2"}, "region"),
-        ({"name": "gemini", "roles": {"extraction": "gemini-2.5-flash"}, "auth": "iam_role"},
-         "IAM role"),
+        ({**GEMINI, "auth": "iam_role"}, "IAM role"),
         ({**GATEWAY, "kind": "sagemaker"}, "kind"),
-        ({**BEDROCK, "kind": "provider"}, "only as Amazon Bedrock in London"),
-        ({**BEDROCK, "kind": "gateway", "api_base": BASE, "auth": "key"},
-         "only as Amazon Bedrock in London"),
+        # ("Bedrock" itself is redacted here: the request carried it as the label, which is not
+        # shaped like a name, and nothing a person sent is quoted back.)
+        (BEDROCK_BY_KEY, "reached only as Amazon"),
+        ({**BEDROCK, "kind": "gateway", "api_base": BASE, "auth": "key"}, "reached only as Amazon"),
         (GATEWAY_BY_ROLE, "token for now"),
+        # London only covers the model's id (Amendment 7 decision 2): an inference profile's id.
+        (_bedrock_model(f"eu.{CLAUDE}"), "London only"),
+        (_bedrock_model(f"us.{CLAUDE}"), "London only"),
+        (_bedrock_model(f"apac.{CLAUDE}"), "London only"),
+        (_bedrock_model(f"global.{CLAUDE}"), "London only"),
+        (_bedrock_model(f"jp.{CLAUDE}"), "London only"),
+        (_bedrock_model(f"us-gov.{CLAUDE}"), "London only"),
+        (_bedrock_model("arn:aws:bedrock:eu-west-2:000000000000:inference-profile/"
+                        f"eu.{CLAUDE}"), "London only"),  # fmt: skip
+        (_bedrock_model("arn:aws:bedrock:eu-west-2:000000000000:application-inference-profile/"
+                        "a1b2c3"), "London only"),  # fmt: skip
     ],
     ids=["bedrock-by-key", "bedrock-us", "bedrock-ireland", "bedrock-address",
          "gateway-no-address", "gateway-region", "provider-by-role", "unknown-kind",
-         "bedrock-named-provider", "bedrock-named-gateway", "gateway-by-role-held"],
+         "bedrock-named-provider", "bedrock-named-gateway", "gateway-by-role-held",
+         "id-eu", "id-us", "id-apac", "id-global", "id-jp", "id-us-gov", "arn-profile",
+         "arn-application-profile"],
 )  # fmt: skip
-def test_the_schema_refuses_each_shape_the_profile_does_not_allow(
-    body: dict[str, Any], words: str
+def test_the_cloud_platform_profile_refuses_each_shape_amendment_7_does_not_allow(
+    client: TestClient, world: World, body: dict[str, Any], words: str
 ) -> None:
-    with pytest.raises(ValidationError) as refused:
-        ModelProviderConfig.model_validate(body)
-    assert words in str(refused.value)
+    refused = client.post("/v1/admin/models/engines", json={"provider": body})
+    assert refused.status_code == 422, refused.text
+    assert words in _refusal(refused)
+    # Refused before the gateway was asked anything, and nothing written.
+    model = next(iter(body["roles"].values()))
+    assert world.gateway.entry_for(f"{body['name']}/{model}") is None
+    assert world.models_file() == ""
+    # A model's id is never quoted back (it may be anything a person pasted).
+    assert "inference-profile/" not in refused.text and "a1b2c3" not in refused.text
+
+
+@pytest.mark.parametrize("model", [
+    CLAUDE, "amazon.titan-embed-text-v2:0", "cohere.embed-english-v3",
+    "anthropic.claude-3-sonnet-20240229-v1:0:28k",
+])  # fmt: skip
+def test_a_bedrock_model_s_own_id_is_taken_on_the_cloud_platform_profile(model: str) -> None:
+    engine = ModelProviderConfig.model_validate(_bedrock_model(model))
+    assert deployment.engine_refusal(engine, CLOUD) is None
+
+
+def test_the_conduit_refuses_a_cross_region_id_however_it_arrives(tmp_path: Path) -> None:
+    """Every sibling reader of an engine on the profile: the models file and the render's lines."""
+    folder = tmp_path / "model-settings"
+    folder.mkdir()
+    across = {**BEDROCK, "roles": {"extraction": f"eu.{CLAUDE}"}}
+    (folder / "models.yaml").write_text(yaml.safe_dump({"providers": [across]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="London only"):
+        ModelSettingsFile(folder, profile=CLOUD).load()
+    environ = {"OSPREY_PROFILE": CLOUD, "OSPREY_MODEL_ENGINES": json.dumps([
+        {**across, "roles": {"extraction": f"bedrock/eu.{CLAUDE}"}}])}  # fmt: skip
+    with pytest.raises(ValueError, match="London only"):
+        Installed.from_env(LOCALS, environ)
 
 
 # --- rule 4, on both kinds ----------------------------------------------------------------------
@@ -235,6 +446,28 @@ def test_the_gateway_s_token_reaches_its_credential_and_is_sent_to_its_address_a
     assert world.gateway.credential_reads == 0
 
 
+def test_the_gateway_answers_at_its_address_written_with_a_trailing_slash(
+    client: TestClient, world: World
+) -> None:
+    body = {**GATEWAY, "api_base": f"{BASE}/"}
+    assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
+    assert client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN}).status_code == 200
+    assert client.post("/v1/admin/models/engines/acme/test").json()["outcome"] == "ok"
+
+
+#: Where a token really lands when pasted into the wrong field (the review's item 4): the address's
+#: userinfo, its query or fragment, the label, the contract reference.
+PASTED = [
+    ("api_base", f"https://{PLANTED}@ai-gateway.client.example/v1"),
+    ("api_base", f"https://sk-proj-{PLANTED}@ai-gateway.client.example/v1"),
+    ("api_base", f"https://user:{PLANTED}@ai-gateway.client.example/v1"),
+    ("api_base", f"{BASE}?api-key={PLANTED}"),
+    ("api_base", f"{BASE}#{PLANTED}"),
+    ("label", PLANTED),
+    ("contract_reference", PLANTED),
+]
+
+
 def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
     client: TestClient, world: World, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -254,10 +487,14 @@ def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
     assert send("PUT", key, json={"key": PLANTED}).status_code == 200  # a rotation
     for malformed in ({"key": PLANTED, "extra": 1}, {"key": PLANTED * 300}, {"secret": PLANTED}):
         assert send("PUT", key, json=malformed).status_code == 422
-    # A token pasted into the address or the label is refused, never echoed.
-    for field in ("api_base", "contract_reference"):
-        assert send("PUT", "/v1/admin/models/engines/acme",
-                    json={"provider": {**GATEWAY, field: PLANTED}}).status_code == 422  # fmt: skip
+    # A token pasted where a paste really lands is refused, on an edit and on an add, never echoed.
+    for field, value in PASTED:
+        edited = send("PUT", "/v1/admin/models/engines/acme",
+                      json={"provider": {**GATEWAY, field: value}})  # fmt: skip
+        assert edited.status_code == 422, (field, value)
+        added = send("POST", "/v1/admin/models/engines",
+                     json={"provider": {**GATEWAY, "name": "acme_two", field: value}})  # fmt: skip
+        assert added.status_code == 422, (field, value)
     send("GET", "/v1/admin/models")
     send("GET", "/v1/admin/models/history")
     assert send("DELETE", key).status_code == 200
@@ -274,6 +511,74 @@ def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
     assert leaked == {}
     # It did reach the client's gateway, so the test is not passing by sending nothing.
     assert any(PLANTED[-4:] in line for line in world.gateway.log)
+    # And the engine still has its first address: no pasted one was taken.
+    assert world.admin.settings.providers[0].api_base == BASE
+
+
+# --- Test the connection: each refusal of the two kinds, in their own words (rule 15) ----------
+
+
+def _tested(client: TestClient, name: str) -> dict[str, Any]:
+    return dict(client.post(f"/v1/admin/models/engines/{name}/test").json())
+
+
+def test_the_gateway_s_policy_refusal_names_the_policy_as_well_as_the_token(
+    client: TestClient, world: World
+) -> None:
+    world.client_gateway.refused_by_policy = frozenset({"gpt-4o-mini"})
+    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
+    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
+    result = _tested(client, "acme")
+    assert result["outcome"] == "key_refused"
+    assert "policy" in result["words"] and "gateway's owners" in result["words"]
+
+
+def test_the_gateway_s_rate_limit_is_said_as_its_own(client: TestClient, world: World) -> None:
+    world.client_gateway.rate_limited = True
+    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
+    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
+    result = _tested(client, "acme")
+    assert result["outcome"] == "rate_limited"
+    assert "Your organisation's AI gateway is limiting" in result["words"]
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [(400, '{"fault":{"faultstring":"Request rejected","detail":{"errorcode":"steps.raise"}}}'),
+     (403, "<html><head><title>403 Forbidden</title></head><body>Request blocked</body></html>")],
+    ids=["api-manager-400", "firewall-403-html"],
+)  # fmt: skip
+def test_the_gateway_s_refusal_in_another_shape_is_said_as_refused_never_unreachable(
+    client: TestClient, world: World, refusal: tuple[int, str]
+) -> None:
+    world.client_gateway.refusal = refusal
+    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
+    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
+    result = _tested(client, "acme")
+    assert result["outcome"] in ("request_refused", "key_refused")
+    assert "could not be reached" not in result["words"]
+    assert "gateway" in result["words"] and "Request rejected" not in json.dumps(result)
+
+
+def test_bedrock_s_model_not_enabled_is_said_as_the_model_s_access_not_the_role_s(
+    client: TestClient, world: World
+) -> None:
+    world.bedrock.enabled_models = frozenset()
+    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    result = _tested(client, "bedrock")
+    assert result["outcome"] == "model_not_enabled"
+    assert "Model access" in result["words"] and "not the role's permissions" in result["words"]
+    assert "refused the namespace's IAM role" not in result["words"]
+
+
+def test_bedrock_s_expired_credentials_are_said_as_expired(
+    client: TestClient, world: World
+) -> None:
+    world.bedrock.expired = True
+    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    result = _tested(client, "bedrock")
+    assert result["outcome"] == "sign_in_expired"
+    assert "expired" in result["words"] and "restart the gateway" in result["words"]
 
 
 # --- no stored key for the IAM-role kinds -------------------------------------------------------
@@ -288,7 +593,7 @@ def test_an_iam_role_engine_keeps_no_key_anywhere(
     assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
     refused = client.put(f"/v1/admin/models/engines/{name}/key", json={"key": PLANTED})
     assert refused.status_code == 409
-    assert "IAM role" in refused.json()["detail"]["detail"]
+    assert "IAM role" in _refusal(refused)
     model = next(iter(body["roles"].values()))
     params = world.params(f"{name}/{model}")
     assert set(params) & KEY_PARAMS == set()
@@ -306,7 +611,7 @@ def test_an_iam_role_engine_keeps_no_key_anywhere(
                world.audit.entries)  # fmt: skip
     # Nor is a key removed for it: there is none (the reviewer's item 11).
     removed = client.delete(f"/v1/admin/models/engines/{name}/key")
-    assert removed.status_code == 409 and "IAM role" in removed.json()["detail"]["detail"]
+    assert removed.status_code == 409 and "IAM role" in _refusal(removed)
     # And the call to Bedrock carried no key of any kind.
     assert client.post(f"/v1/admin/models/engines/{name}/test").json()["outcome"] == "ok"
     assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
@@ -387,6 +692,34 @@ def test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_fil
     assert not (w.folder / "models.yaml").exists()
 
 
+def test_a_keyed_engine_declared_beside_bedrock_is_made_at_start_and_answers_once_its_key_moves(
+    tmp_path: Path,
+) -> None:
+    """`_start_once` reconciles every declared engine when an IAM-role one is among them (the
+    review's item 8): the keyed engine's entries name its credential before the key is there, are
+    offered to no analyst until it is, and answer once `move_keys` brings it in."""
+    gemini = ModelProviderConfig.model_validate(GEMINI)
+    w = World(tmp_path, declared=[gemini, ModelProviderConfig.model_validate(BEDROCK)],
+              key_present={"gemini": False})  # fmt: skip
+
+    async def started() -> tuple[object, object]:
+        await w.admin.start()
+        await w.admin.close()
+        return (await w.admin.test("admin-1", "bedrock"), await w.admin.test("admin-1", "gemini"))
+
+    bedrock, gemini_before = asyncio.run(started())
+    assert getattr(bedrock, "outcome", None) == "ok"
+    assert w.params("gemini/g-flash")["litellm_credential_name"] == "osprey-gemini"
+    assert getattr(gemini_before, "outcome", None) == "key_refused"
+    assert w.admin.routes().engines["gemini"].key_present is False
+    assert w.gateway.credential("osprey-gemini") is None
+    assert not (w.folder / "models.yaml").exists()
+    moved, skipped = asyncio.run(move_keys(w.admin, [f"GEMINI={GEMINI_KEY}"], "cli:root"))
+    assert (moved, skipped) == (["gemini"], [])
+    assert asyncio.run(w.admin.test("admin-1", "gemini")).outcome == "ok"
+    assert w.admin.routes().engines["gemini"].key_present is True
+
+
 # --- P2: each engine's own limits, on both kinds ------------------------------------------------
 
 
@@ -414,16 +747,30 @@ def test_each_kind_s_limits_are_its_own_gateway_key_s(
 LOCALS = DeploymentModels("qwen2.5:7b-instruct", None, None, None)
 
 
+@pytest.fixture
+def as_on_cloud_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`profile: cloud-platform` cannot be declared on this branch: its `Profile` member is P7's
+    (lane/platform), not yet merged here. Its render reuses the cluster's translation (lane/platform
+    a1863d5c), so the harness's handling of the two kinds is shown on the existing profiles with
+    Amendment 7's profile set widened **for the test alone**. At merge, after P7, these cases move
+    to the real profile (the as-built record says so)."""
+    monkeypatch.setattr(
+        deployment, "MODEL_ROUTE_PROFILES", frozenset({CLOUD, "local-lite", "small", "cluster"})
+    )
+
+
 def _declared() -> OspreyConfig:
     models = ModelsConfig.model_validate({
         "local_only": False, "sendable_handling_codes": ["P"],
-        "providers": [BEDROCK, GATEWAY, {"name": "gemini", "roles": {"extraction": "g-flash"}}],
+        "providers": [BEDROCK, GATEWAY, GEMINI],
     })  # fmt: skip
     return engines_config().model_copy(update={"models": models})
 
 
 def _rendered(config: OspreyConfig) -> dict[str, str]:
-    return dict(line.split("=", 1) for line in model_engines_env(config))
+    # `deployment.env` carries the profile to the Conduit (`OSPREY_PROFILE`, every profile).
+    lines = dict(line.split("=", 1) for line in model_engines_env(config))
+    return {"OSPREY_PROFILE": CLOUD, **lines}
 
 
 def test_the_render_tells_the_conduit_each_engine_s_kind_and_how_it_signs_in() -> None:
@@ -459,54 +806,67 @@ def test_the_install_asks_no_key_for_an_iam_role_engine() -> None:
         provider_secret_lines(config, {"OSPREY_MODEL_KEY_ACME": TOKEN})
 
 
-def _with_held_bedrock_key(tmp_path: Path) -> OspreyConfig:
-    from tests.harness.test_model_engines import _config as harness_config
+def _cluster_values(*providers: dict[str, Any]) -> dict[str, Any]:
+    from tests.harness.test_cluster_render import cluster_config, values_for
 
-    models = ModelsConfig.model_validate({
-        "local_only": False, "sendable_handling_codes": ["P"],
-        "providers": [BEDROCK, {"name": "gemini", "roles": {"extraction": "g-flash"}}],
-    })  # fmt: skip
-    return harness_config(tmp_path, models)
+    models = {"local_only": not providers, "sendable_handling_codes": ["P"] if providers else [],
+              "providers": list(providers)}  # fmt: skip
+    return values_for(cluster_config(models=models))
 
 
-def test_an_iam_role_engine_s_held_key_is_blanked_in_every_compose_service(tmp_path: Path) -> None:
-    import yaml
-    from harness.render import render
-
-    from tests.harness.test_model_engines import _fake_resolver
-
-    compose = yaml.safe_load(render(_with_held_bedrock_key(tmp_path), resolver=_fake_resolver)
-                             .artefacts["compose.yaml"])  # fmt: skip
-    for name, service in compose["services"].items():
-        if "env_file" in service or name == "litellm":
-            environment = service.get("environment") or {}
-            assert environment.get("OSPREY_MODEL_KEY_BEDROCK") == "", name
-    gateway = compose["services"]["litellm"]["environment"]
-    assert gateway["OSPREY_MODEL_KEY_GEMINI"] == "${OSPREY_MODEL_KEY_GEMINI:-}"
-
-
+@pytest.mark.usefixtures("as_on_cloud_platform")
 def test_an_iam_role_engine_s_held_key_is_blanked_in_every_cluster_workload() -> None:
-    from tests.harness.test_cluster_render import _containers, cluster_config, values_for
+    from tests.harness.test_cluster_render import _containers
 
-    models = {"local_only": False, "sendable_handling_codes": ["P"], "providers": [BEDROCK]}
-    values = values_for(cluster_config(models=models))
-    readers = [c for c in _containers(values) if c.get("envFrom")]
+    containers = _containers(_cluster_values(BEDROCK))
+    readers = [c for c in containers if c.get("envFrom")]
     assert readers
     for container in readers:
         blanked = {e["name"]: e.get("value") for e in container.get("env", [])}
         assert blanked.get("OSPREY_MODEL_KEY_BEDROCK") == "", container["name"]
+    # The gateway reads the Secret by name only, and not this name.
+    gateway = next(c for c in containers if c["name"] == "litellm")
+    assert not gateway.get("envFrom")
+    assert all(e["name"] != "OSPREY_MODEL_KEY_BEDROCK" for e in gateway["env"])
 
 
+@pytest.mark.usefixtures("as_on_cloud_platform")
+@pytest.mark.parametrize("declared", [[BEDROCK], []], ids=["bedrock-declared", "none-declared"])
+def test_the_gateway_workload_carries_no_static_aws_key(declared: list[dict[str, Any]]) -> None:
+    """The gateway's pod signs Bedrock's calls by its own identity alone (the review's item 8):
+    botocore prefers static keys in the environment to the pod's web identity, so none is given,
+    whether Bedrock is declared at install or added later in *Admin › Models* (none declared: the
+    render cannot know)."""
+    values = _cluster_values(*declared)
+    gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
+    # Nothing reaches it unnamed: it reads no Secret whole, so a key held there is not handed on.
+    assert not gateway.get("envFrom")
+    # And none is named, in any shape the chart takes (`value`, `secret`, `config`, `field`).
+    assert not {e["name"] for e in gateway.get("env", [])} & set(STATIC_AWS)
+    assert not any(variable in yaml.safe_dump(values) for variable in STATIC_AWS)
+    # The gateway does read its own keys by name: the case is not passing on an empty workload.
+    assert any(e["name"] == "LITELLM_MASTER_KEY" for e in gateway["env"])
+
+
+def test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key(
+    client: TestClient, world: World
+) -> None:
+    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    params = world.params(f"bedrock/{CLAUDE}")
+    assert not {p.lower() for p in STATIC_AWS} & set(params)
+    assert not any("AWS_" in str(v) for v in params.values())
+    assert client.post("/v1/admin/models/engines/bedrock/test").json()["outcome"] == "ok"
+    assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
+
+
+@pytest.mark.usefixtures("as_on_cloud_platform")
 def test_the_install_page_offers_no_key_field_for_an_iam_role_engine(tmp_path: Path) -> None:
     from harness.install_page import _providers
 
     draft = tmp_path / "osprey.yaml"
-    config = _declared()
-    draft.write_text(yaml_dump(config), encoding="utf-8")
+    draft.write_text(yaml_dump(_declared()), encoding="utf-8")
     assert {p["name"] for p in _providers(draft)} == {"acme", "gemini"}
 
 
 def yaml_dump(config: OspreyConfig) -> str:
-    import yaml
-
     return yaml.safe_dump(config.model_dump(mode="json", exclude_none=True), sort_keys=False)

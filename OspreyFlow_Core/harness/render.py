@@ -322,8 +322,11 @@ def model_key_variables(config: OspreyConfig) -> dict[str, str]:
 
 def keyless_model_key_variables(config: OspreyConfig) -> dict[str, str]:
     """The variable each IAM-role engine's key **would** be kept in (ADR-135 Amendment 4). It keeps
-    none, but one held from before it signed in so stays in the deployment's secrets until a move
-    removes it, so it is blanked in **every** service, the gateway too: no workload reads it."""
+    none, but one held under its name (an earlier engine of that name) stays in the deployment's
+    Secret until a move removes it, so the cluster's translation, which the `cloud-platform` render
+    reuses, blanks it in every workload that reads the Secret whole; the gateway reads none whole
+    and is never given it by name. Empty on every other profile, which takes no IAM-role engine
+    (Amendment 7 decision 1)."""
     models = config.models
     return {p.name: models.key_variable(p.name) for p in models.enabled_providers if p.keyless}
 
@@ -348,10 +351,9 @@ def model_engines_env(config: OspreyConfig) -> list[str]:
             "contract_reference": p.contract_reference,
             # ADR-135 Amendment 2: the Conduit makes the gateway's entries, so it needs the base.
             "api_base": p.api_base,
-            # ADR-135 Amendment 4: what the engine is, how it signs in, and Bedrock's region.
-            "kind": p.kind,
-            "auth": p.auth,
-            "region": p.region,
+            # ADR-135 Amendment 4: what the engine is, how it signs in, and Bedrock's region;
+            # not written for a plain provider, so every other profile's line is as before.
+            **({} if p.plain else {"kind": p.kind, "auth": p.auth, "region": p.region}),
         }
         for p in models.enabled_providers
     ]
@@ -370,21 +372,19 @@ def _keys_for_the_gateway_alone(config: OspreyConfig, services: dict[str, Any]) 
     every key. The Conduit is told instead whether each key is present, by Compose from the same
     file (`${KEY:+yes}`: "yes" or empty), so it offers analysts only an engine that has one."""
     keys = model_key_variables(config)
-    keyless = keyless_model_key_variables(config)
-    if not keys and not keyless:
+    if not keys:
         return
     for name, service in services.items():
         if name == "litellm":
             service["environment"] = {
                 **dict(service.get("environment") or {}),
                 **{key: f"${{{key}:-}}" for key in keys.values()},
-                **dict.fromkeys(keyless.values(), ""),
             }
             continue
         if "env_file" not in service:
             continue
         environment = dict(service.get("environment") or {})
-        environment.update({key: "" for key in [*keys.values(), *keyless.values()]})
+        environment.update({key: "" for key in keys.values()})
         if name == "api":
             for provider, key in keys.items():
                 environment[f"OSPREY_MODEL_KEY_PRESENT_{provider.upper()}"] = f"${{{key}:+yes}}"
