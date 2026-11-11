@@ -71,6 +71,32 @@ def test_the_chart_is_valid_kubernetes(manifests: list[dict[str, Any]]) -> None:
     assert found and found[1] == found[2] == str(len(manifests)), said
 
 
+def test_a_checksum_that_reads_as_a_number_is_still_a_string_kubernetes_takes() -> None:
+    """The merger's find (11 November 2026): `checksum/…` annotations were the hash's first 16 hex
+    characters, unquoted, so when all 16 were digits YAML read a number and Kubernetes refused the
+    workload, now and then, as values changed. `{"OSPREY_PROBE":"2354"}` hashes to
+    `3625796312017304…`: the annotation must still be that string, and the chart still valid."""
+    values = yaml.safe_load(
+        render(cluster_config(AWS), resolver=_resolver).artefacts["values.yaml"]
+    )
+    values["environment"] = {"OSPREY_PROBE": "2354"}
+    manifests = [doc for doc in yaml.safe_load_all(helm_template(yaml.safe_dump(values))) if doc]
+    annotations = [
+        m["spec"]["template"]["metadata"]["annotations"]
+        for m in manifests
+        if m["kind"] in ("Deployment", "StatefulSet")
+    ]
+    assert annotations
+    for found in annotations:
+        assert found["checksum/environment"] == "3625796312017304", found
+        assert all(isinstance(v, str) for v in found.values()), found
+    said = _docker(
+        KUBECONFORM, "-strict", "-summary", "-kubernetes-version", "1.31.0", "-",
+        stdin=yaml.safe_dump_all(manifests),
+    )  # fmt: skip
+    assert re.search(r"Invalid: 0, Errors: 0", said), said
+
+
 def test_the_chart_holds_no_secret(manifests: list[dict[str, Any]]) -> None:
     assert not _of(manifests, "Secret")
     for _, template in _pod_specs(manifests):
@@ -80,7 +106,9 @@ def test_the_chart_holds_no_secret(manifests: list[dict[str, Any]]) -> None:
                 if re.search("(PASSWORD|SECRET|_TOKEN)$", entry["name"]):
                     # An empty value is the blank that keeps a secret from a workload reading the
                     # whole Secret (ADR-135 Amendment 2 decision 3), never a secret.
-                    assert "value" not in entry or entry["value"] == "" or "$(" in entry["value"], entry
+                    assert "value" not in entry or entry["value"] == "" or "$(" in entry["value"], (
+                        entry
+                    )
 
 
 def test_nothing_but_the_proxy_is_published(manifests: list[dict[str, Any]]) -> None:
