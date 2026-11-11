@@ -53,7 +53,7 @@ Gated head **3bd210d**, on main 7bdd33b; the commit after it adds this report an
 - **CI's `test` job stays serial:** no `ci.yml` change runs it in parallel. `ci-yml-T1p4.diff` only adds the live
   proof to the ignore and conformance lists, and must land with the merge.
 - **Committed at the orchestrator's word:**
-  - `scripts/stack_lease.sh`, which sets the test stacks' Postgres to `max_connections 400`;
+  - `OspreyFlow_Build/scripts/stack_lease.sh`, which sets the test stacks' Postgres to `max_connections 400`;
   - `test_valkey_config.py`;
   - `pyproject.toml` and `uv.lock`.
 - **Named and left:**
