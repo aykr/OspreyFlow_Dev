@@ -1,0 +1,6 @@
+# Laurium's image is built from this folder alone (Dockerfile). Its scratch environment, if any, and
+# the compile input are not part of it.
+.venv
+__pycache__
+*.pyc
+requirements.in

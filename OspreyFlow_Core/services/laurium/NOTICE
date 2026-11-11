@@ -1,0 +1,36 @@
+OspreyFlow: Laurium's service
+Copyright 2026 The OspreyFlow Authors
+
+This image runs Laurium, by the Ministry of Justice, as OspreyFlow's second extraction engine
+(spec/06_DECISIONS.md ADR-135 Amendment 6), installed unmodified from PyPI at version 0.6.0. Each
+package's own licence text is kept in its installed distribution under
+/usr/local/lib/python3.13/site-packages/*.dist-info/.
+
+laurium 0.6.0 (https://github.com/moj-analytical-services/laurium)
+  MIT License. Copyright (c) 2025 Ministry of Justice
+
+arrow-pd-parser 2.2.0 (https://github.com/moj-analytical-services/mojap-arrow-pd-parser)
+  MIT Licence. Copyright 2020 Crown Copyright (Ministry of Justice)
+
+tiktoken 0.14.0 (https://github.com/openai/tiktoken)
+  MIT License. Copyright (c) 2022 OpenAI, Shantanu Jain
+
+en-core-web-sm 3.8.0 (https://github.com/explosion/spacy-models, release en_core_web_sm-3.8.0)
+  MIT License, spaCy's small English pipeline by Explosion, trained on OntoNotes 5 and WordNet 3.0.
+
+Each of the MIT licences above reads, with its own copyright line:
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+  associated documentation files (the "Software"), to deal in the Software without restriction,
+  including without limitation the rights to use, copy, modify, merge, publish, distribute,
+  sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or
+  substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+  NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+  OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
