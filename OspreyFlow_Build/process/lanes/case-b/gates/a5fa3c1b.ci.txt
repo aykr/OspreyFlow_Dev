@@ -1,0 +1,25 @@
+make -k ci at a5fa3c1b (lane/case-b-p12), the test server, 11 November 2026, offline: ARCADEDB_HTTP_PORT=59991
+POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994, OSPREY_case-b unset, no lease. The owner's Makefile
+as on main (P12_MAKEFILE.diff not applied, so no-langchain-check is not in this run; its tests passed in make test
+and the offline set). (The run's own result lines; the full output could not be copied out of the session's task
+folder without approval.)
+
+Failed, all four inside core-check (Core's `check`); every Build target after it passed (licence-check: 76
+packages, all allowed; design, ui-words, opentofu, chart, schemas, authorized-query, demo-guide, domain-model,
+route-coverage, product-tree-link, decision-log-publication, provenance-annotation, test-file-coverage, citation,
+conformance-guard, lanes, confinement, no-branches, bundle).
+
+1. lint (Core, `npm run lint`): 6 ESLint errors, all in
+   services/laurium/.venv/lib/python3.13/site-packages/urllib3/contrib/emscripten/emscripten_fetch_worker.js: the
+   untracked scratch environment whose removal (rm -rf) was denied. Ruff: "All checks passed!". mypy (run alone):
+   "Success: no issues found in 449 source files".
+2. trivy (Core's filesystem scan): 7 targets, CRITICAL "secrets" (gcp-service-account and the like), every one
+   under services/laurium/.venv/ (the Anthropic SDK's own docstrings, `{****}` placeholders): the same scratch
+   environment. No finding in a tracked file.
+3. trivy-image-workspace: libxslt 1.1.43-r3, CVE-2026-87636 and CVE-2026-9947 (HIGH, fixed in 1.1.43-r4), in the
+   workspace image's Alpine base. Not this branch's (apps/workspace untouched); main's own until the base is
+   rebuilt.
+4. harness-a11y: did not run. "this checkout is a linked worktree and OSPREY_PORTS_SLOT is not set". Re-run with
+   OSPREY_PORTS_SLOT=3 asked for approval this unattended session cannot give. The branch has no screen.
+
+Every other image scan (ingest, api, harness, ner, worker, report-sync, superset) passed.

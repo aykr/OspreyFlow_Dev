@@ -34138,3 +34138,147 @@ new mounted file would be `600`); `replace_whole` needs a symlinked `deployment.
 writable, which an in-place write did not. **`OSPREYFLOW_REFRESH_LOCK_FD` and the lock's name
 (`.<deployment>.refresh-lock` beside the resolved folder) are a contract** between one release's
 `update` and the next release's `--files-only` child: kept stable, or changed with both sides.
+
+### ADR-135, Amendment 6 (11 November 2026) — Laurium runs as its own Python 3.13 service, built only when chosen, behind a thin `ModelPort.extract` adapter in the Conduit
+
+*The owner's ruling of 11 November (about 06:00 UTC) on P12's licence check
+(`process/lanes/platform/p12/LICENCE_CHECK.md`), all four points on the orchestrator's recommendation; written by
+the case-b lane, which took P12 from platform. Changes Amendment 5 decisions 1 and 6;
+its decisions 2 to 5 stand.*
+
+**Context.** Laurium 0.2.0 onwards requires Python 3.13 or later; the Conduit and its workers run 3.12, and 0.1.0,
+the last release on 3.12, makes torch a hard dependency. Amendment 5 decision 1 put Laurium into the images that
+serve `ModelPort.extract` as an optional extra (`ospreyflow[laurium]`), which cannot be installed into a 3.12
+environment at all. The licence check found no GPL, AGPL, LGPL, SSPL or non-commercial licence in Laurium's core
+install (121 packages), three packages whose MIT licence the gate cannot read from their metadata, one dependency
+not on PyPI (spaCy's `en-core-web-sm` model), and an `encoder` extra that brings 16 NVIDIA CUDA wheels whose
+licences are proprietary or absent.
+
+**Decisions.**
+
+1. **Laurium runs as its own service, `laurium`, on Python 3.13** (`services/laurium/`: its own `Dockerfile` on
+   `python:3.13-slim` pinned by digest, its own FastAPI app, its own `requirements.txt`). It is built and rendered
+   only when the extraction engine *Laurium* is chosen (Amendment 5 decision 2; the setting and its rendering are
+   P12 part 2). **No `ospreyflow[laurium]` extra and no Laurium entries in `uv.lock`:** the Conduit's lock stays a
+   3.12 lock, and the service's `requirements.txt` is its lock, compiled with `uv pip compile --python-version 3.13
+   --only-binary :all: --generate-hashes` and installed with `--require-hashes`. An image or deployment without
+   Laurium carries no LangChain, spaCy or Laurium: the Conduit's build context leaves `services/laurium/` out
+   (`.dockerignore`), and `tools/no_langchain_check.py` fails on any such distribution installed in an image built
+   without it (checked in CI after each image's build; its reader shown red on its own script's output, and its
+   source leg, offline in `make ci`, on planted Dockerfiles, requirements files, lock and build context).
+2. **Pinned from PyPI's 0.6.0 artefacts by hash, never from the repository's main**, which has moved past 0.6.0
+   with the version string unchanged. **`en-core-web-sm` 3.8.0 comes from Explosion's pinned GitHub release**
+   (`explosion/spacy-models`, `en_core_web_sm-3.8.0`), by its SHA-256: the one source beyond the public package
+   index, accepted as MIT on Explosion's terms (the owner's ruling 3). **The `encoder` extra is never installed**
+   (ruling 4); the image's build fails if torch, transformers, setfit or any `nvidia-*` distribution is present.
+   Encoder models, if ever wanted, are a decision of their own, on CPU-only wheels.
+3. **A thin adapter in the Conduit.** `packages/adapters/extract_laurium/` implements `ModelPort.extract` only, as
+   an HTTP client of the service (the shape `adapters/recognise_stanza` has with its sidecar); the other
+   `ModelPort` operations stay with the LiteLLM adapter. It checks the request's schema before any call (a
+   malformed one is `InvalidExtractionSchemaError`, as the LiteLLM adapter's), validates what comes back against
+   that schema before trusting it, and turns each refusal into `ModelPort`'s typed errors (`ModelUnavailableError`,
+   `ModelLimitReached`, `ExtractionFailedError`), in fixed words, never the gateway's.
+4. **Every model call goes through the gateway, and only the gateway.** The service builds its chat model with
+   Laurium's own `create_llm` on the `openai` platform, `openai_api_base` the gateway's OpenAI-compatible
+   endpoint; Laurium's `ollama`, `bedrock` and `anthropic` platforms are never offered, since each reaches its own
+   host. **At start the service refuses, in words, and does not serve:** a gateway URL whose host is not the
+   deployment's gateway (`litellm`); any setting of Laurium's libraries that names a host (`OPENAI_BASE_URL`,
+   `OPENAI_API_BASE`, `OLLAMA_HOST`, `ANTHROPIC_BASE_URL`, `AWS_ENDPOINT_URL*`, LangSmith's endpoint, a proxy);
+   the resolver's own settings that could point `litellm` elsewhere (`LOCALDOMAIN`, `RES_OPTIONS`, `HOSTALIASES`);
+   LangSmith tracing turned on, which would send every prompt to LangSmith's own host; a library's debug log of each
+   request (`OPENAI_LOG`); and any `OSPREY_LAURIUM_*` setting it does not know. Every spelling of a name is read,
+   since the libraries read either case. The OpenAI client's own retries are off: a refused call is answered once. The adapter passes the call's engine and job (Amendment 3), so the call carries its
+   tag and goes with a scoped key (decision 8), and per-dataset egress, limits, usage and audit apply exactly as
+   for Deep read. **A hazard for part 2:** every proxy setting (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+   `OPENAI_PROXY`, in any case) is refused at start, so the service cannot be deployed behind an egress proxy
+   as it stands; a profile whose gateway is reached only through a proxy needs that decided (a proxy named by
+   the render and refused for every host but the gateway, or the gateway reached directly) before part 2
+   renders it.
+5. **Laurium's failures arrive as failures.** Laurium's `BatchExtractor` catches a row's failure (a refused key,
+   an unknown model, output it cannot parse) and returns the row with every field `None`; through the service that
+   would be an empty finding standing for a refusal. The service builds Laurium's `BatchExtractor` (its prompt,
+   parser and chain) and awaits its `chain` for the one document, so a refusal reaches the adapter as itself.
+6. **The domain model mapped to Laurium's schema, and back.** The request's JSON Schema (from the extraction
+   profile, `services/extract/profile.build_schema`) is mapped to Laurium's `{field: type}` schema with Pydantic
+   types (an object's properties, arrays, enums as `Literal`, strings, integers, numbers, booleans); a shape
+   outside that subset (a combinator, a reference, a list of types) is refused before any model call. Every entity
+   type of the default ontology and of the `fibo` and `niem` packs maps and round-trips, each alone and all
+   together (`tests/services/laurium/test_schema_map.py`). A constraint
+   within a type (`minLength`, `pattern`, bounds) is not given to Laurium's model, which its types cannot carry; the
+   adapter checks every answer against the whole schema (decision 3). Laurium's output comes back as `ExtractionResult.data` in
+   the request's own shape, so `services/extract/candidates.py` locates each finding's span in the document and
+   queues it `pending` exactly as Deep read's: *inferred* until a person accepts it (rule 5), traced to its
+   document and to the span the text gives; Laurium itself reports no span.
+7. **The licence record** (the owner's ruling 2). `00_ARCHITECTURE.md` §7 records `laurium` 0.6.0,
+   `arrow-pd-parser` 2.2.0 and `tiktoken` 0.14.0 as MIT on the evidence of the licence check, each pinned to its
+   version, and `en-core-web-sm` 3.8.0 as MIT from its release; the licence gate's recorded entries
+   (`tools/licence_check.RECORDED_LICENCE_EVIDENCE`, and the copy in the service's own image gate,
+   `services/laurium/licence_gate.py`) admit exactly those packages at exactly those versions, and only while each
+   declares what its evidence was for (no readable licence, or MIT's own text): a release declaring a GPL, an LGPL
+   or anything else is judged afresh. The deployment's notices carry the Ministry of Justice's copyright notices for `laurium` and
+   `arrow-pd-parser`.
+8. **The gateway's master key never crosses into Laurium's container** (the orchestrator's ruling of 11 November
+   on P12 part 1's review, on its recommendation; recorded for the owner, and it makes P12 part 1 a credential
+   step). The master key is admin on the gateway, and Laurium's image runs 126 third-party packages. The adapter
+   sends the service a scoped virtual key for every call: a hosted engine's own key (Amendment 3), or for the
+   deployment's own models and a call outside the routing **Laurium's own key**
+   (`adapters/extract_laurium/keys.py`), made like the engines' keys (an HMAC of its own label under the master
+   key, never stored), held on the gateway with `models` naming the deployment's own models alone, tagged
+   `metadata.osprey_service: laurium` so the engines' stale-key sweep leaves it alone, with no admin right. An
+   empty master key is refused before any call. Making the key at start, and replacing it when the master key
+   rotates, are part 2's, with the render that starts the service.
+
+**Consequences.** `ModelPort.extract`'s refusals run on both adapters through the gateway's measured stand-in
+served over HTTP as `litellm` (`tests/conformance/model_port/test_suite_extract.py`), which answers whatever it
+is told to, whatever the prompt says, and so proves nothing of a model's answer to Laurium's prompt. The contract's
+own cases run on both through `ModelPort`'s suite (`test_suite.py`, Laurium registered in
+`registry.MODEL_PORT_ADAPTERS`, `extract` only), against a stack's real LiteLLM and the pinned conformance model:
+**as of 11 November that leased run has not been taken** (this session could not take a lease;
+`process/lanes/case-b/SERVER_LOG.md`), so Laurium has not yet met a real gateway or model. **It was taken later
+that day** (stack c, beside the orchestrator's gateway pair at CI's pinned digests, the gateway with its own
+database; `process/lanes/case-b/P12_RED_RECORD.md`, "Round 2"): **Laurium cannot read the pinned conformance
+model's answer to its prompt** (the conforming-answer case red three times of three, the service answering
+`unparseable`), while the LiteLLM adapter's same case passes on the same model; and Laurium's own key is refused
+at the gateway's admin routes. **An open finding, so: Laurium has not yet read any real model's answer.** Its service
+asks for the format in the prompt alone (LangChain's `PydanticOutputParser`, at temperature 0, so its three attempts
+are likely one answer three times), where the LiteLLM adapter sends `response_format: json_schema` (constrained
+decoding); the model it would need is one that follows Laurium's prompt-only format, which no pinned model is shown
+to do, and the client's own engine sits behind the client's gateway or Bedrock route that P11 part 2 renders
+(Amendment 7). The conforming-answer case on Laurium is a strict xfail for Laurium alone and **for the unparseable
+refusal alone** (the orchestrator's rulings of 11 November, recorded for the owner): `test_suite.py` turns only that
+refusal's words into the one exception the mark accepts, and any other failure (a refused key, an unreachable
+gateway, another host) is reported FAILED, as a conforming answer is (strict); its four outcomes are shown on the
+stand-in in Laurium's environment (`process/lanes/case-b/p12_xfail_check.py`, `gates/9780c253.laurium-env-offline.txt`).
+**No CI job runs that case in Laurium's environment, so it fires only on a leased run against a real gateway**; every
+other Laurium case stays a hard pass. **Part 2's exit gains a named, leased live case: Laurium reading a conforming
+answer from the client's actual engine** (`test_suite.py`'s conforming-answer case on `extract_laurium`, in Laurium's
+environment, against the gateway or Bedrock route P11 part 2 renders, under a lease), and that run is where the strict
+mark is read; until it passes, D2c says Laurium is not yet shown on a real model. D2c
+records that Laurium runs in its own container, not inside the Conduit and Workers as the page shared with the
+client shows. Part 2 (after P7 and P11 part 1) renders the service in the
+`cloud-platform` profile with its egress line, presets it in that profile's pack, and adds the setting to *Admin ›
+Models*. **Decision 1's "checked in CI after each image's build" is carried, not built:** no CI step runs
+`tools/no_langchain_check.py --image` yet (`process/lanes/case-b/P12_CI.diff` leaves the image checks out, never
+having run them); what runs is the source leg, offline in `make ci` once `P12_MAKEFILE.diff` is applied,
+and the image leg's reader, shown red on its own script's output in `tests/test_no_langchain_check.py`.
+
+**The tests that would fail.** A gateway URL naming another host, `OPENAI_BASE_URL` set, or LangSmith tracing on:
+`tests/services/laurium/test_settings.py`, and the service's own code refusing to start
+(`tests/conformance/model_port/test_laurium_service.py`, run in Laurium's environment). A refusal returned as an
+empty finding: that file's refused cases through the stand-in. A schema outside the subset:
+`tests/services/laurium/test_schema_map.py`. An image without Laurium carrying LangChain:
+`tests/test_no_langchain_check.py` (planted). A fourth package admitted by the recorded entries, or one of the three at another version:
+`tests/licence_check/test_recorded_licence_evidence.py`. A call bound for any host but the gateway (Laurium's
+chat model without `openai_api_base`): `test_laurium_service.py`, every other name refused at the lookup and named.
+The master key sent to the service: `tests/adapters/extract_laurium/test_adapter.py`, read off every byte the
+adapter sends. Laurium's key given an admin right: `tests/conformance/model_port/test_laurium_key_live.py`, live
+against a gateway with its own database. Its plants against the real gateway: the master key at the adapter's call
+site, red, **but caught first by its token-is-the-key-held check**, so the four admin-route assertions themselves are
+shown red only on the stand-in (`process/lanes/case-b/gates/9780c253.key-live-stand-in-dry-run.txt`: that check
+removed too, all four routes granted, red); and Laurium's key made with `user_role: proxy_admin`, **run, and green**:
+the pinned LiteLLM does not grant an admin right for that field, and no field of the key's request that would is known. Laurium's findings auto-accepted: `tests/adapters/extract_laurium/test_findings_inferred.py`
+(the fake service) and `tests/conformance/model_port/test_laurium_findings_pending.py` (the real service
+in-process), each through `run_extraction` and the real `ExtractionCandidateStore`'s own `pending` write, down to
+the row its `INSERT` sends; asyncpg's pool under the store is stood in for (refusing a NULL where the store's table
+says NOT NULL, values that do not match the statement, a repeated id), so **what they do not prove is Postgres's
+own acceptance of the row**, which is `tests/services/api/test_review_store.py`'s, live.

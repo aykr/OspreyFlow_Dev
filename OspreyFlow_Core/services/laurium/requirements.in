@@ -1,0 +1,14 @@
+# Laurium's service (ADR-135 Amendment 6): its own Python 3.13 image, never the Conduit's. Laurium is
+# pinned to PyPI's 0.6.0 artefacts, never its repository's main (which has moved past 0.6.0 with the
+# version string unchanged), and never with the `encoder` extra (16 NVIDIA CUDA wheels, proprietary or
+# unlicensed: process/lanes/platform/p12/LICENCE_CHECK.md). `requirements.txt` is compiled from this
+# with hashes (`uv pip compile --python-version 3.13 --generate-hashes`) and installed with
+# `--require-hashes`; the spaCy model, which is not on PyPI, is named below by its release URL and pinned
+# in `requirements.txt` by its own hash.
+laurium==0.6.0
+# Laurium's one dependency not on PyPI: spaCy's small English model, from Explosion's pinned GitHub
+# release (the owner's ruling 3, 11 November 2026: the one source beyond the public package index).
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+fastapi==0.146.0
+starlette==1.9.0
+uvicorn==0.54.0

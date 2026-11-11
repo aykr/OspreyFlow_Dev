@@ -9,6 +9,7 @@ OspreyFlow_Build/process/**	none	the build record: no test reads it as data
 OspreyFlow_Build/spec/**	none	the specification: its own checks are in make test
 **/*.md	none	documents
 OspreyFlow_Core/docs/**	none	the guides
+OspreyFlow_Core/services/laurium/**	tests/conformance/model_port	Laurium's service (ADR-135 Amendment 6): its live tests import its app by name at run time (laurium_in_process.import_app), which imports cannot see; its Dockerfile builds only its own image, never the harness's
 **/Dockerfile	tests/harness	an image: the live harness tests build and run images (test_harness_image.py, test_bundle_exit_test.py, test_workspace_bundle.py); the stores' own containers are deploy/compose's
 OspreyFlow_Core/apps/**	tests/harness	the Glass and the harness's app: their own tests are vitest and Playwright, but the live harness tests build them (test_workspace_bundle.py runs npm run build and docker build; harness/Dockerfile copies apps/harness and parts of apps/workspace)
 OspreyFlow_Core/packages/schemas/generated/**	none	the TypeScript made from the schemas, which the Glass alone reads

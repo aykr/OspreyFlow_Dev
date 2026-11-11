@@ -1,7 +1,9 @@
 """`ModelPort` conformance suite (`00_ARCHITECTURE.md` §2.4).
 
-Parametrised over `MODEL_PORT_ADAPTERS` in `tests/conformance/registry.py`. `extract()`, `embed()`
-and `transcribe()` are tested here — `describe_image()` has its own file
+Parametrised over `MODEL_PORT_ADAPTERS` in `tests/conformance/registry.py`: the LiteLLM adapter, and
+Laurium's (`extract` only, ADR-135 Amendment 6, run in Laurium's own environment; each case asks
+`factory.require`, so a case an adapter does not implement is skipped saying so). `extract()`,
+`embed()` and `transcribe()` are tested here — `describe_image()` has its own file
 (`test_suite_vision.py`), run on a slower CI cadence than this one
 (`06_DECISIONS.md` ADR-020's Stage 2 addendum) since a vision-language model is materially heavier
 than any of the other three.
@@ -23,31 +25,63 @@ from __future__ import annotations
 import pytest
 
 from adapters.model_litellm import CONFORMANCE_MODEL, CONFORMANCE_TRANSCRIBE_MODEL
-from adapters.model_litellm.errors import InvalidExtractionSchemaError
+from adapters.model_litellm.errors import ExtractionFailedError, InvalidExtractionSchemaError
 from schemas.model import ExtractionRequest, TranscribeRequest
 from tests.conformance.model_port.fixtures import SAMPLE_SPEECH_WAV
 from tests.conformance.registry import MODEL_PORT_ADAPTERS, ModelAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", MODEL_PORT_ADAPTERS, ids=str)
 
+#: ADR-135 Amendment 6 (P12 part 1, round 2; the orchestrator's rulings of 11 November): Laurium
+#: cannot read the pinned conformance model's answer to its prompt, 3 tries of 3 on the real
+#: gateway (`process/lanes/case-b/gates/8190228d.live-*.txt`). Expected to fail for Laurium alone
+#: and **by that refusal alone**: the adapter raises `ExtractionFailedError` for many faults (a
+#: gateway that refuses its key, one that cannot be reached, another host), so only the words of
+#: the unparseable refusal become `LauriumCouldNotRead`, the one exception the mark accepts; any
+#: other failure is an `AssertionError`, reported FAILED. Strict, so a conforming answer is
+#: reported FAILED too. No CI job runs this case in Laurium's environment: it fires on a leased
+#: run against a real gateway (the one in `P12_RED_RECORD.md`, and part 2's exit run on the
+#: client's own engine).
+UNPARSEABLE = "could not read model"
+
+
+class LauriumCouldNotRead(Exception):
+    """Laurium's service could not read the model's answer into the schema (its `unparseable`)."""
+
+
+LAURIUM_UNPARSEABLE_ON_CONFORMANCE_MODEL = pytest.mark.xfail(
+    strict=True,
+    raises=LauriumCouldNotRead,
+    reason="Laurium cannot read the pinned 0.5B conformance model's answer to its prompt "
+    "(unparseable, 3 of 3; process/lanes/case-b/gates/8190228d.live-stack-c.txt)",
+)
+
 
 async def test_extract_returns_data_conforming_to_the_requested_schema(
-    factory: ModelAdapterFactory,
+    factory: ModelAdapterFactory, request: pytest.FixtureRequest
 ) -> None:
+    factory.require("extract")
+    if factory.label == "extract_laurium":
+        request.applymarker(LAURIUM_UNPARSEABLE_ON_CONFORMANCE_MODEL)
     schema = {
         "type": "object",
         "properties": {"name": {"type": "string"}},
         "required": ["name"],
         "additionalProperties": False,
     }
-    request = ExtractionRequest(
+    req = ExtractionRequest(
         document_id="doc-1",
         text="Extract the person's name mentioned: Owen Wilson went to the store.",
         json_schema=schema,
         model=CONFORMANCE_MODEL,
     )
     async with factory.context() as adapter:
-        result = await adapter.extract(request)
+        try:
+            result = await adapter.extract(req)
+        except ExtractionFailedError as exc:
+            if factory.label == "extract_laurium" and UNPARSEABLE in str(exc):
+                raise LauriumCouldNotRead(str(exc)) from exc
+            raise AssertionError(f"extract failed for another reason: {exc}") from exc
 
     assert result.document_id == "doc-1"
     assert result.model == CONFORMANCE_MODEL
@@ -59,6 +93,7 @@ async def test_extract_returns_data_conforming_to_the_requested_schema(
 async def test_extract_rejects_a_malformed_schema_before_calling_the_model(
     factory: ModelAdapterFactory,
 ) -> None:
+    factory.require("extract")
     not_a_schema = {"type": "not-a-real-json-schema-type"}
     request = ExtractionRequest(
         document_id="doc-2", text="irrelevant", json_schema=not_a_schema, model=CONFORMANCE_MODEL
@@ -71,6 +106,7 @@ async def test_extract_rejects_a_malformed_schema_before_calling_the_model(
 async def test_embed_returns_one_equal_length_vector_per_text_in_order(
     factory: ModelAdapterFactory,
 ) -> None:
+    factory.require("embed")
     texts = ["Owen Wilson", "a completely unrelated sentence about the weather"]
     async with factory.context() as adapter:
         vectors = await adapter.embed(texts)
@@ -84,6 +120,7 @@ async def test_embed_returns_one_equal_length_vector_per_text_in_order(
 
 
 async def test_embed_of_no_texts_returns_no_vectors(factory: ModelAdapterFactory) -> None:
+    factory.require("embed")
     async with factory.context() as adapter:
         assert await adapter.embed([]) == []
 
@@ -91,6 +128,7 @@ async def test_embed_of_no_texts_returns_no_vectors(factory: ModelAdapterFactory
 async def test_transcribe_returns_correctly_shaped_segments_and_words(
     factory: ModelAdapterFactory,
 ) -> None:
+    factory.require("transcribe")
     request = TranscribeRequest(
         document_id="audio-1",
         audio=SAMPLE_SPEECH_WAV,
@@ -116,6 +154,7 @@ async def test_transcribe_returns_correctly_shaped_segments_and_words(
 async def test_transcribe_with_diarize_raises_not_implemented(
     factory: ModelAdapterFactory,
 ) -> None:
+    factory.require("transcribe")
     request = TranscribeRequest(
         document_id="audio-2",
         audio=SAMPLE_SPEECH_WAV,

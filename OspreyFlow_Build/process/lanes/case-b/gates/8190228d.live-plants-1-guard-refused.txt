@@ -1,0 +1,16 @@
+Running on ospreyflow-test (stack c, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T145339Z/log: bash process/lanes/case-b/p12_live_plants.sh
+settings present (values hidden):
+ARCADEDB_HTTP_PORT=(set)
+CLICKHOUSE_HTTP_PORT=(set)
+OSPREY_LANE=(set)
+OSPREY_LEASE_DIR=(set)
+POSTGRES_PORT=(set)
+VALKEY_PORT=(set)
+green start: NO TALLY (exit 4): ERROR: Refused: MINIO_ENDPOINT=localhost:9004 is test stack c's object store, whose lease is held by case-b, not this run (OSPREY_LANE is not set).
+Nothing was collected. Leave MINIO_ENDPOINT unset for a stack-free run (the guard pins it to a closed port, localhost:59995), or take the lease and pin the export line acquire prints.
+
+
+plants --live: exit 1
+adapter put back: 1
+keys put back: 1
+Wall time: 0 s, exit 0 (stack c, the lease case-b took at 2026-11-11T14:39:46Z; set-up before it 15 s)

@@ -1,0 +1,71 @@
+green start: 205 passed in 10.02s
+red    a gateway URL of any host accepted: 3 failed, 50 passed in 0.51s
+red    a credential in the gateway URL accepted: 1 failed, 52 passed in 0.48s
+red    a path or a query on the gateway URL accepted: 2 failed, 51 passed in 0.49s
+red    a gateway URL with no port accepted: 1 failed, 52 passed in 0.47s
+red    HTTPS_PROXY not read: 3 failed, 50 passed in 0.47s
+red    AWS's endpoints not read: 2 failed, 51 passed in 0.48s
+red    LangSmith tracing on accepted: 6 failed, 47 passed in 0.48s
+red    one spelling of a name read, the last: 3 failed, 50 passed in 0.47s
+red    the resolver's own settings not read: 3 failed, 50 passed in 0.48s
+red    a debug log of each request accepted: 3 failed, 50 passed in 0.48s
+red    an unknown OSPREY_LAURIUM_ setting ignored: 1 failed, 52 passed in 0.48s
+red    a setting's value repeated in the words: 1 failed, 52 passed in 0.47s
+red    an enum given as any string: 1 failed, 56 passed in 2.61s
+red    an item allowed properties it does not declare: 1 failed, 56 passed in 2.62s
+red    a top-level property not required accepted: 1 failed, 56 passed in 2.62s
+red    an object allowing undeclared properties accepted: 1 failed, 56 passed in 2.60s
+red    an optional property's null kept in the output: 1 failed, 56 passed in 2.61s
+red    a description's braces left single: 1 failed, 56 passed in 2.61s
+red    a combinator beside a type given as the type alone: 3 failed, 54 passed in 2.61s
+red    an enum of anything but strings given to Laurium: 3 failed, 54 passed in 2.60s
+red    the request's schema not checked before the call: 1 failed, 25 passed in 0.52s
+red    the answer trusted without the request's schema: 1 failed, 25 passed in 0.53s
+red    an engine's call sent without its own key: 4 failed, 22 passed in 0.55s
+red    a call for the deployment's own models sent with the master key: 5 failed, 21 passed in 0.54s
+red    Laurium's key derived from an empty master key: 2 failed, 24 passed in 0.54s
+red    Laurium's key made for every model: 1 failed, 25 passed in 0.52s
+red    Laurium's key derived as an engine's: 1 failed, 25 passed in 0.52s
+red    the review queue's write promoting a finding: 1 failed, 1 passed in 0.60s
+red    an engine's call sent untagged: 2 failed, 24 passed in 0.53s
+red    a limit's refusal not read as a limit: 1 failed, 25 passed in 0.52s
+red    a model not offered not told apart: 1 failed, 25 passed in 0.53s
+red    the gateway's words passed on by the adapter (a 429 not a limit): 2 failed, 24 passed in 0.53s
+red    an answer of another shape escaping untyped: 2 failed, 24 passed in 0.54s
+red    a finding traced to another document: 1 failed, 1 passed in 0.59s
+red    a recorded entry admitting any version: 3 failed, 15 passed in 0.44s
+red    a recorded entry admitting a declared GPL: 1 failed, 17 passed in 0.45s
+red    a recorded entry admitting a declared LGPL: 1 failed, 17 passed in 0.44s
+red    a recorded entry admitting any other declared licence: 1 failed, 17 passed in 0.44s
+red    the image's gate tool installed without hashes: 1 failed, 20 passed in 0.44s
+red    a recorded name matched only as spelt: 1 failed, 17 passed in 0.43s
+red    the recorded entries not consulted: 4 failed, 14 passed in 0.45s
+red    the image gate letting the encoder's packages through: 6 failed, 15 passed in 0.45s
+red    the image gate's entries parting from the repository's: 2 failed, 19 passed in 0.44s
+red    Laurium's folder left in the Conduit's context unnoticed: 3 failed, 25 passed in 3.41s
+red    only the folder's own spelling read, not the matcher (as it was): 5 failed, 23 passed in 1.54s
+red    a file a negation puts back not looked at: 1 failed, 27 passed in 3.39s
+red    the source leg run in an image step: 1 failed, 27 passed in 3.36s
+red    LangChain or Laurium in the Conduit's lock unnoticed: 2 failed, 26 passed in 3.46s
+red    another Dockerfile or requirements file naming LangChain unnoticed: 6 failed, 22 passed in 3.41s
+red    requirements files not read: 2 failed, 26 passed in 2.90s
+red    Laurium's own folder not passed: 7 failed, 21 passed in 3.44s
+red    an image's LangChain unnoticed: 9 failed, 19 passed in 3.44s
+red    an unreadable image passed: 1 failed, 27 passed in 3.40s
+53 plants, 53 red
+green start: 26 passed in 13.73s
+red    the service serving with a refused setting: 4 failed, 13 passed in 8.86s
+red    a gateway refusal answered as Laurium's row of Nones: 4 failed, 21 passed in 13.04s
+red    the gateway's words passed on, by the service and the adapter: 2 failed, 15 passed in 8.85s
+red    the OpenAI client's own retries left on: 1 failed, 16 passed in 11.24s
+red    a call without the gateway's token sent on: 1 failed, 16 passed in 9.03s
+red    a text over the limit read: 1 failed, 16 passed in 8.79s
+red    an unparseable answer asked once: 1 failed, 16 passed in 8.81s
+red    the call's tag not sent to the gateway: 1 failed, 16 passed in 8.85s
+red    a description's braces left single, through the real prompt: 13 failed, 12 passed in 15.61s
+red    the gateway not given to Laurium's chat model: 8 failed, 9 passed in 8.25s
+red    the lookup letting another name resolve (the fixture itself): 1 failed, 16 passed in 8.79s
+red    the gateway's /v1 route not served (the stand-in as it was): 7 failed, 11 passed in 9.09s
+red    a call for the deployment's own models sent with the master key: 2 failed, 15 passed in 8.81s
+red    the review queue's write promoting a finding: 1 failed in 2.80s
+14 plants, 14 red

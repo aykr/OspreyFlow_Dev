@@ -347,6 +347,30 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  # ADR-135 Amendment 6: Laurium's service code (Laurium 0.6.0, LangChain) on Python 3.13, its own
+  # environment built by hash, ModelPort.extract's refusals on both engines and its findings reaching the
+  # review queue pending, all through the gateway's measured stand-in served over HTTP. The Conduit's own
+  # runs skip the Laurium cases, with the reason.
+  laurium-service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Laurium's suite in its own 3.13 environment
+        working-directory: .
+        run: make -C OspreyFlow_Build laurium-service
+
+  # ADR-135 Amendment 6: the source leg (the Conduit's build context, lock and Dockerfiles), offline.
+  no-langchain-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.no_langchain_check
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_langchain_check.py
+
   # deploy/superset/Dockerfile: the reference dashboard (ADR-111).
   trivy-image-superset:
     runs-on: ubuntu-latest

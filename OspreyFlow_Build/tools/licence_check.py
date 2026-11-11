@@ -78,6 +78,42 @@ RECORDED_LGPL_EXCEPTIONS: dict[str, str] = {
 }
 
 
+#: `00_ARCHITECTURE.md` §7's recorded licence evidence (ADR-135 Amendment 6 decision 7; the owner's
+#: ruling 2 of 11 November 2026 on P12's licence check): a package whose licence is MIT on the
+#: evidence of its own licence file, which its metadata does not say in a form this gate reads.
+#: (normalised name, version) -> the evidence. An entry admits that package at that version, whatever
+#: unreadable text it declares, and nothing else: another version is judged afresh, and a declared
+#: GPL still fails. Laurium's packages are installed only in Laurium's own image
+#: (`services/laurium/licence_gate.py` carries a copy, held to this one by
+#: `tests/services/laurium/test_licence_gate.py`).
+RECORDED_LICENCE_EVIDENCE: dict[tuple[str, str], str] = {
+    ("laurium", "0.6.0"): "MIT, 'Copyright (c) 2025 Ministry of Justice', in its LICENSE file and "
+    "the wheel's License-File; no licence in its metadata (P12's licence check, 11 November 2026)",
+    ("arrow-pd-parser", "2.2.0"): "MIT, Ministry of Justice, in LICENCE.md inside the wheel; no "
+    "licence in its metadata (P12's licence check, 11 November 2026)",
+    ("tiktoken", "0.14.0"): "MIT, its full text in the License field, which this gate's expression "
+    "parser refuses (P12's licence check, 11 November 2026)",
+}
+
+
+def _normalised(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def recorded(package: dict[str, str]) -> bool:
+    """A package admitted by its recorded evidence: its name and version an entry's, and what it
+    declares is what the evidence was for, nothing readable (`UNKNOWN`) or MIT's own text, with no
+    GPL or LGPL term in it."""
+    key = (_normalised(package.get("Name", "")), package.get("Version", ""))
+    declared = package.get("License", "").strip().lower()
+    return (
+        key in RECORDED_LICENCE_EVIDENCE
+        and (declared in ("", "unknown") or bool(_word("mit").search(declared)))
+        and not _GPL.search(declared)
+        and not _LGPL.search(declared)
+    )
+
+
 #: ADR-114 Amendment 1 decision 5: a share-alike data licence is acceptable only for a pack
 #: whose data is downloaded, never bundled, so the obligation never attaches to an artefact.
 DOWNLOAD_ONLY_DATA_LICENCES = ("CC-BY-SA-4.0",)
@@ -319,7 +355,11 @@ def run_pip_licenses(extra_pythonpath: str | None) -> list[dict[str, str]]:
 
 
 def find_offenders(packages: list[dict[str, str]]) -> list[dict[str, str]]:
-    return [p for p in packages if not is_allowed(p["License"], package=p.get("Name"))]
+    return [
+        p
+        for p in packages
+        if not is_allowed(p["License"], package=p.get("Name")) and not recorded(p)
+    ]
 
 
 def find_own_licence_violations(repo_root: Path = REPO_ROOT) -> list[str]:

@@ -1,0 +1,8 @@
+P12 part 1 (88c78c3) merged; gated by the orchestrator on the merged tree 68c52a4 (ff0e07d + P12 + its two diffs), 11 Nov 2026
+test exit 2
+ci exit 0
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_lanes_launch.py::test_open_refuses_when_a_session_is_running_in_the_worktree
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+= 3 failed, 11710 passed, 27 skipped, 4 xfailed, 91 warnings in 506.59s (0:08:26) =
+- all three known: the server's GPU; lanes_launch's session check (process tooling); test_render_memory's OpenSearch kill (fails on main, CARRIES)

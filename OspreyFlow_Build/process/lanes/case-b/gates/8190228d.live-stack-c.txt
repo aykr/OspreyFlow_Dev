@@ -1,0 +1,426 @@
+Running on ospreyflow-test (stack c, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T144026Z/log: bash process/lanes/case-b/p12_live_run.sh
+
+=== the gateway answers, and holds the conformance model (14:40:27Z)
+GET /health/liveliness: 200
+models: ['Systran/faster-whisper-tiny.en', 'all-minilm:22m-l6-v2-fp16', 'moondream:1.8b-v2-q4_K_M', 'qwen2.5:0.5b-instruct']
+
+=== Laurium's own Python 3.13 environment, by hash (P12_MAKEFILE.diff's laurium-env) (14:40:27Z)
+Using CPython 3.13.18
+Creating virtual environment at: laurium-env/.venv
+Activate with: source laurium-env/.venv/bin/activate
+Using Python 3.13.18 environment at: laurium-env/.venv
+Resolved 126 packages in 265ms
+Installed 126 packages in 373ms
+ + aiohappyeyeballs==2.7.1
+ + aiohttp==3.14.5
+ + aiosignal==1.4.0
+ + annotated-doc==0.0.6
+ + annotated-types==0.8.0
+ + anthropic==2.8.0
+ + anyio==4.16.0
+ + arrow-pd-parser==2.2.0
+ + attrs==26.1.0
+ + awswrangler==3.18.0
+ + blis==1.3.4
+ + boto3==1.44.0
+ + botocore==1.44.0
+ + catalogue==2.0.10
+ + certifi==2026.10.23
+ + charset-normalizer==3.5.2
+ + click==8.5.1
+ + cloudpathlib==0.26.0
+ + confection==1.3.4
+ + cymem==2.0.16
+ + dataengineeringutils3==1.4.3
+ + datasets==5.2.0
+ + deprecated==1.3.1
+ + dill==0.4.1
+ + distro==1.9.0
+ + docstring-parser==0.18.0
+ + en-core-web-sm==3.8.0 (from https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl)
+ + evaluate==0.4.6
+ + faker==40.54.0
+ + fastapi==0.146.0
+ + filelock==4.2.10
+ + frozenlist==1.8.0
+ + fsspec==2026.9.0
+ + h11==0.16.0
+ + hf-xet==1.8.0
+ + httpcore==1.0.9
+ + httpcore2==2.16.0
+ + httpx==0.28.1
+ + httpx-sse==0.4.3
+ + httpx2==2.16.0
+ + huggingface-hub==2.4.0
+ + idna==3.20
+ + jinja2==3.1.6
+ + jiter==0.19.0
+ + jmespath==1.1.0
+ + jsonpatch==1.46
+ + jsonpointer==3.11
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + langchain-anthropic==1.7.10
+ + langchain-aws==1.9.3
+ + langchain-classic==1.0.8
+ + langchain-community==0.4.2
+ + langchain-core==1.7.7
+ + langchain-ollama==1.1.0
+ + langchain-openai==1.7.4
+ + langchain-protocol==0.0.21
+ + langchain-text-splitters==1.1.3
+ + langsmith==0.14.17
+ + laurium==0.6.0
+ + markdown-it-py==4.3.0
+ + markupsafe==3.0.4
+ + mdurl==0.1.2
+ + mojap-metadata==1.16.0
+ + multidict==7.2.1
+ + multiprocess==0.70.19
+ + murmurhash==1.0.16
+ + numpy==2.5.4
+ + ollama==0.6.3
+ + openai==3.49.0
+ + opentelemetry-api==1.45.2
+ + orjson==3.13.0
+ + packaging==26.3
+ + pandas==3.1.1
+ + parameterized==0.7.5
+ + preshed==3.0.15
+ + propcache==0.5.4
+ + protobuf==7.36.2
+ + pyarrow==26.0.1
+ + pydantic==2.14.3
+ + pydantic-core==2.50.4
+ + pydantic-settings==2.16.2
+ + pydbtools==5.9.1
+ + pygments==2.21.0
+ + python-dateutil==2.9.0.post0
+ + python-dotenv==1.2.4
+ + pyyaml==6.0.3
+ + referencing==0.37.0
+ + regex==2026.11.9
+ + requests==2.34.2
+ + requests-toolbelt==1.0.0
+ + rich==15.0.0
+ + rpds-py==2026.9.1
+ + s3transfer==0.19.3
+ + setuptools==84.2.1
+ + shellingham==1.5.4
+ + six==1.17.0
+ + smart-open==5.2.1
+ + sniffio==1.3.1
+ + spacy==3.8.13
+ + spacy-legacy==3.0.12
+ + spacy-loggers==1.0.5
+ + sql-metadata==3.0.1
+ + sqlalchemy==2.1.8
+ + sqlglot==30.31.0
+ + sqlparse==0.6.1
+ + srsly==2.5.6
+ + starlette==1.9.0
+ + tenacity==9.2.1
+ + thinc==8.3.14
+ + tiktoken==0.14.0
+ + tqdm==4.70.1
+ + truststore==0.10.5
+ + typer==0.29.0
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.5
+ + urllib3==2.8.0
+ + uuid-utils==0.19.0
+ + uvicorn==0.54.0
+ + wasabi==1.1.3
+ + weasel==1.0.1
+ + websockets==17.4
+ + wrapt==2.5.2
+ + xxhash==4.1.0
+ + yarl==1.25.1
+ + zstandard==0.25.0
+Using Python 3.13.18 environment at: laurium-env/.venv
+Resolved 24 packages in 192ms
+Installed 15 packages in 38ms
+ + asyncpg==0.32.0
+ + cffi==2.1.1
+ + cryptography==50.0.2
+ + duckdb==1.5.6
+ + iniconfig==2.3.1
+ + networkx==3.7
+ + phonenumbers==9.0.41
+ + pluggy==1.7.0
+ + pycparser==3.12
+ + pyjwt==2.15.1
+ + pyproj==3.8.0
+ + pytest==9.1.1
+ + pytest-asyncio==1.4.0
+ + python-ulid==4.0.1
+ + rustworkx==0.18.1
+laurium-env: exit 0
+
+=== 1. ModelPort's suite on Laurium (laurium_live_adapter), real gateway and pinned model, in Laurium's environment (14:40:28Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items / 6 deselected / 6 selected
+
+../OspreyFlow_Build/tests/conformance/model_port/test_suite.py F.ssss    [100%]
+
+=================================== FAILURES ===================================
+_ test_extract_returns_data_conforming_to_the_requested_schema[extract_laurium] _
+
+factory = ModelAdapterFactory(label='extract_laurium', context=<function _model_laurium_factories.<locals>._context at 0x7e906ab6d9e0>, offers=frozenset({'extract'}), needs=None)
+
+    async def test_extract_returns_data_conforming_to_the_requested_schema(
+        factory: ModelAdapterFactory,
+    ) -> None:
+        factory.require("extract")
+        schema = {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+            "additionalProperties": False,
+        }
+        request = ExtractionRequest(
+            document_id="doc-1",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=schema,
+            model=CONFORMANCE_MODEL,
+        )
+        async with factory.context() as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_suite.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.extract_laurium.adapter.ExtractLauriumAdapter object at 0x7e8fe8b98440>
+req = ExtractionRequest(document_id='doc-1', text="Extract the person's name mentioned: Owen Wilson went to the store.", jso...d': ['name'], 'additionalProperties': False}, model='qwen2.5:0.5b-instruct', handling=None, engine=None, datasets=None)
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        try:
+            Draft202012Validator.check_schema(req.json_schema)
+        except SchemaError as exc:
+            raise InvalidExtractionSchemaError(
+                f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
+            ) from exc
+    
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
+        call = current_call()
+        tag: str | None = None
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
+    
+        body: dict[str, Any] = {
+            "document_id": req.document_id,
+            "text": req.text,
+            "json_schema": req.json_schema,
+            "model": req.model,
+            "tag": tag,
+        }
+        try:
+            resp = await self._http.post(
+                "/v1/extract", json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError:
+            raise ExtractionFailedError(
+                "Laurium's service could not be reached, or did not answer in time."
+            ) from None
+    
+        if resp.status_code != 200:
+>           raise _refusal(resp, req.model)
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+
+packages/adapters/extract_laurium/adapter.py:119: ExtractionFailedError
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+19.11s call     tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[extract_laurium]
+0.24s setup    tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[extract_laurium]
+0.06s call     tests/conformance/model_port/test_suite.py::test_extract_rejects_a_malformed_schema_before_calling_the_model[extract_laurium]
+
+(15 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_rejects_a_malformed_schema_before_calling_the_model[extract_laurium]
+SKIPPED [4] ../OspreyFlow_Build/tests/conformance/registry.py:139: extract_laurium implements extract only
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[extract_laurium]
+============ 1 failed, 1 passed, 4 skipped, 6 deselected in 22.73s =============
+suite on laurium: exit 1
+
+=== 1b. the same suite's extract cases on the LiteLLM adapter, for comparison, in Laurium's environment (14:40:56Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items / 10 deselected / 2 selected
+
+../OspreyFlow_Build/tests/conformance/model_port/test_suite.py ..        [100%]
+
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+1.60s call     tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]
+0.11s setup    tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]
+0.01s call     tests/conformance/model_port/test_suite.py::test_extract_rejects_a_malformed_schema_before_calling_the_model[model_litellm]
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_rejects_a_malformed_schema_before_calling_the_model[model_litellm]
+======================= 2 passed, 10 deselected in 2.74s =======================
+suite extract on litellm: exit 0
+
+=== 1c. Laurium's service cases and the extract refusals (stand-in over HTTP), in Laurium's environment (14:41:01Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 25 items
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py . [  4%]
+................                                                         [ 68%]
+../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py . [ 72%]
+.......                                                                  [100%]
+
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+2.77s call     tests/conformance/model_port/test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start[env0-OSPREY_LAURIUM_GATEWAY_URL]
+1.04s call     tests/conformance/model_port/test_laurium_service.py::test_an_engines_limit_is_model_limit_reached_and_its_tag_and_key_reach_the_gateway
+0.57s call     tests/conformance/model_port/test_laurium_service.py::test_a_finding_comes_back_through_the_gateway
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_checks_the_answer_against_every_constraint_of_the_schema[extract_laurium]
+0.52s call     tests/conformance/model_port/test_laurium_service.py::test_every_model_call_goes_to_the_gateway_and_no_other_host[/v1]
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_through_a_gateway_that_refuses_its_token_is_a_failure[model_litellm]
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_never_returns_an_answer_that_does_not_fit_the_schema[extract_laurium]
+0.52s call     tests/conformance/model_port/test_laurium_service.py::test_a_model_the_provider_does_not_offer_is_model_unavailable
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_of_a_model_the_gateway_has_no_route_for_is_a_failure[model_litellm]
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_through_a_gateway_that_refuses_its_token_is_a_failure[extract_laurium]
+0.52s call     tests/conformance/model_port/test_laurium_service.py::test_every_model_call_goes_to_the_gateway_and_no_other_host[]
+0.52s call     tests/conformance/model_port/test_laurium_service.py::test_a_wrong_gateway_key_is_a_failure_that_never_repeats_it
+0.52s call     tests/conformance/model_port/test_laurium_service.py::test_an_unparseable_answer_is_a_failure_after_three_tries_never_an_empty_finding
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_of_a_model_the_gateway_has_no_route_for_is_a_failure[extract_laurium]
+0.52s call     tests/conformance/model_port/test_laurium_service.py::test_a_model_the_gateway_has_no_route_for_is_a_failure
+0.52s call     tests/conformance/model_port/test_suite_extract.py::test_extract_checks_the_answer_against_every_constraint_of_the_schema[model_litellm]
+0.51s call     tests/conformance/model_port/test_laurium_service.py::test_the_gateway_unreachable_is_a_failure
+0.51s call     tests/conformance/model_port/test_suite_extract.py::test_extract_never_returns_an_answer_that_does_not_fit_the_schema[model_litellm]
+0.51s call     tests/conformance/model_port/test_laurium_service.py::test_a_schema_laurium_is_not_given_is_refused_before_the_gateway
+0.50s call     tests/conformance/model_port/test_laurium_service.py::test_the_real_service_refuses_a_text_over_its_limit_never_reading_part
+0.50s call     tests/conformance/model_port/test_laurium_service.py::test_the_real_service_refuses_a_call_without_the_gateways_token
+0.24s setup    tests/conformance/model_port/test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start[env0-OSPREY_LAURIUM_GATEWAY_URL]
+
+(8 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start[env0-OSPREY_LAURIUM_GATEWAY_URL]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start[env1-OSPREY_LAURIUM_GATEWAY_URL]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start[env2-OPENAI_BASE_URL]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start[env3-LANGSMITH_TRACING]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_finding_comes_back_through_the_gateway
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_every_model_call_goes_to_the_gateway_and_no_other_host[/v1]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_every_model_call_goes_to_the_gateway_and_no_other_host[]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_the_lookup_refuses_every_name_but_the_gateways
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_an_unparseable_answer_is_a_failure_after_three_tries_never_an_empty_finding
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_model_the_gateway_has_no_route_for_is_a_failure
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_wrong_gateway_key_is_a_failure_that_never_repeats_it
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_model_the_provider_does_not_offer_is_model_unavailable
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_an_engines_limit_is_model_limit_reached_and_its_tag_and_key_reach_the_gateway
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_a_schema_laurium_is_not_given_is_refused_before_the_gateway
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_the_gateway_unreachable_is_a_failure
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_the_real_service_refuses_a_call_without_the_gateways_token
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_service.py::test_the_real_service_refuses_a_text_over_its_limit_never_reading_part
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_never_returns_an_answer_that_does_not_fit_the_schema[model_litellm]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_never_returns_an_answer_that_does_not_fit_the_schema[extract_laurium]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_checks_the_answer_against_every_constraint_of_the_schema[model_litellm]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_checks_the_answer_against_every_constraint_of_the_schema[extract_laurium]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_through_a_gateway_that_refuses_its_token_is_a_failure[model_litellm]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_through_a_gateway_that_refuses_its_token_is_a_failure[extract_laurium]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_of_a_model_the_gateway_has_no_route_for_is_a_failure[model_litellm]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_extract.py::test_extract_of_a_model_the_gateway_has_no_route_for_is_a_failure[extract_laurium]
+============================= 25 passed in 14.40s ==============================
+service and refusals: exit 0
+
+=== 2. Laurium's key at the real gateway's admin routes, the Conduit's environment (14:41:18Z)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_key_live.py . [100%]
+
+==================================== PASSES ====================================
+____ test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway _____
+----------------------------- Captured stdout call -----------------------------
+/key/generate: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/generate. Your role=unknown. Your user_id=*******","type":
+/key/update: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/update. Your role=unknown. Your user_id=*******","type":"a
+/key/delete: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/delete. Your role=unknown. Your user_id=*******","type":"a
+/model/new: 403 {"error":{"message":"{'error': 'User does not have permission to make this model call. Your role=internal_user. You can only make model calls if you are a PROXY_ADMIN or if you are a team admin, by sp
+============================= slowest 30 durations =============================
+1.61s call     tests/conformance/model_port/test_laurium_key_live.py::test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway
+0.24s setup    tests/conformance/model_port/test_laurium_key_live.py::test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_key_live.py::test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway
+============================== 1 passed in 2.30s ===============================
+key live: exit 0
+
+=== 2b. its plant at the adapter's call site, red (14:41:20Z)
+green start: 
+GREEN  the master key sent to Laurium's service, at the real gateway's admin routes: 
+GREEN  Laurium's own key made with the proxy admin's role: 
+2 plants, 0 red
+plants --live: exit 1
+
+=== 2c. green again after the plant is put back (14:41:22Z)
+adapter put back: 1 line(s)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_key_live.py . [100%]
+
+==================================== PASSES ====================================
+____ test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway _____
+----------------------------- Captured stdout call -----------------------------
+/key/generate: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/generate. Your role=unknown. Your user_id=*******","type":
+/key/update: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/update. Your role=unknown. Your user_id=*******","type":"a
+/key/delete: 401 {"error":{"message":"Authentication Error, Only proxy admin can be used to generate, delete, update info for new keys/users/teams. Route=/key/delete. Your role=unknown. Your user_id=*******","type":"a
+/model/new: 403 {"error":{"message":"{'error': 'User does not have permission to make this model call. Your role=internal_user. You can only make model calls if you are a PROXY_ADMIN or if you are a team admin, by sp
+============================= slowest 30 durations =============================
+0.90s call     tests/conformance/model_port/test_laurium_key_live.py::test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway
+0.27s setup    tests/conformance/model_port/test_laurium_key_live.py::test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_key_live.py::test_lauriums_key_is_refused_at_every_admin_route_of_the_real_gateway
+============================== 1 passed in 1.65s ===============================
+key live after: exit 0
+
+=== what is left on the gateway: keys and models this run could have written (14:41:24Z)
+key aliases/metadata: [('orch-probe', {})]
+models: ['Systran/faster-whisper-tiny.en', 'all-minilm:22m-l6-v2-fp16', 'moondream:1.8b-v2-q4_K_M', 'qwen2.5:0.5b-instruct']
+Wall time: 57 s, exit 0 (stack c, the lease case-b took at 2026-11-11T14:39:46Z; set-up before it 14 s)
+rc=0

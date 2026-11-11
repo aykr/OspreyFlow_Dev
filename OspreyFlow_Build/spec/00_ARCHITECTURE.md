@@ -1034,6 +1034,29 @@ lock files beside the modules. Nothing of Terraform's BSL-licensed core is used.
 `python-dateutil`, is already in the set) reads a scheduled recipe's cron expression; time zones
 come from the standard library's `zoneinfo`.
 
+**ADR-135 Amendment 6 addition (the owner's ruling of 11 November 2026 on P12's licence check) —
+Laurium, in its own image only (`services/laurium/`), built only when the extraction engine Laurium is
+chosen; never in the Conduit's or any other image (`tools/no_langchain_check.py`):** `laurium` 0.6.0
+(Ministry of Justice) and its core install of 126 packages on Python 3.13, LangChain, pandas and spaCy
+among them, each pinned by hash in `services/laurium/requirements.txt` and checked at image build by
+the image's own gate (`services/laurium/licence_gate.py`, a copy of this register's rule): no GPL,
+AGPL, LGPL, SSPL or non-commercial licence. **Recorded licence evidence**, each entry for that package
+at that version only (`tools/licence_check.RECORDED_LICENCE_EVIDENCE`, and the image gate's copy):
+
+| Package | Version | Licence, and the evidence |
+| --- | --- | --- |
+| `laurium` | 0.6.0 | MIT, "Copyright (c) 2025 Ministry of Justice", in its LICENSE file and the wheel's License-File; its metadata states no licence |
+| `arrow-pd-parser` | 2.2.0 | MIT, "Copyright 2020 Crown Copyright (Ministry of Justice)", in `LICENCE.md` inside the wheel; its metadata states no licence |
+| `tiktoken` | 0.14.0 | MIT, its full text in the metadata's License field, which the gate's expression parser refuses |
+
+`en-core-web-sm` 3.8.0 (spaCy's small English pipeline, MIT on Explosion's terms; trained on OntoNotes
+5 and WordNet 3.0) is fetched from Explosion's GitHub release `en_core_web_sm-3.8.0` by its SHA-256:
+the one source beyond the public package index (ruling 3). **Laurium's `encoder` extra is never
+installed** (ruling 4): it brings 16 NVIDIA CUDA wheels, proprietary or unlicensed, and the image gate
+fails on torch, transformers, setfit, sentence-transformers or any `nvidia-*` package by its presence.
+The Ministry of Justice's copyright notices for `laurium` and `arrow-pd-parser` are carried in the
+product's NOTICE and, in full, in the image's own (`services/laurium/NOTICE`).
+
 **The owner's ruling of 9 November 2026 (MORNING item 89; ADR-140 Amendment 17) addition:**
 `dulwich` 1.2.21, dual-licensed `Apache-2.0 OR GPL-2.0-or-later` and taken under Apache-2.0 (its one
 dependency, `urllib3`, MIT), commits a published recipe to the repository on the recipe volume

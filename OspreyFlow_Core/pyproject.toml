@@ -138,6 +138,14 @@ ignore_missing_imports = true
 module = ["stanza.*", "transformers.*", "spacy.*"]
 ignore_missing_imports = true
 
+# Laurium and the libraries it brings (ADR-135 Amendment 6) are installed only in Laurium's own
+# Python 3.13 image, never in the Conduit's environment. Scoped to the one module that imports them,
+# Laurium's service app: `ignore_missing_imports` would match the imported names (`openai.*`)
+# wherever they were imported, so the error codes are turned off in the importing module instead.
+[[tool.mypy.overrides]]
+module = ["services.laurium.app"]
+disable_error_code = ["import-not-found", "import-untyped"]
+
 [tool.ruff]
 target-version = "py312"
 src = ["packages", "services"]

@@ -1,0 +1,70 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T152030Z/log: bash -c cd ../OspreyFlow_Core && make harness-a11y; echo "harness-a11y: exit $?"; cd apps/workspace && npx vitest run src/matrix/MatrixView.budget.test.tsx; echo "budget: exit $?"
+npm run test:a11y --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+[WebServer] INFO:     Started server process [1592037]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7519 (Press CTRL+C to quit)
+
+Running 34 tests using 2 workers
+
+  ✓   1 a11y/a11y.spec.ts:37:5 › dark theme Profile screen has no automated wcag2aa violations (901ms)
+  ✓   2 a11y/install-page.spec.ts:58:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓   3 a11y/a11y.spec.ts:37:5 › dark theme Components screen has no automated wcag2aa violations (770ms)
+  ✓   4 a11y/install-page.spec.ts:58:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (841ms)
+  ✓   5 a11y/a11y.spec.ts:37:5 › dark theme Models screen has no automated wcag2aa violations (753ms)
+  ✓   6 a11y/install-page.spec.ts:58:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (826ms)
+  ✓   7 a11y/a11y.spec.ts:37:5 › dark theme Governance screen has no automated wcag2aa violations (800ms)
+  ✓   8 a11y/install-page.spec.ts:58:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (845ms)
+  ✓   9 a11y/a11y.spec.ts:37:5 › dark theme Geospatial screen has no automated wcag2aa violations (777ms)
+  ✓  10 a11y/install-page.spec.ts:58:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (878ms)
+  ✓  11 a11y/a11y.spec.ts:37:5 › dark theme Preflight screen has no automated wcag2aa violations (838ms)
+  ✓  12 a11y/install-page.spec.ts:58:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (918ms)
+  ✓  13 a11y/a11y.spec.ts:37:5 › light theme Profile screen has no automated wcag2aa violations (741ms)
+  ✓  14 a11y/install-page.spec.ts:58:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (912ms)
+  ✓  15 a11y/a11y.spec.ts:37:5 › light theme Components screen has no automated wcag2aa violations (839ms)
+  ✓  16 a11y/install-page.spec.ts:58:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (944ms)
+  ✓  17 a11y/a11y.spec.ts:37:5 › light theme Models screen has no automated wcag2aa violations (845ms)
+  ✓  19 a11y/a11y.spec.ts:37:5 › light theme Governance screen has no automated wcag2aa violations (792ms)
+  ✓  18 a11y/install-page.spec.ts:58:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (846ms)
+  ✓  20 a11y/a11y.spec.ts:37:5 › light theme Geospatial screen has no automated wcag2aa violations (763ms)
+  ✓  21 a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (861ms)
+  ✓  22 a11y/a11y.spec.ts:37:5 › light theme Preflight screen has no automated wcag2aa violations (849ms)
+  ✓  23 a11y/install-page.spec.ts:75:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (917ms)
+  ✓  24 a11y/install-page.spec.ts:58:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (920ms)
+  ✓  25 a11y/install-page.spec.ts:58:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (906ms)
+  ✓  26 a11y/install-page.spec.ts:58:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (904ms)
+  ✓  27 a11y/install-page.spec.ts:58:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (862ms)
+  ✓  28 a11y/install-page.spec.ts:58:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (897ms)
+  ✓  29 a11y/install-page.spec.ts:58:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (847ms)
+  ✓  30 a11y/install-page.spec.ts:58:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (860ms)
+  ✓  31 a11y/install-page.spec.ts:58:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (861ms)
+  ✓  32 a11y/install-page.spec.ts:58:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (845ms)
+  ✓  33 a11y/install-page.spec.ts:75:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (815ms)
+  ✓  34 a11y/install-page.spec.ts:75:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (831ms)
+
+  34 passed (23.9s)
+harness-a11y: exit 0
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/root/osprey-runs/case-b/OspreyFlow_Core/apps/workspace[39m
+
+ [32m✓[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 4067[2mms[22m[39m
+   [32m✓[39m MatrixView at 50,000 nodes and 250,000 links [2m(1)[22m
+     [33m[2m✓[22m[39m opens inside §5's first-frame budget, drawing one page of each table and saying so[33m 4065[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 15:20:56
+[2m   Duration [22m 5.07s[2m (tests 82%, environment 12%, transform 3%, import 3%)[22m
+
+
+Slowest 1 tests:
+  4065 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+budget: exit 0
+Wall time: 30 s, exit 0 (no stack, no lease; set-up before it 11 s)
