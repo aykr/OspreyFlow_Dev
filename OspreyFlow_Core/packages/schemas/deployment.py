@@ -268,7 +268,11 @@ _KEY_PREFIXES = ("sk-", "AIza")
 #: A JSON Web Token, the shape most gateways issue their tokens in: three base64url parts joined by
 #: dots, the first two starting `eyJ` (`{"` encoded). Its dots hid it from the unbroken-run check
 #: (the orchestrator's review of P11, round 2, item b).
-_JWT = re.compile(r"eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]*")
+#: Its header may carry `=` padding, and a JWE (encrypted, five parts) has a second part that is not
+#: `eyJ`; a dot may arrive percent-encoded (`%2E`).
+_DOT = r"=*(?:\.|%2[eE])"
+_B64 = r"[A-Za-z0-9_\-]"
+_JWT = re.compile(rf"eyJ{_B64}{{8,}}{_DOT}{_B64}{{8,}}=*(?:{_DOT}{_B64}*=*)+")
 
 
 def _looks_like_a_key(text: str) -> bool:
@@ -493,11 +497,28 @@ def _address_refusal(address: str) -> str | None:
     return None
 
 
+def _label_looks_like_a_key(text: str) -> bool:
+    """A label (cloud-platform's alone) shaped like a key, or holding one among its words: each word
+    checked as a whole label is (my own lane review of round 2, item 6). The contract reference
+    keeps `_looks_like_a_key` on every profile, as ADR-136 has it."""
+    return _looks_like_a_key(text) or any(
+        _looks_like_a_key(word.strip(".,;:()'\"")) for word in text.split()
+    )
+
+
 def _a_key_in_the_path(segment: str) -> bool:
     """A path segment shaped like a key: a key prefix, a JWT, or 24 or more characters mixing upper
     case, lower case and digits. A deployment's name in a path (`my-deployment-2024-08-06`,
     `gpt-4o-mini-2024-07-18`) is lower case, so is taken (the orchestrator's round 2, item d)."""
     if segment.startswith(_KEY_PREFIXES) or _JWT.search(segment):
+        return True
+    # One unhyphenated lower-case run of 24 or more mixing letters and digits (a hex subscription
+    # key): a deployment's name is hyphenated words (my own lane review of round 2, item 5).
+    if (
+        re.fullmatch(r"[a-z0-9]{24,}", segment)
+        and re.search(r"[a-z]", segment)
+        and re.search(r"[0-9]", segment)
+    ):
         return True
     return bool(
         len(segment) >= 24
@@ -526,7 +547,7 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
             f"namespace's IAM role are for profile: {MODEL_ROUTE_PROFILE} (ADR-135 Amendment 4); "
             "on this deployment an engine is a provider, reached by its name and its key"
         )
-    if provider.label and _looks_like_a_key(provider.label):
+    if provider.label and _label_looks_like_a_key(provider.label):
         return (
             "the label looks like a key; it is shown to analysts, so give the engine's name in "
             "words, and the key or token with Enter key"
@@ -1685,7 +1706,11 @@ class OspreyConfig(BaseModel):
         validated as `profile: cluster`; its engines were already held to cloud-platform's rules,
         and it says so by `ENGINES_AS` in the validation's context, so the render does not refuse
         the engines it is rendering (the orchestrator's round 2, item a)."""
-        profile = (info.context or {}).get(ENGINES_AS, self.profile.value)
+        # Honoured only as `_as_cluster` uses it: cloud-platform's rules, for a cluster translation
+        # (my own lane review of round 2, note 11). Any other use is the profile's own rules.
+        engines_as = (info.context or {}).get(ENGINES_AS)
+        translated = engines_as == MODEL_ROUTE_PROFILE and self.profile is Profile.CLUSTER
+        profile = MODEL_ROUTE_PROFILE if translated else self.profile.value
         for provider in self.models.enabled_providers:
             if refused := engine_refusal(provider, profile):
                 raise ValueError(f"models.providers: {provider.name}: {refused}")

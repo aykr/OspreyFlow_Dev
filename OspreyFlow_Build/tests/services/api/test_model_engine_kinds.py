@@ -60,13 +60,28 @@ from adapters.model_litellm.stand_in import (
     StandInGateway,
     StandInProvider,
 )
-from schemas.deployment import ModelProviderConfig, ModelsConfig, OspreyConfig
+from schemas.deployment import ModelProviderConfig, OspreyConfig
 from schemas.domain import Principal
 from tests.services.api.test_model_engines import _config as engines_config
 
 MASTER = "sk-stand-in-master"
 TOKEN = "gw-token-for-the-client-gateway"
 PLANTED = "gw-PLANTED-model-token-Q7Z4-do-not-leak"
+#: A gateway's token in the shape most gateways issue: a JWT (header, payload and signature, each
+#: base64url, the first two starting `eyJ`, which is `{"` encoded). It holds dots, so a check for
+#: "one unbroken run" never saw it (the orchestrator's round 2, item b).
+JWT = ("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhY21lIiwic3ViIjoib3NwcmV5In0."
+       "Q7Z4dGhpcy1pcy1hLXNpZ25hdHVyZS1mb3ItdGhlLXRlc3Q")  # fmt: skip
+#: A lower-case token, as Azure API Management issues subscription keys (32 hex digits).
+HEX = "0f3a9c7e5b1d4a8f2c6e9b0d7a3f5c1e"
+#: A JWE (an encrypted JWT): five base64url parts, the second not `eyJ`.
+JWE = (
+    "eyJhbGciOiJSU0EtT0FFUCIsImVuYyI6IkEyNTZHQ00ifQ."
+    "OKOawDo13gRp2ojaHV7LFpZcgV7T6DVZKTyKOMTYUmKoTCV."
+    "48V1_ALb6US04U3b."
+    "5eym8TW_c8SuK0ltJ3rpYIzOeDQz7TALvtu6UG9oMo4vpzs9tX_EFShS8iB7j6ji."
+    "XFBoMYUZodetZdvTiFvSkQ"
+)
 BASE = "https://ai-gateway.client.example/v1"
 ROLE = "arn:aws:iam::000000000000:role/osprey-gateway"
 CLAUDE = "anthropic.claude-3-haiku-20240307-v1:0"
@@ -105,12 +120,34 @@ KEY_PARAMS = {"api_key", "litellm_credential_name", "aws_access_key_id", "aws_se
 STATIC_AWS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 
 
+def _gateway_role_as_rendered() -> str | None:
+    """The role the gateway's pod holds as the real cloud-platform render gives it: `ROLE` only if
+    its `litellm` workload runs under a service account. Today it does not (the namespace's IRSA
+    account is the Conduit's, the workers' and the report sync's, P7), so the stand-in's gateway
+    has no role, as the real one has none (the orchestrator's ruling on round 2: the gateway's own
+    identity is P11 part 2's; rule 15's second example). Rendered with a keyed engine, which needs
+    neither of `p11/cloud-platform-P11.diff`'s render fixes; part 2, which makes the account only
+    while a Bedrock engine is enabled, renders it with Bedrock here instead."""
+    values = _cloud_values(GEMINI)
+    gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
+    return ROLE if gateway.get("serviceAccountName") else None
+
+
+#: Rendered by P11 part 2 (a gateway service account and role, Bedrock invoke in London only).
+NO_GATEWAY_IDENTITY = (
+    "carried to P11 part 2: the cloud-platform render gives the gateway's pod no IAM identity, so "
+    "a Bedrock engine there has no credentials until part 2 renders its own account and role"
+)
+
+
 class World:
     def __init__(
-        self, tmp_path: Path, *, role: str | None = ROLE,
+        self, tmp_path: Path, *, role: str | None | object = "as-rendered",
         declared: list[ModelProviderConfig] | None = None, profile: str = CLOUD,
         key_present: dict[str, bool] | None = None,
     ) -> None:  # fmt: skip
+        if role == "as-rendered":
+            role = _gateway_role_as_rendered()
         self.folder = tmp_path / "model-settings"
         self.client_gateway = StandInClientGateway(TOKEN, frozenset({"gpt-4o-mini"}))
         self.bedrock = StandInBedrock(frozenset({ROLE}), frozenset({CLAUDE}))
@@ -172,6 +209,21 @@ def world(tmp_path: Path) -> World:
 @pytest.fixture
 def client(world: World, serve: Callable[[World], TestClient]) -> TestClient:
     return serve(world)
+
+
+@pytest.fixture
+def world_with_identity(tmp_path: Path) -> World:
+    """The gateway's pod given `ROLE`, as P11 part 2 will render it: for the cases whose subject
+    is the Conduit's handling of an identity it is given (its refusals' words, no key kept), not
+    whether the render gives one, which the cases marked `NO_GATEWAY_IDENTITY` hold."""
+    return World(tmp_path, role=ROLE)
+
+
+@pytest.fixture
+def client_with_identity(
+    world_with_identity: World, serve: Callable[[World], TestClient]
+) -> TestClient:
+    return serve(world_with_identity)
 
 
 def _as(principal: Principal) -> None:
@@ -473,14 +525,14 @@ PASTED = [
     ("api_base", f"{BASE}#{PLANTED}"),
     ("label", PLANTED),
     ("contract_reference", PLANTED),
+    # The shapes round 2 added (my own lane review of it, item 8): the same sweep of logs, the
+    # audit, the models file and the gateway's rows.
+    ("label", JWT),
+    ("contract_reference", JWT),
+    ("api_base", f"{BASE}/{PLANTED}"),
+    ("api_base", f"{BASE}/{JWT}"),
+    ("label", f"Acme gateway {PLANTED}"),
 ]
-
-
-#: A gateway's token in the shape most gateways issue: a JWT (header, payload and signature, each
-#: base64url, the first two starting `eyJ`, which is `{"` encoded). It holds dots, so a check for
-#: "one unbroken run" never saw it (the orchestrator's round 2, item b).
-JWT = ("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhY21lIiwic3ViIjoib3NwcmV5In0."
-       "Q7Z4dGhpcy1pcy1hLXNpZ25hdHVyZS1mb3ItdGhlLXRlc3Q")  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -494,9 +546,18 @@ JWT = ("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhY21lIiwic3ViIjoib3NwcmV
         ("api_base", f"{BASE}/{PLANTED}"),
         ("api_base", f"{BASE}/{JWT}"),
         ("api_base", f"https://ai-gateway.client.example/sk-proj-{PLANTED}/v1"),
+        # My own lane review of round 2, items 5 and 6: a lower-case token (Azure API Management's
+        # subscription key is 32 lower-case hex), a token among words in the label, and a JWT
+        # padded, encrypted (JWE: five parts, the second not `eyJ`) or with its dots encoded.
+        ("api_base", f"{BASE}/{HEX}"),
+        ("label", f"Acme gateway {PLANTED}"),
+        ("label", JWT.replace(".", "=.", 1)),
+        ("label", JWE),
+        ("api_base", f"{BASE}/{JWT.replace('.', '%2E')}"),
     ],
     ids=["label-jwt", "label-words-and-jwt", "reference-jwt", "reference-words-and-jwt",
-         "path-token", "path-jwt", "path-sk"],
+         "path-token", "path-jwt", "path-sk", "path-hex", "label-words-and-token",
+         "label-padded-jwt", "label-jwe", "path-encoded-jwt"],
 )  # fmt: skip
 def test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed(
     client: TestClient, world: World, field: str, value: str
@@ -508,8 +569,31 @@ def test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed(
     assert world.models_file() == ""
 
 
+@pytest.mark.parametrize("profile", ["local-lite", "small", "cluster"])
+def test_the_engines_as_context_frees_only_a_cluster_translation(profile: str) -> None:
+    """`ENGINES_AS` lets `harness.cloud_platform._as_cluster` validate its translation with its
+    engines held to cloud-platform's rules. Honoured only for `cloud-platform` on a cluster
+    configuration: a Lite or Small one, or another value, is refused as before (my own lane review
+    of round 2, note 11)."""
+    from schemas.deployment import ENGINES_AS
+    from tests.harness.test_cluster_render import cluster_config
+
+    base = cluster_config() if profile == "cluster" else engines_config()
+    raw = base.model_dump(mode="json", exclude_none=True)
+    raw["models"] = {"local_only": False, "sendable_handling_codes": ["P"], "providers": [BEDROCK]}
+    raw["profile"] = profile
+    if profile == "cluster":
+        OspreyConfig.model_validate(raw, context={ENGINES_AS: CLOUD})  # the translation, freed
+    else:
+        with pytest.raises(ValidationError, match="profile: cloud-platform"):
+            OspreyConfig.model_validate(raw, context={ENGINES_AS: CLOUD})
+    with pytest.raises(ValidationError, match="profile: cloud-platform"):
+        OspreyConfig.model_validate(raw, context={ENGINES_AS: "small"})
+
+
 @pytest.mark.parametrize("path", ["/v1", "/openai/deployments/my-deployment-2024-08-06/v1",
-                                  "/api/v2/gpt-4o-mini-2024-07-18"])  # fmt: skip
+                                  "/api/v2/gpt-4o-mini-2024-07-18", "/openai/v1",
+                                  "/deployments/claude-3-haiku-london/chat"])  # fmt: skip
 def test_an_address_s_ordinary_path_is_taken(client: TestClient, path: str) -> None:
     body = {**GATEWAY, "api_base": f"https://ai-gateway.client.example{path}"}
     assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
@@ -608,8 +692,9 @@ def test_the_gateway_s_refusal_in_another_shape_is_said_as_refused_never_unreach
 
 
 def test_bedrock_s_model_not_enabled_is_said_as_the_model_s_access_not_the_role_s(
-    client: TestClient, world: World
+    client_with_identity: TestClient, world_with_identity: World
 ) -> None:
+    client, world = client_with_identity, world_with_identity
     world.bedrock.enabled_models = frozenset()
     client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
     result = _tested(client, "bedrock")
@@ -619,8 +704,9 @@ def test_bedrock_s_model_not_enabled_is_said_as_the_model_s_access_not_the_role_
 
 
 def test_bedrock_s_expired_credentials_are_said_as_expired(
-    client: TestClient, world: World
+    client_with_identity: TestClient, world_with_identity: World
 ) -> None:
+    client, world = client_with_identity, world_with_identity
     world.bedrock.expired = True
     client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
     result = _tested(client, "bedrock")
@@ -632,8 +718,9 @@ def test_bedrock_s_expired_credentials_are_said_as_expired(
 
 
 def test_an_iam_role_engine_keeps_no_key_anywhere(
-    client: TestClient, world: World, caplog: pytest.LogCaptureFixture
+    client_with_identity: TestClient, world_with_identity: World, caplog: pytest.LogCaptureFixture
 ) -> None:
+    client, world = client_with_identity, world_with_identity
     caplog.set_level(logging.DEBUG)
     body = BEDROCK
     name = str(body["name"])
@@ -664,6 +751,7 @@ def test_an_iam_role_engine_keeps_no_key_anywhere(
     assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
 
 
+@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_bedrock_answers_through_the_gateway_pod_s_role_in_london(
     client: TestClient, world: World
 ) -> None:
@@ -723,6 +811,7 @@ def test_the_command_line_moves_no_key_for_an_iam_role_engine(world: World) -> N
     assert "Q7Z4" not in world.models_file()
 
 
+@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_file(
     tmp_path: Path,
 ) -> None:
@@ -739,6 +828,7 @@ def test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_fil
     assert not (w.folder / "models.yaml").exists()
 
 
+@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_a_keyed_engine_declared_beside_bedrock_is_made_at_start_and_answers_once_its_key_moves(
     tmp_path: Path,
 ) -> None:
@@ -795,17 +885,18 @@ LOCALS = DeploymentModels("qwen2.5:7b-instruct", None, None, None)
 
 
 def _declared() -> OspreyConfig:
-    models = ModelsConfig.model_validate({
-        "local_only": False, "sendable_handling_codes": ["P"],
-        "providers": [BEDROCK, GATEWAY, GEMINI],
-    })  # fmt: skip
-    return engines_config().model_copy(update={"models": models})
+    """A real cloud-platform deployment with an engine of each kind (P7's fixture): the cases below
+    once ran on a Small configuration with these engines copied in unvalidated, which no real call
+    site makes (my own lane review of round 2, item 4)."""
+    return _cloud_config(BEDROCK, GATEWAY, GEMINI)
 
 
 def _rendered(config: OspreyConfig) -> dict[str, str]:
-    # `deployment.env` carries the profile to the Conduit (`OSPREY_PROFILE`, every profile).
-    lines = dict(line.split("=", 1) for line in model_engines_env(config))
-    return {"OSPREY_PROFILE": CLOUD, **lines}
+    """The Conduit's environment as the cloud-platform render writes it, `OSPREY_PROFILE` and the
+    engines' variables included, never written by hand."""
+    from tests.harness.test_cloud_platform_render import _values
+
+    return {k: str(v) for k, v in _values(config)["environment"].items()}
 
 
 def test_the_render_tells_the_conduit_each_engine_s_kind_and_how_it_signs_in() -> None:
@@ -869,6 +960,9 @@ def test_a_bedrock_engine_s_host_is_an_egress_host_by_its_region() -> None:
 
     hosts = _hosts(_cloud_values(BEDROCK))
     assert hosts[BEDROCK_HOST] == ["198.18.2.0/24"]
+    # By its kind, whatever its name: a row keyed `bedrock` by name would pass the case above.
+    renamed = {**BEDROCK, "name": "claude_london", "label": "Claude (London)"}
+    assert _hosts(_cloud_values(renamed))[BEDROCK_HOST] == ["198.18.2.0/24"]
     models = {"local_only": False, "sendable_handling_codes": ["P"], "providers": [BEDROCK]}
     with pytest.raises(CloudPlatformNotRenderable, match=BEDROCK_HOST):
         _artefacts(_config("development", models=models))
@@ -927,6 +1021,7 @@ def test_the_gateway_workload_carries_no_static_aws_key(declared: list[dict[str,
     assert any(e["name"] == "LITELLM_MASTER_KEY" for e in gateway["env"])
 
 
+@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key(
     client: TestClient, world: World
 ) -> None:
