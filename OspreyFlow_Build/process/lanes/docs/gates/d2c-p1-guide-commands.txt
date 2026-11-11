@@ -1,0 +1,47 @@
+# D2c part 1: administration guide §6a's commands, run literally at a28ae4c (2026-11-11T14:11:33Z) on the Mac: Docker off, no stack, no lease.
+# Where: a temporary detached worktree of a28ae4c (removed afterwards), in its OspreyFlow_Core, so this lane's own osprey.yaml is untouched. osprey.yaml there is §6a.1's yaml block, extracted from a28ae4c's guide; each $ line is extracted from a28ae4c's guide and run verbatim with sh -c, its exit code its own.
+# python: this lane's OspreyFlow_Core/.venv. ospreyflow: that checkout's own CLI (python -m ospreyflow.main), since the CLI installed on this Mac does not import (httpx).
+
+$ mkdir -p deploy/generated/cloud-platform/terraform
+(exit 0)
+
+$ PYTHONPATH=.:packages python -m harness.render --config osprey.yaml --allow-unpinned
+  deploy/generated/cloud-platform/terraform/variables.tf
+  deploy/generated/cloud-platform/values.yaml
+  deploy/generated/cloud-platform/versions.lock
+(exit 0)
+
+$ aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+(not run: signs in to a real registry)
+
+$ ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform --dry-run
+would copy arcadedata/arcadedb:26.10.1 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/arcadedata/arcadedb:26.10.1
+would copy clickhouse/clickhouse-keeper:25.8.33.6 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-keeper:25.8.33.6
+would copy clickhouse/clickhouse-server:25.8.33.6 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-server:25.8.33.6
+would copy quay.io/keycloak/keycloak:26.0 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/keycloak/keycloak:26.0
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would build 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would push 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c
+would copy postgres:16.4 to 123456789012.dkr.ecr.eu-west-2.amazonaws.com/postgres:16.4
+(exit 0)
+
+$ ospreyflow images push --registry 123456789012.dkr.ecr.eu-west-2.amazonaws.com --from deploy/generated/cloud-platform
+(not run: the real push needs the namespace's registry and Docker)
+
+$ PYTHONPATH=.:packages python -m harness.render --config osprey.yaml
+  File "<checkout>/OspreyFlow_Core/harness/cluster.py", line 580, in render_cluster
+    raise UnpinnedImagesError(pin.unresolved)
+harness.render.UnpinnedImagesError: refusing to write versions.lock without a digest for: ghcr.io/ospreyflow/workspace:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c, ghcr.io/ospreyflow/api:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c, ghcr.io/ospreyflow/ner:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c, ghcr.io/ospreyflow/worker:a28ae4c181cd7f7b4962c6808429ab0d5bc96c4c — pull them yourself, check https://github.com/aykr/OspreyFlow/releases for a published release with a matching digest, or pass --allow-unpinned (a developer flag, never the customer remedy) to mark them 'unresolved' explicitly
+(exit 1)
+
+$ PYTHONPATH=.:packages:<build folder> python -m tools.cp_policy_check --config osprey.yaml
+tools.helm_chart.HelmFailed: helm template failed: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+
+(exit 1, <build folder> given: it needs Docker, which is off here; unrun until P7b's kind run)
+
+# The pinned render's refusal is the guide's own order: it renders only after the real push (step 3), which was not run.
