@@ -642,6 +642,43 @@ def _heap_from_the_limit(pod: dict[str, Any], profile: ProfileSettings) -> None:
         pod["env"].append({"name": "ARCADEDB_OPTS_MEMORY", "value": opts})
 
 
+def embedded_keeper_clickhouse_config() -> str:
+    """The poc shape's ClickHouse (ADR-148 Amendment 5): the cluster's configuration for one server
+    (`harness.cluster.clickhouse_config`), its Keeper the server's own, a Raft of one whose log is
+    on the server's own claim, reached at 127.0.0.1. The cluster's Replicated database needs a
+    Keeper; here it runs inside the server rather than as a StatefulSet of its own."""
+    from harness.cluster import CLAIMS, clickhouse_config
+
+    data = next(path for name, path, _ in CLAIMS["clickhouse"] if name == "data")
+    one = clickhouse_config(1, 1).replace(
+        "<host>clickhouse-keeper-0.clickhouse-keeper-headless</host>", "<host>127.0.0.1</host>"
+    )
+    keeper = f"""  <keeper_server>
+    <tcp_port>9181</tcp_port>
+    <server_id>1</server_id>
+    <log_storage_path>{data}/coordination/log</log_storage_path>
+    <snapshot_storage_path>{data}/coordination/snapshots</snapshot_storage_path>
+    <raft_configuration>
+      <server><id>1</id><hostname>127.0.0.1</hostname><port>9234</port></server>
+    </raft_configuration>
+  </keeper_server>
+"""
+    return one.replace("  <zookeeper>\n", keeper + "  <zookeeper>\n", 1)
+
+
+def _onto_own_claims(pod: dict[str, Any], profile: ProfileSettings) -> None:
+    """The poc shape (ADR-148 Amendment 5): a shared folder the profile gives a claim of its own
+    (`profile.yaml`'s `poc.claims`) is mounted from that claim, at the same folder on it, so the
+    claim's root, which holds the file system's lost+found, is never the folder itself."""
+    for container in [pod, *pod.get("initContainers", [])]:
+        for mount in container.get("shared") or []:
+            for claim in profile.poc.claims:
+                if mount["subPath"] == claim.folder or mount["subPath"].startswith(
+                    claim.folder + "/"
+                ):
+                    mount["claim"] = claim.name
+
+
 def render_cloud_platform(
     config: OspreyConfig,
     images: Sequence[ServiceImage],  # noqa: ARG001 — the cluster configuration's are rendered
@@ -659,6 +696,7 @@ def render_cloud_platform(
     platform = load_platform(_cp(config).platform)
     profile = load_profile()
     production = _cp(config).environment == "production"
+    poc = _cp(config).shape == "poc"
     as_cluster = _as_cluster(config, platform)
     # The images the cluster's configuration runs: none of the stores the platform manages. The
     # gateway always (P11 part 2): an engine first added in Admin › Models then has one without a
@@ -679,7 +717,10 @@ def render_cloud_platform(
     api_image = next(i.image for i in images if i.service == "api")
     copies = _Copies(registry, api_image.rsplit("/", 1)[0], resolver, profile)
 
-    workloads = [w for w in values["workloads"] if w["name"] not in NOT_RENDERED]
+    workloads = [
+        w for w in values["workloads"]
+        if w["name"] not in NOT_RENDERED and not (poc and w["name"] == "clickhouse-keeper")
+    ]  # fmt: skip
     jobs = [j for j in values["jobs"] if j["name"] not in NOT_RENDERED]
     for pod in [*workloads, *jobs]:
         pod.pop("runAs", None)  # decision 3: every pod is 10001's (the chart's podSecurity)
@@ -712,8 +753,10 @@ def render_cloud_platform(
             # Bedrock's calls signed by the gateway's own role, Bedrock's invoke in London alone
             # (P11 part 2, least privilege): never the namespace's, which holds the buckets.
             pod["serviceAccountName"] = gateway_account(platform)
-        if pod.get("kind") == "StatefulSet":
+        if pod.get("kind") == "StatefulSet" and not poc:
             pod["disruptionBudget"] = {"maxUnavailable": 1}
+        if poc:
+            _onto_own_claims(pod, profile)
     names = {w["name"] for w in workloads}
     if copies.unresolved and not allow_unpinned:
         from harness.render import UnpinnedImagesError
@@ -756,14 +799,22 @@ def render_cloud_platform(
     # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
     # master key (found on the kind cluster, where its pod could not start without it).
 
+    files = {k: v for k, v in values["files"].items() if k != "Caddyfile"}
+    storage: dict[str, Any] = {
+        "className": platform.storage.class_name,
+        "sharedClassName": platform.storage.class_name,
+        "sharedAccessMode": "ReadWriteOnce",
+        "sharedSize": values["storage"]["sharedSize"],
+    }
+    if poc:
+        # Amendment 5: the server runs its own Keeper, so no Keeper of its own is rendered.
+        files.pop("keeper.xml")
+        files["clickhouse.xml"] = embedded_keeper_clickhouse_config()
+        storage["claims"] = [{"name": c.name, "size": c.size} for c in profile.poc.claims]
+
     out = {
         "secrets": secrets,
-        "storage": {
-            "className": platform.storage.class_name,
-            "sharedClassName": platform.storage.class_name,
-            "sharedAccessMode": "ReadWriteOnce",
-            "sharedSize": values["storage"]["sharedSize"],
-        },
+        "storage": storage,
         "imagePullSecrets": [],
         "podSecurity": {"user": UID, "group": UID},
         "networkPolicy": {"openEgress": False},
@@ -771,7 +822,7 @@ def render_cloud_platform(
         "ingress": _ingress(config, platform, names, profile, environment),
         "environment": environment,
         "files": {
-            **{k: v for k, v in values["files"].items() if k != "Caddyfile"},
+            **files,
             # The deployment's own configuration, as it was written, not the cluster's shape.
             "osprey.yaml": yaml.safe_dump(
                 config.model_dump(mode="json", exclude_none=True), sort_keys=False

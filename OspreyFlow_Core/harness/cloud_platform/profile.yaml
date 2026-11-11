@@ -70,3 +70,11 @@ resources:
 # metaspace, threads and direct buffers). Its readiness cannot see a heap OOM (harness.profiles),
 # so it exits on one.
 arcadedb_heap_fraction: 0.75
+
+# The proof-of-concept shape (`cloud_platform.shape: poc`, ADR-148 Amendment 5): the folders that
+# leave the shared claim for a claim of their own. The Ingest root (uploads and the drop folder),
+# so uploads cannot fill the disk the settings files and the recipes are on; removed by name at
+# decommission. The size is a proposal, unmeasured.
+poc:
+  claims:
+    - {name: ingest, folder: ingest, size: 100Gi}

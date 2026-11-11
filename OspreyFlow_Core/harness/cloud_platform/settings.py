@@ -198,6 +198,22 @@ class Resources(_Strict):
     memory_limit: str = Field(pattern=_QUANTITY)
 
 
+class OwnClaim(_Strict):
+    """A shared folder given a claim of its own (ADR-148 Amendment 5): its name (the claim is
+    `ospreyflow-<name>`), the folder it takes from the shared claim, and its size."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    folder: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    size: str = Field(pattern=r"^[0-9]+(Mi|Gi|Ti)$")
+
+
+class PocShape(_Strict):
+    """`cloud_platform.shape: poc` (ADR-148 Amendment 5): the folders that leave the shared claim
+    for claims of their own."""
+
+    claims: list[OwnClaim]
+
+
 class ProfileSettings(_Strict):
     doors: list[Door]
     group_zero: list[str] = Field(default_factory=list)
@@ -205,6 +221,7 @@ class ProfileSettings(_Strict):
     egress: EgressHosts
     resources: dict[str, Resources]
     arcadedb_heap_fraction: float = Field(gt=0, lt=1)
+    poc: PocShape
 
     @field_validator("resources")
     @classmethod
