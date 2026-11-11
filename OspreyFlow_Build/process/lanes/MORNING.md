@@ -356,6 +356,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **D2d** was re-reviewed (the first review's findings were lost with the restart): five must-fixes, among them
       that the guides said a Data Engineer can make a rule live. The docs lane is fixing them headless on the Mac
       from 09:30, stopping by 10:25; its server gates are owed.
+      **It did nothing:** headless, it was refused writes to `OspreyFlow_Core/docs/`, spec 10 and its own
+      `process/lanes/docs/`, and `make docs-pdf` and the heartbeat. Its resume list (in
+      `~/.ospreyflow/lanes/docs.headless.out`) asks you for those. Resume it interactively
+      (`lanes_launch.sh resume docs`) and approve them; its prompt with the five must-fixes is
+      `~/.ospreyflow/lanes/docs.prompt.md`.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
