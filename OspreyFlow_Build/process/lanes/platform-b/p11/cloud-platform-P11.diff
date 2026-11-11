@@ -1,0 +1,72 @@
+diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+index b1f979c..a0e35c6 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
++++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+@@ -45,6 +45,7 @@ from harness.cloud_platform.settings import (
+ )
+ from harness.images import DigestResolver, ServiceImage
+ from schemas.deployment import (
++    ENGINES_AS,
+     AnalyticsEngine,
+     CloudPlatformConfig,
+     GraphStore,
+@@ -256,7 +257,9 @@ def _as_cluster(config: OspreyConfig, platform: PlatformSettings) -> OspreyConfi
+             else {}
+         ),
+     }
+-    return OspreyConfig.model_validate(raw)
++    # Its engines were held to cloud-platform's rules when `config` was validated; validated
++    # again as a cluster, they are held to those still (ADR-135 Amendment 7; P11).
++    return OspreyConfig.model_validate(raw, context={ENGINES_AS: Profile.CLOUD_PLATFORM.value})
+ 
+ 
+ def _in_registry(image: str, registry: str) -> str:
+@@ -396,7 +399,8 @@ def _egress_hosts(
+     config: OspreyConfig, platform: PlatformSettings, profile: ProfileSettings
+ ) -> list[str]:
+     """Each host the namespace reaches: the profile's `egress.always` (S3, the bucket, and STS,
+-    IRSA's role); a model engine's address, or its provider's own host from `egress.engine_hosts`,
++    IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
++    (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
+     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
+     mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
+     is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)"""
+@@ -404,6 +408,9 @@ def _egress_hosts(
+     hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]
+     for provider in config.models.enabled_providers:
+         host = _host(provider.api_base) if provider.api_base else None
++        if host is None and provider.kind in profile.egress.engine_kind_hosts:
++            # A kind that names no address (Bedrock): by its kind, its region's (P11).
++            host = profile.egress.engine_kind_hosts[provider.kind].format(region=provider.region)
+         host = host or defaults.get(provider.name)
+         if host is None:
+             raise CloudPlatformNotRenderable(
+diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+index 4a6eefc..78d2c81 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
++++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+@@ -40,6 +40,10 @@ egress:
+     openai: api.openai.com
+     anthropic: api.anthropic.com
+     gemini: generativelanguage.googleapis.com
++  # An engine of a kind that names no address, by its kind whatever its name; `{region}` is the
++  # engine's own (ADR-135 Amendment 4: Bedrock in London only).
++  engine_kind_hosts:
++    bedrock: "bedrock-runtime.{region}.amazonaws.com"
+ 
+ # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
+ # shared platform may carry a LimitRange whose defaults would otherwise cap a container that names
+diff --git a/OspreyFlow_Core/harness/cloud_platform/settings.py b/OspreyFlow_Core/harness/cloud_platform/settings.py
+index 5114cb6..125cc3c 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/settings.py
++++ b/OspreyFlow_Core/harness/cloud_platform/settings.py
+@@ -150,6 +150,9 @@ class ImageOfOurs(_Strict):
+ class EgressHosts(_Strict):
+     always: list[str] = Field(default_factory=list)
+     engine_hosts: dict[str, str] = Field(default_factory=dict)
++    #: A model engine of a kind that names no address (ADR-135 Amendment 4: `bedrock`), by its
++    #: kind, whatever its name, `{region}` the engine's own (P11).
++    engine_kind_hosts: dict[str, str] = Field(default_factory=dict)
+ 
+ 
+ _QUANTITY = r"^[0-9]+(\.[0-9]+)?(m|Ki|Mi|Gi|Ti)?$"

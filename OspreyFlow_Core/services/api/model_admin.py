@@ -46,9 +46,14 @@ import httpx
 import yaml
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
-from adapters.model_litellm.connection import check_connection
+from adapters.model_litellm.connection import WORDS, check_connection
 from adapters.model_litellm.usage import engine_key, usage_tag
-from schemas.deployment import ModelProviderConfig, ModelsConfig
+from schemas.deployment import (
+    ModelProviderConfig,
+    ModelsConfig,
+    engine_kinds_offered,
+    engine_refusal,
+)
 from schemas.model_admin import (
     AdminEngine,
     ConnectionTestResult,
@@ -105,13 +110,41 @@ class ModelSettings(BaseModel):
     limits: dict[str, EngineLimits] = Field(default_factory=dict)
 
 
+#: The fields Amendment 4 added to an engine. Off `cloud-platform` every engine is a plain provider
+#: and they are not written, so the models file and the Conduit's environment there are as before.
+_KIND_FIELDS = ("kind", "auth", "region")
+
+
+def plain_dump(provider: ModelProviderConfig) -> dict[str, Any]:
+    """An engine as written down: Amendment 4's fields left out for a plain provider by its key."""
+    dumped = provider.model_dump(mode="json")
+    if provider.plain:
+        for name in _KIND_FIELDS:
+            dumped.pop(name, None)
+    return dumped
+
+
+def refused_on(providers: Sequence[ModelProviderConfig], profile: str) -> str | None:
+    """The first engine `profile` refuses, in words naming it (ADR-135 Amendment 7 decision 1)."""
+    for provider in providers:
+        if refused := engine_refusal(provider, profile):
+            return f"{provider.name}: {refused}"
+    return None
+
+
 class ModelSettingsFile:
-    def __init__(self, folder: Path) -> None:
+    def __init__(self, folder: Path, *, profile: str = "") -> None:
         self.path = folder / SETTINGS_FILE
+        #: The deployment's profile (`OSPREY_PROFILE`, rendered into `deployment.env` for every
+        #: profile), which decides which engines the file may hold (ADR-135 Amendment 7).
+        self.profile = profile
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] = os.environ) -> ModelSettingsFile:
-        return cls(Path(environ.get("OSPREY_MODEL_SETTINGS_DIR", DEFAULT_SETTINGS_DIR)))
+        return cls(
+            Path(environ.get("OSPREY_MODEL_SETTINGS_DIR", DEFAULT_SETTINGS_DIR)),
+            profile=environ.get("OSPREY_PROFILE", ""),
+        )
 
     def stamp(self) -> float | None:
         """When the file last changed, or None where there is none: a Conduit replica reads it again
@@ -125,12 +158,17 @@ class ModelSettingsFile:
         if not self.path.is_file():
             return None
         raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
-        return ModelSettings.model_validate(raw)
+        settings = ModelSettings.model_validate(raw)
+        if refused := refused_on(settings.providers, self.profile):
+            raise ValueError(f"the models file {self.path} holds an engine refused here: {refused}")
+        return settings
 
     def save(self, settings: ModelSettings) -> None:
         """Atomic, and `600` from the moment it exists (a temporary file renamed over the old)."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        text = yaml.safe_dump(settings.model_dump(mode="json"), sort_keys=False)
+        dumped = settings.model_dump(mode="json")
+        dumped["providers"] = [plain_dump(p) for p in settings.providers]
+        text = yaml.safe_dump(dumped, sort_keys=False)
         fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".models-", suffix=".yaml")
         try:
             os.fchmod(fd, 0o600)
@@ -177,9 +215,15 @@ class Installed:
                     api_base=raw.get("api_base"),
                     privacy_contract=raw.get("privacy_contract") is True,
                     contract_reference=raw.get("contract_reference"),
+                    # ADR-135 Amendment 4: what the engine is and how it signs in.
+                    kind=raw.get("kind") or "provider",
+                    auth=raw.get("auth"),
+                    region=raw.get("region"),
                 )
             )
             present[name] = environ.get(f"OSPREY_MODEL_KEY_PRESENT_{name.upper()}", "") == "yes"
+        if refused := refused_on(providers, environ.get("OSPREY_PROFILE", "")):
+            raise ValueError(f"OSPREY_MODEL_ENGINES names an engine refused here: {refused}")
         return cls(
             providers=providers,
             defaults=dict(cast(dict[str, str], _json("OSPREY_MODEL_DEFAULTS", {}))),
@@ -291,11 +335,16 @@ class GatewayAdmin:
         deleted and made again, so no unmeasured partial update is relied on, and a cleared
         address leaves nothing of the old one behind."""
         params: dict[str, object] = {
-            "model": gateway_model_name(provider.name, model),
-            "litellm_credential_name": credential_name(provider.name),
+            "model": provider.route(model),
             "input_cost_per_token": TOKEN_PRICE,
             "output_cost_per_token": TOKEN_PRICE,
         }
+        if not provider.keyless:
+            params["litellm_credential_name"] = credential_name(provider.name)
+        # An IAM-role engine names no credential and carries no key of any kind (ADR-135
+        # Amendment 4): Bedrock's calls are signed by the gateway pod's own identity, in London.
+        if provider.region:
+            params["aws_region_name"] = provider.region
         if provider.api_base:
             params["api_base"] = provider.api_base
         resp = await self._call(
@@ -504,7 +553,11 @@ class PostgresModelAdminAudit:
 
 # --- the service --------------------------------------------------------------------------------
 
-_EDITABLE = ("label", "roles", "api_base", "privacy_contract", "contract_reference")
+_EDITABLE = (
+    "label", "roles", "api_base", "privacy_contract", "contract_reference",
+    "kind", "auth", "region",  # ADR-135 Amendment 4
+)  # fmt: skip
+
 
 
 #: A value that may be named in a refusal: shaped like a provider or a job (lower-case, short),
@@ -571,6 +624,53 @@ class _Exclusive:
             self._lock.release()
 
 
+#: *Test the connection*'s words for the two kinds of the `cloud-platform` profile (ADR-135
+#: Amendment 7 decision 5), by kind and outcome; any other is `connection.WORDS`'. Bedrock has no
+#: key to enter again, so its words name the role, the model's access or the credentials' renewal;
+#: the client's gateway may refuse by its token or by its own policy, which the status cannot tell
+#: apart, so its words name both.
+KIND_WORDS: dict[tuple[str, str], str] = {
+    ("bedrock", "key_refused"): (
+        "Bedrock refused the namespace's IAM role: the model gateway has no role, or the role "
+        "may not use this model in London. Ask your platform team to check the role's permissions."
+    ),
+    ("bedrock", "model_not_enabled"): (
+        "Bedrock accepted the namespace's IAM role but has not enabled this model for the "
+        "account: access is granted model by model (Bedrock's Model access, in London, "
+        "eu-west-2). Ask your platform team to enable it; this is the model's access, not the "
+        "role's permissions."
+    ),
+    ("bedrock", "sign_in_expired"): (
+        "Bedrock refused the namespace's IAM role's credentials as expired: the model gateway's "
+        "pod did not renew them. Ask your platform team to check the gateway's service account, "
+        "then restart the gateway."
+    ),
+    ("bedrock", "model_not_offered"): (
+        "Bedrock does not offer this model on demand in London (eu-west-2) by this id. A "
+        "cross-region inference profile is not used, as it may send the call outside London: "
+        "choose a model Bedrock offers on demand in London."
+    ),
+    ("gateway", "key_refused"): (
+        "Your organisation's AI gateway refused the call: its token may be wrong, or its own "
+        "policy may not allow this model. Check both with the gateway's owners; enter the token "
+        "again only if it has changed."
+    ),
+    ("gateway", "model_not_offered"): (
+        "Your organisation's AI gateway does not offer this model to this token. Check the model "
+        "name with the gateway's owners."
+    ),
+    ("gateway", "rate_limited"): (
+        "Your organisation's AI gateway is limiting these calls (rate or quota). Try again later, "
+        "or ask the gateway's owners about its limits."
+    ),
+    ("gateway", "request_refused"): (
+        "Your organisation's AI gateway refused the request in a form OspreyFlow does not read "
+        "(not an OpenAI-compatible answer): something in front of it may have refused it. Check "
+        "the address and the model name with the gateway's owners."
+    ),
+}
+
+
 class ModelAdmin:
     """*Models*' service. **The gateway is changed first, the models file only once it has
     answered**; a refusal, or a file that cannot be written, puts the gateway back as the file
@@ -620,6 +720,8 @@ class ModelAdmin:
 
     def key_state(self, name: str) -> KeyState:
         self._fresh()
+        if any(p.name == name and p.keyless for p in self.settings.providers):
+            return "iam_role"
         if self._settings is None:
             return "set" if self._installed.key_present.get(name) else "none"
         record = self._settings.keys.get(name)
@@ -637,7 +739,8 @@ class ModelAdmin:
                 name=p.name,
                 label=p.label or p.name,
                 models={r: gateway_model_name(p.name, m) for r, m in p.roles.items() if r in ROLES},
-                key_present=self.key_state(p.name) == "set",
+                # An IAM-role engine signs in with no key, so it is offered as a keyed one is.
+                key_present=self.key_state(p.name) in ("set", "iam_role"),
                 privacy_contract=p.privacy_contract,
                 contract_reference=p.contract_reference,
                 budget_period=current.limits.get(p.name, EngineLimits()).budget_period,
@@ -673,6 +776,7 @@ class ModelAdmin:
             local_only=self._installed.local_only,
             sendable_handling_codes=list(self._installed.sendable),
             source="models file" if self._settings is not None else "osprey.yaml",
+            engine_kinds=engine_kinds_offered(self._file.profile),
         )
 
     @property
@@ -731,7 +835,10 @@ class ModelAdmin:
             self._retrying = None
 
     async def _start_once(self) -> bool:
-        if self._settings is None:
+        if self._settings is None and not any(p.keyless for p in self._installed.providers):
+            # Before any change in *Models*, a keyed engine's entries are made when its key moves
+            # in. An IAM-role engine has no key to move (ADR-135 Amendment 4), so its entries and
+            # its own gateway key are made here, from `osprey.yaml`'s engines.
             return True
         try:
             async with self._exclusive:
@@ -817,6 +924,9 @@ class ModelAdmin:
             words = "; ".join(str(e.get("msg", "")).removeprefix("Value error, ")
                               for e in invalid.errors(include_input=False))  # fmt: skip
             raise ModelAdminRefused(redacted(words, sent)) from None
+        # ADR-135 Amendment 7 decision 1: what this deployment's profile takes.
+        if refused := refused_on(settings.providers, self._file.profile):
+            raise ModelAdminRefused(redacted(refused, sent))
         return settings
 
     def _save(self, settings: ModelSettings) -> None:
@@ -898,9 +1008,11 @@ class ModelAdmin:
             self._save(proposed)
 
         await self._change(by, "engine_added", provider.name, work)
+        # A plain provider's entry is as before Amendment 4: its kind fields are not named.
+        named = [f for f in _EDITABLE if not (provider.plain and f in _KIND_FIELDS)]
         await self._audited(
             by, "engine_added", provider.name,
-            {f: {"from": None, "to": _plain(getattr(provider, f))} for f in _EDITABLE},
+            {f: {"from": None, "to": _plain(getattr(provider, f))} for f in named},
         )  # fmt: skip
 
     async def edit_engine(self, by: str, name: str, provider: ModelProviderConfig) -> str | None:
@@ -916,14 +1028,25 @@ class ModelAdmin:
             before = next((p for p in current.providers if p.name == name), None)
             if before is None:
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if before.kind != provider.kind:
+                # ADR-135 Amendment 2 decision 1: an engine's provider is fixed once added. Another
+                # kind is another processor, whose contract mark and label this one's are not.
+                raise ModelAdminRefused(
+                    "An engine's kind cannot change; remove it and add one of the other kind."
+                )
             proposed = self._validated(current.model_copy(
                 update={"providers": [provider if p.name == name else p
                                       for p in current.providers]}, deep=True), sent)  # fmt: skip
+            # Only the address decides where a key goes: the kind is fixed above, each kind has
+            # one sign-in and Bedrock one region (ADR-135 Amendment 7 decision 4).
             if (before.api_base or None) != (provider.api_base or None):
                 await self._gateway.delete_credential(name)
                 moved.append(True)
                 kept = {k: v for k, v in proposed.keys.items() if k != name}
                 proposed = proposed.model_copy(update={"keys": kept}, deep=True)
+                # The credential is gone now, whatever follows: the file says so before anything
+                # else can fail, so a refused reconcile never leaves "key set" over no key.
+                self._save(current.model_copy(update={"keys": kept}, deep=True))
             await self._reconcile(proposed, rebuilt=frozenset({name}))
             self._save(proposed)
             return before
@@ -1004,6 +1127,13 @@ class ModelAdmin:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if any(p.name == name and p.keyless for p in current.providers):
+                # ADR-135 Amendment 4: no key is stored for an engine signed in by the role.
+                raise ModelAdminRefused(
+                    f"{name} signs in by the namespace's IAM role, so no key is kept for it; "
+                    "nothing was changed.",
+                    status=409,
+                )
             if self._installed.local_only:
                 raise ModelAdminRefused(
                     "This deployment's osprey.yaml declares local_only: true, so no key for an "
@@ -1033,6 +1163,12 @@ class ModelAdmin:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if any(p.name == name and p.keyless for p in current.providers):
+                raise ModelAdminRefused(
+                    f"{name} signs in by the namespace's IAM role and keeps no key; there is none "
+                    "to remove.",
+                    status=409,
+                )
             await self._gateway.delete_credential(name)
             keys = {k: v for k, v in current.keys.items() if k != name}
             self._save(current.model_copy(update={"keys": keys}, deep=True))
@@ -1077,7 +1213,7 @@ class ModelAdmin:
                 engine=name, outcome="not_routed", ok=False,
                 words="This deployment is local only: no engine outside it is asked anything.",
             )  # fmt: skip
-        elif state != "set":
+        elif state not in ("set", "iam_role"):
             words = (
                 "The gateway no longer holds this engine's key. Enter it again first."
                 if state == "lost"
@@ -1091,8 +1227,19 @@ class ModelAdmin:
                 self._gateway.http, gateway_model_name(provider.name, model),
                 tag=usage_tag(provider.name, "test"),
             )
+            outcome = check.outcome
+            if (
+                provider.kind == "gateway"
+                and outcome == "unreachable"
+                and check.status is not None
+                and 400 <= check.status < 500
+            ):
+                # The client's gateway answered with a 4xx the classifier does not read (not
+                # OpenAI's shape): it was reached, and refused (Amendment 7 decision 5).
+                outcome = "request_refused"
+            words = KIND_WORDS.get((provider.kind, outcome), WORDS[outcome])
             result = ConnectionTestResult(
-                engine=name, outcome=check.outcome, ok=check.ok, words=check.words
+                engine=name, outcome=outcome, ok=check.ok, words=words
             )
         await self._audited(by, "connection_tested", name, outcome=result.outcome)
         return result

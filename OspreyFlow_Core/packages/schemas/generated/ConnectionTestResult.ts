@@ -7,6 +7,9 @@ export type Outcome =
   | "gateway_token"
   | "key_refused"
   | "model_not_offered"
+  | "model_not_enabled"
+  | "sign_in_expired"
+  | "request_refused"
   | "cooling_down"
   | "rate_limited"
   | "unreachable";

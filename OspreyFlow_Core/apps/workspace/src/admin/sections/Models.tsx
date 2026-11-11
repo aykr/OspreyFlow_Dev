@@ -36,14 +36,27 @@ const JOBS = [
   { role: "transcription", label: "Transcription" },
 ] as const;
 const ALL_JOBS = [...JOBS, { role: "embedding", label: "Embeddings" }] as const;
+// `bedrock` is LiteLLM's Bedrock provider by its key on every profile but cloud-platform, where Bedrock is its own kind.
 const PROVIDERS = ["gemini", "openai", "anthropic", "azure", "bedrock"];
 const KEY_WORDS: Record<AdminEngine["key_state"], string> = {
   set: "Key set",
   none: "No key",
   lost: "Key lost: enter it again",
+  iam_role: "IAM role: no key kept",
 };
 
+// ADR-135 Amendment 4: what an engine is, and how it signs in.
+type Kind = "provider" | "gateway" | "bedrock";
+type Auth = "key" | "iam_role";
+const KINDS: { kind: Kind; label: string }[] = [
+  { kind: "provider", label: "A model provider (Gemini, OpenAI, Anthropic, Azure)" },
+  { kind: "gateway", label: "Your organisation's own AI gateway (OpenAI-compatible)" },
+  { kind: "bedrock", label: "Amazon Bedrock in London, by the namespace's IAM role" },
+];
+
 interface Draft {
+  kind: Kind;
+  auth: Auth;
   name: string;
   label: string;
   roles: Record<string, string>;
@@ -52,10 +65,29 @@ interface Draft {
   contract_reference: string;
 }
 
-const EMPTY: Draft = { name: "gemini", label: "", roles: {}, api_base: "", privacy_contract: false, contract_reference: "" };
+const EMPTY: Draft = { kind: "provider", auth: "key", name: "gemini", label: "", roles: {}, api_base: "", privacy_contract: false, contract_reference: "" };
+
+/** A kind chosen in the add form: its name, sign-in and address as that kind takes them. */
+function withKind(draft: Draft, kind: Kind): Draft {
+  if (kind === "bedrock") return { ...draft, kind, auth: "iam_role", name: "bedrock", api_base: "" };
+  if (kind === "gateway") return { ...draft, kind, auth: "key", name: "" };
+  return { ...draft, kind, auth: "key", name: "gemini" };
+}
+
+/** The kinds the deployment's profile takes (ADR-135 Amendment 7): a provider alone where the view says none. */
+function kindsOf(view: ModelsAdminView): Kind[] {
+  return (view.engine_kinds as Kind[] | undefined) ?? ["provider"];
+}
+
+/** How an engine of `kind` signs in: Bedrock by the namespace's IAM role, any other by its key or token. */
+function authFor(kind: Kind): Auth {
+  return kind === "bedrock" ? "iam_role" : "key";
+}
 
 function draftOf(provider: ModelProviderConfig): Draft {
   return {
+    kind: (provider.kind ?? "provider") as Kind,
+    auth: (provider.auth ?? "key") as Auth,
     name: provider.name,
     label: provider.label ?? "",
     roles: { ...provider.roles },
@@ -71,9 +103,11 @@ function providerOf(draft: Draft): ModelProviderConfig {
     name: draft.name.trim(),
     label: draft.label.trim() || null,
     roles,
-    api_base: draft.api_base.trim() || null,
+    api_base: draft.kind === "bedrock" ? null : draft.api_base.trim() || null,
     privacy_contract: draft.privacy_contract,
     contract_reference: draft.privacy_contract ? draft.contract_reference.trim() || null : null,
+    // A provider is sent as before Amendment 4; only the cloud-platform profile's two kinds name theirs.
+    ...(draft.kind === "provider" ? {} : { kind: draft.kind, auth: authFor(draft.kind) }),
   };
 }
 
@@ -85,33 +119,69 @@ function when(at: string | null | undefined): string {
 function EngineForm({
   initial,
   editing,
+  kinds,
   onSave,
   onCancel,
 }: {
   initial: Draft;
   editing: boolean;
+  /** The kinds this deployment's profile takes (ADR-135 Amendment 7): a provider alone but on cloud-platform. */
+  kinds: Kind[];
   onSave: (draft: Draft) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
   const id = editing ? `edit-${initial.name}` : "add-engine";
+  // The kind is shown only where the profile offers more than a provider, or for an engine of another kind.
+  const offersKinds = kinds.length > 1 || draft.kind !== "provider";
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSave(draft);
   };
   return (
     <form className="admin-models-form" aria-label={editing ? `Edit ${initial.name}` : "Add an engine"} onSubmit={submit}>
-      <label htmlFor={`${id}-name`}>Provider</label>
-      {editing ? (
+      {offersKinds && <label htmlFor={`${id}-kind`}>Kind of engine</label>}
+      {!offersKinds ? null : editing ? (
+        // An engine's kind is fixed once added: another kind is another processor (ADR-135 Am 2, 4).
+        <Input id={`${id}-kind`} value={KINDS.find((k) => k.kind === draft.kind)?.label ?? draft.kind} readOnly aria-readonly="true" />
+      ) : (
+        <Select id={`${id}-kind`} value={draft.kind} onChange={(e) => setDraft(withKind(draft, e.target.value as Kind))}>
+          {KINDS.filter((k) => kinds.includes(k.kind)).map((k) => (
+            <option key={k.kind} value={k.kind}>
+              {k.label}
+            </option>
+          ))}
+        </Select>
+      )}
+      <label htmlFor={`${id}-name`}>{draft.kind === "provider" ? "Provider" : "Engine name"}</label>
+      {editing || draft.kind === "bedrock" ? (
         <Input id={`${id}-name`} value={draft.name} readOnly aria-readonly="true" />
+      ) : draft.kind === "gateway" ? (
+        <Input
+          id={`${id}-name`}
+          value={draft.name}
+          placeholder="lower-case, such as our_gateway"
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+        />
       ) : (
         <Select id={`${id}-name`} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}>
-          {PROVIDERS.map((p) => (
+          {PROVIDERS.filter((p) => p !== "bedrock" || !kinds.includes("bedrock")).map((p) => (
             <option key={p} value={p}>
               {p}
             </option>
           ))}
         </Select>
+      )}
+      {draft.kind === "gateway" && (
+        <p className="label" style={{ margin: 0 }}>
+          Signs in by a token, entered next and kept by the model gateway alone. Signing in by the namespace&apos;s IAM
+          role waits for your gateway&apos;s owners to say how it accepts the role.
+        </p>
+      )}
+      {draft.kind === "bedrock" && (
+        <p className="label" style={{ margin: 0 }}>
+          Signs in by the namespace&apos;s IAM role in London (eu-west-2); no key is kept, and no other region is used.
+        </p>
       )}
       <label htmlFor={`${id}-label`}>Label analysts see</label>
       <Input id={`${id}-label`} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
@@ -126,8 +196,14 @@ function EngineForm({
           />
         </div>
       ))}
-      <label htmlFor={`${id}-base`}>Address (https://, where it is not the provider&apos;s own)</label>
-      <Input id={`${id}-base`} value={draft.api_base} onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
+      {draft.kind !== "bedrock" && (
+        <>
+          <label htmlFor={`${id}-base`}>
+            {draft.kind === "gateway" ? "Address of your gateway (https://)" : "Address (https://, where it is not the provider's own)"}
+          </label>
+          <Input id={`${id}-base`} value={draft.api_base} onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
+        </>
+      )}
       <label className="admin-models-check">
         <Checkbox
           checked={draft.privacy_contract}
@@ -335,13 +411,15 @@ export function Models({ api }: { api: ModelsApi }) {
                         <Button aria-label={`Set limits for ${label}`} onClick={() => setOpen({ kind: "limits", name })}>
                           Set limits
                         </Button>
-                        <Button
-                          aria-label={`${engine.key_state === "set" ? "Rotate" : "Enter"} key for ${label}`}
-                          onClick={() => setOpen({ kind: "key", name })}
-                        >
-                          {engine.key_state === "set" ? "Rotate key" : "Enter key"}
-                        </Button>
-                        {engine.key_state !== "none" && (
+                        {engine.key_state !== "iam_role" && (
+                          <Button
+                            aria-label={`${engine.key_state === "set" ? "Rotate" : "Enter"} key for ${label}`}
+                            onClick={() => setOpen({ kind: "key", name })}
+                          >
+                            {engine.key_state === "set" ? "Rotate key" : "Enter key"}
+                          </Button>
+                        )}
+                        {engine.key_state !== "none" && engine.key_state !== "iam_role" && (
                           <Button
                             aria-label={`Remove key for ${label}`}
                             onClick={() => act(removeKey(api, name), `${label}: the key is removed; it is offered to no analyst until one is set.`)}
@@ -372,12 +450,14 @@ export function Models({ api }: { api: ModelsApi }) {
                     key={open.name}
                     initial={draftOf(engine.provider)}
                     editing
+                    kinds={kindsOf(view)}
                     onCancel={() => setOpen(null)}
                     onSave={(draft) => {
                       const hadKey = engine.key_state === "set";
-                      const moved = (engine.provider.api_base ?? "") !== draft.api_base.trim();
+                      const next = providerOf(draft);
+                      const moved = (engine.provider.api_base ?? "") !== (next.api_base ?? "");
                       act(
-                        editEngine(api, providerOf(draft)),
+                        editEngine(api, next),
                         hadKey && moved
                           ? `${draft.name} is saved. Its address changed, so its key was removed: a key is never sent to an address it was not entered for. Enter the key again.`
                           : `${draft.name} is saved.`,
@@ -425,8 +505,17 @@ export function Models({ api }: { api: ModelsApi }) {
               <EngineForm
                 initial={EMPTY}
                 editing={false}
+                kinds={kindsOf(view)}
                 onCancel={() => setOpen(null)}
-                onSave={(draft) => act(addEngine(api, providerOf(draft)), `${draft.name} is added. Enter its key next.`)}
+                onSave={(draft) => {
+                  const added = providerOf(draft);
+                  act(
+                    addEngine(api, added),
+                    added.auth === "iam_role"
+                      ? `${added.name} is added. It signs in by the namespace's IAM role: no key is needed.`
+                      : `${added.name} is added. Enter its key next.`,
+                  );
+                }}
               />
             ) : (
               !view.local_only && (

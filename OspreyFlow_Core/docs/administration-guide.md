@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.76** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.77** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.77 | 2026-11-11 | Appendix A: `models.provider(s).kind`, `auth` and `region`, the client's gateway and Bedrock by the IAM role on the `cloud-platform` profile (P11 part 1, ADR-135 Amendment 7). |
 | 1.76 | 2026-11-11 | §6a's re-check: the policy check on your own settings in its working form, which needs Docker (Helm's own image) and is unrun until P7b's kind run; the example's map said to be empty on this profile; a named deployment's `terraform` folder; the chart, not the render, makes the two Calico policies (`default.`); which commands ran, and where. |
 | 1.75 | 2026-11-11 | §6a after its two reviews, its render commands run as written from `OspreyFlow_Core`: the example's required `map:` section; make the `terraform` folder before the first render (a known issue); the unpinned render first, never installed, then `ecr.tf`, the push with `--from`, and the pinned render; the third-party images copied by tag (a known issue); no CPU limit, so a LimitRange's default and a quota on `limits.cpu` both apply; who reads which keys of `ospreyflow-secrets`, by the blanks; the Terraform state holds every secret; OpenSearch made and unused; Keycloak's group 0 and the identity step not shown; the policy check's fixtures, and `tools.cp_policy_check --config`; the ingress by backend; the coming list and three more questions for the platform's team. |
 | 1.74 | 2026-11-11 | The `cloud-platform` profile as built (P7, ADR-148 Amendment 1), docs' D2c part 1. New §6a: what is rendered and what the platform gives instead; the namespace's requests and limits per component (about 27 GiB and 3.7 CPU in development, 70 GiB and 9.7 CPU in production, unmeasured); the Terraform and the secrets each component reads, by name; images into ECR with `ospreyflow images push`; the egress list, and narrowing the managed networks; `make cp-policy-check`; what is *coming* (Entra ID, backups and restore, the runbooks, the gateway by default, the extraction service, the shared folders, the profile's own OFFICIAL-SENSITIVE ceiling); the questions for the platform's team. §1 points to it. |
@@ -2392,6 +2393,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
 | `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
+| `models.provider.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
+| `models.provider.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key. |
+| `models.provider.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
 | `models.providers.name` | str | required | LiteLLM's name for the provider: openai, anthropic, gemini, azure, bedrock… |
 | `models.providers.label` | str or none | none | The name analysts see for this engine. Default: OpenAI, Anthropic or Gemini for those three, else the provider's name capitalised. |
@@ -2399,6 +2403,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
 | `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
+| `models.providers.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
+| `models.providers.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key. |
+| `models.providers.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.defaults` | mapping | — | Each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it). |
 | `models.extraction` | `qwen2.5:7b-instruct` \| `qwen2.5:14b-instruct` | `qwen2.5:7b-instruct` | The local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with; with resources.gpu: nvidia and this not named, qwen2.5:14b-instruct. |
 | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |

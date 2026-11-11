@@ -199,9 +199,9 @@ class SystemProbes:
         if text is None:
             return None
         found: dict[str, str] = {}
-        for line in text.splitlines():  # `<name> set|none|lost`, as `ospreyflow.models` reads it
+        for line in text.splitlines():  # `<name> set|none|lost|iam_role`, as `ospreyflow.models`
             name, _, state = line.strip().partition(" ")
-            if name and state in ("set", "none", "lost"):
+            if name and state in ("set", "none", "lost", "iam_role"):
                 found[name] = state
         return found
 

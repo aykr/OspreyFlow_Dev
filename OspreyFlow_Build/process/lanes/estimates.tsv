@@ -1,7 +1,7 @@
-# as of 2026-11-11T15:00Z
+# as of 2026-11-11T15:40Z
 admin	P10	part 1: merge prepared (7c33ea8), gates and the leased live selection running; part 2 next	part 1 11 Nov, ~15:30	B
 case	P9	briefed (BRIEF_P9, cut); starting once the owner confirms in its window	12 Nov	B
-platform-b	P11	round 2: every round-1 item fixed; rebase onto P7 once it merges, the JWT-shaped key check, then gates; credential step, listed for you	12 Nov, morning	B
+platform-b	P11	part 1 merged; part 2 (the gateway by default and its own IAM role) after the carries	part 2 13 Nov	B
 case-b	P12	part 1: the live run done on a real gateway (Laurium's scoped key proven; Laurium could not read the 0.5B model's answer, recorded); records and gates, then merge; part 2 after	part 1 12 Nov	B
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B

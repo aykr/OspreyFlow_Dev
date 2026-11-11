@@ -33,7 +33,13 @@ _LABELS = {"openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Gemini"}
 KEY_GIVEN = "OSPREY_MODEL_KEY_GIVEN"
 #: The Conduit's key path, run inside its container.
 KEY_PATH = ("python", "-m", "services.api.model_keys")
-_STATE_WORDS = {"set": "yes", "none": "no", "lost": "lost: enter it again"}
+_STATE_WORDS = {
+    "set": "yes",
+    "none": "no",
+    "lost": "lost: enter it again",
+    # ADR-135 Amendment 4: the engine signs in by the namespace's IAM role and keeps no key.
+    "iam_role": "none kept: signs in by the namespace's IAM role",
+}
 
 
 def parse_defaults(text: str) -> dict[str, str]:
@@ -48,7 +54,7 @@ def parse_defaults(text: str) -> dict[str, str]:
 
 
 def parse_status(text: str) -> dict[str, str]:
-    """`model_keys status`'s lines (`<name> set|none|lost`), by engine."""
+    """`model_keys status`'s lines (`<name> set|none|lost|iam_role`), by engine."""
     found: dict[str, str] = {}
     for line in text.splitlines():
         name, _, state = line.strip().partition(" ")
@@ -105,14 +111,40 @@ def _held(env_file: Path) -> dict[str, str]:
     return held
 
 
-def read_models(product: Path, deployment: Path) -> dict[str, Any]:
+def _running_config(product: Path, deployment: Path) -> dict[str, Any]:
     """The deployment's own copy of `osprey.yaml` (what is running), else the product's."""
     for candidate in (deployment / "osprey.yaml", product / "osprey.yaml"):
         if candidate.is_file():
             loaded = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
             if isinstance(loaded, dict):
-                return _models(loaded)
+                return loaded
     return {}
+
+
+def read_models(product: Path, deployment: Path) -> dict[str, Any]:
+    """The `models` of the deployment's own copy of `osprey.yaml` (what is running), else the
+    product's."""
+    return _models(_running_config(product, deployment))
+
+
+#: ADR-135 Amendment 7 decision 1: the profile whose engines may sign in by the namespace's IAM
+#: role; `schemas.deployment.MODEL_ROUTE_PROFILE`, held to it by `test_models_verb_iam_role.py`
+#: (the command line imports nothing of the product's packages).
+MODEL_ROUTE_PROFILE = "cloud-platform"
+
+
+def may_sign_in_by_role(product: Path, deployment: Path, name: str) -> bool:
+    """Whether engine `name` may be one that keeps no key, as far as the command line can tell
+    without the Conduit: declared so in `osprey.yaml`, or any engine on the `cloud-platform`
+    profile, where one added in *Admin › Models* may be. On every other profile no engine signs in
+    by the role, so this is False there, as before Amendment 4."""
+    config = _running_config(product, deployment)
+    if config.get("profile") == MODEL_ROUTE_PROFILE:
+        return True
+    return any(
+        p.get("name") == name and (p.get("kind") == "bedrock" or p.get("auth") == "iam_role")
+        for p in _providers(_models(config))
+    )
 
 
 def _contract(provider: Mapping[str, Any]) -> str:

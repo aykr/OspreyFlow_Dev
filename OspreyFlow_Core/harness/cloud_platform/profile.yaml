@@ -40,6 +40,10 @@ egress:
     openai: api.openai.com
     anthropic: api.anthropic.com
     gemini: generativelanguage.googleapis.com
+  # An engine of a kind that names no address, by its kind whatever its name; `{region}` is the
+  # engine's own (ADR-135 Amendment 4: Bedrock in London only).
+  engine_kind_hosts:
+    bedrock: "bedrock-runtime.{region}.amazonaws.com"
 
 # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
 # shared platform may carry a LimitRange whose defaults would otherwise cap a container that names

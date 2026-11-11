@@ -2,7 +2,7 @@
 ADR-135 Amendment 2; `CLAUDE.md` rule 15: a fixture models the dependency's refusals, not only its
 grants).
 
-**Every behaviour here was measured** against the image the product pins
+**Every behaviour below was measured** against the image the product pins
 (`ghcr.io/berriai/litellm@sha256:d295634e…`), on 8 November 2026 under the platform lease on test
 stack a, with its own database and a stand-in provider (ADR-135 Amendment 2, "Measured first"):
 
@@ -68,6 +68,11 @@ rate limit is recorded as a failure (the stand-in records it nowhere, and no tes
 before making it (`GatewayAdmin.put_credential`) and deletes an edited engine's entries before
 making them again (`ModelAdmin._reconcile`).
 
+**Except the client's gateway and Bedrock** (`StandInClientGateway`, `StandInBedrock`, ADR-135
+Amendment 4), which are **recorded, not measured**: no client gateway and no AWS account is
+reachable from the build. Their refusals are modelled from OpenAI-compatible, AWS and botocore
+documented answers, and are to be measured against the real Bedrock in London in P11's part 2.
+
 The stand-in is an `httpx.MockTransport`, so the code under test sends real HTTP requests through
 the same `httpx.AsyncClient` it uses against the real gateway. Its own red-then-green proof is
 `tests/adapters/model_litellm/test_stand_in_gateway.py`.
@@ -95,6 +100,63 @@ class StandInProvider:
     accepted_key: str
     offered_models: frozenset[str]
     #: The tokens it reports for each answer.
+    prompt_tokens: int = 17
+    completion_tokens: int = 5
+
+
+@dataclass
+class StandInClientGateway:
+    """The client's own OpenAI-compatible AI gateway (ADR-135 Amendment 4 (a)), reached through
+    LiteLLM's `openai/` route at its address. **Recorded, not measured** (no client gateway was
+    reachable from the build): it refuses as an OpenAI-compatible server does — a wrong bearer token
+    401, echoing part of it as OpenAI's own words do; a model it does not offer 404; a model its own
+    policy does not allow this token 403; its own rate limit 429. A request with no token never
+    reaches it: LiteLLM's OpenAI client refuses to send one (the 500 measured for the provider
+    route, the same client). A client's gateway is often behind an API manager or firewall that
+    refuses in **its own** shape, not OpenAI's (`refusal`: an HTML page, an API manager's fault);
+    LiteLLM's OpenAI client keeps the status and carries the body as words. Its address is matched
+    with or without a trailing slash, as the OpenAI client joins either to `/chat/completions`."""
+
+    accepted_token: str | None
+    offered_models: frozenset[str]
+    #: Models the gateway's own policy refuses this token (403, OpenAI's shape).
+    refused_by_policy: frozenset[str] = frozenset()
+    #: Its own rate limit reached (429, OpenAI's shape).
+    rate_limited: bool = False
+    #: A refusal in a shape that is not OpenAI's, as (status, body), from whatever stands in front.
+    refusal: tuple[int, str] | None = None
+    prompt_tokens: int = 17
+    completion_tokens: int = 5
+
+
+@dataclass
+class StandInBedrock:
+    """Amazon Bedrock in London, signed by the gateway pod's own identity (the namespace's IAM role,
+    IRSA; ADR-135 Amendment 4 (b)). **Recorded from AWS's and botocore's documented refusals, not
+    measured** (no AWS account is reached from the build): no credentials on the pod, botocore's
+    "Unable to locate credentials"; a role the account's policy does not allow, 403
+    `AccessDeniedException` naming the assumed role; a model the account has not been granted, 403
+    `AccessDeniedException` "You don't have access to the model with the specified model ID"; the
+    role's credentials expired, 403 `ExpiredTokenException`; a model identifier it does not offer,
+    400 `ValidationException`; throttling, 429 `ThrottlingException`. LiteLLM wraps each as
+    `BedrockException`. Which of these words AWS documents, and where, is in ADR-135 Amendment 7.
+
+    No other region is modelled: `engine_refusal` holds every Bedrock engine to London before an
+    entry is made, so no call reaches Bedrock elsewhere. The region asked is kept in `signed`."""
+
+    allowed_roles: frozenset[str]
+    offered_models: frozenset[str]
+    #: The models the account has been granted access to; None is every offered one.
+    enabled_models: frozenset[str] | None = None
+    #: The role's credentials have expired (the pod did not renew its web identity).
+    expired: bool = False
+    throttled: bool = False
+    #: Whether the role's trust policy lets the gateway's service account assume it
+    #: (`sts:AssumeRoleWithWebIdentity`); False is a wrong annotation or trust policy.
+    trusts_service_account: bool = True
+    #: Models offered only through an inference profile: invoked by their own id, Bedrock answers
+    #: 400 "on-demand throughput isn't supported" (as for newer Claude models in eu-west-2).
+    profile_only_models: frozenset[str] = frozenset()
     prompt_tokens: int = 17
     completion_tokens: int = 5
 
@@ -187,6 +249,9 @@ class StandInGateway:
     #: When set, `POST /credentials` is refused with this status, as the real gateway refuses a
     #: write its database does not take (measured: 500 on `POST /model/new`).
     refuse_credentials: int | None = None
+    #: When set, `POST /model/new` is refused with this status, as the real gateway refuses a write
+    #: its database does not take (measured: 500, "Failed to add model to db").
+    refuse_model_new: int | None = None
     #: Every call the gateway made to a provider: the address it went to (None for the provider's
     #: own) and the key it carried, so a test can say where a key was sent.
     sent: list[tuple[str | None, str | None]] = field(default_factory=list)
@@ -206,6 +271,15 @@ class StandInGateway:
     #: The rendered entries' own answers report these tokens.
     local_prompt_tokens: int = 17
     local_completion_tokens: int = 5
+    #: The client's own gateways, by address (ADR-135 Amendment 4 (a)).
+    client_gateways: Mapping[str, StandInClientGateway] = field(default_factory=dict)
+    #: Bedrock in London (ADR-135 Amendment 4 (b)), reached by the gateway pod's own identity.
+    bedrock: StandInBedrock | None = None
+    #: The IAM role the gateway's pod holds through its service account (IRSA), or None where the
+    #: pod has no identity.
+    workload_role: str | None = None
+    #: Every call signed by the pod's identity: (the role, the region asked).
+    signed: list[tuple[str | None, str]] = field(default_factory=list)
     _db: dict[str, _Stored] = field(default_factory=dict)
     _keys: dict[str, _VirtualKey] = field(default_factory=dict)
     #: (day, tag) -> each recorded figure.
@@ -317,6 +391,12 @@ class StandInGateway:
         body = self._body(request)
         if method == "PATCH":
             self.patches.append(path)
+        if method == "POST" and path == "/model/new" and self.refuse_model_new:
+            return _error(
+                self.refuse_model_new,
+                "{'error': 'Failed to add model to db. Check your server logs for more details.'}",
+                "auth_error",
+            )
         if method == "POST" and path == "/model/new":
             return self._model_new(body)
         if method == "PATCH" and path.startswith("/model/") and path.endswith("/update"):
@@ -693,6 +773,16 @@ class StandInGateway:
         if "litellm_credential_name" in params:
             key = self.credential(params["litellm_credential_name"])
         group = f". Received Model Group={model_name}\nAvailable Model Group Fallbacks=None"
+        if provider_name == "bedrock" and self.bedrock is not None:
+            return self._bedrock(model_id, model_name, provider_side, params, key, now, group)
+        address = (params.get("api_base") or "").rstrip("/")
+        client_gateway = next(
+            (g for base, g in self.client_gateways.items() if base.rstrip("/") == address), None
+        )
+        if provider_name == "openai" and client_gateway is not None:
+            return self._client_gateway(
+                model_id, model_name, provider_side, params, key, client_gateway, now, group
+            )
         self.sent.append((params.get("api_base"), key))
         if provider is None:
             return _error(
@@ -726,6 +816,143 @@ class StandInGateway:
                 "invalid_request_error",
             )
         return _ok(model_name, provider.prompt_tokens, provider.completion_tokens, self.answer)
+
+    def _client_gateway(
+        self, model_id: str, model_name: str, model: str, params: Mapping[str, str],
+        key: str | None, upstream: StandInClientGateway, now: float, group: str,
+    ) -> httpx.Response:  # fmt: skip
+        if not key:
+            # LiteLLM's OpenAI client refuses before sending: nothing reaches the client's gateway.
+            self._cool(model_id, now)
+            return _error(
+                500,
+                "litellm.AuthenticationError: AuthenticationError: OpenAIException - The api_key "
+                "client option must be set either by passing api_key to the client or by setting "
+                "the OPENAI_API_KEY environment variable" + group,
+                "internal_server_error",
+            )
+        self.sent.append((params.get("api_base"), key))
+        if upstream.refusal is not None:
+            # Whatever stands in front of the client's gateway refused, in its own shape: the
+            # OpenAI client keeps the status and carries the body as the error's words.
+            status, text = upstream.refusal
+            self._cool(model_id, now)
+            return _error(status, f"litellm.APIError: OpenAIException - {text}" + group, "None")
+        if key != upstream.accepted_token:
+            self._cool(model_id, now)
+            words = (
+                "litellm.AuthenticationError: AuthenticationError: OpenAIException - Incorrect API "
+                f"key provided: {_fragment(key)}." + group
+            )
+            self.log.append(words)
+            return _error(401, words, "authentication_error")
+        if upstream.rate_limited:
+            return _error(
+                429,
+                "litellm.RateLimitError: RateLimitError: OpenAIException - Rate limit reached for "
+                "requests. Please try again later." + group,
+                "rate_limit_error",
+            )
+        if model in upstream.refused_by_policy:
+            self._cool(model_id, now)
+            return _error(
+                403,
+                "litellm.PermissionDeniedError: PermissionDeniedError: OpenAIException - The model "
+                f"`{model}` is not allowed for this token by the gateway's policy." + group,
+                "permission_denied_error",
+            )
+        if model not in upstream.offered_models:
+            self._cool(model_id, now)
+            return _error(
+                404,
+                f"litellm.NotFoundError: OpenAIException - The model `{model}` does not exist"
+                + group,
+                "invalid_request_error",
+            )
+        return _ok(model_name, upstream.prompt_tokens, upstream.completion_tokens, self.answer)
+
+    def _bedrock(
+        self, model_id: str, model_name: str, model: str, params: Mapping[str, str],
+        key: str | None, now: float, group: str,
+    ) -> httpx.Response:  # fmt: skip
+        upstream = self.bedrock
+        assert upstream is not None
+        region = params.get("aws_region_name", "")
+        # Any key an entry carries would go to Bedrock with the call: recorded, so a test can say
+        # that none did (an IAM-role engine's entries carry none).
+        static = params.get("aws_access_key_id") or params.get("aws_bearer_token_bedrock")
+        self.sent.append((f"bedrock:{region}", key or static))
+        role = self.workload_role
+        if role is None:
+            self._cool(model_id, now)
+            return _error(
+                500,
+                "litellm.APIConnectionError: BedrockException - Unable to locate credentials"
+                + group,
+                "internal_server_error",
+            )
+        if not upstream.trusts_service_account:
+            self._cool(model_id, now)
+            return _error(
+                500,
+                "litellm.APIConnectionError: BedrockException - An error occurred (AccessDenied) "
+                "when calling the AssumeRoleWithWebIdentity operation: Not authorized to perform "
+                "sts:AssumeRoleWithWebIdentity" + group,
+                "internal_server_error",
+            )
+        if upstream.expired:
+            self._cool(model_id, now)
+            return _error(
+                403,
+                'litellm.PermissionDeniedError: BedrockException - {"message":"The security token '
+                'included in the request is expired"}' + group,
+                "permission_denied_error",
+            )
+        self.signed.append((role, region))
+        resource = f"arn:aws:bedrock:{region}::foundation-model/{model}"
+        session = f"arn:aws:sts::000000000000:assumed-role/{role.rpartition('/')[2]}/botocore"
+        if role not in upstream.allowed_roles:
+            self._cool(model_id, now)
+            return _error(
+                403,
+                f'litellm.PermissionDeniedError: BedrockException - {{"Message":"User: {session} '
+                f"is not authorized to perform: bedrock:InvokeModel on resource: {resource} "
+                'because no identity-based policy allows the bedrock:InvokeModel action"}' + group,
+                "permission_denied_error",
+            )
+        if upstream.throttled:
+            return _error(
+                429,
+                'litellm.RateLimitError: BedrockException - {"message":"Too many requests, please '
+                'wait before trying again."}' + group,
+                "throttling_error",
+            )
+        if model in upstream.profile_only_models:
+            self._cool(model_id, now)
+            return _error(
+                400,
+                f'litellm.BadRequestError: BedrockException - {{"message":"Invocation of model ID '
+                f"{model} with on-demand throughput isn't supported. Retry your request with the "
+                'ID or ARN of an inference profile that contains this model."}' + group,
+                "invalid_request_error",
+            )
+        if model not in upstream.offered_models:
+            self._cool(model_id, now)
+            return _error(
+                400,
+                'litellm.BadRequestError: BedrockException - {"message":"The provided model '
+                'identifier is invalid."}' + group,
+                "invalid_request_error",
+            )
+        if upstream.enabled_models is not None and model not in upstream.enabled_models:
+            self._cool(model_id, now)
+            return _error(
+                403,
+                'litellm.PermissionDeniedError: BedrockException - {"message":"You don\'t have '
+                'access to the model with the specified model ID."}' + group,
+                "permission_denied_error",
+            )
+        return _ok(model_name, upstream.prompt_tokens, upstream.completion_tokens, self.answer)
 
     def _cool(self, model_id: str, now: float) -> None:
         self._cooled_until[model_id] = now + self.cooldown_seconds

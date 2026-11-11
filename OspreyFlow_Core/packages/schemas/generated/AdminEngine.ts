@@ -20,7 +20,19 @@ export type PrivacyContract = boolean;
  * ADR-136: the agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark.
  */
 export type ContractReference = string | null;
-export type KeyState = "set" | "none" | "lost";
+/**
+ * ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
+ */
+export type Kind = "provider" | "gateway" | "bedrock";
+/**
+ * ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the namespace's IAM role: no key is stored). Default: iam_role for bedrock, else key.
+ */
+export type Auth = ("key" | "iam_role") | null;
+/**
+ * Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock.
+ */
+export type Region = string | null;
+export type KeyState = "set" | "none" | "lost" | "iam_role";
 export type KeySetAt = string | null;
 export type KeySetBy = string | null;
 export type DefaultFor = string[];
@@ -56,6 +68,9 @@ export interface ModelProviderConfig {
   api_base?: ApiBase;
   privacy_contract?: PrivacyContract;
   contract_reference?: ContractReference;
+  kind?: Kind;
+  auth?: Auth;
+  region?: Region;
 }
 /**
  * The roles it takes, each with the provider's model for it

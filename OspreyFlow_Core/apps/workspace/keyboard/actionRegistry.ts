@@ -894,6 +894,9 @@ export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
   // ADR-135 Amendment 3: an engine's limits and the gateway's usage.
   "set-a-model-engines-limits-by-keyboard",
   "choose-the-model-usage-period-by-keyboard",
+  // ADR-135 Amendment 4 (P11 part 1): the two engine kinds of the cloud-platform profile.
+  "add-bedrock-by-iam-role-by-keyboard",
+  "add-the-organisations-gateway-by-keyboard",
 ] as const);
 
 // ADR-147: Admin › Maps (platform lane P3).

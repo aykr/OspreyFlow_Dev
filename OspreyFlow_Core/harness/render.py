@@ -303,7 +303,11 @@ def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
         key = config.models.key_variable(provider.name)
         for model in dict.fromkeys(provider.roles.values()):
             name = f"{provider.name}/{model}"
-            params: dict[str, object] = {"model": name, "api_key": f"os.environ/{key}"}
+            params: dict[str, object] = {"model": provider.route(model)}
+            if not provider.keyless:  # ADR-135 Amendment 4: an IAM-role engine names no key
+                params["api_key"] = f"os.environ/{key}"
+            if provider.region:
+                params["aws_region_name"] = provider.region
             if provider.api_base:
                 params["api_base"] = provider.api_base
             entries.append({"model_name": name, "litellm_params": params})
@@ -312,7 +316,19 @@ def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
 
 def model_key_variables(config: OspreyConfig) -> dict[str, str]:
     """Each enabled provider's name and the `deployment.env` variable its key is kept in."""
-    return {p.name: config.models.key_variable(p.name) for p in config.models.enabled_providers}
+    # An engine signed in by the namespace's IAM role has none (ADR-135 Amendment 4).
+    return {p.name: config.models.key_variable(p.name) for p in config.models.keyed_providers}
+
+
+def keyless_model_key_variables(config: OspreyConfig) -> dict[str, str]:
+    """The variable each IAM-role engine's key **would** be kept in (ADR-135 Amendment 4). It keeps
+    none, but one held under its name (an earlier engine of that name) stays in the deployment's
+    Secret until a move removes it, so the cluster's translation, which the `cloud-platform` render
+    reuses, blanks it in every workload that reads the Secret whole; the gateway reads none whole
+    and is never given it by name. Empty on every other profile, which takes no IAM-role engine
+    (Amendment 7 decision 1)."""
+    models = config.models
+    return {p.name: models.key_variable(p.name) for p in models.enabled_providers if p.keyless}
 
 
 def model_engines_env(config: OspreyConfig) -> list[str]:
@@ -335,6 +351,9 @@ def model_engines_env(config: OspreyConfig) -> list[str]:
             "contract_reference": p.contract_reference,
             # ADR-135 Amendment 2: the Conduit makes the gateway's entries, so it needs the base.
             "api_base": p.api_base,
+            # ADR-135 Amendment 4: what the engine is, how it signs in, and Bedrock's region;
+            # not written for a plain provider, so every other profile's line is as before.
+            **({} if p.plain else {"kind": p.kind, "auth": p.auth, "region": p.region}),
         }
         for p in models.enabled_providers
     ]

@@ -1483,6 +1483,28 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
         return 0
     known = set(states or {})
     who = f"cli:{getpass.getuser()}"
+    if args.action in ("key", "remove-key") and (states or {}).get(args.name) == "iam_role":
+        # ADR-135 Amendment 4: refused before any key is read, so none is ever typed for it.
+        print(
+            f"{args.name} signs in by the namespace's IAM role and keeps no key; nothing was "
+            "changed.",
+            file=sys.stderr,
+        )
+        return 1
+    if (
+        args.action in ("key", "remove-key")
+        and states is None
+        and engine_keys.may_sign_in_by_role(ctx.product, directory, args.name)
+    ):
+        # ADR-135 Amendment 7 decision 3: the Conduit did not say how the engine signs in, and it
+        # may keep no key, so none is read for it until the Conduit can say.
+        print(
+            f"The Conduit did not answer, so whether {args.name} keeps a key or signs in by the "
+            "namespace's IAM role cannot be told; no key was read and nothing was changed. Start "
+            "the deployment (ospreyflow start), then try again.",
+            file=sys.stderr,
+        )
+        return 1
     if args.action == "key":
         label, key = engine_keys.read_key(
             models, args.name, ctx.env, ctx.ask_secret, wanted=wanted, known=known

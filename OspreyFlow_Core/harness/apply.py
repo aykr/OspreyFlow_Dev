@@ -231,7 +231,8 @@ def provider_secret_lines(
     held = _env_pairs(previous)
     in_gateway = held.get(KEYS_IN_GATEWAY) == "yes"
     lines: list[str] = [f"{KEYS_IN_GATEWAY}=yes\n"] if in_gateway else []
-    for provider in config.models.enabled_providers:
+    # An engine signed in by the namespace's IAM role keeps no key (ADR-135 Amendment 4).
+    for provider in config.models.keyed_providers:
         variable = config.models.key_variable(provider.name)
         key = environ.get(variable, "") or held.get(variable, "")
         if not key and in_gateway:
@@ -959,7 +960,7 @@ def _keys_for_new_providers(
     # ADR-135 Amendment 2: once keys live in the gateway, one is set in Admin › Models or with
     # `ospreyflow models key`; apply takes one only from the terminal, and never asks.
     in_gateway = held.get(KEYS_IN_GATEWAY) == "yes"
-    for provider in config.models.enabled_providers:
+    for provider in config.models.keyed_providers:  # none for an IAM-role engine (ADR-135 Am 4)
         variable = config.models.key_variable(provider.name)
         terminal = f"OSPREY_MODEL_KEY_{provider.name.upper()}"
         if held.get(variable):

@@ -7,7 +7,7 @@ API, the models file and the audit are the same code as *Admin › Models*'.
                                                                   # or on standard input
     python -m services.api.model_keys remove <name> --by <who>
     python -m services.api.model_keys move --by <who>            # NAME=KEY lines on standard input
-    python -m services.api.model_keys status                      # name, set|none|lost per line
+    python -m services.api.model_keys status                      # name and set|none|lost|iam_role
 
 A key is read from `OSPREY_MODEL_KEY_GIVEN` (passed by name into the container) or standard input,
 never from an argument (which `ps` would show), and never printed. Every answer is in fixed words;
@@ -73,7 +73,9 @@ async def move_keys(
         name, sep, value = line.strip().partition("=")
         if sep and value:
             pairs[name.strip().lower()] = SecretStr(value.strip())
-    enabled = {p.name for p in admin.settings.providers}
+    # An engine signed in by the namespace's IAM role keeps no key (ADR-135 Amendment 4): a line
+    # for it is skipped and named, as a removed engine's is.
+    enabled = {p.name for p in admin.settings.providers if not p.keyless}
     skipped = sorted(set(pairs) - enabled)
     moved = sorted(set(pairs) & enabled)
     for name in moved:
@@ -100,7 +102,10 @@ async def _run(argv: Sequence[str]) -> int:
             moved, skipped = await move_keys(admin, sys.stdin.read().splitlines(), by)
             print(f"moved into the gateway: {', '.join(moved) or 'none'}")
             if skipped:
-                print(f"dropped, no longer enabled engines: {', '.join(skipped)}")
+                print(
+                    "dropped, as no enabled engine keeps a key by that name (removed, or signed "
+                    f"in by the namespace's IAM role): {', '.join(skipped)}"
+                )
         elif args.name is None:
             print("name the engine", file=sys.stderr)
             return 1

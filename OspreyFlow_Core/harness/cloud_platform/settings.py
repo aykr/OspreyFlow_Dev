@@ -150,6 +150,9 @@ class ImageOfOurs(_Strict):
 class EgressHosts(_Strict):
     always: list[str] = Field(default_factory=list)
     engine_hosts: dict[str, str] = Field(default_factory=dict)
+    #: A model engine of a kind that names no address (ADR-135 Amendment 4: `bedrock`), by its
+    #: kind, whatever its name, `{region}` the engine's own (P11).
+    engine_kind_hosts: dict[str, str] = Field(default_factory=dict)
 
 
 _QUANTITY = r"^[0-9]+(\.[0-9]+)?(m|Ki|Mi|Gi|Ti)?$"
