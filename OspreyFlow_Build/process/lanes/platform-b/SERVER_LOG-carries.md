@@ -3,7 +3,7 @@
 P11 part 1's log is `SERVER_LOG.md` on `lane/platform-b-p11` (a second file here, so the two branches never
 add the same path).
 
-## About 07:50 UTC · my own lane-reviewer on cf92e93 (read-only)
+## About 07:30 UTC · my own lane-reviewer on cf92e93 (read-only)
 
 It would not let the carries merge: 2 blocking, 12 must-fix, 2 minor groups. In short:
 1. **Contradicts an accepted ADR (stop-question).** Refresh counts a value in the shell as held before moving
@@ -32,3 +32,37 @@ It would not let the carries merge: 2 blocking, 12 must-fix, 2 minor groups. In 
   decides to move a compose file into place (CARRIES row 104), given that the next `stop`/`apply` from
   another shell is then locked out? Recommended: no (the ADR as written); the code follows the ADR until
   ruled. `stop`'s own lockout check still reads the shell, because there it predicts what Compose does.
+
+## 07:35 to 07:55 UTC · the fixes (times are the commits' own)
+
+- 39a48b0: one atomic writer (`harness/atomic.py`) for every writer of `deployment.env` (items 4, 5, 11).
+- 4c74ace: refresh back to the ADR (item 1), the lock over the whole refresh opened read-only, the
+  stale stage said, the pending record kept until done and cleared by `update` after its restarts,
+  apply asking Docker by label rather than refusing, the words pointing to `apply`, one env reader
+  (items 2, 3, 6–9). A real bug found on the way: `X= # note` read as `# note` by the shared reader too.
+- 70a96429: the chart's ConfigMap keys and `subPath` quoted; the checksum case can fail for both lines
+  (items 10, 15).
+- 96453a0: every verb checked through one helper, `switch` stopping a locked-out other deployment by
+  label, `status` saying why (item 12); lint.
+- 16 plants, each red for its stated reason (`plants.md`). 665 tests (refresh, update, CLI, the
+  harness files touched) and 52 chart tests green offline. ruff clean on every file touched; mypy's
+  three errors in `scripts/refresh.py` are on main already.
+
+## Decisions taken
+
+1. **Item 1 withdrawn to the ADR, not built** (PROMPT_L: a contradiction of an accepted ADR goes to the
+   orchestrator first). `stop`'s own check still reads the shell: there it predicts what Compose does.
+2. **Apply renders rather than refuses** (item 3): the re-render is Amendment 39's own way out, and a
+   refusal there is what the redactor hid (item 2), so removing it answers both.
+3. **The pending record survives `--files-only`**; `update` clears it after its restarts (one line in
+   `harness/update.py`, for the ownership ruling). Cost: a service may restart once more than needed.
+4. **A file mounted on its own is still written in place** (`write_shared`, refresh's mounted files):
+   a rename would leave the running container on the old inode. None holds a secret.
+5. **`doctor` keeps the bare compose argv**, so it still runs on a locked-out deployment to say why.
+
+## Built
+
+**The carries built at 96453a0** after my own lane-reviewer's round, all findings fixed but Q1 (the
+ADR) and the two the orchestrator owns (amendment numbers, ownership). Records:
+`carries/{REPORT.md,ADR-114-AS-BUILT-DRAFT.md,DOCS_REQUEST.md}`, `plants.md`, the friction row.
+The orchestrator's independent review is owed, then the rebase and the gates once. Nothing running.

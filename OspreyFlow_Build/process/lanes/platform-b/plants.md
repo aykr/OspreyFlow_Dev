@@ -75,3 +75,33 @@ Amendments 37 and 38 give.
 - The staged refresh's edges, each red first in `tests/test_refresh_carries.py` and planted red after: the pending restarts (a run that dies after the move), the owner kept on the move, the stage glob, the lock, a symlinked `compose.yaml`, `export` lines, the shell. The symlink case was first written on `litellm.yaml`, which passed for the wrong reason (a mounted file is written in place), so it moved to `compose.yaml`. `test_refresh.py`'s `--files-only` case now expects the owed restart once.
 - The lockout's words: `ospreyflow stop` asked Compose anyway, red; apply's port lookup asked Compose anyway, planted red. The CLI's copy and the harness's are held to the same answers on the required, unset-only, plain, defaulted and escaped forms, the shell and `export` lines.
 - Lint: the touched Build tests tidied of I001, RUF028 and ISC004; 132 green after.
+
+### Carries, after my own lane review (11 November 2026, on the test server, offline)
+
+Each new test written against the reviewed code, then each fix planted back out at its call site
+(`/tmp/p11plants/plant.py` and `carries_plants.py`: replace, run, restore); every one red for its
+stated reason, green with the fix.
+
+| Plant | Fault put back | Red |
+|---|---|---|
+| A1 | `store_volumes.put_back` rewriting `deployment.env` in place | the witness link saw the rewrite (`test_put_back_replaces_…`) |
+| A2 | `apply.move_into_place` copying `deployment.env` with `copytree` | the same (`test_apply_s_move_into_place_replaces_…`) |
+| R1 | refresh counting a value in the shell as held | `test_a_value_only_in_the_shell_is_not_held`: `[] == ['OSPREY_LITELLM_SALT_SECRET']` |
+| R2 | the lock on the files pass alone | `test_the_lock_is_held_through_the_build_and_the_restarts`: free at build, up and restart |
+| R3 | the lock opened for writing | `test_the_lock_file_is_opened_read_only` |
+| R4 | a stale stage left by another account not said | `FileExistsError` instead of words |
+| R5 | `--files-only` clearing the record | `test_files_only_leaves_the_restarts_owed`: no record |
+| R6 | a stores refusal dropping what an earlier run owed | `test_a_stores_refusal_keeps_…`: no record |
+| R7 | a bare rename (no owner kept, the link replaced) | `…keeps_its_owner`: nothing given an owner; `…symlinked_deployment_env…`: not a link |
+| U1 | `update` never clearing the record | `test_an_update_clears_the_record_after_its_restarts` |
+| H1 | `checksum/files` unquoted | `9266205751740302 == '9266205751740302'` (the files probe `{"probe.txt": "420"}`) |
+| H2 | a ConfigMap key unquoted | Helm: "unsupported map key of type: <nil>" (`NULL`) |
+| C1 | `_compose_of` not checking | stop, start, logs, status, uninstall each answered 0 or asked Compose |
+| C2 | `switch` with no label fallback | `switch` answered 1 |
+
+The parity case gained a quoted value, an unquoted ` #` comment and an empty shell value; the comment
+case was **red against both readers**, the CLI's copy and the shared `read_env_file` alike (`X= #
+note` read as `# note`), and both were fixed. The owner cases now give the old file an owner the
+runner is not (4242), so a version taking the runner's or the new file's owner fails. Earlier counts
+corrected: "20 of 20 chart tests" is `test_helm_chart.py`'s 20 collected (12 functions, parametrised);
+"132 green" named no file set and is withdrawn in favour of the counts in `SERVER_LOG-carries.md`.
