@@ -251,6 +251,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       since gained docs commits, so they are rebuilt and landed when the merger is back.
     - **Skipped:** the nightly full live set. It needs the Mac to bring its stack down, and the laptop goes offline.
 
+33. **Your instructions for the client chain, with my seven adjustments, are recorded (ADR-142 Amendment 8, written).**
+    - **ADR-148 Amendment 5** is reserved for P7b.
+    - **The build plan:** the "Two tracks" section now carries the lane table and the merge order.
+    - **progress.tsv:** P7a, P7b and P9b are new steps. P8 is marked deferred, and P10, P11 and P12 have moved to
+      admin, platform-b and case-b.
+    - **P7** restarts on the test server at 07:08.
+    - **The rest** (P10, P9, P11, P12, L1.9, D2c) are briefed when P7 merges this afternoon.
+    - **Estimate:** the whole client chain merged around 15 November, and D2c complete by 16 November.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin

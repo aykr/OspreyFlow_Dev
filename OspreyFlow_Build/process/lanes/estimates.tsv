@@ -1,19 +1,19 @@
-# as of 2026-11-11T06:05Z
-orchestrator	publish	v0.5.0 from main: release gates finishing on the server, then tag and push	~06:45	A
-studio-b	L1.10b	lands after the tag (e97b7ef)	after the tag	A
-admin	T1	part 4 lands after the tag (b3d3e0a); part 5 on the server from 07:08	11 Nov, ~12:00	A
+# as of 2026-11-11T06:15Z
+platform	P7	restarted on the test server 07:08; merges on render, cp-policy-check and the gates (Am 8); review and merge on your return	11 Nov, ~14:00	B
+admin	P10	Entra ID claims; after T1 part 5; two review rounds	13 Nov	B
+platform	P9	cut: encrypted S3 backup of ArcadeDB and ClickHouse, one timed restore	13 Nov	B
+platform-b	P11	the model route, after its carries	13–14 Nov	B
+case-b	P12	Laurium as its own Python 3.13 service (licence ruled)	14 Nov	B
+studio-b	L1.9	S3 and Athena connectors	13–14 Nov	B
+platform	P7a	P7's acceptance run on kind	14 Nov	B
+platform	P7b	shape: poc, install and decommission runbooks (ADR-148 Am 5)	15 Nov	B
+docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where Laurium runs	15–16 Nov	B
+platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
+admin	T1	part 4 lands on your return; part 5 on the server from 07:08	11 Nov, ~12:00	A
 rules	UPG-check	the real update to the published v0.5.0, on the server from 07:08	11 Nov, ~09:30	A
-rules	hyg	studio's finding fixed on the server; the merger's re-review on your return	11 Nov, ~12:00	A
-rules-b	T3b	server gates done ~06:10; the merger's review on your return	11 Nov, ~12:00	A
-docs	D2d	the rule-editor guides: review fixes, one rebase, one round of gates	11 Nov, ~13:00	A
-docs	D2b	decks rebuilt; your three items (MORNING 30), then captures	11 Nov, afternoon	A
-platform-b	carries	chart quoting first, then the refresh's edge cases (server session from 07:08)	11 Nov, ~12:00	B
-platform	P7	acceptance on kind: restart when you are back (the server session stalled)	11 Nov, evening	B
-studio	carries	draft import; a source's default marking (ADR-140 Am 19)	12 Nov	B
-rules	lists	list teardown; ADR-146's two-list question	12 Nov	B
-studio-b	L1.9	S3 and Athena, after P7	12 Nov	B
-platform	P11	the model route: the client's gateway or Bedrock, after P7	12 Nov	B
-platform	P12	Laurium: its own Python 3.13 service (licence ruled; no stop), after P7	12–13 Nov	B
-platform	P8–P10	shared disk, backups, Entra; in turn after P7	13–14 Nov	B
-docs	D2c	Cloud Platform guide, with the extraction engine and Laurium as a service	14 Nov	B
-orchestrator	your laptop	rebuild your local deployment after the whole build (v0.4.12: backup, apply, update, apply)	after D2c	B
+rules	hyg	an access step: two rounds; studio's finding fixed on the server	11 Nov, afternoon	A
+rules-b	T3b	ready; the merger's review on your return	11 Nov, ~12:00	A
+docs	D2d	the review's nine must-fixes, then merge without you (Am 8)	11 Nov, afternoon	A
+studio-b	L1.10b	lands on your return	11 Nov, ~12:00	A
+platform-b	carries	chart quoting first; on the server from 07:08	11 Nov, ~12:00	B
+orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B

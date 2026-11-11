@@ -217,6 +217,24 @@ then D2b with captures from a deployment built from `main` on the owner's test s
 never `osprey-small`). **Track B, the client's install (ADR-148):** P7, L1.10, P8, P9, P10, L1.9, P11, P12, D2c.
 Track B's live exits wait for the client's access. Neither track waits on the other; P6 moved to platform-b for that.
 
+**Track B, from 11 November (ADR-142 Amendment 8, the owner's word):** one complete install on the client's
+environment in one go, Laurium included; the client's environment is due on 20 November. P7 merges on its render,
+`cp-policy-check` and the ordinary gates; its kind acceptance is P7a. Once P7 merges, side by side:
+
+| Lane | Step | Notes |
+| --- | --- | --- |
+| admin | P10 | Entra ID claims (`packages/principal_auth/`, the profile's claim settings); an access step, two rounds; after T1 part 5 |
+| platform | P9, then P7a, then P7b | P9 cut to backup and one timed restore (P9b later); P7b the `shape: poc` profile (ADR-148 Am 5) |
+| platform-b | P11 | The model route, after its carries |
+| case-b | P12 | Laurium as its own Python 3.13 service (BRIEF_P12, p12/LICENCE_CHECK.md) |
+| studio-b | L1.9 | S3 and Athena connectors |
+| docs | D2c | From P7's merge, filled as each step lands; records where Laurium runs |
+
+Merge order: P10 and P9 first, then P11, P12 and L1.9; P7b last. One template file per step; `values.yaml`, the
+profile's settings model and `render.py`'s profile entry are platform's, the others sending diffs. **P8 deferred**
+until after the install (P7's interim stands), and **P9b** (alerts, drain test, volume expansion) after it too.
+Paused until the chain merges: T3b's follow-ups, D2b's captures, rules' `lists`.
+
 ## File ownership
 
 A lane changes only what it owns. Anything else is a request to the orchestrator, who either makes a

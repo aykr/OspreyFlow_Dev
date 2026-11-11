@@ -33363,3 +33363,45 @@ written by whichever session prepares the merge, still inside one commit on `mai
 **The test that would fail.** A merge commit on `main` whose first parent is not the `main` it was built on, or that
 was not a fast-forward, shows the rule broken. `git log --first-parent main` shows only the orchestrator's landings,
 and each one is checked against the merger's "land" message in `process/lanes/merger/LANDED.md`.
+
+### ADR-142, Amendment 8 (11 November 2026) — the client's Cloud Platform chain sooner
+
+*The owner's word, 11 November, about 06:15 UTC: one complete install on the client's environment in one go,
+Laurium included; the client's environment is due on 20 November and their backlog has sign-in in its second
+sprint. With the orchestrator's adjustments, which the owner accepted.*
+
+1. **P7 merges in two parts.** P7 merges once the render, `cp-policy-check` (green, and red on each planted fault)
+   and the ordinary gates pass. Its acceptance run on kind becomes **P7a**, on the platform lane, and holds nothing
+   below. P7 restarts on the test server at once.
+2. **The client chain runs side by side once P7 merges**, each in a fresh session: admin **P10** (Entra ID claims;
+   an access step, two review rounds) after admin's T1 part 5; platform-b **P11** after its carries (or ahead of
+   them, if they can wait); case-b **P12** (Laurium as its own service, BRIEF_P12, with a handover note since the
+   brief was written for platform); studio-b **L1.9**; platform **P9, then P7a, then P7b**; docs **D2c** from P7's
+   merge, filled as each step lands.
+3. **One file, one owner.** P9, P10, P11, P12 and P7b all touch the cloud-platform render
+   (`OspreyFlow_Core/harness/render.py`) and the Helm chart (`OspreyFlow_Core/deploy/helm/ospreyflow/templates/`).
+   Each step owns its own template file or files. The shared ones (`values.yaml`, the profile's settings model,
+   `render.py`'s profile entry) are platform's; other steps send diffs, applied at merge in order: P10 and P9 first,
+   then P11, P12 and L1.9. P7b runs after P9, P11 and P12, since it renders what they leave.
+4. **P9 is cut to what a proof of concept needs**: the scheduled, encrypted backup of ArcadeDB and ClickHouse to
+   S3, and one restore rehearsed and timed, with its runbook section. The alerts, the PodDisruptionBudgets' drain
+   test and the volume-expansion procedure move to **P9b**, after the client's install.
+5. **P8 is deferred until after the client's install.** P7's interim (the shared folders on one ReadWriteOnce
+   claim, co-scheduled) stands for a single-copy deployment; the recipes-repository question stays open.
+6. **P7b**, on platform after P9: the profile's proof-of-concept shape, `shape: poc` (ADR-148 Amendment 5,
+   reserved). Exit: the acceptance scenarios green on kind in that shape, `cp-policy-check` green, and the install
+   and decommission runbooks each run end to end on kind, the second leaving nothing behind (checked, red first).
+   The production shape is unchanged.
+7. **Reviews do not wait for the owner.** The merger reviews, and the orchestrator lands, any step that is not an
+   access, credential or data-model step without the owner's return; those keep two rounds and are listed for the
+   owner afterwards. T3b and D2d (after its must-fixes) go ahead on this rule. **hyg is an access step** (schedule
+   notices filtered to their owner, rules 3 and 4), so it keeps its two rounds. Merges still land only through the
+   orchestrator (Amendment 7), so nothing lands while the orchestrator's machine is offline.
+8. **Paused until the client chain has merged:** T3b's follow-ups, D2b's captures and rules' `lists`. T1 carries on,
+   since it shortens every gate.
+9. **D2c records where Laurium runs** (its container, image and repository) once P12 settles it, and lists what
+   the owner must correct on the page shared with the client, which shows Laurium inside the Conduit and Workers.
+
+**The test that would fail.** `progress.tsv` shows P7a, P7b and P9b as their own steps, and P8 as deferred; a merge
+of P11, P12 or P7b that edits another step's template, or a shared file other than by platform's diff, is sent
+back at the trial merge.
