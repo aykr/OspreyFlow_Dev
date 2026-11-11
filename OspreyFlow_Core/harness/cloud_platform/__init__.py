@@ -89,7 +89,7 @@ SHARED_LABEL = "ospreyflow.io/shared"
 
 #: The doors, the images of ours, group 0's workloads, the hosts every render reaches and each
 #: container's resources are data, in `profile.yaml` (`settings.load_profile`), so a later step
-#: adds a row there rather than editing this module (ADR-142 Amendment 8 decision 3).
+#: adds a row there rather than editing this module (ADR-148 Amendment 1 item 11).
 
 CORE = Path(__file__).resolve().parents[2]
 #: Where the Ingress's settings are read from, so they follow their sources, never a copy of them:

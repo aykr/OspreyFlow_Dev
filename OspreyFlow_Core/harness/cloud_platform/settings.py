@@ -4,7 +4,7 @@ in `OSPREY_PLATFORM_FOLDERS`, which a test's or a local proof's own platform fil
 deployment's own choices are `osprey.yaml`'s `cloud_platform:`; another shared platform is another
 file, not another profile.
 
-**The profile's extension points** are data too (`profile.yaml`, ADR-142 Amendment 8 decision 3):
+**The profile's extension points** are data too (`profile.yaml`, ADR-148 Amendment 1 item 11):
 the Ingress's doors, the images of ours and how each is built, the workloads given group 0, the
 hosts every render reaches and each container's resources. A later step adds a row there."""
 

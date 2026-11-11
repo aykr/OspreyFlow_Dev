@@ -1,5 +1,5 @@
-# The `cloud-platform` profile's extension points (spec/06_DECISIONS.md ADR-148; ADR-142
-# Amendment 8 decision 3): what a later step adds to the profile is a row here, not an edit to
+# The `cloud-platform` profile's extension points (spec/06_DECISIONS.md ADR-148, Amendment 1
+# item 11): what a later step adds to the profile is a row here, not an edit to
 # `harness/cloud_platform/__init__.py`. Read and checked by `harness.cloud_platform.settings.
 # load_profile`; a row it cannot read is refused in words at render. What a *platform* fixes
 # (its ingress class, its storage class, its managed networks) is its own file under

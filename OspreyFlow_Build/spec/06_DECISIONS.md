@@ -32139,7 +32139,8 @@ Superset.
     second time (`ref@sha256:…@sha256:…`: the gateway, Ollama, speaches), which no registry pulls; the
     cluster's values change in those image lines alone.
 
-11. **The extension points are data** (ADR-142 Amendment 8 decision 3): the Ingress's doors, the
+11. **The extension points are data** (so the later cloud-platform steps each add a row, not an edit
+    to the render): the Ingress's doors, the
     images of ours and how each is built, the workloads given group 0, the hosts every render reaches
     and each container's resources are rows of `harness/cloud_platform/profile.yaml`, read and checked
     at render; an image of ours with no row is refused in words. A platform's own settings file may
