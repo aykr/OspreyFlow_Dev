@@ -34352,6 +34352,104 @@ path segments, are taken in an address's path. CARRIES' P11 minors stay carried:
 words key on a string AWS does not document; the other-shape gateway test accepts either refusal; the stand-in never
 cools an entry after a 429 and LiteLLM's cooldown is unmeasured.
 
+### ADR-148, Amendment 5 (11 November 2026) — the `cloud-platform` profile's proof-of-concept shape (`shape: poc`) as built (P7b)
+
+Status: accepted. Built by the platform lane at step P7b. Where the reservation left a choice, the
+platform lane's recommendation was taken; each such choice is marked below, for the owner to
+overrule. The standard shape, P7's, is unchanged by points 1–7. Point 8 changes both shapes, as the
+orchestrator asked. Amendment 1 stands except where point 6 corrects it.
+
+1. **The setting.** `cloud_platform.shape` takes `standard` (the default) or `poc`. A `poc` outside a
+   development namespace is refused in words (`environment: production` would run one copy of each
+   store and call it production). Its only effect is on this profile's render, and naming
+   `standard` renders exactly what leaving it out does (`test_the_standard_shape_is_the_default`).
+2. **The stores.** One ArcadeDB and one ClickHouse. ClickHouse's Keeper runs **inside the server**:
+   the server's own configuration carries `keeper_server`, a Raft of one, its log and snapshots on
+   the server's own claim, and its `zookeeper` is that Keeper at 127.0.0.1:9181. No Keeper
+   StatefulSet is rendered. The cluster's Replicated database still has the Keeper it needs
+   (`test_the_clickhouse_server_runs_its_own_keeper`). This reading of "with its Keeper, inside the
+   server" was the platform lane's, and the orchestrator agreed it.
+3. **No PodDisruptionBudgets** (`test_no_disruption_budgets`).
+4. **The Ingest root on a claim of its own** (decided on the platform lane's recommendation, for the
+   owner to overrule). The reservation's "scratch volume for Ingest" is defined nowhere else.
+   - Uploads and the drop folder (`/var/lib/osprey/ingest`) are mounted from `ospreyflow-ingest`.
+     The claim is ReadWriteOnce on the platform's class, kept on uninstall like the shared claim,
+     and sized in `profile.yaml`'s `poc.claims`. Uploads therefore cannot fill the disk that holds
+     the settings files and the recipes, and the decommission removes the claim by name.
+   - The folder sits on its claim as `ingest/`, not at the claim's root, which holds the file
+     system's lost+found.
+   - An emptyDir as each pod's temporary folder was not needed: connector reads' temporary files
+     are small and sit beside their target.
+   - The chart mounts a shared folder from a claim of its own wherever the folder names one
+     (`storage.claims`, a shared mount's `claim`); the standard shape names none.
+5. **CPU limits in the poc shape.** Every container names a CPU limit, never below its request,
+   from `profile.yaml`'s `poc.cpu_limits`; a limit below its request is refused at render. The poc
+   shape goes onto the client's namespace before their team has said what LimitRange and quota it
+   carries (point 6). The standard shape still requests CPU and limits none.
+6. **A correction to Amendment 1 item 13.** Item 13 says that with no CPU limit, "a namespace's
+   LimitRange never caps it by default". That is the wrong way round. A LimitRange's default CPU
+   limit is given to exactly the containers that name none, and a ResourceQuota that sets
+   `limits.cpu` refuses any pod without one. Each container's memory limit is named, so the
+   LimitRange's memory default is never applied. In the standard shape its CPU default is, and a
+   quota on `limits.cpu` would refuse the pods. Point 5 is the poc shape's answer; the standard
+   shape's waits for the platform team (below).
+7. **The runbooks.** The poc render writes `INSTALL.md` and `DECOMMISSION.md` beside the values,
+   with the deployment's own names in them, for the client's team to run end to end from the
+   release's `OspreyFlow_Core` folder.
+   - **The fenced blocks are the runbook**, run in order in one shell. A block fenced `sh` runs
+     wherever the runbook is followed. A block fenced `sh platform` runs only on the client's
+     platform (the Terraform pull requests and the AWS accounts' own commands); a rehearsal on a
+     local cluster runs its stand-in instead. The rehearsal reads the blocks back
+     (`harness.cloud_platform.runbooks.command_blocks`), so it runs exactly the text the client's
+     team reads.
+   - No block ends the reader's shell (`exit`), each block parses as shell, and the rehearsal's
+     blocks call neither the AWS command line nor Terraform. Each of these is a test.
+   - **The decommission removes what `helm uninstall` keeps:**
+     - each StatefulSet's claims, selected by the release's label, which the StatefulSet
+       controller gives every claim it makes;
+     - the shared claims, by name, then a wait until no volume is held for the namespace;
+     - our Secret.
+   - **It then empties what the namespace's Terraform cannot remove while it holds anything**,
+     before the pull request that removes those resources: every bucket, of every object and
+     every version (`media` is versioned), and every ECR repository the render names (they have
+     no `force_delete`).
+   - Its last block runs the decommission check (`harness.cloud_platform.decommission_check`).
+     The check names anything of the deployment's still in the namespace, any volume kept after
+     one of its claims, anything in the Terraform state, and its buckets. An IAM role or policy and
+     a KMS key alias in the state are named as such, since each outlives the namespace (the render
+     makes no KMS key today). Each leftover is planted in the shape its source prints it, red
+     first (`tests/cp_policy_check/test_cp_decommission_check.py`).
+   - The install's sign-in step is `python -m harness.cloud_platform.identity`, the cluster's own
+     identity step, until P10's sign-in replaces it.
+8. **The profile's ceiling** (decision 10; Amendment 2's carry for P7, closed here). On this
+   profile a deployment that names no `deployment.highest_marking` is held to OFFICIAL-SENSITIVE,
+   not the handling scheme's highest; one that names its own keeps it
+   (`test_the_ceiling_is_official_sensitive_unless_the_deployment_names_its_own`, red first at
+   SECRET).
+9. **`ospreyflow images push`'s refusal**, with no render to push, names a command that works as
+   given from `OspreyFlow_Core` (`PYTHONPATH=.:packages .venv/bin/python -m harness.render`). A test
+   runs the command its words give.
+
+**Open question for the client's platform team** (Amendment 1's list gains it): what LimitRange
+and ResourceQuota the namespace carries, and in particular whether the quota sets `limits.cpu` or
+the LimitRange a default CPU limit. Until then the standard shape names no CPU limit (point 6).
+
+**Left, and why.**
+- The acceptance scenarios on kind in the poc shape, and the final render they run, come after
+  P11's and P12's part 2s land, since the shape renders what they leave. Under point 8's ceiling
+  the run seeds only packs declared at or below OFFICIAL-SENSITIVE.
+- Carried by name, each changing the standard shape's render, so not folded in here:
+  - the OpenSearch domain `opensearch.tf` makes, which no pod reads (`opensearch-output`);
+  - a gateway for an engine first added in *Admin › Models*, which the render leaves out when the
+    install declares none, so that engine has no gateway until a re-render.
+
+**The tests that would fail.** `tests/harness/test_cloud_platform_poc.py` (the shape, the stores,
+the claim, the CPU limits, the runbooks), `tests/cp_policy_check/test_cp_policy_check.py` (every
+planted fault refused in the poc shape's own render, the claim rendered, mounted and refused
+ReadWriteMany), `tests/cp_policy_check/test_cp_decommission_check.py`,
+`tests/harness/test_cloud_platform_identity.py`, the ceiling's case in
+`tests/harness/test_cloud_platform_render.py` and the refusal's in `tests/cli/test_images_verb.py`.
+
 ### ADR-148, Amendment 6 (11 November 2026) — Entra ID's claims as built (P10 part 1): mapped by settings, one construction path, the tenant, issuer, client and scope pinned, a principal keyed by `oid` within its tenant
 
 *Entra ID's claims as built (P10 part 1), by the admin lane; two independent review rounds.*
