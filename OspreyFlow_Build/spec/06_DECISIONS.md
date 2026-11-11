@@ -34122,7 +34122,16 @@ that day** (stack c, beside the orchestrator's gateway pair at CI's pinned diges
 database; `process/lanes/case-b/P12_RED_RECORD.md`, "Round 2"): **Laurium cannot read the pinned conformance
 model's answer to its prompt** (the conforming-answer case red three times of three, the service answering
 `unparseable`), while the LiteLLM adapter's same case passes on the same model; and Laurium's own key is refused
-at the gateway's admin routes. D2c
+at the gateway's admin routes. **An open finding, so: Laurium has not yet read any real model's answer.** Its service
+asks for the format in the prompt alone (LangChain's `PydanticOutputParser`, at temperature 0, so its three attempts
+are likely one answer three times), where the LiteLLM adapter sends `response_format: json_schema` (constrained
+decoding); the model it would need is one that follows Laurium's prompt-only format, which no pinned model is shown
+to do, and the client's own engine sits behind the client's gateway or Bedrock route that P11 part 2 renders
+(Amendment 7). The conforming-answer case on Laurium is `xfail(strict=True)` for the pinned conformance model alone,
+by that refusal alone (the orchestrator's ruling of 11 November, recorded for the owner), so it fails the day it
+starts passing; every other Laurium case stays a hard pass. **Part 2's exit gains a named, leased live case:
+Laurium reading a conforming answer from the client's actual engine**; until it passes, D2c says Laurium is not yet
+shown on a real model. D2c
 records that Laurium runs in its own container, not inside the Conduit and Workers as the page shared with the
 client shows. Part 2 (after P7 and P11 part 1) renders the service in the
 `cloud-platform` profile with its egress line, presets it in that profile's pack, and adds the setting to *Admin ›

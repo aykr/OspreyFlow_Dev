@@ -25,32 +25,47 @@ from __future__ import annotations
 import pytest
 
 from adapters.model_litellm import CONFORMANCE_MODEL, CONFORMANCE_TRANSCRIBE_MODEL
-from adapters.model_litellm.errors import InvalidExtractionSchemaError
+from adapters.model_litellm.errors import ExtractionFailedError, InvalidExtractionSchemaError
 from schemas.model import ExtractionRequest, TranscribeRequest
 from tests.conformance.model_port.fixtures import SAMPLE_SPEECH_WAV
 from tests.conformance.registry import MODEL_PORT_ADAPTERS, ModelAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", MODEL_PORT_ADAPTERS, ids=str)
 
+#: ADR-135 Amendment 6 (P12 part 1, round 2; the orchestrator's ruling of 11 November): Laurium
+#: cannot read the pinned conformance model's answer to its prompt, 3 tries of 3 on the real
+#: gateway (`process/lanes/case-b/gates/8190228d.live-*.txt`). Expected to fail for that model
+#: alone, by that refusal alone, and strictly, so the case fails the day it starts passing. Every
+#: other Laurium case stays a hard pass. Part 2's exit holds Laurium to a conforming answer from
+#: the client's own engine.
+LAURIUM_UNPARSEABLE_ON_CONFORMANCE_MODEL = pytest.mark.xfail(
+    strict=True,
+    raises=ExtractionFailedError,
+    reason="Laurium cannot read the pinned 0.5B conformance model's answer to its prompt "
+    "(unparseable, 3 of 3; process/lanes/case-b/gates/8190228d.live-stack-c.txt)",
+)
+
 
 async def test_extract_returns_data_conforming_to_the_requested_schema(
-    factory: ModelAdapterFactory,
+    factory: ModelAdapterFactory, request: pytest.FixtureRequest
 ) -> None:
     factory.require("extract")
+    if factory.label == "extract_laurium":
+        request.applymarker(LAURIUM_UNPARSEABLE_ON_CONFORMANCE_MODEL)
     schema = {
         "type": "object",
         "properties": {"name": {"type": "string"}},
         "required": ["name"],
         "additionalProperties": False,
     }
-    request = ExtractionRequest(
+    req = ExtractionRequest(
         document_id="doc-1",
         text="Extract the person's name mentioned: Owen Wilson went to the store.",
         json_schema=schema,
         model=CONFORMANCE_MODEL,
     )
     async with factory.context() as adapter:
-        result = await adapter.extract(request)
+        result = await adapter.extract(req)
 
     assert result.document_id == "doc-1"
     assert result.model == CONFORMANCE_MODEL

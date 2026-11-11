@@ -233,3 +233,39 @@ review's blocker, question 2), `docker run` of the image and `trivy` on it (ques
 13), `git apply --check` of the two diffs (checked by hand against the files' context lines), and `graphify
 update`. Nothing of this session is still running: no agent was started, and every make run has ended. No container
 was started; the image `case-b-laurium:p12` stays. The report is `REPORT.md`.
+
+## Round 2, on the Mac (11 November, from about 13:30 UTC): the orchestrator's round-2 findings
+
+The session moved to the Mac (`~/dev/osprey-wt/case-b`, the server's work fetched at 3215922); the owner was at the
+Mac and approved each `stack_lease.sh` call. Rebased onto main 8aa3da5 (one conflict: both sides appended to
+`06_DECISIONS.md`; both kept, main's first, nothing of main's removed).
+
+1. **The leased live run (blocker 1).** No leased stack has a model gateway (`lane_stacks.tsv`), so the
+   orchestrator stood up CI's pinned LiteLLM (its own Postgres, keys real) and Ollama on the server; case-b ran
+   under stack c's lease (`P12_RED_RECORD.md`, "Round 2"). **Open finding: Laurium has not yet read any real
+   model's answer.** Its conforming-answer case failed 3 of 3 on the pinned `qwen2.5:0.5b-instruct`
+   (`unparseable`); the LiteLLM adapter's same case passed on the same model. Ruled by the orchestrator: that case
+   `xfail(strict=True, raises=ExtractionFailedError)` on Laurium alone (`test_suite.py`); part 2's exit gains
+   Laurium reading a conforming answer from the client's own engine (P11 part 2's gateway or Bedrock route); D2c
+   says Laurium is not yet shown on a real model until then.
+2. **The scoped key at the real gateway (blocker 2).** `test_laurium_key_live.py` passed on the real gateway. Its
+   plants: the master key at the adapter, red; Laurium's key made with `user_role: proxy_admin`, green, **so that
+   plant cannot be shown red on the pinned LiteLLM**: no field of the key's request is known to grant an admin
+   right. On the real gateway the master-key plant is caught first by the token-is-the-key-held check, **so the
+   four admin-route assertions are shown red on the stand-in only**. The hosted-engine branch's master-key plant:
+   `[gemini]` red offline (54 of 54).
+3. **The gates (blocker 3)** through `stack_lease.sh offline case-b` at the head: `gates/<head>.{test,ci}.txt`.
+4. **The image leg said carried** in the tool, its test, `P12_MAKEFILE.diff` and a new sentence in Amendment 6.
+5. **Ownership** of `test_guard.py` and the `factory.require` lines, ratified: its own friction fragment
+   (`2026-11-11-case-b-conformance-suite-ownership.md`); `test_suite.py`'s xfail is a further line in that file,
+   by the same ruling.
+6. **Minor:** 13 distinct entity types in 33 cases; the unrecorded MatrixView rerun withdrawn; `test_suite_extract`'s
+   scope said truly. **Carried:** `review_queue.py`'s asyncpg import (it satisfies the drift check by reading the
+   refusals from a module, not by the gate's own rule), `extract_engines.py` duplicating `ModelAdapterFactory`, and
+   `laurium_in_process.py`'s teardown deleting whatever Laurium key the gateway holds (a part 2 hazard: run against a
+   deployment's gateway it would delete the deployment's key; `test_laurium_key_live.py` refuses such a gateway
+   before writing, the suite's factory does not yet).
+7. **The lane-reviewer's round on round 2** (13 findings) fixed before the lease: the live test gated off CI and
+   unleased gateways, given a positive control and a known-key check, every removal run and leftovers found by tag,
+   the `--live` mode refusing without a gateway; `plants_P12.py` counting an empty green start as green (found on
+   the server, fixed).
