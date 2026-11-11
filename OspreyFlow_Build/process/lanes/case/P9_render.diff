@@ -6,9 +6,10 @@ platform's own render test, which must now expect ClickHouse's pod to run as its
 1. One hook: `render_cloud_platform` calls `harness.cloud_platform_backups.add_backups` once, with the values it is
    about to write; it adds to them and returns `terraform/backups.tf`, which the hook adds to the artefacts. No other
    line of `__init__.py` changes; `terraform.py` is untouched. (This diff.)
-2. Imports one way: `harness/cloud_platform_backups.py` imports `harness.cloud_platform.settings` and, inside
-   `backups_terraform`, `harness.cloud_platform.terraform`'s `_file`, `_q` and `_secret`. Platform imports it only at
-   this hook and in the decommission check's kept rule (P9_decommission.diff).
+2. Imports: `harness/cloud_platform_backups.py` imports `harness.cloud_platform.settings`, and, inside
+   `backups_terraform`, `harness.cloud_platform.terraform`'s private `_file`, `_q` and `_secret` (asked of platform:
+   make those three public, or P9 copies them). Platform imports the module at this hook, in the decommission
+   check's kept rule and in `runbooks.py` (P9_decommission.diff).
 3. `make cp-policy-check` green with the diff on this branch's tree: 152 passed (`gates/p9_platform_conditions.r2.log`);
    `tests/cloud_platform_backup`'s policy case green on development and production. On P7b's tree (d7d60d2) with P9
    applied, the poc, development and production renders break one rule only: `ingress-isolation` for
