@@ -1,6 +1,10 @@
 # rules-hyg item 3, ADR-110 Amendment 19: each case shown red at its own call site, then green.
 # Every plant is a change to the product code a test guards, made and reverted from a saved copy
 # (cmp-checked), never by git checkout. Offline runs: this Mac, closed ports.
+# Counts are each run's own, at the head of that round; cases were added after (Admin's round 3). At the
+# final head the files hold: test_needs_you.py 14, test_schedule_notice_words.py 14, the live
+# test_schedule_notices_needs_you.py 5, and test_schedule_executor.py's Amendment 19 cases 7; the named
+# live run at that head is the round-4 section below.
 #
 # Round 1 (e7e4cb2), kept for the record: two route plants (the notices not served; another's
 # principal asked) and two Glass plants (not drawn; left out of the count), each red then green.

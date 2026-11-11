@@ -28392,7 +28392,7 @@ own place (ADR-145 decision 11).
 5. **A notice says one fixed sentence per kind, never an error's own text** (rule 7): an error can carry
    a host, a table or a source row's key (an `ArcadeDBError` carries the server's whole reply), and it
    stays in the run's ledger and the log. The sentence follows the run's name (`The scheduled run of
-   <recipe> due <time>`, or `The run of <recipe> on the file <name>`), by kind (`scheduler.NoticeKind`):
+   <recipe> due <time>`, or `The run of <recipe> on the file <name>`), by kind (`schedule_notices.NoticeKind`):
    *failed* (any error), *timed out* (a `TimeoutError`), *refused for reach* (the run no longer reaches
    its case or its dataset), *refused for rights* (its owner may no longer run it: a right, a clearance,
    a sign-in), *the sign-in service did not answer* (not the owner's doing, so it never pauses the

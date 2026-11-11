@@ -7,7 +7,14 @@
 - **Gates at 13a04bc** (rebased on main 18d7870): see `gates/` (live, ci, test, every-harness, keyboard).
 
 ## Decisions taken
-- Item 3's route and panel, needs_you.py, and the scheduler's words and its executor tests are other lanes' files, edited on the orchestrator's grants (Admin's for Needs you, Studio's for the scheduler), each lane to review its hunks.
+- Item 3 edits other lanes' files on the orchestrator's grants, by cross-session message (no commit holds them):
+  Admin's (10 November ~21:20): `services/api/needs_you.py`, the `/v1/me/needs-you` route in `app.py` and
+  `apps/workspace/src/admin/needsYou/**` (NeedsYou.tsx, needsYouApi.ts, NeedsYou.test.tsx), with "the keyboard case
+  for the new row (keyboard.spec or needsYou's own spec)" (`keyboard/needs-you.spec.ts`) and "the axe looks in
+  three themes"; `keyboard/needs-you-harness.tsx` (its `?notices=1` state) is not named and was taken as the axe
+  looks' means: for the orchestrator to ratify. Studio's (~22:05): `services/api/scheduler.py`'s notice wording
+  and `_Refused`'s kind, and `tests/services/api/test_schedule_executor.py`'s assertions; the new cases added to
+  that file (the ArcadeDB, quota and exchange cases) go beyond "assertions": for ratification too.
 - A packages/schemas change rides with the step in its own commit at the head (the orchestrator's standing instruction at a lane's start).
 - Kinds beyond the ruling's five: still going and keyless refresh (already fixed words), and quota (new on main while the branch was open).
 - The notice tip and the "more" line in plain words; the TS fields stay optional so a Glass reads an older Conduit as no notices.

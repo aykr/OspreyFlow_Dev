@@ -21,6 +21,10 @@ EXECUTOR_TEST = (
     "../OspreyFlow_Build/tests/services/api/test_schedule_executor.py"
     "::test_a_graph_store_error_never_reaches_the_owners_words"
 )
+_EXECUTOR = "../OspreyFlow_Build/tests/services/api/test_schedule_executor.py"
+PAUSE_TEST = f"{_EXECUTOR}::test_a_failed_exchange_is_told_failed_and_never_pauses_the_schedule"
+QUOTA_SLOT_TEST = f"{_EXECUTOR}::test_a_quota_refusal_tells_its_owner_in_the_quota_sentence"
+QUOTA_FILE_TEST = f"{_EXECUTOR}::test_a_quota_refused_file_tells_its_owner_the_quota_sentence"
 SELECT = "SELECT {_COLUMNS}, count(*) OVER () AS total FROM alerts "
 WHERE = (
     '"WHERE owner_id = $1 AND rule_id LIKE $2 AND typology IS NULL "\n'
@@ -46,6 +50,14 @@ PLANTS: list[tuple[str, Path, str, str, str]] = [
     ("the error's text put back into the words", SCHEDULER,
      "notice_words(self._due(recipe, latest), failure_kind(error))",
      'f"{self._due(recipe, latest)} failed: {error}"', EXECUTOR_TEST),
+    ("a failed exchange counted toward the three that pause", SCHEDULER,
+     "                about_the_owner=False,  # never one of the three that pause (Amendment 3)\n",
+     "", PAUSE_TEST),
+    ("the quota refusal at a slot told in another kind", SCHEDULER,
+     'notice_words(self._due(recipe, latest), "refused_quota")',
+     'notice_words(self._due(recipe, latest), "failed")', QUOTA_SLOT_TEST),
+    ("the quota refusal at a watched file told in another kind", SCHEDULER,
+     'notice_words(words, "refused_quota")', 'notice_words(words, "failed")', QUOTA_FILE_TEST),
 ]  # fmt: skip
 
 
@@ -76,6 +88,8 @@ def main() -> int:
         keep.unlink()
         back = path.read_text() == text
         print(f"# --- plant ({label}) in {path}: exit {code}")
+        print(f"#     - {old.strip()}")
+        print(f"#     + {new.strip() or '(the line removed)'}")
         print(said)
         if code == 0:
             print("    GREEN under a plant: the test cannot see this defect")
@@ -84,7 +98,7 @@ def main() -> int:
             print(f"    {path} NOT put back")
             ok = False
     print("# --- green, every plant put back")
-    for target in (STORE_TEST, EXECUTOR_TEST):
+    for target in (STORE_TEST, _EXECUTOR):
         code, said = pytest(target)
         print(said)
         ok = ok and code == 0
