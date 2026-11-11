@@ -14,11 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.70** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.71** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.71 | 2026-11-11 | Rules' L2.11 as built (ADR-146 Amendment 6). §9.4: who writes a rule and makes it live, by right and role (a Rule author alone cannot make one live); no whole-deployment rule; after updating, Rule author assigned, `migrate_rules_to_datasets`, a rule running as its author while they hold Write rules or Deploy rules; whom a rule's alerts reach. §9.5: screening lists imported, mapped and refreshed in the Ingest Studio's Sources. §9.6: a second person for making a rule live where the dataset asks |
+| 1.71 | 2026-11-11 | Rules' L2.11 as built (ADR-146 Amendment 6). §9.4: who writes a rule and makes it live, by right and role (an Analyst: a Rule author does not hold `deploy_rules`, and a Data Engineer, who does, cannot open Rules and Monitoring and reads the queue's counts only); no whole-deployment rule; after updating, Rule author assigned, `migrate_rules_to_datasets` (its `--dry-run` first, the original retired, a dataset with no home case reported and its rule left running until a second run), a rule running as its author while they hold Write rules or Deploy rules; whom a rule's alerts reach. §9.5: screening lists imported, mapped and refreshed in the Ingest Studio's Sources, shown read-only under What raises alerts; a refresh's match from a rule kept just for its author is medium, as a Watched pattern. §9.6: a second person for making a rule live where the dataset asks, both of them Analysts |
 | 1.70 | 2026-11-11 | §13's synced-folder warning names a Windows home folder under WSL's `/mnt/c/` in words. |
 | 1.69 | 2026-11-10 | Describes v0.5.0. No change to its content. |
 | 1.68 | 2026-11-10 | Rules' L2.10 and platform-b's P6 as built, no longer *coming*. §9.8: a rule's alerts routed to one team (*‹Team› only*), read by its members and the home case's Authors, enforced in the query; the lead's or cover's *Give to* and *Suppress until…*. §10a: the case map's *Gazetteers in this case's dataset*, with *Add* and *Remove* for `run_pipelines` |
@@ -1233,9 +1233,9 @@ case reads. Who may do each, by right:
 | What | Right, and the case level it needs | Built-in roles holding it |
 | --- | --- | --- |
 | Write a rule and test it | `author_rules`, an Author of the case | Rule author |
-| Make a rule live, or approve another's | `deploy_rules`, an Author of the case | Analyst, Data Engineer |
+| Make a rule live, or approve another's | `deploy_rules`, and Rules and Monitoring itself; an Author of the case | Analyst. A Data Engineer holds `deploy_rules` but cannot open Rules and Monitoring |
 | Work an alert (claim, give, close) | `triage_alerts`, an Editor of the case | Analyst, Rule author |
-| Read the alerts | `read_alert_queue` | Analyst, Data Engineer, Rule author, Reports Viewer |
+| Read the alerts | `read_alert_queue`, and Rules and Monitoring itself (the Reports Viewer's Home lists the alerts on the cases they read) | Analyst, Rule author, Reports Viewer. A Data Engineer holds `read_alert_queue` but reads the queue's counts only, not its alerts |
 
 Rules and Monitoring opens to whoever holds `triage_alerts` or `author_rules`, with
 `read_alert_queue`: a Data Engineer alone does not open it. **A Rule author alone cannot make a rule
@@ -1247,7 +1247,11 @@ rule covers the whole deployment**: a rule watches one dataset, chosen once in t
 writes rules. `scripts.migrate_rules_to_datasets` (in the update's one-off steps) turns each rule that
 covered the whole deployment into one rule per dataset, in that dataset's home case, with the same
 conditions, owner and name: a running rule keeps running, and one still waiting for its first
-approval becomes a draft, to be tested and made live. **A rule runs as its author**: on every run (a
+approval becomes a draft, to be tested and made live. Run it with `--dry-run` first: it says what it
+would do and writes nothing. The original rule is then retired, with a version saying why. **A dataset
+with no home case is reported, never guessed**: that rule is left whole and running, converted to no
+dataset, so that no alert is raised twice and no dataset goes unwatched. Make the dataset's home case
+and run the script again; the second run converts it. **A rule runs as its author**: on every run (a
 load, a schedule, a list's refresh, *Test*) its author must still hold `author_rules` or
 `deploy_rules`, or it raises nothing and the run says why ("the rule's author, ‹owner›, no longer holds
 author_rules or deploy_rules"). Check that each rule's owner holds one, and transfer the rules of
@@ -1292,8 +1296,8 @@ records where each statement was read.
 
 **A closed list: OFSI.** HM Treasury closed the OFSI Consolidated List on 28 January 2026; the FCDO's
 UK Sanctions List is now the only source of UK designations. OspreyFlow keeps the OFSI connector, so a
-file you already hold can still be read, but nothing new will ever be published to it: the Lists tab
-says "Closed list" on such a list's row, and the subscribe form names the connector "reads a closed
+file you already hold can still be read, but nothing new will ever be published to it: the lists shown
+under What raises alerts say "Closed list" on such a list's row, and the subscribe form names the connector "reads a closed
 list" and points to the UK Sanctions List. To screen against UK designations, download
 `UK-Sanctions-List.xml` from the list's page (gov.uk/government/publications/the-uk-sanctions-list;
 the FCDO keeps it at a fixed address, `sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml`), put it
@@ -1302,8 +1306,8 @@ does not fetch it for you. The connector reads the XML only (its schema is publi
 order is not).
 
 **Licence not confirmed: UN and OpenSanctions.** Until their licences for a customer's screening are
-confirmed, these two connectors read OspreyFlow's own synthetic lists only. The Lists tab marks each
-such list "Licence not confirmed", with the reason, and the subscribe form says so beside the
+confirmed, these two connectors read OspreyFlow's own synthetic lists only. What raises alerts marks
+each such list "Licence not confirmed", with the reason, and the subscribe form says so beside the
 connector. A real UN or OpenSanctions file is refused, in words, even when this device's exceptions
 admit its dataset, and nothing loads; `python -m scripts.load_screening_list` refuses a list whose
 dataset is `opensanctions` or `un_consolidated` the same way.
@@ -1333,8 +1337,10 @@ download of the list in the same place.
 the file again and applies it as a new **version**: the publisher's own date where the format has one,
 otherwise the file's fingerprint. OspreyFlow compares it with the version before and re-screens every
 customer of every case with a screening rule against **the added and changed entries only**, as each
-rule's deployer and within that case's datasets; each new match is a high-severity alert in that case's
-queue, its link to the listed party inferred until a person confirms it. A file that is not in the
+rule's deployer and within that case's datasets; each new match is an alert in that case's queue, its
+link to the listed party inferred until a person confirms it. It is high-severity from a case's
+screening rule, and medium, listed as a *Watched pattern*, from one kept just for its author (a known
+issue: user guide, section 7.2). A file that is not in the
 connector's format fails in words and leaves the list as it was. Every refresh is recorded under
 **Latest refreshes**, with what it added, changed and removed, and how many customers it re-screened and
 how many alerts it raised **in your own unit**: each screening rule re-screens as its deployer, and its
@@ -1363,17 +1369,18 @@ approve it** (ADR-133 decision 7):
 
 | Decision | Who proposes it | Who approves it |
 | --- | --- | --- |
-| Making a rule live on a dataset that asks for a second person (its **Promotion of drawn items** setting, *Second person reviews*; a composite asks if any member does) | An Author of the case who holds `deploy_rules`, once the draft is tested | **Another** Author of the case holding `deploy_rules`: never the draft's author, or whoever asked for it to go live (on the rule's row in Rules and Monitoring → **What raises alerts**: **Approve**, or **Reject** and **Send the rejection** with words; each step is on the **Changes** tab) |
+| Making a rule live on a dataset that asks for a second person (its **Promotion of drawn items** setting, *Second person reviews*; a composite asks if any member does) | An Author of the case who holds `deploy_rules` and opens Rules and Monitoring (an Analyst), once the draft is tested | **Another** Author of the case who holds `deploy_rules` and opens Rules and Monitoring (an Analyst): never the draft's author, or whoever asked for it to go live (on the rule's row in Rules and Monitoring → **What raises alerts**: **Approve**, or **Reject** and **Send the rejection** with words; each step is on the **Changes** tab) |
 | Closing a **high-severity** alert another person may see | A member of the case who triages alerts (`triage_alerts`, Editor) | **Another** member who triages alerts in that case |
 | A new version of the **installation-wide connection-strength influencers** (ADR-139) | Anyone holding `manage_strength_influencers` (the Analyst and Admin roles hold it) | **Another** person holding it |
 
 A rule on a dataset that does not ask, or one kept just for its author, needs no approval. An alert only its owner may see (their
 own hotlist's, kept to them) is closed by its owner alone, since no second person may read it. Writing
-and testing a rule needs `author_rules`; making it live needs `deploy_rules` (section 9.4). A data
+and testing a rule needs `author_rules`; making it live needs `deploy_rules` and Rules and Monitoring
+itself (section 9.4). A data
 engineer attaches rules to pipelines (Checks on load) but does not write them.
 
-**So a dataset that asks for a second person needs at least two Authors of the case holding
-`deploy_rules`**; with one, a rule there can be tested but never made live.
+**So a dataset that asks for a second person needs at least two Authors of the case who hold
+`deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
 **Approving influencers.** In the Glass's rail, **Connection strength**, a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses

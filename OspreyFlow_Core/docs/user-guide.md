@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.44** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.45** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.45 | 2026-11-11 | The review of 1.44, against the code. §7.6: *Make live*, *Approve* and *Reject* need Deploy rules and Rules and Monitoring itself, so an Analyst, not a Data Engineer; *Deploy the sentence* needs Deploy rules and Keep watches. §7.1, §7.2, §7.4, §7.9 and §7.10: a rule kept just for its author is listed as a *Watched pattern*, and a template or pattern rule kept so raises medium alerts whatever its template's severity, stated as a known issue. §7.4: *Retire*, *Use* and *Deploy* need Deploy rules. §7.10: the screening lists are shown read-only under *What raises alerts*, and imported, mapped and refreshed in the Ingest Studio's *2 Sources*. Captions 23, 24 and 26 recaptioned |
 | 1.44 | 2026-11-11 | Rules' L2.10 and L2.11 as built (ADR-146 Amendment 6). §7.1: the place's four tabs, the one queue's five kinds and its filters. §7.2: a rule's own severity; who sees an alert, *‹Team› only* among them. §7.3: What fired it, Open the board, the lead's Give to and Suppress until…. §7.4 and §7.5: what raises alerts, hotlists and watched patterns there, Save as a watch, Watch for this, drawn items' watches. §7.6: the rule editor: a dataset chosen once, the sentence, Preview, Save the draft, Test on the last 30 days, Make live (Deploy rules), the second person by the dataset's setting, Show as BPMN; no whole-deployment rule. §7.11 and §7.12 brought in line |
 | 1.43 | 2026-11-10 | Describes v0.5.0. §7: the alerts journey, the rule editor included, built and no longer *coming*; the section is still to be rewritten for it. |
 | 1.42 | 2026-11-10 | Rules' L2.10, case's L3.6 and L3.H1 as built, no longer *coming*. §4: a rule's alerts routed to one team, read by its members and the home case's Authors, given out or suppressed by its lead. §5.14: a drawn item's watch, the *Drawn items* alert when a load meets it, and the load result's count |
@@ -852,9 +853,12 @@ none open, it says "Open a case to see its alerts and what raises them." Its tab
 **One queue holds every alert you may see.** **Kind** names its five kinds:
 
 - **Rules**: raised by the case's rules — structuring, rapid movement, circular flow, screening
-  matches, shared contact details, unverified customers, drawn patterns and rules written as sentences;
+  matches, shared contact details, unverified customers, drawn patterns and rules written as sentences
+  for the case;
 - **Hotlists**: data touched an identifier on a hotlist (§7.5);
-- **Watched patterns**: a saved pattern matched new data (§7.5);
+- **Watched patterns**: a saved pattern matched new data (§7.5), or a rule kept just for you raised
+  an alert, whether written as a sentence or made from a template or a saved pattern (§7.2's known
+  issue);
 - **Raised by an analyst**: someone chose **Raise an alert…** in the Query builder. One raised to a
   dataset is headed "Dataset alert";
 - **Drawn items**: a load wrote something that looks like an item drawn on a board (§7.5).
@@ -888,11 +892,21 @@ other alert takes its kind's:
 | Alert | Severity |
 | --- | --- |
 | A hotlist match | High |
-| A screening match (the template) | High |
-| Shared contact details (the template) | Low |
-| Any other template, a watched pattern, a drawn item | Medium |
+| A screening match (a case's rule from the template) | High |
+| Shared contact details (a case's rule from the template) | Low |
+| Any other template's case rule, a watched pattern, a drawn item | Medium |
+| A rule made from a template or a saved pattern, kept just for you | Medium, whatever its template |
 
-Each template says its own on **What raises alerts**: "Raises medium-severity alerts."
+Each template says, on **What raises alerts**, what a case's rule made from it raises: "Raises
+medium-severity alerts."
+
+**Known issue: a rule kept just for you is listed as a watched pattern.** Every alert from a rule kept
+just for you is listed as **Watched pattern**, under **Kind: Watched patterns**, not under **Rules**. A
+rule just for you written as a sentence keeps the severity it sets. One made from a template or a saved
+pattern on **What raises alerts** (which keeps every rule made there just for you, §7.4) is **medium**,
+whatever its template says: a screening match from it, high from a case's rule, is medium, and shared
+contact details, low from a case's rule, are medium too. A rule for the case, written in the rule
+editor (§7.6), is not affected.
 
 Who may see an alert is shown on its row:
 
@@ -963,20 +977,22 @@ Under it, each rule says what it looks for, how it runs and where it stands:
 
 Each rule has **Versions** (§7.12), and a scheduled rule or one on a list's refresh has **Schedule and
 runs**. A rule written in the rule editor also has **Open in the rule editor**, offered to the case's
-Authors (§7.6). An Author retires a live rule with **Retire**. A rule for the case is written in the
-rule editor.
+Authors (§7.6). An Author of the case who holds **Deploy rules** retires a live rule with **Retire**:
+in the built-in roles, an Analyst. A rule for the case is written in the rule editor.
 
 **Templates** lists the typologies as named starting points (the four AML templates are in §7.9),
 grouped by the work they serve (anti-money-laundering transaction monitoring, KYC, any case), each with
-what it looks for and the severity of its alerts. **Use** fills **Deploy a rule** with the template's
+what it looks for and the severity a case's rule made from it raises. **Use** fills **Deploy a rule** with the template's
 defaults and puts you on the rule's name; change anything, then **Deploy**. A rule from a saved pattern
 is made in the same form: choose the **Typology** *Drawn pattern (from the Query builder)*, then the
 **Saved pattern**.
 
 **A rule made here runs just for you.** The form says so: "This rule raises alerts for you; to share
-it with the case, write it in the rule editor." Its alerts reach you alone. Everyone in the case sees
-the templates; only an Author has **Use** and **Deploy**, and anyone else reads "A case Author deploys
-and retires rules." *Coming:* a template or pattern rule becoming the case's draft, to test and make
+it with the case, write it in the rule editor." Its alerts reach you alone. **Known issue:** they are
+listed as **Watched pattern** and are **medium**, whatever the template's severity (§7.2). Everyone in
+the case sees the templates; **Use** and **Deploy** need an Author of the case who holds **Deploy
+rules** and opens Rules and Monitoring (in the built-in roles, an Analyst), and anyone else reads "A
+case Author deploys and retires rules." *Coming:* a template or pattern rule becoming the case's draft, to test and make
 live in the rule editor.
 
 The money-flow templates (structuring, rapid movement, circular flow) judge each load's movements with
@@ -1102,13 +1118,15 @@ you, over what you may see. Nothing was raised." The count is yours alone: anyon
 that the draft was tested, and when ("This draft was tested on 10/11/2026."). Until then the editor
 says "A rule goes live only once this draft is tested." Saving the draft again needs a new test.
 
-**7. Make live.** **Make live** needs **Deploy rules** (`deploy_rules`), which Analysts and Data
-Engineers hold. A Rule author alone does not hold it and is not offered the button; the Super user
-preset gives both. The rule goes live at once ("‹name› is live."), unless its dataset asks for a
+**7. Make live.** **Make live** needs **Deploy rules** (`deploy_rules`) and Rules and Monitoring
+itself, which opens to whoever works alerts or writes rules: in the built-in roles, an Analyst. A Data
+Engineer holds Deploy rules but cannot open this place. A Rule author opens it but does not hold Deploy
+rules, and is not offered the button. The Super user preset gives both. The rule goes live at once ("‹name› is live."), unless its dataset asks for a
 second person (its **Promotion of drawn items** setting is *Second person reviews*): then the editor
 says "‹dataset› asks for a second person: making it live waits for another Author to approve it." The
 rule reads *a draft, waiting for a second person's approval to go live*, and another Author of the
-case holding Deploy rules chooses **Approve**, or **Reject** with a reason. Neither the draft's author
+case who holds Deploy rules and opens this place (an Analyst) chooses **Approve**, or **Reject** with a
+reason. Neither the draft's author
 nor whoever asked for it to go live may approve it.
 
 **Changing a rule.** **Open in the rule editor**, on a case rule's row, opens it on its own dataset, at
@@ -1127,8 +1145,9 @@ and runs** (§7.11). No one is offered a rule for the whole deployment.
 **A rule just for you.** Under the editor, **Write a rule as a sentence** again offers the same blanks,
 for *just me*: "A rule just for you: fill each blank from the lists. Preview it on the last 90 days
 before you deploy it. A rule for the case is written above, on its dataset." Its alerts reach you
-alone. It runs after each load commits or on a schedule. An Editor or Author of the case deploys it
-with **Deploy the sentence**; anyone else reads "A case Editor deploys a rule for themselves; a case
+alone, listed as **Watched pattern** (§7.2). It runs after each load commits or on a schedule. An
+Editor or Author of the case who holds **Deploy rules** and **Keep watches** (in the built-in roles, an
+Analyst) deploys it with **Deploy the sentence**; anyone else reads "A case Editor deploys a rule for themselves; a case
 Author deploys one for the case."
 
 **Patterns and sentences.** Once deployed, a rule's drawn pattern is saved among your patterns, to open
@@ -1161,7 +1180,7 @@ Frequency conditions are counted over the 90 days.
 
 ### 7.9 The AML templates: jurisdiction, cash, dormancy and velocity
 
-![The Rules tab: the AML templates, and the form filled from "High-risk jurisdiction"](images/user/24-aml-templates.png)
+![What raises alerts: the AML templates, and the form filled from "High-risk jurisdiction"](images/user/24-aml-templates.png)
 
 Four templates watch a case's money movements (its *transacted* links), each with settings you choose
 and no formula to write:
@@ -1180,16 +1199,18 @@ and no formula to write:
   days; measured by the number of movements or by the amount moved. An account with nothing in those
   days before has no rate to rise from and raises nothing.
 
-Each raises a medium-severity alert in the queue, in words: the movement, the accounts and what made it
-a finding. They judge only movements and accounts you could see as the rule's deployer: a movement
+Each raises a medium-severity alert in the queue (listed under **Rules** from a case's rule, and as a
+**Watched pattern** from one kept just for you, §7.2), in words: the movement, the accounts and what
+made it a finding. They judge only movements and accounts you could see as the rule's deployer: a movement
 hidden from them neither wakes a dormant account nor adds to a rate. The last two compare an account
 with its own stored past, so they run after each load commits.
 
 ### 7.10 Screening lists, re-screened when they change
 
-![The Lists tab: each list's version, entries, last update and state, the latest refreshes, and subscribing](images/user/23-screening-lists.png)
+![The screening lists under What raises alerts: each list's version, entries, last update and state, and the latest refreshes](images/user/23-screening-lists.png)
 
-The **Lists** tab shows each sanctions, PEP or adverse-media list the deployment screens against: the
+**What raises alerts** shows, read-only, each sanctions, PEP or adverse-media list the deployment
+screens against: the
 list it is (OFAC, the FCDO's UK Sanctions List, the UN or EU consolidated list, OpenSanctions, or HM
 Treasury OFSI's, which closed on 28 January 2026 and is marked "Closed list"), its version, how
 many entries it holds, when it last changed, its licence, and its state — up to date, not yet read, or
@@ -1199,8 +1220,9 @@ left as it was, and says so.
 When a list changes, OspreyFlow re-screens every customer in every case that has a **Screening on
 onboarding** rule (§7.4) against **the entries that changed only** — those added and those whose names,
 date of birth or country changed. An entry that did not change was screened when it arrived, so it
-raises nothing again. Each new match raises a high-severity screening alert in that case's queue,
-naming the customer and the list entry, with its score. Like every screening match, it is a suggestion:
+raises nothing again. Each new match raises a screening alert in that case's queue, naming the
+customer and the list entry, with its score: high from a case's rule, and medium, as a **Watched
+pattern**, from a rule kept just for its author (§7.2's known issue). Like every screening match, it is a suggestion:
 the link between the customer and the listed party is inferred until a person confirms it, by closing
 the alert as a **True match** (§7.3). Customers are screened as the rule's deployer and within the case's
 datasets, so no one is screened, or alerted on, outside what that person may see.
@@ -1211,10 +1233,12 @@ non-commercial use only; OpenSanctions is CC BY-NC 4.0, and screening in a busin
 which needs its own data licence. Until a licence is confirmed, these connectors read OspreyFlow's
 synthetic lists only.
 
-Administrators and data engineers subscribe to a list and refresh it from this tab (the administration
-guide, §9.5, says how), and may have it refreshed every day or every week; the **Schedule** column
-says when, or "By hand only". They see how many customers each refresh re-screened, and the alerts it
-raised, **in their own unit only**. Everyone else sees the lists, not those numbers.
+Lists are not added or refreshed here: "Screening lists are imported, mapped and refreshed in the
+Ingest Studio's Sources. This tab shows them; it no longer adds or refreshes one." Administrators and
+data engineers do that in the Ingest Studio's **2 Sources**, under **Screening lists**, and may have a
+list refreshed every day or every week (the administration guide, §9.5, says how); the **Schedule**
+column says when, or "By hand only". They see how many customers each refresh re-screened, and the
+alerts it raised, **in their own unit only**. Everyone else sees the lists, not those numbers.
 
 ### 7.11 A rule that runs on a schedule
 
@@ -1238,7 +1262,7 @@ as you see it, and raises an alert for each new finding, once.
 
 ### 7.12 A second person's approval
 
-![A rule for the whole deployment waiting for a second person, and a high-severity alert whose close waits for approval](images/user/26-second-person.png)
+![A high-severity alert whose close waits for a second person's approval](images/user/26-second-person.png)
 
 These decisions need a second person with the right, and the person who proposed one can never approve
 it.
