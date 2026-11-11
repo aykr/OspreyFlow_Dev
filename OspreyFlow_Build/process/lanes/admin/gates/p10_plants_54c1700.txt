@@ -1,0 +1,92 @@
+control (no plant): green (exit 0) — 104 passed in 48.32s
+[two clearances or units resolved (any one picked), not refused] test_groups_granting_two_clearances_are_refused_not_resolved: red (exit 1) — 1 failed in 1.40s
+[two clearances or units resolved (any one picked), not refused] test_groups_granting_two_units_are_refused: red (exit 1) — 1 failed in 1.51s
+[two clearances or units resolved (any one picked), not refused] test_the_owner_exchange_maps_claims_through_the_same_path: red (exit 1) — 1 failed in 1.94s
+[a missing claim-sourced value defaulted to cleared] test_both_missing_is_refused_never_defaulted_to_cleared[extension]: red (exit 1) — 1 failed in 1.38s
+[a missing claim-sourced value defaulted to cleared] test_a_missing_clearance_attribute_with_the_unit_group_present_is_refused: red (exit 1) — 1 failed in 1.40s
+[a missing claim-sourced value defaulted to cleared] test_the_default_mapping_does_not_read_entra_attributes: red (exit 1) — 1 failed in 1.42s
+[a missing group-sourced value defaulted to cleared] test_both_missing_is_refused_never_defaulted_to_cleared[groups]: red (exit 1) — 1 failed in 1.39s
+[a missing group-sourced value defaulted to cleared] test_a_missing_clearance_with_a_unit_present_is_refused: red (exit 1) — 1 failed in 1.42s
+[a missing group-sourced value defaulted to cleared] test_a_missing_unit_with_a_clearance_present_is_refused: red (exit 1) — 1 failed in 1.41s
+[a missing group-sourced value defaulted to cleared] test_an_unmapped_group_grants_nothing: red (exit 1) — 1 failed in 1.46s
+[an unmapped group grants a handling code] test_an_unmapped_group_grants_nothing: red (exit 1) — 1 failed in 1.44s
+[a group overage (_claim_names) read as no groups] test_a_group_overage_is_refused_not_read_as_no_groups: red (exit 1) — 1 failed in 1.45s
+[the implicit flow's overage (hasgroups) read as no groups] test_the_implicit_flows_overage_signal_is_refused: red (exit 1) — 1 failed in 1.44s
+[a groups claim that is not a list iterated as one] test_a_groups_claim_that_is_not_a_list_of_ids_is_refused: red (exit 1) — 1 failed in 1.48s
+[a groups list longer than Entra's cap accepted] test_a_groups_list_past_entras_cap_is_refused: red (exit 1) — 1 failed in 1.40s
+[a missing or other tenant's tid accepted] test_a_token_entra_would_not_accept_is_refused[other-tenant]: red (exit 1) — 1 failed in 1.45s
+[a missing or other tenant's tid accepted] test_a_token_entra_would_not_accept_is_refused[no-tid]: red (exit 1) — 1 failed in 1.47s
+[exp not required of an Entra token] test_a_token_entra_would_not_accept_is_refused[no-exp]: red (exit 1) — 1 failed in 1.46s
+[the issuer not checked] test_a_token_entra_would_not_accept_is_refused[wrong-issuer]: red (exit 1) — 1 failed in 1.52s
+[the audience not checked] test_a_token_entra_would_not_accept_is_refused[wrong-audience]: red (exit 1) — 1 failed in 1.48s
+[the expiry not checked] test_a_token_entra_would_not_accept_is_refused[expired]: red (exit 1) — 1 failed in 1.43s
+[another tenant's whole token: issuer and tenant checks both removed] test_another_tenants_whole_token_is_refused: red (exit 1) — 1 failed in 1.42s
+[an Entra mapping built on a resolver checking neither issuer nor audience] test_an_entra_mapping_without_issuer_and_audience_checks_is_refused_at_construction: red (exit 1) — 1 failed in 1.48s
+[an Entra token's app roles read as OspreyFlow roles] test_an_entra_app_role_grants_no_ospreyflow_role: red (exit 1) — 1 failed in 1.52s
+[an Entra token's app roles read as OspreyFlow roles] test_extension_attributes_build_the_principal: red (exit 1) — 1 failed in 1.47s
+[an Entra principal keyed by its pairwise sub (review round 1, item 3)] test_an_entra_principal_is_keyed_by_oid_not_its_pairwise_sub: red (exit 1) — 1 failed in 1.55s
+[an Entra principal keyed by its pairwise sub (review round 1, item 3)] test_extension_attributes_build_the_principal: red (exit 1) — 1 failed in 1.51s
+[a Keycloak principal keyed by an oid it happens to carry] test_a_keycloak_principal_is_still_keyed_by_sub: red (exit 1) — 1 failed in 1.46s
+[an Entra token under the Keycloak handling accepted (review round 1, item 4)] test_an_entra_token_under_the_keycloak_handling_is_refused[our-tenant]: red (exit 1) — 1 failed in 1.51s
+[an Entra token under the Keycloak handling accepted (review round 1, item 4)] test_an_entra_token_under_the_keycloak_handling_is_refused[other-tenant]: red (exit 1) — 1 failed in 1.45s
+[a token issued to another client accepted (review round 1, item 8)] test_a_token_issued_to_another_client_is_refused[other-azp]: red (exit 1) — 1 failed in 1.58s
+[a token issued to another client accepted (review round 1, item 8)] test_a_token_issued_to_another_client_is_refused[no-client]: red (exit 1) — 1 failed in 1.54s
+[a token issued to another client accepted (review round 1, item 8)] test_a_token_issued_to_another_client_is_refused[v1-other-appid]: red (exit 1) — 1 failed in 1.53s
+[a token issued to another client accepted (review round 1, item 8)] test_a_token_issued_to_another_client_is_refused[azp-and-other-appid]: red (exit 1) — 1 failed in 1.58s
+[only azp read: a v1 token's appid ignored] test_a_token_issued_to_another_client_is_refused[azp-and-other-appid]: red (exit 1) — 1 failed in 1.52s
+[only azp read: a v1 token's appid ignored] test_a_v1_token_naming_the_glass_by_appid_resolves: red (exit 1) — 1 failed in 1.49s
+[a token without this API's scope accepted] test_a_token_without_this_apis_scope_is_refused[other-scope]: red (exit 1) — 1 failed in 1.49s
+[a token without this API's scope accepted] test_a_token_without_this_apis_scope_is_refused[longer-name]: red (exit 1) — 1 failed in 1.43s
+[a token without this API's scope accepted] test_a_token_without_this_apis_scope_is_refused[openid-only]: red (exit 1) — 1 failed in 1.42s
+[the scope matched as a substring of scp] test_a_token_without_this_apis_scope_is_refused[longer-name]: red (exit 1) — 1 failed in 1.44s
+[a guest account accepted] test_a_guest_account_is_refused[acct]: red (exit 1) — 1 failed in 1.43s
+[a guest account accepted] test_a_guest_account_is_refused[acct-text]: red (exit 1) — 1 failed in 1.44s
+[a guest account accepted] test_a_guest_account_is_refused[idp-other]: red (exit 1) — 1 failed in 1.46s
+[a guest's acct read only as a number] test_a_guest_account_is_refused[acct-text]: red (exit 1) — 1 failed in 1.52s
+[an Entra mapping without the Glass's client id accepted] test_an_entra_mapping_needs_the_glass_client_id[none]: red (exit 1) — 1 failed in 0.87s
+[an Entra mapping without the Glass's client id accepted] test_an_entra_mapping_needs_the_glass_client_id[empty]: red (exit 1) — 1 failed in 0.89s
+[an Entra mapping without the Glass's client id accepted] test_an_entra_mapping_needs_the_glass_client_id[not-a-guid]: red (exit 1) — 1 failed in 0.89s
+[a scope setting naming none or two] test_the_scope_setting_names_one_scope[empty]: red (exit 1) — 1 failed in 0.93s
+[a scope setting naming none or two] test_the_scope_setting_names_one_scope[two]: red (exit 1) — 1 failed in 0.87s
+[one handling code or role, given as a string, split into its letters] test_a_single_valued_handling_code_attribute_is_one_code_not_its_letters: red (exit 1) — 1 failed in 1.45s
+[one handling code or role, given as a string, split into its letters] test_the_default_mapping_reads_one_code_or_role_as_one_not_its_letters: red (exit 1) — 1 failed in 1.43s
+[handling codes or roles of the wrong type passed through] test_handling_codes_of_the_wrong_type_are_refused: red (exit 1) — 1 failed in 1.39s
+[handling codes or roles of the wrong type passed through] test_the_default_mapping_refuses_a_claim_of_the_wrong_type[object-codes]: red (exit 1) — 1 failed in 1.52s
+[handling codes or roles of the wrong type passed through] test_the_default_mapping_refuses_a_claim_of_the_wrong_type[numeric-roles]: red (exit 1) — 1 failed in 1.42s
+[an empty handling code accepted (review round 1, item 9)] test_an_empty_handling_code_is_refused[empty-string]: red (exit 1) — 1 failed in 1.42s
+[an empty handling code accepted (review round 1, item 9)] test_an_empty_handling_code_is_refused[empty-in-list]: red (exit 1) — 1 failed in 1.42s
+[a handling code given twice kept twice] test_a_handling_code_given_twice_is_kept_once: red (exit 1) — 1 failed in 1.42s
+[one clearance or unit group granting a list of values] test_one_group_cannot_grant_two_clearances_or_units[clearance]: red (exit 1) — 1 failed in 0.87s
+[one clearance or unit group granting a list of values] test_one_group_cannot_grant_two_clearances_or_units[org_unit]: red (exit 1) — 1 failed in 0.88s
+[a list, number or empty clearance accepted as a value (str()-ed)] test_an_empty_clearance_attribute_is_refused: red (exit 1) — 1 failed in 1.43s
+[a list, number or empty clearance accepted as a value (str()-ed)] test_a_clearance_attribute_that_is_not_a_string_is_refused: red (exit 1) — 1 failed in 1.42s
+[a list, number or empty clearance accepted as a value (str()-ed)] test_a_numeric_clearance_attribute_is_refused_not_turned_into_text: red (exit 1) — 1 failed in 1.40s
+[a list, number or empty clearance accepted as a value (str()-ed)] test_the_default_mapping_refuses_a_claim_of_the_wrong_type[list-clearance]: red (exit 1) — 1 failed in 1.42s
+[a list, number or empty clearance accepted as a value (str()-ed)] test_the_default_mapping_refuses_a_claim_of_the_wrong_type[empty-clearance]: red (exit 1) — 1 failed in 1.45s
+[a list, number or empty clearance accepted as a value (str()-ed)] test_the_default_mapping_refuses_a_claim_of_the_wrong_type[numeric-unit]: red (exit 1) — 1 failed in 1.42s
+[an oid that is not an Entra object id accepted] test_an_oid_that_is_not_an_object_id_is_refused: red (exit 1) — 1 failed in 1.39s
+[an oid that is not an Entra object id accepted] test_a_token_entra_would_not_accept_is_refused[no-oid]: red (exit 1) — 1 failed in 1.41s
+[an app-only token accepted as a person] test_an_app_only_token_is_no_person[app-token]: red (exit 1) — 1 failed in 1.44s
+[an app-only token accepted as a person] test_an_app_only_token_is_no_person[no-scp]: red (exit 1) — 1 failed in 1.43s
+[an app-only token accepted as a person] test_an_app_only_token_is_no_person[idtyp-app]: red (exit 1) — 1 failed in 1.41s
+[both a missing claim and a missing group defaulted (the mixed mapping)] test_both_missing_is_refused_never_defaulted_to_cleared[mixed]: red (exit 1) — 1 failed in 1.44s
+[a source naming both a claim and a group table, or neither] test_a_source_names_exactly_one_of_a_claim_or_a_group_table[neither]: red (exit 1) — 1 failed in 0.94s
+[a source naming both a claim and a group table, or neither] test_a_source_names_exactly_one_of_a_claim_or_a_group_table[both]: red (exit 1) — 1 failed in 0.86s
+[an empty claim name accepted] test_a_source_names_exactly_one_of_a_claim_or_a_group_table[empty-claim]: red (exit 1) — 1 failed in 0.87s
+[an empty group table accepted] test_a_source_names_exactly_one_of_a_claim_or_a_group_table[empty-table]: red (exit 1) — 1 failed in 0.89s
+[a group table entry granting an empty value accepted] test_a_group_table_entry_must_grant_a_value[empty-value]: red (exit 1) — 1 failed in 0.94s
+[a group table key that is not a group id accepted] test_a_group_table_key_must_be_a_group_id: red (exit 1) — 1 failed in 0.88s
+[a group table key that is not a group id accepted] test_a_group_table_entry_must_grant_a_value[empty-group]: red (exit 1) — 1 failed in 0.85s
+[an unnamed groups claim accepted] test_the_groups_claim_must_be_named: red (exit 1) — 1 failed in 0.90s
+[the resolver trusts a mapping that skipped its validators] test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver[copy]: red (exit 1) — 1 failed in 1.34s
+[the resolver trusts a mapping that skipped its validators] test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver[construct]: red (exit 1) — 1 failed in 1.32s
+[an Entra mapping without a tenant accepted] test_a_mapping_other_than_the_fixed_names_needs_its_tenant: red (exit 1) — 1 failed in 0.92s
+[a tenant id that is not a GUID accepted] test_the_tenant_id_must_be_a_guid[empty]: red (exit 1) — 1 failed in 0.89s
+[a tenant id that is not a GUID accepted] test_the_tenant_id_must_be_a_guid[name]: red (exit 1) — 1 failed in 0.86s
+[a tenant id that is not a GUID accepted] test_the_tenant_id_must_be_a_guid[bad]: red (exit 1) — 1 failed in 1.36s
+[a misspelt setting ignored] test_the_settings_refuse_an_unknown_key: red (exit 1) — 1 failed in 0.89s
+[the default mapping's clearance name changed] test_the_default_mapping_is_the_fixed_claim_names: red (exit 1) — 1 failed in 1.34s
+[the exchange path maps by the fixed names, not the deployment's mapping] test_the_owner_exchange_maps_claims_through_the_same_path: red (exit 1) — 1 failed in 1.87s
+[a second Principal construction in principal_auth] test_one_principal_construction_in_principal_auth: red (exit 1) — 1 failed in 0.87s
+control (restored): green (exit 0) — 104 passed in 48.34s
+49 plants, 89 case runs: 89 red, 0 missed, 0 harness faults

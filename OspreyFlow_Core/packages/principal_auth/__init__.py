@@ -24,13 +24,16 @@ verbatim below, because they document decisions rather than location.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote
 
 import httpx
 import jwt
 from jwt import PyJWKClient
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from schemas.domain import Principal
 
@@ -138,6 +141,267 @@ CLAIM_ORG_UNIT = "org_unit"
 CLAIM_RECEIVABLE_HANDLING_CODES = "receivable_handling_codes"
 CLAIM_ROLES = "roles"
 
+
+# --- where the principal's claims come from: settings, not fixed names (ADR-148 decision 9) ---
+#
+# Entra ID issues no `clearance`, `org_unit` or `receivable_handling_codes` claim. The deployment
+# says, for each, which token claim carries it (a directory extension attribute,
+# `extension_<app id>_<name>`) or a table from Entra group id to value. The default is the three
+# fixed names this module always read, so every deployment that names nothing behaves exactly as
+# before. Only the *source names* are settings: what a principal is, and the one function that
+# builds it (`principal_from_claims`), stay here.
+#
+# **Refused, never guessed** (CLAUDE.md rules 3 and 5's spirit): a clearance or unit with no source
+# in the token, groups granting more than one clearance or unit, a group overage, or a value of the
+# wrong type is a `PrincipalResolutionError` (a 401), never a default. `principal_auth` holds no
+# marking scheme, so "the lowest of two clearances" is not something it could compute honestly;
+# and a person in two clearance groups is a directory error the operator should see. An unmapped
+# group grants nothing.
+
+
+#: An Entra object id (a tenant, a group): lower-case, as Entra writes it in a token.
+_GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+class _Source(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    claim: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> _Source:
+        groups = getattr(self, "groups", None)
+        if (self.claim is None) == (groups is None):
+            raise ValueError("name exactly one of `claim` or `groups`")
+        if self.claim is not None and not self.claim:
+            raise ValueError("`claim` must name a claim")
+        if groups is not None:
+            if not groups:
+                raise ValueError("`groups` must map at least one group")
+            for group, value in groups.items():
+                values = value if isinstance(value, list) else [value]
+                if not values or not all(values):
+                    raise ValueError(f"group {group!r} must grant a non-empty value")
+                if not _GUID.match(group):
+                    # A mistyped id would match no token's group and silently grant nothing.
+                    raise ValueError(f"group {group!r} is not an Entra group id (a GUID)")
+        return self
+
+
+class ValueSource(_Source):
+    """Where a single-valued claim (clearance, organisational unit) comes from: a token claim, or a
+    table from group id to value."""
+
+    groups: dict[str, str] | None = None
+
+
+class CodesSource(_Source):
+    """Where the receivable handling codes come from: a token claim (a list, or one code as a
+    string), or a table from group id to the codes that group grants."""
+
+    groups: dict[str, list[str]] | None = None
+
+
+class ClaimMapping(BaseModel):
+    """The deployment's claim settings.
+
+    **A mapping other than the fixed names is an Entra ID mapping, and needs `tenant_id`** (ADR-148
+    decision 9 is the only reason the names are settings; a Keycloak deployment maps onto the fixed
+    names with protocol mappers). With `tenant_id` set the token must carry `oid` and `exp` and a
+    `tid` equal to it, the resolver must check issuer and audience, and **roles are not read from
+    the token**: an Entra token's `roles` are app roles an Entra administrator assigns, and roles
+    stay assigned in Admin › People (decision 9). An app-only token (a daemon's, with no `scp`) is
+    no person and is refused; so is a token without this API's `scope`, one issued to a client
+    other than `client_id` (the Glass), and a guest's. The principal is keyed by `oid`, not by
+    Entra's pairwise `sub`. A token carrying `tid` under the fixed names (Keycloak) is refused.
+
+    **The validators are the safety, so the resolver validates again** what it is given:
+    `model_copy` and `model_construct` skip them, and a copy of the default mapping with a changed
+    source would otherwise be Keycloak-handled (no tenant check, the token's roles read)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    clearance: ValueSource = ValueSource(claim=CLAIM_CLEARANCE)
+    org_unit: ValueSource = ValueSource(claim=CLAIM_ORG_UNIT)
+    handling_codes: CodesSource = CodesSource(claim=CLAIM_RECEIVABLE_HANDLING_CODES)
+    groups_claim: str = "groups"
+    tenant_id: str | None = None
+    #: The Glass's own app registration: an Entra token's `azp` (v2.0) or `appid` (v1.0) must name
+    #: it, so a token another application obtained for this API is no session of ours.
+    client_id: str | None = None
+    #: The delegated scope the Glass asks for; an Entra token's `scp` must include it.
+    scope: str = "access_as_user"
+
+    @model_validator(mode="after")
+    def _entra_needs_its_tenant(self) -> ClaimMapping:
+        if not self.groups_claim:
+            raise ValueError("`groups_claim` must name a claim")
+        if self.tenant_id is not None and not _GUID.match(self.tenant_id):
+            raise ValueError("`tenant_id` must be the Entra tenant's id (a GUID)")
+        if self.tenant_id is not None and (
+            self.client_id is None or not _GUID.match(self.client_id)
+        ):
+            raise ValueError("an Entra ID mapping needs `client_id`, the Glass's application id")
+        if not self.scope or " " in self.scope:
+            raise ValueError("`scope` must name one delegated scope")
+        fixed = (
+            self.clearance == ValueSource(claim=CLAIM_CLEARANCE)
+            and self.org_unit == ValueSource(claim=CLAIM_ORG_UNIT)
+            and self.handling_codes == CodesSource(claim=CLAIM_RECEIVABLE_HANDLING_CODES)
+            and self.groups_claim == "groups"
+        )
+        if not fixed and self.tenant_id is None:
+            raise ValueError(
+                "a claim mapping other than the fixed names is an Entra ID mapping: "
+                "set `tenant_id`, so the tenant, issuer and audience are checked"
+            )
+        return self
+
+    @property
+    def is_entra(self) -> bool:
+        return self.tenant_id is not None
+
+    def required_claims(self) -> list[str]:
+        """The claims PyJWT must find before anything is mapped. `tid` and `oid` are checked once
+        each, in `principal_from_claims` (an absent one fails there), and `sub`'s type is PyJWT's
+        own check."""
+        return ["sub", "exp"] if self.is_entra else ["sub"]
+
+
+DEFAULT_CLAIM_MAPPING = ClaimMapping()
+
+#: Entra's own cap on the groups a JWT carries; past it the claim is replaced by an overage.
+MAX_TOKEN_GROUPS = 200
+
+
+def _token_groups(claims: Mapping[str, Any], mapping: ClaimMapping) -> list[str]:
+    """The token's group ids. A group overage (Entra leaves `groups` out of a JWT past 200 groups
+    and names a Graph source in `_claim_names`, or, in the implicit flow, sends `hasgroups: true`)
+    is refused, never read as "no groups"."""
+    names = claims.get("_claim_names")
+    if mapping.groups_claim not in claims and (
+        (isinstance(names, dict) and mapping.groups_claim in names)
+        or claims.get("hasgroups") is True
+    ):
+        raise PrincipalResolutionError(
+            f"token has a group overage: its `{mapping.groups_claim}` claim was left out for "
+            "Graph; limit the groups the app's token carries (groups assigned to the application)"
+        )
+    groups = claims.get(mapping.groups_claim, [])
+    if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
+        raise PrincipalResolutionError(
+            f"token's `{mapping.groups_claim}` claim is not a list of group ids"
+        )
+    if len(groups) > MAX_TOKEN_GROUPS:
+        # Entra never sends more; a longer list is not a token Entra issued.
+        raise PrincipalResolutionError(
+            f"token's `{mapping.groups_claim}` claim lists more than {MAX_TOKEN_GROUPS} groups"
+        )
+    return groups
+
+
+def _single_value(
+    claims: Mapping[str, Any], source: ValueSource, what: str, groups: list[str]
+) -> str:
+    if source.claim is not None:
+        value = claims.get(source.claim)
+        if value is None:
+            raise PrincipalResolutionError(
+                f"token is missing required claim: {what} ({source.claim!r})"
+            )
+        if not isinstance(value, str) or not value:
+            raise PrincipalResolutionError(
+                f"token's {what} claim ({source.claim!r}) is not a non-empty string"
+            )
+        return value
+    assert source.groups is not None
+    found = {source.groups[g] for g in groups if g in source.groups}
+    if not found:
+        raise PrincipalResolutionError(
+            f"token is missing required claim: no group grants the {what}"
+        )
+    if len(found) > 1:
+        raise PrincipalResolutionError(f"token's groups grant more than one {what}; refused")
+    return found.pop()
+
+
+def _string_list(claims: Mapping[str, Any], claim: str, what: str) -> list[str]:
+    """A claim holding names: a list of strings, or one string as **one** name (never its
+    letters, as `list("RS")` would make it); absent is none. An empty name is refused, and a name
+    given twice is kept once, as the group path keeps a code two groups grant."""
+    value = claims.get(claim, [])
+    names = [value] if isinstance(value, str) else value
+    if not isinstance(names, list) or not all(isinstance(v, str) for v in names):
+        raise PrincipalResolutionError(f"token's {what} claim ({claim!r}) is not a list of names")
+    if not all(names):
+        raise PrincipalResolutionError(f"token's {what} claim ({claim!r}) holds an empty name")
+    return list(dict.fromkeys(names))
+
+
+def _handling_codes(claims: Mapping[str, Any], source: CodesSource, groups: list[str]) -> list[str]:
+    if source.claim is not None:
+        return _string_list(claims, source.claim, "handling codes")
+    assert source.groups is not None
+    codes: list[str] = []
+    for g in groups:
+        for code in source.groups.get(g, []):
+            if code not in codes:
+                codes.append(code)
+    return codes
+
+
+def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> Principal:
+    """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
+    package builds, from a session's token or an exchanged one, is built here from verified
+    claims."""
+    if mapping.is_entra:
+        if claims.get("tid") != mapping.tenant_id:
+            raise PrincipalResolutionError("token's tid is missing or names another tenant")
+        if not isinstance(claims.get("oid"), str) or not _GUID.match(claims["oid"]):
+            raise PrincipalResolutionError("token's oid is not an Entra object id")
+        scope = claims.get("scp")
+        if claims.get("idtyp") == "app" or not isinstance(scope, str) or not scope:
+            raise PrincipalResolutionError(
+                "token is app-only (no delegated scp): a service principal is no person"
+            )
+        if mapping.scope not in scope.split(" "):
+            raise PrincipalResolutionError(
+                f"token's scp does not grant this API's scope ({mapping.scope!r})"
+            )
+        # v2.0 names the client in `azp`, v1.0 in `appid`: whichever is present must be the Glass.
+        clients = [claims[c] for c in ("azp", "appid") if c in claims]
+        if not clients or any(c != mapping.client_id for c in clients):
+            raise PrincipalResolutionError("token was not issued to the Glass's client")
+        # A guest (B2B) account is homed in another tenant: `acct` 1, or an `idp` other than the
+        # issuer. Refused until the deployment decides to admit guests (ADR-148 Amendment 6).
+        guest_idp = "idp" in claims and claims["idp"] != claims.get("iss")
+        if claims.get("acct") in (1, "1") or guest_idp:
+            raise PrincipalResolutionError("token is a guest account's: guests are not admitted")
+    elif "tid" in claims:
+        # Keycloak never emits `tid`; an Entra token here would skip every check above and have its
+        # app roles read as OspreyFlow roles.
+        raise PrincipalResolutionError(
+            "token carries tid: an Entra ID token is refused without an Entra claim mapping"
+        )
+    uses_groups = any(
+        s.groups is not None for s in (mapping.clearance, mapping.org_unit, mapping.handling_codes)
+    )
+    groups = _token_groups(claims, mapping) if uses_groups else []
+    clearance = _single_value(claims, mapping.clearance, "clearance", groups)
+    org_unit = _single_value(claims, mapping.org_unit, "organisational unit", groups)
+    return Principal(
+        # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
+        # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
+        # application. Keycloak: `sub`, required and refused unless a string by PyJWT's decode.
+        id=str(claims["oid"]) if mapping.is_entra else str(claims["sub"]),
+        clearance=clearance,
+        org_unit=org_unit,
+        receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
+        # Keycloak's `roles` come from Admin › People; an Entra token's are not ours to read.
+        roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
+    )
+
+
 #: RFC 8693 §2.1's own grant-type URI, unchanged by this simplified client.
 TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange"
 
@@ -213,8 +477,25 @@ class PrincipalResolver:
     process, `aclose()`d at lifespan shutdown alongside every other
     client this codebase already closes there."""
 
-    def __init__(self, config: OidcSettings) -> None:
+    def __init__(self, config: OidcSettings, *, claim_mapping: ClaimMapping | None = None) -> None:
+        # Validated again from plain data: a copy or a `model_construct` skips the validators,
+        # and they are what make an Entra mapping checked as one.
+        mapping = ClaimMapping.model_validate(
+            (claim_mapping or DEFAULT_CLAIM_MAPPING).model_dump(mode="python")
+        )
+        if mapping.is_entra:
+            # A tenant-bound mapping that did not check `iss` and `aud` would take another tenant's
+            # (or another app's) token signed by a key it trusts: refused before any token is read.
+            if not config.oidc_issuer:
+                raise ValueError(
+                    "an Entra ID claim mapping needs the token issuer checked (OIDC_ISSUER)"
+                )
+            if not config.oidc_audience:
+                raise ValueError(
+                    "an Entra ID claim mapping needs the token audience checked (OIDC_AUDIENCE)"
+                )
         self._config = config
+        self._claim_mapping = mapping
         self._jwk_client = PyJWKClient(
             config.oidc_jwks_url, cache_keys=True, lifespan=config.oidc_jwks_ttl_seconds
         )
@@ -429,7 +710,7 @@ class PrincipalResolver:
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={
-                    "require": ["sub"],
+                    "require": self._claim_mapping.required_claims(),
                     "verify_aud": self._config.oidc_audience is not None,
                     "verify_iss": self._config.oidc_issuer is not None,
                 },
@@ -437,21 +718,8 @@ class PrincipalResolver:
         except jwt.PyJWTError as exc:
             raise PrincipalResolutionError(f"token rejected: {exc}") from exc
 
-        try:
-            clearance = str(claims[CLAIM_CLEARANCE])
-            org_unit = str(claims[CLAIM_ORG_UNIT])
-        except KeyError as exc:
-            # Defaulting a missing claim to "" would still fail closed
-            # (`01_DOMAIN_MODEL.md` §2.2: an unrecognised clearance sees
-            # nothing) but silently, as a principal who can never see
-            # anything rather than a rejected token — worse for whoever
-            # has to debug an IdP misconfiguration than an explicit 401.
-            raise PrincipalResolutionError(f"token is missing required claim: {exc}") from exc
-
-        return Principal(
-            id=str(claims["sub"]),
-            clearance=clearance,
-            org_unit=org_unit,
-            receivable_handling_codes=list(claims.get(CLAIM_RECEIVABLE_HANDLING_CODES, [])),
-            roles=list(claims.get(CLAIM_ROLES, [])),
-        )
+        # A missing clearance or unit is refused, not defaulted to "": defaulting would still fail
+        # closed (`01_DOMAIN_MODEL.md` §2.2: an unrecognised clearance sees nothing) but silently,
+        # as a principal who can never see anything rather than a rejected token — worse for
+        # whoever has to debug an IdP misconfiguration than an explicit 401.
+        return principal_from_claims(claims, self._claim_mapping)

@@ -1,0 +1,9 @@
+self-test: ok — an import error ('1 error') is a fault
+self-test: ok — a failure with an error is a fault
+self-test: ok — exit 2 is a fault
+self-test: ok — exit 5 (nothing collected) is a fault
+self-test: ok — exit 0 is a miss
+self-test: ok — exit 1 with 'failed' is a red
+self-test: ok — off keeps the 8-space indentation
+self-test: ok — off keeps elif
+self-test: ok — the 72d8719 tenant plant fails to compile

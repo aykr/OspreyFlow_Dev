@@ -1,0 +1,8 @@
+P10 part 1 (5ef24c6) merged; gated by the orchestrator on the merged tree 1372902 (main f78b307 + P10), 11 Nov 2026
+test exit 2
+ci exit 0
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+===== 1 failed, 11871 passed, 27 skipped, 91 warnings in 430.83s (0:07:10) =====
+- the GPU case only (the server's)
+- the leased live selection (303 files, stack b, lease 13:41:03Z): 35 failed, every one also failing on main's own full baseline (lease 15:38:12Z, 36 failed)
+- make idp-test against a real Keycloak 26: 10 passed; harness-a11y 34/34 in slot 14
