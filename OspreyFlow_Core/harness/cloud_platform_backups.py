@@ -229,11 +229,13 @@ def give_arcadedb_its_backups_claim(arcadedb: dict[str, Any]) -> dict[str, Any]:
 
 
 def clickhouse_users(deployment_user: str) -> str:
-    """ClickHouse's users file: `backup` (the runner's: BACKUP, the S3 source, the database's own
-    rights for RESTORE, ON CLUSTER), and the deployment's own user refused the S3 and URL sources
-    and BACKUP, so none of its queries reaches the bucket through ClickHouse's role (measured on
-    kind: before this, `osprey` read and overwrote sets). Each grant's grammar measured on
-    ClickHouse 25.8.33.6."""
+    """ClickHouse's users file: `backup` (the runner's: BACKUP, the S3 source, ON CLUSTER, and
+    every right on `ospreyflow*`, a prefix grant, since the restore makes `ospreyflow_restoring_*`
+    and swaps it with `ospreyflow_before_*`: refused on kind with `ospreyflow.*` alone, measured
+    both ways in gates/p9_grants_probe3.log), and the deployment's own user refused the S3 and URL
+    sources and BACKUP, so none of its queries reaches the bucket through ClickHouse's role
+    (measured on kind: before this, `osprey` read and overwrote sets), but for RESTORE, which no
+    privilege gates (Amendment 7, point 4). Each grant measured on ClickHouse 25.8.33.6."""
     return f"""<clickhouse>
   <users>
     <{deployment_user}>
@@ -249,7 +251,7 @@ def clickhouse_users(deployment_user: str) -> str:
       <quota>default</quota>
       <networks><ip>::/0</ip></networks>
       <grants>
-        <query>GRANT ALL ON ospreyflow.*</query>
+        <query>GRANT ALL ON ospreyflow*.*</query>
         <query>GRANT BACKUP, CLUSTER, S3 ON *.*</query>
       </grants>
     </{CLICKHOUSE_BACKUP_USER}>

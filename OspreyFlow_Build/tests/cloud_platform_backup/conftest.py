@@ -164,6 +164,30 @@ ZIP = b"PK\x03\x04 an ArcadeDB backup" * 1000
 REGIONAL = f"https://s3.{REGION}.amazonaws.com"
 
 
+def _backup_user_grants() -> list[str]:
+    """The database patterns `GRANT ALL ON <pattern>.*` gives `backup` in the users file the render
+    writes (cloud_platform_backups.clickhouse_users), so the fake refuses what ClickHouse would."""
+    user = backups.CLICKHOUSE_BACKUP_USER
+    block = backups.clickhouse_users("osprey").split(f"<{user}>", 1)[1].split(f"</{user}>", 1)[0]
+    return re.findall(r"GRANT ALL ON ([\w*]+)\.\*", block)
+
+
+def _backup_user_may(database: str) -> bool:
+    # ClickHouse's wildcard grant (`db*`) is a prefix; anything else names one database.
+    return any(
+        database.startswith(p[:-1]) if p.endswith("*") else database == p for p in _backup_user_grants()
+    )
+
+
+def _databases_named(statement: str) -> list[str]:
+    """The databases a restore's statement creates, drops, renames or restores into."""
+    found = re.findall(
+        r"(?:DROP DATABASE(?: IF EXISTS)?|CREATE DATABASE(?: IF NOT EXISTS)?|RENAME DATABASE|\bTO|\bAS)\s+(\w+)",
+        statement,
+    )
+    return [d for d in found if d not in ("S3",)]
+
+
 class FakeStores:
     """ArcadeDB's and ClickHouse's HTTP, as `Stores.http` calls them."""
 
@@ -230,6 +254,13 @@ class FakeStores:
             text = (f"Code: 497. DB::Exception: {user}: Not enough privileges. To execute this query, "
                     "it's necessary to have the grant BACKUP ON ospreyflow.*. (ACCESS_DENIED)").encode()  # fmt: skip
             raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        for database in _databases_named(body):
+            if not _backup_user_may(database):
+                # ClickHouse 25.8's own refusal (kind, round 3: the restore's temporary database
+                # outside `ospreyflow.*`), judged by the grants the real users file gives `backup`.
+                text = (f"Code: 497. DB::Exception: backup: Not enough privileges. To execute this query, "
+                        f"it's necessary to have the grant DROP DATABASE ON {database}.*. (ACCESS_DENIED)").encode()  # fmt: skip
+                raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
         if body.startswith(("DROP DATABASE", "CREATE DATABASE", "RENAME DATABASE")):
             return b""
         match = re.search(r"S3\((.*)\)", body)

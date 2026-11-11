@@ -455,3 +455,20 @@ def test_mains_restore_steps_fail_closed_when_the_pods_cannot_be_listed(
     assert pb.main([command, "--set", manifest["set"]]) == 1
     assert "cannot confirm the writers are stopped" in capsys.readouterr().err
     assert (claims / "kept.txt").read_text() == "untouched"
+
+
+def test_the_fake_judges_the_backup_users_databases_as_clickhouse_did() -> None:
+    """The fake's refusals follow the users file's own grant, and agree with ClickHouse 25.8.33.6
+    (gates/p9_grants_probe3.log): `ospreyflow*` covers the live database and the restore's two,
+    and refuses a name merely containing the word."""
+    from tests.cloud_platform_backup.conftest import _backup_user_may, _databases_named
+
+    for allowed in ("ospreyflow", "ospreyflow_restoring_20261111t0200z", "ospreyflow_before_20261111t0200z"):
+        assert _backup_user_may(allowed), allowed
+    for refused in ("x_ospreyflow", "elsewhere", "default", "system"):
+        assert not _backup_user_may(refused), refused
+    assert _databases_named("RENAME DATABASE ospreyflow TO ospreyflow_before_x ON CLUSTER osprey") == [
+        "ospreyflow",
+        "ospreyflow_before_x",
+    ]
+    assert _databases_named("BACKUP DATABASE ospreyflow TO S3('u')") == []

@@ -248,6 +248,9 @@ runner.PLANTS = [
     ("the writers not checked again before ArcadeDB's databases are replaced", CHART,
      '"name" "writers" "image" $b.image', '"name" "writers-unused" "image" $b.image',
      [TH + "test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_replaced"]),
+    ("the backup user's grant back to `ospreyflow.*` (kind, round 3: the restore refused its own temporary database)",
+     RENDER, "        <query>GRANT ALL ON ospreyflow*.*</query>", "        <query>GRANT ALL ON ospreyflow.*</query>",
+     [TP + "test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set"]),
 ]
 
 if __name__ == "__main__":
