@@ -14,7 +14,7 @@
 2. **What paints, more fully:**
    - an SVG root's filter, border or shadow;
    - a pseudo-element painting by border or by text;
-   - an outer box-shadow reaching the point from an element that is not an ancestor;
+   - an outer box-shadow reaching the point from an element that is not an ancestor (amended in the server round, 11 November: measured by what it paints there, at every place in the words' chain, not failed by its reach);
    - inert subtrees (their `inert` lifted for the probe and restored).
 3. **The page under everything** is the browser's `Canvas` colour as computed, not white.
 4. **SVG ink:**
@@ -42,3 +42,7 @@
 
 ## Show as BPMN
 Its listing comes off if the task box measures well. If it fails, the drawing's tokens are fixed in `showAsBpmn.css` (mine), red first.
+
+## Amended in the server round (11 November 2026)
+- A point where the words are hidden is not judged: under an opaque cover the hit test finds over them, or clipped by a scrolling ancestor. Words hidden at every point are unmeasurable.
+- Each node is scrolled into place at once, and every scroll is restored after it.

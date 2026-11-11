@@ -89,3 +89,83 @@ All browser runs were local, in the orchestrator's slot (`OSPREY_PORTS_SLOT=9`),
 - the plant for `-webkit-text-fill-color`.
 
 **Confirming run:** after "built".
+
+
+## The server round: the probe judged alike on every platform (11 November 2026, 9c6b9dc)
+
+**Why.** The merger's browser runs on the test server (20261111T091740Z on the merged tree, T093929Z on d41df45, slot 13) were red where the Mac's slot 9 had been green. All the new findings were the probe's own "not measurable". The UI font falls back to `system-ui`, so Linux Chromium sets the words a few pixels differently, and three of the probe's decisions turned on those pixels:
+- **a shadow's reach.** Show as BPMN's panel ends at x 940 and its shadow (`0 8px 24px -8px`, 0.7 black) reaches "Expires" at x 941 on Linux only;
+- **an open menu over the words.** Places' views menu covers part of the banner on Linux, and the first point inside the shadow's reach named the shadow;
+- **whether the probe scrolled.** The derive preview's cell lies past its `overflow: auto` box (right edge 1184, words from 1221). The old probe scrolled only when the words crossed the viewport's edge, so the result turned on the font, and on what an earlier node had scrolled.
+
+**What changed** (`undecidedContrast.ts`, `textContrast.ts`):
+1. Another element's outer shadow is **measured** at each point. Its paint is a Gaussian with σ equal to half the blur (CSS Backgrounds 3), taken out to 3σ. The worst of three placements counts: laid away, straight under the words, or over them. The probe no longer fails on the shadow's reach.
+2. A point where the words are **hidden** is not judged. The words are hidden under an opaque element that the browser's hit test finds over them (never one of their own descendants), or where a scrolling box clips them. (Words hidden at every point first passed with no ratio; the review round below makes them unmeasurable.)
+3. Each node is **scrolled** to the middle of its boxes at once (`behavior: "instant"`), and every scroll position is put back after it.
+
+**Red in Node** (`textContrast.test.ts`, 34 cases). Each fault was planted in `textContrast.ts` and then restored:
+- **S1:** shadows ignored. Red: 3.
+- **S2:** σ taken as the whole blur. Red: the coverage case.
+- **S3:** the "over" placement dropped. Green at first, because no case had "over" as the worst. A case was added (a black shadow over light words on black), and then it was red.
+- **S4:** the "under" placement dropped. Red: 1.
+- **S5:** an unread shadow colour skipped. Red: 1.
+- **S6:** no cap on shadows. Red: 1.
+- **H1:** hidden points judged. Red: 2.
+- **H2:** words hidden everywhere made unmeasurable. Red: 1.
+
+**Red in the browser, at the real call site** (`checkUndecidedContrast` on real axe results). These ran on the server, slot 13, at the tree committed as 9c6b9dc. The log is `t3b/server-round-plants.txt`; "old" is the probe at d41df45.
+- **A shadow in the words' own colour** reaching Show as BPMN's "Start": red at **2.14:1, a ratio**. The old probe gave "not measurable".
+- **The platform shift in miniature:** a box with Show as BPMN's own shadow, the words 0 to 30px past it.
+  - The old probe is red at every gap, and *which* words are red changes with the gap (3, 2, 2, 2, 1, 1, 1, 1).
+  - The new probe is green at every gap.
+- **An opaque cover over half of "If a Person meets":** green, the visible half measured.
+  - Control: the same with `hides` removed is red, "over or under div".
+  - A translucent cover (alpha 0.9) stays red in every variant.
+- **The covered half's words in the cover's colour** (the visible half at 1:1): red at **1.00:1**. A hidden half never excuses the visible one.
+- **An opaque descendant of the words' own cell** over half of its words: red, "over or under span".
+  - Control: with the descendant guard removed it is green, so the guard carries it.
+  - Found on the way: Chrome's hit test found the span 0.4px outside its fractional box, so the cover test now allows the 1px the browser snaps to.
+- **The derive preview's cell, as loaded:** green, where the old probe is red.
+  - It is red again only with `hides`, the clip check and the instant scroll all removed. Any one of the three settles it.
+  - Scrolled right first, it is green in every variant.
+- **A rounded corner** (60px) over the words: green in the new probe.
+  - Chrome's hit test leaves out the corner past its arc, so the words there show no cover.
+  - The probe's own corner test is a second guard behind the hit test, and this plant does not reach it.
+
+**Carried, not closed** (CARRIES row 121, added to the earlier list):
+- a shadow under a translucent ancestor, which is measured as straight under the words or away, never between;
+- a shadow's rounded corners, taken as square (which can only overstate the paint);
+- the corner test not reached in the browser.
+
+### The review round (8bd3eef): the lane-reviewer's findings and the orchestrator's condition
+
+**The orchestrator's condition:** hidden points are a new way for the probe to stay silent, so show that they cannot hide a real failure. Three changes, each measured below.
+- **Words hidden at every point are now unmeasurable**, never a pass.
+- **A cover hides the words only when nothing on its way up makes it see-through:** no filter, blend, mask or clip on it or any ancestor. Chrome's hit test ignores a mask.
+- **The clip check is narrower.** A hit-test miss counts as hidden only where an ancestor that clips its overflow also leaves the point out. Any other miss is a cover: a modal's inertness, a rotation, pointer events kept off. A point where the browser hit-tests nothing (outside the viewport) is a cover too.
+
+**The lane-reviewer's findings on 9c6b9dc, and what was done:**
+1. *No record of the red runs:* written above, and the plant logs are in `t3b/server-round-plants.txt`. The browser plants and their variants stay out of every commit, as in every earlier round (Q1 to Q7, MP1 to MP3).
+2. *A filter, blend or mask on a cover's ancestor:* fixed, as the second change above. Plants: a mask that clears the cover, and a cover in a blended wrapper. Both red.
+3. *Hidden at every point passing:* fixed, as the first change above (H2′).
+4. *Three placements are not the worst:* a shadow is now laid at every place in the words' chain, as well as away and over everything. A search over random colours found a case where only "between the layers" is the worst (1.04:1, against 1.13:1 over everything). It is a unit case, and S7 is red.
+5. *σ unchecked:* measured from Chromium's pixels on the server. The fitted σ is 2.08, 4.15, 8.30, 12.46, 20.76 and 31.17 for blurs of 4 to 60px: about 0.52 × blur. That is against the model's 0.5 × blur, and the Skia figure the reviewer half-remembered (0.29 × blur + 0.5) is refuted.
+   - At half the blur the measured alpha is 0.157, the model's 0.159. At the whole blur it is 0.020, the model's 0.023.
+   - So the model matches to within 0.003 and slightly overstates the tail. σ stays at blur / 2.
+6. *An empty hit test:* now a cover.
+7. *A smooth scroll restore:* every restore is instant.
+8. *`1e-06px`:* read with its exponent.
+9. *The colour regex copied into the browser half:* kept. A colour it cannot read still reaches `parseColour` and is refused (S5).
+10. *The "none" placement:* "over everything" dominates it in every case searched. It is kept as a second line and is not separately red.
+11. *The corner comment:* corrected.
+
+**Red at the real call site** (run 20261111T130711Z, slot 13). The plants sit on Show as BPMN's "If a Person meets", whose words are in their task box's own fill, so they are 1:1 wherever they are seen.
+- With no plant: 1.00:1.
+- A translucent half (alpha 0.5), a half gradient (opaque, then clear), an opaque half at opacity 0.9, a content-box clip with the words in its padding, an opaque half under a mask that clears it, and an opaque half in a blended wrapper: each "not measurable: over or under div". All red.
+- An opaque half in a wrapper at opacity 0.5, and a frame (clear background, opaque border): 1.00:1, red. The wrapper's stacking puts it under the dialog, so the words are seen whole.
+- Opaque over every point: "not measurable: hidden at every point", red, with 1:1 words and with 7:1 words alike.
+
+**The full set at 9c6b9dc** (20261111T124046Z) had 7 failed and 972 passed:
+- 4 were the GOV.UK brand's `data-brand` not set within 5s, before the probe ran. All 4 passed on the retake.
+- 3 were places' open menu, "over or under button.menu-panel__item". A menu's items lie over its opaque panel, so the probe now looks through everything over the words for a cover that hides them (8bd3eef).
+- On the retake, places' GOV.UK look gave "hidden at every point" for its two listed menu findings. Their listings now give that reason (owner shell).

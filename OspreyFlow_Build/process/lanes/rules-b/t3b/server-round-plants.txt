@@ -1,0 +1,229 @@
+# T3b server round: the browser plants and controls, run 20261111T123911Z on the test server, slot 13, against the tree committed as 9c6b9dc (only its header comment differs). new = the probe at 9c6b9dc; old = the probe at d41df45 (19d73ba after the rebase); each other row is the new probe with the branches named removed. The plant file and the variants are in no commit.
+
+
+Running 13 tests using 1 worker
+
+## opaque-half
+  new (0): -
+  old (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  nohides+noclip+oldscroll (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+
+## translucent-half
+  new (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  old (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  noguard (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  noclip (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  oldscroll (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  noclip+oldscroll (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  nohides (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+  nohides+noclip+oldscroll (1): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+
+## rounded-corner
+  new (0): -
+  old (3): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      tspan[dy="16"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("the conditions")
+      text[x="460"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("End")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (3): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      tspan[dy="16"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("the conditions")
+      text[x="460"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("End")
+  nohides+noclip+oldscroll (3): tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      tspan[dy="16"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("the conditions")
+      text[x="460"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("End")
+
+## derive-preview's cell, descendant-in-cell
+  new (1): tr:nth-child(2) > td:nth-child(6): not measurable: over or under span (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  old (1): tr:nth-child(2) > td:nth-child(6): not measurable: over or under div (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  noguard (0): -
+  noclip (1): tr:nth-child(2) > td:nth-child(6): not measurable: over or under span (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (1): tr:nth-child(2) > td:nth-child(6): not measurable: over or under span (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  nohides+noclip+oldscroll (2): tr:nth-child(2) > td:nth-child(6): not measurable: over or under div (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+      tr:nth-child(2) > td:nth-child(7): not measurable: over or under div (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("2026-11-01T10:40:00+00:00")
+
+
+## shadow-tail, the words 0px past the box
+  new (0): -
+  old (3): tspan[dy="0"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      tspan[dy="16"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("the conditions")
+      text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 4px past the box
+  new (0): -
+  old (2): tspan[dy="0"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 8px past the box
+  new (0): -
+  old (2): tspan[dy="0"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 12px past the box
+  new (0): -
+  old (2): tspan[dy="0"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+      text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 16px past the box
+  new (0): -
+  old (1): text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 20px past the box
+  new (0): -
+  old (1): text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 24px past the box
+  new (0): -
+  old (1): text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## shadow-tail, the words 30px past the box
+  new (0): -
+  old (1): text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+## derive-preview as loaded
+  new (0): -
+  old (1): tr:nth-child(2) > td:nth-child(6): not measurable: over or under div (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (2): tr:nth-child(2) > td:nth-child(6): not measurable: over or under div (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("+44 7700 900719")
+      tr:nth-child(2) > td:nth-child(7): not measurable: over or under div (axe: elmPartiallyObscured) [own surfaces 15.69:1] ("2026-11-01T10:40:00+00:00")
+
+## derive-preview with its scrolling boxes scrolled right first
+  new (0): -
+  old (0): -
+  noguard (0): -
+  noclip (0): -
+  oldscroll (0): -
+  noclip+oldscroll (0): -
+  nohides (0): -
+  nohides+noclip+oldscroll (0): -
+
+  13 passed (38.5s)
+Wall time: 40 s, exit 0 (no stack, no lease; set-up before it 15 s)
+
+# From run 20261111T123406Z (the same tree before the 1px edge allowance; new and old only): the shadow in the words' own colour, and the words gone under a half cover
+## shadow-ink
+  new (1): text[x="60"]: 2.14:1 < 4.5:1 (axe: imgNode) ("Start")
+  old (1): text[x="60"]: not measurable: over or under the shadow of div (axe: imgNode) [own surfaces 13.17:1] ("Start")
+
+## opaque-half-words-gone
+  new (1): #show-as-bpmn-title: 1.00:1 < 4.5:1 (axe: equalRatio) ("Visits to listed people as BPMN 2.0")
+  old (1): #show-as-bpmn-title: not measurable: over or under div (axe: equalRatio) [own surfaces 1.00:1] ("Visits to listed people as BPMN 2.0")
+
+
+# The orchestrator's condition and the reviewer's #5: run 20261111T130711Z (slot 13), the tree committed next; words in their task box's own fill (1:1) unless named
+
+Running 12 tests using 1 worker
+
+## words 1:1, no plant
+  new: tspan[dy="0"]: 1.00:1 < 4.5:1 (axe: imgNode) ("If a Person meets")
+  old: tspan[dy="0"]: 1.00:1 < 4.5:1 (axe: imgNode) ("If a Person meets")
+
+## translucent half
+  new: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+
+## gradient half (opaque, then clear)
+  new: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.12:1] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.12:1] ("If a Person meets")
+
+## opaque half at opacity 0.9
+  new: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+
+## opaque half in a wrapper at opacity 0.5
+  new: tspan[dy="0"]: 1.00:1 < 4.5:1 (axe: imgNode) ("If a Person meets")
+  old: tspan[dy="0"]: 1.00:1 < 4.5:1 (axe: imgNode) ("If a Person meets")
+
+## frame: clear background, opaque border
+  new: tspan[dy="0"]: 1.00:1 < 4.5:1 (axe: imgNode) ("If a Person meets")
+  old: tspan[dy="0"]: 1.00:1 < 4.5:1 (axe: imgNode) ("If a Person meets")
+
+## content-box clip, words in its padding
+  new: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.12:1] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.12:1] ("If a Person meets")
+
+## opaque half with a mask that clears it
+  new: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+
+## opaque half in a wrapper with a blend
+  new: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.00:1] ("If a Person meets")
+
+## opaque over every point
+  new: tspan[dy="0"]: not measurable: hidden at every point, under an opaque element over the words or clipped (axe: imgNode) [own surfaces unread] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 1.12:1] ("If a Person meets")
+
+## opaque over every point, words 7:1
+  new: tspan[dy="0"]: not measurable: hidden at every point, under an opaque element over the words or clipped (axe: imgNode) [own surfaces unread] ("If a Person meets")
+  old: tspan[dy="0"]: not measurable: over or under div (axe: imgNode) [own surfaces 13.17:1] ("If a Person meets")
+
+blur 4: fitted sigma 2.08 (blur/2 = 2.00, 0.2887*blur+0.5 = 1.65); alpha at 0.5,2,4px: 0.408, 0.114, 0.012
+blur 8: fitted sigma 4.15 (blur/2 = 4.00, 0.2887*blur+0.5 = 2.81); alpha at 0.5,4,8px: 0.455, 0.141, 0.016
+blur 16: fitted sigma 8.30 (blur/2 = 8.00, 0.2887*blur+0.5 = 5.12); alpha at 0.5,8,16px: 0.478, 0.153, 0.020
+blur 24: fitted sigma 12.46 (blur/2 = 12.00, 0.2887*blur+0.5 = 7.43); alpha at 0.5,12,24px: 0.486, 0.157, 0.020
+blur 40: fitted sigma 20.76 (blur/2 = 20.00, 0.2887*blur+0.5 = 12.05); alpha at 0.5,20,40px: 0.494, 0.161, 0.020
+blur 60: fitted sigma 31.17 (blur/2 = 30.00, 0.2887*blur+0.5 = 17.82); alpha at 0.5,30,60px: 0.494, 0.165, 0.024
+
+  12 passed (15.2s)
+Wall time: 16 s, exit 0 (no stack, no lease; set-up before it 11 s)
