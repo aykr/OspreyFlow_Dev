@@ -108,3 +108,43 @@ index f977d16..f580088 100644
      # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
      # value; every one of these is a name, a path or a choice already written in osprey.yaml.
      return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"
+diff --git a/OspreyFlow_Core/services/api/model_admin.py b/OspreyFlow_Core/services/api/model_admin.py
+index 0827213..24a25c4 100644
+--- a/OspreyFlow_Core/services/api/model_admin.py
++++ b/OspreyFlow_Core/services/api/model_admin.py
+@@ -39,7 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
+ from dataclasses import dataclass, field
+ from datetime import UTC, datetime
+ from pathlib import Path
+-from typing import Any, Protocol, cast
++from typing import Any, Literal, Protocol, cast
+ 
+ import asyncpg
+ import httpx
+@@ -193,6 +193,8 @@ class Installed:
+     local_only: bool
+     sendable: list[str]
+     locals: dict[str, str | None]
++    #: ADR-135 Amendment 9: the extraction engine the render chose (`OSPREY_EXTRACTION_ENGINE`).
++    extraction_engine: Literal["deep_read", "laurium"] = "deep_read"
+ 
+     @classmethod
+     def from_env(cls, local: DeploymentModels, environ: Mapping[str, str]) -> Installed:
+@@ -234,6 +236,9 @@ class Installed:
+                 for c in environ.get("OSPREY_SENDABLE_HANDLING_CODES", "").split(",")
+                 if c.strip()
+             ],
++            extraction_engine=(
++                "laurium" if environ.get("OSPREY_EXTRACTION_ENGINE") == "laurium" else "deep_read"
++            ),
+             locals={
+                 "extraction": local.extraction,
+                 "vision": local.vision,
+@@ -777,6 +782,7 @@ class ModelAdmin:
+             sendable_handling_codes=list(self._installed.sendable),
+             source="models file" if self._settings is not None else "osprey.yaml",
+             engine_kinds=engine_kinds_offered(self._file.profile),
++            extraction_engine=self._installed.extraction_engine,
+         )
+ 
+     @property

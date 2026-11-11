@@ -86,3 +86,19 @@ The orchestrator withdrew its ruling (b) on case-b's stop (an accepted owner dec
   null written out is the field left unset, so the preset. Taken out of the refused values, with that said.
 - With the diff applied: the schemas, harness, CLI, cp-policy-check, engine and Laurium adapter suites, 2,160 passed;
   the one failure is `test_deployment_schema.py` reading the owner's own local `osprey.yaml`, as before.
+
+## Piece 5: *Admin › Models* shows the extraction engine, read-only (the orchestrator's ruling (B))
+
+Set-up only: Admin shows the engine the render chose, with "chosen at set-up: change it in osprey.yaml, then re-render
+(ospreyflow start --build or the next upgrade)", and offers no change; no write route.
+
+- **The API** (`ModelsAdminView.extraction_engine`, the schema; `Installed`'s and `view`'s two lines in
+  `P12p2_platform.diff`): `tests/services/api/test_admin_models_extraction_engine.py`, written first, **5 failed**
+  (`Installed` had no such field), then 7 passed; with the model admin routes and engine kinds, 135 passed.
+  The access case (rule 4: an analyst refused the view) and the no-write-route case passed before and after: they are
+  the existing route's rights and the absence of a route, regression guards.
+- **The Glass** (`P12p2_glass_models.diff`, for platform-b: `Models.tsx`, its test, the harness and the axe list):
+  `Models.test.tsx`'s new block, written first, **2 failed**, then 13 passed; `tsc` and ESLint clean. No focusable
+  element added, so no keyboard case (rule 13 covers actions). **axe in all three themes** on the test server,
+  offline: the Models harness's states with `cloud=1&engine=laurium` added, **40 passed**
+  (`gates/fa445e5.a11y-models-harness.txt`).
