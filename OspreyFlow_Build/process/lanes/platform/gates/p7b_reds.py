@@ -97,6 +97,20 @@ runner.PLANTS = [
     ("poc: a CPU limit below its request accepted", INIT,
      "    if _millicores(limit) < _millicores(request):\n", "    if False:\n",
      [T_POC + "test_a_cpu_limit_below_its_request_is_refused_in_words"]),
+    ("poc: the OpenSearch domain still made", C + "harness/cloud_platform/terraform.py",
+     '    if config.components.search is SearchBackend.OPENSEARCH and cp.shape != "poc":\n',
+     "    if config.components.search is SearchBackend.OPENSEARCH:\n",
+     [T_POC + "test_the_poc_shape_makes_no_opensearch_domain"]),
+    ("render: an artefact's own folder not made (terraform/)", C + "harness/render.py",
+     "        make_shared_folder(target.parent, under=out_dir)\n", "",
+     [T_R + "test_a_first_render_into_an_empty_folder_writes_every_artefact"]),
+    ("render: the plan's digests not carried forward (each tag resolved afresh)",
+     C + "harness/cloud_platform/carry.py",
+     "        return copied.get(image) or fallback(image)\n", "        return fallback(image)\n",
+     [T_R + "test_a_tag_that_moves_between_the_two_renders_keeps_the_digest_that_was_copied"]),
+    ("images: a third-party image copied by its tag alone", C + "cli/ospreyflow/images.py",
+     "    if by_tag:\n", "    if False:\n",
+     [T_IMG + "test_a_third_party_image_named_by_tag_alone_is_never_copied"]),
 ]
 
 if __name__ == "__main__":
