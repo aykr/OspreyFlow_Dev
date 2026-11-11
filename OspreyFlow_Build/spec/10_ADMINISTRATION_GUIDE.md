@@ -755,7 +755,8 @@ rules, three things were not yet shown working: the Conduit and the workers runn
 Keycloak starting with group 0 (below), and the egress policies enforced. P7b's kind run is to show
 them. And nothing yet runs the identity step that a cluster's install runs once Keycloak answers
 (the Conduit's client secret set on its clients, its service account's roles), so sign-in is not
-configured on this profile until Entra ID replaces Keycloak (*coming*, section 6a.7).
+configured on this profile until Entra ID replaces Keycloak: the Conduit's side of that is built
+(section 6a.7), the profile's is *coming* (section 6a.8).
 The commands that need the platform, a cluster or Docker (`helm install`, `tofu`, the push itself,
 the policy check on your own settings) have not yet been run anywhere: they are unrun until P7b's
 kind run. The other commands below (the folder, the two renders and the push's dry run) have been run as
@@ -865,7 +866,7 @@ Each container asks for its CPU and memory and has a memory limit. **None names 
 purpose: a CPU limit throttles a store's compaction and the Conduit's bursts. So a LimitRange in the
 namespace with a default CPU limit puts that limit on every container, and a ResourceQuota counting
 `limits.cpu` refuses every pod that names none: both are questions for the platform's team (section
-6a.8). ArcadeDB's Java heap is three quarters of its memory limit. **These sizes are proposals, not
+6a.9). ArcadeDB's Java heap is three quarters of its memory limit. **These sizes are proposals, not
 measurements**: no load has yet run on the platform.
 
 | Component | Copies, development | Copies, production | CPU asked for | Memory asked for | Memory limit |
@@ -909,7 +910,7 @@ leaves it unchanged and `tofu validate` accepts it.
 **The platform's Terraform state holds every secret here**: the passwords it makes, and each key a
 person holds, which is a sensitive variable with no default written into the Secret's data. How the
 environments repository's pipeline is given those variables is a question for the platform's team
-(section 6a.8).
+(section 6a.9).
 
 **The managed stores' details are read by name from their secrets**, and only by the pods that read
 the stores. No such detail is in a file, in `values.yaml` or in our own Secret. The pods that take the
@@ -1005,7 +1006,7 @@ controller's namespace, on their own ports. The Ingress serves the Glass, `id.` 
 Entra ID) and, when reporting is on, `bi.` (Superset) at `network.public_origin`'s names. Its read
 and send timeouts are an hour, for the Glass's live updates, and its body-size limit is the
 Conduit's upload cap, 512 MiB; ModSecurity may refuse an upload long before that (the first question
-in section 6a.8).
+in section 6a.9).
 
 ### 6a.6 The policy check
 
@@ -1029,10 +1030,96 @@ PYTHONPATH=.:packages:<build folder> python -m tools.cp_policy_check --config os
 It is unrun here until P7b's kind run. The
 platform's own Gatekeeper constraints are not published to us, so the check does not run them.
 
-### 6a.7 Coming
+### 6a.7 Signing in through Entra ID
 
-- **Sign-in through the organisation's Entra ID**: its claims for clearance, organisational unit and
-  handling codes mapped in the profile, its endpoints in the egress list, and no Keycloak.
+**Built in the Conduit's token check, not yet reachable from the profile.** The Conduit can read an
+Entra ID access token through a claim mapping (ADR-148 Amendment 6). The profile does not yet read a
+mapping from `osprey.yaml` or give one to the Conduit, and it still renders Keycloak, so a
+`cloud-platform` deployment signs in through neither yet (*coming*, section 6a.8). This section says
+what the mapping does once it is given; where its settings go in `osprey.yaml` is part of the step
+still coming.
+
+**The mapping.** Clearance, organisational unit and handling codes each come from **one** source,
+never both: a named token claim (a directory extension attribute, say), or a table from Entra group
+id to value. Its shape, with placeholder ids:
+
+```yaml
+tenant_id: 00000000-0000-4000-8000-000000000001   # the organisation's Entra tenant
+client_id: 00000000-0000-4000-8000-000000000002   # the Glass's app registration
+scope: access_as_user                             # the delegated scope the Glass asks for (the default)
+clearance: {claim: extension_<app id>_clearance}
+org_unit: {groups: {00000000-0000-4000-8000-000000000011: unit-1}}
+handling_codes: {groups: {00000000-0000-4000-8000-000000000021: [R]}}
+groups_claim: groups                              # the claim holding the person's group ids (the default)
+```
+
+A clearance or unit group grants one value; a handling-codes group grants a list, and a person's
+codes are the union of their mapped groups'. A group the table does not name grants nothing. A
+mapping that names both sources or neither, an unknown key (`clearence`), a group id or tenant that
+is not a GUID, a group granting an empty value, or a tenant with no `client_id` fails to load. A mapping other
+than the fixed claim names that Keycloak uses (`clearance`, `org_unit`,
+`receivable_handling_codes`) must name its tenant.
+
+**Pinned to the tenant and to the Glass.** Every Entra tenant shares one set of signing keys, so a
+signature alone says nothing about whose token it is. With a tenant set:
+
+- the Conduit's token check refuses to start unless its `OIDC_ISSUER` and `OIDC_AUDIENCE` are set,
+  and checks both on every token;
+- the token must carry `oid` and `exp`, and its `tid` must be the tenant;
+- the application it was issued to (`azp` in a v2.0 token, `appid` in a v1.0 token) must be
+  `client_id`, so a token another application in the tenant obtained for this API is no session;
+- its `scp` must include `scope` as a whole word (`access_as_user_extra` does not count).
+
+**A person is keyed by `oid`**, Entra's object id, unique within the pinned tenant. Entra's `sub`
+differs for each application that asks, so it would split one person in two. On Keycloak the key
+stays `sub`.
+
+**Refused, never guessed.** Each of these is refused at sign-in, never given a default:
+
+- a missing clearance or unit, or a value of the wrong type;
+- groups granting two different clearances, or two different units (two granting the same one are
+  fine);
+- a group overage: past 200 groups Entra leaves the list out of the token, so a person in more than
+  200 groups cannot sign in;
+- an empty handling code, alone or in a list;
+- an `oid` that is not an object id, or another tenant's token;
+- an app-only token (no delegated `scp`, or `idtyp: app`), which is a program, not a person;
+- a guest from another directory (`acct` of `1`, or an `idp` other than the issuer). Admitting
+  guests would need a setting that does not exist.
+
+On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
+words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
+
+**Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
+assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator. Roles stay
+assigned in *Admin › People*. Where *Admin › People* keeps them on this profile, with no Keycloak, is
+*coming* (section 6a.8).
+
+**Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
+one real token from the organisation's development tenant is to settle each:
+
+- **v1.0 or v2.0 tokens.** An app registration left at its default is issued v1.0 access tokens,
+  whose issuer is `https://sts.windows.net/<tenant>/` (not `https://login.microsoftonline.com/<tenant>/v2.0`)
+  and whose audience may be the `api://` application id URI rather than the client id. Set
+  `OIDC_ISSUER` and `OIDC_AUDIENCE` to what the tokens carry.
+- **Extension attribute names** are assumed to arrive as `extension_<application id without
+  hyphens>_<name>`, or as `extn.<name>` through a claims-mapping policy. The mapping names whatever
+  the real token carries.
+- **A claims-mapping policy** has its tokens signed with an application's own key, so the Conduit's
+  `OIDC_JWKS_URL` must then end in `?appid=<client id>`.
+- **Access tokens, not ID tokens**: the Glass is to send an access token for this API. An ID token
+  carries no `scp`, and is refused as app-only.
+
+### 6a.8 Coming
+
+- **Sign-in through the organisation's Entra ID on the profile** (the Conduit's side is section
+  6a.7): the profile reading the claim mapping from `osprey.yaml` and giving it to the Conduit, with
+  the issuer, audience and signing keys; Entra's endpoints in the egress list; and **Keycloak not
+  rendered**, with its pod, its `id.` name, its secrets and its group 0. *Admin › People* is to keep
+  each person's roles in the deployment's own Postgres, by tenant and `oid`: a person appears after
+  their first sign-in or is added by `oid` beforehand, and the first administrator is named by `oid`
+  at install. Two things are not to be available on Entra at first: a scheduled run acting as its
+  owner, and Superset's roles.
 - **Backups and restore**: a scheduled backup of ArcadeDB and ClickHouse to S3, encrypted, and a
   restore rehearsed on the development namespace, with its measured times.
 - **The volume-expansion and upgrade runbooks** for ArcadeDB and ClickHouse.
@@ -1043,7 +1130,7 @@ platform's own Gatekeeper constraints are not published to us, so the check does
 - **The shared folders, the settings files and the recipes repository** off the one volume.
 - **The marking ceiling** set to OFFICIAL-SENSITIVE by the profile itself.
 
-### 6a.8 Questions for the platform's team
+### 6a.9 Questions for the platform's team
 
 None stops the render; each is the team's to answer before the first install.
 
