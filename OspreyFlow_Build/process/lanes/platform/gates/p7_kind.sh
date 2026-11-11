@@ -15,6 +15,8 @@ KUBECTL_VERSION=v1.32.2
 CALICO_VERSION=v3.29.3
 INGRESS_VERSION=controller-v1.12.1
 export PATH="$TOOLS:$PATH" KUBECONFIG="$HOME/osprey-runs/platform.tools/kubeconfig"
+# The kind platform's settings file is a test fixture since 11 November (ADR-148 Amendment 1 item 11).
+export OSPREY_PLATFORM_FOLDERS="$(cd "$(dirname "$0")/../../../.." && pwd)/tests/fixtures/cloud_platform/platforms"
 
 tools() {
   mkdir -p "$TOOLS"

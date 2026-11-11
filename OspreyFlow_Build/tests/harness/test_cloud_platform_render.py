@@ -25,7 +25,7 @@ from typing import Any
 import pytest
 import yaml
 from harness.cloud_platform import CloudPlatformNotRenderable, managed_variables
-from harness.cloud_platform.settings import load_platform
+from harness.cloud_platform.settings import FOLDERS_VARIABLE, PLATFORMS, load_platform
 from harness.render import UnpinnedImagesError, load_config, render
 from pydantic import ValidationError
 from tools.cp_policy_check import FIXTURES, _resolver
@@ -73,8 +73,9 @@ def values(request: pytest.FixtureRequest) -> dict[str, Any]:
 def test_the_render_is_values_a_lock_the_image_plan_and_the_namespace_s_terraform() -> None:
     names = set(_artefacts(_config()))
     assert {"values.yaml", "versions.lock", "images.yaml"} <= names
-    assert {f"terraform/{f}.tf" for f in ("main", "variables", "rds", "elasticache", "s3", "ecr",
-                                         "irsa", "secrets")} <= names  # fmt: skip
+    # No main.tf: the providers and backend are the namespace folder's own (test_rendered_terraform).
+    assert {f"terraform/{f}.tf" for f in ("variables", "rds", "elasticache", "s3", "ecr", "irsa",
+                                         "secrets")} <= names  # fmt: skip
 
 
 def test_none_of_the_stores_the_platform_manages_and_no_caddy_or_local_model(
@@ -377,12 +378,15 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
     assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
 
 
-def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s() -> None:
+def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The bucket is reached at S3's addresses (a gateway endpoint routes them by a prefix list, not
     the VPC's network) and IRSA's role by STS: each is an egress host on every render, its networks
     the platform's settings file's (`egress.service_nets`) or the deployment's, or refused."""
     with pytest.raises(CloudPlatformNotRenderable, match="s3.eu-west-2.amazonaws.com"):
         _artefacts(_config("development", cloud_platform={"egress_nets": {}}))
+    monkeypatch.setenv(FOLDERS_VARIABLE, str(FIXTURES / "platforms"))
     kind = load_platform("kind")
     assert set(kind.egress.service_nets) == set(AWS)
     raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
@@ -634,3 +638,182 @@ def test_a_database_s_owner_is_granted_to_the_login_that_makes_it(values: dict[s
             grant = script.find(f"GRANT {owner[1]} TO CURRENT_USER;")
             assert 0 <= grant < script.find(f"CREATE DATABASE {owner[0]}"), container["name"]
     assert made, "no init container makes a database: the test would pass on nothing"
+
+
+# ---- egress opened by one setting (ADR-148 decision 7; the independent review of P7, item 3) -----
+
+
+@pytest.mark.parametrize(
+    ("net", "why"),
+    [
+        ("0.0.0.0/0", "is a default route"),
+        ("::/0", "is a default route"),
+        ("0.0.0.0/1", "is wider than /16"),
+        ("10.0.0.0/8", "is wider than /16"),
+        ("2001:db8::/32", "is wider than /48"),
+    ],
+)
+def test_a_network_that_would_open_egress_is_refused(net: str, why: str) -> None:
+    """Planted where a deployment writes it, `osprey.yaml`'s `cloud_platform.egress_nets`: one
+    setting must never allow the namespace out to everywhere."""
+    raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["egress_nets"]["api.openai.com"] = [net]
+    with pytest.raises(ValidationError, match=re.escape(f"['api.openai.com']: {net} {why}")):
+        OspreyConfig.model_validate(raw)
+
+
+def test_the_widest_networks_egress_may_name_are_accepted() -> None:
+    raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["egress_nets"]["api.openai.com"] = ["10.1.0.0/16", "2001:db8:1::/48"]
+    assert _hosts(_values(OspreyConfig.model_validate(raw)))["api.openai.com"] == [
+        "10.1.0.0/16", "2001:db8:1::/48",
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize("field", ["managed_nets", "service_nets"])
+def test_a_platform_s_networks_that_would_open_egress_are_refused(
+    tmp_path: Any, field: str
+) -> None:
+    """A platform's own settings file is held to the same width: every pod may reach all of its
+    `managed_nets`."""
+    raw = yaml.safe_load((PLATFORMS / "client.yaml").read_text(encoding="utf-8"))
+    raw["egress"][field] = (
+        ["0.0.0.0/0"] if field == "managed_nets" else {"s3.eu-west-2.amazonaws.com": ["::/0"]}
+    )
+    (tmp_path / "wide.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
+    with pytest.raises(ValidationError, match="is a default route"):
+        load_platform("wide", [tmp_path])
+
+
+# ---- the profile's extension points are data (ADR-142 Amendment 8 decision 3) --------------------
+
+
+def _profile(tmp_path: Any, monkeypatch: pytest.MonkeyPatch, change: Any) -> None:
+    """The render reads a copy of `profile.yaml` with `change` made to it."""
+    import harness.cloud_platform as cp
+    from harness.cloud_platform.settings import PROFILE, load_profile
+
+    raw = yaml.safe_load(PROFILE.read_text(encoding="utf-8"))
+    change(raw)
+    path = tmp_path / "profile.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    monkeypatch.setattr(cp, "load_profile", lambda: load_profile(path))
+
+
+def test_an_image_of_ours_with_no_build_row_is_refused_in_words(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _profile(tmp_path, monkeypatch, lambda raw: raw["ours"].pop("ner"))
+    with pytest.raises(CloudPlatformNotRenderable, match="do not say how 'ner' is built"):
+        _artefacts(_config())
+
+
+def test_a_door_group_zero_and_an_always_host_are_rows(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def change(raw: dict[str, Any]) -> None:
+        raw["doors"] = [d for d in raw["doors"] if d["workload"] != "superset"]
+        raw["group_zero"] = []
+        raw["egress"]["always"].append("login.example.org")
+
+    _profile(tmp_path, monkeypatch, change)
+    raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["egress_nets"]["login.example.org"] = ["198.51.100.9/32"]
+    values = _values(OspreyConfig.model_validate(raw))
+    assert {r["service"] for r in values["ingress"]["rules"]} == {"workspace", "keycloak"}
+    assert "supplementalGroups" not in _by_name(values)["keycloak"]
+    assert _hosts(values)["login.example.org"] == ["198.51.100.9/32"]
+
+
+def test_an_unreadable_profile_is_refused_in_words(tmp_path: Any) -> None:
+    from harness.cloud_platform.settings import ProfileUnreadable, load_profile
+
+    (tmp_path / "profile.yaml").write_text("doors: []\nours: {}\n", encoding="utf-8")
+    with pytest.raises(ProfileUnreadable, match="cannot be read"):
+        load_profile(tmp_path / "profile.yaml")
+
+
+# ---- the Ingress in front of the Glass (the independent review of P7, item 7) --------------------
+
+
+NGINX = "nginx.ingress.kubernetes.io/"
+
+
+def test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads() -> None:
+    """The platform's controller closes a quiet connection after 60 s and refuses a body over
+    1 MiB by default: the Glass's delta stream and its uploads need the Glass's own proxy's
+    timeouts (1h) and the Conduit's upload cap (512 MiB)."""
+    annotations = _values(_config())["ingress"]["annotations"]
+    assert annotations[NGINX + "proxy-read-timeout"] == "3600"
+    assert annotations[NGINX + "proxy-send-timeout"] == "3600"
+    assert annotations[NGINX + "proxy-body-size"] == "512m"
+
+
+def test_the_ingress_s_settings_follow_their_sources(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Read from the Glass's nginx template and the Conduit's `ingest_sources.py`, never copied:
+    each changed at its source (in the text the render reads), the annotation follows."""
+    import harness.cloud_platform as cp
+
+    nginx = tmp_path / "nginx.conf.template"
+    nginx.write_text(
+        cp.WORKSPACE_NGINX.read_text(encoding="utf-8")
+        .replace("proxy_read_timeout 1h;", "proxy_read_timeout 2h;")
+        .replace("proxy_send_timeout 1h;", "proxy_send_timeout 90m;"),
+        encoding="utf-8",
+    )
+    uploads = tmp_path / "ingest_sources.py"
+    uploads.write_text(
+        cp.CONDUIT_UPLOADS.read_text(encoding="utf-8").replace(
+            "_DEFAULT_MAX_UPLOAD_BYTES = 512 * 1024 * 1024",
+            "_DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024**3",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cp, "WORKSPACE_NGINX", nginx)
+    monkeypatch.setattr(cp, "CONDUIT_UPLOADS", uploads)
+    annotations = _values(_config())["ingress"]["annotations"]
+    assert annotations[NGINX + "proxy-read-timeout"] == "7200"
+    assert annotations[NGINX + "proxy-send-timeout"] == "5400"
+    assert annotations[NGINX + "proxy-body-size"] == "2048m"
+    nginx.write_text("server { listen 8080; }\n", encoding="utf-8")
+    with pytest.raises(CloudPlatformNotRenderable, match="sets no proxy_read_timeout"):
+        _artefacts(_config())
+
+
+def test_a_deployment_s_own_upload_cap_is_the_ingress_s() -> None:
+    from harness.cloud_platform import UPLOAD_CAP_VARIABLE, upload_cap_bytes
+
+    assert upload_cap_bytes({UPLOAD_CAP_VARIABLE: str(100 * 1024 * 1024)}) == 100 * 1024 * 1024
+
+
+# ---- resources (the independent review of P7, item 11) -------------------------------------------
+
+
+def test_every_container_asks_for_what_it_needs_and_is_limited(values: dict[str, Any]) -> None:
+    """A namespace's LimitRange gives a container that names none the platform's defaults, which
+    would cap the stores; each names its own (`profile.yaml`'s `resources`)."""
+    for container in _containers(values):
+        resources = container["resources"]
+        assert resources["requests"]["cpu"] and resources["requests"]["memory"], container["name"]
+        assert resources["limits"]["memory"], container["name"]
+        assert "cpu" not in resources["limits"], container["name"]
+
+
+def test_arcadedb_s_heap_follows_its_memory_limit(
+    values: dict[str, Any], tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def heap(values: dict[str, Any]) -> str:
+        env = {e["name"]: e for e in _by_name(values)["arcadedb"]["env"]}
+        return str(env["ARCADEDB_OPTS_MEMORY"]["value"])
+
+    assert _by_name(values)["arcadedb"]["resources"]["limits"]["memory"] == "12Gi"
+    assert heap(values) == "-Xms1G -Xmx9G -XX:+ExitOnOutOfMemoryError"  # 12Gi × 0.75
+    assert "OSPREY_ARCADEDB_HEAP" not in values["environment"]
+
+    def change(raw: dict[str, Any]) -> None:
+        raw["resources"]["arcadedb"] |= {"memory": "8Gi", "memory_limit": "8Gi"}
+
+    _profile(tmp_path, monkeypatch, change)
+    assert heap(_values(_config())) == "-Xms1G -Xmx6G -XX:+ExitOnOutOfMemoryError"
