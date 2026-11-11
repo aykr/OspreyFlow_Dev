@@ -19,6 +19,14 @@ _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
 #: A variable named, with no value after it, is advice, not a secret (ADR-114 Amendment 8: a
 #: private repository is read with `GITHUB_TOKEN`). Its value, and every other line, stays hidden.
 _NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)\b(?!\s*[=:])")
+#: The CLI's own modules' refusal words (`refresh: …`, `ospreyflow: …`; ADR-114 Amendment 39), which
+#: name the variables Compose requires and never a value (CARRIES, the orchestrator's review item 2).
+_OUR_WORDS = re.compile(r"^(?:refresh|ospreyflow): ")
+#: In our own words, a variable's NAME in prose: upper case, and followed by a comma, a full stop,
+#: a closing mark, the end of the line or a joining word, never by `=`, `:`, a quote or a value.
+_A_NAME_IN_PROSE = re.compile(
+    r"\b[A-Z][A-Z0-9_]*[A-Z0-9]\b(?=[,.;)\]`]|\s*$|\s+(?:which|is|are|and|or|nor|was|were)\b)"
+)
 
 
 class Runner(Protocol):
@@ -50,7 +58,10 @@ class Redactor:
         )
 
     def __call__(self, line: str) -> str:
-        return self._notice if _SECRET.search(_NAMED_ONLY.sub("", line)) else line
+        left = _NAMED_ONLY.sub("", line)
+        if _OUR_WORDS.match(line):
+            left = _A_NAME_IN_PROSE.sub("", left)
+        return self._notice if _SECRET.search(left) else line
 
 
 class SubprocessRunner:

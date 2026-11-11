@@ -346,8 +346,9 @@ def before_the_gateway_database(directory: Path) -> str:
         "This deployment was rendered before the model gateway kept its own database (ADR-135 "
         "Amendment 2), which a refresh cannot bring it to, so nothing was changed. With the "
         "checkout at the version you are moving to (git checkout <its tag>), run "
-        f"`ospreyflow backup{n}`, then `ospreyflow apply{n}` (it keeps every secret and an install "
-        f"from a release on its own images), then `ospreyflow update{n}` and `ospreyflow apply{n}` "
+        f"`ospreyflow backup{n}`, then `ospreyflow apply{n}` (it keeps every value deployment.env "
+        "holds, and an install from a release on its own images), then "
+        f"`ospreyflow update{n}` and `ospreyflow apply{n}` "
         "once more for an install from a release (the second apply moves the providers' keys into "
         f"the gateway), or `ospreyflow start --build{n}` for one built from a checkout."
     )
