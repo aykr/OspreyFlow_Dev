@@ -1,3 +1,22 @@
+# rules lane · report · rules-hyg, three hygiene carries, and the test_kyc_rules fix (10 November 2026, 20:30–23:30 UTC)
+
+- **Item 1, Home's key cap: MET.** `.home-key` no longer dims itself; `homeKey.test.ts` reads the tokens and blends the key cap over the primary button's three faces in three themes: red on main (light 4.13, GOV.UK 3.91, and dark's pressed 3.59, which T3 cannot reach), green 9/9. T3's eight listings removed with it. Merger: no findings.
+- **Item 2, the metrics panel's rarity note: MET, a harness artefact.** axe's `elmPartiallyObscuring`: the harness's 600px column let the panel spill 10.6px past BODY; it now scrolls as the product's side-panel slot does. axe measures the note in three themes; metrics scans 16/16, keyboard 8/8. Merger: no findings.
+- **Item 3, schedule notices in *Needs you* (ADR-110 Amendment 19): MET after four review rounds.** Since L2.10 notices reached no screen. Owner alone in one statement (the orchestrator's ruling: no dataset reach); fixed sentences of eight kinds, and at read anything else becomes the fallback (rule 7); twenty with the total (rule 2). 20 plants red then green: route, words, Glass, 7 live on stack b (`hyg/3-schedule-notices-red.txt`).
+- **test_kyc_rules on main (off-step): isolation, fixed and merged (a8e9992).** A second screening list left in the shared Postgres by another live file; red 3/16 on stack c, green 16/16 on the same rows.
+- **Gates at 13a04bc** (rebased on main 18d7870): see `gates/` (live, ci, test, every-harness, keyboard).
+
+## Decisions taken
+- Item 3's route and panel, needs_you.py, and the scheduler's words and its executor tests are other lanes' files, edited on the orchestrator's grants (Admin's for Needs you, Studio's for the scheduler), each lane to review its hunks.
+- A packages/schemas change rides with the step in its own commit at the head (the orchestrator's standing instruction at a lane's start).
+- Kinds beyond the ruling's five: still going and keyless refresh (already fixed words), and quota (new on main while the branch was open).
+- The notice tip and the "more" line in plain words; the TS fields stay optional so a Glass reads an older Conduit as no notices.
+
+## Requests / carries
+- every-harness's `open=1&notices=1` and the new live file's Makefile and ci.yml lines: `hyg/hyg3_every_harness.diff`, `hyg/hyg3_ci_makefile.diff`, for the merger to apply.
+- Carries: lane stacks are not fresh across `down`/`up` (admin's T1); one owner on two lists raises two alerts (ADR-146, tomorrow).
+- Nothing of mine is running once the gates end; stack b released then.
+
 # rules lane · report · UPG, the v0.4.12 → v0.5.0 upgrade rehearsed on ospreyflow-test (10 November 2026, 18:20–21:10 UTC)
 
 - **Exit — rehearsed end to end, every step recorded: MET, with what stood in named.** Four runs (`gates/upg-rehearsal.txt`, `gates/upg-run1..4/`). Run 1 (main 5df2a3e): v0.4.12 → main, seven migrations; found update's files step breaks every pre-Amendment-2 deployment. Runs 2–3: platform-b's fixes failed (two-pass minting, undeclared volumes, gateway key; then reapply skipping `litellm-db`); a named update refreshing the wrong deployment found in code. Run 4 (platform-b d85f514, fresh v0.4.12): the refusal changes nothing (43/43 files), backup + apply bring it over (12 healthy, stores untouched, gateway key = Conduit key), files step a no-op, seven migrations, a v0.4.12 rule raises an alert after, 77 of 80 env keys byte-identical (every secret among them).

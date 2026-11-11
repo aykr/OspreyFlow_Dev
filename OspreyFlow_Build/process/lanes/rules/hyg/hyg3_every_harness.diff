@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-index e282e0b..9553761 100644
+index 11cb21c..d5f3cf7 100644
 --- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-@@ -241,7 +241,8 @@ const EXTRA_STATES: Record<string, string[]> = {
+@@ -245,7 +245,8 @@ const EXTRA_STATES: Record<string, string[]> = {
    // every section in the side list, a coming placeholder open.
    // L2.7 (ADR-145 decision 11): Needs you drawn open, its entries and their tips; the Studio with
    // two proposed link types, its Model tab's count and the reminder above the other tabs.
