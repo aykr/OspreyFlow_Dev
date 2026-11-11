@@ -55,8 +55,13 @@ else bad "keeper as 10001"; docker logs "$P-keeper" 2>&1 | tail -15; fi
 
 say "3. postgres as the init containers (keycloak-db, litellm-db), then LiteLLM, as 10001 with every capability dropped"
 # The stand-in for RDS runs as its image's own user: it is the platform's, not one of our pods.
-POSTGRES=postgres:16.4@sha256:96d71e7844cd87255fe8cd99e2f2fa95579cde47435ef6d970b3339093b661b2
-LITELLM=berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
+# The render's own references (harness/render.py's POSTGRES_IMAGE, which the render pins by the digest
+# the registry gives, and the gateway's pin there). Until 11 November this named a postgres digest and a
+# Docker Hub LiteLLM that do not exist ("not found"), so this section had never run as committed.
+POSTGRES=postgres:16.4
+LITELLM=ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
+echo "postgres: $POSTGRES, image $(docker image inspect --format '{{.Id}}' "$POSTGRES" 2>/dev/null || echo 'not here')"
+echo "litellm: $LITELLM"
 docker network create "$P" >/dev/null
 docker run -d --name "$P-rds" --network "$P" -e POSTGRES_USER=osprey -e POSTGRES_PASSWORD=throwaway-p7 "$POSTGRES" >/dev/null
 wait_healthy "$P-rds" pg_isready -U osprey || bad "the RDS stand-in never answered"

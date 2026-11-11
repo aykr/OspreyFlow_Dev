@@ -1,5 +1,9 @@
 # Platform · P7 handoff (10 November 2026, ~18:25 GMT; moved to a session on the test server)
 
+> **Superseded** (11 November 2026). Its items 1 and 6 were done on the server (SERVER_LOG.md, 11 November);
+> items 2–5 are **P7a**'s under ADR-142 Amendment 8, listed in ADR-148 Amendment 1's "Left". The kind cluster it
+> describes is down. Read REPORT.md and SERVER_LOG.md for P7's state, not this.
+
 **Step:** P7, the `cloud-platform` profile (BRIEF.md). Branch rebased onto main 382268e; the last real commit is 07cd97f.
 **Must do first:** move the schemas commit (`feat(schemas): profile cloud-platform…`) back to the branch's head (it sits below the 6 newest).
 

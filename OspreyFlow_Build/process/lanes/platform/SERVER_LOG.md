@@ -95,3 +95,28 @@ the orchestrator fetches this clone.
   - Nothing of this session is running.
   - The kind cluster is down.
   - Nothing was pushed.
+
+## 11 November 2026 (third server session: round 1 of the orchestrator's two reviews at 1a63953d)
+
+- **09:20 UTC, start.** Both independent reviews: not mergeable yet, eleven must-fixes and the minors, fixed in one
+  pass (Amendment 6). Rule 14: `ListAgents` shows four peer sessions (platform-b, studio-b, case-b, rules), each on
+  its own lane and worktree. This session's permissions do not list processes' working directories, so that was not
+  checked directly; nothing else wrote this worktree during the session (`git status` held only this session's
+  edits). Containers: osprey-small's (left alone) and three `osprey-test-idp-*` fixtures; no `osprey-p7-*`. No kind
+  cluster was needed or brought up.
+- **The stores' uid proof, LiteLLM included** (item 9). Its first run failed four times: the script named a postgres
+  digest and a Docker Hub LiteLLM that do not exist ("not found"; a 429 on the first pull besides), so its second
+  section had never run as committed. Pointed at the render's own references (`postgres:16.4`, the gateway's
+  `ghcr.io/berriai/litellm@sha256:d295…`), it passed: ArcadeDB, ClickHouse, Keeper, both init containers' SQL and
+  LiteLLM each as 10001:10001, capabilities dropped, 0 failures (`gates/p7_stores_uid_proof.2026-11-11.log`, whole).
+- **The Conduit without Java, built once** (item 9): `gates/p7_conduit_no_java.sh`, 0 failures on the working tree.
+  The image has no `java` anywhere, no `/opt/java`, no `JAVA_HOME`, and its only label is `included=omitted`. The
+  application imports, and uvicorn starts it; its start-up then stops on `OIDC_JWKS_URL` (a deployment's setting,
+  not Java). It is re-run at the head and logged under the hash.
+- **`make docs-pdf` here** (item 1): it fails, `DocumentControlError: the printed guide has no list of figures to
+  start after`. Read back with pypdf, the PDF this server's Chromium printed says `List of ﬁgures` (U+FB01, the
+  "fi" ligature), which `tools.docs_pdf`'s search does not match. The failed run had rewritten
+  `docs/pdf/administration-guide.pdf`; restored by name. The guide is docs' (the orchestrator's ruling): its whole
+  change against main, this round's settings row included, is `P7_admin_guide.diff`, and the guide is restored to
+  main's copy by name, so `test_docs_pdf` passes here and the two admin-guide cases on the package guide fail until
+  the merger applies the diff, regenerates the PDF and runs both on the merged tree.

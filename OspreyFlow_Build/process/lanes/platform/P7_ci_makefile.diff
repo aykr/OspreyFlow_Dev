@@ -47,9 +47,9 @@ index 35a1a6f3..05c48815 100644
  	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py ../OspreyFlow_Build/tests/harness/test_proxy_health.py
  
 +# ADR-148 decision 14: the `cloud-platform` profile rendered, templated by Helm and held to the shared
-+# platform's rules (a root or named-UID pod, privilege, a port below 1024, a ReadWriteMany claim, a
-+# hostPath, a foreign registry, no deny-egress, a Dockerfile not 10001:10001); each rule shown red on a
-+# planted fault by its own test (rule 15), and the namespace's Terraform formatted and valid. Docker.
++# platform's rules (root, a named or other UID or GID, privilege, a low port, RWX, hostPath, a foreign
++# registry, no deny-egress, open egress, ingress from other tenants, no resources, a Dockerfile not 10001);
++# each rule red on a planted fault by its own test (rule 15); the Terraform formatted and valid. Docker.
 +cp-policy-check:
 +	$(IN_CORE) PYTHONPATH=.:packages:$(BUILD) $(PY) -m tools.cp_policy_check
 +	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py

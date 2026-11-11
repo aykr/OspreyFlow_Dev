@@ -90,3 +90,44 @@ Green before the plants, and again at the head after them: `make cp-policy-check
 tree only): `development.yaml: 32 manifests, 0 violation(s)`, `production.yaml: 37 manifests, 0 violation(s)`,
 then 91 passed (the check's tests, the rendered Terraform's and the render's) before the reviewer's points, and
 98 after them (34, 3 and 61).
+
+## Round 1 of the orchestrator's two reviews at 1a63953d (11 November 2026, test server)
+
+Every fix this round, and the four older tests with no red of their own, each undone or planted **in the file the
+fix lives in**, in the shape that code had (at 1a63953d) or emits, alone, then its tests run and the file written
+back byte for byte (hash-checked): `gates/p7_round1_reds.py`, from OspreyFlow_Core, offline ports, no lease, nothing
+else writing the tree. **32 plants, 32 red**, one only after its test was corrected (below). The green for each is
+the full run at the head (`gates/<sha>.test.txt`).
+
+| Item | Plant (file) | Red: the tests that failed |
+| --- | --- | --- |
+| 3 | a too-wide or default-route net passes (`tools/cp_policy_check.py`) | `test_a_host_s_network_that_opens_egress_is_refused` ×4, `test_managed_networks_that_open_egress_are_refused` |
+| 3 | an Allow with no destination passes (same) | `test_an_allow_rule_with_no_destination_is_refused` |
+| 3 | a Kubernetes egress rule to everywhere passes (same) | `test_the_open_egress_policy_is_refused` |
+| 3 | `egress_nets` of any width (`packages/schemas/deployment.py`) | `test_a_network_that_would_open_egress_is_refused` ×5 |
+| 3 | a platform's nets of any width (`harness/cloud_platform/settings.py`) | `test_a_platform_s_networks_that_would_open_egress_are_refused[managed_nets, service_nets]` |
+| 4 | a pod no policy selects passes (check) | `test_a_dropped_internal_policy_leaves_pods_open_and_is_refused` |
+| 4 | any namespace selector passes (check) | `test_a_widened_ingress_policy_is_refused`, `test_an_ingress_controller_namespace_not_the_platform_s_is_refused` |
+| 4 | an address block passes (check) | `test_a_widened_ingress_policy_is_refused` |
+| 4 | a rule from every source passes (check) | `test_the_public_policy_admitting_every_address_is_refused` |
+| 4 | `ospreyflow-public` rendered behind the Ingress (`networkpolicies.yaml`) | `test_the_render_passes[development, production]` |
+| 6 | the checksums unquoted, as at 1a63953d (`workloads.yaml`) | `test_helm_chart.py::test_a_checksum_of_digits_alone_is_still_text` — **not red at first**, see below |
+| 7 | no timeouts; no body size; the cap's source bound at import (`harness/cloud_platform/__init__.py`) | `test_the_ingress_keeps_the_glass_s_websocket_open_and_takes_its_uploads` (×2), `test_the_ingress_s_settings_follow_their_sources` |
+| 8 | no `fsGroupChangePolicy`, as at 1a63953d (`_helpers.tpl`); the rule off (check) | `test_the_render_passes` ×2; `test_a_volume_walk_at_every_start_is_refused` |
+| 11 | no resources in the chart (`_helpers.tpl`); the rule off (check); none rendered; the heap not from the limit (`__init__.py`) | `test_the_render_passes` ×2; `test_a_container_without_resources_is_refused`; `test_every_container_asks_for_what_it_needs_and_is_limited` ×2; `test_arcadedb_s_heap_follows_its_memory_limit` ×2 |
+| rulings | an image with no row is a bare KeyError; group 0 and the always-hosts as constants (`__init__.py`) | `test_an_image_of_ours_with_no_build_row_is_refused_in_words`; `test_a_door_group_zero_and_an_always_host_are_rows` ×2 |
+| minor | another profile's config, an AttributeError (check) | `test_a_configuration_of_another_profile_is_refused_in_words` |
+| 9 | the omitted image given `JAVA_HOME` (`services/api/Dockerfile`) | `test_the_omitted_image_does_not_declare_java` |
+| older | the omission's stage made Java's (Dockerfile); the Conduit planned with Java (`profile.yaml`) | `test_the_cloud_platform_s_build_carries_no_java`; `test_the_conduit_is_planned_without_java` |
+| 10 | the route that does not exist offered again (`services/api/map_admin.py`) | `test_on_a_cloud_platform_the_build_says_there_is_no_basemap_route_yet` (the older built-off-the-platform case, renamed) |
+| minor | a provider block; no `:aud`; OpenSearch with no security group (`terraform.py`) | `test_the_providers_and_backend_are_the_namespace_folder_s` ×2; `test_the_bucket_role_trusts_the_service_account_s_tokens_for_sts_alone`; `test_opensearch_is_reached_…_alone` |
+| older | a secret key the values read and the Terraform does not write (`terraform.py`) | `test_every_secret_the_values_read_is_one_the_terraform_writes` ×2 |
+
+**The checksum test passed its own plant at first (rule 15's second paragraph).** The first all-digit digest the
+test found was `0264289451781167`. Kubernetes' Go YAML reads it as a number; PyYAML, the test's reader, reads a
+leading-0 string holding an 8 or 9 as text, so the unquoted template passed. The test now takes only a digest led by
+1–9, which it asserts PyYAML reads as an integer; run again with the plant alone: red
+(`test_a_checksum_of_digits_alone_is_still_text`, 1 failed).
+
+**A defect found by its own test before any plant**: `upload_cap_bytes` took its source file as a default argument,
+bound at import, so it would not follow the source (`'512m' == '2048m'`); the plant above restores that shape.
