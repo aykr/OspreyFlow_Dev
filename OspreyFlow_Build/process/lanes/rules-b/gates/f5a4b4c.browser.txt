@@ -427,8 +427,13 @@ pw_rc=1
   32 passed (2.4m)
 hpw_rc=1
 Wall time: 1702 s, exit 0 (no stack, no lease; set-up before it 13 s)
+(The "exit 0" is the wrapper's, the status of the last command in the pipe; the run's own status is pw_rc=1 and hpw_rc=1 above.)
 
-== second full run, 20261111T161902Z (slot 13; --last-failed found no record of the first, so the whole set ran again), load average 4.8 at its start
+== second full run, 20261111T161902Z (slot 13), load average 4.8 at its start.
+   Tree: the worktree as copied at 16:19Z, f5a4b4c's committed code plus the then-uncommitted records (no code file differed from f5a4b4c).
+   Command (the run's cmd.sh on the server): cd OspreyFlow_Core/apps/workspace && export OSPREY_PORTS_SLOT=13; uptime; npx playwright test --config a11y/playwright.config.ts --last-failed --reporter=line 2>&1 | grep -vE "^\[[0-9]+/[0-9]+\]" | grep -E "^\s+[0-9]+\) |passed|failed|Error:|^\s+[-+] " | cut -c1-200; cd ../harness && npx playwright test --config a11y/playwright.config.ts --last-failed --reporter=line 2>&1 | grep -E "passed|failed|^\s+[0-9]+\) " | cut -c1-200
+   --last-failed found no record (no test-results/.last-run.json in that copy), so the whole config ran again. Named no files, it also ran a11y/reflow.spec.ts's 5 tests: 976 + 8 = 984 workspace tests, the first run's 979 plus those 5.
+   The grep kept no "Running N tests" line and no pw_rc: Playwright's own status was not captured (8 failed, so it was non-zero). The "exit 0" below is the pipe's last command, cut. The harness: 34 passed, 0 failed.
  16:19:02 up 16 days, 57 min,  9 users,  load average: 4.83, 10.85, 16.29
   1) a11y/every-harness.spec.ts:355:7 › ingest-studio-harness.html pipeline=map-preview (govuk) has no automated WCAG 2.2 A or AA violations 
     Error: expect(locator).toHaveAttribute(expected) failed
@@ -479,3 +484,4 @@ Wall time: 1702 s, exit 0 (no stack, no lease; set-up before it 13 s)
 Wall time: 1601 s, exit 0 (no stack, no lease; set-up before it 12 s)
 
 == diagnostic, 20261111T164630Z (slot 13, load average 30): map-view's listed "Harness tiles ©" (main > div > div > div:nth-child(2)), each look 5 times, a scratch spec never committed. The first repeat found no node at all (the map's attribution not yet drawn when axe ran); the other 14 measured as listed (not measurable over canvas.sigma-mouse, own 11.31 dark, 2.85 light). The two "gone" failures above are that race in the harness's wait, not the probe.
+   The scratch spec, not committed: for map-view-harness.html gazetteers=added (dark), searched=fail (light) and the plain look (dark), --repeat-each=5, it opens the look as every-harness.spec.ts does (reduced motion, networkidle, fonts, data-theme for light), runs axe with the same tags, keeps the color-contrast nodes axe left incomplete, passes, or violates at "main > div > div > div:nth-child(2)", judges them with judgeUndecided, and prints the node's text and the first five elements elementsFromPoint finds at its centre ("no node" when the selector finds nothing).

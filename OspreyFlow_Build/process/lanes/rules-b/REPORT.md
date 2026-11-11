@@ -43,19 +43,28 @@ be4052a, sent back by the orchestrator's review of 9697ad3, is at 9697ad3.)
    - (b) A pin for words hidden at every point reads no SVG shapes or shadows at those points.
    - (c) The flow and inline narrowings have no plant that reaches them.
    - (d) **CARRIES row, for the merge (owner: rules-b):** "every-harness's GOV.UK looks wait 5s for `data-brand`
-     before the probe runs, and on the test server under load that wait timed out in every full run (4, 1, 4, 1
-     tests). It is an environment wait, not a contrast finding: raise or replace it with a wait on the brand's own
+     before the probe runs, and on the test server under load that wait timed out in every full run: 8, then 7
+     looks at f5a4b4c, each time in different looks (4, 1, 4, 1 at T3b's earlier heads). It is an environment wait, not a contrast finding: raise or replace it with a wait on the brand's own
      stylesheet."
    - (e) **CARRIES row, for the merge (owner: rules-b):** "every-harness's map-view looks scan before the map's
      attribution ('Harness tiles ©') is drawn when the server is loaded, so its listed finding is reported gone (once in
      each of two full runs, in different looks). Wait for the attribution before the scan."
+   - (f) The corner test reads each corner as a circle of its larger radius, so a percentage or a radius over half
+     the box (a 999px pill) makes it stricter than the browser: a false positive (flagged), never a silent pass.
+   - (g) A cover with an inline `pointer-events: none !important` beats the probe's lifting style sheet, so
+     `elementsFromPoint` never finds it, and the words are judged as if it were not there.
+   - (h) The scratch spec behind (e)'s diagnosis was never committed. Its shape is in `gates/f5a4b4c.browser.txt`'s
+     last section.
+   - (i) `tsconfig.json` does not include `apps/workspace/a11y/` (a disclosed gap since Round 12d), so the probe and
+     the plants are not type-checked; only `src/color/` is.
 5. **Findings:** nothing new listed.
 6. **Gates**, all on the test server, slot 13 (`gates/f5a4b4c.browser.txt`, `gates/2515840.ci.txt`). 2515840 changes
    only a type guard after f5a4b4c.
    - **Browser set at f5a4b4c, two full runs.**
      - 20261111T154955Z, load average up to 17: 968 + 32 passed, 13 failed.
-     - 20261111T161902Z (a `--last-failed` retake that found no record, so the whole set ran again): 976 + 34 passed,
-       8 failed. The canvas pair and both harness screens passed there.
+     - 20261111T161902Z (a `--last-failed` retake that found no record, so the whole set ran again, with
+       `reflow.spec.ts`'s 5 tests too, as no files were named): 976 + 34 passed, 8 failed. The canvas pair and both
+       harness screens passed there. Playwright's own status was not captured; the record gives the command and tree.
      - No new contrast finding in either run. Every failure was one of three things:
        - GOV.UK's 5s `data-brand` wait (8, then 7, in different looks: carry (d));
        - load timeouts (the canvas pair and two harness install screens in the first run);

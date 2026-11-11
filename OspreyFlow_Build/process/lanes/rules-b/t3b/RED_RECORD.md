@@ -225,8 +225,8 @@ Each variant's edit must match the probe exactly once, or the run stops. The log
 last sections.
 
 **Item 1: each `hides()`/`opaque()` guard shown red with that guard removed** (`guards.plant.ts`; the final run is
-20261111T154842Z, 19 plants plus the shadow plant, all green).
-- Every covering plant lies over the right half of Show as BPMN's "If a Person meets", whose own surfaces give 13.17:1.
+20261111T154842Z: 19 tests, all green, the 18 plants of `guards.plant.ts` and the shadow plant's one test; 12 of the 18 are covering plants with a pixel reading, the other 6 are the unreachable records' plants).
+- Every covering plant (12) lies over the right half of Show as BPMN's "If a Person meets", whose own surfaces give 13.17:1.
   Each one is a real failure, read from the screenshot's pixels:
   - 14.74:1 on the uncovered half;
   - under the cover, 3.08:1 (opacity, filter, mask and mask border at 0.5), 2.36:1 (a 60% white border) or 1.48:1
