@@ -17,3 +17,14 @@ def test_model_port_suite_imports_cleanly() -> None:
 
 def test_model_port_registry_is_populated_from_phase_6() -> None:
     assert MODEL_PORT_ADAPTERS != []
+
+
+def test_model_port_extract_suite_imports_cleanly() -> None:
+    assert suite_imports_cleanly("tests.conformance.model_port.test_suite_extract")
+
+
+def test_the_extract_suite_holds_both_engines() -> None:
+    """ADR-135 Amendment 6: Deep read's adapter and Laurium's, one suite for both."""
+    from tests.conformance.model_port.extract_engines import MODEL_EXTRACT_ADAPTERS
+
+    assert [str(f) for f in MODEL_EXTRACT_ADAPTERS] == ["model_litellm", "extract_laurium"]

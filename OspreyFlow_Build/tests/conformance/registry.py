@@ -254,4 +254,8 @@ COMPUTE_PORT_ADAPTERS: list[ComputeAdapterFactory] = [
     *_compute_graphology_tier1_factories(),
 ]
 MODEL_PORT_ADAPTERS: list[ModelAdapterFactory] = _model_litellm_factories()
+#: ADR-135 Amendment 6: `ModelPort.extract`'s suite over both engines, through the gateway's
+#: stand-in. Its factories live in `model_port/extract_engines.py`, which imports no other port's
+#: adapters, so Laurium's own 3.13 environment can run the suite.
+from tests.conformance.model_port.extract_engines import MODEL_EXTRACT_ADAPTERS  # noqa: E402,F401
 MEDIA_STORE_ADAPTERS: list[MediaStoreFactory] = _media_store_factories()
