@@ -1,0 +1,32 @@
+make test at bcc51186 (code head), 11 November 2026, on the test server, with `shared-files-P11.diff` applied
+uncommitted (restored by name after).
+
+NOT through `stack_lease.sh offline platform-b`: this session's permissions refuse the script ("requires
+approval", which a non-interactive session cannot give). Run here instead with the same closed ports the offline
+lease exports and platform-b's slot:
+  env ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 \
+      OSPREY_PORTS_SLOT=7 LANG=en_GB.UTF-8 make -C OspreyFlow_Build test
+The whole log could not be copied out of the session's /tmp either (also refused); its failure section and totals
+are below verbatim, and the JS stage's log is beside this file.
+
+== Python (pytest, the Makefile's ignore list) ==
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+    AssertionError: assert 'pass' == 'skip'    (this server has a GPU; environmental, as in the interim run)
+FAILED ../OspreyFlow_Build/tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly
+    {'port': 59993} != {'port': 6379}          (it reads the pinned offline VALKEY_PORT; environmental)
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[10_ADMINISTRATION_GUIDE.md]
+FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[administration-guide.md]
+    the guide's appendix A differs from the schema: expected by the review's item 7 (the two guides restored to
+    main as the docs lane's files; the change is p11/docs-admin-guide-P11.diff, green once docs applies it)
+==== 4 failed, 10934 passed, 13 skipped, 73 warnings in 1632.22s (0:27:12) =====
+make: *** [Makefile:137: test] Error 1
+
+== live-collect (run next by hand: make stops at the Python stage's failure) ==
+make -k -C OspreyFlow_Build live-collect: every live file collected, no error.
+
+== JS (make -C OspreyFlow_Core test-js; bcc51186.test-js.txt) ==
+apps/workspace: Test Files 2 failed | 362 passed (364); Tests 2 failed | 3057 passed (3059)
+  src/matrix/MatrixView.budget.test.tsx (the 50,000-node first-frame budget, 8953 ms) and
+  src/ingest/checks/ChecksScreen.test.tsx ("says a refusal in the server's words", 1054 ms): neither touched by
+  this branch; both pass run alone at the same head (2 files, 7 tests passed): load on a shared server.
+apps/harness (not reached by the recipe after the workspace's failure; run by hand, vitest): 7 files, 51 tests passed.

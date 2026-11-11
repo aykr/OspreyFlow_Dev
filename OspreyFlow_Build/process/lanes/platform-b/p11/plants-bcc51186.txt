@@ -1,0 +1,261 @@
+   1  RED  GatewayAdmin.add_entry: every entry names a credential, IAM-role ones too
+      1 failed, 1 warning in 2.75s
+      E   AssertionError: assert {'litellm_credential_name'} == set()
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:599: AssertionError: assert {'litellm_credential_name'} == set()
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_keeps_no_key_anywhere
+   2  RED  ModelAdmin.set_key: the IAM-role refusal removed
+      1 failed, 1 warning in 2.75s
+      E   assert 200 == 409
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_keeps_no_key_anywhere
+   3  RED  ModelAdmin.edit_engine: an address change keeps the key (only guard left of `_where_the_key_goes`)
+      1 failed, 1 warning in 2.71s
+      E   AssertionError: assert 'gw-token-for-the-client-gateway' is None
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:667: AssertionError: assert 'gw-token-for-the-client-gateway' is None
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_refused_reconcile_after_an_address_change_says_no_key_rather_than_key_set
+   4  RED  model_keys.move_keys: the CLI moves a key for an IAM-role engine
+      1 failed, 1 warning in 2.71s
+      E   services.api.model_admin.ModelAdminRefused: bedrock signs in by the namespace's IAM role, so no key is kept for it; nothing was changed.
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_command_line_moves_no_key_for_an_iam_role_engine
+   5  RED  ModelAdmin.routes: an IAM-role engine offered only with a key
+      1 failed, 1 warning in 2.68s
+      E   AssertionError: assert False is True
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:631: AssertionError: assert False is True
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_answers_through_the_gateway_pod_s_role_in_london
+   6  RED  apply.provider_secret_lines: the install asks every engine for a key
+      1 failed, 1 warning in 2.69s
+      E   harness.apply.ApplyFailed: render: models enables the provider bedrock, and OSPREY_MODEL_KEY_BEDROCK is not set. Set it in this terminal (it is kept only in the deployment's own secrets file) and run the install (or ospreyflow apply) again, or remove the provider from osprey.yaml.
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_install_asks_no_key_for_an_iam_role_engine
+   7  RED  render.model_engines_env: the kind not written
+      1 failed, 1 warning in 2.81s
+      E   ValueError: OSPREY_MODEL_ENGINES names an engine refused here: bedrock: bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; choose that kind of engine
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_render_tells_the_conduit_each_engine_s_kind_and_how_it_signs_in
+   8  RED  model_routing.routes_from_env: the role ignored
+      1 failed, 1 warning in 2.70s
+      E   AssertionError: assert {'bedrock': F...emini': False} == {'bedrock': T...emini': False}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:786: AssertionError: assert {'bedrock': F...emini': False} == {'bedrock': T...emini': False}
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_has_no_key_variable_and_is_offered_with_none
+   A  RED  cluster.render_cluster: an IAM-role engine's held key not blanked
+      1 failed, 1 warning in 2.78s
+      E   AssertionError: workspace
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:826: AssertionError: workspace
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_s_held_key_is_blanked_in_every_cluster_workload
+   B  RED  engine_refusal: `bedrock` taken as a provider on cloud-platform
+      2 failed, 78 deselected, 1 warning in 2.74s
+      E   AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock","roles":{"extraction":"anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"provider","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:361: AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock","roles":{"extraction":"anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"provider","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      E   AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"anthropic.claude-3-haiku-20240307-v1:0"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:361: AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"anthropic.claude-3-haiku-20240307-v1:0"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_profile_refuses_each_shape_amendment_7_does_not_allow[bedrock-named-provider]
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_profile_refuses_each_shape_amendment_7_does_not_allow[bedrock-named-gateway]
+   C  RED  engine_refusal: the gateway by the role taken
+      1 failed, 79 deselected, 1 warning in 2.76s
+      E   AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"iam_role","region":null},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:361: AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"iam_role","region":null},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_cloud_platform_profile_refuses_each_shape_amendment_7_does_not_allow[gateway-by-role-held]
+   D  RED  ModelAdmin.edit_engine: the kind changeable
+      1 failed, 1 warning in 2.78s
+      E   AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":true,"contract_reference":"DPA 2026/07","kind":"provider","auth":"key","region":null},"key_state":"set","key_set_at":"2026-11-11T09:45:31.328670Z","key_set_by":"admin-1","default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:653: AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":true,"contract_reference":"DPA 2026/07","kind":"provider","auth":"key","region":null},"key_state":"set","key_set_at":"2026-11-11T09:45:31.328670Z","key_set_by":"admin-1","default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_engine_s_kind_is_fixed_once_added_so_its_contract_never_moves_to_another
+   E  RED  ModelAdmin.remove_key: removal not refused
+      1 failed, 1 warning in 2.84s
+      E   assert (200 == 409)
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_an_iam_role_engine_keeps_no_key_anywhere
+   F  RED  ModelAdmin._start_once: no entries for a declared IAM-role engine
+      2 failed, 5 passed, 73 deselected, 1 warning in 3.43s
+      E   AssertionError: assert None is not None
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:690: AssertionError: assert None is not None
+      E   AssertionError: assert 'not_routed' == 'ok'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:711: AssertionError: assert 'not_routed' == 'ok'
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_file
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_keyed_engine_declared_beside_bedrock_is_made_at_start_and_answers_once_its_key_moves
+   G  RED  ModelAdmin.edit_engine: "key set" kept after the credential went
+      1 failed, 1 warning in 2.86s
+      E   AssertionError: assert 'set' == 'none'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:668: AssertionError: assert 'set' == 'none'
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_refused_reconcile_after_an_address_change_says_no_key_rather_than_key_set
+   H  RED  install_page._providers: a key field offered for it
+      1 failed, 1 warning in 2.86s
+      E   AssertionError: assert {'acme', 'bedrock', 'gemini'} == {'acme', 'gemini'}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:868: AssertionError: assert {'acme', 'bedrock', 'gemini'} == {'acme', 'gemini'}
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_install_page_offers_no_key_field_for_an_iam_role_engine
+   I  RED  connection.classify: STS's refusal unread
+      1 failed in 0.43s
+      E   AssertionError: assert 'unreachable' == 'key_refused'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py:257: AssertionError: assert 'unreachable' == 'key_refused'
+      FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py::test_bedrock_refuses_when_the_role_does_not_trust_the_gateway_s_service_account
+   J  RED  connection.classify: the inference-profile refusal unread
+      1 failed in 0.43s
+      E   AssertionError: assert 'unreachable' == 'model_not_offered'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py:267: AssertionError: assert 'unreachable' == 'model_not_offered'
+      FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py::test_bedrock_refuses_a_model_offered_only_through_an_inference_profile
+   K  RED  ospreyflow.models._STATE_WORDS: `iam_role` unknown to the CLI
+      1 failed in 0.37s
+      E   assert "bedrock (Bedrock (London)): key present: none kept: signs in by the namespace's IAM role" in "Engines:\n  local: this deployment's own models (no key)\n  gemini (Gemini): key present: yes; privacy contract: no —...action gemini-2.5-flash\nDefaults:\n  extraction: local\n  vision: local\n  transcription: local\n  embedding: local\n"
+      FAILED ../OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py::test_an_iam_role_engine_is_listed_as_keeping_no_key
+   L  RED  ospreyflow.main._models: `models key`/`remove-key` not refused first
+      2 failed, 7 deselected in 0.39s
+      E   AssertionError: assert 0 == 1
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py:69: AssertionError: assert 0 == 1
+      FAILED ../OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py::test_models_key_and_remove_key_refuse_an_iam_role_engine_before_reading_a_key[key]
+      FAILED ../OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py::test_models_key_and_remove_key_refuse_an_iam_role_engine_before_reading_a_key[remove-key]
+  N1  RED  engine_refusal: off cloud-platform, the two kinds taken (item 1)
+      12 failed, 68 deselected, 1 warning in 2.89s
+      E   AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:248: AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider"]}
+  N2  RED  engine_refusal: Amendment 4's rules on every profile (the blocker, item 1)
+      22 failed, 1 passed, 57 deselected, 1 warning in 2.93s
+      E   ValueError: the models file /tmp/pytest-of-root/pytest-2084/test_a_models_file_naming_bedr0/model-settings/models.yaml holds an engine refused here: bedrock: bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; choose that kind of engine
+      E   ValueError: the models file /tmp/pytest-of-root/pytest-2084/test_a_models_file_naming_bedr1/model-settings/models.yaml holds an engine refused here: bedrock: bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; choose that kind of engine
+      E   ValueError: the models file /tmp/pytest-of-root/pytest-2084/test_a_models_file_naming_bedr2/model-settings/models.yaml holds an engine refused here: bedrock: bedrock is reached only as Amazon Bedrock in London, by the namespace's IAM role; choose that kind of engine
+      E   AssertionError: {"detail":{"error":"model_admin_refused","detail":"bedrock: bedrock is reached only as Amazon … in London, by the namespace's IAM role; choose that kind of engine"}}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:223: AssertionError: {"detail":{"error":"model_admin_refused","detail":"bedrock: bedrock is reached only as Amazon … in London, by the namespace's IAM role; choose that kind of engine"}}
+  N3  RED  ModelSettingsFile.load: the profile's refusal not read from the file
+      1 failed, 1 warning in 2.81s
+      E   Failed: DID NOT RAISE ValueError
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_conduit_refuses_a_cross_region_id_however_it_arrives
+  N4  RED  Installed.from_env: the profile's refusal not read at start
+      1 failed, 1 warning in 2.82s
+      E   Failed: DID NOT RAISE ValueError
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_conduit_refuses_a_cross_region_id_however_it_arrives
+  N5  RED  ModelAdmin._validated: Admin › Models ignores the profile
+      30 failed, 1 passed, 49 deselected, 1 warning in 3.09s
+      E   AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:248: AssertionError: {"engines":[{"provider":{"name":"acme","label":"Acme AI gateway","roles":{"extraction":"gpt-4o-mini"},"api_base":"https://ai-gateway.client.example/v1","privacy_contract":false,"contract_reference":null,"kind":"gateway","auth":"key","region":null},"key_state":"none","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider"]}
+  N6  RED  OspreyConfig._engines_suit_the_profile: osprey.yaml ignores the profile
+      1 failed, 1 warning in 2.81s
+      E   Failed: DID NOT RAISE ValidationError
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_osprey_yaml_off_the_cloud_platform_profile_takes_bedrock_by_key_and_refuses_the_kinds
+  N7  RED  engine_refusal: a cross-region inference profile's id taken (item 2)
+      8 failed, 72 deselected, 1 warning in 2.82s
+      E   AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"eu.anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"bedrock","auth":"iam_role","region":"eu-west-2"},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:361: AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"eu.anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"bedrock","auth":"iam_role","region":"eu-west-2"},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      E   AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"us.anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"bedrock","auth":"iam_role","region":"eu-west-2"},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:361: AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"us.anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"bedrock","auth":"iam_role","region":"eu-west-2"},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      E   AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"apac.anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"bedrock","auth":"iam_role","region":"eu-west-2"},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:361: AssertionError: {"engines":[{"provider":{"name":"bedrock","label":"Bedrock (London)","roles":{"extraction":"apac.anthropic.claude-3-haiku-20240307-v1:0"},"api_base":null,"privacy_contract":false,"contract_reference":null,"kind":"bedrock","auth":"iam_role","region":"eu-west-2"},"key_state":"iam_role","key_set_at":null,"key_set_by":null,"default_for":[],"limits":{"requests_per_minute":null,"tokens_per_minute":null,"budget_tokens":null,"budget_period":null}}],"defaults":{},"local_models":{"extraction":"qwen2.5:7b-instruct","vision":null,"transcription":null,"embedding":"all-minilm:22m-l6-v2-fp16"},"local_only":false,"sendable_handling_codes":["O"],"source":"models file","engine_kinds":["provider","gateway","bedrock"]}
+  N8  RED  _address_refusal: a key before the host taken (item 4)
+      1 failed, 1 warning in 2.86s
+      E   AssertionError: ('api_base', 'https://gw-PLANTED-model-token-Q7Z4-do-not-leak@ai-gateway.client.example/v1')
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:494: AssertionError: ('api_base', 'https://gw-PLANTED-model-token-Q7Z4-do-not-leak@ai-gateway.client.example/v1')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row
+  N9  RED  _address_refusal: a key in the query or fragment taken (item 4)
+      1 failed, 1 warning in 2.78s
+      E   AssertionError: ('api_base', 'https://ai-gateway.client.example/v1?api-key=gw-PLANTED-model-token-Q7Z4-do-not-leak')
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:494: AssertionError: ('api_base', 'https://ai-gateway.client.example/v1?api-key=gw-PLANTED-model-token-Q7Z4-do-not-leak')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row
+ N10  RED  engine_refusal: a key-shaped label taken (item 4)
+      1 failed, 1 warning in 2.84s
+      E   AssertionError: ('label', 'gw-PLANTED-model-token-Q7Z4-do-not-leak')
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:494: AssertionError: ('label', 'gw-PLANTED-model-token-Q7Z4-do-not-leak')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row
+ N11  RED  connection.classify: Bedrock's model access read as the role refused (item 3)
+      2 failed, 97 deselected, 1 warning in 2.86s
+      E   AssertionError: assert 'key_refused' == 'model_not_enabled'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py:221: AssertionError: assert 'key_refused' == 'model_not_enabled'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:569: AssertionError: assert 'key_refused' == 'model_not_enabled'
+      FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py::test_bedrock_refuses_a_model_the_account_has_not_been_granted_as_model_access
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_bedrock_s_model_not_enabled_is_said_as_the_model_s_access_not_the_role_s
+ N12  RED  connection.classify: Bedrock's expired credentials read as the role refused (item 3)
+      3 failed, 96 deselected, 1 warning in 2.81s
+      E   AssertionError: assert 'key_refused' == 'sign_in_expired'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py:232: AssertionError: assert 'key_refused' == 'sign_in_expired'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py:242: AssertionError: assert 'key_refused' == 'sign_in_expired'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:580: AssertionError: assert 'key_refused' == 'sign_in_expired'
+ N13  RED  KIND_WORDS: the gateway's 403 said as the token alone (item 3)
+      1 failed, 1 warning in 2.75s
+      E   AssertionError: assert ('policy' in 'The provider refused the key. Enter the key again, or check it with the provider.')
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:533: AssertionError: assert ('policy' in 'The provider refused the key. Enter the key again, or check it with the provider.')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_s_policy_refusal_names_the_policy_as_well_as_the_token
+ N14  RED  ModelAdmin.test: the gateway's other-shaped 4xx said as unreachable (item 3)
+      1 failed, 1 passed, 78 deselected, 1 warning in 2.87s
+      E   AssertionError: assert 'unreachable' in ('request_refused', 'key_refused')
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:558: AssertionError: assert 'unreachable' in ('request_refused', 'key_refused')
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_s_refusal_in_another_shape_is_said_as_refused_never_unreachable[api-manager-400]
+ N15  RED  the stand-in: the address matched only as written (item 3)
+      2 failed, 97 deselected, 1 warning in 2.96s
+      E   assert 500 == 200
+      E   AssertionError: assert 'unreachable' == 'ok'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:455: AssertionError: assert 'unreachable' == 'ok'
+      FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py::test_the_client_gateway_answers_at_its_address_with_or_without_a_trailing_slash
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_answers_at_its_address_written_with_a_trailing_slash
+ N16  RED  ospreyflow.main._models: a key read with the Conduit silent (item 8)
+      4 failed, 5 deselected in 0.46s
+      E   AssertionError: assert 0 == 1
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py:90: AssertionError: assert 0 == 1
+      E   assert ('IAM role' in "ospreyflow: acme_added_in_admin_models is not a provider this deployment enables (enabled: gemini, bedrock). Add it i... works too; after it, osprey.yaml's providers are no longer read (ADR-135 Amendment 2). The local engine has no key.\n")
+ N17  RED  ospreyflow.models.may_sign_in_by_role: an engine added in Admin › Models not held back on cloud-platform (item 8)
+      2 failed, 7 deselected in 0.42s
+      E   assert ('IAM role' in "ospreyflow: acme_added_in_admin_models is not a provider this deployment enables (enabled: gemini, bedrock). Add it i... works too; after it, osprey.yaml's providers are no longer read (ADR-135 Amendment 2). The local engine has no key.\n")
+      FAILED ../OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py::test_with_the_conduit_silent_no_key_is_read_where_the_engine_may_keep_none[added-in-admin-models-key]
+      FAILED ../OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py::test_with_the_conduit_silent_no_key_is_read_where_the_engine_may_keep_none[added-in-admin-models-remove-key]
+ N18  RED  ModelAdmin.view: the two kinds offered on every profile (item 1)
+      15 failed, 4 passed, 61 deselected, 1 warning in 3.07s
+      E   AssertionError: assert ['provider', ...y', 'bedrock'] == ['provider']
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:232: AssertionError: assert ['provider', ...y', 'bedrock'] == ['provider']
+ N19  RED  ModelSettingsFile.save: a plain provider's file written with the new fields
+      1 failed, 1 warning in 2.84s
+      E   AssertionError: assert {'api_base', ..., 'name', ...} == {'api_base', ...act', 'roles'}
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:294: AssertionError: assert {'api_base', ..., 'name', ...} == {'api_base', ...act', 'roles'}
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_off_the_cloud_platform_profile_the_models_file_and_render_are_written_as_before
+ N20  RED  render.model_engines_env: a plain provider's line written with the new fields
+      1 failed in 0.64s
+      E   AssertionError: assert [{'name': 'ge...: False, ...}] == [{'name': 'ge...: False, ...}]
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/harness/test_model_engines.py:192: AssertionError: assert [{'name': 'ge...: False, ...}] == [{'name': 'ge...: False, ...}]
+      FAILED ../OspreyFlow_Build/tests/harness/test_model_engines.py::test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_key
+ N21  RED  ospreyflow.models.MODEL_ROUTE_PROFILE: the CLI's profile drifts from the schema's
+      1 failed in 0.36s
+      E   AssertionError: assert 'cloud_platform' == 'cloud-platform'
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py:111: AssertionError: assert 'cloud_platform' == 'cloud-platform'
+      FAILED ../OspreyFlow_Build/tests/cli/test_models_verb_iam_role.py::test_the_command_line_names_the_profile_as_the_schema_does
+ N22  RED  the stand-in: Bedrock grants a model the account was not given (item 3)
+      1 failed, 18 deselected in 0.46s
+      E   assert 200 == 403
+      FAILED ../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_engine_kinds.py::test_bedrock_refuses_a_model_the_account_has_not_been_granted_as_model_access
+ N23  RED  render.compose_services (litellm): a static AWS key named for the gateway (item 8)
+      2 failed, 1 passed, 77 deselected, 1 warning in 3.15s
+      E   AssertionError: assert not ({'AWS_ACCESS_KEY_ID', 'DATABASE_URL', 'LITELLM_LOCAL_MODEL_COST_MAP', 'LITELLM_MASTER_KEY', 'LITELLM_SALT_KEY', 'OSPREY_LITELLM_DB_PASSWORD', ...} & {'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'})
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:845: AssertionError: assert not ({'AWS_ACCESS_KEY_ID', 'DATABASE_URL', 'LITELLM_LOCAL_MODEL_COST_MAP', 'LITELLM_MASTER_KEY', 'LITELLM_SALT_KEY', 'OSPREY_LITELLM_DB_PASSWORD', ...} & {'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN'})
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_workload_carries_no_static_aws_key[bedrock-declared]
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_workload_carries_no_static_aws_key[none-declared]
+ N25  RED  render.compose_services (litellm): the gateway handed the whole deployment.env, a static AWS key in it unnamed (item 8)
+      2 failed, 1 passed, 77 deselected, 1 warning in 3.86s
+      E   AssertionError: assert not True
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:843: AssertionError: assert not True
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_workload_carries_no_static_aws_key[bedrock-declared]
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_the_gateway_workload_carries_no_static_aws_key[none-declared]
+ N24  RED  ModelAdmin.add_engine: a plain provider's audit names the new fields
+      1 failed, 1 warning in 3.00s
+      E   AssertionError: assert not ({'auth', 'kind', 'region'} & {'api_base', 'auth', 'contract_reference', 'kind', 'label', 'privacy_contract', ...})
+      /root/osprey-srv/platform-b/OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py:298: AssertionError: assert not ({'auth', 'kind', 'region'} & {'api_base', 'auth', 'contract_reference', 'kind', 'label', 'privacy_contract', ...})
+      FAILED ../OspreyFlow_Build/tests/services/api/test_model_engine_kinds.py::test_off_the_cloud_platform_profile_the_models_file_and_render_are_written_as_before
+  U1  RED  Models.tsx EngineForm: the kind offered on every profile (item 1)
+      ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+       FAIL  apps/workspace/src/admin/sections/Models.test.tsx > Models > offers no kind of engine off the cloud-platform profile, and bedrock as a provider by its key, as before
+      AssertionError: expected <select class="select" …(1)>…(1)</select> to be null
+  U2  RED  Models.tsx EngineForm: `bedrock` offered as a provider by a key on cloud-platform
+      ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+       FAIL  apps/workspace/src/admin/sections/Models.test.tsx > Models > on the cloud-platform profile offers Bedrock as its own kind, not as a provider by a key
+      AssertionError: expected [ 'gemini', 'openai', …(3) ] to not include 'bedrock'
+  U3  RED  Models.tsx providerOf: a plain provider sent with the new fields
+      ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+       FAIL  apps/workspace/src/admin/sections/Models.test.tsx > Models > offers no kind of engine off the cloud-platform profile, and bedrock as a provider by its key, as before
+      AssertionError: expected [ 'name', 'label', 'roles', …(5) ] to not include 'kind'
+  U4  RED  Models.tsx providerOf: the gateway added without its address
+        9 passed (18.0s)
+        1) apps/workspace/keyboard/admin-models.spec.ts:79:1 › the organisation's own gateway is added by keyboard, signed in by its token 
+          Error: expect(received).toMatchObject(expected)
+          > 94 |   expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({
+        2) apps/workspace/keyboard/admin-models.spec.ts:140:1 › an engine's connection is tested by keyboard 
+        3) apps/workspace/keyboard/admin-models.spec.ts:147:1 › each job's default engine is set by keyboard 
+        4) apps/workspace/keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above 
+  U5  RED  Models.tsx providerOf: an engine of the two kinds sent as a provider
+        9 passed (18.1s)
+        1) apps/workspace/keyboard/admin-models.spec.ts:29:1 › an engine is added by keyboard ────────────
+        2) apps/workspace/keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for 
+            71 |   expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({ name: "bedrock", kind: "bedrock", auth: "iam_role", api_base: null });
+        3) apps/workspace/keyboard/admin-models.spec.ts:79:1 › the organisation's own gateway is added by keyboard, signed in by its token 
+          Error: expect(received).toMatchObject(expected)
+          > 94 |   expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({
+
+50 of 50 plants red

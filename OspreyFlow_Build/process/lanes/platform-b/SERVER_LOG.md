@@ -118,9 +118,79 @@ keyboard (rule 13) and axe in three themes.
   from documentation, not measured (the draft says so).
 - (Resolved: the schema commit is at the head, e28c561.)
 
+## The orchestrator's review, round 1 of 2 (cec7a5e6, "not mergeable"): one pass, the code committed at 09:44 (`git log --date`)
+
+- **Start.** No other agent in this worktree (`ListAgents`: the admin lane alone, in `~/osprey-srv/admin`;
+  `pgrep`: its session and this one). `lane/platform-b-p11` at cec7a5e6 by `git checkout` (`git switch` refused
+  by this session's permissions, as before). `lanes_heartbeat.sh` is refused by them too: **no heartbeat sent this
+  round**. `lane/platform-b-carries` not touched.
+- **The profile is not on this branch.** ADR-148's `cloud-platform` is P7's (`lane/platform`, 31 commits not on
+  main); the owner's main 354bbec is not on this server either. So the rules are held to the profile **by its
+  value** (`MODEL_ROUTE_PROFILE = "cloud-platform"`), which P7's `Profile.CLOUD_PLATFORM` (a `StrEnum`) equals at
+  merge; `osprey.yaml` at that profile cannot be validated here, and the harness's cases for the two kinds widen
+  the profile set for the test alone (decision 10). The build plan has P11 after P7 merges; the orchestrator
+  reviewed and ruled on it as it stands, so I built on.
+- **Item 1, the blocker:** shown red at cec7a5e6 for its stated reason (`p11/red-2-round-1-at-cec7a5e6.txt`).
+  Fixed by one profile-scoped function, `engine_refusal(engine, profile)`, called by every reader of an engine
+  with the deployment's profile (`osprey.yaml`, `Installed.from_env`, `ModelSettingsFile.load`,
+  `ModelAdmin._validated`); the Conduit's profile is `OSPREY_PROFILE` from `deployment.env`. Every other profile
+  as on main: main's own render test restored unchanged and green; `bedrock` back in *Models*' provider list.
+- **Item 2:** any id with a part before the provider's, and any ARN, refused on `cloud-platform` (not only known
+  prefixes: AWS's own guide warns the prefix alone does not say where a call goes). The classifier's docstring no
+  longer points at inference profiles; Bedrock's "on-demand throughput isn't supported" is said as the model not
+  offered on demand in London.
+- **Item 3:** AWS's documentation checked for each Bedrock string (a web-fetch agent, 11 November): only the
+  expired-token wording is documented, as "has expired"; "You don't have access to the model…", "The provided
+  model identifier is invalid" and "on-demand throughput isn't supported" are not. The draft says so, per string,
+  with the pages. The region case and the stand-in's region branch are removed (unreachable).
+- **Item 7:** the two guide files restored to main by name (39f32b0b); their appendix change is
+  `p11/docs-admin-guide-P11.diff`. No `make` target regenerates it (`python -m tools.admin_guide_options
+  --write`, by hand), so it is not kept: `test_admin_guide.py`'s two appendix cases fail here until docs applies it.
+- **Plants:** `p11/plant.py`, committed. The first run (uncommitted tree) was 46 of 47 red: **N23 was not red**,
+  planted in a `render_cluster` branch that never ran (the cluster's gateway has no `envFrom`), which was this
+  lane's own dead code from round one: removed, the test widened to every env shape, N23 planted again where a
+  key really arrives, N25 added. A same-length plant also left stale bytecode behind (N21): the script now writes
+  none. Every plant re-run at the code head: `p11/plants-bcc51186.txt`.
+- **Glass:** vitest 11/11; keyboard 13/13 (slot 7, `LANG=en_GB.UTF-8`, the shared diff applied); axe 36/36 on
+  the nine *Models* states in three themes, the two new ones at `cloud=1`. tsc and eslint clean; Prettier not
+  run as a gate (main's own `Models.tsx` does not pass it). ruff and mypy clean on the branch's Python diff.
+- **Left listening, not mine:** vite on 5893 and 5894 (slot 7's harness axe ports) from the gate runner's copy
+  `/root/osprey-runs/platform-b`, started by an earlier run and not by this session: not stopped (never kill a
+  process you did not start). The harness's axe target in `make -k ci` may fail on them; said with the gates.
+- **Not run this round:** my own lane-reviewer (the brief here is the orchestrator's review; round 2 follows).
+
+### Decisions taken this round (the recommended option; the orchestrator or the owner may overrule)
+10. **The profile by value, the harness by a widened set.** Options: add `Profile.CLOUD_PLATFORM` here (P7's
+    file and render, half-built here); wait for P7; or compare by value and widen the set in tests. Chose the
+    last: nothing of P7's is copied, and P7's member equals the string at merge.
+11. **Item 4's address and label refusals on `cloud-platform` only**, by item 1's ruling (every other profile
+    as on main); recommended to the owner for every profile, as its own decision.
+12. **Off-profile fields not written.** A plain provider's models file, `OSPREY_MODEL_ENGINES` line, request
+    body and audit leave out `kind`, `auth` and `region`, so another profile's state is byte-for-byte main's.
+13. **The CLI with the Conduit silent:** refuses `key`/`remove-key` before reading a key where the engine may
+    keep none (declared so, or any engine on `cloud-platform`); every other profile reads the key as before.
+14. **A 4xx the classifier does not know, from the client's gateway, is `request_refused`**, given by *Admin ›
+    Models* for that kind alone, so no other provider's answers change.
+
+### Gates at bcc51186 (once)
+`stack_lease.sh` (offline and every other verb) is refused by this session's permissions, so the two gates ran
+with `make` here, on the offline lease's closed ports and slot 7, `shared-files-P11.diff` applied uncommitted:
+- `make test`: 4 failed, 10934 passed, 13 skipped. The failures are `test_gpu_is_skipped…` (this server has a
+  GPU), `test_valkey_config` (pinned 59993) and `test_admin_guide` ×2 (item 7: the appendix is docs' diff). Live
+  files all collect. JS: the workspace had 2 failed, 3057 passed; the Matrix 50,000-node budget and the checks
+  screen's refusal words both pass run alone, so it was load. Harness 51/51. `p11/bcc51186.test.txt`,
+  `.test-js.txt`.
+- `make -k ci`: every target passed except `harness-a11y`: "http://localhost:5893 is already used", the vite left
+  by `/root/osprey-runs/platform-b` (above), not stopped. `p11/bcc51186.ci.txt`.
+- Restored by name afterwards: `actionRegistry.ts`, `every-harness.spec.ts`, and the three
+  `.terraform.lock.hcl` files `tofu init` rewrote. Docker images built as `ospreyflow/*:ci`; nothing pruned;
+  `osprey-small` untouched.
+
 ## Built
 
-**P11 part 1 built at e28c561** (code), after my own lane-reviewer's round, all its findings fixed but the
+**P11 part 1, the orchestrator's review round 1 fixed: built at bcc51186.** Round 2 follows.
+
+**(Earlier.) P11 part 1 built at e28c561** (code), after my own lane-reviewer's round, all its findings fixed but the
 orchestrator's two (Q2 number, Q4 ownership). Reviews: the orchestrator's independent review is owed, and
 this is a credential step, so two rounds. **Addendum:** the interim `make test` found the settings appendix
 generated from the schema out of date (`test_admin_guide.py`); regenerated in 8d2f18b, which is now the
