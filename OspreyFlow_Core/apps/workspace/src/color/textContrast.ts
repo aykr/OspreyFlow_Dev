@@ -421,7 +421,11 @@ export function judge(sample: Sample): Judgement {
   const axe = sample.axeReason ? ` (axe: ${sample.axeReason})` : "";
   const fg = sample.unreadable ? null : parseColour(sample.color);
   const own = fg ? onOwnSurfaces(sample, fg) : null;
-  const ownRatio = typeof own === "number" ? own : null;
+  // Hidden at every point, the words are still read on their own surfaces with the hiding left aside,
+  // so a listing of them is pinned to that, never excused whatever their colours become (the
+  // orchestrator's review of 9697ad3, item 3).
+  const unhidden = own === null && fg ? onOwnSurfaces({ ...sample, hidden: undefined }, fg) : own;
+  const ownRatio = typeof unhidden === "number" ? unhidden : null;
   const fail = (why: string): Judgement => ({ ...base, ratio: null, ownRatio, why: `not measurable: ${why}${axe}` });
   if (sample.unreadable) return fail(sample.unreadable);
   if (sample.overlappedBy) return fail(`over or under ${sample.overlappedBy}`);

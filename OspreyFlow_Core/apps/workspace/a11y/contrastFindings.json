@@ -1045,14 +1045,14 @@
    "text": "·",
    "ratio": "unmeasurable",
    "reason": "hidden at every point, under an opaque element over the words or clipped",
-   "own": null,
+   "own": 19.59,
    "owner": "shell"
   },
   "span:nth-child(5)": {
    "text": "reads Prison intel",
    "ratio": "unmeasurable",
    "reason": "hidden at every point, under an opaque element over the words or clipped",
-   "own": null,
+   "own": 19.59,
    "owner": "shell"
   }
  }

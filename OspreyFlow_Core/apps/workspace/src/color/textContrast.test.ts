@@ -449,6 +449,25 @@ describe("words hidden at a point (T3b's server round)", () => {
     expect(gone.ratio).toBeNull();
     expect(gone.why).toBe("not measurable: hidden at every point, under an opaque element over the words or clipped");
   });
+
+  it("pins words hidden at every point to their own surfaces at every point, so a listing never excuses unconditionally", () => {
+    // The orchestrator's review of 9697ad3, item 3: with `ownRatio` null, a listing's `own: null`
+    // held whatever the words' colours became. Hidden at every point, they are still read on their own
+    // surfaces with the hiding left aside: black words on black at the second point, 1:1.
+    const gone = twoPoints([true, true]);
+    expect(gone.ownRatio).toBeCloseTo(1, 2);
+    const listed = {
+      text: "Words",
+      ratio: "unmeasurable" as const,
+      reason: "hidden at every point, under an opaque element over the words or clipped",
+      own: 1,
+      owner: "shell",
+    };
+    expect(excuses(listed, gone)).toBe(true);
+    // A pin above what they give now fails, and so does `own: null`: a listing must name a floor.
+    expect(excuses({ ...listed, own: 1.5 }, gone)).toBe(false);
+    expect(excuses({ ...listed, own: null }, gone)).toBe(false);
+  });
 });
 
 describe("a listed finding", () => {
