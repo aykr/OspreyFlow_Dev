@@ -137,3 +137,10 @@ the orchestrator's call, 20 November). Part 1's strict xfail on the 0.5B model s
   `services.api.review.run_extraction` alone. `test_laurium_reads_findings_alone.py`, written first (red at
   collection), through the real `run_extraction` and store and through a direct call: 3 passed. **Plants:** the marker
   left out of `run_extraction` (`nullcontext()`), 1 failed; every caller sent to Laurium, 2 failed.
+- **Items 1, 5 and 14** (`services/api/laurium_start.py`, which `app.py` now calls): the key at start never stops the
+  Conduit (tried once, then in the background, each wait twice the last up to ten minutes, as `ModelAdmin.start`;
+  logged in words, never the key) and Laurium's calls alone are refused in words until it is held; the composition
+  inside the routes made by `routed_model`; Laurium's client closed at shutdown. `tests/services/api/test_laurium_start.py`,
+  written first (red at collection), 5 passed. **Plants:** the routes inside Laurium's composition (the reversed
+  wrapping), 3 failed; a key failure raised, 2 failed; Laurium's calls sent before its key is held, 1 failed; its
+  client left open, 1 failed.

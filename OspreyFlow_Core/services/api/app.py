@@ -109,9 +109,6 @@ from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
 
-from adapters.extract_laurium.composed import ENGINE as EXTRACTION_ENGINE
-from adapters.extract_laurium.composed import LAURIUM, extraction_from_env
-from adapters.extract_laurium.keys import laurium_at_start
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import (
@@ -765,6 +762,7 @@ from .kyc_expiries import KycExpiryStore
 from .kyc_sweep import SweepReport
 from .kyc_sweep import run_daily as run_daily_kyc_sweep
 from .kyc_sweep import sweep as kyc_sweep
+from .laurium_start import LauriumKeyAtStart, close_laurium, lauriums, routed_model
 from .link_changes import (
     ChangeNotMadeError,
     InvalidChangeError,
@@ -1248,18 +1246,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # client's provider sees only material whose handling code the deployment declared sendable
     # and whose every dataset allows that provider, and an engine an analyst names is used only
     # when it is enabled and has a key.
-    model: ModelPort = RoutedModel(
-        # ADR-135 Amendment 6 (P12 part 2): `extract` by Laurium's service when the deployment
-        # chose it (`OSPREY_EXTRACTION_ENGINE`), every other operation the gateway's; inside the
-        # routes, so each call keeps its engine's own key and the egress rules.
-        extraction_from_env(
-            ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
-            os.environ,
-            master=LiteLLMConfig.from_env().api_key,
-        ),
+    # ADR-135 Amendments 6 and 9 (P12 part 2): `extract` by Laurium's service for the review
+    # queue's document extraction when the deployment chose it (`OSPREY_EXTRACTION_ENGINE`),
+    # every other call the gateway's; inside the routes, so each keeps its engine's key and the
+    # egress rules (`services.api.laurium_start.routed_model`).
+    model: ModelPort = routed_model(
+        ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
         routes=routes_from_env(models, os.environ),
         # ADR-136: and only from datasets whose egress allows the engine.
         egress=datasets_store,
+        environ=os.environ,
+        master=LiteLLMConfig.from_env().api_key,
     )
     # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
@@ -1463,10 +1460,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await model_admin.start()
     if routed is not None:
         routed.follow(model_admin.routes)
-    if os.environ.get(EXTRACTION_ENGINE) == LAURIUM:
+    laurium_key_start: LauriumKeyAtStart | None = None
+    if (composed := lauriums(model)) is not None:
         # ADR-135 Amendment 6 decision 8: Laurium's own key, the deployment's extraction model
-        # alone, and any older one (a master key since rotated) deleted, before a call is taken.
-        await laurium_at_start(gateway_http, gateway_config.api_key, [models.extraction])
+        # alone, and any older one (a master key since rotated) deleted; tried again in the
+        # background until held, never stopping the Conduit, Laurium's calls refused until then.
+        laurium_key_start = LauriumKeyAtStart(
+            gateway_http, gateway_config.api_key, [models.extraction]
+        )
+        composed.ready = lambda: laurium_key_start is not None and laurium_key_start.held
+        await laurium_key_start.start()
     app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme
@@ -1648,6 +1651,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # one left here would fail them; without it they judge with the weights file's influencers.
         app.state.strength_influencers = None
         await litellm_client.aclose()
+        if laurium_key_start is not None:
+            await laurium_key_start.stop()
+        await close_laurium(model)
         app.state.model_admin = None
         await model_admin.close()
         await model_admin_audit.close()

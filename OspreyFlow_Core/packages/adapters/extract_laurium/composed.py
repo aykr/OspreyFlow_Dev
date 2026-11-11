@@ -13,11 +13,12 @@ read as Deep read.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 
 from adapters.extract_laurium.adapter import ExtractLauriumAdapter, LauriumConfig
+from adapters.model_litellm.errors import ExtractionFailedError
 from ports.model import ModelPort
 from schemas.domain import Vector
 from schemas.model import (
@@ -61,9 +62,17 @@ class LauriumExtracts:
     def __init__(self, inner: ModelPort, laurium: ExtractLauriumAdapter) -> None:
         self.inner = inner
         self.laurium = laurium
+        #: Whether Laurium's own key is held on the gateway (`services.api.laurium_start`): until
+        #: it is, Laurium's calls are refused in words, never sent with a key the gateway lacks.
+        self.ready: Callable[[], bool] = lambda: True
 
     async def extract(self, req: ExtractionRequest) -> ExtractionResult:
         if _LAURIUM_READS.get():
+            if not self.ready():
+                raise ExtractionFailedError(
+                    "Laurium's key is not yet held on the model gateway; the Conduit keeps "
+                    "trying. Try the extraction again shortly."
+                )
             return await self.laurium.extract(req)
         return await self.inner.extract(req)
 
