@@ -1,16 +1,16 @@
-# as of 2026-11-11T09:10Z
-platform	P7	built at 1a63953d (server); two independent review rounds from 09:00; merges without you if both pass and its gates are green (Am 8), listed for your review	11 Nov, ~11:00	B
-admin	P10	part 1 built at 5b0e6e1; review round 1 from 09:00 (access, two rounds); profile wiring after P7	12 Nov	B
+# as of 2026-11-11T09:15Z
+platform	P7	review A: not mergeable (make test red on its own stale PDF, kind claims recorded as done, egress allows /0, renders-unchanged not shown at head); review B running; one fix pass on the server after B, then round 2	12 Nov	B
+admin	P10	round 1: not mergeable (the tenant plant was an import error; principal keyed by oid, the orchestrator's ruling; tid under Keycloak refused); fixes on the server since 09:11; ADR-148 Am 6 reserved	12 Nov	B
 case	P9	cut: encrypted S3 backup, one timed restore; a fresh sol session once P7 merges	12–13 Nov	B
-platform-b	P11	part 1 built at cec7a5e6; review round 1 from 09:00 (credential, two rounds); part 2 after P7	12 Nov	B
-case-b	P12	part 1 built at a5fa3c1b; one review round from 09:00; part 2 after P7	13 Nov	B
-studio-b	L1.9	part 1 built at b29dba44; review round 1 from 09:00 (access, two rounds); part 2 after P7	12–13 Nov	B
+platform-b	P11	round 1: not mergeable (Amendment 4's rules on every profile; London-only ids; stand-ins too permissive; key in an address); fixes on the server since 09:07; ADR-135 Am 7 reserved	12 Nov	B
+case-b	P12	review: not mergeable (never met a real gateway; master key into Laurium, now a credential step with two rounds; gates not at head); fixes on the server since 09:09	13 Nov	B
+studio-b	L1.9	round 1: not mergeable (the named-query checker fails open; uv.lock; duplicate columns); fixes on the server since 09:08	12–13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P7b	shape: poc and both runbooks; its kind run is the install's acceptance; from P7's merge	13 Nov	B
 docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where Laurium runs	13–14 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
-admin	T1	part 4 landed (9de435c); part 5 built, its gates at 5541196 being explained on the server (restarted 09:04)	11 Nov, afternoon	A
-rules	UPG-check	not run: the server session stopped at 07:07 (its driver writes outside the worktree); to rerun under a lease	12 Nov	A
+admin	T1	part 4 landed (9de435c); part 5 built, gates explained at 9cbb4575 (server); with the merger next	11 Nov, evening	A
+rules	UPG-check	the real update v0.4.12 to v0.5.0 on osprey-upg, server session since 09:11	11 Nov, ~12:00	A
 rules	hyg	studio's finding fixed at 373b3dd; the merger's two rounds from 09:10	11 Nov, ~10:30	A
 rules-b	T3b	with the merger, after hyg	11 Nov, afternoon	A
 docs	D2d	the review's nine must-fixes, then merge without you (Am 8)	11 Nov, afternoon	A
