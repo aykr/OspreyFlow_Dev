@@ -238,7 +238,7 @@ class Bucket:
             "UploadId"
         ]
         writer = _PartWriter(self.client, bucket, key, upload_id)
-        taken: dict[str, Any] = {"entries": 0, "gone": 0, "changed": []}
+        taken: dict[str, Any] = {"entries": 0, "gone": 0}
         try:
             with tarfile.open(fileobj=writer, mode="w|gz") as tar:  # type: ignore[call-overload]
                 for path in _tree(folder):
@@ -319,18 +319,22 @@ def _tree(folder: Path) -> Iterator[Path]:
                     yield Path(root) / name
 
 
-class _AtMost:
-    """A file read for exactly `size` bytes: one that shrank while read is padded, and said so."""
+class FileShrank(OSError):
+    """A file that grew shorter while it was read: never padded into the set (the orchestrator's
+    round 2), the claims part refused instead."""
 
-    def __init__(self, file: Any, size: int) -> None:
-        self.file, self.left, self.short = file, size, False
+
+class _AtMost:
+    """A file read for exactly `size` bytes; one that shrank while read is refused."""
+
+    def __init__(self, file: Any, size: int, name: str) -> None:
+        self.file, self.left, self.name = file, size, name
 
     def read(self, n: int = -1) -> bytes:
         want = self.left if n < 0 else min(n, self.left)
         data = self.file.read(want)
         if len(data) < want:
-            self.short = True
-            data += b"\0" * (want - len(data))
+            raise FileShrank(f"{self.name} grew shorter while it was read")
         self.left -= len(data)
         return bytes(data)
 
@@ -340,10 +344,7 @@ def _add(tar: tarfile.TarFile, path: Path, name: str, taken: dict[str, Any]) -> 
         if path.is_file() and not path.is_symlink():
             with path.open("rb") as file:  # opened: a delete after this keeps its content
                 info = tar.gettarinfo(arcname=name, fileobj=file)
-                reader = _AtMost(file, info.size)
-                tar.addfile(info, reader)
-                if reader.short:
-                    taken["changed"].append(name)
+                tar.addfile(info, _AtMost(file, info.size, name))
         else:
             tar.add(path, arcname=name, recursive=False)
     except FileNotFoundError:
@@ -491,19 +492,46 @@ class Stores:
             )
         return answer.split("\t", 1)[0].strip()
 
-    def clickhouse_restore(self, url: str) -> None:
+    def clickhouse_restore(self, url: str, set_id: str) -> None:
+        """ClickHouse's database replaced by the set's, **never dropped before the restore is
+        proven** (the orchestrator's ruling 5): restored into a database of its own (its own Keeper
+        path, so it never meets the live one's), then the two swapped by rename, and the old dropped
+        only after. A refusal leaves the live database as it was, the half-restored one removed."""
         database = _identifier(self.settings.clickhouse_database)
+        stamp_ = _identifier(set_id.lower())
+        restoring, old = f"{database}_restoring_{stamp_}", f"{database}_before_{stamp_}"
+        on = self._on_cluster()
+        self.clickhouse(f"DROP DATABASE IF EXISTS {restoring}{on} SYNC", "clear the restore's own")
         self.clickhouse(
-            f"DROP DATABASE IF EXISTS {database}{self._on_cluster()} SYNC", "DROP DATABASE"
+            f"CREATE DATABASE {restoring}{on} ENGINE = Replicated("
+            f"'/clickhouse/databases/{restoring}', '{{shard}}', '{{replica}}')"
+            if self.settings.clickhouse_cluster
+            else f"CREATE DATABASE {restoring}",
+            "make the restore's own database",
         )
-        answer = self.clickhouse(
-            f"RESTORE DATABASE {database}{self._on_cluster()} FROM {_s3_function(url)}",
-            "RESTORE … FROM S3",
-        )
-        if "RESTORED" not in answer:
-            raise BackupRefused(
-                "clickhouse", "RESTORE … FROM S3", f"ClickHouse answered {answer.strip()[:300]!r}"
+        try:
+            answer = self.clickhouse(
+                f"RESTORE DATABASE {database} AS {restoring}{on} FROM {_s3_function(url)} "
+                "SETTINGS allow_different_database_def = true",
+                "RESTORE … FROM S3",
             )
+            if "RESTORED" not in answer:
+                raise BackupRefused(
+                    "clickhouse",
+                    "RESTORE … FROM S3",
+                    f"ClickHouse answered {answer.strip()[:300]!r}",
+                )
+        except BackupRefused:
+            # The live database untouched; the half-restored one removed (a refusal to remove it
+            # is said beside the first, never in its place).
+            try:
+                self.clickhouse(f"DROP DATABASE IF EXISTS {restoring}{on} SYNC", "remove the half")
+            except BackupRefused:
+                pass
+            raise
+        self.clickhouse(f"RENAME DATABASE {database} TO {old}{on}", "set the live one aside")
+        self.clickhouse(f"RENAME DATABASE {restoring} TO {database}{on}", "put the restored one in")
+        self.clickhouse(f"DROP DATABASE IF EXISTS {old}{on} SYNC", "drop the old one")
 
 
 def _identifier(name: str) -> str:
@@ -733,14 +761,30 @@ def latest(bucket: Bucket) -> str:
     return finished[-1]
 
 
-def verify_set(bucket: Bucket, set_id: str) -> dict[str, Any]:
-    """**Every part of the set checked before anything is replaced** (the orchestrator's ruling 3):
-    the manifest there (a finished set), ArcadeDB's zip and each claim by size and SHA-256, read
-    through and kept nowhere, and ClickHouse's part by each file's name, size and ETag. A part
-    missing (expired, say) or changed refuses the restore with nothing touched. Returns the
+def verify_set(
+    bucket: Bucket, set_id: str, claims: tuple[str, ...] = (), parts: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    """**Every part of the set checked before anything is replaced** (the orchestrator's rulings 3
+    and 4): the manifest there (a finished set) and **its own** (its `set` this set, every key it
+    names under `sets/<set_id>/`); the deployment's claims (`claims`) each in it, so a set without
+    its claims part is never restored into a deployment that has them; ArcadeDB's zip and each claim
+    by size and SHA-256, read through and kept nowhere; ClickHouse's part by each file's name, size
+    and ETag. `parts` narrows the check to those parts (a step re-checking its own). A part missing
+    (expired, say), changed or another set's refuses the restore with nothing touched. Returns the
     manifest."""
     manifest = manifest_of(bucket, set_id)
+    prefix = f"sets/{set_id}/"
+    wanted = set(parts or ("arcadedb", "clickhouse", "claims"))
     problems: list[str] = []
+    if manifest.get("set") != set_id:
+        problems.append(f"its manifest is set {manifest.get('set')!r}'s, not {set_id}'s")
+    named = [manifest["arcadedb"]["key"], manifest["clickhouse"]["prefix"],
+             *(f["key"] for f in manifest["clickhouse"].get("files", [])),
+             *(c["key"] for c in (manifest.get("claims") or {}).values())]  # fmt: skip
+    if outside := [k for k in named if not k.startswith(prefix)]:
+        problems.append(f"its manifest names objects outside the set: {', '.join(outside)}")
+    if missing := [c for c in claims if c not in (manifest.get("claims") or {})]:
+        problems.append(f"it holds no part for the claim {', '.join(missing)}")
 
     def check(what: str, key: str, size: int, sha256: str) -> None:
         try:
@@ -754,12 +798,13 @@ def verify_set(bucket: Bucket, set_id: str) -> dict[str, Any]:
                 f"the manifest says {size}, {sha256[:12]}…"
             )
 
-    graph = manifest["arcadedb"]
-    check("ArcadeDB's zip", graph["key"], graph["bytes"], graph["sha256"])
+    if "arcadedb" in wanted:
+        graph = manifest["arcadedb"]
+        check("ArcadeDB's zip", graph["key"], graph["bytes"], graph["sha256"])
     analytics = manifest["clickhouse"]
-    if not analytics.get("files"):
+    if "clickhouse" in wanted and not analytics.get("files"):
         problems.append("ClickHouse's part has no file list in the manifest")
-    else:
+    elif "clickhouse" in wanted:
         try:
             now = {f["key"]: f for f in bucket.listing(analytics["prefix"])}
         except Exception as error:  # noqa: BLE001 - reported in words
@@ -769,10 +814,12 @@ def verify_set(bucket: Bucket, set_id: str) -> dict[str, Any]:
             there = now.get(file["key"])
             if there is None:
                 problems.append(f"ClickHouse's {file['key']} is missing")
-            elif (there["bytes"], there["etag"]) != (file["bytes"], file["etag"]):
+                continue
+            if (there["bytes"], there["etag"]) != (file["bytes"], file["etag"]):
                 problems.append(f"ClickHouse's {file['key']} is not the file the set wrote")
-    for name, part in sorted((manifest.get("claims") or {}).items()):
-        check(f"the claim {name}", part["key"], part["bytes"], part["sha256"])
+    if "claims" in wanted:
+        for name, part in sorted((manifest.get("claims") or {}).items()):
+            check(f"the claim {name}", part["key"], part["bytes"], part["sha256"])
     if problems:
         raise BackupRefused(
             "restore", f"verify set {set_id}", "; ".join(problems) + "; nothing was touched"
@@ -799,24 +846,31 @@ def _pods(selector: str) -> list[dict[str, Any]]:
 
 
 def writers_stopped(
-    settings: Settings, pods: Callable[[str], list[dict[str, Any]]] = _pods
+    settings: Settings, pods: Callable[[str], list[dict[str, Any]]] | None = None
 ) -> None:
     """A restore refuses while anything that writes runs (the orchestrator's ruling 4): ArcadeDB,
     the Conduit, the workers and the report sync, in every shape. A pod finished (Succeeded,
-    Failed) is not running."""
+    Failed) is not running. **It fails closed**: with no writers named, or the pods unlisted, it
+    refuses; it never proceeds unconfirmed."""
     if not settings.writers:
-        return
+        raise BackupRefused(
+            "restore",
+            "see what runs",
+            "cannot confirm the writers are stopped: none are named to check "
+            "(OSPREY_BACKUP_WRITERS); nothing was touched",
+        )
     selector = f"app.kubernetes.io/name in ({','.join(settings.writers)})"
     try:
-        found = pods(selector)
+        found = (pods or _pods)(selector)
     except Exception as error:  # noqa: BLE001 - reported in words
         # Fails closed: until the namespace's egress lets the restore reach the cluster's API (P7b's
         # per-workload rows), no restore proceeds on this profile, never one that guessed.
         raise BackupRefused(
             "restore",
             "see what runs",
-            f"cannot confirm the writers are stopped (the pods could not be listed: {error}); "
-            "nothing was touched",
+            f"cannot confirm the writers are stopped: the pods could not be listed ({error}); on "
+            "the cloud-platform profile every restore refuses so until P7b's restore row lands "
+            "(its egress to the cluster's API); nothing was touched",
         ) from error
     finished = ("Succeeded", "Failed")
     running = sorted(
@@ -833,8 +887,9 @@ def writers_stopped(
 
 def fetch_graph(bucket: Bucket, set_id: str, folder: Path) -> Path:
     """The set's ArcadeDB zip into `folder`, checked against its manifest before it is used; the
-    whole set verified first."""
-    manifest = verify_set(bucket, set_id)
+    whole set is verified by the Job's first step (`verify`), so this checks the zip alone, as it
+    downloads it."""
+    manifest = manifest_of(bucket, set_id)
     graph = manifest["arcadedb"]
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{graph['database']}.zip"
@@ -861,7 +916,7 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
     against the manifest, unpacked beside the claim's contents (refusing any entry outside it),
     and only then the old contents, but for lost+found, replaced. Run with every pod that mounts
     the claims stopped."""
-    manifest = verify_set(bucket, set_id)
+    manifest = manifest_of(bucket, set_id)  # the whole set verified by the Job's first step
     claims = manifest.get("claims")
     if not claims:
         raise BackupRefused("claims", f"restore set {set_id}", "the set holds no claims part")
@@ -908,14 +963,19 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
     return restored
 
 
-def restore_analytics(settings: Settings, bucket: Bucket, stores: Stores, set_id: str,
-                      pods: Callable[[str], list[dict[str, Any]]] = _pods) -> None:  # fmt: skip
+def restore_analytics(
+    settings: Settings,
+    bucket: Bucket,
+    stores: Stores,
+    set_id: str,
+    pods: Callable[[str], list[dict[str, Any]]] | None = None,
+) -> None:  # fmt: skip
     """ClickHouse's database replaced from the set, only once nothing writes and the whole set is
     verified: ClickHouse is dropped only for a set it can be restored from."""
     writers_stopped(settings, pods)
-    manifest = verify_set(bucket, set_id)
+    manifest = verify_set(bucket, set_id, parts=("clickhouse",))
     url = f"{settings.s3_base}/{manifest['clickhouse']['prefix']}"
-    stores.clickhouse_restore(url)
+    stores.clickhouse_restore(url, set_id)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -960,7 +1020,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "verify":
             set_id = latest(bucket) if args.set == "latest" else args.set
             writers_stopped(settings)
-            verify_set(bucket, set_id)
+            verify_set(bucket, set_id, claims=settings.claims)
             print(f"restore: set {set_id} verified, every part; nothing writing")
         elif args.command == "backup-claims":
             part = take_claims(settings, bucket)

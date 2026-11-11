@@ -242,7 +242,7 @@ def test_main_runs_each_part_and_fails_the_job_on_a_missing_claims_part(
                         "AWS_ENDPOINT_URL_S3": aws.endpoint,
                         "OSPREY_BACKUP_ARCADEDB_FOLDER": str(settings.arcadedb_folder),
                         "OSPREY_BACKUP_CLAIMS": "ingest", "OSPREY_BACKUP_CLAIMS_FOLDER": str(claims),
-                        "OSPREY_BACKUP_CLAIMS_WAIT": "0.05",
+                        "OSPREY_BACKUP_CLAIMS_WAIT": "0.05", "CLICKHOUSE_USER": "backup",
                         "OSPREY_BACKUP_JOB": _job("ospreyflow-backup", SLOT)}.items():  # fmt: skip
         monkeypatch.setenv(name, value)
     stores = pb.Stores
@@ -271,13 +271,15 @@ def test_a_file_gone_before_it_is_read_is_left_out_and_counted(
 
     monkeypatch.setattr(pb, "_tree", walk_then_remove)
     part = pb.take_claims(late, pb.Bucket(late))
-    assert part["ingest"]["gone"] == 1 and part["ingest"]["changed"] == []
+    assert part["ingest"]["gone"] == 1
     with tarfile.open(fileobj=io.BytesIO(aws.stand_in.read(BUCKET, part["ingest"]["key"])), mode="r:gz") as tar:
         names = tar.getnames()
     assert "ingest/drop/nightly/people.csv" not in names
     assert "ingest/uploads/case-1/witness statement.pdf" in names
 
 
-def test_a_file_that_shrinks_while_read_is_kept_whole_length_and_named() -> None:
-    reader = pb._AtMost(io.BytesIO(b"abc"), 5)
-    assert reader.read(4) + reader.read() == b"abc\0\0" and reader.short
+def test_a_file_that_shrinks_while_read_refuses_the_part_never_padded() -> None:
+    """The orchestrator's round 2: a file shorter than its header says is never padded into the set."""
+    reader = pb._AtMost(io.BytesIO(b"abc"), 5, "ingest/drop/x.csv")
+    with pytest.raises(pb.FileShrank, match="ingest/drop/x.csv grew shorter"):
+        reader.read()

@@ -16,6 +16,8 @@ servers are the kind run's (`process/lanes/case/gates/p9_kind.sh`).
 from __future__ import annotations
 
 import datetime as dt
+import json
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -182,10 +184,35 @@ def test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set(
     manifest = pb.take(settings, bucket, stores)
     path = pb.fetch_graph(bucket, pb.latest(bucket), tmp_path / "restore")
     assert path.read_bytes() == ZIP
+    sent = len(fake.statements)
     pb.restore_analytics(settings, bucket, stores, manifest["set"])
-    assert fake.statements[-2] == "DROP DATABASE IF EXISTS ospreyflow SYNC"
-    assert fake.statements[-1] == (
-        f"RESTORE DATABASE ospreyflow FROM S3('{REGIONAL}/{BUCKET}/sets/{manifest['set']}/clickhouse/')")
+    stamp = manifest["set"].lower()
+    restoring, before = f"ospreyflow_restoring_{stamp}", f"ospreyflow_before_{stamp}"
+    # Restored beside the live database, then swapped, and the old dropped only after.
+    assert fake.statements[sent:] == [
+        f"DROP DATABASE IF EXISTS {restoring} SYNC",
+        f"CREATE DATABASE {restoring}",
+        f"RESTORE DATABASE ospreyflow AS {restoring} FROM S3('{REGIONAL}/{BUCKET}/sets/{manifest['set']}/clickhouse/') "
+        "SETTINGS allow_different_database_def = true",
+        f"RENAME DATABASE ospreyflow TO {before}",
+        f"RENAME DATABASE {restoring} TO ospreyflow",
+        f"DROP DATABASE IF EXISTS {before} SYNC",
+    ]
+
+
+def test_clickhouse_refused_its_restore_leaves_the_live_database_as_it_was(aws: Running, run: Any) -> None:
+    """The orchestrator's ruling 5: ClickHouse's role refused the set's key (kms:Decrypt), the live
+    database is never renamed or dropped; the half-restored one is removed."""
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    _deny_kms(aws, "kms:GenerateDataKey", role=CLICKHOUSE_ROLE_ARN)
+    sent = len(fake.statements)
+    with pytest.raises(pb.BackupRefused) as refused:
+        pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    assert refused.value.step == "RESTORE … FROM S3" and "kms:Decrypt" in refused.value.reason
+    after = fake.statements[sent:]
+    assert not [s for s in after if s.startswith("RENAME") or s == "DROP DATABASE IF EXISTS ospreyflow SYNC"]
+    assert after[-1].startswith("DROP DATABASE IF EXISTS ospreyflow_restoring_"), "the half removed"
 
 
 def test_a_zip_that_does_not_match_its_manifest_is_never_restored(aws: Running, run: Any, tmp_path: Path) -> None:
@@ -249,23 +276,23 @@ def test_a_missing_clickhouse_part_leaves_arcadedb_and_clickhouse_untouched(
     aws.stand_in.delete(BUCKET, f"{manifest['clickhouse']['prefix']}.backup")
     sent = len(fake.statements)
     for step in (lambda: pb.verify_set(bucket, manifest["set"]),
-                 lambda: pb.fetch_graph(bucket, manifest["set"], tmp_path / "restore"),
                  lambda: pb.restore_analytics(settings, bucket, stores, manifest["set"])):  # fmt: skip
         with pytest.raises(pb.BackupRefused) as refused:
             step()
         assert "ClickHouse's" in refused.value.reason and ".backup is missing" in refused.value.reason
         assert "nothing was touched" in refused.value.reason
     assert fake.statements[sent:] == [], "no DROP, no RESTORE sent to ClickHouse"
-    assert not (tmp_path / "restore" / "ospreyflow.zip").exists()
+    assert not (tmp_path / "restore").exists()
 
 
 def test_a_changed_clickhouse_file_is_never_restored(aws: Running, run: Any) -> None:
     settings, bucket, stores, fake = run
     manifest = pb.take(settings, bucket, stores)
     aws.stand_in.put(BUCKET, f"{manifest['clickhouse']['prefix']}.backup", b"<another/>", KEY_ARN)
+    sent = len(fake.statements)
     with pytest.raises(pb.BackupRefused, match="is not the file the set wrote"):
         pb.restore_analytics(settings, bucket, stores, manifest["set"])
-    assert not [s for s in fake.statements if s.startswith("DROP")]
+    assert fake.statements[sent:] == []
 
 
 def test_the_manifest_records_clickhouses_part_by_file(run: Any) -> None:
@@ -316,7 +343,8 @@ def test_a_restore_goes_on_once_the_writers_are_stopped(run: Any) -> None:
     manifest = pb.take(settings, bucket, stores)
     guarded = pb.Settings(**{**settings.__dict__, "writers": ("arcadedb", "api")})
     pb.restore_analytics(guarded, bucket, stores, manifest["set"], pods=lambda _: [_pod("api-1", "Succeeded")])
-    assert fake.statements[-1].startswith("RESTORE DATABASE")
+    assert any(s.startswith("RESTORE DATABASE") for s in fake.statements)
+    assert fake.statements[-1].startswith("DROP DATABASE IF EXISTS ospreyflow_before_")
 
 
 def test_pods_it_cannot_list_refuse_the_restore(run: Any) -> None:
@@ -354,3 +382,74 @@ def test_an_sts_refusal_is_named_as_sts_s() -> None:
     assert pb._said(error) == "STS refused it (AccessDenied: Not authorized)"
     error = ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "PutObject")
     assert pb._said(error).startswith("S3 refused it")
+
+
+# ---- round 3: the manifest is its own set's; no writers named refuses; main fails closed --------
+
+
+def _rewrite_manifest(aws: Running, set_id: str, change: Any) -> None:
+    key = f"sets/{set_id}/manifest.json"
+    manifest = json.loads(aws.stand_in.read(BUCKET, key))
+    change(manifest)
+    aws.stand_in.put(BUCKET, key, json.dumps(manifest).encode(), KEY_ARN)
+
+
+def test_a_manifest_that_is_another_sets_is_refused(aws: Running, run: Any) -> None:
+    settings, bucket, stores, _ = run
+    manifest = pb.take(settings, bucket, stores)
+    _rewrite_manifest(aws, manifest["set"], lambda m: m.update(set="20201231T000000Z"))
+    with pytest.raises(pb.BackupRefused, match="its manifest is set '20201231T000000Z'"):
+        pb.verify_set(bucket, manifest["set"])
+
+
+def test_a_manifest_naming_another_sets_objects_is_refused(aws: Running, run: Any) -> None:
+    settings, bucket, stores, _ = run
+    manifest = pb.take(settings, bucket, stores)
+    _rewrite_manifest(aws, manifest["set"],
+                      lambda m: m["arcadedb"].update(key="sets/20201231T000000Z/arcadedb/ospreyflow.zip"))  # fmt: skip
+    with pytest.raises(pb.BackupRefused, match="outside the set"):
+        pb.verify_set(bucket, manifest["set"])
+
+
+def test_a_set_without_the_deployments_claims_is_refused(run: Any) -> None:
+    """The stores' Job refuses a set taken without the claims part the deployment has."""
+    settings, bucket, stores, _ = run
+    manifest = pb.take(settings, bucket, stores)
+    with pytest.raises(pb.BackupRefused, match="no part for the claim ingest"):
+        pb.verify_set(bucket, manifest["set"], claims=("ingest",))
+
+
+def test_no_writers_named_refuses_the_restore(run: Any) -> None:
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    unnamed = pb.Settings(**{**settings.__dict__, "writers": ()})
+    sent = len(fake.statements)
+    with pytest.raises(pb.BackupRefused, match="cannot confirm the writers are stopped: none are named"):
+        pb.restore_analytics(unnamed, bucket, stores, manifest["set"])
+    assert fake.statements[sent:] == []
+
+
+@pytest.mark.parametrize("command", ["verify", "restore-claims"])
+def test_mains_restore_steps_fail_closed_when_the_pods_cannot_be_listed(
+    aws: Running, run: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path, command: str,
+) -> None:  # fmt: skip
+    """The Jobs' own entry points: `verify` (the stores' and the claims' first step) and
+    `restore-claims` refuse in words when the API cannot be asked, before reading anything."""
+    settings, bucket, stores, _ = run
+    manifest = pb.take(settings, bucket, stores)
+    claims = tmp_path / "claims" / "ingest"
+    claims.mkdir(parents=True)
+    (claims / "kept.txt").write_text("untouched")
+    for name, value in {"OSPREY_BACKUP_BUCKET": BUCKET, "OSPREY_BACKUP_KMS_KEY": KEY_ARN, "AWS_REGION": REGION,
+                        "AWS_ENDPOINT_URL_S3": aws.endpoint, "OSPREY_BACKUP_WRITERS": "arcadedb,api",
+                        "OSPREY_BACKUP_CLAIMS_FOLDER": str(tmp_path / "claims")}.items():  # fmt: skip
+        monkeypatch.setenv(name, value)
+
+    def unreachable(_: str) -> list[dict[str, Any]]:
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(pb, "_pods", unreachable)
+    assert pb.main([command, "--set", manifest["set"]]) == 1
+    assert "cannot confirm the writers are stopped" in capsys.readouterr().err
+    assert (claims / "kept.txt").read_text() == "untouched"

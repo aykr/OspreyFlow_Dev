@@ -220,7 +220,14 @@ class FakeStores:
             (self.folder / database / name).write_bytes(ZIP)
             return json.dumps({"result": [{"operation": "backup database", "backupFile": name}]}).encode()
         self.statements.append(body)
-        if body.startswith("DROP DATABASE"):
+        user = request.get_header("X-clickhouse-user")
+        if body.startswith(("BACKUP", "RESTORE")) and user != "backup":
+            # ClickHouse 25.8's own refusal to the deployment's user, which holds no BACKUP (and no
+            # S3 source), measured in p9_grants_probe.log.
+            text = (f"Code: 497. DB::Exception: {user}: Not enough privileges. To execute this query, "
+                    "it's necessary to have the grant BACKUP ON ospreyflow.*. (ACCESS_DENIED)").encode()  # fmt: skip
+            raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        if body.startswith(("DROP DATABASE", "CREATE DATABASE", "RENAME DATABASE")):
             return b""
         match = re.search(r"S3\((.*)\)", body)
         assert match, body
@@ -238,8 +245,8 @@ class FakeStores:
             # As ClickHouse 25.8 does: its lock first, removed at the end (refused without
             # s3:DeleteObject on it, measured on osprey-p9), then the backup's own files.
             s3.put_object(Bucket=bucket, Key=prefix + ".lock", Body=b"")
-            s3.put_object(Bucket=bucket, Key=prefix + ".backup", Body=b"<config/>")
             s3.put_object(Bucket=bucket, Key=prefix + "data/ospreyflow/events/all_1_1_0/data.bin", Body=b"rows")
+            s3.put_object(Bucket=bucket, Key=prefix + ".backup", Body=b"<config/>")  # last, as ClickHouse
             s3.delete_object(Bucket=bucket, Key=prefix + ".lock")
             return b"0b1d-backup-id\tBACKUP_CREATED\n"
 
@@ -257,7 +264,7 @@ class FakeStores:
 
 
 @pytest.fixture
-def run(aws: Running, tmp_path: Path) -> tuple[pb.Settings, pb.Bucket, pb.Stores, FakeStores]:
+def run(aws: Running, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[pb.Settings, pb.Bucket, pb.Stores, FakeStores]:
     folder = tmp_path / "arcadedb-backups"
     folder.mkdir()
     settings = pb.Settings.from_env({
@@ -265,8 +272,12 @@ def run(aws: Running, tmp_path: Path) -> tuple[pb.Settings, pb.Bucket, pb.Stores
         "AWS_ENDPOINT_URL_S3": aws.endpoint, "OSPREY_BACKUP_ARCADEDB_FOLDER": str(folder),
         "OSPREY_BACKUP_ARCADEDB_HOST": "arcadedb-0.arcadedb-headless",
         "ARCADEDB_ROOT_PASSWORD": "pw", "CLICKHOUSE_USER": "backup", "CLICKHOUSE_PASSWORD": "pw",
+        # The restore's writers, as the chart names them; the pods listed as none running (a case
+        # that wants one running gives its own listing).
+        "OSPREY_BACKUP_WRITERS": "arcadedb,api,worker,report-sync",
     })  # fmt: skip
     aws.session()  # the pod's IRSA environment
+    monkeypatch.setattr(pb, "_pods", lambda _: [])
     fake = FakeStores(aws, folder)
     return settings, pb.Bucket(settings), pb.Stores(settings, http=fake), fake
 
