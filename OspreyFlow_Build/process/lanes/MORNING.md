@@ -402,6 +402,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       `D2B/CAPTURES_*.md` kept as the screenshots still owed. A v0.5.0 demo deployment in the GOV.UK look for your
       demo on Friday 13 November, frozen and backed up, checked Thursday by midday; the test server quiet from 12:00
       UK time on Friday until you say the demo is over.
+    - **osprey-small is on v0.5.0 (15:06; your choice of the three):** the CHANGELOG's steps 1–5 green as rehearsed,
+      the Conduit on v0.5.0's image (sha256:d163934…), 14 containers, six datasets kept, 6 cases placed, 19 sources
+      registered. Backups: v0.4.12's own `/srv/ospreyflow/backups/20261111T150255Z-small-422833c…`; v0.5.0 after the
+      update `/srv/ospreyflow/backups/small/20261111T150726Z-small-2be985a…`; the deployment folder and settings as at
+      v0.4.12 in `/home/osprey/small-upg-2026-11-11/`. Frozen from now until you say the demo is over. Steps 6–7:
+      Rule author and the five home cases given to the demo administrator (your choice), reassignable in Admin.
+      Thursday's check: 12 November, done by 11:00 UK time.
+    - **Your standing word (about 15:15): orphaned test processes a lane's run left on the server may be stopped
+      without asking,** never anything of osprey-small's; each is listed here. Stopped: pid 1013683 (vite :5893),
+      1013813 (harness.webapp) and 1014161 (vite :5894), all platform-b's, about 18 h old.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
