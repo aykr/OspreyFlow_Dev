@@ -289,17 +289,19 @@ started; its lease file is in the record). The server was shared with other lane
 15). The seed is synthetic: 5,000 vertices and 1,000 edges, 200,000 ClickHouse rows, and 301 files (7.7 MB) on the
 Ingest claim; the set was 9.6 MB in 17 objects. These are what that cluster did, not a service level: the
 platform's disks, network and S3 differ, and a real database is larger. The record is
-`OspreyFlow_Build/process/lanes/case/gates/p9_kind_roundtrip.r2.json`.
+`OspreyFlow_Build/process/lanes/case/gates/p9_kind_roundtrip_timed.r3.json` (round 3, under the case lane's
+lease on test stack c; another lane's live run held stack b on the same server meanwhile; round 2's, under lease b,
+was 70.2 s).
 
 | Path | Measured | What dominates it |
 | --- | --- | --- |
-| **Backup** (both runs of one slot) | **7.4 s** | the Jobs' start; ArcadeDB's and ClickHouse's own work took about 1.4 s |
-| Stopping ArcadeDB and the claims' pod | 31.6 s | ArcadeDB's graceful stop |
-| **The restore's two Jobs** (in parallel, `verify` first in each) | **14.9 s** | the pods' start and the verify; the restore itself under a second |
-| Starting ArcadeDB and the claims' pod again | 23.7 s | ArcadeDB's start and readiness |
-| **End to end, destroyed → restored and compared** | **70.2 s** | stopping and starting, not data |
+| **Backup** (both runs of one slot) | **7.1 s** | the Jobs' start; ArcadeDB's and ClickHouse's own work took about 1.4 s |
+| Stopping ArcadeDB and the claims' pod | 31.3 s | ArcadeDB's graceful stop |
+| **The restore's two Jobs** (in parallel, `verify` first in each) | **16.5 s** | the pods' start and the verify; the restore itself under a second |
+| Starting ArcadeDB and the claims' pod again | 23.0 s | ArcadeDB's start and readiness |
+| **End to end, destroyed → restored and compared** | **70.8 s** | stopping and starting, not data |
 
-**What the 70.2 s leaves out.** On kind one pod stood for the Conduit and the workers; the real Conduit,
+**What the 70.8 s leaves out.** On kind one pod stood for the Conduit and the workers; the real Conduit,
 workers and report sync are stopped and started around the restore too, and their start (the Conduit's
 above all) adds to it. At this size the data is negligible and the restore is the stores' stop and start;
 a real restore's time grows with the set. Measure it again on the client's development namespace

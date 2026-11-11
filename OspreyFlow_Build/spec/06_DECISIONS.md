@@ -33925,6 +33925,13 @@ was not one AWS would give once the key has its own policy. Each is fixed, red f
 ClickHouse rows and 301 files on the Ingest claim). The server was shared with other lanes' work throughout (its load
 average 10 to 15), so each time is what that cluster did then, not a service level:
 
+- **The timed round trip, round 3, under the case lane's lease on test stack c** (taken for this run alone, no
+  stack started; another lane's live run held stack b on the same server meanwhile): backup 7.1 s; restore 70.8 s
+  end to end (stopping 31.3 s, the two restore Jobs 16.5 s, starting 23.0 s), counts, sums and the claim's tree
+  hash equal to the seed's, every object under the key (`gates/p9_kind_roundtrip_timed.r3.json`). Round 3's other
+  kind runs (`gates/p9_kind.r3.log`, `p9_kind_*.r3.json`): every red below, the fail-closed restore and osprey's
+  sources, after kind found two faults the fakes had hidden (the backup user's grant, and the swap renaming a lost
+  database; point 4 and point 8).
 - **The timed round trip, round 2, under the case lane's lease on test stack b** (taken for this run alone, no
   stack started; the lease's own file is in the record): backup 7.4 s; restore 70.2 s end to end (stopping ArcadeDB
   and the claims' pod 31.6 s, the two restore Jobs 14.9 s in parallel with `verify` first in each, starting 23.7 s).
