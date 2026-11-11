@@ -56,12 +56,33 @@ RUN jlink \
       --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
       --output /opt/jre
 
-FROM java AS java-included
-FROM python:3.12-slim AS java-omitted
-RUN mkdir -p /opt/jre
-FROM java-${CONDUIT_JAVA} AS java-chosen
+# The runtime, and what declares it, only in the build that carries it (ADR-148 decision 12): the
+# image's base is one of these two, chosen by the build argument, so an image built with
+# `CONDUIT_JAVA=omitted` has no /opt/java, no JAVA_HOME and no Java on its path, is not labelled with
+# Java's licence or version, and never pulls the stage above; neither `make licence-check` nor a
+# reader of the image's labels is told it carries a runtime it does not (the independent review of
+# P7, item 9).
+FROM python:3.12-slim AS runtime-included
+COPY --from=java /opt/jre /opt/java
+LABEL org.ospreyflow.runtime.java.included="included"
+LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
+LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
+# On the path the Conduit's `shutil.which("java")` reads (`map_admin.MapAdmin.basemap`).
+ENV PATH="/opt/java/bin:${PATH}" \
+    JAVA_HOME="/opt/java"
 
-FROM python:3.12-slim AS conduit
+FROM python:3.12-slim AS runtime-omitted
+LABEL org.ospreyflow.runtime.java.included="omitted"
+
+FROM runtime-${CONDUIT_JAVA}
+
+# Base-image OS packages lag the upstream image's own last-published point
+# release; picking up current Debian security patches at build time is
+# what keeps `trivy image` (below) a real gate rather than permanently red
+# on packages this service does not touch. In the final stage
+# (`tests/test_images_built_fresh.py`), before the code's layers, so a code
+# change does not repeat it.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # No `git`: publishing commits a recipe in-process with dulwich (Apache-2.0), so nothing this image
 # carries execs the binary, which is GPL-2.0-only (the owner's ruling of 9 November 2026; ADR-140
@@ -124,30 +145,3 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=6 \
          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status==200 else 1)"]
 
 ENTRYPOINT ["uvicorn", "services.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
-
-# The runtime, and what declares it, only in the build that carries it (ADR-148 decision 12): an image
-# built with `CONDUIT_JAVA=omitted` has no /opt/java, no JAVA_HOME and no Java on its path, and is not
-# labelled with Java's licence or version, so neither `make licence-check` nor a reader of the image's
-# labels is told it carries a runtime it does not (the independent review of P7, item 9).
-FROM conduit AS conduit-included
-ARG CONDUIT_JAVA
-COPY --from=java-chosen /opt/jre /opt/java
-LABEL org.ospreyflow.runtime.java.included="${CONDUIT_JAVA}"
-LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
-LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
-# On the path the Conduit's `shutil.which("java")` reads (`map_admin.MapAdmin.basemap`).
-ENV PATH="/opt/java/bin:${PATH}" \
-    JAVA_HOME="/opt/java"
-
-FROM conduit AS conduit-omitted
-LABEL org.ospreyflow.runtime.java.included="omitted"
-
-FROM conduit-${CONDUIT_JAVA}
-# Base-image OS packages lag the upstream image's own last-published point
-# release; picking up current Debian security patches at build time, in the
-# image's final stage, is what keeps `trivy image` a real gate rather than
-# permanently red on packages this service does not touch
-# (`tests/test_images_built_fresh.py`). As root for the upgrade alone.
-USER root
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
-USER 10001:10001

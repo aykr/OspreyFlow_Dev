@@ -184,7 +184,7 @@ def test_git_planted_in_the_real_conduit_dockerfile_is_an_offender(plant: str) -
     """Rule 15, at the gate's real call site: `git` put back into the Conduit's own Dockerfile
     text, after its Java runtime is copied in, is named, whether or not it is declared."""
     conduit = _real_conduit()
-    anchor = "COPY --from=java-chosen /opt/jre /opt/java\n"  # the runtime ADR-148's build argument chose
+    anchor = "COPY --from=java /opt/jre /opt/java\n"
     assert conduit.count(anchor) == 1
     planted = conduit.replace(anchor, plant + anchor)
     expected = "undeclared" if "LABEL" not in plant else "GPL-2.0-only"
