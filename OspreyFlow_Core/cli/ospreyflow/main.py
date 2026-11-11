@@ -1483,6 +1483,14 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
         return 0
     known = set(states or {})
     who = f"cli:{getpass.getuser()}"
+    if args.action in ("key", "remove-key") and (states or {}).get(args.name) == "iam_role":
+        # ADR-135 Amendment 4: refused before any key is read, so none is ever typed for it.
+        print(
+            f"{args.name} signs in by the namespace's IAM role and keeps no key; nothing was "
+            "changed.",
+            file=sys.stderr,
+        )
+        return 1
     if args.action == "key":
         label, key = engine_keys.read_key(
             models, args.name, ctx.env, ctx.ask_secret, wanted=wanted, known=known

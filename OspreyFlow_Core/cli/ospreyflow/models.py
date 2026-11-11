@@ -33,7 +33,13 @@ _LABELS = {"openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Gemini"}
 KEY_GIVEN = "OSPREY_MODEL_KEY_GIVEN"
 #: The Conduit's key path, run inside its container.
 KEY_PATH = ("python", "-m", "services.api.model_keys")
-_STATE_WORDS = {"set": "yes", "none": "no", "lost": "lost: enter it again"}
+_STATE_WORDS = {
+    "set": "yes",
+    "none": "no",
+    "lost": "lost: enter it again",
+    # ADR-135 Amendment 4: the engine signs in by the namespace's IAM role and keeps no key.
+    "iam_role": "none kept: signs in by the namespace's IAM role",
+}
 
 
 def parse_defaults(text: str) -> dict[str, str]:
@@ -48,7 +54,7 @@ def parse_defaults(text: str) -> dict[str, str]:
 
 
 def parse_status(text: str) -> dict[str, str]:
-    """`model_keys status`'s lines (`<name> set|none|lost`), by engine."""
+    """`model_keys status`'s lines (`<name> set|none|lost|iam_role`), by engine."""
     found: dict[str, str] = {}
     for line in text.splitlines():
         name, _, state = line.strip().partition(" ")

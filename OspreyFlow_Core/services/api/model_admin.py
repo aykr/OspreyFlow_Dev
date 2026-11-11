@@ -177,6 +177,10 @@ class Installed:
                     api_base=raw.get("api_base"),
                     privacy_contract=raw.get("privacy_contract") is True,
                     contract_reference=raw.get("contract_reference"),
+                    # ADR-135 Amendment 4: what the engine is and how it signs in.
+                    kind=raw.get("kind") or "provider",
+                    auth=raw.get("auth"),
+                    region=raw.get("region"),
                 )
             )
             present[name] = environ.get(f"OSPREY_MODEL_KEY_PRESENT_{name.upper()}", "") == "yes"
@@ -291,11 +295,16 @@ class GatewayAdmin:
         deleted and made again, so no unmeasured partial update is relied on, and a cleared
         address leaves nothing of the old one behind."""
         params: dict[str, object] = {
-            "model": gateway_model_name(provider.name, model),
-            "litellm_credential_name": credential_name(provider.name),
+            "model": provider.route(model),
             "input_cost_per_token": TOKEN_PRICE,
             "output_cost_per_token": TOKEN_PRICE,
         }
+        if not provider.keyless:
+            params["litellm_credential_name"] = credential_name(provider.name)
+        # An IAM-role engine names no credential and carries no key of any kind (ADR-135
+        # Amendment 4): Bedrock's calls are signed by the gateway pod's own identity, in London.
+        if provider.region:
+            params["aws_region_name"] = provider.region
         if provider.api_base:
             params["api_base"] = provider.api_base
         resp = await self._call(
@@ -504,7 +513,17 @@ class PostgresModelAdminAudit:
 
 # --- the service --------------------------------------------------------------------------------
 
-_EDITABLE = ("label", "roles", "api_base", "privacy_contract", "contract_reference")
+_EDITABLE = (
+    "label", "roles", "api_base", "privacy_contract", "contract_reference",
+    "kind", "auth", "region",  # ADR-135 Amendment 4
+)  # fmt: skip
+
+
+def _where_the_key_goes(provider: ModelProviderConfig) -> tuple[object, ...]:
+    """What decides where an engine's key is sent, or whether it has one (ADR-135 Amendment 2
+    decision 1, the owner's ruling; Amendment 4): its address, its kind, how it signs in and its
+    region. A change to any of them removes the key."""
+    return (provider.api_base or None, provider.kind, provider.auth, provider.region)
 
 
 #: A value that may be named in a refusal: shaped like a provider or a job (lower-case, short),
@@ -571,6 +590,16 @@ class _Exclusive:
             self._lock.release()
 
 
+#: *Test the connection*'s words where an engine signed in by the namespace's IAM role is refused
+#: (ADR-135 Amendment 4): there is no key to enter again, so the words name the role instead.
+ROLE_REFUSED_WORDS: dict[str, str] = {
+    "bedrock": (
+        "Bedrock refused the namespace's IAM role: the model gateway has no role, or the role "
+        "may not use this model in London. Ask your platform team to check the role's permissions."
+    ),
+}
+
+
 class ModelAdmin:
     """*Models*' service. **The gateway is changed first, the models file only once it has
     answered**; a refusal, or a file that cannot be written, puts the gateway back as the file
@@ -620,6 +649,8 @@ class ModelAdmin:
 
     def key_state(self, name: str) -> KeyState:
         self._fresh()
+        if any(p.name == name and p.keyless for p in self.settings.providers):
+            return "iam_role"
         if self._settings is None:
             return "set" if self._installed.key_present.get(name) else "none"
         record = self._settings.keys.get(name)
@@ -637,7 +668,8 @@ class ModelAdmin:
                 name=p.name,
                 label=p.label or p.name,
                 models={r: gateway_model_name(p.name, m) for r, m in p.roles.items() if r in ROLES},
-                key_present=self.key_state(p.name) == "set",
+                # An IAM-role engine signs in with no key, so it is offered as a keyed one is.
+                key_present=self.key_state(p.name) in ("set", "iam_role"),
                 privacy_contract=p.privacy_contract,
                 contract_reference=p.contract_reference,
                 budget_period=current.limits.get(p.name, EngineLimits()).budget_period,
@@ -731,7 +763,10 @@ class ModelAdmin:
             self._retrying = None
 
     async def _start_once(self) -> bool:
-        if self._settings is None:
+        if self._settings is None and not any(p.keyless for p in self._installed.providers):
+            # Before any change in *Models*, a keyed engine's entries are made when its key moves
+            # in. An IAM-role engine has no key to move (ADR-135 Amendment 4), so its entries and
+            # its own gateway key are made here, from `osprey.yaml`'s engines.
             return True
         try:
             async with self._exclusive:
@@ -916,14 +951,23 @@ class ModelAdmin:
             before = next((p for p in current.providers if p.name == name), None)
             if before is None:
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if before.kind != provider.kind:
+                # ADR-135 Amendment 2 decision 1: an engine's provider is fixed once added. Another
+                # kind is another processor, whose contract mark and label this one's are not.
+                raise ModelAdminRefused(
+                    "An engine's kind cannot change; remove it and add one of the other kind."
+                )
             proposed = self._validated(current.model_copy(
                 update={"providers": [provider if p.name == name else p
                                       for p in current.providers]}, deep=True), sent)  # fmt: skip
-            if (before.api_base or None) != (provider.api_base or None):
+            if _where_the_key_goes(before) != _where_the_key_goes(provider):
                 await self._gateway.delete_credential(name)
                 moved.append(True)
                 kept = {k: v for k, v in proposed.keys.items() if k != name}
                 proposed = proposed.model_copy(update={"keys": kept}, deep=True)
+                # The credential is gone now, whatever follows: the file says so before anything
+                # else can fail, so a refused reconcile never leaves "key set" over no key.
+                self._save(current.model_copy(update={"keys": kept}, deep=True))
             await self._reconcile(proposed, rebuilt=frozenset({name}))
             self._save(proposed)
             return before
@@ -936,12 +980,25 @@ class ModelAdmin:
         }
         await self._audited(by, "engine_edited", name, changes)
         if moved:
+            if (before.api_base or None) != (provider.api_base or None):
+                await self._audited(
+                    by, "key_removed", name, outcome="done: the engine's address changed"
+                )
+                return (
+                    f"{provider.label or name}'s address changed, so its key was removed: the key "
+                    "is never sent to an address it was not entered for. Enter it again."
+                )
             await self._audited(
-                by, "key_removed", name, outcome="done: the engine's address changed"
+                by, "key_removed", name, outcome="done: how the engine signs in changed"
             )
+            if provider.keyless:
+                return (
+                    f"{provider.label or name} now signs in by the namespace's IAM role, so its "
+                    "key was removed: no key is kept for it."
+                )
             return (
-                f"{provider.label or name}'s address changed, so its key was removed: the key "
-                "is never sent to an address it was not entered for. Enter it again."
+                f"How {provider.label or name} signs in changed, so its key was removed: the key "
+                "is never sent anywhere it was not entered for. Enter it again."
             )
         return None
 
@@ -1004,6 +1061,13 @@ class ModelAdmin:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if any(p.name == name and p.keyless for p in current.providers):
+                # ADR-135 Amendment 4: no key is stored for an engine signed in by the role.
+                raise ModelAdminRefused(
+                    f"{name} signs in by the namespace's IAM role, so no key is kept for it; "
+                    "nothing was changed.",
+                    status=409,
+                )
             if self._installed.local_only:
                 raise ModelAdminRefused(
                     "This deployment's osprey.yaml declares local_only: true, so no key for an "
@@ -1033,6 +1097,12 @@ class ModelAdmin:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
                 raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if any(p.name == name and p.keyless for p in current.providers):
+                raise ModelAdminRefused(
+                    f"{name} signs in by the namespace's IAM role and keeps no key; there is none "
+                    "to remove.",
+                    status=409,
+                )
             await self._gateway.delete_credential(name)
             keys = {k: v for k, v in current.keys.items() if k != name}
             self._save(current.model_copy(update={"keys": keys}, deep=True))
@@ -1077,7 +1147,7 @@ class ModelAdmin:
                 engine=name, outcome="not_routed", ok=False,
                 words="This deployment is local only: no engine outside it is asked anything.",
             )  # fmt: skip
-        elif state != "set":
+        elif state not in ("set", "iam_role"):
             words = (
                 "The gateway no longer holds this engine's key. Enter it again first."
                 if state == "lost"
@@ -1091,8 +1161,11 @@ class ModelAdmin:
                 self._gateway.http, gateway_model_name(provider.name, model),
                 tag=usage_tag(provider.name, "test"),
             )
+            words = check.words
+            if provider.keyless and check.outcome == "key_refused":
+                words = ROLE_REFUSED_WORDS.get(provider.kind, words)
             result = ConnectionTestResult(
-                engine=name, outcome=check.outcome, ok=check.ok, words=check.words
+                engine=name, outcome=check.outcome, ok=check.ok, words=words
             )
         await self._audited(by, "connection_tested", name, outcome=result.outcome)
         return result
