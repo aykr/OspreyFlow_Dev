@@ -64,6 +64,10 @@ export type Transcription = "Systran/faster-whisper-tiny.en";
  * ADR-095: the local model that turns text into vectors.
  */
 export type Embedding = "all-minilm:22m-l6-v2-fp16";
+/**
+ * ADR-135 Amendments 5 and 6: deep_read (the default) or, at profile: cloud-platform only, laurium (its own service, every call through the gateway).
+ */
+export type ExtractionEngine = "deep_read" | "laurium";
 
 /**
  * `05_DEPLOYMENT.md` §2.1's Models screen: "Local only, or local with a named hosted fallback
@@ -87,6 +91,7 @@ export interface ModelsConfig {
   vision?: Vision;
   transcription?: Transcription;
   embedding?: Embedding;
+  extraction_engine?: ExtractionEngine;
 }
 /**
  * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached

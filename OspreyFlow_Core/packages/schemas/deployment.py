@@ -681,6 +681,14 @@ class ModelsConfig(BaseModel):
         default="all-minilm:22m-l6-v2-fp16",
         description="ADR-095: the local model that turns text into vectors.",
     )
+    #: ADR-135 Amendments 5 and 6 (P12 part 2): which engine runs `ModelPort.extract`. Deep read is
+    #: the LiteLLM adapter; Laurium is its own service, rendered only when chosen, on
+    #: `cloud-platform` alone (`OspreyConfig._extraction_engine_suits_the_profile`).
+    extraction_engine: Literal["deep_read", "laurium"] = Field(
+        default="deep_read",
+        description="ADR-135 Amendments 5 and 6: deep_read (the default) or, at profile: "
+        "cloud-platform only, laurium (its own service, every call through the gateway).",
+    )
 
     @property
     def enabled_providers(self) -> list[ModelProviderConfig]:
@@ -1910,6 +1918,22 @@ class OspreyConfig(BaseModel):
         for provider in self.models.enabled_providers:
             if refused := engine_refusal(provider, profile):
                 raise ValueError(f"models.providers: {provider.name}: {refused}")
+        return self
+
+    @model_validator(mode="after")
+    def _extraction_engine_suits_the_profile(self, info: ValidationInfo) -> OspreyConfig:
+        """ADR-135 Amendments 5 and 6 (P12 part 2; the orchestrator's ruling of 11 November):
+        Laurium on `cloud-platform` alone, as the engine kinds are (`_engines_suit_the_profile`),
+        its cluster translation carried by `ENGINES_AS` alike."""
+        engines_as = (info.context or {}).get(ENGINES_AS)
+        translated = engines_as == MODEL_ROUTE_PROFILE and self.profile is Profile.CLUSTER
+        profile = MODEL_ROUTE_PROFILE if translated else self.profile.value
+        if self.models.extraction_engine == "laurium" and profile not in MODEL_ROUTE_PROFILES:
+            raise ValueError(
+                f"models.extraction_engine: laurium is for profile: {MODEL_ROUTE_PROFILE} "
+                f"(ADR-135 Amendment 6); this deployment is profile: {profile}. Name deep_read, "
+                "or leave it out."
+            )
         return self
 
     @model_validator(mode="after")
