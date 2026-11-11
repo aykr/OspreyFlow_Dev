@@ -34596,7 +34596,11 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     - Superset is given by name only the keys it reads (`secrets.named`).
     - The Glass and the recogniser get the ConfigMap alone (the chart's `noSecret`).
     - `make cp-policy-check` refuses our Secret whole to any other pod, and any key outside a
-      named allowance (`whole-secret`).
+      named allowance (`whole-secret`). The allowance is default-deny (the orchestrator's ruling,
+      11 November): a pod not listed in the check may hold no key of ours, so a new workload
+      (case-b's Laurium) is refused one until it is listed, with no other edit to the check. The
+      list holds the keys the render gives each store, Keycloak, the gateway and Superset; the
+      gateway also holds each engine's key (`OSPREY_MODEL_KEY_<NAME>`).
 23. **Ingress is the paths turned round** (the orchestrator's ruling). Each workload's Kubernetes
     policy, `ospreyflow-ingress-<workload>`, admits only the workloads whose paths name it, on its
     own ports, rendered from the same rows as their egress so the two cannot drift. A workload
