@@ -455,6 +455,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **Merge order changed (about 20:00):** P12 part 2 merges after P7b, with Laurium's network row in the same merge,
       so a default cloud-platform render (Laurium, your preset) never runs it with open egress. Order: P9, P7b, P9's
       decommission diff, then P12 part 2. Corrected: only the Conduit (api), not the workers, calls Laurium.
+    - **Ruled for P10 part 2 (about 20:30), an access decision Amendment 6 point 4 held for you; I took the
+      recommended option under your 24 October instruction, yours to overrule:** on cloud-platform (no Keycloak),
+      Admin › People's roles live in the deployment's own Postgres, keyed by tenant and `oid`, and are looked up
+      inside `principal_auth`'s one construction path (a failed lookup is a 503, never a principal with no roles).
+      A person appears after their first sign-in, or can be added by `oid` beforehand. The first administrator is
+      named by `oid` at install, and an empty list refuses the render. Disable is a deployment-side flag; there is
+      no invite on this profile (Entra holds the accounts). Two things stay unavailable on Entra until a later step:
+      a scheduled run acting as its owner (marked stopped, ADR-044's path), and Superset roles (everyone Gamma).
+      The alternatives were roles from Entra groups or app roles, which would contradict ADR-148 decision 9.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
