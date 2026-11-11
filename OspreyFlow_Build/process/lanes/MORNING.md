@@ -298,6 +298,55 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **On your return:** I run the update check under a lease from the Mac, and commit the hyg fix from that
       worktree.
 
+36. **After your restart, 11 November, 09:00–10:25 (your Mac online about 90 minutes).**
+    - **Server sessions.** None was running at 09:00. Admin had hit its 5-hour limit at 08:41; the others had
+      finished and stopped for review. P7's commits sat only in `~/osprey-p7/wt`, never pushed to `repo.git`; I
+      fetched them from there. Now running (tmux): `p7`, `p10fix`, `platform-b`, `studio-b`, `case-b` (each fixing
+      round 1, gates once at the new head, then "built" and stop) and `rules` (the update check).
+    - **Landed (fast-forward):** studio-b L1.10b (7b39106), admin T1 part 4 (9de435c), rules hyg (11cc19f; both
+      blind rounds clean, live run on stack g under the merger's lease of 09:13:05Z, 89 passed).
+    - **Not mergeable at their built heads** (independent reviews, all in `process/` reports on request):
+      - **P7 (two rounds):** `make test` red on its own stale admin-guide PDF; one setting could open all egress
+        (`0.0.0.0/0`), and the check only asked whether a deny existed; nothing checked isolation from other
+        tenants; the ingress would cut the Glass's WebSocket every 60 s and cap uploads at 1 MB; the checksum
+        annotations were unquoted; kind results recorded that its own log contradicts. So it did not merge
+        without you. Ten-plus must-fixes in one pass.
+      - **P10:** the tenant check's plants were an import error, so it was never shown red.
+      - **P11:** Amendment 4's Bedrock rules applied on every profile, which would stop a Lite or Small Conduit
+        naming `bedrock`.
+      - **L1.9:** the Athena named-query check failed open (`FROM (SELECT 1) t, finance.ledger`); `uv.lock`
+        lacked botocore, so the Conduit would not start.
+      - **P12:** Laurium has never met a real gateway or model, only a stand-in with a fixed answer.
+    - **Decided on my recommendation, each yours to overrule:**
+      1. **P10: an Entra principal is keyed by `oid` within the pinned tenant, not `sub`.** Entra's `sub` differs
+         per application, and Graph (Admin › People before a first sign-in) knows only `oid`. Also, a token
+         carrying `tid` is refused under the Keycloak handling (it made an Entra app role an administrator).
+         ADR-148 Amendment 6 reserved.
+      2. **P11: Amendment 4's rules held to the cloud-platform profile** (as the ADR says), and **Bedrock model
+         ids with a geography prefix (`eu.`, `global.`, …) refused there** ("Bedrock in London"). ADR-135
+         Amendment 7 reserved.
+      3. **P12: the gateway's master key never goes into Laurium's container;** it gets a scoped engine key.
+         That makes P12 part 1 a credential step: two rounds.
+      4. **rules hyg:** a fault acting as the owner stays "refused" in the ledger with the notice kind "failed";
+         the error text is in the log only (ADR-110 Amendment 20, written).
+      5. **T3b's one conflict** (`contrastFindings.json`, both sides removing listings they closed) resolved as
+         both removals, landed only if the browser set is green on the merged tree.
+      6. **Ownership:** P7's chart templates, CLI dispatch and option tools ratified for P7; the administration
+         guide stays docs' (diffs); `harness/cloud_platform/**` is now a shared file of the chain (the plan
+         updated); P12's out-of-map files ratified.
+    - **Your choices this morning:** rules restarted with `--add-dir /root/osprey-runs/rules-upg` for its run
+      only (no settings changed); I switched admin's server worktree to `lane/admin-p10` with your leave; the
+      stuck `admin-p10fix` waiter ended at your word.
+    - **The libxslt finding: v0.5.0 is not affected, no v0.5.1 needed for it.** The published
+      `ghcr.io/aykr/workspace:2be985a…` has libxslt 1.1.43-r4 and 0 fixable HIGH/CRITICAL (trivy 0.76.1, today).
+      The red scan is the test server's stale layer cache: the Dockerfile's `apk upgrade` layer was cached
+      before r4. Docker Hub's `nginx:1.30-alpine` is still r3, and a fresh `apk upgrade` on it installs r4.
+      The fix is a no-cache rebuild before the scan on the server; P7's fix pass does that for its gate.
+    - **Three `osprey-test-idp-*` containers** have been up since about 07:00, left by a lane's IdP fixture.
+      Left alone; yours to stop.
+    - **New dates:** P7, P10, P11 and L1.9 on 12 November, P12 on 13 November; the client chain about 13–14
+      November, unchanged.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
