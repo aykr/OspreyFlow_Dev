@@ -33397,6 +33397,8 @@ sprint. With the orchestrator's adjustments, which the owner accepted.*
    owner afterwards. T3b and D2d (after its must-fixes) go ahead on this rule. **hyg is an access step** (schedule
    notices filtered to their owner, rules 3 and 4), so it keeps its two rounds. Merges still land only through the
    orchestrator (Amendment 7), so nothing lands while the orchestrator's machine is offline.
+   **P7 is treated as an ordinary step** (the owner, about 06:30): one review round, then it merges; a retrospective
+   second review follows the merge, its findings carried forward, not reverted.
 8. **Paused until the client chain has merged:** T3b's follow-ups, D2b's captures and rules' `lists`. T1 carries on,
    since it shortens every gate.
 9. **D2c records where Laurium runs** (its container, image and repository) once P12 settles it, and lists what

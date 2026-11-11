@@ -261,6 +261,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **Estimate:** the whole client chain merged around 14 November, and D2c complete by 15 November. This is
       after your swap (about 06:25): admin's server session builds P10's mapping and its access tests now, ahead
       of T1 part 5, which slips about a day.
+    - **P7 gets one review round, then merges (your word, about 06:30).** A retrospective second review follows once
+      your laptop is back, and anything it finds becomes a follow-up item, not a revert. It still lands only when the
+      laptop is online, since merges go through me.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
