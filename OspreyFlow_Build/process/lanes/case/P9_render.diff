@@ -1,3 +1,14 @@
+P9 (case) for the platform lane: the two calls that put the backups into the cloud-platform render and its
+Terraform (ADR-142 Amendment 8 decision 3), and values.yaml's `backups: {}`. Apply with `git apply` from the
+repository root; with it, tests/cloud_platform_backup/test_backups_render.py's
+test_the_render_carries_the_backups_itself runs instead of skipping.
+
+Note for an upgrade: the render gives ArcadeDB's StatefulSet a third volumeClaimTemplate (`backups`). Kubernetes
+refuses a change to a StatefulSet's volumeClaimTemplates in place, so an existing deployment's ArcadeDB
+StatefulSet is deleted with `--cascade=orphan` (its pod and claims kept) before the `helm upgrade` that adds it;
+the new StatefulSet adopts the running pod and its two claims, and arcadedb-0, deleted once, starts again with the
+third. A fresh install is unaffected.
+
 diff --git a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
 index 5d53b1c..a7a4300 100644
 --- a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
