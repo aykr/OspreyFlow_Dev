@@ -10,8 +10,8 @@
 # from ArcadeDB, Valkey and Postgres.
 #
 # ADR-148 decision 12: `--build-arg CONDUIT_JAVA=omitted` builds it without the Java runtime below,
-# for the `cloud-platform` profile (`ospreyflow images push` passes it); the stage is then never
-# pulled. Every other build takes the default, `included`.
+# for the `cloud-platform` profile (`ospreyflow images push` passes it); BuildKit then never pulls
+# the stage (the legacy builder builds every stage). Every other build takes the default, `included`.
 ARG CONDUIT_JAVA=included
 FROM python:3.12-slim AS builder
 
@@ -59,9 +59,9 @@ RUN jlink \
 # The runtime, and what declares it, only in the build that carries it (ADR-148 decision 12): the
 # image's base is one of these two, chosen by the build argument, so an image built with
 # `CONDUIT_JAVA=omitted` has no /opt/java, no JAVA_HOME and no Java on its path, is not labelled with
-# Java's licence or version, and never pulls the stage above; neither `make licence-check` nor a
-# reader of the image's labels is told it carries a runtime it does not (the independent review of
-# P7, item 9).
+# Java's licence or version, and (under BuildKit) never pulls the stage above; neither `make
+# licence-check` nor a reader of the image's labels is told it carries a runtime it does not (the
+# independent review of P7, item 9).
 FROM python:3.12-slim AS runtime-included
 COPY --from=java /opt/jre /opt/java
 LABEL org.ospreyflow.runtime.java.included="included"
