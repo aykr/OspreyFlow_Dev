@@ -1,0 +1,22 @@
+# head 47d9954; plant: a * is held only to being the whole resource
+# command: pytest -q -rA ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py
+# must fail: test_a_wide_statement_is_refused_by_the_render; for the reason 'planted1'; all failed: yes
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_no_results_or_table_location_is_an_egress_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_worker_reaches_no_connector_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_role_s_statements_are_read_only_and_scoped
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_listing_condition_never_holds_an_action_that_carries_no_prefix
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted0-names a wildcard resource]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted2-names a wildcard resource]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted3-writes outside a declared results_location]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted4-gives s3:DeleteObject]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted5-names the bucket synthetic-other, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted6-reads synthetic-exports outside its declared folders]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted7-lists synthetic-exports beyond its declared folders]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted8-names the database payroll, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_table_location_not_declared_is_athena_s_refusal_in_typed_words
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_nothing_is_rendered_with_no_source_declared
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted1-names a wildcard resource] - AssertionError: Regex pattern did not match.
+1 failed, 17 passed in 2.89s

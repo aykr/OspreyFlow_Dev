@@ -6,7 +6,8 @@ command. The items' first reds, taken before the code existed, are `red-1-3-rend
 
 Rebuilt after the lane review (round 1) with its new plants, at the commit holding the fixes; the
 shared files' two diffs (`cloud-platform-L19p2.diff`, `docs-admin-guide-L19p2.diff`, regenerated at
-that commit) applied in the worktree, as they are at merge. Run from OspreyFlow_Core with the
+that commit) applied in the worktree, as they are at merge, and the head commit's schema
+(`packages/schemas`) beside them, since the schema commit is kept at the branch's head. Run from OspreyFlow_Core with the
 closed offline ports pinned (no stack):
     .venv/bin/python ../OspreyFlow_Build/process/lanes/studio-b/l1.9p2/red_plants.py
 """

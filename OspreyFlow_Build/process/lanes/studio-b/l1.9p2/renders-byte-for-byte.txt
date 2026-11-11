@@ -1,7 +1,7 @@
-# L1.9 part 2: the other profiles' renders, before and after this change, at one commit (HEAD 489cc4b archived twice, the
-# working tree's changed files laid over the second; both without .git, so the image tag is 'unknown' in both).
-# Script: render_all.py (local-lite and Small from tests/fixtures/deployment_v0_4_12, cluster from test_cluster_render's
-# cluster_config, the four cloud-platform fixtures). diff -rq, then each differing file's changed lines in full:
+# L1.9 part 2: every profile's render, main (df8b48e) against this branch (47d9954, with the head's schema and both shared
+# diffs applied), each archived without .git, so the image tag is 'unknown' in both. Script: render_all.py beside this file
+# (local-lite and Small from tests/fixtures/deployment_v0_4_12, cluster as test_cluster_render's cluster_config, the
+# four cloud-platform fixtures; the new development-sources fixture is not on main). diff -rq, then each changed line:
 Files r-before/cloud-platform-development/values.yaml and r-after/cloud-platform-development/values.yaml differ
 Files r-before/cloud-platform-poc/values.yaml and r-after/cloud-platform-poc/values.yaml differ
 Files r-before/cloud-platform-production/values.yaml and r-after/cloud-platform-production/values.yaml differ
