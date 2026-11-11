@@ -18,8 +18,8 @@ await applyHarnessBrand();
 const params = new URLSearchParams(location.search);
 type Engine = {
   provider: { name: string; label: string | null; roles: Record<string, string>; api_base: string | null;
-              privacy_contract: boolean; contract_reference: string | null };
-  key_state: "set" | "none" | "lost";
+              privacy_contract: boolean; contract_reference: string | null; kind?: string; auth?: string | null };
+  key_state: "set" | "none" | "lost" | "iam_role";
   key_set_at: string | null;
   key_set_by: string | null;
   default_for: string[];
@@ -34,6 +34,12 @@ const engines: Engine[] = [
                 privacy_contract: true, contract_reference: "DPA 2026/07" },
     key_state: "lost", key_set_at: "2026-11-01T09:00:00Z", key_set_by: "admin-1", default_for: [] },
 ];  // prettier-ignore
+// ADR-135 Amendment 4: `iam=1` adds Bedrock in London, signed in by the namespace's IAM role.
+if (params.get("iam")) {
+  engines.push({ provider: { name: "bedrock", label: "Bedrock (London)", roles: { extraction: "anthropic.claude-3-haiku" },
+                             api_base: null, privacy_contract: false, contract_reference: null, kind: "bedrock", auth: "iam_role" },
+                 key_state: "iam_role", key_set_at: null, key_set_by: null, default_for: [] });
+}  // prettier-ignore
 let defaults: Record<string, string> = {};
 const history = [
   { at: "2026-11-08T09:00:00Z", by: "admin-1", action: "key_set", engine: "gemini", changes: {}, outcome: "done" },
@@ -75,7 +81,9 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   }  // prettier-ignore
   if (path === "" && method === "GET") return reply(200, view());
   if (path === "/engines" && method === "POST") {
-    engines.push({ provider: body.provider as Engine["provider"], key_state: "none", key_set_at: null, key_set_by: null, default_for: [] });
+    // ADR-135 Amendment 4: an engine signed in by the namespace's IAM role has no key to set.
+    const provider = body.provider as Engine["provider"];
+    engines.push({ provider, key_state: provider.auth === "iam_role" ? "iam_role" : "none", key_set_at: null, key_set_by: null, default_for: [] });
     return reply(200, view());
   }
   if (path === "/defaults") {
@@ -130,6 +138,17 @@ if (open) {
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name);
     if (button) {
       button.click();
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  // `kind=bedrock` or `kind=gateway`: the add form with that kind of engine chosen (ADR-135 Am 4).
+  const kind = params.get("kind");
+  for (let i = 0; kind && i < 40; i++) {
+    const select = document.getElementById("add-engine-kind") as HTMLSelectElement | null;
+    if (select) {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, kind);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
       break;
     }
     await new Promise((resolve) => setTimeout(resolve, 50));

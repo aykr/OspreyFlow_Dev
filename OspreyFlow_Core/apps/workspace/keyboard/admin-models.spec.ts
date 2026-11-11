@@ -40,6 +40,43 @@ test("an engine is added by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "add-a-model-engine-by-keyboard");
 });
 
+// ADR-135 Amendment 4: the kind of engine is chosen by keyboard, and an IAM-role engine offers no key.
+test("Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for", async ({ page }) => {
+  await press(page, "Add an engine");
+  await page.getByLabel("Kind of engine", { exact: true }).focus();
+  await page.keyboard.press("End"); // the last kind listed, Bedrock
+  await expect(page.getByLabel("Engine name", { exact: true })).toHaveValue("bedrock");
+  await expect(page.getByText(/no key is kept/)).toBeVisible();
+  await typeInto(page, "Label analysts see", "Bedrock");
+  await typeInto(page, /Extraction and Ask: the provider/, "anthropic.claude-3-haiku");
+  await press(page, "Add the engine");
+  await expect(page.getByRole("status")).toContainText("no key is needed");
+  expect(await asked(page)).toContain("POST /engines");
+  await expect(page.getByRole("table", { name: "Engines", exact: true })).toContainText("IAM role: no key kept");
+  await expect(page.getByRole("button", { name: /key for Bedrock/ })).toHaveCount(0);
+  await press(page, "Test the connection to Bedrock");
+  expect(await asked(page)).toContain("POST /engines/bedrock/test");
+  registerCovered(REGISTRY, "add-bedrock-by-iam-role-by-keyboard");
+});
+
+test("the organisation's own gateway is added by keyboard, signed in by its token", async ({ page }) => {
+  await press(page, "Add an engine");
+  await page.getByLabel("Kind of engine", { exact: true }).focus();
+  // Type-ahead on the closed list (on macOS an arrow key opens it instead of moving the choice).
+  await page.keyboard.type("Your"); // "Your organisation's own AI gateway"
+  await expect(page.getByLabel("Engine name", { exact: true })).toBeEditable();
+  await typeInto(page, "Engine name", "acme_ai");
+  await expect(page.getByText(/Signs in by a token/)).toBeVisible();
+  await typeInto(page, /Address of your gateway/, "https://ai.example/v1");
+  await typeInto(page, /Extraction and Ask: the provider/, "gpt-4o-mini");
+  await press(page, "Add the engine");
+  await expect(page.getByRole("status")).toContainText("acme_ai is added. Enter its key next");
+  expect(await asked(page)).toContain("POST /engines");
+  await press(page, "Enter key for acme_ai");
+  await expect(page.getByRole("textbox", { name: /Key for acme_ai/ })).toHaveValue("");
+  registerCovered(REGISTRY, "add-the-organisations-gateway-by-keyboard");
+});
+
 test("an engine is edited by keyboard", async ({ page }) => {
   await press(page, "Edit Gemini");
   await typeInto(page, "Label analysts see", "Google Gemini");
