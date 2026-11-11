@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.45** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.46** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.46 | 2026-11-11 | The second look at 1.45. §7.10: lists are imported in the Ingest Studio by a data engineer, or anyone holding Load screening lists and Edit pipelines; who here sees a refresh's counts. Captions 23 and 26 say that their pictures still show the former Lists and Watches tabs, to be retaken |
 | 1.45 | 2026-11-11 | The review of 1.44, against the code. §7.6: *Make live*, *Approve* and *Reject* need Deploy rules and Rules and Monitoring itself, so an Analyst, not a Data Engineer; *Deploy the sentence* needs Deploy rules and Keep watches. §7.1, §7.2, §7.4, §7.9 and §7.10: a rule kept just for its author is listed as a *Watched pattern*, and a template or pattern rule kept so raises medium alerts whatever its template's severity, stated as a known issue. §7.4: *Retire*, *Use* and *Deploy* need Deploy rules. §7.10: the screening lists are shown read-only under *What raises alerts*, and imported, mapped and refreshed in the Ingest Studio's *2 Sources*. Captions 23, 24 and 26 recaptioned |
 | 1.44 | 2026-11-11 | Rules' L2.10 and L2.11 as built (ADR-146 Amendment 6). §7.1: the place's four tabs, the one queue's five kinds and its filters. §7.2: a rule's own severity; who sees an alert, *‹Team› only* among them. §7.3: What fired it, Open the board, the lead's Give to and Suppress until…. §7.4 and §7.5: what raises alerts, hotlists and watched patterns there, Save as a watch, Watch for this, drawn items' watches. §7.6: the rule editor: a dataset chosen once, the sentence, Preview, Save the draft, Test on the last 30 days, Make live (Deploy rules), the second person by the dataset's setting, Show as BPMN; no whole-deployment rule. §7.11 and §7.12 brought in line |
 | 1.43 | 2026-11-10 | Describes v0.5.0. §7: the alerts journey, the rule editor included, built and no longer *coming*; the section is still to be rewritten for it. |
@@ -1207,7 +1208,7 @@ with its own stored past, so they run after each load commits.
 
 ### 7.10 Screening lists, re-screened when they change
 
-![The screening lists under What raises alerts: each list's version, entries, last update and state, and the latest refreshes](images/user/23-screening-lists.png)
+![The former Lists tab, before the lists moved to the Ingest Studio (this picture is to be retaken): each list's version, entries, last update and state, the latest refreshes, and subscribing](images/user/23-screening-lists.png)
 
 **What raises alerts** shows, read-only, each sanctions, PEP or adverse-media list the deployment
 screens against: the
@@ -1234,10 +1235,11 @@ which needs its own data licence. Until a licence is confirmed, these connectors
 synthetic lists only.
 
 Lists are not added or refreshed here: "Screening lists are imported, mapped and refreshed in the
-Ingest Studio's Sources. This tab shows them; it no longer adds or refreshes one." Administrators and
-data engineers do that in the Ingest Studio's **2 Sources**, under **Screening lists**, and may have a
-list refreshed every day or every week (the administration guide, §9.5, says how); the **Schedule**
-column says when, or "By hand only". They see how many customers each refresh re-screened, and the
+Ingest Studio's Sources. This tab shows them; it no longer adds or refreshes one." A data engineer does
+that in the Ingest Studio's **2 Sources**, under **Screening lists** — or anyone holding both **Load
+screening lists** and **Edit pipelines** — and may have a list refreshed every day or every week (the
+administration guide, §9.5, says how); the **Schedule** column says when, or "By hand only". Someone
+here who also holds Load screening lists sees how many customers each refresh re-screened, and the
 alerts it raised, **in their own unit only**. Everyone else sees the lists, not those numbers.
 
 ### 7.11 A rule that runs on a schedule
@@ -1262,7 +1264,7 @@ as you see it, and raises an alert for each new finding, once.
 
 ### 7.12 A second person's approval
 
-![A high-severity alert whose close waits for a second person's approval](images/user/26-second-person.png)
+![A high-severity alert whose close waits for a second person's approval (taken before the tabs of §7.1: it still shows the former Lists and Watches tabs, and is to be retaken)](images/user/26-second-person.png)
 
 These decisions need a second person with the right, and the person who proposed one can never approve
 it.

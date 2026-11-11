@@ -1075,18 +1075,19 @@ records where each statement was read.
 **A closed list: OFSI.** HM Treasury closed the OFSI Consolidated List on 28 January 2026; the FCDO's
 UK Sanctions List is now the only source of UK designations. OspreyFlow keeps the OFSI connector, so a
 file you already hold can still be read, but nothing new will ever be published to it: the lists shown
-under What raises alerts say "Closed list" on such a list's row, and the subscribe form names the connector "reads a closed
-list" and points to the UK Sanctions List. To screen against UK designations, download
+under What raises alerts say "Closed list" on such a list's row, and the Ingest Studio's **Import a
+list** offers its template as "OFSI consolidated (closed list)", beside "UK Sanctions List". To screen against UK designations, download
 `UK-Sanctions-List.xml` from the list's page (gov.uk/government/publications/the-uk-sanctions-list;
 the FCDO keeps it at a fixed address, `sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml`), put it
-in the ingest folder, and subscribe to it through the **UK Sanctions List (FCDO)** connector. OspreyFlow
+in the ingest folder, and import it with the **UK Sanctions List** template. OspreyFlow
 does not fetch it for you. The connector reads the XML only (its schema is published; the CSV's column
 order is not).
 
 **Licence not confirmed: UN and OpenSanctions.** Until their licences for a customer's screening are
 confirmed, these two connectors read OspreyFlow's own synthetic lists only. What raises alerts marks
-each such list "Licence not confirmed", with the reason, and the subscribe form says so beside the
-connector. A real UN or OpenSanctions file is refused, in words, even when this device's exceptions
+each such list "Licence not confirmed", with the reason, and the Ingest Studio's **Import a list**
+names their templates "UN consolidated (synthetic only until licensed)" and "OpenSanctions (synthetic
+only until licensed)". A real UN or OpenSanctions file is refused, in words, even when this device's exceptions
 admit its dataset, and nothing loads; `python -m scripts.load_screening_list` refuses a list whose
 dataset is `opensanctions` or `un_consolidated` the same way.
 
@@ -1099,8 +1100,10 @@ OspreyFlow's own (`packages/demo_fixtures/screening_lists/`, known by its finger
 make itself synthetic by saying so.
 
 **Where lists live.** Lists are imported, mapped and refreshed in the **Ingest Studio → 2 Sources**,
-under **Screening lists**, by holders of `load_screening_lists` (the administrator and data-engineer
-roles). Rules and Monitoring → **What raises alerts** shows them, read-only: "Screening lists are
+under **Screening lists**, by whoever holds `load_screening_lists` and opens the Ingest Studio, which
+needs `edit_pipelines`: a Data Engineer. An Administrator holds `load_screening_lists` but not
+`edit_pipelines`, so cannot open the Studio; give them the Data Engineer role as well, or use the
+command below. Rules and Monitoring → **What raises alerts** shows them, read-only: "Screening lists are
 imported, mapped and refreshed in the Ingest Studio's Sources. This tab shows them; it no longer adds
 or refreshes one."
 
@@ -1127,8 +1130,9 @@ many of another unit's customers a list touched. *Refresh now* answers the same 
 records who refreshed which list.
 
 **When.** A list is refreshed when someone presses **Refresh now**, runs the command, or on the list's
-own **refresh schedule**, set on its row under **Refresh**: **every day** or **every week** (and the
-day), **At (UK time)**; *by hand* stops it. The **Refreshed** column shows when each list was refreshed.
+own **refresh schedule**, set from its row's **Manage** column with **Schedule**: **Refresh** **every
+day** or **every week** (and **On** which day), **At (UK time)**, then **Save schedule**; **Refresh by
+hand only** stops it. The **Refreshed** column says when each list is refreshed, or "by hand".
 A rule can also run **when a screening list refreshes** (user guide, section 7).
 
 - **A scheduled refresh runs as the person who saved the schedule**, resolved afresh each time —
