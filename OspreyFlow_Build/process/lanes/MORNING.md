@@ -412,6 +412,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     - **Your standing word (about 15:15): orphaned test processes a lane's run left on the server may be stopped
       without asking,** never anything of osprey-small's; each is listed here. Stopped: pid 1013683 (vite :5893),
       1013813 (harness.webapp) and 1014161 (vite :5894), all platform-b's, about 18 h old.
+    - **P9 rulings (about 16:30), yours to overrule:** ClickHouse 25.8 refuses BACKUP TO S3 with explicit credentials,
+      so its pod runs as the backup role's service account; that role gets put, get, list and KMS but **no delete**
+      (expiry by the bucket's lifecycle; object lock in P9b). **On decommission, the backups bucket and its key are
+      kept by default** (the one named exception, so a retained backup never becomes unreadable), with the commands to
+      delete them when the client's retention ends; the decommission check reports them as kept, not as left over.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
