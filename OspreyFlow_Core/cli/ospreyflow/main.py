@@ -78,6 +78,9 @@ from .run import (
     subprocess_capture,
     unset_required,
 )
+from .run import (
+    project as compose_env_project,
+)
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
@@ -1072,9 +1075,10 @@ def _start(args: argparse.Namespace, ctx: _Context) -> int:
             env=ctx.named_env(),
         )
     else:
+        up = [*_compose_of(directory), "up", "-d", "--wait"]  # refused before any step runs
         _uploads_ready(ctx, directory)
         _stores_named(ctx, directory)
-        ctx.step("start the deployment", [*compose(directory), "up", "-d", "--wait"])
+        ctx.step("start the deployment", up)
     return 0
 
 
@@ -1130,13 +1134,31 @@ def _repair_sign_in(args: argparse.Namespace, ctx: _Context) -> int:
     return 0
 
 
+def _compose_of(directory: Path) -> list[str]:
+    """`compose(directory)` for a verb acting on the deployment, **refused in words when Compose
+    cannot read its compose file** (a required value nowhere: the v0.5.0 rehearsal's lockout), so
+    no verb fails in Compose's words or none (CARRIES; the lane review of the carries, item 12).
+    `doctor` keeps the bare `compose`: it must run on such a deployment to say what is wrong."""
+    if (directory / "compose.yaml").is_file():
+        missing = unset_required(directory)
+        if missing:
+            raise CommandRefused(locked_out(directory, missing))
+    return compose(directory)
+
+
+def _stop_by_label(ctx: _Context, folder: Path) -> None:
+    """A deployment's containers stopped by its Compose project's label, which needs no compose
+    file: how `switch` stops another deployment that Compose cannot read."""
+    label = f"label=com.docker.compose.project={compose_env_project(folder)}"
+    code, out = ctx.capture(["docker", "ps", "-q", "--filter", label], cwd=ctx.product)
+    ids = out.split() if code == 0 else []
+    if ids:
+        ctx.step(f"stop {folder.name}'s containers", ["docker", "stop", *ids])
+
+
 def _stop(ctx: _Context) -> int:
     directory = ctx.deployed()
-    # A compose file Compose cannot read is said in words, before Compose is asked (CARRIES).
-    missing = unset_required(directory)
-    if missing:
-        raise CommandRefused(locked_out(directory, missing))
-    ctx.step("stop the deployment", [*compose(directory), "stop"])
+    ctx.step("stop the deployment", [*_compose_of(directory), "stop"])
     return 0
 
 
@@ -1200,13 +1222,18 @@ def _switch(args: argparse.Namespace, ctx: _Context) -> int:
             product = folder.parents[2]
             print(f"{name}: {state} \u2014 {product} \u2014 {public_origin(product)}")
         return 0
+    # This one's own compose file first: refused before any other deployment is stopped for it.
+    up = [*_compose_of(ctx.deployed()), "up", "-d", "--wait"]
     for name, running, folder in deployments:
         if running and folder.resolve() != own:
             print(f"Stopping {name}, so this one has the machine to itself.")
-            ctx.step(f"stop {name}", [*compose(folder), "stop"])
+            try:
+                ctx.step(f"stop {name}", [*_compose_of(folder), "stop"])
+            except CommandRefused:
+                _stop_by_label(ctx, folder)
     _uploads_ready(ctx, ctx.deployed())
     _stores_named(ctx, ctx.deployed())
-    ctx.step("start the deployment", [*compose(ctx.deployed()), "up", "-d", "--wait"])
+    ctx.step("start the deployment", up)
     named.remember(ctx.env, ctx.target.name)
     address = ctx.origin()
     ctx.open_url(address)
@@ -1260,8 +1287,13 @@ def _services(text: str) -> list[dict[str, Any]]:
 
 def _status(ctx: _Context) -> int:
     directory = ctx.deployed()
+    try:
+        _compose_of(directory)
+    except CommandRefused as refused:
+        print(str(refused), file=sys.stderr)  # not "Is Docker running?": Compose cannot read it
+        return 1
     code, output = ctx.capture(
-        [*compose(directory), "ps", "--all", "--format", "json"], cwd=ctx.product
+        [*_compose_of(directory), "ps", "--all", "--format", "json"], cwd=ctx.product
     )
     if code != 0:
         print("Could not ask Docker about the deployment. Is Docker running?", file=sys.stderr)
@@ -1303,7 +1335,7 @@ def _one_shot_steps(directory: Path) -> set[str]:
 
 
 def _logs(args: argparse.Namespace, ctx: _Context) -> int:
-    argv = [*compose(ctx.deployed()), "logs"]
+    argv = [*_compose_of(ctx.deployed()), "logs"]
     if args.follow:
         argv.append("--follow")
     argv += ["--tail", str(args.tail)]
@@ -1327,7 +1359,7 @@ def _uninstall(args: argparse.Namespace, ctx: _Context) -> int:
         return 1
     ctx.step(
         "remove the deployment",
-        [*compose(directory), "down", *([] if args.keep_data else ["-v"])],
+        [*_compose_of(directory), "down", *([] if args.keep_data else ["-v"])],
     )
     return 0
 
@@ -1336,7 +1368,7 @@ def _map(args: argparse.Namespace, ctx: _Context) -> int:
     """ADR-147 decision 6: through the Conduit's own *Maps* code inside its container, so the
     command line and *Admin › Maps* are one code with one audit (`cli/ospreyflow/maps.py`)."""
     directory = ctx.deployed()
-    in_conduit = [*compose(directory), "exec", "-T", "api", *map_verbs.MAP_PATH]
+    in_conduit = [*_compose_of(directory), "exec", "-T", "api", *map_verbs.MAP_PATH]
     who = f"cli:{getpass.getuser()}"
     if args.action == "list":
         code, out = ctx.capture([*in_conduit, "list"])
@@ -1362,7 +1394,7 @@ def _map(args: argparse.Namespace, ctx: _Context) -> int:
 
 def _conduit_running(ctx: _Context, directory: Path) -> bool:
     code, output = ctx.capture(
-        [*compose(directory), "ps", "--format", "json", "api"], cwd=ctx.product
+        [*_compose_of(directory), "ps", "--format", "json", "api"], cwd=ctx.product
     )
     if code != 0:
         raise CommandRefused("Could not ask Docker about the Conduit. Is Docker running?")
@@ -1420,7 +1452,7 @@ def _grading(args: argparse.Namespace, ctx: _Context) -> int:
             "stopping it is your choice, so it is not done for you. Nothing was changed."
         )
     argv = [
-        *compose(directory), "run", "--rm", "--no-deps", "--entrypoint", "python", *mounts,
+        *_compose_of(directory), "run", "--rm", "--no-deps", "--entrypoint", "python", *mounts,
         "api", *grading_verb.GRADING_PATH, "--to", to,
         "--mapping", f"{grading_verb.IN_CONTAINER}/mapping.yaml",
         *(["--dry-run"] if args.dry_run else ["--confirm", args.confirm]),
@@ -1429,11 +1461,12 @@ def _grading(args: argparse.Namespace, ctx: _Context) -> int:
     if args.dry_run:
         return ctx.run(argv, cwd=ctx.product)
     if running:
-        ctx.step("stop the Conduit", [*compose(directory), "stop", "api"])
+        ctx.step("stop the Conduit", [*_compose_of(directory), "stop", "api"])
     code = ctx.run(argv, cwd=ctx.product)
     if code in grading_verb.NOTHING_CHANGED:
         if running:
-            ctx.step("start the Conduit again", [*compose(directory), "up", "-d", "--wait", "api"])
+            again = [*_compose_of(directory), "up", "-d", "--wait", "api"]
+            ctx.step("start the Conduit again", again)
         return code
     if code != 0:
         # A stop part way, an unforeseen failure, a killed one-shot: some items may be changed.
@@ -1461,7 +1494,7 @@ def _grading(args: argparse.Namespace, ctx: _Context) -> int:
             [*ctx.python, "-m", "harness.apply", "--reapply",
              "--config", str(config), "--out-root", str(directory.parent)],
         )  # fmt: skip
-        ctx.step("start the Conduit", [*compose(directory), "up", "-d", "--wait", "api"])
+        ctx.step("start the Conduit", [*_compose_of(directory), "up", "-d", "--wait", "api"])
     except StepFailed:
         print(
             "The items and grading.scheme are changed, but the deployment did not start again: "
@@ -1481,7 +1514,7 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     env_file = directory / "deployment.env"
     models = engine_keys.read_models(ctx.product, directory)
     wanted = engine_keys.read_wanted(ctx.config_path.parent)
-    in_conduit = [*compose(directory), "exec", "-T"]
+    in_conduit = [*_compose_of(directory), "exec", "-T"]
     code, out = ctx.capture([*in_conduit, "api", *engine_keys.KEY_PATH, "status"])
     states = engine_keys.parse_status(out) if code == 0 else None
     if args.action is None:

@@ -56,8 +56,8 @@ from typing import Any
 
 import yaml
 from harness import compose_env, ingest_uploads, model_downloads, register_sign_in, store_volumes
-from harness.atomic import replace_whole
 from harness.apply import _compose, release_registry
+from harness.atomic import replace_whole
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
     THEME_NAME,

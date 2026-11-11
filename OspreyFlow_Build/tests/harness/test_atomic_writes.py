@@ -2,10 +2,10 @@
 (`harness/atomic.py`; CARRIES, 10 November 2026; ADR-114 Amendment 39 decision 5).
 
 What a mistake would do, and the case that catches it (rule 12), each planted at its call site:
-- a write that truncates and rewrites the live file (`copytree`, `write_bytes`, `O_TRUNC`): a crash
-  part way leaves torn secrets — the hard-link cases (a link made to the old file still holds the old
-  bytes only if the file was replaced, not rewritten) for `apply.move_into_place`, `write_private`
-  and `FilesHeld.put_back`;
+- a write that truncates and rewrites the live file (`copytree`, `write_bytes`, `O_TRUNC`): a
+  crash part way leaves torn secrets — the hard-link cases (a link made to the old file still holds
+  the old bytes only if the file was replaced, not rewritten) for `apply.move_into_place`,
+  `write_private` and `FilesHeld.put_back`;
 - a symlinked `deployment.env` turned into a regular file, or written in place —
   `test_a_symlinked_file_stays_a_link_and_its_target_is_replaced`;
 - the owner taken from the runner or the new file rather than the old one, under sudo —
@@ -121,7 +121,8 @@ def test_put_back_replaces_deployment_env_rather_than_rewriting_it(tmp_path: Pat
     (folder / "deployment.env").write_bytes(OLD)
     held = FilesHeld(folder)
     (folder / "deployment.env").write_bytes(NEW)
-    before = tmp_path / "witness"  # outside the folder, which put_back clears of what it did not hold
+    # Outside the folder, which put_back clears of what it did not hold.
+    before = tmp_path / "witness"
     os.link(folder / "deployment.env", before)
     held.put_back()
     assert (folder / "deployment.env").read_bytes() == OLD and before.read_bytes() == NEW

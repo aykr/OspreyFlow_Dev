@@ -3,12 +3,12 @@ is asked (CARRIES, the v0.5.0 upgrade rehearsal, 10 November 2026: a compose fil
 `deployment.env` did not hold locked the operator out of `apply` and `stop`, in Compose's words or
 none).
 
-Compose refuses `${NAME:?…}` when NAME is unset or empty, and `${NAME?…}` when it is unset; it takes
-a value from the shell before the env file (an empty one too), and reads `export NAME=v`, one pair of
-quotes and an unquoted ` #` comment there as `harness.preflight.ports.read_env_file` does. `${NAME}`,
-`${NAME:-default}` and the escaped `$${NAME:?…}` it never refuses. `cli/ospreyflow/run.py` keeps a
-copy for `ospreyflow stop`, which cannot import the harness; `tests/harness/test_compose_lockout.py`
-holds them to the same answers.
+Compose refuses `${NAME:?…}` when NAME is unset or empty, and `${NAME?…}` when it is unset; it
+takes a value from the shell before the env file (an empty one too), and reads `export NAME=v`, one
+pair of quotes and an unquoted ` #` comment there as `harness.preflight.ports.read_env_file` does.
+`${NAME}`, `${NAME:-default}` and the escaped `$${NAME:?…}` it never refuses.
+`cli/ospreyflow/run.py` keeps a copy for the command's verbs, which cannot import the harness;
+`tests/harness/test_compose_lockout.py` holds them to the same answers.
 """
 
 from __future__ import annotations

@@ -3,17 +3,19 @@
 The move into place:
 - what must restart outlives a run that dies after the files moved —
   `test_a_run_that_dies_after_the_move_still_restarts_what_changed_next_time`;
-- a file renamed into place keeps the old one's owner — `test_a_file_moved_into_place_keeps_its_owner`.
+- a file renamed into place keeps the old one's owner —
+  `test_a_file_moved_into_place_keeps_its_owner`.
 
 The staged pass:
 - a stage left behind is never taken for a deployment —
   `test_a_stage_left_behind_is_never_a_deployment`;
 - two refreshes of one deployment never share a stage — `test_a_second_refresh_at_once_is_refused`;
-- a symlinked file is written through its link — `test_a_symlinked_file_is_written_through_its_link`,
-  and `deployment.env` replaced whole there, the link kept —
+- a symlinked file is written through its link —
+  `test_a_symlinked_file_is_written_through_its_link`, and `deployment.env` replaced whole there,
+  the link kept —
   `test_a_symlinked_deployment_env_stays_a_link_and_is_replaced_whole`;
-- a required value on an `export` line is held — `test_a_value_on_an_export_line_is_held`; **one only
-  in the shell is not** (ADR-114 Amendment 39 decision 2; held for the orchestrator) —
+- a required value on an `export` line is held — `test_a_value_on_an_export_line_is_held`;
+  **one only in the shell is not** (ADR-114 Amendment 39 decision 2; held for the orchestrator) —
   `test_a_value_only_in_the_shell_is_not_held`.
 
 After the lane review of the carries (11 November 2026):
@@ -21,7 +23,8 @@ After the lane review of the carries (11 November 2026):
   `test_the_lock_is_held_through_the_build_and_the_restarts`;
 - a lock file left read-only (by a run under sudo) stops no later run —
   `test_the_lock_file_is_opened_read_only`;
-- a stage another account left is refused in words — `test_a_stage_this_account_cannot_remove_is_said`;
+- a stage another account left is refused in words —
+  `test_a_stage_this_account_cannot_remove_is_said`;
 - the pending record outlives `--files-only` (for `update`), `update` clears it only once its
   restarts are done, and a stores refusal keeps what an earlier run owed —
   `test_files_only_leaves_the_restarts_owed`, `test_an_update_clears_the_record_after_its_restarts`,
@@ -39,12 +42,12 @@ import pytest
 from harness import atomic
 from scripts import refresh
 
+from tests import test_refresh_before_the_gateway as _gateway
 from tests.test_refresh import Recorder, Registrar
-from tests.test_refresh_before_the_gateway import (  # noqa: F401 - the fixture, by name
-    _after_the_gateway_database,
-    _checkout,
-    deployment,
-)
+from tests.test_refresh_before_the_gateway import _after_the_gateway_database, _checkout
+
+#: The fixture, bound by name so pytest finds it here (an import would shadow every parameter).
+deployment = _gateway.deployment
 
 
 def _restarts(run: Recorder) -> list[str]:
@@ -111,9 +114,10 @@ def test_a_second_refresh_at_once_is_refused(deployment: Path) -> None:
 
 
 def test_a_symlinked_file_is_written_through_its_link(deployment: Path) -> None:
-    """An operator keeps `compose.yaml` elsewhere and links it in: the pass reads it through the link
-    (it was silently left out of the stage) and brings it up to date there, and the link stays a
-    link. (`litellm.yaml`, which a service mounts, is written in place and so through a link too.)"""
+    """An operator keeps `compose.yaml` elsewhere and links it in: the pass reads it through the
+    link (it was silently left out of the stage) and brings it up to date there, and the link stays
+    a link. (`litellm.yaml`, which a service mounts, is written in place and so through a link
+    too.)"""
     _after_the_gateway_database(deployment)
     elsewhere = deployment.parent / "compose-kept-elsewhere.yaml"
     (deployment / "compose.yaml").rename(elsewhere)
@@ -249,7 +253,8 @@ def test_a_stores_refusal_keeps_what_an_earlier_run_owed(
     record.write_text(json.dumps({"routing_changed": True}), encoding="utf-8")
 
     def refused(*_a: object, **_k: object) -> None:
-        raise refresh.store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
+        full = "postgres: No space left on device"
+        raise refresh.store_volumes.StoresNotMoved(full, stopped=True)
 
     monkeypatch.setattr(refresh.store_volumes, "move", refused)
     with pytest.raises(refresh.RefreshFailed):

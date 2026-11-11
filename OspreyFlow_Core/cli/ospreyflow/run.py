@@ -152,13 +152,19 @@ def unset_required(directory: Path, environ: Mapping[str, str] | None = None) ->
     return sorted(missing)
 
 
-def locked_out(directory: Path, missing: list[str]) -> str:
-    """`harness.compose_env.locked_out`'s words."""
+def project(directory: Path) -> str:
+    """`harness.compose_env.project`: the compose project's name (`name:`), or the folder's."""
     name = directory.name
     for line in (directory / "compose.yaml").read_text(encoding="utf-8").splitlines():
         if line.startswith("name:"):
             name = line.partition(":")[2].strip().strip("\"'") or name
             break
+    return name
+
+
+def locked_out(directory: Path, missing: list[str]) -> str:
+    """`harness.compose_env.locked_out`'s words."""
+    name = project(directory)
     return (
         f"The compose file needs {', '.join(missing)}, which deployment.env does not hold, so "
         "Docker Compose refuses every command on this deployment and nothing was changed. Run "

@@ -126,8 +126,8 @@ def move_into_place(stage: Path, out_dir: Path) -> None:
 
     **`deployment.env` is replaced whole, last** (`harness.atomic.replace_whole`): `copytree`
     truncates and rewrites each file it copies, so a crash or a full disk part way would have torn
-    the live secrets (the lane review of the carries). Every other file is copied as before: a file a
-    container mounts on its own must keep its inode."""
+    the live secrets (the lane review of the carries). Every other file is copied as before: a file
+    a container mounts on its own must keep its inode."""
     from harness.atomic import replace_whole
 
     mode = out_dir.stat().st_mode & 0o777 if out_dir.is_dir() else None

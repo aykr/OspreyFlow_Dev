@@ -1,15 +1,16 @@
 """A compose file naming a required value `deployment.env` does not hold no longer locks the
-operator out of `apply` (CARRIES, the v0.5.0 upgrade rehearsal, 10 November 2026): `apply`'s own port
-lookup (`compose ps`) failed, preflight then refused the deployment's own 8090 and 2500 as taken, and
-nothing said why. Now it asks Docker by the project's label, which needs no compose file, and goes on
-to render the file again, which is the way out (ADR-114 Amendment 39 decision 1). It never refuses
-there, so no words of it are hidden by the command's redactor either (the lane review, items 2, 3).
+operator out of `apply` (CARRIES, the v0.5.0 upgrade rehearsal, 10 November 2026): `apply`'s own
+port lookup (`compose ps`) failed, preflight then refused the deployment's own 8090 and 2500 as
+taken, and nothing said why. Now it asks Docker by the project's label, which needs no compose
+file, and goes on to render the file again, which is the way out (ADR-114 Amendment 39 decision 1).
+It never refuses there, so no words of it are hidden by the command's redactor either (the lane
+review, items 2, 3).
 
-What Compose refuses is what this reads (`harness.compose_env.unset_required`), and the CLI's own copy
-(`ospreyflow stop`'s, which cannot import the harness) answers the same: `${X:?}` unset or empty,
-`${X?}` unset only; `${X}`, `${X:-d}` and `$${X:?}` never; a value from the shell (an empty one too)
-before the file; an `export X=v` line, one pair of quotes, an unquoted ` #` comment, as Compose reads
-them.
+What Compose refuses is what this reads (`harness.compose_env.unset_required`), and the CLI's own
+copy (`ospreyflow stop`'s, which cannot import the harness) answers the same: `${X:?}` unset or
+empty, `${X?}` unset only; `${X}`, `${X:-d}` and `$${X:?}` never; a value from the shell (an empty
+one too) before the file; an `export X=v` line, one pair of quotes, an unquoted ` #` comment, as
+Compose reads them.
 - `test_what_compose_refuses_is_read_the_same_by_both_copies`
 - `test_applys_own_port_lookup_asks_docker_by_label_and_never_refuses`
 - `test_the_words_name_the_values_never_hold_one_and_point_to_apply`

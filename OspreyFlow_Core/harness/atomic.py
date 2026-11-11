@@ -1,16 +1,16 @@
-"""A file replaced whole or not at all (CARRIES, 10 November 2026; ADR-114 Amendment 39 decision 5:
-"an interruption leaves whole files and the secrets as they were").
+"""A file replaced whole or not at all (CARRIES, 10 November 2026; ADR-114 Amendment 39
+decision 5: "an interruption leaves whole files and the secrets as they were").
 
-`replace_whole` is the one way a deployment's secrets file reaches its place, from `apply`, `restore`'s
-put-back, refresh and `write_private`. It writes a temporary file beside the real target, sets its mode
-before any byte, flushes it to disk, gives it the old file's owner when run as root (a run under sudo
-leaves it the operator's), renames it over the target and flushes the folder. **A symlink is followed**:
-the link stays a link and its target is replaced, so an operator's linked `deployment.env` is neither
-turned into a regular file nor written in place. A failure at any point leaves the old file whole and
-no temporary file.
+`replace_whole` is the one way a deployment's secrets file reaches its place, from `apply`,
+`restore`'s put-back, refresh and `write_private`. It writes a temporary file beside the real
+target, sets its mode before any byte, flushes it to disk, gives it the old file's owner when run
+as root (a run under sudo leaves it the operator's), renames it over the target and flushes the
+folder. **A symlink is followed**: the link stays a link and its target is replaced, so an
+operator's linked `deployment.env` is neither turned into a regular file nor written in place. A
+failure at any point leaves the old file whole and no temporary file.
 
-Not for a file a container mounts on its own (`./glass.json:…`): a rename gives it a new inode, which
-the running container would not see. Those are written in place, and hold no secret.
+Not for a file a container mounts on its own (`./glass.json:…`): a rename gives it a new inode,
+which the running container would not see. Those are written in place, and hold no secret.
 """
 
 from __future__ import annotations
@@ -45,8 +45,8 @@ def _owner_of(target: Path) -> tuple[int, int]:
 
 
 def replace_whole(path: Path, data: bytes, *, mode: int | None = None) -> None:
-    """`data` into `path` whole or not at all. `mode`: the file's mode (default: the old file's, else
-    `644`). The old file's owner is kept when run as root."""
+    """`data` into `path` whole or not at all. `mode`: the file's mode (default: the old file's,
+    else `644`). The old file's owner is kept when run as root."""
     target = path.resolve() if path.is_symlink() else path
     folder = target.parent
     old = target.stat() if target.exists() else None
