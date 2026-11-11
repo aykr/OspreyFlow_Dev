@@ -1,17 +1,17 @@
-# as of 2026-11-11T09:45Z
-platform	P7	review A: not mergeable (make test red on its own stale PDF, kind claims recorded as done, egress allows /0, renders-unchanged not shown at head); review B running; one fix pass on the server after B, then round 2	12 Nov	B
-admin	P10	round 1: not mergeable (the tenant plant was an import error; principal keyed by oid, the orchestrator's ruling; tid under Keycloak refused); fixes on the server since 09:11; ADR-148 Am 6 reserved	12 Nov	B
-case	P9	cut: encrypted S3 backup, one timed restore; a fresh sol session once P7 merges	12–13 Nov	B
-platform-b	P11	round 1: not mergeable (Amendment 4's rules on every profile; London-only ids; stand-ins too permissive; key in an address); fixes on the server since 09:07; ADR-135 Am 7 reserved	12 Nov	B
-case-b	P12	review: not mergeable (never met a real gateway; master key into Laurium, now a credential step with two rounds; gates not at head); fixes on the server since 09:09	13 Nov	B
-studio-b	L1.9	round 1: not mergeable (the named-query checker fails open; uv.lock; duplicate columns); fixes on the server since 09:08	12–13 Nov	B
+# as of 2026-11-11T12:45Z
+platform	P7	round 2: every round-1 item fixed; five small must-fixes (two untested check branches, the reds recorded, the uploads claim) on the Mac now, then gates; merges without you (Am 8)	11 Nov, ~17:00	B
+admin	P10	round 2: every code item fixed; gates at 5ef24c6 running on the server (the orchestrator); access step, listed for you after	11 Nov, ~16:00	B
+case	P9	cut: encrypted S3 backup, one timed restore; briefed when P7 merges (a fresh session)	12 Nov	B
+platform-b	P11	round 2: every round-1 item fixed; rebase onto P7 once it merges, the JWT-shaped key check, then gates; credential step, listed for you	12 Nov, morning	B
+case-b	P12	round 2: code fixed; the leased live run against the real gateway (its blocker) and the scoped key's admin refusals, on the Mac now; credential step	11 Nov, evening	B
+studio-b	L1.9	part 1 passed both rounds; merge prepared (c6135b6), its gates on the merged tree running; part 2 after P7	part 1 11 Nov, ~14:30	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
-platform	P7b	shape: poc and both runbooks; its kind run is the install's acceptance; from P7's merge	13 Nov	B
-docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where Laurium runs	13–14 Nov	B
+platform	P7b	shape: poc and both runbooks; its kind run is the install's acceptance; from P7's merge	12–13 Nov	B
+docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
-admin	T1	part 4 landed (9de435c); part 5 built, gates explained at 9cbb4575 (server); with the merger next	11 Nov, evening	A
-rules	UPG-check	the real update v0.4.12 to v0.5.0 on osprey-upg, server session since 09:11	11 Nov, ~12:00	A
-rules-b	T3b	red on the server's browser set (its probe on Linux Chromium); back to rules-b, whose session is closed	12 Nov	A
-docs	D2d	fresh review: five must-fixes; being fixed headless on the Mac until 10:25; server gates owed, then the merger	11 Nov, evening	A
-platform-b	carries	after P11 part 1 (chart quoting first)	12 Nov	B
+admin	T1	part 4 landed (9de435c); part 5 built (9cbb4575), its review next	12 Nov	A
+rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
+rules-b	T3b	the probe made platform-independent, then the server's browser gate; on the Mac now	11 Nov, evening	A
+docs	D2d	both reviews' fixes done (5037f48); its server gates running, then merge	11 Nov, ~15:00	A
+platform-b	carries	after P11 (chart quoting first); rulings owed (a shell value held, two amendment numbers)	12 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
