@@ -2545,7 +2545,6 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |
 | `models.transcription` | `Systran/faster-whisper-tiny.en` | `Systran/faster-whisper-tiny.en` | The local model that transcribes a video's speech. |
 | `models.embedding` | `all-minilm:22m-l6-v2-fp16` | `all-minilm:22m-l6-v2-fp16` | The local model that turns text into vectors. |
-| `models.extraction_engine` | `deep_read` \| `laurium` or none | none | ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, laurium (its own service, every call through the gateway). Left unset: laurium on cloud-platform (its preset), deep_read on every other profile. |
 | `governance` | section | — | Identity, handling, ontology and the marking shown on screen. |
 | `governance.identity_provider` | str | `keycloak` | The identity provider people sign in through. |
 | `governance.handling_scheme` | str | `uk-law-enforcement` | The handling scheme every item is marked under. |
