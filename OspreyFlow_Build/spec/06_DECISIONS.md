@@ -34571,8 +34571,16 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       - A model engine's host goes to the gateway alone, a proxied map source to the Conduit,
         the mail server to Keycloak, and a connector host to the Conduit and the workers.
       - The Glass and the recogniser reach DNS and their own targets, nothing outside.
-    - P9's backup and restore pods have their rows by their own names; they are wired when P9's
-      render lands. A later workload (case-b's Laurium) is a row, not a template edit.
+    - The gateway, which signs Bedrock's calls by its own role (P11 part 2), reaches STS alone
+      (`egress.identity`), never S3.
+    - P9's backup and restore pods (`backup`, `backup-claims`, `restore`, `restore-claims`) are
+      rows by their own pods' names. P9's render gives their names to `egress_policy(...,
+      others=...)`, since they render beside the workloads; each then admits nothing and reaches
+      ArcadeDB, ClickHouse, S3, STS and KMS (`egress.keys`). A restore alone also reaches the
+      cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that the
+      writers have stopped. No lane renders a Calico policy of its own: every path is a row, and
+      a later workload (case-b's Laurium) is a row, not a template edit.
+    - A host that no rendered pod reaches is not rendered (KMS, before P9's pods exist).
     - `make cp-policy-check` refuses an Allow beyond DNS under a policy selecting every pod
       (`wide-egress`).
 22. **Our Secret only to what reads it** (the same review). P7 gave the whole deployment Secret to
