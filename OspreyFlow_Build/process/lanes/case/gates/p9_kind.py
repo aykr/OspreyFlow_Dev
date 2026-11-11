@@ -884,13 +884,10 @@ class Run:
     # -- the runs ---------------------------------------------------------------------------------
 
     def lease(self) -> dict[str, str]:
-        """The lease this run is under, as the environment names it (rule 14); none is said so."""
-        named = {
-            k: v
-            for k, v in os.environ.items()
-            if any(w in k for w in ("LEASE", "STACK", "OSPREY_LANE"))
-        }
-        return named or {"lease": "none: not a timing run"}
+        """The lease this run was taken under (rule 14), as the caller names it in P9_LEASE (the
+        line `stack_lease.sh status` printed for it); none is said so."""
+        named = os.environ.get("P9_LEASE")
+        return {"lease": named} if named else {"lease": "none: not a timing run"}
 
     def save(self, run: str) -> None:
         self.record["at"] = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
