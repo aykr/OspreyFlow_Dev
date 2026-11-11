@@ -333,9 +333,14 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
     expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [0, -1000, 1000, 1000], 24))).toBeCloseTo(0.515, 5);
     // σ is half the blur radius (CSS Backgrounds 3): a blur of 24 is σ 12, so 12px out is Φ(−1).
     expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [12, -1000, 1000, 1000], 24))).toBeCloseTo(0.158655 + 0.015, 4);
-    // Past three standard deviations (36px), nothing.
+    // From 2σ the margin falls to 0.0025 at 3σ, the most Chromium paints over the Gaussian there; past
+    // 3σ (36px), where Chromium paints nothing, nothing. 30px out is 2.5σ: Φ(−2.5) + 0.00875.
+    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [30, -1000, 1000, 1000], 24))).toBeCloseTo(0.00621 + 0.00875, 4);
     expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [37, -1000, 1000, 1000], 24))).toBe(0);
-    expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [35, -1000, 1000, 1000], 24))).toBeGreaterThan(0.015);
+    // No cliff: a pixel either side of 3σ changes the paint laid by under 0.005.
+    const near = shadowCoverage(at("rgba(0, 0, 0, 0.7)", [35.9, -1000, 1000, 1000], 24));
+    expect(near).toBeGreaterThan(0);
+    expect(near).toBeLessThan(0.005);
     expect(shadowCoverage(at("rgba(0, 0, 0, 0.7)", [1, -10, 10, 10], 0))).toBe(0);
   });
 

@@ -151,7 +151,7 @@ All browser runs were local, in the orchestrator's slot (`OSPREY_PORTS_SLOT=9`),
 4. *Three placements are not the worst:* a shadow is now laid at every place in the words' chain, as well as away and over everything. A search over random colours found a case where only "between the layers" is the worst (1.04:1, against 1.13:1 over everything). It is a unit case, and S7 is red.
 5. *σ unchecked:* measured from Chromium's pixels on the server. A first fit (run 20261111T130711Z) put σ at about 0.52 × blur, which refutes the Skia figure the reviewer half-remembered (0.29 × blur + 0.5).
    - **Corrected in the second pass:** my first reading of that fit, "the model slightly overstates the tail", was wrong. The samples sat at pixel centres, and there the model fell short (0.149 against 0.157 measured at 12.5px for a blur of 24). The reviewer caught it.
-   - Measured again pixel by pixel, inside the shape and out (run 20261111T132837Z): the Gaussian of blur / 2 is at most 0.0136 of the colour short anywhere, for every blur from 4 to 60px.
+   - Measured again pixel by pixel, inside the shape and out (run 20261111T132837Z, slot 13): the Gaussian of blur / 2 is at most 0.0136 of the colour short anywhere, for every blur from 4 to 60px.
    - So the coverage now carries a margin of 0.015 within 3σ (S8 red without it).
 6. *An empty hit test:* now a cover.
 7. *A smooth scroll restore:* every restore is instant.
@@ -194,3 +194,23 @@ The lane-reviewer's second pass on 8bd3eef left three must-fixes, and found the 
   - Without the branch: red through another cover (the drawing's end circle). The plant shows the branch's own reason but does not tell the two apart.
 
 **Unit plants at 896bbf7** (36 cases), each red: S1 (4), S2, S3, S4, S5, S6, S7, S8 (no margin: 2), S9 (every place: 1), H1 (2) and H2.
+
+### The third review pass (the margin tapered)
+
+All three of the second pass's must-fixes were confirmed closed. The third pass raised one suspected fail-open and two minors.
+- **The suspected fail-open:** an opaque container under the words, with a translucent child raised over them. Planted (run 20261111T135324Z, slot 13), it is not one. Chromium lists the child on top and the container below the words (`CHILD > WORDS > rect > svg > div > CONTAINER`), so the look-ahead never takes the container as hiding them. The words are red, "over or under div", with and without the look-ahead.
+- **The cliff at 3σ:** measured by band of σ past the shape (same run), for blurs of 4 to 60px. Chromium lays at most this much over the Gaussian of half the blur:
+
+  | Band past the shape | Most laid over the Gaussian |
+  | --- | --- |
+  | [−2σ, 0) | 0.0045 |
+  | [0, σ) | 0.0136 |
+  | [σ, 2σ) | 0.0109 |
+  | [2σ, 3σ) | 0.0025 |
+  | from 3σ | nothing at all |
+
+  - So the 3σ cut-off is the renderer's own.
+  - The margin is now 0.015 to 2σ, then falls straight to 0.0025 at 3σ. The step at 3σ is about 0.004 of the colour.
+  - Unit plants: S10, the margin flat to 3σ, is red (the no-cliff case); S8, no margin to 2σ, is red (2).
+- **The σ run's slot:** 20261111T132837Z ran in slot 13, now written in item 5.
+- **The full set at 896bbf7** (20261111T133108Z): 975 passed, 4 failed, and all 4 failed before the probe ran, on the GOV.UK brand's `data-brand` not set within 5s. The harness set: 34 passed. The 4, with the 1 from 8bd3eef's run, passed on the retake (5 passed). A different set fails each run (4, 1, 4).

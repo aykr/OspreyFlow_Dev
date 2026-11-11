@@ -324,7 +324,7 @@ function normalCdf(z: number): number {
 /**
  * The share of a shadow's colour painted at its point, 0 to 1. CSS Backgrounds 3 blurs the shadow's
  * shape by a Gaussian whose standard deviation is half the blur radius; over a rectangle that is the
- * product of one CDF difference per axis, with `SHADOW_MARGIN` laid on for what Chromium paints past it.
+ * product of one CDF difference per axis, with `shadowMargin` laid on for what Chromium paints past it.
  * The shape's rounded corners are taken square, which can only overstate the paint near a corner.
  */
 export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }: ShadowAt): number {
@@ -334,15 +334,21 @@ export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }
   const far = 3 * sigma;
   if (x < left - far || x > right + far || y < top - far || y > bottom + far) return 0;
   const across = (v: number, lo: number, hi: number) => normalCdf((hi - v) / sigma) - normalCdf((lo - v) / sigma);
-  return Math.min(1, Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom)) + SHADOW_MARGIN);
+  const past = Math.max(left - x, x - right, top - y, y - bottom, 0) / sigma;
+  return Math.min(1, Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom)) + shadowMargin(past));
 }
 
 /**
- * Laid on every blurred shadow's coverage within its reach: Chromium's own blur, read from its pixels on
- * the test server (rules-b's T3b red record, the review round), comes to at most 0.0136 of the colour
- * more than the Gaussian of half the blur anywhere from inside the shape to twice the blur past it.
+ * Laid on a blurred shadow's coverage `past` standard deviations beyond its shape, for what Chromium's
+ * own blur paints over the Gaussian of half the blur. Read from its pixels on the test server (rules-b's
+ * T3b red record, the review rounds), it is at most 0.0136 of the colour up to 2σ and 0.0025 from 2σ to
+ * 3σ, and it paints nothing from 3σ on. The margin is 0.015 to 2σ, then falls straight to 0.0025 at 3σ,
+ * so a few pixels either way change the paint laid by no more than the renderer's own does.
  */
-const SHADOW_MARGIN = 0.015;
+function shadowMargin(past: number): number {
+  if (past < 2) return 0.015;
+  return 0.0025 + (0.015 - 0.0025) * Math.max(0, 3 - past);
+}
 
 /** The text's worst ratio at point `p` on its own surfaces, with each shadow in `laid` at index j laid
  * under the chain's first j elements (straight on the page past the last), and `above` over everything
