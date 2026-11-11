@@ -214,25 +214,7 @@ class Run:
                     "subject": f"system:serviceaccount:{self.ns}:{backups.SERVICE_ACCOUNT}",
                     "jwks": jwks,
                     "issuer": issuer,
-                    "policies": [role_policy or backups.role_policy(arn, KEY_ARN)]
-                    + (
-                        # A measurement, never the product's policy: does ClickHouse need more
-                        # delete than its own lock file? (P9_LOCK_DELETE=1, the orchestrator's
-                        # question of 11 November 2026.)
-                        [
-                            {
-                                "Statement": [
-                                    {
-                                        "Effect": "Allow",
-                                        "Action": ["s3:DeleteObject"],
-                                        "Resource": [f"{arn}/sets/*/clickhouse/.lock"],
-                                    }
-                                ]
-                            }
-                        ]
-                        if os.environ.get("P9_LOCK_DELETE")
-                        else []
-                    ),
+                    "policies": [role_policy or backups.role_policy(arn, KEY_ARN)],
                 }
             ],
             "buckets": [
