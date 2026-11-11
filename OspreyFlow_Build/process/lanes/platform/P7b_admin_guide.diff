@@ -1,0 +1,12 @@
+diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
+index 6d262dc..0ed33c3 100644
+--- a/OspreyFlow_Core/docs/administration-guide.md
++++ b/OspreyFlow_Core/docs/administration-guide.md
+@@ -2083,6 +2083,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+ | `cloud_platform.platform` | str | `client` | The platform's settings file, by name |
+ | `cloud_platform.namespace` | str or none | none | The namespace the platform's team created for the deployment (required) |
+ | `cloud_platform.environment` | `development` \| `production` | `development` | One copy of each store; production runs the cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3) |
++| `cloud_platform.shape` | `standard` \| `poc` | `standard` | The stores as the environment sets them. poc: the proof-of-concept shape, a development namespace's only: one ArcadeDB and one ClickHouse running its own Keeper, no disruption budgets, and the Ingest root on a claim of its own |
+ | `cloud_platform.registry` | str or none | none | Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there |
+ | `cloud_platform.allow_from` | list of str | — | The networks (CIDR) the platform's ingress admits; empty: every address |
+ | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
