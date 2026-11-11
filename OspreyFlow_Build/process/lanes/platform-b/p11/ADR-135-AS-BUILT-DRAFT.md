@@ -31,10 +31,16 @@ settles it. Decision 2's ruling is recorded **for the owner to overrule**.
      another kind; a gateway with no address; a provider by the role; an engine named `bedrock` of any other kind
      (LiteLLM routes a provider by its name, so it would reach Bedrock by a stored key in no fixed region); the
      client's gateway by the role (held, decision 6); and decisions 2 and 3.
-   The gateway entry's `model_name` stays `<engine>/<model>`. **On this branch `profile: cloud-platform` cannot be
-   declared**: its `Profile` member is P7's (`lane/platform`), not merged here. The harness's handling of the two
-   kinds is tested on the existing profiles with the profile set widened for the test alone
-   (`test_model_engine_kinds.py`'s `as_on_cloud_platform`); at merge, after P7, those cases move to the real profile.
+   The gateway entry's `model_name` stays `<engine>/<model>`. **On the real profile since the rebase onto P7**: the
+   harness's cases, first run on a widened profile set, are on P7's own `cloud-platform` fixture, and moving them
+   found the render refusing the very engines it rendered twice over. P7's render validates the deployment's cluster
+   translation as `profile: cluster`, where these kinds are refused: the translation is now validated with
+   `ENGINES_AS` in its context, so its engines stay held to cloud-platform's rules. And P7's egress took an engine's
+   host from its address or its provider's name: a Bedrock engine names neither, and its host is now its region's
+   runtime (`bedrock-runtime.eu-west-2.amazonaws.com`), allowed by its networks like any other, or refused in words.
+   The render writes `OSPREY_PROFILE=cloud-platform`, by which the Conduit offers and takes the kinds. A
+   cloud-platform render runs the gateway only with an engine enabled at install (P7), so an engine first added in
+   *Admin › Models* there has no gateway until the deployment is rendered again with it.
 2. **London only covers the model's id** (the orchestrator's ruling, from Amendment 4's "Bedrock in the client's
    London region"; for the owner to overrule). A Bedrock model is named by its own id (`anthropic.…`). A
    cross-region inference profile's id puts a geography before it (`eu.…`, `us.…`, `apac.…`, `global.…`, and others
@@ -45,8 +51,12 @@ settles it. Decision 2's ruling is recorded **for the owner to overrule**.
    inference profile ("on-demand throughput isn't supported") is therefore not usable here; *Test the connection*
    says so in words (decision 5), and points at a model offered on demand in London, never at an inference profile.
 3. **No key in the gateway's address, label or reference.** On `cloud-platform` an engine's `api_base` with userinfo
-   (`https://<key>@host/…`, `https://user:<key>@host/…`) or a query or fragment (`?api-key=…`, `#…`) is refused, and so
-   is a label shaped like a key (the contract reference already was, on every profile, by ADR-136). A key pasted
+   (`https://<key>@host/…`, `https://user:<key>@host/…`), a query or fragment (`?api-key=…`, `#…`), or a path segment
+   shaped like a key (`https://host/v1/<token>`: a key prefix, a JWT, or 24 or more characters mixing upper case,
+   lower case and digits; a deployment's lower-case name such as `my-deployment-2024-08-06` is taken) is refused, and
+   so is a label shaped like a key (the contract reference already was, on every profile, by ADR-136). **A JWT**
+   (`eyJ….eyJ….…`, the shape most gateways issue tokens in) is a key's shape in the label and the reference, which
+   the unbroken-run check missed for its dots. A key pasted
    there would be kept in the models file, the gateway's entries and the audit, and shown in *Admin › Models*. Held to
    `cloud-platform` by decision 1's ruling; **recommended for the owner**: the same refusals on every profile, which
    would change how other profiles take an address (a separate decision).

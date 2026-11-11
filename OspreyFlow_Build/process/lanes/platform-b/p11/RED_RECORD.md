@@ -95,3 +95,16 @@ cited a parametrised `[bedrock, gateway-by-role]` that the first round's review 
 ## The Glass, at bcc51186's code with `shared-files-P11.diff` applied
 vitest `Models.test.tsx` 11/11; keyboard `admin-models.spec.ts` 13/13 (slot 7, `LANG=en_GB.UTF-8`); axe 27 scans
 and 9 label checks over the nine *Models* states, the two new ones at `cloud=1`, dark, light and GOV.UK, 36/36.
+
+## Round 2 at the rebase onto P7 (11 November 2026, on the Mac, offline)
+
+| Case | Red first |
+|---|---|
+| `test_the_cloud_platform_render_tells_the_conduit_its_profile[bedrock, bedrock-and-gateway]` | the render refused its own engines ("…are for profile: cloud-platform…"), then "names no api_base" |
+| `…held_key_is_blanked_in_every_cloud_platform_workload`, `…gateway_workload_carries_no_static_aws_key[*]` | the same two refusals, on the real profile (green on the widened set) |
+| `test_a_bedrock_engine_s_host_is_an_egress_host_by_its_region` | "names no api_base" |
+| `test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed[*]` (seven) | each taken with 200: a JWT in the label or reference, a token, JWT or `sk-` in the path |
+| `test_an_address_s_ordinary_path_is_taken[*]` | green before and after: the guard against the path rule catching a deployment's name |
+
+The none-declared case of the static-AWS-key test was dropped on the real profile: P7 renders no gateway without
+an engine, so there is nothing to inspect (the report's finding 6).
