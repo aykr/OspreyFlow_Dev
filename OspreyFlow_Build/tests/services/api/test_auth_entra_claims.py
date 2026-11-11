@@ -52,6 +52,7 @@ from principal_auth import (
     ClaimMapping,
     CodesSource,
     PrincipalLookupUnavailable,
+    SeenPerson,
     StoredPerson,
     ValueSource,
 )
@@ -152,8 +153,9 @@ class FakePeople:
         self.fail: Exception | None = None
         self.delay = 0.0
 
-    async def person(self, tenant_id: str, oid: str, claims: object) -> StoredPerson:
+    async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson:
         self.calls.append((tenant_id, oid))
+        self.seen = seen
         if self.delay:
             await asyncio.sleep(self.delay)
         if self.fail is not None:
@@ -959,6 +961,19 @@ def test_an_entra_principals_roles_are_the_stored_ones_never_the_tokens(keypair,
     assert resolver.people.calls == [(TENANT, OID)]
 
 
+def test_the_store_is_given_the_resolved_access_never_the_tokens_roles(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, email=["not", "text"])))
+    assert resolver.people.seen == SeenPerson(
+        name="Synthetic Analyst",
+        username="synthetic.analyst@example.test",
+        email=None,
+        clearance="OFFICIAL",
+        org_unit="unit-1",
+        receivable_handling_codes=(),
+    )
+
+
 def test_a_first_sign_in_records_the_person_with_no_roles(keypair, jwks_url) -> None:
     resolver = _resolver(jwks_url, BY_EXTENSION)
     assert resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD))).roles == []
@@ -1002,7 +1017,7 @@ def test_a_failed_or_slow_lookup_is_unavailable_never_a_principal(keypair, jwks_
 def test_a_malformed_stored_person_is_unavailable(keypair, jwks_url, stored) -> None:
     resolver = _resolver(jwks_url, BY_EXTENSION)
 
-    async def answer(tenant_id: str, oid: str, claims: object) -> object:
+    async def answer(tenant_id: str, oid: str, seen: object) -> object:
         return stored
 
     resolver.people.person = answer  # type: ignore[method-assign]

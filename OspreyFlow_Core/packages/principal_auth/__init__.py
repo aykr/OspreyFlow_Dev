@@ -415,13 +415,32 @@ class StoredPerson:
     disabled: bool
 
 
+@dataclass(frozen=True)
+class SeenPerson:
+    """What a verified token says of the person, for Admin › People's list: their names as Entra
+    gives them (`name`, `preferred_username`, `email`, each text or none) and the clearance, unit
+    and codes the mapping resolved. Never their roles: those are only ever the store's."""
+
+    name: str | None
+    username: str | None
+    email: str | None
+    clearance: str
+    org_unit: str
+    receivable_handling_codes: tuple[str, ...]
+
+
+def _text_claim(claims: Mapping[str, Any], name: str) -> str | None:
+    value = claims.get(name)
+    return value[:200] if isinstance(value, str) and value else None
+
+
 class RoleSource(Protocol):
     """Where an Entra principal's roles are read (ADR-148 Amendment 8, the orchestrator's ruling of
     11 November 2026): the deployment's own store, keyed by tenant and object id. `person` records
     a person on their first sign-in (with no roles) and answers what is stored; it raises on any
     failure, which the resolver turns into `PrincipalLookupUnavailable`, never a principal."""
 
-    async def person(self, tenant_id: str, oid: str, claims: Mapping[str, Any]) -> StoredPerson: ...
+    async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson: ...
 
 
 class PrincipalLookupUnavailable(Exception):
@@ -870,11 +889,19 @@ class PrincipalResolver:
         claims = self._verified_claims(token)
         if not self._claim_mapping.is_entra:
             return principal_from_claims(claims, self._claim_mapping)
-        _verified_parts(claims, self._claim_mapping)
+        verified = _verified_parts(claims, self._claim_mapping)
         assert self._role_source is not None and self._claim_mapping.tenant_id is not None
+        seen = SeenPerson(
+            name=_text_claim(claims, "name"),
+            username=_text_claim(claims, "preferred_username"),
+            email=_text_claim(claims, "email"),
+            clearance=verified.clearance,
+            org_unit=verified.org_unit,
+            receivable_handling_codes=tuple(verified.codes),
+        )
         try:
             stored = await asyncio.wait_for(
-                self._role_source.person(self._claim_mapping.tenant_id, str(claims["oid"]), claims),
+                self._role_source.person(self._claim_mapping.tenant_id, verified.id, seen),
                 timeout=self._role_lookup_timeout,
             )
         except Exception as exc:  # noqa: BLE001 - every failure of the read is the one 503
