@@ -68,17 +68,19 @@ only from `deployment.env`, never from the shell; CARRIES row 104's "or from the
    text update embeds (its last line) is shown only when it holds no secret word outside those
    phrases. The gateway refusal says "keeps every value deployment.env holds", no longer "every
    secret".
-7. **The chart's values-derived keys are quoted**: the `checksum/*` annotations, ConfigMap data keys
-   and a file's `subPath` (a key reading as a number, bool or null broke the render or the workload).
+7. **The chart's values-derived keys are quoted** — platform's under P7 at the orchestrator's
+   ruling: P7 (main c73e4f1) quotes the `checksum/*` annotations; the ConfigMap data keys and a
+   file's `subPath` (a key reading as a number, bool or null broke the render), with the chart
+   tests' two cases, are sent to platform as `carries/chart-quoting-for-platform.diff` and are not
+   on this branch.
 
 **Tests** (`process/lanes/platform-b/plants.md`, "Carries", "after my own lane review" and "after the
 orchestrator's review"): `tests/harness/test_atomic_writes.py`, `tests/harness/test_env_writers_whole.py`,
 `tests/test_refresh_carries.py`, `tests/harness/test_compose_lockout.py`,
 `tests/cli/test_compose_lockout.py`, `tests/cli/test_refusal_words_reach_the_operator.py`,
 `tests/harness/test_update_apply.py`'s lock cases, `tests/test_refresh_before_the_gateway.py`'s
-handed-lock cases, `tests/test_refresh.py`'s `--files-only` and symlinked put-back cases, and
-`tests/harness/test_helm_chart.py`'s two quoting cases (point 7, platform's under P7 from the
-orchestrator's ruling: dropped at the rebase wherever P7 covers the same quoting).
+handed-lock cases, and `tests/test_refresh.py`'s `--files-only` and symlinked put-back cases.
+Point 7's two chart cases travel with its diff.
 
 **Not done, recorded:** `fcntl` and `os.geteuid` are POSIX-only (`scripts/refresh.py`), as `os.fchmod`
 already was in the harness; a native-Windows refresh is not supported by this. A values file whose
