@@ -362,6 +362,24 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       (`lanes_launch.sh resume docs`) and approve them; its prompt with the five must-fixes is
       `~/.ospreyflow/lanes/docs.prompt.md`.
 
+37. **The afternoon, 11 November (you back from about 12:15).**
+    - **Landed:** D2d (ad0f699), L1.9 part 1 (34ea63c; access step, two rounds: yours to look at), P7 (c73e4f1;
+      without you under Am 8, two rounds and a fixes check: yours to look at). P10 part 1 merge prepared (7c33ea8).
+    - **The update check is done:** v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on a fresh `osprey-upg`
+      (12:26): the release reads v0.5.0, the model keys moved into the gateway, the gateway takes the Conduit's
+      key. Two findings: `update` crashes with a traceback when it cannot ask "Continue?" (no terminal); the
+      CHANGELOG's "plain update before step 2 refuses in one line, changing nothing" refuses only after the
+      question, a backup and a checkout, then rolls back. Steps 5–7 were rehearsed before release and not re-run.
+    - **Decided on my recommendation, yours to overrule:**
+      1. platform-b's carries: a value in the shell is not "held" (ADR-114 Am 39 decision 2 stands); ADR-114
+         Amendment 40 for its draft; `register_sign_in.py` and `restore.py` ratified for the one-writer fix.
+      2. P7b: the "scratch volume for Ingest" is the ingest root on a claim of its own in the poc shape.
+      3. D2d's three server gate failures accepted as the environment (stale libxslt layer, GPU, the server's lane
+         state); P7's and L1.9's likewise (GPU, two lane-tooling tests, an unset port slot in my own runs).
+    - **The server sessions cannot take a lease** (`stack_lease.sh` from the server itself finds no host, and its
+      Claude is refused the approval). So P7, P12, the carries and P11 moved to the Mac lanes, on `ayan`,
+      with your approvals; the heavy runs still go to the server.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
