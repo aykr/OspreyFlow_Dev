@@ -148,9 +148,11 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     };
     // An ancestor hides what lies beneath it only when its own background is opaque and neither it
     // nor anything above it is translucent (an opacity lets the group's underlay through). An SVG
-    // element other than the root paints no CSS background, whatever its computed one says.
+    // element other than the outermost `<svg>` (a nested `<svg>` included) paints no CSS background,
+    // whatever its computed one says.
+    const outermostSvg = (e: Element) => e instanceof SVGSVGElement && e.ownerSVGElement === null;
     const opaque = (e: Element) => {
-      if (e instanceof SVGElement && e.tagName.toUpperCase() !== "SVG") return false;
+      if (e instanceof SVGElement && !outermostSvg(e)) return false;
       const bg = getComputedStyle(e).backgroundColor;
       if (!(/^rgb\(/.test(bg) || /^color\(srgb [^/]*\)$/.test(bg))) return false;
       for (let at: Element | null = e; at; at = at.parentElement) {
@@ -296,7 +298,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         }
         const box = at.getBoundingClientRect();
         // An SVG element's own box paints nothing; its shapes are read at each point below.
-        const surface = !(at instanceof SVGElement) || at.tagName.toUpperCase() === "SVG";
+        const surface = !(at instanceof SVGElement) || outermostSvg(at);
         chain.push({
           name: name(at), backgroundColor: surface ? s.backgroundColor : "rgba(0, 0, 0, 0)",
           backgroundImage: surface ? s.backgroundImage : "none",

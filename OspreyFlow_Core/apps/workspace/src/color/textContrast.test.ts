@@ -354,10 +354,13 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
   });
 
   it("takes the worst of the shadow under the words, over them and away", () => {
-    // Light words on black at an edge of a blurred white shadow (alpha 0.515 there, with the measured margin): under, the page lightens
-    // and the words lose; over, both lighten; the worst counts.
+    // Light words on black at an edge of a blurred white shadow (its most there, over the pixel round the
+    // point and with the measured margin, about 0.53): under, the page lightens and the words lose;
+    // over, both lighten; the worst counts.
+    const most = shadowCoverageRange(at("rgba(255, 255, 255, 1)", [0, -1000, 1000, 1000], 24))[1];
+    expect(most).toBeGreaterThan(0.515);
     const ink: Rgba = [200, 200, 200, 1];
-    const shadow: Rgba = [255, 255, 255, 0.515];
+    const shadow: Rgba = [255, 255, 255, most];
     const black: Rgba = [0, 0, 0, 1];
     const under = ratioOf(over(ink, over(shadow, black)), over(shadow, black));
     const above = ratioOf(over(shadow, ink), over(shadow, black));
@@ -372,7 +375,7 @@ describe("a shadow at the words, measured (T3b's server round)", () => {
     expect(j.ratio as number).toBeCloseTo(Math.min(under, above, none), 4);
     // A black shadow on that black page: laid under the words it changes nothing, so only the shadow
     // laid over them, darkening the words alone, finds their worst.
-    const dark: Rgba = [0, 0, 0, 0.515];
+    const dark: Rgba = [0, 0, 0, most];
     const darkened = judge(
       sample({
         color: "rgb(200, 200, 200)",
@@ -447,6 +450,32 @@ describe("a shadow's alpha bracketed (the orchestrator's review of 9697ad3, mino
     expect(crossing.ratio).toBe(1);
   });
 
+  it("fails the reviewer's coloured dip, which every placement together already finds at an end", () => {
+    // The lane-reviewer's counter-example to "the worse end": black words on red, a cyan shadow under
+    // them near a rounded corner, where the bracket is [0, about 0.49]. Laid under the words, red
+    // falls as green and blue rise, so the page's luminance dips inside the bracket (5.25:1 at none,
+    // 5.17:1 at the most, about 4.0:1 at a quarter). Laid over everything at the most, the shadow is
+    // worse still, so the words fail as they should. A search of random colours over every placement
+    // found no case worse inside the bracket than at an end or a swap (the red record).
+    const dip = judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer(), layer({ name: "body", backgroundColor: "rgb(255, 0, 0)" })],
+        shadows: [[{ colour: "rgba(0, 255, 255, 1)", edges: [0, 0, 100, 100], blur: 8, radius: 16, x: 2, y: 2 }]],
+      }),
+    );
+    expect(dip.ratio).toBeLessThan(4.2);
+    expect(dip.why).toMatch(/< 4\.5:1$/);
+  });
+
+  it("takes in the whole pixel round a point, so a sharp shadow's edge within half a pixel may paint anything", () => {
+    // Chromium paints the pixel the point falls in, anti-aliased at a fractional edge: a sharp shadow
+    // whose edge lies 0.3px from the point is between none and all of its colour there.
+    expect(shadowCoverageRange(at([10, -1000, 1000, 1000], 0, 9.7, 0))).toEqual([0, 1]);
+    expect(shadowCoverageRange(at([10, -1000, 1000, 1000], 0, 12, 0))).toEqual([1, 1]);
+    expect(shadowCoverageRange(at([10, -1000, 1000, 1000], 0, 8, 0))).toEqual([0, 0]);
+  });
+
   it("takes the least as nothing near a rounded corner, and the Gaussian less the measured shortfall elsewhere", () => {
     const [cornerLow, cornerHigh] = shadowCoverageRange(at([0, 0, 100, 100], 8, -2, -2, 16));
     expect(cornerLow).toBe(0);
@@ -503,6 +532,8 @@ describe("words hidden at a point (T3b's server round)", () => {
     // A pin above what they give now fails, and so does `own: null`: a listing must name a floor.
     expect(excuses({ ...listed, own: 1.5 }, gone)).toBe(false);
     expect(excuses({ ...listed, own: null }, gone)).toBe(false);
+    // And the findings file refuses such a listing outright.
+    expect(() => readFindings({ look: { ".x": { ...listed, own: null } } })).toThrow(/hidden at every point.*a floor/);
   });
 });
 

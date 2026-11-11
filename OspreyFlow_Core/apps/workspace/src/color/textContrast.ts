@@ -293,10 +293,12 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string | null {
     };
     const indices = [0, ...sample.chain.map((_, i) => i + 1).filter((j) => !bare(j - 1))];
     const places = indices.length + 2;
-    if (places ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
-    // Each placement is measured at each shadow's least and most paint. Between them every colour
-    // moves one way, so the words' figure there is the worse end's, unless the words and what lies
-    // under them change places in lightness on the way: then somewhere between they are equal, 1:1.
+    // Each placement is measured at each shadow's least and most paint, and where the words and what
+    // lies under them change places in lightness between those ends, somewhere between they are equal:
+    // 1:1. Each channel moves one way across the bracket, but luminance need not (a coloured shadow
+    // over a coloured surface), so the worst of one placement may lie inside it; a search of random
+    // colours over every placement together found no case worse inside than at an end or a swap
+    // (rules-b's T3b red record, the review fixes), which is what this rests on.
     if (places ** cast.length * 2 ** cast.length > MAX_PLACEMENTS) return `more than ${MAX_PLACEMENTS} placements of its shadows at one point`;
     for (let combination = 0; combination < places ** cast.length; combination += 1) {
       const place = cast.map((_, i) => Math.floor(combination / places ** i) % places);
@@ -349,24 +351,36 @@ export function shadowCoverage({ edges: [left, top, right, bottom], blur, x, y }
   // Past three standard deviations from the shape the browser half sends nothing, and nothing is laid.
   const far = 3 * sigma;
   if (x < left - far || x > right + far || y < top - far || y > bottom + far) return 0;
-  const across = (v: number, lo: number, hi: number) => normalCdf((hi - v) / sigma) - normalCdf((lo - v) / sigma);
   const past = Math.max(left - x, x - right, top - y, y - bottom, 0) / sigma;
-  return Math.min(1, Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom)) + shadowMargin(past));
+  return Math.min(1, gaussianCoverage({ edges: [left, top, right, bottom], blur, x, y }) + shadowMargin(past));
+}
+
+/** The Gaussian of half the blur over the shadow's shape at its point, with nothing laid on. */
+function gaussianCoverage({ edges: [left, top, right, bottom], blur, x, y }: Pick<ShadowAt, "edges" | "blur" | "x" | "y">): number {
+  const sigma = blur / 2;
+  const across = (v: number, lo: number, hi: number) => normalCdf((hi - v) / sigma) - normalCdf((lo - v) / sigma);
+  return Math.max(0, across(x, left, right)) * Math.max(0, across(y, top, bottom));
 }
 
 /**
- * The least and the most of a shadow's colour Chromium may paint at its point: the Gaussian less
- * `SHADOW_SHORT`, and `shadowCoverage`. Near a rounded corner of the shape, which the Gaussian takes
- * square, the least is nothing.
+ * The least and the most of a shadow's colour Chromium may paint at its point. Chromium paints the
+ * whole pixel the point falls in, so both are taken over that pixel (the point and the four corners
+ * of the square a pixel wide round it): the most is `shadowCoverage`'s largest there, the least the
+ * Gaussian's smallest less `SHADOW_SHORT` (a sharp shadow's smallest, which is nothing where its edge
+ * crosses the pixel). Near a rounded corner of the shape, which the Gaussian takes square, the least
+ * is nothing.
  */
 export function shadowCoverageRange(shadow: ShadowAt): [number, number] {
-  const high = shadowCoverage(shadow);
-  if (high === 0) return [0, 0];
   const { edges: [left, top, right, bottom], x, y } = shadow;
+  const round: [number, number][] = [[x, y], [x - 0.5, y - 0.5], [x + 0.5, y - 0.5], [x - 0.5, y + 0.5], [x + 0.5, y + 0.5]];
+  const high = Math.max(...round.map(([px, py]) => shadowCoverage({ ...shadow, x: px, y: py })));
+  if (high === 0) return [0, 0];
   const r = (shadow.radius ?? 0) + 1.5 * shadow.blur;
   const nearCorner = (shadow.radius ?? 0) > 0 && (x < left + r || x > right - r) && (y < top + r || y > bottom - r);
-  if (nearCorner || !(shadow.blur > 0)) return [nearCorner ? 0 : high, high];
-  return [Math.max(0, high - shadowMargin(Math.max(left - x, x - right, top - y, y - bottom, 0) / (shadow.blur / 2)) - SHADOW_SHORT), high];
+  if (nearCorner) return [0, high];
+  if (!(shadow.blur > 0)) return [Math.min(...round.map(([px, py]) => shadowCoverage({ ...shadow, x: px, y: py }))), high];
+  const least = Math.min(...round.map(([px, py]) => gaussianCoverage({ ...shadow, x: px, y: py })));
+  return [Math.max(0, least - SHADOW_SHORT), high];
 }
 
 /**
@@ -529,6 +543,9 @@ export function readFindings(json: unknown): Record<string, Record<string, Liste
         if (keys !== "own,owner,ratio,reason,text") bad(where, `unexpected fields ${keys}`);
         if (typeof e.reason !== "string" || !e.reason) bad(where, "no reason");
         if (e.own !== null && !(typeof e.own === "number" && e.own > 0 && e.own <= 21)) bad(where, `an own ratio out of range ${String(e.own)}`);
+        // Words hidden at every point are always read on their own surfaces (`judge`), so their listing
+        // names that floor; with none it would excuse them whatever their colours became.
+        if (e.own === null && e.reason.startsWith("hidden at every point")) bad(where, "hidden at every point with no own ratio: a listing of it must name a floor");
       } else {
         bad(where, `a ratio that is neither a number nor "unmeasurable": ${String(e.ratio)}`);
       }
