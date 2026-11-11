@@ -210,9 +210,9 @@ describe("what lies under the text", () => {
     expect(label([[{ fill: "url(#hatch)", at: 1 }]]).why).toMatch(/unread shape fill/);
   });
 
-  it("lays a shape under the words' own branch, so the words' opacity fades the words alone", () => {
+  it("lays a shape under the words' own ancestors, so the words' opacity fades the words alone", () => {
     // A black dialog; <rect fill="#fff"> and <text fill="#000" opacity=".5"> in one <svg>: the rect is
-    // under the text's branch, so the half opacity greys the words over white: 3.98:1, a fail. Laid
+    // under the text's own ancestors, so the half opacity greys the words over white: 3.98:1, a fail. Laid
     // under the text element itself, the opacity would fade both, and the words would pass at 5.28:1.
     const faded = judge(
       sample({

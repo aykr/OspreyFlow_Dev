@@ -37,9 +37,9 @@ export interface Sample {
   /** A painted element under or over the text that is not the node nor an ancestor, or null. */
   overlappedBy: string | null;
   /** For each probed point, the plain SVG shapes lying under an SVG label's words there (its box),
-   * nearest first: each shape's fill as a colour (its own branch's opacities folded in) and `at`, the
-   * index in `chain` of the ancestor it shares with the words. It lies under the words' own branch
-   * (`chain[0 … at-1]`) and over that ancestor. Absent or shorter than the points means none. */
+   * nearest first: each shape's fill as a colour (the opacities on its own side of the tree folded
+   * in) and `at`, the index in `chain` of the ancestor it shares with the words. It lies under the
+   * words' own line of ancestors (`chain[0 … at-1]`) and over that ancestor. Absent or shorter than the points means none. */
   under?: { fill: string; at: number }[][];
   /** The browser's canvas under everything, as computed (`Canvas`); white when absent. */
   page?: string;
@@ -238,7 +238,7 @@ export function needFor(fontSize: string, fontWeight: string): number {
  */
 function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
   const points = Math.max(1, ...sample.chain.map((l) => l.covers.length), sample.under?.length ?? 0);
-  const page = parseColour(sample.page ?? "rgb(255, 255, 255)");
+  const page: Rgba | null = sample.page === undefined ? [255, 255, 255, 1] : parseColour(sample.page);
   if (!page || page[3] < 1) return `an unread page colour ${sample.page}`;
   let worst = Infinity;
   for (let p = 0; p < points; p += 1) {
@@ -250,7 +250,7 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
       return null;
     };
     for (const [i, layer] of sample.chain.entries()) {
-      // A label's shapes lie under its own branch and over the ancestor they share with it.
+      // A label's shapes lie under its own line of ancestors and over the ancestor they share with it.
       for (const shape of (sample.under?.[p] ?? []).filter((u) => u.at === i)) {
         const colour = parseColour(shape.fill);
         if (!colour) return `an unread shape fill ${shape.fill}`;

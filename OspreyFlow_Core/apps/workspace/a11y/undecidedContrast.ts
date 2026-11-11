@@ -142,7 +142,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     // An SVG shape under an SVG label's words that is a plain surface there: a rect, circle, ellipse,
     // polygon or path whose fill (a colour, not a pattern or gradient) covers the point and whose
     // stroke does not, with no filter, mask or blend from it up to the ancestor it shares with the
-    // words. It is laid at that ancestor's place under the words, with every opacity on its own branch.
+    // words. It is laid at that ancestor's place under the words, with every opacity on its own side of the tree.
     // Anything else under the words is a cover. `chainOf` is the words' node, then its ancestors.
     const PLAIN = new Set(["RECT", "CIRCLE", "ELLIPSE", "POLYGON", "PATH"]);
     let chainOf: Element[] = [];
