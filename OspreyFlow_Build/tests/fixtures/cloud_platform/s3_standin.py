@@ -241,13 +241,13 @@ class StandIn:
         return stand_in
 
     def configure(self, config: dict[str, Any]) -> None:
-        """Who may call and each bucket's policy and key, from `config`; the objects kept, every
-        session ended (a changed role is assumed again, as on AWS after its policy changes)."""
+        """Who may call and each bucket's policy and key, from `config`; the objects kept. As on
+        AWS, a session already running goes on and meets its role's policy as it now stands; a
+        session whose role is gone ends."""
         stand_in = self
         with self.lock:
             self.users.clear()
             self.roles.clear()
-            self.sessions.clear()
         for user in config.get("users", []):
             stand_in.users[user["access_key"]] = Principal(
                 arn=user["arn"], secret=user["secret_key"], policies=user.get("policies", [])
@@ -263,6 +263,13 @@ class StandIn:
                 jwks=role.get("jwks"),
                 issuer=role.get("issuer"),
             )
+        with self.lock:
+            for key, session in list(self.sessions.items()):
+                role = self.roles.get(_role_of(session.arn))
+                if role is None:
+                    del self.sessions[key]
+                else:
+                    session.policies = role.policies
         stand_in.buckets.clear()
         for bucket in config.get("buckets", []):
             stand_in.buckets[bucket["name"]] = Bucket(
@@ -907,6 +914,9 @@ def _http_date(iso: str) -> str:
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
+    #: S3 takes many connections at once: ClickHouse's BACKUP opens one per part in parallel, and
+    #: the standard library's backlog of 5 timed its connections out (osprey-p9, 11 November 2026).
+    request_queue_size = 256
 
     def __init__(self, address: tuple[str, int], stand_in: StandIn) -> None:
         super().__init__(address, Handler)
@@ -921,7 +931,9 @@ def serve(
     if tls is not None:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(*tls)
-        server.socket = context.wrap_socket(server.socket, server_side=True)
+        # The handshake on the request's own thread, never the accepting one, so one slow client
+        # cannot hold every other connection waiting.
+        server.socket = context.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
         stand_in.secure = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server

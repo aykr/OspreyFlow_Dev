@@ -22,6 +22,7 @@ from tests.cloud_platform_backup.conftest import (
     Running,
     later,
     role_policy,
+    standin_config,
 )
 from tests.fixtures.cloud_platform.s3_standin import Role, mint_token
 
@@ -239,3 +240,39 @@ def test_a_role_trusting_the_clusters_keys_takes_its_signed_token_and_refuses_an
         with pytest.raises(ClientError) as refused:
             aws.s3().list_objects_v2(Bucket=BUCKET)
         assert _code(refused) == "InvalidIdentityToken"
+
+
+def _lever(aws: Running, path: str, body: dict[str, object] | None = None) -> int:
+    import json
+    import urllib.request
+
+    request = urllib.request.Request(aws.endpoint + path, data=json.dumps(body or {}).encode(), method="POST")
+    with urllib.request.urlopen(request) as answer:  # noqa: S310 - the stand-in's own address
+        return int(answer.status)
+
+
+def test_a_policy_changed_by_the_lever_judges_the_sessions_already_running(aws: Running) -> None:
+    """As on AWS: a role's policy changed while a session lives is the policy that session meets
+    next, and the session goes on (ClickHouse keeps its session; ending it at a policy change
+    would refuse it for the wrong reason, an unknown key)."""
+    client = aws.s3()
+    client.put_object(Bucket=BUCKET, Key="sets/a/before", Body=b"x")
+    sessions = dict(aws.stand_in.sessions)
+    assert _lever(aws, "/_standin/configure", standin_config(role=role_policy(kms_actions=("kms:Decrypt",)))) == 204
+    with pytest.raises(ClientError) as refused:
+        client.put_object(Bucket=BUCKET, Key="sets/a/after", Body=b"x")
+    assert _code(refused) == "AccessDenied"
+    assert "kms:GenerateDataKey" in refused.value.response["Error"]["Message"]
+    assert _lever(aws, "/_standin/configure", standin_config()) == 204
+    client.put_object(Bucket=BUCKET, Key="sets/a/after", Body=b"x")
+    assert aws.stand_in.sessions.keys() == sessions.keys()
+    assert aws.stand_in.read(BUCKET, "sets/a/before") == b"x", "the objects are kept"
+
+
+def test_the_expire_lever_ends_every_session_as_an_hour_would(aws: Running) -> None:
+    client = aws.s3()
+    client.list_objects_v2(Bucket=BUCKET)
+    assert _lever(aws, "/_standin/expire") == 204
+    with pytest.raises(ClientError) as refused:
+        client.put_object(Bucket=BUCKET, Key="sets/a/x", Body=b"x")
+    assert _code(refused) == "ExpiredToken"
