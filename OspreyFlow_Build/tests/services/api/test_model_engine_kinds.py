@@ -122,22 +122,12 @@ STATIC_AWS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 
 def _gateway_role_as_rendered() -> str | None:
     """The role the gateway's pod holds as the real cloud-platform render gives it: `ROLE` only if
-    its `litellm` workload runs under a service account. Today it does not (the namespace's IRSA
-    account is the Conduit's, the workers' and the report sync's, P7), so the stand-in's gateway
-    has no role, as the real one has none (the orchestrator's ruling on round 2: the gateway's own
-    identity is P11 part 2's; rule 15's second example). Rendered with a keyed engine, which needs
-    neither of `p11/cloud-platform-P11.diff`'s render fixes; part 2, which makes the account only
-    while a Bedrock engine is enabled, renders it with Bedrock here instead."""
-    values = _cloud_values(GEMINI)
+    its `litellm` workload runs under a service account. Rendered with a Bedrock engine, the only
+    one whose calls the gateway's own role signs: P11 part 2 gives it its own account then (rule
+    15's second example: the stand-in's gateway holds what the real one holds, no more)."""
+    values = _cloud_values(BEDROCK)
     gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
     return ROLE if gateway.get("serviceAccountName") else None
-
-
-#: Rendered by P11 part 2 (a gateway service account and role, Bedrock invoke in London only).
-NO_GATEWAY_IDENTITY = (
-    "carried to P11 part 2: the cloud-platform render gives the gateway's pod no IAM identity, so "
-    "a Bedrock engine there has no credentials until part 2 renders its own account and role"
-)
 
 
 class World:
@@ -213,9 +203,9 @@ def client(world: World, serve: Callable[[World], TestClient]) -> TestClient:
 
 @pytest.fixture
 def world_with_identity(tmp_path: Path) -> World:
-    """The gateway's pod given `ROLE`, as P11 part 2 will render it: for the cases whose subject
-    is the Conduit's handling of an identity it is given (its refusals' words, no key kept), not
-    whether the render gives one, which the cases marked `NO_GATEWAY_IDENTITY` hold."""
+    """The gateway's pod given `ROLE` outright: for the cases whose subject is the Conduit's
+    handling of an identity it is given (its refusals' words, no key kept), not whether the render
+    gives one, which the default `World` follows (`_gateway_role_as_rendered`)."""
     return World(tmp_path, role=ROLE)
 
 
@@ -532,6 +522,8 @@ PASTED = [
     ("api_base", f"{BASE}/{PLANTED}"),
     ("api_base", f"{BASE}/{JWT}"),
     ("label", f"Acme gateway {PLANTED}"),
+    ("contract_reference", f"DPA 2026/07 {PLANTED}"),
+    ("api_base", f"{BASE}/{HEX}"),
 ]
 
 
@@ -554,10 +546,16 @@ PASTED = [
         ("label", JWT.replace(".", "=.", 1)),
         ("label", JWE),
         ("api_base", f"{BASE}/{JWT.replace('.', '%2E')}"),
+        # P11 part 2, carried from part 1's confirmation: a token among a reference's words, and an
+        # upper-case hex or base32 token in the path.
+        ("contract_reference", f"DPA 2026/07 {PLANTED}"),
+        ("api_base", f"{BASE}/{HEX.upper()}"),
+        ("api_base", f"{BASE}/JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"),
     ],
     ids=["label-jwt", "label-words-and-jwt", "reference-jwt", "reference-words-and-jwt",
          "path-token", "path-jwt", "path-sk", "path-hex", "label-words-and-token",
-         "label-padded-jwt", "label-jwe", "path-encoded-jwt"],
+         "label-padded-jwt", "label-jwe", "path-encoded-jwt", "reference-words-and-token",
+         "path-upper-hex", "path-base32"],
 )  # fmt: skip
 def test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed(
     client: TestClient, world: World, field: str, value: str
@@ -630,7 +628,7 @@ def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
     send("GET", "/v1/admin/models/history")
     assert send("DELETE", key).status_code == 200
 
-    fragments = (PLANTED, PLANTED[:12], "Q7Z4", "leak")
+    fragments = (PLANTED, PLANTED[:12], "Q7Z4", "leak", "eyJhbGci", HEX)
     seen = {
         "responses": "\n".join(bodies),
         "logs": "\n".join(r.getMessage() + repr(r.args) for r in caplog.records),
@@ -718,9 +716,8 @@ def test_bedrock_s_expired_credentials_are_said_as_expired(
 
 
 def test_an_iam_role_engine_keeps_no_key_anywhere(
-    client_with_identity: TestClient, world_with_identity: World, caplog: pytest.LogCaptureFixture
+    client: TestClient, world: World, caplog: pytest.LogCaptureFixture
 ) -> None:
-    client, world = client_with_identity, world_with_identity
     caplog.set_level(logging.DEBUG)
     body = BEDROCK
     name = str(body["name"])
@@ -751,7 +748,6 @@ def test_an_iam_role_engine_keeps_no_key_anywhere(
     assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
 
 
-@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_bedrock_answers_through_the_gateway_pod_s_role_in_london(
     client: TestClient, world: World
 ) -> None:
@@ -811,7 +807,6 @@ def test_the_command_line_moves_no_key_for_an_iam_role_engine(world: World) -> N
     assert "Q7Z4" not in world.models_file()
 
 
-@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_file(
     tmp_path: Path,
 ) -> None:
@@ -828,7 +823,6 @@ def test_a_declared_iam_role_engine_gets_its_entries_at_start_with_no_models_fil
     assert not (w.folder / "models.yaml").exists()
 
 
-@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_a_keyed_engine_declared_beside_bedrock_is_made_at_start_and_answers_once_its_key_moves(
     tmp_path: Path,
 ) -> None:
@@ -1021,7 +1015,6 @@ def test_the_gateway_workload_carries_no_static_aws_key(declared: list[dict[str,
     assert any(e["name"] == "LITELLM_MASTER_KEY" for e in gateway["env"])
 
 
-@pytest.mark.xfail(strict=True, reason=NO_GATEWAY_IDENTITY)
 def test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key(
     client: TestClient, world: World
 ) -> None:

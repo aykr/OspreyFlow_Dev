@@ -425,7 +425,7 @@ class ModelProviderConfig(BaseModel):
                 "the contract reference may hold letters, digits, spaces and . , ; : / ( ) & ' _ "
                 "+ - only"
             )
-        if _looks_like_a_key(cleaned):
+        if _label_looks_like_a_key(cleaned):
             raise ValueError(
                 "the contract reference looks like a key; it is shown to analysts, so give the "
                 "agreement's name or number in words, and the key with ospreyflow models key"
@@ -499,9 +499,9 @@ def _address_refusal(address: str) -> str | None:
 
 
 def _label_looks_like_a_key(text: str) -> bool:
-    """A label (cloud-platform's alone) shaped like a key, or holding one among its words: each word
-    checked as a whole label is (my own lane review of round 2, item 6). The contract reference
-    keeps `_looks_like_a_key` on every profile, as ADR-136 has it."""
+    """A label or contract reference shaped like a key, or holding one among its words: each word
+    checked as a whole one is (my own lane review of round 2, item 6; the reference too since P11
+    part 2, carried from part 1's confirmation: `DPA 2026/07 <token>` was taken)."""
     return _looks_like_a_key(text) or any(
         _looks_like_a_key(word.strip(".,;:()'\"")) for word in text.split()
     )
@@ -513,11 +513,12 @@ def _a_key_in_the_path(segment: str) -> bool:
     `gpt-4o-mini-2024-07-18`) is lower case, so is taken (the orchestrator's round 2, item d)."""
     if segment.startswith(_KEY_PREFIXES) or _JWT.search(segment):
         return True
-    # One unhyphenated lower-case run of 24 or more mixing letters and digits (a hex subscription
-    # key): a deployment's name is hyphenated words (my own lane review of round 2, item 5).
+    # One unhyphenated run of 24 or more letters and digits in one case, mixing letters and digits
+    # (a hex subscription key in either case, a base32 secret): a deployment's name is hyphenated
+    # words (my own lane review of round 2, item 5; upper case since P11 part 2).
     if (
-        re.fullmatch(r"[a-z0-9]{24,}", segment)
-        and re.search(r"[a-z]", segment)
+        re.fullmatch(r"[a-z0-9]{24,}|[A-Z0-9]{24,}", segment)
+        and re.search(r"[A-Za-z]", segment)
         and re.search(r"[0-9]", segment)
     ):
         return True
