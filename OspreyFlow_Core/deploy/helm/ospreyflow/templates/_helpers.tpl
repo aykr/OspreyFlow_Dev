@@ -195,6 +195,9 @@ securityContext:
 {{- with .w.serviceAccountName }}
 serviceAccountName: {{ . }}
 {{- end }}
+{{- if hasKey .w "automountToken" }}
+automountServiceAccountToken: {{ .w.automountToken }}
+{{- end }}
 {{- with .w.terminationGracePeriodSeconds }}
 terminationGracePeriodSeconds: {{ . }}
 {{- end }}

@@ -150,3 +150,21 @@ def test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api(
         callers = set(rows[store]["fromPods"]) & set(stores)
         assert callers == {"backup", "restore"}, store
     assert [n for n, r in rows.items() if r.get("toKubeApi")] == ["restore"]
+
+
+# ---- the service account's token (Amendment 5 point 24, case-b's P12 part 2) --------------------
+
+
+@pytest.mark.parametrize("name", ["development", "production", "poc", "production-bedrock"])
+def test_only_a_pod_with_an_account_of_its_own_mounts_its_token(name: str) -> None:
+    """Every pod and Job says whether its token is mounted (Kubernetes mounts it by default): only
+    the IRSA pods and, with Bedrock, the gateway, each by an account of its own; none of the others,
+    which call no Kubernetes API."""
+    values = _values(name)
+    pods = [*values["workloads"], *values["jobs"]]
+    for pod in pods:
+        assert pod["automountToken"] is bool(pod.get("serviceAccountName")), pod["name"]
+    mounted = {p["name"] for p in pods if p["automountToken"]}
+    gateway = {"litellm"} if name == "production-bedrock" else set()
+    irsa = {"api", "worker", "report-sync"} & {p["name"] for p in pods}  # the poc's has no sync
+    assert {"api", "worker"} <= irsa and mounted == irsa | gateway

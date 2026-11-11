@@ -754,3 +754,48 @@ def test_a_poc_container_without_a_cpu_limit_is_refused(
     assert standard.shape == "standard"
     _, found = cp.check(standard)
     assert "no-cpu-limit" not in {v.rule for v in found}
+
+
+# ---- the service account's token (Amendment 5 point 24) ----------------------------------------
+
+
+@pytest.mark.parametrize("workload", ["workspace", "ner", "superset", "keycloak", "arcadedb",
+                                      "clickhouse", "litellm"])  # fmt: skip
+def test_a_token_mounted_where_no_kubernetes_api_is_called_is_refused(
+    rendered: tuple[dict[str, Any], str], workload: str
+) -> None:
+    """The shape a render that forgets the setting gives: no `automountToken`, so the chart writes
+    nothing and Kubernetes mounts the token by default. The gateway is here too: without Bedrock it
+    has no account of its own."""
+    values, registry = copy.deepcopy(rendered)
+    pod = next((w for w in values["workloads"] if w["name"] == workload), None)
+    if pod is None:
+        pytest.skip(f"{workload} is not rendered here")
+    assert pod.pop("automountToken") is False
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.where.split("/")[1]) for v in found] == [("token", workload)]
+
+
+def test_a_token_in_a_job_is_refused(rendered: tuple[dict[str, Any], str]) -> None:
+    """A Job by its pod's name (its own name carries a hash of its steps)."""
+    values, registry = copy.deepcopy(rendered)
+    job = values["jobs"][0]
+    job["automountToken"] = True
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.where.split("/")[0]) for v in found] == [("token", "Job")]
+
+
+def test_the_irsa_pods_mount_their_tokens_and_pass(rendered: tuple[dict[str, Any], str]) -> None:
+    values, registry = rendered
+    docs = helm_template(yaml.safe_dump(values))
+    specs = {d["metadata"]["name"]: pod_spec(d) for d in docs if d["kind"] == "Deployment"}
+    for name in ("api", "worker", "report-sync"):
+        assert specs[name]["automountServiceAccountToken"] is True, name
+        assert specs[name]["serviceAccountName"], name
+    assert specs["workspace"]["automountServiceAccountToken"] is False
+    # An IRSA pod that lost its account is refused, though named as one that may hold a token.
+    values = copy.deepcopy(values)
+    api = next(w for w in values["workloads"] if w["name"] == "api")
+    api.pop("serviceAccountName")
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.where) for v in found] == [("token", "Deployment/api")]

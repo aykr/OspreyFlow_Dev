@@ -878,6 +878,9 @@ def render_cloud_platform(
             # Bedrock's calls signed by the gateway's own role, Bedrock's invoke in London alone
             # (P11 part 2, least privilege): never the namespace's, which holds the buckets.
             pod["serviceAccountName"] = gateway_account(platform)
+        # Amendment 5 point 24: the service account's token is mounted only in a pod given an
+        # account of its own (IRSA's web identity); a pod calling no Kubernetes API holds none.
+        pod["automountToken"] = bool(pod.get("serviceAccountName"))
         if pod.get("kind") == "StatefulSet" and not poc:
             pod["disruptionBudget"] = {"maxUnavailable": 1}
         _secrets_it_reads(pod, profile)

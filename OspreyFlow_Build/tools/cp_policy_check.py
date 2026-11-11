@@ -252,6 +252,25 @@ def _whole_secret(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violati
                 yield Violation("whole-secret", at, f"is given {SECRET}'s {ref.get('key')}")
 
 
+#: Amendment 5 point 24: the pods that may mount their service account's token, each only with an
+#: account of its own: IRSA's (the Conduit, the workers, the report sync), the gateway's with
+#: Bedrock, and P9's backup and restore pods (their web identity; a restore also asks the API
+#: whether the writers have stopped). Held here, not read from the render.
+TOKEN_ALLOWED = frozenset({"api", "worker", "report-sync", "litellm",
+                           "backup", "backup-claims", "restore", "restore-claims"})  # fmt: skip
+
+
+def _token(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violation]:
+    """Amendment 5 point 24: a pod whose token is mounted (Kubernetes' default, unless
+    `automountServiceAccountToken` is false) must be one that needs it, with its own account."""
+    if spec.get("automountServiceAccountToken") is False:
+        return
+    pod = _pod_labels(doc).get("app.kubernetes.io/name") or (doc.get("metadata") or {}).get("name")
+    if pod in TOKEN_ALLOWED and spec.get("serviceAccountName"):
+        return
+    yield Violation("token", _name(doc), "mounts its service account's token")
+
+
 def _is_dns(rule: dict[str, Any]) -> bool:
     """A rule to the cluster's DNS alone: a namespace selector and port 53, nothing else."""
     destination = rule.get("destination") or {}
@@ -406,6 +425,7 @@ def check_manifests(
         if spec is not None:
             found += _pod_rules(doc, spec, registry)
             found += _whole_secret(doc, spec)
+            found += _token(doc, spec)
         found += _egress_rules(doc)
         found += _wide_egress(doc)
         found += _wide_ingress(doc)
