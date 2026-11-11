@@ -36,8 +36,11 @@ one first added in *Admin › Models* is refused (decision 4).
    or a Bedrock engine without the role, is refused before the gateway is asked: "On this deployment an engine is
    reached only once the render has made its way out of the namespace (and, for Bedrock, the gateway's own IAM
    role), and it made none for this engine. Declare it in osprey.yaml, re-render, and have the platform team apply
-   the Terraform; then it can be enabled here." Never a silent failure. Every other profile reaches any host, as
-   before.
+   the Terraform; then it can be enabled here." Never a silent failure. **The same holds wherever an engine comes
+   from the models file** (a restore, or a render that dropped one): such an engine is never written into the
+   gateway (its stale entries are deleted), never offered to analysts, refused a key or limits, and marked in
+   *Admin › Models* "not made by the render: <those words>". With no word from the render on `cloud-platform`,
+   nothing is made (fails closed). Every other profile reaches any host, as before.
 5. **The words name the gateway's own IAM role**, not the namespace's: *Admin › Models*, its connection test's
    words (`key_refused` sends the platform team to `terraform/gateway.tf`, not the bucket role), the command line,
    the schema's descriptions and the administration guide's appendix (`p11p2/docs-admin-guide-P11p2.diff`).
@@ -47,7 +50,8 @@ one first added in *Admin › Models* is refused (decision 4).
 
 **Tests** (`p11p2/RED_RECORD.md`; the W plants in `p11/plant.py`): `tests/harness/test_cloud_platform_gateway.py`
 (the gateway by default, no host without an engine, the gateway's account only with Bedrock, the role's two
-documents compared block by block and that comparison shown red by eighteen planted shapes, the namespace's role
+documents compared block by block and that comparison shown red by eighteen planted shapes, no other Terraform
+file naming the gateway's role, policy or account (three planted strays), the namespace's role
 unchanged, the accounts kept apart, the refusal without one), P7's two cases changed in
 `test_cloud_platform_render.py`, `test_rendered_terraform.py`'s `production-bedrock` shape (OpenTofu's fmt, init and
 validate on `gateway.tf`; with cp-policy-check, on the new `production-bedrock` fixture), and
