@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.70** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.71** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.71 | 2026-11-11 | The commands table: `ospreyflow images push`, for the `cloud-platform` profile. Appendix A: the `cloud-platform` profile and its `cloud_platform` settings. |
 | 1.70 | 2026-11-11 | §13's synced-folder warning names a Windows home folder under WSL's `/mnt/c/` in words. |
 | 1.69 | 2026-11-10 | Describes v0.5.0. No change to its content. |
 | 1.68 | 2026-11-10 | Rules' L2.10 and platform-b's P6 as built, no longer *coming*. §9.8: a rule's alerts routed to one team (*‹Team› only*), read by its members and the home case's Authors, enforced in the query; the lead's or cover's *Give to* and *Suppress until…*. §10a: the case map's *Gazetteers in this case's dataset*, with *Add* and *Remove* for `run_pipelines` |
