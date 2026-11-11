@@ -992,6 +992,7 @@ def main(argv: list[str] | None = None) -> int:
     analytics = commands.add_parser("restore-analytics", help="ClickHouse's RESTORE from a set")
     analytics.add_argument("--set", default="latest")
     commands.add_parser("backup-claims", help="the claims run: each claim into its slot's set")
+    commands.add_parser("writers", help="a restore's guard: refuses while anything writes")
     verify = commands.add_parser(
         "verify", help="a restore's first step: nothing writing, every part checked"
     )
@@ -1017,6 +1018,9 @@ def main(argv: list[str] | None = None) -> int:
             set_id = latest(bucket) if args.set == "latest" else args.set
             path = fetch_graph(bucket, set_id, args.to)
             print(f"restore: set {set_id}'s ArcadeDB zip at {path}, checked against its manifest")
+        elif args.command == "writers":
+            writers_stopped(settings)
+            print("restore: nothing writing")
         elif args.command == "verify":
             set_id = latest(bucket) if args.set == "latest" else args.set
             writers_stopped(settings)

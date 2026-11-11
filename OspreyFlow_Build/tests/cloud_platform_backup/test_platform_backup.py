@@ -133,7 +133,7 @@ def test_a_bucket_policy_refusing_the_role_refuses_the_backup(aws: Running, run:
     policy["Statement"][-1]["Condition"]["ArnNotEquals"]["aws:PrincipalArn"] = [ROLE_ARN + "-other"]
     with pytest.raises(pb.BackupRefused) as refused:
         pb.take(settings, bucket, stores)
-    assert refused.value.store == "backup" and "read set" in refused.value.step
+    assert refused.value.store == "arcadedb" and "AccessDenied" in refused.value.reason
     assert "AccessDenied" in refused.value.reason
 
 

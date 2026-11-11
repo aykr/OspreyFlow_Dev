@@ -197,12 +197,19 @@ def test_another_key_the_role_may_use_is_refused_by_the_bucket_policy_alone(aws:
 
 
 def test_the_conduits_role_is_refused_the_backups_bucket(aws: Running) -> None:
-    """Its own policy allows every S3 action; the bucket's denies it all the same."""
+    """Its own policy allows every S3 action; the bucket's denies it every object and version all the
+    same. Listing is not denied (HeadBucket needs it: the Terraform's read, the decommission's step
+    8), and names sets without holding any."""
+    aws.s3().put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"zip")
     aws.token = (mint_token(ISSUER_SECRET, sub="system:serviceaccount:ospreyflow-dev:ospreyflow"))
     conduit = aws.s3(role=CONDUIT_ROLE_ARN)
-    with pytest.raises(ClientError) as refused:
-        conduit.list_objects_v2(Bucket=BUCKET)
-    assert _code(refused) == "AccessDenied"
+    conduit.list_objects_v2(Bucket=BUCKET)
+    for refused_call in (lambda: conduit.get_object(Bucket=BUCKET, Key="sets/a/arcadedb/x"),
+                         lambda: conduit.delete_object(Bucket=BUCKET, Key="sets/a/arcadedb/x")):  # fmt: skip
+        with pytest.raises(ClientError) as refused:
+            refused_call()
+        assert _code(refused) == "AccessDenied"
+    assert aws.stand_in.read(BUCKET, "sets/a/arcadedb/x") == b"zip"
     with pytest.raises(ClientError) as refused:
         conduit.put_object(Bucket=BUCKET, Key="sets/a/arcadedb/x", Body=b"x")
     assert _code(refused) == "AccessDenied"

@@ -142,8 +142,13 @@ def test_the_keys_own_policy_lets_the_account_administer_the_roles_use_and_nobod
     by_sid = {s["Sid"]: s for s in policy["Statement"]}
     administer = by_sid["Administer"]
     assert administer["Principal"] == {"AWS": ["arn:aws:iam::1:root"]}
-    assert not [a for a in administer["Action"] if a in ("kms:*", "kms:Decrypt", "kms:Encrypt", "kms:ScheduleKeyDeletion")
-                or a.startswith(("kms:GenerateDataKey", "kms:ReEncrypt", "kms:Schedule"))]  # fmt: skip
+    # By action, not by name: no wildcard that reaches use or a grant (kms:Create* holds CreateGrant).
+    use = ("kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey", "kms:ReEncryptFrom", "kms:CreateGrant",
+           "kms:ScheduleKeyDeletion")  # fmt: skip
+    import fnmatch
+
+    assert not [a for a in administer["Action"] for u in use if fnmatch.fnmatchcase(u, a.replace("kms:", "kms:"))]
+    assert {"kms:CreateAlias", "kms:DeleteAlias", "kms:PutKeyPolicy"} <= set(administer["Action"])
     use = by_sid["UseThroughS3"]
     assert use["Principal"] == {"AWS": roles} and use["Condition"]["StringEquals"]["kms:ViaService"] == "s3.eu-west-2.amazonaws.com"
     deny = by_sid["NeverScheduledForDeletion"]
@@ -230,7 +235,9 @@ def test_the_bucket_is_versioned_so_an_overwrite_erases_nothing() -> None:
     text = rendered.terraform()
     versioning = re.search(r'resource "aws_s3_bucket_versioning" "backups" \{(.*?)\n\}', text, re.DOTALL)
     assert versioning is not None and re.search(r'status\s*=\s*"Enabled"', versioning.group(1))
-    assert "DeleteObjectVersion" not in text
+    for document in ("backup_policy", "backup_clickhouse_policy"):  # the roles': no version is theirs to remove
+        role = re.search(rf'data "aws_iam_policy_document" "{document}" \{{(.*?)\n\}}', text, re.DOTALL)
+        assert role is not None and "Version" not in role.group(1).replace('"Version"', "")
 
 
 def test_the_sets_expire_by_the_buckets_lifecycle_rule() -> None:
@@ -241,7 +248,12 @@ def test_the_sets_expire_by_the_buckets_lifecycle_rule() -> None:
     # The current versions' own expiry, not the noncurrent one's `noncurrent_days` (which this once
     # matched alone, so the rule's expiry could go and the test stay green).
     assert re.search(rf"expiration \{{\s*days\s*=\s*{backups.EXPIRE_DAYS}\s*\}}", rule.group(1))
-    assert re.search(rf"noncurrent_days\s*=\s*{backups.EXPIRE_DAYS}\b", rule.group(1))
+    # The retention is the total (the orchestrator's ruling): an overwritten version is kept a
+    # short window to recover it, not a second retention; expired delete markers are removed.
+    assert re.search(rf"noncurrent_days\s*=\s*{backups.NONCURRENT_DAYS}\b", rule.group(1))
+    assert backups.NONCURRENT_DAYS < backups.EXPIRE_DAYS
+    markers = re.search(r'id\s*=\s*"remove-expired-markers"(.*?)\n  \}', text, re.DOTALL)
+    assert markers is not None and re.search(r"expired_object_delete_marker\s*=\s*true", markers.group(1))
     assert backups.EXPIRE_DAYS >= 30, "a month of failed runs before the last good set expires"
 
 

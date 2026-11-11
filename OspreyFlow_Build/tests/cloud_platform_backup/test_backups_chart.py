@@ -80,7 +80,7 @@ def test_the_restore_job_is_rendered_only_for_a_named_set_and_in_order() -> None
     job = _named(docs, "Job", "ospreyflow-restore-20261111t021500z")
     pod = pod_spec(job)
     assert pod is not None
-    assert [c["name"] for c in pod["initContainers"]] == ["verify", "fetch-graph", "restore-graph"]
+    assert [c["name"] for c in pod["initContainers"]] == ["verify", "fetch-graph", "writers", "restore-graph"]
     env = {e["name"]: e.get("value") for e in pod["initContainers"][0]["env"]}
     assert env["OSPREY_BACKUP_WRITERS"] == "arcadedb,api,worker,report-sync"
     assert pod["containers"][0]["name"] == "restore-analytics"
@@ -237,3 +237,30 @@ def test_a_refused_run_is_never_retried() -> None:
     docs = _docs(_with_claims(rendered.values()))
     for name in ("ospreyflow-backup", "ospreyflow-backup-claims"):
         assert _exactly(docs, "CronJob", name)["spec"]["jobTemplate"]["spec"]["backoffLimit"] == 0
+
+
+def test_a_restore_beyond_one_copy_of_each_store_is_refused_naming_p9b() -> None:
+    """The orchestrator's round 2, item 13: the restore is proven for one ArcadeDB and one ClickHouse
+    copy; the production shape's restore is refused by the render, in words naming P9b."""
+    values = rendered.values("production")
+    values["backups"]["restore"] = {"set": "20261111T021500Z"}
+    with pytest.raises(helm_chart.HelmFailed, match="P9b"):
+        _docs(values)
+    assert _named(_docs(rendered.values("production")), "CronJob", "ospreyflow-backup"), "the backups still run"
+
+
+def test_the_restore_needs_its_writers_named() -> None:
+    values = rendered.values()
+    del values["backups"]["writers"]
+    with pytest.raises(helm_chart.HelmFailed, match="backups.writers"):
+        _docs(values)
+
+
+def test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_replaced() -> None:
+    values = rendered.values()
+    values["backups"]["restore"] = {"set": "20261111T021500Z"}
+    pod = pod_spec(_named(_docs(values), "Job", "ospreyflow-restore-20261111t021500z"))
+    assert pod is not None
+    names = [c["name"] for c in pod["initContainers"]]
+    assert names[names.index("restore-graph") - 1] == "writers"
+    assert pod["initContainers"][names.index("writers")]["command"][-1] == "writers"

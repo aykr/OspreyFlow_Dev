@@ -51,13 +51,15 @@ CLICKHOUSE_BACKUP_PASSWORD = "OSPREY_CLICKHOUSE_BACKUP_PASSWORD"
 BACKUP_SECRET = "ospreyflow-clickhouse-backup"
 BACKUP_SECRET_KEY = "password"
 CLICKHOUSE_USERS_FILE = "clickhouse-backup-users.xml"
-#: Daily at 02:15 UTC; each set expires by the bucket's lifecycle rule after EXPIRE_DAYS, and an
-#: object overwritten keeps its previous version for as long (the bucket is versioned), never by
-#: a role, which can erase no set. Thirty-five days: a month of failed runs before the last good
-#: set goes, for the alert (P9b) to be heard. The client's retention is to be agreed; a proposal,
-#: not a measurement.
+#: Daily at 02:15 UTC. **The retention is the total** (the orchestrator's ruling): a set's objects
+#: expire by the bucket's lifecycle rule EXPIRE_DAYS after they were written; an object overwritten
+#: keeps its previous version for NONCURRENT_DAYS more, a window to recover an overwrite, not a
+#: second retention; expired delete markers are removed. Thirty-five days: a month of failed runs
+#: before the last good set goes, for the alert (P9b) to be heard. The client's retention is to be
+#: agreed; a proposal, not a measurement.
 SCHEDULE = "15 2 * * *"
 EXPIRE_DAYS = 35
+NONCURRENT_DAYS = 7
 #: The backups bucket's name after the deployment's prefix (`<prefix>backups`).
 BUCKET_SUFFIX = "backups"
 #: What a decommission keeps (the orchestrator's ruling of 11 November 2026): the bucket, its
@@ -89,11 +91,22 @@ OBJECT_ACTIONS = ["s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload"]
 CLICKHOUSE_LOCK = "sets/*/clickhouse/.lock"
 BUCKET_ACTIONS = ["s3:ListBucket", "s3:GetBucketLocation"]
 KMS_ACTIONS = ["kms:GenerateDataKey", "kms:Decrypt"]
-#: The key's administrators' actions (the account's): never its use, never its deletion.
+#: The key's administrators' actions (the account's): its alias, its rotation, its tags, reading it
+#: and its policy (kms:PutKeyPolicy, which the Terraform applies). Not its use, and not
+#: kms:CreateGrant (a grant is use), so no routine path uses the key but the two roles'. An
+#: administrator can still rewrite this policy (kms:PutKeyPolicy): the Deny below guards against
+#: accident, not against them.
 KEY_ADMIN_ACTIONS = [
-    "kms:Create*", "kms:Describe*", "kms:Enable*", "kms:List*", "kms:Put*", "kms:Update*",
-    "kms:Revoke*", "kms:Disable*", "kms:Get*", "kms:TagResource", "kms:UntagResource",
-    "kms:CancelKeyDeletion",
+    "kms:CreateAlias", "kms:DeleteAlias", "kms:UpdateAlias", "kms:Describe*", "kms:Enable*",
+    "kms:List*", "kms:PutKeyPolicy", "kms:Update*", "kms:Revoke*", "kms:Disable*", "kms:Get*",
+    "kms:TagResource", "kms:UntagResource", "kms:CancelKeyDeletion",
+]  # fmt: skip
+#: Every object action the bucket's policy refuses to all but the two roles: reading, writing and
+#: removing an object or any version of it. Not s3:ListBucket, which HeadBucket needs (the
+#: Terraform's read of the bucket, the decommission's step 8): a listing names sets, holds none.
+OBJECT_DENIED = [
+    "s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:PutObjectAcl",
+    "s3:PutObjectVersionAcl", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:RestoreObject",
 ]  # fmt: skip
 
 
@@ -166,20 +179,21 @@ def bucket_policy(bucket_arn: str, key_arn: str, role_arns: list[str]) -> dict[s
             {"Sid": "NoKeyNamed", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
              "Resource": [f"{bucket_arn}/*"],
              "Condition": {"StringEquals": {sse: "aws:kms"}, "Null": {key_header: "true"}}},
-            # The objects the backup roles' alone: the Conduit's role, which holds every other
-            # bucket, is refused here. The bucket's own settings stay the Terraform's to change.
-            {"Sid": "BackupRolesOnly", "Effect": "Deny", "Principal": "*",
-             "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
-             "Resource": every, "Condition": {"ArnNotEquals": {"aws:PrincipalArn": role_arns}}},
+            # Every object and version the backup roles' alone: the Conduit's role, which holds
+            # every other bucket, and any principal of the account are refused them. The bucket's
+            # own settings stay the Terraform's (the account's administrators') to change.
+            {"Sid": "BackupRolesOnly", "Effect": "Deny", "Principal": "*", "Action": OBJECT_DENIED,
+             "Resource": [f"{bucket_arn}/*"],
+             "Condition": {"ArnNotEquals": {"aws:PrincipalArn": role_arns}}},
         ],
     }  # fmt: skip
 
 
 def key_policy(account_root: str, role_arns: list[str], region: str) -> dict[str, Any]:
     """The backups key's own policy (the orchestrator's ruling 7): the account's administrators
-    administer it, never use it; the backup roles use it, through S3 in the region alone; **nobody
-    schedules its deletion** (the decommission's section 9 replaces this policy first, the client's
-    decision when the retention ends)."""
+    administer it (KEY_ADMIN_ACTIONS: no use of it, no grant); the backup roles use it, through S3
+    in the region alone; its deletion is denied to all, against accident (an administrator who
+    rewrites the policy can lift that; the decommission's section 9 does, the client's decision)."""
     return {
         "Version": "2012-10-17",
         "Statement": [
@@ -188,6 +202,8 @@ def key_policy(account_root: str, role_arns: list[str], region: str) -> dict[str
             {"Sid": "UseThroughS3", "Effect": "Allow", "Principal": {"AWS": role_arns},
              "Action": [*KMS_ACTIONS, "kms:DescribeKey"], "Resource": ["*"],
              "Condition": _via_s3(region)},
+            # Against accident: an administrator who rewrites this policy can remove it, and the
+            # decommission's section 9 does so, the client's decision when the retention ends.
             {"Sid": "NeverScheduledForDeletion", "Effect": "Deny", "Principal": "*",
              "Action": ["kms:ScheduleKeyDeletion"], "Resource": ["*"]},
         ],
@@ -321,6 +337,10 @@ def backups_values(
         "env": env,
         # The pods a restore refuses to run beside (the orchestrator's ruling 4): every writer.
         "writers": ["arcadedb", "api", "worker", "report-sync"],
+        # The restore is proven for one copy of each store (Amendment 7); beyond it the render
+        # refuses the restore's Jobs, in words naming P9b (the orchestrator's round 2, item 13).
+        "restorable": int(arcadedb.get("replicas", 1)) == 1
+        and int(clickhouse.get("replicas", 1)) == 1,
         "arcadedb": {
             "pod": "arcadedb-0",
             "backupsClaim": f"{claim['name']}-arcadedb-0",
@@ -488,7 +508,13 @@ def backups_terraform(config: OspreyConfig, platform: PlatformSettings) -> str:
                     ("status", _q("Enabled")),
                     ("filter", [("prefix", _q("sets/"))]),
                     ("expiration", [("days", str(EXPIRE_DAYS))]),
-                    ("noncurrent_version_expiration", [("noncurrent_days", str(EXPIRE_DAYS))]),
+                    ("noncurrent_version_expiration", [("noncurrent_days", str(NONCURRENT_DAYS))]),
+                ]),
+                ("rule", [
+                    ("id", _q("remove-expired-markers")),
+                    ("status", _q("Enabled")),
+                    ("filter", [("prefix", _q("sets/"))]),
+                    ("expiration", [("expired_object_delete_marker", "true")]),
                 ]),
             ]),
             ('data "aws_iam_policy_document" "backups_bucket"',
