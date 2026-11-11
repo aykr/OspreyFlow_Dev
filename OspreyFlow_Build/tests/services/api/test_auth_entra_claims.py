@@ -1044,6 +1044,17 @@ def test_the_synchronous_path_refuses_an_entra_mapping(keypair, jwks_url) -> Non
         real.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
 
 
+def test_the_construction_path_refuses_an_entra_principal_without_its_stored_person() -> None:
+    """The second guard behind `resolve`'s: built from claims alone, an Entra principal would have
+    no roles read for it; refused, never built with none (rule 15: `resolve`'s case alone passes with
+    either guard removed)."""
+    from principal_auth import principal_from_claims
+
+    claims = {**entra_claims(**_GOOD), "sub": "s"}
+    with pytest.raises(PrincipalLookupUnavailable):
+        principal_from_claims(claims, BY_EXTENSION)
+
+
 def test_an_entra_mapping_needs_a_people_store_and_keycloak_refuses_one(jwks_url) -> None:
     with pytest.raises(ValueError, match="people store"):
         PrincipalResolver(_entra_config(jwks_url), claim_mapping=BY_EXTENSION)
