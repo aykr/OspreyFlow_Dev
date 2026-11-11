@@ -20,7 +20,9 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
 - 07:30–07:55 Glass: the wizard's S3 folder and format and Athena's table or named query (Studio's, committed);
   Admin › Connections' two kinds (no key field; the cloud role's words read with Region). Vitest, tsc, ESLint
   clean; keyboard (slot 11) 58/58 in `admin.spec.ts` and `sources-connectors.spec.ts`: four new tests proving
-  five registry ids, one plant red; axe on the four new states in dark, light and GOV.UK, 20/20.
+  five registry ids, one plant red; axe on the four new states in dark, light and GOV.UK, 20/20. *(Corrected in
+  round 1, item 8: four states in three themes are 12 scans, not 20, and that run's output was not kept. Round
+  1's gate re-runs them and keeps it: see below.)*
 - 08:05 Own lane-reviewer on the branch: 18 findings, "merge: no". Fixed in this round:
   1. **uv.lock** does not carry botocore for the Conduit (only through the `extraction` extra), so the image's
      `uv sync --frozen` would lack it and the Conduit would not start. The brief says the lock is re-made at
@@ -59,6 +61,44 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
 - **Built at b29dba44.** Safe point: waiting for the orchestrator's two review rounds (an access step). No
   rebase, no further commit to code until then; only this record follows.
 
+## Round 1 (the orchestrator's review of b29dba44: not mergeable; 11 November, afternoon)
+
+- Session `studio-b-d5` (pid 1705532, started by the orchestrator's runner). Checked first (rule 14): no other
+  agent in this worktree (`ListAgents`: one peer, platform-b, in its own; `pgrep`), no studio-b container running.
+  Local `main` still 459ae1d4, the branch's base, so no rebase was needed.
+- **Item 1, the blocker.** The five shapes written as cases first and run against b29dba44: red, with 11 siblings
+  that also failed open and two second statements hidden behind a comment's marker in a string
+  (`l1.9r1/red_athena_at_b29dba44.txt`, 27 failed). The token scan replaced by a recursive-descent reading of
+  the statement (`athena_connector._Relations`): every relation in every FROM list at every depth, a shape it
+  does not follow refused (fails closed), comments and strings read in one pass, a quoted name never a keyword.
+  43 more shapes beyond the suite (`l1.9r1/probe_checker.txt`): none passes.
+- **Item 2, the lock.** `uv lock` with this machine's uv (0.13.7) rewrote all 5,294 lines into a newer format with
+  no version changed, so the lock has instead the two lines `uv lock` itself adds (botocore in `ospreyflow`'s
+  dependencies and requires-dist), in its own format. `uv lock --check`: red on b29dba44's lock, green on this
+  one. Own commit (ad8fefff). This worktree's `.venv` synced from it with `uv sync --frozen` (botocore and jmespath
+  reinstalled from the lock); the gates' offline host syncs its copy with `uv sync --frozen` before every run.
+- **Item 3.** A result naming a column twice, and a row with more or fewer values than its columns, refused.
+- **Items 4 and 5.** Both plants run against both access cases (`L1.9_RED_RECORD.md`, round 1); the source case's
+  own guards planted too. The two `in (403, 404)` checks pinned whole to a nonexistent dataset's and source's reply.
+- **Item 6.** `test_cloud_clients.py` builds both clients as a deployment does: pyarrow's arguments by its own
+  record of them, botocore's endpoint, addressing and the key each request is signed with (the environment's,
+  so none given), against a recorded S3 (`s3_fixture.py`) and the recorded Athena.
+- **Item 7.** The Athena fixture checks the execution's catalog, resolves every table after FROM or JOIN and an
+  unqualified one against the execution's database. The live file gains the unparseable-query and
+  missing-catalog cases (skipped without Athena); FAILED versus InvalidRequestException recorded as part 2's.
+- **Item 8.** The listing stops at 1,001 objects (`CloudS3Store`: botocore lists a page at a time, pyarrow opens),
+  proved against the recorded S3 and SeaweedFS. Both clients refuse to send to another host than the egress
+  check's (`only_to`): added while wording S3's region refusals, since botocore carries an S3 region redirector.
+  Whether it would follow `PermanentRedirect` with the endpoint named is not shown here (against the recording,
+  it did not); the guard makes that moot, and its own test plants a request moved to another region's host. The Catalog field added to the admin form's diff (applied for its tests, then restored
+  by name). The bucket wording corrected in the draft and the friction row; SeaweedFS's missing region refusals
+  recorded as part 2's check; RED_RECORD's counts corrected.
+- **Item 9.** The draft retitled ADR-140, Amendment 20, with items 1, 3 and 7 folded in.
+- SeaweedFS (`studio-b-seaweedfs-3`, 127.0.0.1:58335, this lane's own, no lease): 7 passed, the live listing plant
+  red; stopped, and removed with the two stopped ones from the first round.
+- Not run: `graphify update .` (outside this session's permitted commands), and a leased live run
+  (`test_route_rights.py`): the round adds no route, and item 10 names the offline gates and the browser ones.
+
 ## Decisions taken (the owner may overrule)
 
 1. **No credential field on either kind.** Options: (a) none, the deployment's own cloud identity (pyarrow's
@@ -88,12 +128,25 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
 7. **Admin › Connections' form goes as a diff** to the admin lane (the ownership map), not committed; until it
    lands, S3 and Athena connections are named through the route alone (`POST /v1/admin/connections`).
 
+8. **Fail closed over a full grammar** (round 1, item 1). Options: (a) a complete Trino SQL parser (a new
+   dependency, such as sqlglot, which parses Trino's dialect); (b) a recursive-descent reading of the relations
+   alone, refusing what it does not follow. Chose (b): no new dependency for an access check whose job is to be
+   small enough to read whole, and a parser built to accept a dialect fails open on what it does not know, where
+   this one refuses it. A rare legitimate shape (a parenthesised subquery joined inside parentheses,
+   MATCH_RECOGNIZE) is refused and saved more plainly.
+9. **The S3 object cap counts every object under the folder** (round 1, item 8), of any format, hidden or not:
+   the listing has to stop before the reader can choose among the objects. A folder of 600 CSV and 600 Parquet
+   objects is now refused where it was read. The alternative, counting only the chosen objects, needs the whole
+   listing first, which is what the item forbids.
+10. **Both cloud clients refuse to send to another host** (`only_to`; added in round 1). Not asked by the review,
+    but any request moved off the named host (a region redirect, an endpoint resolver) would reach a host the
+    egress allow-list does not name (ADR-148 decision 7); refusing costs nothing for a correctly named region.
+
 ## Questions held and requests (for the orchestrator)
 
-1. **An ADR-140 amendment number** for L1.9 part 1 (the row names "ADR-140 amendment (to reserve)"). The text
-   is drafted in `L1.9_ADR-140_amendment_draft.md`; 09 §2 carries the as-built prose meanwhile.
-2. **Re-make `uv.lock` at merge** (`uv lock`) so `ospreyflow` depends on botocore directly; without it the
-   Conduit's image lacks botocore and the Conduit fails to start. A shared commit, not this lane's.
+1. ~~An ADR-140 amendment number.~~ Amendment 20, reserved (round 1, item 9); the draft is retitled.
+2. **`uv.lock`**: botocore is in this branch's lock (ad8fefff, round 1, item 2); the merger regenerates it at
+   merge as planned.
 3. **Apply at merge:** `L1.9_admin_connections.diff` (admin lane's files; with the ADMIN ids of
    `L1.9_action_registry.diff`), `L1.9_action_registry.diff`, `L1.9_every_harness.diff`, `L1.9_ci.diff`.
 4. Anyone may `docker rm studio-b-seaweedfs studio-b-seaweedfs-2` (both stopped, synthetic objects only).

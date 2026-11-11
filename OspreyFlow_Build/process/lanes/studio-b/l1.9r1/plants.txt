@@ -1,0 +1,131 @@
+# plants at 1ce97251
+checker-at-b29dba44: RED — the checker as the review found it, against this round's cases (services/ingest/connectors/athena_connector.py) — 23 failed, 36 passed in 5.61s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '--', booking_id FROM finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '/*' AS a FROM finance.ledger WHERE '*/' = '*/']
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (SELECT 1) t, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (VALUES (1), (2)) AS v(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (visits.many m JOIN visits.visit_bookings b ON true), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many "where", finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1]) AS t(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN visits.visit_bookings, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many FOR TIMESTAMP AS OF current_timestamp, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many INTERSECT SELECT * FROM (SELECT 1) t, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many TABLESAMPLE BERNOULLI (50), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON (m.notes = b.notes), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON true, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b USING (booking_id), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many, LATERAL (SELECT 1) l, finance.ledger]
+    failed: test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '--' AS a FROM visits.many; DROP TABLE visits.visit_bookings]
+    failed: test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '/*' AS a FROM visits.many; DROP TABLE visits.visit_bookings; SELECT '*/']
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many WHERE true, finance.ledger]
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m JOIN visits.visit_bookings b, finance.ledger]
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m foo, finance.ledger]
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many, (finance.ledger)]
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT FROM WHERE visits.visit_bookings]
+comma-unchecked: RED — a FROM list's comma not followed by a checked relation (the review's shape) (services/ingest/connectors/athena_connector.py) — 20 failed, 21 passed in 3.32s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (SELECT 1) t, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (VALUES (1), (2)) AS v(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (visits.many m JOIN visits.visit_bookings b ON true), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many "where", finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many AS m, finance.ledger AS l]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1]) AS t(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN visits.visit_bookings, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many FOR TIMESTAMP AS OF current_timestamp, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many INTERSECT SELECT * FROM (SELECT 1) t, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many TABLESAMPLE BERNOULLI (50), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many UNION SELECT * FROM visits.many, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON (m.notes = b.notes), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON true, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b USING (booking_id), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m, LATERAL (SELECT * FROM finance.ledger) l]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m, UNNEST((SELECT array_agg(entry) FROM finance.ledger)) AS t(e)]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many, LATERAL (SELECT 1) l, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[WITH x AS (SELECT 1) SELECT * FROM x, finance.ledger]
+subquery-relation-returns: RED — after a subquery in FROM, the rest passed over (the review's case 1) (services/ingest/connectors/athena_connector.py) — 3 failed, 38 passed in 3.40s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (SELECT 1) t, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM (VALUES (1), (2)) AS v(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many INTERSECT SELECT * FROM (SELECT 1) t, finance.ledger]
+cross-join-swallows: RED — after a CROSS JOIN, the rest passed over (case 2) (services/ingest/connectors/athena_connector.py) — 3 failed, 38 passed in 3.65s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1]) AS t(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN visits.visit_bookings, finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o), finance.ledger]
+on-swallows-commas: RED — a join's ON condition taking the comma after it as its own (case 3) (services/ingest/connectors/athena_connector.py) — 2 failed, 39 passed in 4.75s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON (m.notes = b.notes), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m JOIN visits.visit_bookings b ON true, finance.ledger]
+unnest-swallows: RED — after UNNEST(…), the rest passed over (case 4) (services/ingest/connectors/athena_connector.py) — 2 failed, 39 passed in 6.05s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many CROSS JOIN UNNEST(ARRAY[1]) AS t(n), finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many m CROSS JOIN UNNEST(ARRAY[1]) WITH ORDINALITY AS t(n, o), finance.ledger]
+sample-swallows: RED — TABLESAMPLE's argument scanned together with what follows it (case 5) (services/ingest/connectors/athena_connector.py) — 1 failed, 40 passed in 4.32s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many TABLESAMPLE BERNOULLI (50), finance.ledger]
+select-end-open: NOT RED — what follows a SELECT's clauses, unaccounted for, passed (failing open); NOT RED alone, by design: the statement's own end check refuses the same shapes (the next plant removes both) (services/ingest/connectors/athena_connector.py) — 7 passed in 1.13s
+fail-closed-off: RED — both end checks off: a shape the checker does not follow passed over (services/ingest/connectors/athena_connector.py) — 3 failed, 4 passed in 1.57s
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many MATCH_RECOGNIZE (MEASURES 1 AS x PATTERN (a) DEFINE a AS true), finance.ledger]
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many WHERE true, finance.ledger]
+    failed: test_a_named_query_the_checker_cannot_follow_is_refused[SELECT * FROM visits.many m foo, finance.ledger]
+quoted-is-keyword: RED — a quoted name read as a keyword (`"where"` as WHERE) (services/ingest/connectors/athena_connector.py) — 1 failed, 40 passed in 5.09s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT * FROM visits.many "where", finance.ledger]
+comments-first: RED — comments stripped before strings are read (b29dba44's order) (services/ingest/connectors/athena_connector.py) — 4 failed, 48 passed in 6.25s
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '--', booking_id FROM finance.ledger]
+    failed: test_a_named_query_naming_a_table_outside_the_connection_is_never_sent[SELECT '/*' AS a FROM finance.ledger WHERE '*/' = '*/']
+    failed: test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '--' AS a FROM visits.many; DROP TABLE visits.visit_bookings]
+    failed: test_a_named_query_that_is_not_one_select_is_never_sent[SELECT '/*' AS a FROM visits.many; DROP TABLE visits.visit_bookings; SELECT '*/']
+duplicate-columns: RED — a result naming a column twice kept, the second value in both cells (services/ingest/connectors/athena_connector.py) — 1 failed in 0.72s
+    failed: test_a_result_naming_a_column_twice_is_refused_never_one_value_written_in_both
+surplus-values: RED — a row's surplus values dropped silently (b29dba44's zip) (services/ingest/connectors/athena_connector.py) — 1 failed in 0.74s
+    failed: test_a_row_with_more_values_than_columns_is_refused_never_cut
+fixture-at-b29dba44: RED — the fixture as the review found it: catalog ignored, first FROM only, unqualified asserted (../OspreyFlow_Build/tests/connectors/athena_fixture.py) — 3 failed in 0.90s
+    failed: test_a_catalog_athena_does_not_hold_is_refused_in_words
+    failed: test_a_join_to_a_table_athena_does_not_hold_is_refused_in_words
+    failed: test_an_unqualified_table_is_read_from_the_query_s_own_database
+list-whole: RED — the folder listed whole, then counted (pyarrow's listing, as at b29dba44) (services/api/connector_reads.py) — 1 failed in 1.29s
+    failed: test_a_listing_stops_at_the_object_cap_and_one
+only-to-off: RED — a request bound for another host sent (services/api/connector_reads.py) — 2 failed in 0.91s
+    failed: test_a_request_bound_for_another_host_is_never_sent[athena]
+    failed: test_a_request_bound_for_another_host_is_never_sent[s3]
+path-style: RED — the listing client addressing the bucket by path, at s3.<region> (services/api/connector_reads.py) — 1 failed in 0.94s
+    failed: test_the_s3_store_reaches_the_bucket_s_own_host_virtual_hosted_with_no_key
+s3-endpoint-from-env: RED — the listing client's endpoint left to the environment (AWS_ENDPOINT_URL) (services/api/connector_reads.py) — 1 failed in 0.88s
+    failed: test_the_s3_store_reaches_the_bucket_s_own_host_virtual_hosted_with_no_key
+s3-fs-key: RED — pyarrow's filesystem given a key (services/api/connector_reads.py) — 1 failed in 0.86s
+    failed: test_the_s3_store_reaches_the_bucket_s_own_host_virtual_hosted_with_no_key
+s3-fs-path-style: RED — pyarrow's filesystem addressing the bucket by path (services/api/connector_reads.py) — 1 failed in 0.90s
+    failed: test_the_s3_store_reaches_the_bucket_s_own_host_virtual_hosted_with_no_key
+athena-endpoint-from-env: RED — the Athena client's endpoint left to the environment (services/api/connector_reads.py) — 1 failed in 0.90s
+    failed: test_the_athena_client_reaches_athena_s_own_host_with_no_key
+athena-key: RED — the Athena client given a key (services/api/connector_reads.py) — 1 failed in 0.82s
+    failed: test_the_athena_client_reaches_athena_s_own_host_with_no_key
+region-words: RED — a bucket in another region not told so (services/ingest/connectors/s3_connector.py) — 2 failed, 2 passed in 1.08s
+    failed: test_s3_s_refusals_are_refused_in_words_and_never_followed[moved-the bucket is in another region than the connection names: correct its Region in Admin \u203a Connections; nothing was read]
+    failed: test_s3_s_refusals_are_refused_in_words_and_never_followed[wrong_region-the bucket is in another region than the connection names: correct its Region in Admin \u203a Connections; nothing was read]
+unbound-cloud: RED — refuse_unbound skipping s3 and athena (round 1's plant, now on every case) (services/api/connector_reads.py) — 4 failed, 2 passed, 1 warning in 3.56s
+    failed: test_another_dataset_s_author_cannot_read_through_it[athena]
+    failed: test_another_dataset_s_author_cannot_read_through_it[s3]
+    failed: test_refresh_now_through_a_rebound_connection_reads_nothing[athena]
+    failed: test_refresh_now_through_a_rebound_connection_reads_nothing[s3]
+route-unbound-removed: RED — the register route's own refuse_unbound (app.py:11526) removed (services/api/app.py) — 2 failed, 4 passed, 3 warnings in 3.37s
+    failed: test_another_dataset_s_author_cannot_read_through_it[athena]
+    failed: test_another_dataset_s_author_cannot_read_through_it[s3]
+store-ignores-dataset: RED — a source found by id alone, not within the route's dataset (the store's WHERE; the in-memory store stands in for the Postgres one) (services/api/sources.py) — 2 failed, 4 passed, 1 warning in 3.31s
+    failed: test_another_dataset_s_source_is_refused[athena]
+    failed: test_another_dataset_s_source_is_refused[s3]
+dataset-gate-open: RED — the dataset's own gate (require_studio_dataset) admitting anyone (services/api/app.py) — 4 failed, 2 passed, 1 warning in 3.30s
+    failed: test_another_dataset_s_author_cannot_read_through_it[athena]
+    failed: test_another_dataset_s_author_cannot_read_through_it[s3]
+    failed: test_another_dataset_s_source_is_refused[athena]
+    failed: test_another_dataset_s_source_is_refused[s3]
+dataset-gate-403: RED — the dataset's gate answering 403, telling a dataset that exists apart from one that does not (item 5) (services/api/app.py) — 4 failed, 2 passed, 1 warning in 3.08s
+    failed: test_another_dataset_s_author_cannot_read_through_it[athena]
+    failed: test_another_dataset_s_author_cannot_read_through_it[s3]
+    failed: test_another_dataset_s_source_is_refused[athena]
+    failed: test_another_dataset_s_source_is_refused[s3]
+
+# plants at 1ce97251
+list-whole-live: RED — the folder listed whole, against SeaweedFS (services/api/connector_reads.py) — 1 failed in 1.27s
+    failed: test_a_real_listing_stops_at_the_object_cap_and_one
+region-words: RED — a bucket in another region not told so (services/ingest/connectors/s3_connector.py) — 2 failed, 2 passed in 1.04s
+    failed: test_s3_s_refusals_are_refused_in_words_and_never_followed[moved-the bucket is in another region than the connection names: correct its Region in Admin \u203a Connections; nothing was read]
+    failed: test_s3_s_refusals_are_refused_in_words_and_never_followed[wrong_region-the bucket is in another region than the connection names: correct its Region in Admin \u203a Connections; nothing was read]
+
