@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import datetime as dt
 import shutil
+from typing import Any
 from decimal import Decimal
 from pathlib import Path
 
@@ -140,9 +141,9 @@ class _Watched:
     def __init__(self, inner: pa_fs.FileSystem, listed_size: int | None = None) -> None:
         self.inner, self.listed_size, self.opened = inner, listed_size, []
 
-    def get_file_info(self, selector: pa_fs.FileSelector) -> list[pa_fs.FileInfo]:
+    def get_file_info(self, selector: Any) -> Any:
         found = self.inner.get_file_info(selector)
-        if self.listed_size is None:
+        if self.listed_size is None or not isinstance(selector, pa_fs.FileSelector):
             return found
         return [pa_fs.FileInfo(i.path, i.type, size=self.listed_size) for i in found]
 

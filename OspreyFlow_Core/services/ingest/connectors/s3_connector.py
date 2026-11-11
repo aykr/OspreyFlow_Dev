@@ -34,9 +34,10 @@ from .reads import ConnectorRefused, ReadRows
 
 
 class ObjectStore(Protocol):
-    """What the reader asks of a bucket: the two read-only calls of `pyarrow.fs.FileSystem`."""
+    """What the reader asks of a bucket: the two read-only calls of `pyarrow.fs.FileSystem`
+    (`get_file_info` takes a selector, answering a list, or a path, answering one)."""
 
-    def get_file_info(self, selector: pa_fs.FileSelector, /) -> list[pa_fs.FileInfo]: ...
+    def get_file_info(self, selector_or_path: Any, /) -> Any: ...
 
     def open_input_stream(self, path: str, /) -> Any: ...
 
@@ -50,7 +51,7 @@ _FORMAT_WORDS = {"csv": "CSV", "parquet": "Parquet"}
 def refused_by_store(error: OSError) -> ConnectorRefused:
     """What S3 said, in fixed words: never the store's own message, which names hosts and keys."""
     said = str(error).upper()
-    if "ACCESS_DENIED" in said or "ACCESSDENIED" in said or "FORBIDDEN" in said or "403" in said:
+    if "ACCESS_DENIED" in said or "ACCESSDENIED" in said or "FORBIDDEN" in said:
         return ConnectorRefused(
             "the bucket refused the read (access denied): the deployment's cloud role may not read "
             "it; nothing was read"
@@ -71,6 +72,10 @@ def _objects(
     folder = f"{settings.prefix}{read.folder}"
     base = f"{settings.bucket}/{folder}".rstrip("/")
     try:
+        # The bucket asked for first: a folder's listing answers a bucket that does not exist as
+        # empty (found on SeaweedFS, L1.9), which would be told as "no object" rather than why.
+        if fs.get_file_info(settings.bucket).type == pa_fs.FileType.NotFound:
+            raise ConnectorRefused("the bucket does not exist; nothing was read")
         found = fs.get_file_info(pa_fs.FileSelector(base, recursive=True, allow_not_found=True))
     except OSError as error:
         raise refused_by_store(error) from error

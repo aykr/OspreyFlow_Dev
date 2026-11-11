@@ -1,0 +1,20 @@
+{
+  "_about": "The S3 stand-in's identities for test_s3_connector_live.py (L1.9 part 1): synthetic test credentials, never a real key (rule 9). 'setup' writes the fixture objects; 'reader' may only list and read synthetic-exports, as the namespace's role would; 'other' may read only another bucket, so a read of synthetic-exports is refused as access denied.",
+  "identities": [
+    {
+      "name": "setup",
+      "credentials": [{"accessKey": "SYNTHETICSETUPKEY", "secretKey": "synthetic-setup-secret-not-real"}],
+      "actions": ["Admin", "Read", "List", "Write", "Tagging"]
+    },
+    {
+      "name": "reader",
+      "credentials": [{"accessKey": "SYNTHETICREADERKEY", "secretKey": "synthetic-reader-secret-not-real"}],
+      "actions": ["Read:synthetic-exports", "List:synthetic-exports"]
+    },
+    {
+      "name": "other",
+      "credentials": [{"accessKey": "SYNTHETICOTHERKEY", "secretKey": "synthetic-other-secret-not-real"}],
+      "actions": ["Read:synthetic-elsewhere", "List:synthetic-elsewhere"]
+    }
+  ]
+}
