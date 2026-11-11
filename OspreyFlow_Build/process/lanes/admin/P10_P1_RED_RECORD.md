@@ -1,40 +1,29 @@
 # P10 part 1 · red record (CLAUDE.md rule 15)
 
-Commit `0c45089d` on `lane/admin-p10`. Tests in `OspreyFlow_Build/tests/services/api/test_auth_entra_claims.py`
-(37 cases), all through the real `PrincipalResolver.resolve` (real RS256, loopback JWKS, PyJWT's checks).
+Head `1d82a727` on `lane/admin-p10` (the lane-reviewer's first-round fixes on `0c45089d`). Tests in
+`OspreyFlow_Build/tests/services/api/test_auth_entra_claims.py` (54 cases, plus `test_auth.py`'s 11 unchanged), all
+through the real `PrincipalResolver.resolve` (real RS256, loopback JWKS, PyJWT's own checks).
 
-**Red before the code.** The file was written first and failed at collection: `ImportError: cannot import name
+**Red before the code.** The file was written first and failed at collection with `ImportError: cannot import name
 'ClaimMapping' from 'principal_auth'`.
 
-**Each behaviour red at its real call site.** `process/lanes/admin/p10/p10_plants.py` edits
-`packages/principal_auth/__init__.py` at the line the behaviour lives on, runs the cases that should catch it,
-and restores the file. 16 plants, 27 case runs, every one red; the control green before and after.
-Output: `gates/p10_plants_0c45089.txt`.
+**Each behaviour red at its real call site.** `p10/p10_plants.py` edits `packages/principal_auth/__init__.py` on the
+line where the behaviour lives, runs the cases meant to catch it, and restores the file. The control is the whole Entra
+file plus `test_auth.py` (65 cases), green before and after. **30 plants, 51 case runs, all red, none missed:**
+`gates/p10_plants_1d82a72.txt`. The first round's output (16 plants at `0c45089`) is kept as
+`gates/p10_plants_0c45089.txt`.
 
-| Plant | Caught by |
-| --- | --- |
-| groups granting two clearances or units: any one picked | two clearances; two units; the owner exchange |
-| a missing claim-sourced clearance defaulted to cleared | both missing [extension], [mixed]; default mapping ignores Entra attributes |
-| a missing group-sourced value defaulted to cleared | both missing [groups]; missing clearance; missing unit; unmapped group |
-| an unmapped group grants a code | unmapped group grants nothing |
-| a group overage read as no groups | overage refused |
-| a groups claim that is not a list | groups not a list |
-| another tenant's `tid` accepted | entra refusals [other-tenant] |
-| `oid`, `tid`, `exp` not required | entra refusals [no-oid], [no-tid], [no-exp] |
-| an Entra mapping on a resolver not checking issuer and audience | refused at construction |
-| one handling code split into its letters | single-valued attribute is one code |
-| handling codes of the wrong type passed through | wrong type refused |
-| a list or empty clearance accepted | empty refused; not a string refused |
-| a source with both a claim and a table, or neither | exactly one [neither], [both] |
-| a misspelt setting ignored | unknown key refused |
-| the exchange builds its principal by a second path | the owner exchange |
-| a second `Principal(` in `principal_auth` | one construction |
-
-**Where a red rests on the message, not on a resolved principal** (rule 15's warning, said rather than hidden):
-- `[no-tid]` under the "not required" plant: the token is then refused by the tenant check ("another tenant"),
-  not by PyJWT, so the case goes red on its `match="tid"`. `tid` is defended twice; removing both is two plants.
-- `both missing [mixed]` under the claim-default plant: the unit (from groups) is still missing, so the token is
-  refused for the unit and the case goes red on `match="clearance"`. `[extension]` under the same plant goes red
-  because the token resolves, which is the reason the case names.
-- The overage and groups-not-a-list cases were rebuilt so the plant makes the token **resolve** (groups feed only
-  the handling codes), after a first version that would have been refused for a missing unit anyway.
+**Each red is for the reason its case names, not a message mismatch.** In the first round two reds were only a
+message mismatch: `[no-tid]` was still refused by the tenant check, and `both missing [mixed]` was still refused for
+the unit. The lane-reviewer found both. Fixed:
+- `tid` is checked once, by the tenant check (PyJWT no longer also requires it). Under that check's plant, a token
+  with no `tid` or another tenant's `tid` now resolves.
+- `[mixed]` was replaced in the claim-default plant by a mixed-mapping token that has the unit group but no clearance
+  attribute. Under the plant it resolves.
+- The overage, `hasgroups` and groups-not-a-list cases take groups only for handling codes. Under each plant the
+  token resolves, with no codes.
+- The checks PyJWT does (issuer, audience, expiry) are each planted off at the resolver's `options`.
+- Another tenant's whole token (its issuer and its `tid` together, the shape Entra really issues) is defended twice,
+  so it is planted as one fault with both checks removed. Under it the token resolves.
+- Under the wrong-type plants for handling codes and roles the token now crashes with a `TypeError`, not a 401, which
+  is the defect the case names.
