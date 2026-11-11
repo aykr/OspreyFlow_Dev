@@ -50,7 +50,7 @@ platform	P4	M	done	The analyst's map: basemap switch, place search, contrast in 
 platform	P5	M	done	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2) (merged 1ddbc9a)
 platform	P7	L	done	The cloud-platform profile (ADR-148): the render, the Helm chart, cp-policy-check; merged 0f17781 after two review rounds and a fixes check, without the owner (Am 8), listed for the owner; its kind acceptance is P7a
 platform	P8	M	todo	DEFERRED until after the client's install (ADR-142 Am 8): Nothing on a shared disk: S3 for uploads, staging, tiles, models; settings and recipes per the owner's rulings (ADR-148)
-case	P9	M	todo	Cut for the proof of concept (ADR-142 Am 8): the scheduled, encrypted backup of ArcadeDB and ClickHouse to S3, one restore rehearsed and timed, its runbook section
+case	P9	M	building	Cut for the proof of concept (ADR-142 Am 8): the scheduled, encrypted backup of ArcadeDB and ClickHouse to S3, one restore rehearsed and timed, its runbook section
 admin	P10	M	building	Sign-in claims from Entra ID mapped by settings; no Keycloak on this profile (ADR-148)
 platform-b	P11	M	building	The model route on the cloud-platform profile: the client's gateway or Bedrock (ADR-135 Am 4), after P7
 case-b	P12	L	building	Laurium as a second extraction engine: licence checked and ruled 11 Nov (p12/LICENCE_CHECK.md); its own Python 3.13 service behind a thin ModelPort.extract adapter (ADR-135 Am 5 and 6)
@@ -75,7 +75,7 @@ platform-b	T2	S	done	Tooling: per-lane Playwright ports, docker-shelling tests s
 rules-b	T3	S	done	Dialogs' and invisible text's colour contrast actually gated in every-harness (merged ea3ba26)
 rules	UPG	S	done	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, before the publish: four runs; run 4 passed on platform-b's d85f514 (refusal, the one-time apply, the migrations, end state); update's real pull, pin and rollback owed to the post-tag check (merged e620588)
 platform-b	UPG-fix	S	done	Update from v0.4.12 refuses in words before writing anything and names the one-time `ospreyflow apply` route; a named update reaches its own deployment; files moved into place whole; apply starts a newly added service with its dependencies (ADR-114 Am 39; merged 1223cc8)
-rules	UPG-check	S	building	The real update from v0.4.12 to the published v0.5.0 (CHANGELOG steps 1–7), on the test server
+rules	UPG-check	S	done	The real update from v0.4.12 to the published v0.5.0: the CHANGELOG's steps 1–4 green on osprey-upg (11 Nov 12:26), then osprey-small itself updated steps 1–5 (15:06)
 rules	hyg	S	done	Hygiene, three items: the key cap's own ink; the metrics harness panel scrolls (the rarity note); a scheduled load's notice reaches its owner in Needs you, owner alone, fixed words by kind (ADR-110 Am 19) ; a fault acting as the owner kept in the log (studio's finding) (merged 373b3dd)
 rules	lists	S	todo	Live files remove the screening lists they load; ADR-146: one owner on two lists, one alert or two
 rules-b	T3b	S	review	The contrast probe's limits (SVG surfaces, shadows, points); Show as BPMN's task-box contrast
@@ -83,5 +83,5 @@ platform-b	carries	M	building	The chart's quoted checksums; ADR-114 Am 39's edge
 studio	carries	S	todo	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19)
 docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (user 1.46, admin 1.72), with their PDFs; merged f262e7b after two reviews
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape
-platform	P7b	M	todo	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks, each run on kind; its kind run is the client install's acceptance
+platform	P7b	M	building	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks, each run on kind; its kind run is the client install's acceptance
 platform	P9b	S	todo	After the client's install: alerts, the PodDisruptionBudgets' drain test, the volume-expansion procedure
