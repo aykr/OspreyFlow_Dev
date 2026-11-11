@@ -1,0 +1,31 @@
+# head 489cc4b; no plant
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_no_results_or_table_location_is_an_egress_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_worker_reaches_no_connector_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_role_s_statements_are_read_only_and_scoped
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted0]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted1]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted2]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted3]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_nothing_is_rendered_with_no_source_declared
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_declared_connection_is_saved_and_tested[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_declared_connection_is_saved_and_tested[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_no_longer_declared_is_refused_at_test_and_at_every_read[athena]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change0]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change1]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change2]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change4]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change5]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change6]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change7]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change8]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[athena-change9]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_another_profile_is_not_held_to_a_declaration[s3]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_another_profile_is_not_held_to_a_declaration[athena]
+29 passed, 16 warnings in 3.66s

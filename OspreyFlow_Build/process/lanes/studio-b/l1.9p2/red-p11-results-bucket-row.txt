@@ -1,0 +1,15 @@
+# head 489cc4b; plant: the results location's bucket rendered as the Conduit's egress row
+# command: pytest -q -rA ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py
+# must fail: test_no_results_or_table_location_is_an_egress_host; all failed: yes
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_worker_reaches_no_connector_host
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_role_s_statements_are_read_only_and_scoped
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted0]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted1]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted2]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted3]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_no_results_or_table_location_is_an_egress_host - AssertionError: synthetic-athena-results
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_nothing_is_rendered_with_no_source_declared - harness.cloud_platform.CloudPlatformNotRenderable: egress is denied by default on a cloud platform (ADR-148 decision 7); name the networks of synthetic-athena-results.s3.eu-west-2.amazonaws.com under cloud_platform.egress_nets, or switch the feature off
+2 failed, 9 passed in 2.00s

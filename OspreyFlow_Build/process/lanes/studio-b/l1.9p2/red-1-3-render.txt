@@ -1,0 +1,12 @@
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_no_results_or_table_location_is_an_egress_host
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_worker_reaches_no_connector_host
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_role_s_statements_are_read_only_and_scoped
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted0]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted1]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted2]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted3]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_nothing_is_rendered_with_no_source_declared
+11 failed in 1.47s
