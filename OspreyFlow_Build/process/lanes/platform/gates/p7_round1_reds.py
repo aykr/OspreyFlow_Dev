@@ -191,8 +191,9 @@ def main() -> int:
         before = _digest(path)
         text = original.decode("utf-8")
         olds, news = ([old], [new]) if isinstance(old, str) else (old, new)
-        if missing := [o for o in olds if text.count(o) != 1]:
-            print(f"NOT PLANTED  {what}: its text is not once in {relative}: {missing[0][:80]!r}")
+        # Each old text is replaced wherever it occurs (the checksums' plant unquotes every one).
+        if missing := [o for o in olds if o not in text]:
+            print(f"NOT PLANTED  {what}: its text is not in {relative}: {missing[0][:80]!r}")
             not_red += 1
             continue
         for o, n in zip(olds, news, strict=True):
