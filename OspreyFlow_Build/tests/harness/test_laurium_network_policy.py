@@ -203,9 +203,13 @@ def _refuse_unread(rule: dict[str, Any]) -> None:
             raise UnreadableShape(f"a Calico rule this test cannot read: {sorted(found)}")
 
 
+def _name(doc: dict[str, Any]) -> str:
+    return str((doc.get("metadata") or {}).get("name") or "")
+
+
 def decide(docs: list[dict[str, Any]], subject: Endpoint, peer: Endpoint, direction: str) -> str:
     """Calico's answer for `subject`'s traffic to (Egress) or from (Ingress) `peer`."""
-    ordered: list[tuple[float, str, dict[str, Any]]] = []
+    ordered: list[tuple[float, str, str, dict[str, Any]]] = []
     for doc in docs:
         if doc.get("kind") in ("GlobalNetworkPolicy", "StagedNetworkPolicy"):
             raise UnreadableShape(f"a {doc['kind']} this test cannot read")
@@ -216,13 +220,14 @@ def decide(docs: list[dict[str, Any]], subject: Endpoint, peer: Endpoint, direct
             if direction in spec.get("types", []) and calico_selects(
                 spec["selector"], subject.labels
             ):
-                ordered.append((float(spec.get("order", 1000)), "calico", spec))
+                ordered.append((float(spec.get("order", 1000)), _name(doc), "calico", spec))
         elif direction in spec.get("policyTypes", []) and k8s_selects(
             spec["podSelector"], subject.labels
         ):
-            ordered.append((1000.0, "k8s", spec))
-    ordered.sort(key=lambda o: o[0])
-    for _, kind, spec in ordered:
+            ordered.append((1000.0, _name(doc), "k8s", spec))
+    # Calico breaks a tie in order by the policy's name (round 3, item 4).
+    ordered.sort(key=lambda o: (o[0], o[1]))
+    for _, _, kind, spec in ordered:
         rules = spec.get("egress" if direction == "Egress" else "ingress") or []
         for rule in rules:
             if kind == "calico":
@@ -254,7 +259,8 @@ def _outside(values: dict[str, Any]) -> tuple[Endpoint, Endpoint]:
     egress = values["egress"]
     managed = ipaddress.ip_network(egress["managedNets"][0], strict=False)
     host_nets = [n for h in egress.get("hosts", []) for n in h["nets"]]
-    assert host_nets, "the render names no outside host to try"
+    if not host_nets:  # never a plain assert: it would pass as the strict xfail's AssertionError
+        raise UnreadableShape("the render names no outside host to try")
     host = ipaddress.ip_network(host_nets[0], strict=False)
     return Endpoint(ip=str(next(managed.hosts())), port=5432), Endpoint(
         ip=str(next(host.hosts())), port=443
@@ -432,3 +438,12 @@ def test_the_evaluator_refuses_a_field_it_cannot_read() -> None:
         decide([_calico("x", 100, "all()", rules)], LAURIUM, pod("arcadedb", 2480), "Egress")
     with pytest.raises(UnreadableShape, match="cannot read"):
         decide([{"kind": "GlobalNetworkPolicy", "spec": {}}], LAURIUM, pod("x"), "Egress")
+
+
+def test_the_evaluator_breaks_a_tie_in_order_by_name_as_calico_does() -> None:
+    """Two policies at one order: the one whose name sorts first decides (round 3, item 4)."""
+    allow = _calico("default.a-allow", 100, "all()", [{"action": "Allow"}])
+    deny = _calico("default.b-deny", 100, "all()", [{"action": "Deny"}])
+    assert decide([deny, allow], LAURIUM, pod("arcadedb", 2480), "Egress") == "Allow"
+    allow["metadata"]["name"], deny["metadata"]["name"] = "default.b-allow", "default.a-deny"
+    assert decide([allow, deny], LAURIUM, pod("arcadedb", 2480), "Egress") == "Deny"

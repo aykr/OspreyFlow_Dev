@@ -232,6 +232,9 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
 
 ### The merge step for P12 part 2 (after P7b, with Laurium's row) — not to be skipped
 
+0. **The owner's `P12p2_CI.diff` (`.github/`, applied by the owner as a patch) lands first or in the same push:**
+   `tests/test_release_local_matrix.py` is red on main without it (round 3, item 1; the orchestrator holds the merge
+   for it).
 1. Apply Laurium's rows to P7b's `egress.paths` (`P12p2_egress_paths.md`) in the same merge.
 2. **Remove** the `UNTIL_P7B` mark (`tests/harness/test_laurium_network_policy.py`) and the token test's xfail
    (`tests/harness/test_laurium_render.py::test_lauriums_pod_mounts_no_service_account_token`).
@@ -262,9 +265,26 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
    setuptools 70.3.0, CVE-2025-47273; urllib3 2.7.0, CVE-2026-97687 and -97689), from the base image
    (`gates/c235226.laurium-image-1-trivy-found.txt`, `…-where-trivy-looked.txt`). **Fixed in Laurium's Dockerfile:** pip
    uninstalls itself last (the service never runs it). Then **trivy 0 HIGH or CRITICAL; started with no network and
-   its gateway's address alone, as 10001:10001, `/healthz` 200 after about 6 s** (`gates/c235226.laurium-image-2.txt`).
+   its gateway's address alone, as 10001:10001 (configured; **measured with `docker exec … id -u`/`-g`: 10001 and 10001**, `gates/88518d4.laurium-image-3-id.txt`), `/healthz` 200 after about 6 s** (`gates/c235226.laurium-image-2.txt`).
    Core's image scans gain `trivy-image-laurium` in `check` as `P12p2_core_makefile.diff` (Core's Makefile).
 9. **Minors:** §6a.2's sizing said to be Deep read's, Laurium's 0.25 CPU and 1 GiB on top by default (the guide diff);
    `packages/schemas` and the generated TypeScript named in the friction row; carried there: the Glass's profile
    guess (`engine_kinds` includes `gateway`), and the readiness latch under a key rotation. **Part 1's
    `P12_MAKEFILE.diff` and `P12_CI.diff` are applied on main** (2128e5b); nothing of part 1's is removed.
+
+## Round 3 of the orchestrator's review (88518d4): ready once P7b lands, after these
+
+1. The owner's CI patch lands first or with it: the merge step's point 0.
+2. **The call-site scan by syntax tree:** every keyword `laurium_may_read=` at a call (the parameter's default is not
+   one), every import or call of `laurium_reads` under any name, every assignment to `_LAURIUM_READS`. **Plants**
+   (`gates/88518d4.round3-plants.txt`): a threaded flag in email extraction (`laurium_may_read=using == "model"`), 2 failed
+   (the scan, and the email call site reaching Laurium); `laurium_reads` imported as `reads` in `questions.py`, 1
+   failed.
+3. `_outside()` raises `UnreadableShape`, never a plain assert. 4. The evaluator breaks a tie in order by name, as
+   Calico does (`test_the_evaluator_breaks_a_tie_in_order_by_name_as_calico_does`).
+5. The "four images" words in `release.yml`'s header (`P12p2_CI.diff`) and `release_local.py`.
+6. Amendment 9 names `test_release_local_matrix` and `trivy-image-laurium`.
+7. **The prose-only reds captured** (`gates/88518d4.round3-plants.txt`): the questions.py plant; `release_local` without the
+   CI diff (1 failed, Laurium with no twin in the release's matrix); `UnreadableShape` FAILED and the stated failure
+   XFAIL under `UNTIL_P7B`; `ready` not wired (1 failed).
+8. The image's user measured: 10001:10001.

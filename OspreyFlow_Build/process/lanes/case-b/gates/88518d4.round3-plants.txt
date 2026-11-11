@@ -1,0 +1,46 @@
+# Round 3's plants (the orchestrator's item 7), on the Mac offline at 88518d4, each put back after.
+
+## 1. A threaded flag in email extraction (laurium_may_read=using == "model")
+E         Right contains one more item: 'Dana MERCER wrote to Callum PRICE about the Dabhol plant.'
+E         Left contains 1 more item:
+E         {('services/api/email_extraction.py', 'laurium_may_read='): 1}
+PASSED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_a_documents_content_by_the_model_reaches_deep_read_not_laurium
+PASSED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_the_route_that_passes_it_is_the_review_queues
+FAILED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_email_extraction_by_the_model_reaches_deep_read_not_laurium
+FAILED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_only_the_sanctioned_sites_reach_laurium
+2 failed, 2 passed in 2.41s
+
+## 2. laurium_reads imported under another name in questions.py
+E         Left contains 1 more item:
+E         {('services/api/questions.py', 'laurium_reads'): 2}
+PASSED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_email_extraction_by_the_model_reaches_deep_read_not_laurium
+PASSED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_a_documents_content_by_the_model_reaches_deep_read_not_laurium
+PASSED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_the_route_that_passes_it_is_the_review_queues
+FAILED ../OspreyFlow_Build/tests/adapters/extract_laurium/test_laurium_call_sites.py::test_only_the_sanctioned_sites_reach_laurium
+1 failed, 3 passed in 2.42s
+
+## 3. release_local.py without P12p2_CI.diff (release.yml as on main)
+E       AssertionError: assert [('api', 'ser...ces/laurium')] == [('api', 'ser...OM_SHA', '.')]
+E         Left contains one more item: ('laurium', 'services/laurium/Dockerfile', None, 'services/laurium')
+PASSED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_lauriums_image_is_built_from_its_own_folder
+FAILED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_release_local_builds_what_the_release_builds
+1 failed, 1 passed in 0.20s
+
+## 4. UnreadableShape under UNTIL_P7B is FAILED, the stated AssertionError XFAIL (scratch test, removed)
+________________ test_unreadable_manifest_is_failed_not_xfailed ________________
+    def test_unreadable_manifest_is_failed_not_xfailed() -> None:
+E       tests.harness.test_laurium_network_policy.UnreadableShape: a Calico selector this test cannot read
+XFAIL ../OspreyFlow_Build/tests/_scratch_p12p2/test_mark_shape.py::test_the_stated_failure_is_xfailed - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]
+FAILED ../OspreyFlow_Build/tests/_scratch_p12p2/test_mark_shape.py::test_unreadable_manifest_is_failed_not_xfailed
+1 failed, 1 xfailed in 0.21s
+
+## 5. ready not wired in laurium_in_the_conduit
+E            +    where <function LauriumExtracts.__init__.<locals>.<lambda> at 0x10a446c00> = <adapters.extract_laurium.composed.LauriumExtracts object at 0x10a451f10>.ready
+PASSED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_laurium_sits_inside_the_routes
+PASSED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_not_chosen_the_routes_hold_the_model_as_it_was
+PASSED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_a_gateway_still_starting_is_tried_again_without_stopping_anything
+PASSED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_until_its_key_is_held_lauriums_calls_alone_are_refused_in_words
+PASSED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_lauriums_client_is_closed_at_shutdown
+PASSED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_the_conduits_lifespan_runs_the_laurium_block
+FAILED ../OspreyFlow_Build/tests/services/api/test_laurium_start.py::test_the_conduits_laurium_block_starts_the_key_and_is_unready_until_it_exists
+1 failed, 6 passed in 1.49s

@@ -5,12 +5,12 @@ the push, executable directly against this checkout.
 it needs a real tag push and `packages: write` credentials for `ghcr.io/ospreyflow` this sandbox
 does not have. `actionlint` (`06_DECISIONS.md` ADR-049 Stage 2 §5b/§7's own brief, item 2) checks
 the YAML is well-formed; it says nothing about whether the *commands* it runs actually work. This
-script runs the same four builds, the same trivy gate (same flags, same severity, same
-`--ignore-unfixed`), the same `--build-arg OSPREY_BUILT_FROM_SHA` for the harness image, and the
-same `make bundle` — against this repository's own real Dockerfiles, real trivy binary, real
-`make bundle` command — with `--dry-run` standing in for the four `docker push` calls, printing
-the exact references it would have pushed instead of reaching the registry. **The only step this
-script cannot exercise is the push itself** — said here, not left implicit.
+script runs the same builds (`SERVICES`, the release's matrix), the same trivy gate (same flags,
+same severity, same `--ignore-unfixed`), the same `--build-arg OSPREY_BUILT_FROM_SHA` for the
+harness image, and the same `make bundle` — against this repository's own real Dockerfiles, real
+trivy binary, real `make bundle` command — with `--dry-run` standing in for the `docker push` calls,
+printing the exact references it would have pushed instead of reaching the registry. **The only step
+this script cannot exercise is the push itself** — said here, not left implicit.
 
 **Round 13cg: nor does it run `ci-status-gate`**, the job that now runs before `build-scan-push`
 and refuses the release unless `ci.yml` reported green for the commit being tagged

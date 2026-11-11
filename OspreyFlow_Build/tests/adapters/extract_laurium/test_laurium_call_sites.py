@@ -13,6 +13,7 @@ two sanctioned sites (the review queue's route, and `run_extraction` itself), re
 
 from __future__ import annotations
 
+import ast
 import inspect
 import json
 from pathlib import Path
@@ -58,13 +59,62 @@ async def test_a_documents_content_by_the_model_reaches_deep_read_not_laurium() 
     assert laurium.asked == []
 
 
-#: The two sanctioned sites (round 2, item 5), and the marker's own definition.
+#: What may reach Laurium, read from every module's syntax tree (round 3, item 2): each keyword
+#: argument `laurium_may_read=` given at a call, each import or call of `laurium_reads` under any
+#: name, and each assignment to `_LAURIUM_READS` outside its own module. The parameter's own default in
+#: `run_extraction`'s signature is not a call and is not counted.
 SANCTIONED = {
-    ("services/api/app.py", "laurium_may_read=True"): 1,  # run_extraction_route's call
-    ("services/api/review.py", "laurium_reads("): 1,  # inside run_extraction, behind the flag
-    ("packages/adapters/extract_laurium/composed.py", "laurium_reads("): 2,  # its definition, its docstring
+    ("services/api/app.py", "laurium_may_read="): 1,  # run_extraction_route's call, True
+    ("services/api/review.py", "laurium_reads"): 2,  # its import, and its one use behind the flag
+    ("packages/adapters/extract_laurium/composed.py", "laurium_reads"): 1,  # its definition
+    (
+        "packages/adapters/extract_laurium/composed.py",
+        "_LAURIUM_READS=",
+    ): 1,  # the ContextVar itself
 }
 CORE = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
+
+
+def _uses(tree: ast.AST) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    aliases = {"laurium_reads"}
+
+    def add(key: str) -> None:
+        counts[key] = counts.get(key, 0) + 1
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for name in node.names:
+                if name.name == "laurium_reads":
+                    aliases.add(name.asname or name.name)
+                    add("laurium_reads")
+                if name.name == "_LAURIUM_READS":
+                    add("_LAURIUM_READS=")
+        elif (
+            isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+            and node.name == "laurium_reads"
+        ):
+            add("laurium_reads")
+        elif isinstance(node, ast.Assign | ast.AnnAssign):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id == "_LAURIUM_READS" for t in targets):
+                add("_LAURIUM_READS=")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            for keyword in node.keywords:
+                if keyword.arg == "laurium_may_read":
+                    add("laurium_may_read=")
+            func = node.func
+            name = (
+                func.id
+                if isinstance(func, ast.Name)
+                else func.attr
+                if isinstance(func, ast.Attribute)
+                else None
+            )
+            if name in aliases:
+                add("laurium_reads")
+    return counts
 
 
 def _found() -> dict[tuple[str, str], int]:
@@ -73,14 +123,12 @@ def _found() -> dict[tuple[str, str], int]:
         for path in sorted((CORE / root).rglob("*.py")):
             if ".venv" in path.parts or "node_modules" in path.parts:
                 continue
-            text = path.read_text("utf-8")
-            for needle in ("laurium_may_read=True", "laurium_reads("):
-                if count := text.count(needle):
-                    found[(str(path.relative_to(CORE)), needle)] = count
+            for key, count in _uses(ast.parse(path.read_text("utf-8"))).items():
+                found[(str(path.relative_to(CORE)), key)] = count
     return found
 
 
-def test_only_the_two_sanctioned_sites_reach_laurium() -> None:
+def test_only_the_sanctioned_sites_reach_laurium() -> None:
     assert _found() == SANCTIONED
 
 

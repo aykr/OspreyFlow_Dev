@@ -34,6 +34,7 @@ for i in $(seq 1 60); do
   sleep 2
 done
 echo "healthz: $ready"
-docker inspect -f 'user={{.Config.User}} state={{.State.Status}}' "$NAME"
+docker inspect -f 'configured user={{.Config.User}} state={{.State.Status}}' "$NAME"
+echo "measured: uid=$(docker exec "$NAME" id -u) gid=$(docker exec "$NAME" id -g)"
 docker logs "$NAME" 2>&1 | tail -15
 echo "start: $ready"

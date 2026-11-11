@@ -35321,6 +35321,8 @@ passing it, and a planted `laurium_reads()` in `questions.py`, each red). The co
 `tests/services/api/test_laurium_start.py` (the reversed wrapping planted red). The sweep, every page first:
 `tests/adapters/extract_laurium/test_laurium_at_start.py`. Admin read-only:
 `tests/services/api/test_admin_models_extraction_engine.py` and `Models.test.tsx`. The platform's rules with Laurium
-rendered on three shapes: `tests/harness/test_laurium_cp_policy.py`. Laurium's traffic, in Calico's order:
+rendered on three shapes: `tests/harness/test_laurium_cp_policy.py`. Laurium's image unscanned:
+`make -C OspreyFlow_Core trivy-image-laurium` in Core's `check`, and CI's `trivy-image-laurium` job. The release
+building another set of images than the local release: `tests/test_release_local_matrix.py`. Laurium's traffic, in Calico's order:
 `tests/harness/test_laurium_network_policy.py`, strict-xfailed until P7b. The exit:
 `tests/conformance/model_port/test_laurium_reads_a_real_model_live.py`, leased.
