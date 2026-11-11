@@ -1,0 +1,25 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 270afa0a..dde32cdd 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -989,6 +989,9 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+   "name-a-sql-connection-by-keyboard",
+   "name-a-json-connection-by-keyboard",
+   "test-a-connection-by-keyboard",
++  // L1.9 (ADR-148): an Amazon S3 bucket and Amazon Athena, each with no field for a key.
++  "name-an-s3-connection-by-keyboard",
++  "name-an-athena-connection-by-keyboard",
+   "copy-the-grading-change-command-by-keyboard",
+   "read-a-roles-tip-by-keyboard",
+   "read-a-teams-lead-tip-by-keyboard",
+@@ -1258,6 +1261,10 @@ export const SOURCES_CONNECTORS_ACTIONS = defineActionRegistry("SOURCES_CONNECTO
+   "register-a-source-through-a-json-connection-by-keyboard",
+   "unsubscribe-a-dataset-from-a-screening-list-by-keyboard",
+   "refresh-a-screening-list-by-hand-only-by-keyboard",
++  // L1.9 (ADR-148): an S3 folder and format, Athena's table and a named query.
++  "register-a-source-through-an-s3-connection-by-keyboard",
++  "register-a-source-through-an-athena-table-by-keyboard",
++  "register-a-source-through-an-athena-named-query-by-keyboard",
+ ] as const);
+ 
+ // ADR-145 Amendment 4 decision 12 (L1.8): the Studio's who-can tips and its door to the help page.

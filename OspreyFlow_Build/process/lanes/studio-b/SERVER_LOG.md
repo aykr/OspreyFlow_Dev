@@ -19,6 +19,18 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
   removed** (`docker rm` needs a permission this session was not given; it holds only synthetic objects, which
   the test deletes in teardown). Anyone may `docker rm studio-b-seaweedfs`.
 
+- 07:30–07:55 Glass: Admin › Connections' two kinds (no key field; the cloud role's words read with Region;
+  a dotted bucket refused before sending), the wizard's S3 folder and format, Athena's table or named query.
+  Vitest 13/13 (a plant sending a secret with S3 went red); tsc clean; ESLint clean. Keyboard (slot 11): 58/58
+  in `admin.spec.ts` and `sources-connectors.spec.ts`, five new cases, one plant red. Axe: the four new states
+  in dark, light and GOV.UK, 20/20. Commit `5c4deecf`.
+- Shared and owner files sent as diffs, never committed: `L1.9_action_registry.diff` (five ids),
+  `L1.9_every_harness.diff` (four states), `L1.9_ci.diff` (SeaweedFS started in the `test` job with its
+  identities, `OSPREY_S3_STANDIN` set). `keyboard/admin-harness.tsx` committed with a small change (the
+  drawn-form state takes `show=s3|athena`, two rows served): P11 may touch the same file for Admin › Models.
+- 09 §2 gains "Amazon S3 and Amazon Athena (L1.9 part 1)"; the ADR-140 amendment drafted in
+  `L1.9_ADR-140_amendment_draft.md` for a reserved number.
+
 ## Decisions taken (the owner may overrule)
 
 1. **No credential field on either kind.** Options: (a) none, the deployment's own cloud identity (pyarrow's
