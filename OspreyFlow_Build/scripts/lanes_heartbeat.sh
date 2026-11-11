@@ -6,6 +6,10 @@
 #        (a lane at its usage limit is beaten from outside as: beat <lane> blocked "usage limit")
 #   lanes_heartbeat.sh nudge <lane> "<message>"     the orchestrator leaves a lane a message, shown
 #                                                     to it at its next beat (a session it cannot type into)
+#   lanes_heartbeat.sh                                the owner's default view (11 November 2026): the steps
+#                                                     left by foundation feature and by deployment, the
+#                                                     release, housekeeping, and one row per lane
+#   lanes_heartbeat.sh --lanes [--full]               lane by lane (the same as `show`)
 #   lanes_heartbeat.sh show                           one table: every lane, the lease, what needs you
 #   lanes_heartbeat.sh summary                        the owner's short view: one line of totals, what needs
 #                                                     you, and the remaining steps by track with their times
@@ -45,6 +49,11 @@ PROGRESS="${OSPREY_PROGRESS_FILE:-$(cd "$(dirname "$0")/.." && pwd)/process/lane
 # time estimates table to the heartbeat dashboard"). Tab-separated: lane, step, where it is, estimate; a first
 # line `# as of <UTC ISO time>` says when they were made, so the dashboard can say how old they are.
 ESTIMATES="${OSPREY_ESTIMATES_FILE:-$(dirname "$PROGRESS")/estimates.tsv}"
+# The default view's two groupings of every step (groups.tsv: lane, step, feature, deployment; its header lists
+# the allowed values) and the release it reports (release.tsv: key, value), both beside the step table.
+GROUPS_FILE="${OSPREY_GROUPS_FILE:-$(dirname "$PROGRESS")/groups.tsv}"
+RELEASE="${OSPREY_RELEASE_FILE:-$(dirname "$PROGRESS")/release.tsv}"
+ACCOUNTS="${OSPREY_ACCOUNTS_FILE:-$HOME/.ospreyflow/accounts.conf}"   # lanes_launch.sh's own default
 mkdir -p "$DIR"
 
 now() { echo "${OSPREY_NOW:-$(date -u +%s)}"; }   # OSPREY_NOW: the test's clock
@@ -298,6 +307,166 @@ summary() {
   echo "Every detail: lanes_heartbeat.sh show"
 }
 
+# --- the owner's default view (11 November 2026; reporting only) -------------------------------------------
+# Two views of the same steps, by foundation feature and by deployment (groups.tsv), each block "N of M steps
+# done" and then only the steps not done, in plain words; then the release, housekeeping and one row per lane.
+# Every step is counted somewhere: a step groups.tsv does not group is listed under its own heading, never
+# dropped (test_lanes_groups.py keeps that heading empty).
+
+# A lane's account: its <lane>.account, else its line in the owner's accounts file, else "default".
+account_of() {
+  local a
+  a="$(cat "$DIR/$1.account" 2>/dev/null || true)"
+  [ -n "$a" ] || a="$(awk -v l="$1" '$1 == "lane" && $2 == l && $3 == "=" { print $4; exit }' "$ACCOUNTS" 2>/dev/null || true)"
+  echo "${a:-default}"
+}
+
+# Where a lane's session runs: lanes_launch.sh's own alive test (a Claude Code process in its worktree).
+where_of() {
+  if (cd "$SCRIPTS_DIR" && "$LAUNCHER" alive "$1") >/dev/null 2>&1; then echo "this Mac"; else echo "not running"; fi
+}
+
+# What has merged since the release. The merge commits on main since release.tsv's `cut` (first parent only, so a
+# lane's own merges of main are not counted) when that commit is in this repository; progress.tsv carries no
+# dates, so it cannot say what merged after a given day, and a cut this repository lacks is said in words.
+release_merges() {
+  local cut ref="${OSPREY_MAIN_REF:-main}"
+  cut="$(awk -F'\t' '!/^#/ && $1 == "cut" { print $2; exit }' "$RELEASE" 2>/dev/null || true)"
+  if [ -n "$cut" ] && git -C "$SCRIPTS_DIR" cat-file -e "$cut^{commit}" 2>/dev/null; then
+    printf 'from\t%s\n' "$cut"
+    git -C "$SCRIPTS_DIR" log --merges --first-parent --format='%cs%x09%s' "$cut..$ref" 2>/dev/null || true
+  else
+    printf 'missing\t%s\n' "$cut"
+  fi
+}
+
+clock() {
+  local e fmt='%a %e %b %Y, %H:%M'
+  e="$(now)"
+  printf '%s UTC (%s UK time)' \
+    "$(date -u -r "$e" +"$fmt" 2>/dev/null || date -u -d "@$e" +"$fmt")" \
+    "$(TZ=Europe/London date -r "$e" +%H:%M 2>/dev/null || TZ=Europe/London date -d "@$e" +%H:%M)"
+}
+
+overview() {
+  local lanes merges lane st note
+  lanes="$(mktemp "$DIR/.overview.XXXXXX")"; merges="$(mktemp "$DIR/.merges.XXXXXX")"
+  for lane in $LANES; do
+    st="$(field state "$DIR/$lane.beat")"; note="$(field note "$DIR/$lane.beat")"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$lane" "${st:--}" "$note" "$(account_of "$lane")" "$(where_of "$lane")" >> "$lanes"
+  done
+  release_merges > "$merges"
+  P_CLOCK="$(clock)" P_PROGRESS="$PROGRESS" P_GROUPS="$GROUPS_FILE" P_EST="$ESTIMATES" P_RELEASE="$RELEASE" \
+    P_LANES="$lanes" P_MERGES="$merges" perl -CSD -e "$OVERVIEW_PL"
+  rm -f "$lanes" "$merges"
+}
+
+# shellcheck disable=SC2016   # perl, not the shell, expands these
+OVERVIEW_PL='
+use strict; use warnings; use utf8;
+sub rows { my ($f) = @_; my @r; open(my $h, "<:encoding(UTF-8)", $f) or return @r;
+  while (<$h>) { chomp; next if /^#/ || !/\S/; push @r, [split /\t/, $_, -1] } return @r }
+sub cut { my ($s, $n) = @_; return $s if length $s <= $n; $s = substr($s, 0, $n - 1); $s =~ s/\s+\S*$//; return "$s…" }
+my @prog = grep { @$_ >= 5 } rows($ENV{P_PROGRESS});
+my (%feat, %dep);
+for (rows($ENV{P_GROUPS})) { next if @$_ < 4; my $k = "$_->[0]\t$_->[1]"; ($feat{$k}, $dep{$k}) = ($_->[2], $_->[3]) }
+my %day;   # estimates.tsv: lane, step (or "P8, P9b"), note, day, track
+for (rows($ENV{P_EST})) { next if @$_ < 4; my $r = $_; $day{"$r->[0]\t$_"} = $r->[3] for split /,\s*/, $r->[1] }
+my %rel; for (rows($ENV{P_RELEASE})) { $rel{$_->[0]} = $_->[1] if @$_ >= 2 }
+my @lanes = grep { @$_ >= 5 } rows($ENV{P_LANES});
+my %plain = (todo => "not started", building => "building", review => "in review", done => "merged");
+
+# The step a lane is on: the step of its own that its beat names first (the longer of two at one place, so
+# "P5b proof" over "P5b"); a beat that names none falls back to the step table: the first in review or being
+# built, else the first not started.
+my (%on, %beat);
+for my $l (@lanes) {
+  my ($lane, $state, $note) = @$l; $beat{$lane} = [$state, $note];
+  my ($best, $pos);
+  for my $r (grep { $_->[0] eq $lane } @prog) {
+    my $s = $r->[1];
+    next unless $note =~ /(?<![A-Za-z0-9.\-])\Q$s\E(?![A-Za-z0-9\-])/;
+    my $p = $-[0];
+    ($best, $pos) = ($s, $p) if !defined $pos || $p < $pos || ($p == $pos && length $s > length $best);
+  }
+  unless (defined $best) {
+    my @mine = grep { $_->[0] eq $lane } @prog;
+    my ($busy) = grep { $_->[3] eq "review" || $_->[3] eq "building" } @mine;
+    my ($todo) = grep { $_->[3] eq "todo" } @mine;
+    $best = ($busy || $todo || [])->[1];
+  }
+  $on{$lane} = $best if defined $best;
+}
+
+# A step'"'"'s name: its title'"'"'s first clause, after any leading "deferred"/"cut" status words.
+sub name_of { my ($t) = @_;
+  $t =~ s/^(?:DEFERRED|Cut for|After the client.s install)[^:]*:\s*//;
+  $t =~ s/(?::|;| \(| — ).*//; return ucfirst cut($t, 60) }
+sub shortnote { my ($n) = @_; my @w = split " ", $n; my $s = join " ", @w[0 .. ($#w < 5 ? $#w : 5)];
+  $s =~ s/[\s,;:.]+$//; return @w > 6 ? "$s…" : $s }
+sub state_of { my ($r) = @_; my ($lane, $step, $status) = @$r[0, 1, 3];
+  if ($status ne "done" && defined $on{$lane} && $on{$lane} eq $step) {
+    my ($bs, $bn) = @{ $beat{$lane} };
+    return "waiting to merge" if $bs eq "ready-to-merge";
+    return "blocked" if $bs eq "blocked";
+    if ($bs eq "waiting-for-owner") {   # the same reading as `show`: only a note naming the owner is the owner'"'"'s
+      return "waiting for a test stack" if $bn =~ /lease/;
+      return "needs you: " . shortnote($bn) if $bn =~ /[Oo]wner/;
+      return "waiting for the orchestrator";
+    } }
+  return $plain{$status} // "not started" }
+sub line_of { my ($r) = @_; my $d = $day{"$r->[0]\t$r->[1]"} // "no estimate";
+  return sprintf "    %s (%s, %s) · %s · %s", name_of($r->[4]), $r->[1], $r->[0], state_of($r), $d }
+sub block { my ($title, @in) = @_; my $done = grep { $_->[3] eq "done" } @in;
+  print "  $title\n"; printf "    %d of %d steps done\n", $done, scalar @in;
+  print line_of($_), "\n" for grep { $_->[3] ne "done" } @in; print "\n" }
+sub k { "$_[0][0]\t$_[0][1]" }
+
+my $asof = ""; if (open(my $h, "<", $ENV{P_EST})) { while (<$h>) { $asof = $1 if /^# as of \S*T(\d\d:\d\d)/ } }
+print "OSPREYFLOW · $ENV{P_CLOCK}\n";
+print "Client-install chain expected to finish merging: ", ($rel{chain} // "unknown"),
+  ($asof ? " (estimates as of $asof UTC)" : ""), "\n\n";
+
+print "VIEW 1 · FOUNDATION FEATURES\n\n";
+for my $f ("Ingest Studio", "Four places, the Glass and Admin", "Cases and drawing boards", "Rules and alerting",
+    "Models and maps", "Laurium") { block($f, grep { ($feat{k($_)} // "") eq $f } @prog) }
+
+print "VIEW 2 · DEPLOYMENT\n\n";
+my @deps = (["Local-lite", "Local-lite"], ["Small", "Small (osprey-small runs " . ($rel{small} // "unknown") . ")"],
+  ["Client install", "Client install (cloud-platform profile, shape: poc)"],
+  ["After the client'"'"'s install", "After the client'"'"'s install (the deferred steps)"]);
+for my $d (@deps) { block($d->[1], grep { ($dep{k($_)} // "") eq $d->[0] } @prog) }
+
+print "RELEASE\n";
+printf "  Last: %s, published %s\n", $rel{last} // "unknown", $rel{published} // "unknown";
+my @m = rows($ENV{P_MERGES}); my $how = shift @m;
+if ($how && $how->[0] eq "from") {
+  printf "  Merged on main since (%d merge%s after %s):\n", scalar @m, @m == 1 ? "" : "s", $how->[1];
+  for (@m) { my ($date, $subj) = @$_; my $lane = $subj =~ /^merge\((?:lane\/)?([^)]*)\)/ ? $1 : "";
+    $subj =~ s/^[^:]*:\s*//; $subj =~ s/(?:;| \(| — ).*//;
+    my ($y, $mo, $dd) = split /-/, $date; my @mn = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
+    printf "    %d %s · %s%s\n", $dd, $mn[$mo - 1], cut($subj, 60), $lane ? " ($lane)" : "" }
+} else { printf "  Merged since: not known (the release cut %s is not in this repository)\n", ($how && $how->[1]) || "(none)" }
+printf "  Next: %s\n\n", $rel{next} // "not set";
+
+print "HOUSEKEEPING\n\n";
+block("Housekeeping", grep { ($feat{k($_)} // "") eq "Housekeeping" && ($dep{k($_)} // "") eq "Housekeeping" } @prog);
+
+my @loose = grep { !defined $feat{k($_)} } @prog;
+if (@loose) { print "NOT IN GROUPS.TSV\n\n"; block("Not grouped", @loose) }
+
+print "LANES\n";
+printf "  %-11s %-8s %-12s %-62s %s\n", "Lane", "Account", "Session", "On now", "Next";
+for my $l (@lanes) {
+  my ($lane, undef, undef, $acct, $where) = @$l; my $cur = $on{$lane};
+  my $now = defined $cur ? sprintf("%s (%s / %s)", $cur, $feat{"$lane\t$cur"} // "ungrouped", $dep{"$lane\t$cur"} // "ungrouped") : "-";
+  my @mine = grep { $_->[0] eq $lane } @prog; my $i = 0;
+  if (defined $cur) { for (0 .. $#mine) { if ($mine[$_][1] eq $cur) { $i = $_ + 1; last } } }
+  my ($nx) = grep { $_->[3] ne "done" && (!defined $cur || $_->[1] ne $cur) } @mine[$i .. $#mine];
+  printf "  %-11s %-8s %-12s %-62s %s\n", $lane, $acct, $where, cut($now, 62), $nx ? $nx->[1] : "free" }
+print "\nLane by lane: lanes_heartbeat.sh --lanes\n";
+'
+
 notify() {
   local msg="$1"
   if command -v osascript >/dev/null 2>&1; then
@@ -332,11 +501,13 @@ watch_loop() {
   done
 }
 
-case "${1:-show}" in
+case "${1:-}" in
+  "") overview ;;
+  --lanes) shift; show "${1:-}" ;;
   beat) shift; beat "$@" ;;
   nudge) shift; nudge "$@" ;;
   show) shift; show "${1:-}" ;;
   summary) summary ;;
   watch) shift; case "${1:-}" in --full) watch_loop 300 --full ;; *) watch_loop "${1:-300}" "${2:-}" ;; esac ;;
-  *) echo "usage: lanes_heartbeat.sh beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full]" >&2; exit 2 ;;
+  *) echo "usage: lanes_heartbeat.sh [--lanes [--full]] | beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full]" >&2; exit 2 ;;
 esac

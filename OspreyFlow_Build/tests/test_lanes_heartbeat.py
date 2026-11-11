@@ -456,3 +456,146 @@ def test_an_estimate_is_cut_by_characters_never_through_one(hb, tmp_path) -> Non
     for verb in ("show", "summary"):
         out = hb(verb, OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout  # text=True: a bad byte raises
         assert "–" * 30 + "→" * 10 in out, verb
+
+
+# --- the owner's default view (11 November 2026) ---------------------------------------------------------------
+# The fixture is the real files' shape: progress.tsv's five columns, groups.tsv's header and four columns,
+# estimates.tsv's "# as of" line and five columns, release.tsv's keys; the beats are written by the real `beat`.
+
+_FEATURES = [
+    "Ingest Studio", "Four places, the Glass and Admin", "Cases and drawing boards", "Rules and alerting",
+    "Models and maps", "Laurium",
+]
+_DEPLOYMENTS = [
+    "Local-lite", "Small (osprey-small runs v0.5.0)", "Client install (cloud-platform profile, shape: poc)",
+    "After the client's install (the deferred steps)",
+]
+
+
+def _overview_fixture(hb, tmp_path: Path) -> dict[str, str]:
+    steps = [  # lane, step, size, status, title, feature, deployment
+        ("studio", "L1", "S", "done", "Ingest one: the first", "Ingest Studio", "Small"),
+        ("studio", "L2", "M", "building", "Ingest two: the drawers", "Ingest Studio", "Small"),
+        ("studio", "L3", "S", "todo", "Ingest three; the connectors", "Ingest Studio", "Client install"),
+        ("case", "C1", "L", "review", "Case one (ADR-1): drawing", "Cases and drawing boards", "Small"),
+        ("case", "C2", "S", "todo", "Case two", "Cases and drawing boards", "Local-lite"),
+        ("admin", "A1", "M", "building", "Sign-in claims: Entra ID", "Four places, the Glass and Admin", "Client install"),
+        ("admin", "A2", "S", "todo", "Admin two", "Four places, the Glass and Admin", "Small"),
+        ("rules", "R1", "S", "building", "Rule one", "Rules and alerting", "Small"),
+        ("rules", "R2", "S", "todo", "Rule two", "Rules and alerting", "After the client's install"),
+        ("platform", "M1", "S", "done", "Map one", "Models and maps", "Small"),
+        ("platform", "X1", "L", "building", "Laurium as an engine: part 1", "Laurium", "Client install"),
+        ("docs", "H1", "S", "done", "Tidy one", "Housekeeping", "Housekeeping"),
+        ("docs", "H2", "S", "building", "Tidy two", "Housekeeping", "Housekeeping"),
+        ("docs", "H3", "S", "todo", "The client's guide", "Housekeeping", "Client install"),
+    ]
+    progress = tmp_path / "progress.tsv"
+    progress.write_text("# lane, step, size, status, title\n" + "".join("\t".join(s[:5]) + "\n" for s in steps))
+    (tmp_path / "groups.tsv").write_text(
+        "# lane, step, feature, deployment\n"
+        f"# Feature: {' | '.join(_FEATURES)} | Housekeeping\n"
+        "# Deployment: Local-lite | Small | Client install | After the client's install | Housekeeping\n"
+        + "".join(f"{s[0]}\t{s[1]}\t{s[5]}\t{s[6]}\n" for s in steps)
+    )
+    (tmp_path / "estimates.tsv").write_text(
+        "# as of 2026-11-11T15:00Z\nstudio\tL2\tthe drawers\t12 Nov\tB\nadmin\tA1\tclaims\t13 Nov\tB\n"
+    )
+    (tmp_path / "release.tsv").write_text(
+        "# key, value\nlast\tv0.5.0\npublished\t2026-11-11 06:35 UTC\ncut\t0000000\nrepository\tx/y\n"
+        "next\tv0.5.1: the chain merged\nchain\t14 Nov\nsmall\tv0.5.0\n"
+    )
+    launcher = tmp_path / "launcher.sh"  # lanes_launch.sh's `alive`: only case's session runs here
+    launcher.write_text('#!/bin/sh\n[ "$1" = alive ] && [ "$2" = case ] && { echo yes; exit 0; }\necho no; exit 1\n')
+    launcher.chmod(0o755)
+    env = {
+        "OSPREY_LANES": "studio case admin rules platform docs",
+        "OSPREY_PROGRESS_FILE": str(progress),
+        "OSPREY_LAUNCHER": str(launcher),
+        "OSPREY_ACCOUNTS_FILE": str(tmp_path / "accounts.conf"),
+    }
+    (tmp_path / "accounts.conf").write_text("account sol = ~/.claude-sol\nlane rules    = sol\n")
+    for lane, state, note in [
+        ("studio", "working", "L2: wiring the drawers"),
+        ("case", "working", "C1 review fixes"),
+        ("admin", "waiting-for-owner", "A1: the owner's ruling on the claim names, a or b"),
+        ("rules", "ready-to-merge", "R1 gates green"),
+        ("platform", "working", "X1 part 1 live run"),
+        ("docs", "working", "H2 tidying"),
+    ]:
+        assert hb("beat", lane, state, note).returncode == 0
+    return env
+
+
+def _blocks(out: str) -> dict[str, list[str]]:
+    """Each block's heading (two spaces in) and its lines (four spaces in)."""
+    blocks: dict[str, list[str]] = {}
+    current = None
+    for line in out.splitlines():
+        if line.startswith("  ") and not line.startswith("   ") and current is not False:
+            current = line.strip()
+            blocks[current] = []
+        elif line.startswith("    ") and current:
+            blocks[current].append(line.strip())
+        if line == "LANES":
+            current = False
+    return blocks
+
+
+def test_the_default_view_shows_its_blocks_in_the_owners_order(hb, tmp_path) -> None:
+    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    assert out.splitlines()[1] == "Client-install chain expected to finish merging: 14 Nov (estimates as of 15:00 UTC)"
+    order = ["VIEW 1 · FOUNDATION FEATURES", *(f"  {f}\n" for f in _FEATURES), "VIEW 2 · DEPLOYMENT",
+             *(f"  {d}\n" for d in _DEPLOYMENTS), "\nRELEASE\n", "\nHOUSEKEEPING\n", "  Housekeeping\n", "\nLANES\n"]
+    at = [out.index(heading) for heading in order]
+    assert at == sorted(at), out
+
+
+def test_the_default_view_lists_only_steps_not_done_with_counts(hb, tmp_path) -> None:
+    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    blocks = _blocks(out)
+    for done in ("(L1, studio)", "(M1, platform)", "(H1, docs)"):
+        assert done not in out, done
+    assert blocks["Ingest Studio"] == [
+        "1 of 3 steps done",
+        "Ingest two (L2, studio) · building · 12 Nov",
+        "Ingest three (L3, studio) · not started · no estimate",
+    ]
+    assert blocks["Models and maps"] == ["1 of 1 steps done"]
+    assert blocks["Small (osprey-small runs v0.5.0)"][0] == "2 of 6 steps done"
+    assert blocks["Client install (cloud-platform profile, shape: poc)"][0] == "0 of 4 steps done"
+    assert blocks["Housekeeping"] == ["1 of 2 steps done", "Tidy two (H2, docs) · building · no estimate"]
+
+
+def test_the_default_view_says_each_state_in_plain_words(hb, tmp_path) -> None:
+    import re
+
+    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    states = {
+        line.split(" · ")[1]
+        for lines in _blocks(out).values()
+        for line in lines
+        if " · " in line
+    }
+    assert states == {"building", "not started", "in review", "waiting to merge",
+                      "needs you: A1: the owner's ruling on the…"}, states
+    # The step table's and the beats' own codes never reach the owner ("in review" is the plain words for review).
+    assert not re.search(r"\btodo\b|(?<!in )\breview\b|ready-to-merge|waiting-for-owner|being built", out), out
+
+
+def test_the_default_views_lanes_table_names_each_lanes_step_and_next(hb, tmp_path) -> None:
+    out = hb(**_overview_fixture(hb, tmp_path)).stdout
+    rows = {line.split()[0]: " ".join(line.split()) for line in out.split("\nLANES\n")[1].splitlines()[1:] if line.startswith("  ")}
+    assert rows["platform"].endswith("X1 (Laurium / Client install) free")
+    assert rows["docs"].endswith("H2 (Housekeeping / Housekeeping) H3")
+    assert rows["admin"].endswith("A1 (Four places, the Glass and Admin / Client install) A2")
+    assert rows["case"].startswith("case default this Mac C1 ")
+    assert rows["rules"].startswith("rules sol not running R1 ")
+
+
+def test_the_lane_by_lane_view_is_kept_behind_lanes(hb, tmp_path) -> None:
+    env = _overview_fixture(hb, tmp_path)
+    lanes, show = hb("--lanes", **env).stdout, hb("show", **env).stdout
+    assert lanes.splitlines()[0] == show.splitlines()[0] and lanes.startswith("OVERALL: ")
+    assert "STUDIO: " in lanes and "VIEW 1" not in lanes
+    full = hb("--lanes", "--full", **env).stdout
+    assert "  done         H1     Tidy one" in full and "VIEW 1" not in full
