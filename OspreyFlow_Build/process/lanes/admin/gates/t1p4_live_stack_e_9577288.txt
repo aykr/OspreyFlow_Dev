@@ -1,0 +1,14 @@
+# The isolation step again at 9577288 (the names fix), the same lease on stack e
+Running on ospreyflow-test (stack e, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261110T222141Z/log: process/lanes/admin/t1/t1p4_run.sh isolation
+..                                                                       [100%]
+============================= slowest 30 durations =============================
+5.63s call     tests/test_worker_isolation_live.py::test_two_workers_writing_the_same_names_never_see_each_other_s
+2.28s call     tests/test_worker_isolation_live.py::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red
+0.32s setup    tests/test_worker_isolation_live.py::test_two_workers_writing_the_same_names_never_see_each_other_s
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+2 passed in 8.28s
+STEP isolation: exit 0, 9 s
+OUTCOME isolation passed tests.test_worker_isolation_live::test_two_workers_writing_the_same_names_never_see_each_other_s
+OUTCOME isolation passed tests.test_worker_isolation_live::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red
+Wall time: 9 s, exit 0 (stack e, the lease admin took at 2026-11-10T21:15:07Z; set-up before it 10 s)

@@ -189,6 +189,40 @@ tunnel_open() {
   # shellcheck disable=SC2086
   ssh -f -N -M -S "$(tunnel_sock "$s")" -o ExitOnForwardFailure=yes -o BatchMode=yes $fwd "$h"
 }
+# The test stacks' Postgres allows PG_CONNECTIONS (T1 part 4, 10 November 2026): one Conduit's asyncpg pools open 47
+# connections at their minimum, and the default 100 refused four pytest-xdist workers on one stack. Read once the
+# server answers; if it allows fewer, ALTER SYSTEM (kept in the container's data folder) and restart that container
+# alone, then read it again. Fails if it never answers or still allows fewer. Only the osprey-test-* stacks.
+PG_CONNECTIONS=400
+pg_show() {
+  local s="$1" c="$2" i tries="${OSPREY_PG_READY_TRIES:-60}" got
+  for ((i = 0; i < tries; i++)); do
+    if got="$(docker_for "$s" exec "$c" psql -U osprey -d postgres -tAc 'SHOW max_connections' 2>/dev/null)" &&
+      [[ "$got" =~ ^[0-9]+$ ]]; then
+      echo "$got"; return 0
+    fi
+    sleep "${OSPREY_PG_READY_PAUSE:-1}"
+  done
+  echo "Test stack $s's Postgres ($c) did not answer after $tries tries." >&2
+  return 1
+}
+pg_connections() {
+  local s="$1" c have
+  c="$(grep -v '^#' "$TABLE" | awk -F'\t' -v s="$s" '$1 == s && $2 == "postgres" && $3 != "-" { print $3 }')"
+  [ -n "$c" ] || return 0
+  have="$(pg_show "$s" "$c")" || return 1
+  if [ "$have" -lt "$PG_CONNECTIONS" ]; then
+    docker_for "$s" exec "$c" psql -U osprey -d postgres -tAc "ALTER SYSTEM SET max_connections = $PG_CONNECTIONS" >/dev/null ||
+      { echo "Test stack $s's Postgres ($c) refused ALTER SYSTEM." >&2; return 1; }
+    docker_for "$s" restart "$c" >/dev/null || { echo "docker could not restart $c." >&2; return 1; }
+    have="$(pg_show "$s" "$c")" || return 1
+  fi
+  if [ "$have" -lt "$PG_CONNECTIONS" ]; then
+    echo "Test stack $s's Postgres ($c) allows max_connections $have after a restart, not $PG_CONNECTIONS." >&2
+    return 1
+  fi
+  echo "Test stack $s's Postgres ($c): max_connections $have."
+}
 tunnel_close() {
   local s="$1"
   ssh -S "$(tunnel_sock "$s")" -O exit "$(host_of "$s")" >/dev/null 2>&1 || true
@@ -300,6 +334,7 @@ case "$cmd" in
     remote="$(host_of "$s")"
     [ "$cmd" = down ] && [ -n "$remote" ] && tunnel_close "$s"
     docker_for "$s" "$verb" "${these[@]}" >/dev/null || { echo "docker could not $verb test stack $s." >&2; exit 1; }
+    [ "$cmd" = up ] && { pg_connections "$s" || exit 1; }
     if [ "$cmd" = up ] && [ -n "$remote" ]; then
       tunnel_open "$s" || { echo "Test stack $s started on $remote, but its ssh tunnel did not open: run down, then up." >&2; exit 1; }
     fi

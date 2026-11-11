@@ -1,0 +1,290 @@
+Running on ospreyflow-test (stack b, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261110T174730Z/log: process/lanes/admin/t1/t1p4_run.sh
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_without_the_plugin_each_worker_sees_both_in_every_store_the_red _____
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-448/test_without_the_plugin_each_w0')
+
+    @pytest.mark.skipif(not os.environ.get("OSPREY_LANE"), reason="live: under stack_lease.sh only")
+    def test_without_the_plugin_each_worker_sees_both_in_every_store_the_red(tmp_path: Path) -> None:
+        """The planted cross-worker leak, caught: the same run on the stack's shared names."""
+        ran, seen = _run(tmp_path, "-n", "2")
+>       assert ran.returncode == 0, ran.stdout + ran.stderr
+E       AssertionError: bringing up nodes...
+E         bringing up nodes...
+E         
+E         .F                                                                       [100%]
+E         =================================== FAILURES ===================================
+E         _____________________ test_the_same_key_in_every_store[b] ______________________
+E         [gw1] linux -- Python 3.12.3 /root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python
+E         
+E         side = 'b'
+E         
+E             @pytest.mark.parametrize("side", ["a", "b"])
+E             def test_the_same_key_in_every_store(side):
+E                 seen = {}
+E                 try:
+E                     for write in STORES.values():
+E                         write("write")
+E                     _barrier("written")
+E                     seen = {name: read("read") for name, read in STORES.items()}
+E                     _barrier("read")
+E                 finally:
+E                     for remove in STORES.values():
+E         >               remove("remove")
+E         
+E         test_planted.py:119: 
+E         _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+E         test_planted.py:101: in <lambda>
+E             "arcadedb": lambda step: asyncio.run(_arcadedb(step)),
+E                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E         /usr/lib/python3.12/asyncio/runners.py:194: in run
+E             return runner.run(main)
+E                    ^^^^^^^^^^^^^^^^
+E         /usr/lib/python3.12/asyncio/runners.py:118: in run
+E             return self._loop.run_until_complete(task)
+E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E         /usr/lib/python3.12/asyncio/base_events.py:687: in run_until_complete
+E             return future.result()
+E                    ^^^^^^^^^^^^^^^
+E         test_planted.py:35: in _arcadedb
+E             await client.sql(f"DELETE FROM {kind} WHERE worker = :w", params={"w": WORKER})
+E         /root/osprey-runs/admin/OspreyFlow_Core/packages/adapters/graph_arcadedb/client.py:458: in sql
+E             return await self.command("sql", command, params=params, session_id=session_id)
+E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E         /root/osprey-runs/admin/OspreyFlow_Core/packages/adapters/graph_arcadedb/client.py:492: in command
+E             self._raise_for_error(resp)
+E         _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+E         
+E         resp = <Response [500 Internal Server Error]>
+E         
+E             @staticmethod
+E             def _raise_for_error(resp: httpx.Response) -> None:
+E                 if resp.status_code >= 400:
+E                     exception_class: str | None = None
+E                     try:
+E                         exception_class = resp.json().get("exception")
+E                     except ValueError:
+E                         pass
+E         >           raise ArcadeDBError(
+E                         f"ArcadeDB error {resp.status_code}: {resp.text}",
+E                         status_code=resp.status_code,
+E                         exception_class=exception_class,
+E                     )
+E         E           adapters.graph_arcadedb.client.ArcadeDBError: ArcadeDB error 500: {"error":"Internal error","requestId":"1dc5ea82c1f6e58c-4e","exception":"com.arcadedb.exception.SchemaException","detail":"Type with name 'T1Probe_3208680a' was not found"}
+E         
+E         /root/osprey-runs/admin/OspreyFlow_Core/packages/adapters/graph_arcadedb/client.py:519: ArcadeDBError
+E         =========================== short test summary info ============================
+E         FAILED test_planted.py::test_the_same_key_in_every_store[b] - adapters.graph_...
+E         1 failed, 1 passed in 1.65s
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/root/osprey-runs/admin/OspreyFlow_Core/.venv/bin/python', '-m', 'pytest', '-q', '-p', 'no:cac...D test_planted.py::test_the_same_key_in_every_store[b] - adapters.graph_...\n1 failed, 1 passed in 1.65s\n', stderr='').returncode
+
+../OspreyFlow_Build/tests/test_worker_isolation_live.py:188: AssertionError
+============================= slowest 30 durations =============================
+5.16s call     tests/test_worker_isolation_live.py::test_two_workers_writing_the_same_names_never_see_each_other_s
+1.90s call     tests/test_worker_isolation_live.py::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red
+0.30s setup    tests/test_worker_isolation_live.py::test_two_workers_writing_the_same_names_never_see_each_other_s
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_worker_isolation_live.py::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red
+1 failed, 1 passed in 7.50s
+STEP isolation: exit 1, 8 s
+........................................................................ [ 19%]
+........................................................................ [ 38%]
+........................................................................ [ 57%]
+........................................................................ [ 76%]
+........................................................................ [ 95%]
+................                                                         [100%]
+--------------------- 369 unmarked test(s) reached a store ---------------------
+tests/conformance/graph_port/test_analyst_layer.py::test_a_link_in_case_as_layer_leaves_the_loaded_node_unchanged_under_case_b[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_analyst_layer.py::test_the_case_b_check_fails_with_case_a_layer_in_case_b_read_set[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bad_edge_raises_before_anything_is_written[bad_ends-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bad_edge_raises_before_anything_is_written[bad_property-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bad_edge_raises_before_anything_is_written[missing_endpoint-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bad_edge_raises_before_anything_is_written[unknown_type-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_edge_reads_back_like_an_upserted_one[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_load_does_not_carry_another_datasets_occurrences_into_a_pair[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_load_of_two_datasets_writes_two_links_each_case_reads_only_its_own[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_load_of_writes_standing_for_several_holds_their_sum_as_the_revision[graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[hidden_node-False-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[hidden_node-True-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[other_dataset-False-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[other_dataset-True-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_edge-False-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_node-False-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[restricted-False-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[restricted-True-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-False-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_loaded_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-True-graph_arcadedb[gremlin]]: ArcadeDB on port 2492
+… and 349 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+56.48s call     tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+38.63s call     tests/conformance/graph_port/test_suite.py::test_get_edges_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+36.80s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+36.60s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+12.98s call     tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]
+9.31s call     tests/conformance/graph_port/test_suite.py::test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones[graph_arcadedb[gremlin]]
+8.73s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+8.53s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+7.17s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time
+6.76s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+5.96s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index
+3.94s call     tests/conformance/graph_port/test_type_aliases.py::test_reads_by_id_find_a_type_another_process_created_after_this_one_applied_its_ontology[graph_arcadedb[gremlin]]
+3.72s call     tests/conformance/graph_port/test_suite.py::test_client_parity_scores_a_pair_linked_through_a_shared_value[graph_arcadedb[gremlin]]
+3.41s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_share_rarity_matches_a_world_without_the_hidden_holders[graph_arcadedb[gremlin]]
+3.20s call     tests/conformance/graph_port/test_type_aliases.py::test_a_pending_proposals_links_are_stored_under_its_label_and_read_as_its_name[graph_arcadedb[gremlin]]
+2.91s call     tests/conformance/graph_port/test_analyst_layer.py::test_a_link_in_case_as_layer_leaves_the_loaded_node_unchanged_under_case_b[graph_arcadedb[gremlin]]
+2.89s call     tests/conformance/graph_port/test_suite.py::test_regrade_drawn_changes_the_grade_and_original_alone[graph_arcadedb[gremlin]]
+2.55s call     tests/conformance/graph_port/test_suite.py::test_restore_link_state_refuses_a_link_written_since_by_anyone[graph_arcadedb[gremlin]]
+2.49s call     tests/conformance/graph_port/test_suite.py::test_shared_attribute_rarity_is_the_inverse_frequency_of_what_the_reader_shares[graph_arcadedb[gremlin]]
+2.42s call     tests/conformance/graph_port/test_suite.py::test_client_parity_scores_equal_a_transcription_of_the_clients_r_function[graph_arcadedb[gremlin]]
+2.34s call     tests/conformance/graph_port/test_suite.py::test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was[graph_arcadedb[gremlin]]
+2.22s call     tests/conformance/graph_port/test_suite.py::test_the_clients_rarity_is_refused_past_its_cap_rather_than_counted_in_part[graph_arcadedb[gremlin]]
+2.15s call     tests/conformance/graph_port/test_type_aliases.py::test_no_new_link_is_written_under_the_old_name[graph_arcadedb[gremlin]]
+2.10s call     tests/conformance/graph_port/test_suite.py::test_a_node_reverted_and_superseded_stays_superseded_when_written_again[graph_arcadedb[gremlin]]
+1.95s call     tests/conformance/graph_port/test_suite.py::test_a_dataset_trigger_applies_only_to_links_in_a_dataset_the_reader_may_read[graph_arcadedb[gremlin]]
+1.89s call     tests/conformance/graph_port/test_suite.py::test_the_clients_rarity_is_one_less_a_values_share_of_the_pair_links_of_its_kind[graph_arcadedb[gremlin]]
+1.86s call     tests/conformance/graph_port/test_type_aliases.py::test_a_link_under_an_alias_reads_and_is_found_as_its_type[graph_arcadedb[gremlin]]
+1.74s call     tests/conformance/graph_port/test_suite.py::test_get_edges_of_a_mixed_list_is_exactly_the_readable_subset[graph_arcadedb[gremlin]]
+1.64s call     tests/conformance/graph_port/test_suite.py::test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_read[graph_arcadedb[gremlin]]
+1.63s call     tests/conformance/graph_port/test_suite.py::test_rarity_is_refused_past_its_cap_rather_than_scored_in_part[graph_arcadedb[gremlin]]
+376 passed in 482.54s (0:08:02)
+STEP graph-serial: exit 0, 483 s
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 19%]
+........................................................................ [ 38%]
+........................................................................ [ 57%]
+........................................................................ [ 76%]
+........................................................................ [ 95%]
+................                                                         [100%]
+============================= slowest 30 durations =============================
+119.90s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+119.88s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+110.39s call     tests/conformance/graph_port/test_suite.py::test_get_edges_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+74.84s call     tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+63.33s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time
+60.57s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index
+24.69s call     tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]
+16.64s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+16.25s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+15.65s call     tests/conformance/graph_port/test_suite.py::test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones[graph_arcadedb[gremlin]]
+15.04s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+7.49s call     tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_open_span_reads_back_open_like_an_upserted_one[graph_arcadedb[gremlin]]
+7.00s call     tests/conformance/graph_port/test_bulk_loader.py::test_the_bulk_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-False-graph_arcadedb[gremlin]]
+6.88s call     tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_edge_reads_back_like_an_upserted_one[graph_arcadedb[gremlin]]
+6.73s call     tests/conformance/graph_port/test_bulk_loader.py::test_the_bulk_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-False-graph_arcadedb[gremlin]]
+6.67s call     tests/conformance/graph_port/test_analyst_layer.py::test_the_case_b_check_fails_with_case_a_layer_in_case_b_read_set[graph_arcadedb[gremlin]]
+6.66s call     tests/conformance/graph_port/test_analyst_layer.py::test_a_link_in_case_as_layer_leaves_the_loaded_node_unchanged_under_case_b[graph_arcadedb[gremlin]]
+6.25s call     tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-node_supersede-graph_arcadedb[gremlin]]
+5.72s call     tests/conformance/graph_port/test_bulk_loader.py::test_what_is_already_stored_is_part_of_the_end_of_load_corpus[graph_arcadedb[gremlin]]
+5.57s call     tests/conformance/graph_port/test_bulk_loader.py::test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert[1-graph_arcadedb[gremlin]]
+5.53s call     tests/conformance/graph_port/test_dataset_footprints.py::test_each_layer_is_counted_alone[graph_arcadedb[gremlin]]
+5.45s call     tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-edge_supersede-graph_arcadedb[gremlin]]
+5.39s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_share_rarity_matches_a_world_without_the_hidden_holders[graph_arcadedb[gremlin]]
+5.34s call     tests/conformance/graph_port/test_suite.py::test_regrade_drawn_changes_the_grade_and_original_alone[graph_arcadedb[gremlin]]
+5.26s call     tests/conformance/graph_port/test_bulk_loader.py::test_a_bulk_load_does_not_carry_another_datasets_occurrences_into_a_pair[graph_arcadedb[gremlin]]
+5.20s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_leaves_out_an_unreadable_id_whatever_the_reason[handling_code-graph_arcadedb[gremlin]]
+5.14s call     tests/conformance/graph_port/test_bulk_loader.py::test_the_bulk_loader_stamps_the_same_parameter_set_as_an_upsert[3-graph_arcadedb[gremlin]]
+5.11s call     tests/conformance/graph_port/test_bulk_loader.py::test_a_reverted_pair_is_not_a_collision[graph_arcadedb[gremlin]]
+5.01s call     tests/conformance/graph_port/test_suite.py::test_restore_link_state_refuses_a_link_written_since_by_anyone[graph_arcadedb[gremlin]]
+5.00s call     tests/conformance/graph_port/test_suite.py::test_shared_contacts_never_rest_on_what_the_reader_cannot_see[graph_arcadedb[gremlin]]
+376 passed in 377.23s (0:06:17)
+STEP graph-n4: exit 0, 379 s
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 19%]
+........................................................................ [ 38%]
+........................................................................ [ 57%]
+........................................................................ [ 76%]
+........................................................................ [ 95%]
+................                                                         [100%]
+============================= slowest 30 durations =============================
+177.17s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+176.30s call     tests/conformance/graph_port/test_suite.py::test_get_edges_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+175.81s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+90.17s call     tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+77.26s call     tests/conformance/graph_port/test_suite.py::test_a_hub_receiving_many_edges_across_batches_stores_each_edge_once[graph_arcadedb[gremlin]]
+44.05s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+42.54s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+40.31s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_full_ontology_batched_dumps_as_one_at_a_time
+38.28s call     tests/conformance/graph_port/test_suite.py::test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+36.05s call     tests/conformance/graph_port/test_suite.py::test_existing_node_ids_past_one_chunk_names_exactly_the_existing_ones[graph_arcadedb[gremlin]]
+35.36s call     tests/conformance/graph_port/test_schema_batch_live.py::test_the_dump_comparison_names_a_missing_index
+9.02s call     tests/conformance/graph_port/test_suite.py::test_restore_link_state_refuses_a_link_written_since_by_anyone[graph_arcadedb[gremlin]]
+8.57s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-node_supersede-graph_arcadedb[gremlin]]
+8.40s call     tests/conformance/graph_port/test_suite.py::test_a_revert_takes_the_nodes_and_links_out_of_every_read_for_every_reader[graph_arcadedb[gremlin]]
+8.01s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-upsert-graph_arcadedb[gremlin]]
+7.98s call     tests/conformance/graph_port/test_suite.py::test_a_same_pair_write_in_another_dataset_is_a_link_of_its_own[graph_arcadedb[gremlin]]
+7.02s call     tests/conformance/graph_port/test_suite.py::test_get_edges_of_a_mixed_list_is_exactly_the_readable_subset[graph_arcadedb[gremlin]]
+6.90s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-node_supersede-graph_arcadedb[gremlin]]
+6.88s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[hidden_node-edge_supersede-graph_arcadedb[gremlin]]
+6.71s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_node-edge_supersede-graph_arcadedb[gremlin]]
+6.24s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-edge_supersede-graph_arcadedb[gremlin]]
+6.07s call     tests/conformance/graph_port/test_suite.py::test_strip_provenance_references_removes_the_prefix_from_live_and_superseded_links[graph_arcadedb[gremlin]]
+6.07s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[restricted-node_supersede-graph_arcadedb[gremlin]]
+6.06s call     tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[raised_by_supersede_edge-upsert-graph_arcadedb[gremlin]]
+6.05s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[raised_by_supersede_edge-upsert-graph_arcadedb[gremlin]]
+5.98s call     tests/conformance/graph_port/test_suite.py::test_most_connected_of_one_type_counts_only_that_type[graph_arcadedb[gremlin]]
+5.88s call     tests/conformance/graph_port/test_suite.py::test_a_link_structure_past_its_caps_is_refused_with_only_what_is_seen_counted[graph_arcadedb[gremlin]]
+5.85s call     tests/conformance/graph_port/test_suite.py::test_the_two_store_case_is_red_under_weights_version_1[secret-upsert-graph_arcadedb[gremlin]]
+5.82s call     tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-edge_supersede-graph_arcadedb[gremlin]]
+5.81s call     tests/conformance/graph_port/test_suite.py::test_a_visible_links_weight_is_the_same_in_two_stores_that_differ_by_a_hidden_link[secret-node_supersede-graph_arcadedb[gremlin]]
+376 passed in 279.83s (0:04:39)
+STEP graph-n8: exit 0, 282 s
+bringing up nodes...
+bringing up nodes...
+
+....                                                                     [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+12.89s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+10.68s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+4.04s call     tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+0.13s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.08s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.07s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.05s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.01s setup    tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+0.01s setup    tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+4 passed, 4 warnings in 20.13s
+STEP rights-n4: exit 0, 22 s
+....                                                                     [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+============================= slowest 30 durations =============================
+6.42s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+3.94s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+2.84s call     tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+0.47s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.10s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.05s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.04s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.03s setup    tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+
+(4 durations < 0.005s hidden.  Use -vv to show these durations.)
+4 passed, 1 warning in 15.06s
+STEP rights-serial: exit 0, 16 s
+Wall time: 1190 s, exit 1 (stack b, the lease admin took at 2026-11-10T17:45:01Z; set-up before it 14 s)

@@ -1,0 +1,41 @@
+UNPLANTED tests/test_stack_lease.py: green
+UNPLANTED tests/test_worker_isolation.py: green
+PLANT ArcadeDB's from_env not redirected (tests/worker_isolation.py): 2 failed: test_two_workers_open_different_names_in_every_store, test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread
+PLANT POSTGRES_DB not per worker (tests/worker_isolation.py): 1 failed: test_two_workers_open_different_names_in_every_store
+PLANT VALKEY_DB left at 0 (tests/worker_isolation.py): 6 failed: test_two_workers_open_different_names_in_every_store, test_more_workers_than_valkey_has_databases_is_refused, test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread, test_a_run_nested_in_a_worker_takes_the_valkey_databases_after_the_outer_run_s, test_n_auto_takes_as_many_workers_as_valkey_has_databases_left, test_a_replacement_worker_past_the_run_s_count_is_refused
+PLANT MINIO_BUCKET_PREFIX not set (tests/worker_isolation.py): 3 failed: test_two_workers_open_different_names_in_every_store, test_each_worker_makes_its_stores_at_its_first_test_and_clears_them_at_its_last, test_a_store_that_fails_to_clear_fails_the_run_and_the_others_are_still_cleared
+PLANT ANALYTICS_DB_PATH not set (tests/worker_isolation.py): 1 failed: test_two_workers_open_different_names_in_every_store
+PLANT a per-test conformance_* name rewritten too (tests/worker_isolation.py): 1 failed: test_two_workers_open_different_names_in_every_store
+PLANT serial files not grouped (tests/worker_isolation.py): 4 failed: test_each_serial_file_exists_and_is_grouped, test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread, test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not, test_the_container_files_run_on_one_worker_with_the_serial_ones_through_xdist
+PLANT the group added after xdist reads it (tests/worker_isolation.py): 2 failed: test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread, test_the_container_files_run_on_one_worker_with_the_serial_ones_through_xdist
+PLANT a serial test kept on the worker's own graph (tests/worker_isolation.py): 1 failed: test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread
+PLANT a serial test kept on the worker's own Valkey database (tests/worker_isolation.py): 1 failed: test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread
+PLANT a worker known by the inherited PYTEST_XDIST_WORKER (tests/worker_isolation.py): 1 failed: test_a_child_that_inherits_a_worker_s_environment_is_not_taken_for_a_worker
+PLANT -n without --dist loadgroup let through (tests/worker_isolation.py): 1 failed: test_n_without_loadgroup_is_refused
+PLANT more workers than Valkey databases let start (tests/worker_isolation.py): 2 failed: test_more_workers_than_valkey_has_databases_is_refused_before_any_worker_starts, test_a_nested_run_that_would_pass_db_15_is_refused_before_any_worker_starts
+PLANT the controller not exporting the databases it took (tests/worker_isolation.py): 4 failed: test_two_workers_open_different_names_in_every_store, test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread, test_a_run_nested_in_a_worker_takes_the_valkey_databases_after_the_outer_run_s, test_n_auto_takes_as_many_workers_as_valkey_has_databases_left
+PLANT a nested run's workers from db 1 again (tests/worker_isolation.py): 2 failed: test_a_run_nested_in_a_worker_takes_the_valkey_databases_after_the_outer_run_s, test_n_auto_takes_as_many_workers_as_valkey_has_databases_left
+PLANT -n auto given every CPU (tests/worker_isolation.py): 1 failed: test_n_auto_takes_as_many_workers_as_valkey_has_databases_left
+PLANT the sweep blind to a name's age (tests/worker_isolation.py): 1 failed: test_the_sweep_takes_only_this_plugin_s_names_from_a_killed_run
+PLANT a store that fails to clear stops the rest (tests/worker_isolation.py): 1 failed: test_a_store_that_fails_to_clear_fails_the_run_and_the_others_are_still_cleared
+PLANT a make that fails part-way not cleared (tests/worker_isolation.py): 1 failed: test_a_make_that_fails_part_way_fails_the_run_and_what_was_made_is_cleared
+PLANT the stores cleared in pytest_unconfigure, after xdist's workerfinished (tests/worker_isolation.py): 2 failed: test_each_worker_makes_its_stores_at_its_first_test_and_clears_them_at_its_last, test_a_store_that_fails_to_clear_fails_the_run_and_the_others_are_still_cleared
+PLANT a replacement worker past the run's count let through (tests/worker_isolation.py): 1 failed: test_a_replacement_worker_past_the_run_s_count_is_refused
+PLANT a Valkey database another run holds taken anyway (tests/worker_isolation.py): 1 failed: test_a_valkey_database_another_run_holds_is_refused
+PLANT OSPREY_LANE alone taken for a lease (tests/worker_isolation.py): 1 failed: test_stores_are_made_only_where_the_lane_holds_a_lease
+PLANT a nested run sweeping (tests/worker_isolation.py): 1 failed: test_a_nested_run_does_not_sweep
+PLANT the run's workers not in its header (tests/worker_isolation.py): 1 failed: test_the_run_s_header_names_its_workers_and_databases
+PLANT container files not grouped (tests/worker_isolation.py): 2 failed: test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not, test_the_container_files_run_on_one_worker_with_the_serial_ones_through_xdist
+PLANT a container file's docker run -d not known (tests/worker_isolation.py): 2 failed: test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not, test_the_container_files_run_on_one_worker_with_the_serial_ones_through_xdist
+PLANT a container file's run --rm -d not known (tests/worker_isolation.py): 1 failed: test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not
+PLANT the TLS fixtures imported relatively not known (tests/worker_isolation.py): 1 failed: test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not
+PLANT the check: Valkey given no db not counted as db 0 (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT the check: Valkey's db given by position missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT the check: a **{..., "db": 0} literal missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT the check: a fixed compose project missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT the check: compose's --project-name missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT the check: a multiprocessing child missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT the check: a -m scripts./cli child missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
+PLANT up never sets max_connections (scripts/stack_lease.sh): 3 failed: test_up_raises_a_test_stack_s_postgres_to_400_connections_and_restarts_it_once, test_up_fails_when_the_restarted_postgres_still_allows_fewer, test_up_fails_when_postgres_never_answers
+PLANT ALTER SYSTEM without the restart (scripts/stack_lease.sh): 1 failed: test_up_raises_a_test_stack_s_postgres_to_400_connections_and_restarts_it_once
+PLANT one try, no wait for a starting Postgres (scripts/stack_lease.sh): 2 failed: test_up_raises_a_test_stack_s_postgres_to_400_connections_and_restarts_it_once, test_up_fails_when_the_restarted_postgres_still_allows_fewer

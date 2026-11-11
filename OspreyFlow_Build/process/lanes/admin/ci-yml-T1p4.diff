@@ -1,0 +1,21 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index e639827..fcefda2 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -667,6 +667,7 @@ jobs:
+           ../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py
+           ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py
+           ../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py
++          ../OspreyFlow_Build/tests/test_worker_isolation_live.py
+           ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py
+           ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py
+           ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py
+@@ -951,7 +952,7 @@ jobs:
+       # See `conformance-model`'s own comment above for the outcome of extending that job to cover
+       # it (attempted the same session).
+       - run: >-
+-          uv run pytest -c ../OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port
++          uv run pytest -c ../OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/test_worker_isolation_live.py
+           --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py
+           --ignore=../OspreyFlow_Build/tests/test_media_blob.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py

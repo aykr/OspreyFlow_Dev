@@ -13,7 +13,7 @@ from services.api.config import ValkeyConfig
 
 
 def test_the_deployments_own_valkey_is_reached_plainly(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("VALKEY_PASSWORD", "VALKEY_TLS"):
+    for name in ("VALKEY_PASSWORD", "VALKEY_TLS", "VALKEY_DB", "VALKEY_PORT"):  # a worker or an offline run sets these
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("VALKEY_HOST", "valkey")
     assert ValkeyConfig.from_env().client_kwargs() == {"host": "valkey", "port": 6379, "db": 0}
@@ -26,6 +26,7 @@ def test_a_managed_valkey_is_reached_with_its_password_over_tls(
     monkeypatch.setenv("VALKEY_PORT", "6380")
     monkeypatch.setenv("VALKEY_PASSWORD", "from-the-secret")
     monkeypatch.setenv("VALKEY_TLS", "true")
+    monkeypatch.delenv("VALKEY_DB", raising=False)
     assert ValkeyConfig.from_env().client_kwargs() == {
         "host": "cache.example.internal",
         "port": 6380,

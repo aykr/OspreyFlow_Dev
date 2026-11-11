@@ -63,7 +63,7 @@ platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
 rules-b	L2.11a	S	done	The rule editor's standards: BPMN 2.0 and DMN, export, import refusal, Show as BPMN (split from L2.11) (merged 1d01f49)
-admin	T1	M	building	Faster live runs (merged so far: part 1 afe3354, the batched schema 2456d2c, part 3 94a74c5, part 2a 0d6d924; left: marks, parallel, sleeps); part 4 waits for the tag (b3d3e0a); part 5 on the test server from 11 Nov
+admin	T1	M	building	Faster live runs (merged so far: part 1 afe3354, the batched schema 2456d2c, part 3 94a74c5, part 2a 0d6d924, part 4 the parallel make test with each worker its own stores 75cbc9b; left: marks, sleeps, the ArcadeDB waits); part 5 on the test server from 11 Nov
 platform-b	preflight	S	done	A named install's preflight checks its own published ports (merged dc93d13)
 platform-b	ADR-147 Am 3	S	done	The six gazetteer-only identifiers withheld from every reader (merged 6db8ce8)
 docs	P5b rows	S	done	P5b's guide rows, and L2.5b's and L2.5c's lines (merged c4c294c)

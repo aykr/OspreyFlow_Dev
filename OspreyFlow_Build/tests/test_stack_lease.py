@@ -161,9 +161,18 @@ def test_release_with_the_throwaway_test_stack_still_up_is_refused(lease) -> Non
 _THROWAWAY = ("osprey-probe-arcadedb-new", "osprey-test-pg", "osprey-test-valkey-6379", "osprey-test-objectstore")
 
 
+# `up` reads the stack's Postgres `max_connections` (`docker exec … psql`); a recording fake answers as one
+# that already allows the test stacks' 400, so `up` neither changes nor restarts it.
+_PG_AT_400 = 'case "$1" in exec) echo 400;; esac\n'
+
+
+def _start_stop(log: Path) -> list[str]:
+    return [c for c in log.read_text().splitlines() if c.split()[0] in ("start", "stop")]
+
+
 def _recording_docker(tmp_path: Path) -> tuple[str, Path]:
     log = tmp_path / "docker.log"
-    script = f'#!/bin/sh\necho "$@" >> "{log}"\nexit 0\n'
+    script = f'#!/bin/sh\necho "$@" >> "{log}"\n{_PG_AT_400}exit 0\n'
     return script, log
 
 
@@ -183,7 +192,7 @@ def test_up_and_down_start_and_stop_the_throwaway_containers_alone(lease, tmp_pa
         assert lease("down", "case", docker="recording").returncode == 0
     finally:
         del _DOCKER["recording"]
-    calls = log.read_text().splitlines()
+    calls = _start_stop(log)
     assert calls[0].split()[:1] == ["start"] and set(calls[0].split()[1:]) == set(_THROWAWAY)
     assert calls[1].split()[:1] == ["stop"] and set(calls[1].split()[1:]) == set(_THROWAWAY)
     assert not any("compose" in c or "dev.yaml" in c for c in calls)
@@ -214,7 +223,7 @@ def test_up_and_down_start_and_stop_only_the_holders_own_stack(lease, tmp_path: 
         assert lease("down", "rules", docker="recording").returncode == 0
     finally:
         del _DOCKER["recording"]
-    calls = log.read_text().splitlines()
+    calls = _start_stop(log)
     assert calls[0].split()[:1] == ["start"] and set(calls[0].split()[1:]) == set(_STACK_B)
     assert calls[1].split()[:1] == ["stop"] and set(calls[1].split()[1:]) == set(_STACK_B)
 
@@ -257,7 +266,7 @@ _STACK_D_PORTS = ("2494", "55436", "6382", "9006")
 
 def _recording_tools(tmp_path: Path) -> tuple[str, str, Path]:
     log = tmp_path / "tools.log"
-    docker = f'#!/bin/sh\necho "docker host=${{DOCKER_HOST:-local}} $*" >> "{log}"\nexit 0\n'
+    docker = f'#!/bin/sh\necho "docker host=${{DOCKER_HOST:-local}} $*" >> "{log}"\n{_PG_AT_400}exit 0\n'
     ssh = f'#!/bin/sh\necho "ssh $*" >> "{log}"\nexit 0\n'
     return docker, ssh, log
 
@@ -837,3 +846,84 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
     assert failed.returncode == 1 and "names no live test file" in failed.stderr
     assert "The selection failed" in failed.stderr, failed.stderr  # not the empty-selection refusal
     assert not log.exists() or "rsync" not in log.read_text()  # nothing sent
+
+
+# --- The test stacks' Postgres allows 400 connections (T1 part 4, 10 November 2026) ----------------------------
+# One Conduit opens 46 asyncpg pools whose minimums add up to 47 connections; Postgres's default
+# `max_connections` of 100 refused rule 3's live access set at four pytest-xdist workers on stack b
+# (`TooManyConnectionsError`, process/lanes/admin/T1_P4_RED_RECORD.md). `up` makes each test stack's Postgres
+# allow 400. The fake models what the real one refuses: `ALTER SYSTEM` alone changes nothing that `SHOW` reads
+# until the server restarts, and `psql` fails while the server is still starting.
+
+
+def _postgres_docker(tmp_path: Path, live: int, *, starting: int = 0, ignores_alter: bool = False) -> tuple[str, Path]:
+    st = tmp_path / "pg"
+    st.mkdir()
+    (st / "live").write_text(f"{live}\n")
+    (st / "starting").write_text(f"{starting}\n")
+    keep = "" if ignores_alter else 'echo "$*" | sed -n "s/.*max_connections = \\([0-9]*\\).*/\\1/p" > "$st/pending"; '
+    script = f"""#!/bin/sh
+st="{st}"
+echo "$*" >> "$st/log"
+case "$1" in
+  exec)
+    n=$(cat "$st/starting")
+    if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$st/starting"; echo 'psql: error: the database system is starting up' >&2; exit 2; fi
+    case "$*" in
+      *"SHOW max_connections"*) cat "$st/live" ;;
+      *"ALTER SYSTEM SET max_connections"*) {keep}echo 'ALTER SYSTEM' ;;
+    esac ;;
+  restart) [ -f "$st/pending" ] && mv "$st/pending" "$st/live"; echo 2 > "$st/starting" ;;
+esac
+exit 0
+"""
+    return script, st
+
+
+def _up_with(lease, tmp_path: Path, script: str, **env: str) -> subprocess.CompletedProcess[str]:
+    lease("acquire", "case", "conformance")
+    _DOCKER["postgres"] = script
+    old = {k: os.environ.get(k) for k in env}
+    os.environ.update(env)
+    try:
+        return lease("up", "case", docker="postgres")
+    finally:
+        del _DOCKER["postgres"]
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_up_raises_a_test_stack_s_postgres_to_400_connections_and_restarts_it_once(lease, tmp_path: Path) -> None:
+    script, st = _postgres_docker(tmp_path, live=100, starting=1)
+    up = _up_with(lease, tmp_path, script, OSPREY_PG_READY_PAUSE="0")
+    assert up.returncode == 0, up.stderr
+    assert (st / "live").read_text().strip() == "400"
+    calls = (st / "log").read_text().splitlines()
+    assert [c for c in calls if c.startswith("restart")] == ["restart osprey-test-pg"], calls
+    assert any("ALTER SYSTEM SET max_connections = 400" in c and "osprey-test-pg" in c for c in calls), calls
+    assert "max_connections 400" in up.stdout, up.stdout
+
+
+def test_up_leaves_a_postgres_already_at_400_alone(lease, tmp_path: Path) -> None:
+    script, st = _postgres_docker(tmp_path, live=400)
+    up = _up_with(lease, tmp_path, script, OSPREY_PG_READY_PAUSE="0")
+    assert up.returncode == 0, up.stderr
+    calls = (st / "log").read_text().splitlines()
+    assert not any(c.startswith("restart") or "ALTER SYSTEM" in c for c in calls), calls
+
+
+def test_up_fails_when_the_restarted_postgres_still_allows_fewer(lease, tmp_path: Path) -> None:
+    script, _ = _postgres_docker(tmp_path, live=100, ignores_alter=True)
+    up = _up_with(lease, tmp_path, script, OSPREY_PG_READY_PAUSE="0")
+    assert up.returncode == 1
+    assert "max_connections" in up.stderr and "100" in up.stderr, up.stderr
+
+
+def test_up_fails_when_postgres_never_answers(lease, tmp_path: Path) -> None:
+    script, _ = _postgres_docker(tmp_path, live=100, starting=99)
+    up = _up_with(lease, tmp_path, script, OSPREY_PG_READY_PAUSE="0", OSPREY_PG_READY_TRIES="3")
+    assert up.returncode == 1
+    assert "osprey-test-pg" in up.stderr and "did not answer" in up.stderr, up.stderr
