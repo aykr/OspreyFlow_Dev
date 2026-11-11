@@ -103,6 +103,17 @@ INVENTORY: tuple[ServiceEntry, ...] = (
         note="The fast recogniser (Stanza) sidecar, its model inside its own image.",
     ),
     ServiceEntry(
+        directory="services/laurium",
+        kind=Kind.DEPLOYABLE,
+        entrypoint="uvicorn laurium_service.app:app",
+        imported_by=(),
+        created_in="ADR-135 Amendment 6",
+        note=(
+            "Laurium's own Python 3.13 service, built from its own folder and only when the "
+            "extraction engine Laurium is chosen; the Conduit's adapters/extract_laurium calls it."
+        ),
+    ),
+    ServiceEntry(
         directory="services/ingest",
         kind=Kind.DEPLOYABLE,
         entrypoint="python -m services.ingest",

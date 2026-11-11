@@ -1,0 +1,22 @@
+make test at 310648a1 (lane/case-b-p12), the test server, 11 November 2026, offline: ARCADEDB_HTTP_PORT=59991
+POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994, OSPREY_case-b unset, no lease, no container.
+(The run's own summary lines; the full output could not be copied out of the session's task folder without approval.)
+
+FAILED ../OspreyFlow_Build/tests/harness/test_service_inventory.py::test_the_inventory_covers_every_directory_under_services_and_apps
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly
+FAILED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_nothing_the_conduit_image_carries_execs_git
+FAILED ../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py::test_no_conduit_module_loads_a_path_under_tests
+==== 5 failed, 10982 passed, 13 skipped, 72 warnings in 2202.55s (0:36:42) =====
+
+Each failure explained:
+1. test_service_inventory: "only in tree: ['services/laurium']". Ours: the new directory was not classified. Fixed
+   in the next commit (harness/service_inventory.py, a DEPLOYABLE row); the test then 25 passed.
+2, 3. test_nothing_the_conduit_image_carries_execs_git, test_no_conduit_module_loads_a_path_under_tests: every
+   path named is under OspreyFlow_Core/services/laurium/.venv/, the untracked scratch environment this session
+   made to read Laurium's source, whose removal (rm -rf) was denied. No branch file is named. They pass once it is
+   removed.
+4. test_valkey_config: {'port': 59993} != {'port': 6379}: the test reads VALKEY_PORT, pinned to 59993 by the
+   server's offline run as instructed. This server's own; the branch touches nothing under services/api.
+5. test_webapp_preflight GPU: 'pass' == 'skip': this host's own hardware. The branch touches nothing under
+   harness/preflight or harness/webapp.py.
