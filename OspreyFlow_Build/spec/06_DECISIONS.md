@@ -35242,3 +35242,71 @@ token shapes above are as Microsoft documents them, not yet measured):
 - one real token from the client's development tenant, which settles the assumptions above.
 
 Tests: `tests/services/api/test_auth_entra_claims.py`. Planted faults: `process/lanes/admin/P10_P1_RED_RECORD.md`.
+
+### ADR-135, Amendment 9 (11 November 2026) — Laurium wired into the cloud-platform profile as built (P12 part 2): its own service with no Secret in its pod, the review queue's extraction alone, the cloud-platform preset read as a profile default, Admin read-only, its key made at start without stopping the Conduit, and Laurium reading the product's own extraction model
+
+Status: as built by the case-b lane (P12 part 2), after its own lane reviewer's round and the orchestrator's rulings of
+11 November, each recorded for the owner. Changes Amendment 5 decision 2 where said (point 5); Amendments 6 and 8
+stand. Record: `process/lanes/case-b/P12p2_RED_RECORD.md`.
+
+1. **The setting, and the cloud-platform preset.** `models.extraction_engine`: `deep_read` or `laurium`, and Laurium on
+   the `cloud-platform` profile alone (as Amendment 7's engine kinds), refused on any other in words naming the profile.
+   **Amendment 5 decision 2 ("the `cloud-platform` profile's pack presets Laurium") named no artefact** (the install's
+   answers serve Lite, Small and Enterprise; starters are theme and domain): a rule 11 gap, **closed as a profile
+   default** (the orchestrator, on the lane's stop, the owner's decision kept): **left unset, `laurium` on
+   cloud-platform and its cluster translation, `deep_read` on every other profile; naming `deep_read` opts out.** It is
+   **read, never written** (`OspreyConfig.extraction_engine`, a property): a dump of a configuration that named nothing
+   still names nothing, so the set-up console's save and a profile switch never carry a resolved value. Platform's two
+   cloud-platform fixtures name `deep_read`, so their tests keep their meaning; P7b's poc fixture leaves it unset and
+   renders Laurium. **The owner's question stands in MORNING:** keep the preset, or `deep_read` until point 7's open
+   item closes.
+2. **Laurium serves document extraction into the review queue alone** (the orchestrator's ruling on the lane reviewer's
+   item 2, a rule 11 gap): `services.api.review.run_extraction`, whose findings arrive *inferred*, sets a marker
+   (`adapters.extract_laurium.composed.laurium_reads`), and only inside it does `extract` go to Laurium. Questions, Ask
+   to search, email extraction and a document's content stay with Deep read: Ask to search's schema writes an untyped
+   `items`, which Laurium's subset refuses, and Questions joins every document into one call. Composed **inside** the
+   routes (`services.api.laurium_start.routed_model`), so Laurium's calls keep their engine, its key and the dataset
+   egress rules.
+3. **The render.** Laurium is a service only when chosen (`harness/laurium.py`): its own image beside the Conduit's,
+   so `ospreyflow images push` copies it; its port; **no `env_file`, so on a cluster no `envFrom` of the deployment's
+   Secret** (which holds the gateway's master key and every store's password): its environment is its gateway's address
+   alone. The Conduit is told the choice and Laurium's address (`OSPREY_EXTRACTION_ENGINE`, `OSPREY_LAURIUM_URL`). The
+   gateway is rendered always (Amendment 8). Platform's files (`render.py`'s two hooks, `cluster.py`'s port, the
+   profile's image and resources, `model_admin.py`'s two lines, the two fixtures) as the lane's diff.
+4. **Laurium's key at start** (Amendment 6 decision 8's part 2): made with the deployment's extraction model alone, and
+   **every older Laurium key deleted**, by its hash, every page read first, so a key from a master key since rotated is
+   not left valid. **A key that cannot be made never stops the Conduit** (the lane reviewer's item 1): tried again in the
+   background, each wait twice the last up to ten minutes, as the engines' reconciliation (Amendment 3); until it is
+   held, Laurium's calls alone are refused in words. The live suite's factory refuses a gateway already holding
+   Laurium's key (a deployment's), looking for it by its hash, never with the key in an address.
+5. ***Admin › Models* shows the engine, read-only, on the cloud-platform profile alone**, with Amendment 8's words:
+   "chosen at set-up: change it in osprey.yaml, re-render, and have the platform team apply it." **This changes
+   Amendment 5 decision 2's "and in *Admin › Models* … changing it is audited behind `manage_models`"** (the
+   orchestrator's ruling, as P11's: Admin never offers what the render did not make): Laurium is a service the render
+   makes, so a change here could not take effect; there is no write route and so nothing to audit.
+6. **Where Laurium's traffic may go is P7b's** (platform, ADR-148 Amendment 5): its row in the per-workload egress,
+   `laurium: [litellm]`, and `laurium` in the Conduit's row; ingress derived from the same rows (the Conduit alone
+   reaches it; no worker holds a model). **Until P7b and the row land, the namespace's `allow-egress` (`all()`, order
+   100) admits Laurium's pod, as every pod, to every pod, the managed stores and each allowed host** (the lane's
+   finding of 11 November, measured on the rendered chart): the preset ships with that until then.
+7. **The exit: Laurium reads a real model's answer.** Leased on stack b (11 November, 18:01 UTC) beside the
+   orchestrator's pinned gateway (LiteLLM with its own database) and Ollama: **`qwen2.5:7b-instruct`, the product's own
+   extraction model, 3 of 3**; the 0.5B conformance model 0 of 3, the control (part 1's strict xfail on it stays,
+   narrowed to its unparseable refusal alone). **The client's own engine is proven at their install (20 November): P12's
+   last open item**, and D2c says so.
+
+**Consequences.** Laurium's prompt asks for its format in the prompt alone; a model that does not follow it (the 0.5B)
+is refused as `unparseable`, never read as an empty finding. The options for one that does not, recorded not built:
+constrained decoding (`response_format: json_schema` bound on Laurium's chat model), JSON mode, a larger model.
+
+**The tests that would fail.** The setting and its preset, read not written: `tests/schemas/test_extraction_engine_setting.py`
+(the round trip and a shared `ModelsConfig` planted red). Laurium's render and no Secret in its pod:
+`tests/harness/test_laurium_render.py` (`env_file` planted red). The review queue's extraction alone:
+`tests/adapters/extract_laurium/test_laurium_reads_findings_alone.py` (the marker left out, and every caller sent, each
+red). The composition inside the routes, the key at start never stopping the Conduit, the client closed:
+`tests/services/api/test_laurium_start.py` (the reversed wrapping planted red). The sweep, every page first:
+`tests/adapters/extract_laurium/test_laurium_at_start.py`. Admin read-only:
+`tests/services/api/test_admin_models_extraction_engine.py` and `Models.test.tsx`. The platform's rules with Laurium
+rendered on three shapes: `tests/harness/test_laurium_cp_policy.py`. Laurium's traffic, in Calico's order:
+`tests/harness/test_laurium_network_policy.py`, strict-xfailed until P7b. The exit:
+`tests/conformance/model_port/test_laurium_reads_a_real_model_live.py`, leased.
