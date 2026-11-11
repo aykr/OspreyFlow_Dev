@@ -33397,8 +33397,8 @@ sprint. With the orchestrator's adjustments, which the owner accepted.*
    owner afterwards. T3b and D2d (after its must-fixes) go ahead on this rule. **hyg is an access step** (schedule
    notices filtered to their owner, rules 3 and 4), so it keeps its two rounds. Merges still land only through the
    orchestrator (Amendment 7), so nothing lands while the orchestrator's machine is offline.
-   **P7 is treated as an ordinary step** (the owner, about 06:30): one review round, then it merges; a retrospective
-   second review follows the merge, its findings carried forward, not reverted.
+   **P7 merges without the owner once both review rounds pass and its gates are green** (the owner, about 06:45,
+   replacing the one round given at about 06:30); it is listed for the owner's review afterwards.
 10. **The platform lane's queue, revised (the owner, about 06:40).**
     - **P9 moves to case**, in a fresh session on the `sol` account, once P7 merges. Case is the idle lane, and
       `sol` keeps the owner's 30% share. Platform keeps P7, then P7b.

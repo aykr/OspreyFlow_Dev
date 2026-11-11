@@ -1,5 +1,5 @@
 # as of 2026-11-11T06:40Z
-platform	P7	running on the test server since 06:13; merges on render, cp-policy-check and the gates (Am 8); one review round on your return, a retrospective one after	11 Nov, ~12:30	B
+platform	P7	running on the test server since 06:13; merges on render, cp-policy-check and the gates (Am 8); two review rounds on your return, then merges without you	11 Nov, ~14:00	B
 admin	P10	Entra ID claims: the mapping and access tests on the server from 07:08; profile wiring after P7; two review rounds	12 Nov	B
 case	P9	cut: encrypted S3 backup, one timed restore; a fresh sol session once P7 merges	12–13 Nov	B
 platform-b	P11	part 1 (engine kinds) on the server from 07:08, two rounds; part 2 after P7	12 Nov	B

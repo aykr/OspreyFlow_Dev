@@ -279,6 +279,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **P7a** (the production shape) moves to after the install.
       - New dates: P7b on 13 November, and the whole client chain on 13 November, with D2c on 13–14 November.
 
+34. **The demo deployment on the test server is frozen until you say so (your word, about 06:45), for your demo on
+    Friday 13 November.** `osprey-small` runs **v0.4.12**. Its `deployment.env` says `OSPREY_RELEASE_VERSION=v0.4.12`;
+    its `versions.lock` pins the release images `ghcr.io/aykr/*:422833c`, digest-pinned; its containers have been up
+    5 to 6 days and are healthy. No update, reseed or restart of it. Every lane's server prompt already forbids
+    touching it, and the v0.5.0 update check runs on its own `osprey-upg`.
+    **P7 now needs two review rounds and green gates to merge without you** (your word, replacing the one round of
+    about 06:30); it is listed for you after. It can still land only while my session, on your laptop, is online.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
