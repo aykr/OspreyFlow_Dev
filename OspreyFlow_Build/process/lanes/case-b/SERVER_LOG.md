@@ -121,4 +121,9 @@ written first and each fix planted red (`P12_RED_RECORD.md`: 45 offline, 9 in La
 
 ## Built
 
-(see the end of this file)
+**Built at 310648a1** (the reviewer's findings fixed), and at **a5fa3c1b** with the service inventory's row, which
+make test found missing. Gates at those heads: `gates/310648a1.test.txt`, `gates/a5fa3c1b.ci.txt`, every failure
+explained. Main has not moved (459ae1d4), so there was no rebase. The orchestrator's independent review starts when it
+is back; I am not reporting ready-to-merge until it has run. Nothing of this session is still running: the reviewer
+agent has finished, and so have the make runs. No container is left (only `docker build` was run; the image
+`case-b-laurium:p12` stays for the held `docker run` check). The report is `REPORT.md`.
