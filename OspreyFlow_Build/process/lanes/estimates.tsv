@@ -1,4 +1,4 @@
-# as of 2026-11-11T09:30Z
+# as of 2026-11-11T09:45Z
 platform	P7	review A: not mergeable (make test red on its own stale PDF, kind claims recorded as done, egress allows /0, renders-unchanged not shown at head); review B running; one fix pass on the server after B, then round 2	12 Nov	B
 admin	P10	round 1: not mergeable (the tenant plant was an import error; principal keyed by oid, the orchestrator's ruling; tid under Keycloak refused); fixes on the server since 09:11; ADR-148 Am 6 reserved	12 Nov	B
 case	P9	cut: encrypted S3 backup, one timed restore; a fresh sol session once P7 merges	12–13 Nov	B
@@ -11,7 +11,7 @@ docs	D2c	Cloud Platform guide, from P7's merge, filled as each step lands; where
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 4 landed (9de435c); part 5 built, gates explained at 9cbb4575 (server); with the merger next	11 Nov, evening	A
 rules	UPG-check	the real update v0.4.12 to v0.5.0 on osprey-upg, server session since 09:11	11 Nov, ~12:00	A
-rules-b	T3b	with the merger, after hyg	11 Nov, afternoon	A
-docs	D2d	the review's nine must-fixes, then merge without you (Am 8)	11 Nov, afternoon	A
+rules-b	T3b	red on the server's browser set (its probe on Linux Chromium); back to rules-b, whose session is closed	12 Nov	A
+docs	D2d	fresh review: five must-fixes; being fixed headless on the Mac until 10:25; server gates owed, then the merger	11 Nov, evening	A
 platform-b	carries	after P11 part 1 (chart quoting first)	12 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
