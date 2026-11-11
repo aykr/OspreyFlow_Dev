@@ -1,0 +1,12 @@
+P7b (lane/platform-p7b, records 5585b4e, code 2833a66f) merged onto main d507f9c, gated by the orchestrator, 11 November 2026.
+- Earlier merged tree (becb266f on d9beca2, rsynced 20:54Z, stack_lease.sh offline merge): make -k test 3 failed, 12147 passed
+  (GPU preflight; test_render_memory's OpenSearch case, failing on main; test_lanes_launch's running-session case,
+  passing alone on platform's run); make -k ci exit 0 (harness-a11y in slot 14).
+- Final merged tree (2833a66f, the second pass changing only cp_policy_check, the egress tests, the connector_hosts
+  schema and the harness's ports): tests/cp_policy_check, the five test_cloud_platform_* files above, test_admin_guide
+  and test_docs_pdf on the server (21:48Z, offline): 523 passed, 6 skipped. make cp-policy-check: 0 violation(s) for
+  development, poc, production-bedrock and production.
+- The lane's own gates at 2833a66f: make test 3 known; make -k ci exit 0; red record 106/106; renders of local-lite,
+  small and cluster byte for byte.
+- Locally on the merge: docs, reservations and heartbeat tests 127 passed; tools.docs_pdf clean (only the admin PDF moved).
+- At merge: P7b_admin_guide.diff applied as the administration guide 1.82; ADR-148 Amendment 5 marked written.
