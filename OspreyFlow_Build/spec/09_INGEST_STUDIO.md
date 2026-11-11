@@ -338,9 +338,12 @@ are, each read **read-only** and landing as the source's one file exactly as abo
   to a prefix may not hold. A store's refusal is judged by its AWS error code, never by words in a key;
   a bucket in another region than the connection names (`PermanentRedirect`, `AuthorizationHeaderMalformed`)
   is told so, never followed there. The endpoint is named (`s3.<region>.amazonaws.com`, virtual-hosted),
-  never taken from the environment, and neither client sends a request to any host but the one the egress
-  allow-list names. The folder is listed a page at a time (botocore's `ListObjectsV2`; pyarrow's S3
-  filesystem opens the objects) and the listing **stops at 1,001 objects**, never taken whole. Rows of
+  never taken from the environment. The folder is listed a page at a time by botocore (`ListObjectsV2`),
+  whose client sends no request to any host but the one the egress allow-list names, and the listing
+  **stops at 1,001 objects** (a folder marker counting as one), never taken whole. pyarrow's S3
+  filesystem opens the objects and, for an empty listing, asks for the bucket: it is held to that host by
+  its own arguments alone (the named endpoint, virtual-hosted), not by a guard on each request, and whether
+  it would follow a region redirect is part 2's check. The Athena client is held as the listing client is. Rows of
   several objects are put together by column name; a header naming a column twice is refused. A Parquet
   date or time is written in ISO 8601, a decimal as written, a list as compact JSON; a binary column is
   refused.
@@ -357,7 +360,8 @@ are, each read **read-only** and landing as the source's one file exactly as abo
   comma it cannot attribute, a word after a relation it does not know, a join with no condition) is
   refused too, which may refuse a legitimate query the client then saves more plainly (the role's IAM
   policy is the second line, not the first). A string value is a string wherever a comment's marker is
-  in it, and a quoted name is never a keyword. Results are paged a thousand rows at a time; a query
+  in it, a `--` comment ends at a carriage return as at a newline (as Athena's own SQL reads it), and a
+  quoted name is never a keyword. Results are paged a thousand rows at a time; a query
   running past 300 seconds is stopped and refused. A result naming a column twice (`SELECT a.id, b.id`),
   or a row with more or fewer values than its columns, is refused, never written with one value in two
   cells or a value dropped. A query that does not parse or names a missing catalog, database or table,

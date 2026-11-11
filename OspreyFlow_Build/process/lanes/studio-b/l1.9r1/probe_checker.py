@@ -61,6 +61,12 @@ BAD = [
     "SELECT * FROM visits.many m, visits.many n WHERE m.a = (SELECT a FROM finance.ledger)",
     "SELECT * FROM (TABLE finance.ledger) t",
     "SELECT * FROM visits.many m, finance.ledger;",
+    # After the lane's own reviewer found `--\r` (round 1). Trino ends a `--` comment only at \r or
+    # \n (its lexer's SIMPLE_COMMENT), so a comment running on past any other line end (\x0b, \x0c,
+    # \x85,  ,  ) is a comment to both, and reads nothing more: not listed here.
+    "SELECT * FROM visits.many --\r\n, finance.ledger",
+    "SELECT * FROM visits.many\r, finance.ledger",
+    "SELECT * FROM visits.many /* a\r */ , finance.ledger",
 ]
 
 

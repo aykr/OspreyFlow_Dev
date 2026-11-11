@@ -41,4 +41,7 @@ refused (outside): 'SELECT * FROM visits.many m JOIN visits.many n ON true JOIN 
 refused (outside): 'SELECT * FROM visits.many m, visits.many n WHERE m.a = (SELECT a FROM finance.ledger)'
 refused (outside): 'SELECT * FROM (TABLE finance.ledger) t'
 refused (outside): 'SELECT * FROM visits.many m, finance.ledger;'
-43 shapes, 0 passed
+refused (outside): 'SELECT * FROM visits.many --\r\n, finance.ledger'
+refused (outside): 'SELECT * FROM visits.many\r, finance.ledger'
+refused (outside): 'SELECT * FROM visits.many /* a\r */ , finance.ledger'
+46 shapes, 0 passed

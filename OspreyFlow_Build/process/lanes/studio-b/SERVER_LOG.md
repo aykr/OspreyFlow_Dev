@@ -96,6 +96,19 @@ orchestrator while the laptop is offline (about 07:15 to 11:00 UTC). Plan: `L1.9
 - **Item 9.** The draft retitled ADR-140, Amendment 20, with items 1, 3 and 7 folded in.
 - SeaweedFS (`studio-b-seaweedfs-3`, 127.0.0.1:58335, this lane's own, no lease): 7 passed, the live listing plant
   red; stopped, and removed with the two stopped ones from the first round.
+- **Own lane-reviewer** (run while the first gates ran at 464f7482; those gates were stopped, unfinished, and
+  their partial logs removed): **one fail-open**, a `--` comment that Trino ends at a lone carriage return
+  read to the newline, hiding a table (or a second statement) from the check; and six more (the fixture's comma
+  lists and a function's FROM, uncounted folder markers, a listing with no token, the store's `OSError` as a
+  500, the rebound refresh pinned by status only, the spec's "neither client" claim too wide). All fixed, each
+  red first (`L1.9_RED_RECORD.md`, round 1, own reviewer). Recorded plainly: the first probe's "43 shapes, 0
+  passed" had not tried a carriage return, and was not the result it was written down as.
+- **The offline gates could not go through `stack_lease.sh offline`** from this server: `ospreyflow-test` (the
+  first host in `lane_stack_hosts.tsv`) is the owner's Mac's ssh alias and does not resolve here, and
+  `OSPREY_OFFLINE_HOST=localhost` finds no sshd. So the gates ran as the first round's did, here in the worktree,
+  with the exports `run_on_host` sets for an offline run (ports 59991–59994, `OSPREY_PORTS_LANE=studio-b`,
+  `OSPREY_PORTS_SLOT=11`, `--durations=30`), no stack and no lease, in the `.venv` synced from the branch's lock
+  by `uv sync --frozen` immediately before.
 - Not run: `graphify update .` (outside this session's permitted commands), and a leased live run
   (`test_route_rights.py`): the round adds no route, and item 10 names the offline gates and the browser ones.
 

@@ -120,6 +120,10 @@ PLANTS: dict[str, Plant] = {
                   "    for match in _TOKEN.finditer(re.sub(r'--[^\\n]*(\\n|$)|/\\*.*?\\*/', ' ', "
                   "statement, flags=re.DOTALL)):")],
         [OUTSIDE, NOT_ONE], "comments stripped before strings are read (b29dba44's order)"),
+    "comment-to-newline-only": Plant(
+        ATHENA, [('r"""(?P<comment>--[^\\r\\n]*|', 'r"""(?P<comment>--[^\\n]*|')],
+        [OUTSIDE, NOT_ONE], "a `--` comment read to the newline alone, past a carriage return "
+                            "(the lane's own reviewer, round 1)"),
     # --- item 3: Athena's result columns --------------------------------------------------------
     "duplicate-columns": Plant(
         ATHENA, [("            _refuse_a_column_named_twice(columns, where)\n", "")],
@@ -137,6 +141,14 @@ PLANTS: dict[str, Plant] = {
          f"{T_ATHENA}::test_a_join_to_a_table_athena_does_not_hold_is_refused_in_words",
          f"{T_ATHENA}::test_an_unqualified_table_is_read_from_the_query_s_own_database"],
         "the fixture as the review found it: catalog ignored, first FROM only, unqualified asserted"),
+    "fixture-first-item-only": Plant(
+        FIXTURE, [("        for piece in [*items, item]:", "        for piece in [*items, item][:1]:")],
+        [f"{T_ATHENA}::test_a_table_athena_does_not_hold_after_a_comma_is_refused_in_words"],
+        "the fixture resolving only a FROM list's first item (round 1's own reviewer)"),
+    "fixture-function-from": Plant(
+        FIXTURE, [("    text = _NOT_A_FROM.sub(\" x \", re.sub(", "    text = (lambda t: t)(re.sub(")],
+        [f"{T_ATHENA}::test_the_fixture_reads_what_athena_reads"],
+        "a function's FROM, or IS DISTINCT FROM, read by the fixture as a table"),
     # --- items 6 and 8: the clients a deployment builds, and the bounded listing ---------------
     "list-whole": Plant(
         READS, [(LIST_PAGE, "MaxKeys=1_000"), (LIST_STOP, 'if not page.get("IsTruncated"):')],
@@ -145,6 +157,22 @@ PLANTS: dict[str, Plant] = {
         READS, [(LIST_PAGE, "MaxKeys=1_000"), (LIST_STOP, 'if not page.get("IsTruncated"):')],
         [f"{T_LIVE}::test_a_real_listing_stops_at_the_object_cap_and_one"],
         "the folder listed whole, against SeaweedFS", live=True),
+    "markers-uncounted": Plant(
+        READS, [("            for item in page.get(\"Contents\", []):\n                found.append(",
+                 "            for item in page.get(\"Contents\", []):\n                if str(item[\"Key\"])"
+                 ".endswith(\"/\"):\n                    continue\n                found.append(")],
+        [f"{T_CLIENTS}::test_folder_markers_count_so_a_listing_of_them_stops_at_the_cap"],
+        "folder markers not counted (b29dba44's round-1 listing): a folder of them listed whole"),
+    "no-token-unchecked": Plant(
+        READS, [("            if not token or token == ask.get(\"ContinuationToken\"):",
+                 "            if False:")],
+        [f"{T_CLIENTS}::test_a_listing_cut_short_with_nowhere_to_go_on_is_refused_in_words"],
+        "a listing cut short with no token gone on with"),
+    "store-error-unworded": Plant(
+        READS, [("    try:\n        return readers.s3_store(settings)\n    except OSError as error:",
+                 "    try:\n        return readers.s3_store(settings)\n    except ValueError as error:")],
+        [f"{T_CLIENTS}::test_a_store_that_cannot_be_made_is_refused_in_words_at_a_read_and_at_test"],
+        "pyarrow's OSError making the filesystem left unworded (a 500)"),
     "only-to-off": Plant(
         READS, [('    client.meta.events.register_first(f"before-send.{service}", '
                  "_refuse_elsewhere)", "    del _refuse_elsewhere")],
@@ -202,6 +230,14 @@ PLANTS: dict[str, Plant] = {
                    "        return found")],
         ACCESS, "a source found by id alone, not within the route's dataset (the store's WHERE; "
                 "the in-memory store stands in for the Postgres one)"),
+    "refresh-unbound-words": Plant(
+        APP, [("            await _audit_refused_read(audit, principal, dataset_id, "
+               "source.connection_id, refused)\n            raise _no_such_connection() from refused",
+               "            await _audit_refused_read(audit, principal, dataset_id, "
+               "source.connection_id, refused)\n            raise HTTPException(status_code=404, "
+               "detail={\"error\": \"not_found\", \"detail\": \"not this dataset's\"}) from refused")],
+        [f"{T_ACCESS}::test_refresh_now_through_a_rebound_connection_reads_nothing"],
+        "Refresh now through a rebound connection answered otherwise than an unknown connection"),
     "dataset-gate-open": Plant(
         APP, [(GATE, GATE.replace("if list(principal.datasets or []) != [dataset_id]:", "if False:"))],
         ACCESS, "the dataset's own gate (require_studio_dataset) admitting anyone"),
