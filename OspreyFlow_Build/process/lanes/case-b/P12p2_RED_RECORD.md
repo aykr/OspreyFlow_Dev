@@ -196,3 +196,21 @@ once P7b's check is on main.
    over the real service (`laurium_live_adapter`), not through the Conduit's routed model**: the Conduit's lifespan needs
    the stores and Keycloak, not cheap on a lease beside the gateway pair; the composition, the marker and the key's
    readiness are the offline tests above.
+3. **Merge order** (the ruling): after P7b with Laurium's row; Amendment 9 point 6 says so, and that the default
+   never ships open.
+4. **Rebased onto f78b307**; both diffs apply clean there.
+5. **The strict xfails at the head, `--runxfail`** (`gates/6052a5b.runxfail-*.txt`): the network policy's six fail
+   for their stated reasons (Laurium reaches ClickHouse, the Conduit, ArcadeDB and the gateway's other port; the
+   gateway, workers and others reach Laurium; no egress policy of Laurium's rendered); the token case, 2 failed for
+   the field's absence; part 1's 0.5B xfail, the four-outcome check in Laurium's environment, 4 of 4.
+6. **Ownership** named in Amendment 9 point 3 and the friction row. 7. **The ingress test renamed** for what it asserts.
+- Minor: `P12p2_CI.diff` for the owner (trivy on Laurium's image; the release publishes it from its folder); the render
+  test's label case points at the evaluator; the record's figures corrected; `assert_queued_pending`.
+
+**Found by the gates:** the guide's appendix row changed `administration-guide.md` without a new version or PDF
+(`test_docs_pdf`): the row is off the branch and goes as `P12p2_docs_admin_guide.diff`, the guide's 1.79, its PDF
+printed at merge as P11's was.
+
+**How the gates ran, said plainly:** a chain of server runs started with a shell `&` outlived its tool call and kept
+going (its local process lived on), so the next chains were refused by the lease's own guard ("case-b's last remote run
+is still running") and nothing ran twice. Its runs are the gates below, each recorded against the tree it copied.
