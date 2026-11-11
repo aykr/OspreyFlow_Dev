@@ -294,6 +294,9 @@ BEDROCK_REGION = "eu-west-2"
 #: the profile's own `Profile` member is P7's.
 MODEL_ROUTE_PROFILE = "cloud-platform"
 MODEL_ROUTE_PROFILES: frozenset[str] = frozenset({MODEL_ROUTE_PROFILE})
+#: The validation context's key naming the profile whose engine rules a translated configuration
+#: was already held to (`harness.cloud_platform._as_cluster`).
+ENGINES_AS = "engines_as"
 #: ADR-135 Amendment 7 decision 2: a Bedrock model is named by its own id (`anthropic.…`). An
 #: inference profile's id puts a geography before it (`eu.`, `us.`, `apac.`, `global.`, …) and may
 #: send the call outside London; AWS's own guide says not to rely on the prefix alone to tell where
@@ -1651,10 +1654,15 @@ class OspreyConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _engines_suit_the_profile(self) -> OspreyConfig:
-        """ADR-135 Amendment 7 decision 1: each engine as this profile allows (`engine_refusal`)."""
+    def _engines_suit_the_profile(self, info: ValidationInfo) -> OspreyConfig:
+        """ADR-135 Amendment 7 decision 1: each engine as this profile allows (`engine_refusal`).
+        A cloud-platform deployment's cluster translation (`harness.cloud_platform._as_cluster`) is
+        validated as `profile: cluster`; its engines were already held to cloud-platform's rules,
+        and it says so by `ENGINES_AS` in the validation's context, so the render does not refuse
+        the engines it is rendering (the orchestrator's round 2, item a)."""
+        profile = (info.context or {}).get(ENGINES_AS, self.profile.value)
         for provider in self.models.enabled_providers:
-            if refused := engine_refusal(provider, self.profile.value):
+            if refused := engine_refusal(provider, profile):
                 raise ValueError(f"models.providers: {provider.name}: {refused}")
         return self
 

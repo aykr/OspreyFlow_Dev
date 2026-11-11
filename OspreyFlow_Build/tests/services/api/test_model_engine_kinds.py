@@ -747,18 +747,6 @@ def test_each_kind_s_limits_are_its_own_gateway_key_s(
 LOCALS = DeploymentModels("qwen2.5:7b-instruct", None, None, None)
 
 
-@pytest.fixture
-def as_on_cloud_platform(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`profile: cloud-platform` cannot be declared on this branch: its `Profile` member is P7's
-    (lane/platform), not yet merged here. Its render reuses the cluster's translation (lane/platform
-    a1863d5c), so the harness's handling of the two kinds is shown on the existing profiles with
-    Amendment 7's profile set widened **for the test alone**. At merge, after P7, these cases move
-    to the real profile (the as-built record says so)."""
-    monkeypatch.setattr(
-        deployment, "MODEL_ROUTE_PROFILES", frozenset({CLOUD, "local-lite", "small", "cluster"})
-    )
-
-
 def _declared() -> OspreyConfig:
     models = ModelsConfig.model_validate({
         "local_only": False, "sendable_handling_codes": ["P"],
@@ -806,19 +794,63 @@ def test_the_install_asks_no_key_for_an_iam_role_engine() -> None:
         provider_secret_lines(config, {"OSPREY_MODEL_KEY_ACME": TOKEN})
 
 
-def _cluster_values(*providers: dict[str, Any]) -> dict[str, Any]:
-    from tests.harness.test_cluster_render import cluster_config, values_for
+def _cloud_config(*providers: dict[str, Any]) -> OspreyConfig:
+    """A real `profile: cloud-platform` deployment (P7's own fixture), with these engines: the
+    cases below ran on a widened profile set before P7 merged, which hid that the render refused
+    the very engines it was rendering (the orchestrator's round 2, item a)."""
+    from tests.harness.test_cloud_platform_render import _config
+
+    from tests.harness.test_cloud_platform_render import AWS
 
     models = {"local_only": not providers, "sendable_handling_codes": ["P"] if providers else [],
               "providers": list(providers)}  # fmt: skip
-    return values_for(cluster_config(models=models))
+    # Each engine's host is an egress host, which the render refuses without its networks.
+    nets = {**AWS, BEDROCK_HOST: ["198.18.2.0/24"], "ai-gateway.client.example": ["203.0.113.0/24"],
+            "generativelanguage.googleapis.com": ["203.0.114.0/24"]}  # fmt: skip
+    return _config("development", models=models, cloud_platform={"egress_nets": nets})
 
 
-@pytest.mark.usefixtures("as_on_cloud_platform")
-def test_an_iam_role_engine_s_held_key_is_blanked_in_every_cluster_workload() -> None:
-    from tests.harness.test_cluster_render import _containers
+#: Bedrock's runtime in London, the one host a Bedrock engine's calls reach (ADR-135 Am 4).
+BEDROCK_HOST = "bedrock-runtime.eu-west-2.amazonaws.com"
 
-    containers = _containers(_cluster_values(BEDROCK))
+
+def test_a_bedrock_engine_s_host_is_an_egress_host_by_its_region() -> None:
+    """A Bedrock engine names no address; the render took an engine's host from its address or its
+    provider's name alone, so it refused Bedrock as "names no api_base" (P11 at the rebase onto
+    P7). Its host is its region's runtime, allowed by its networks, or refused in words."""
+    from harness.cloud_platform import CloudPlatformNotRenderable
+    from tests.harness.test_cloud_platform_render import _artefacts, _config, _hosts
+
+    hosts = _hosts(_cloud_values(BEDROCK))
+    assert hosts[BEDROCK_HOST] == ["198.18.2.0/24"]
+    models = {"local_only": False, "sendable_handling_codes": ["P"], "providers": [BEDROCK]}
+    with pytest.raises(CloudPlatformNotRenderable, match=BEDROCK_HOST):
+        _artefacts(_config("development", models=models))
+
+
+def _cloud_values(*providers: dict[str, Any]) -> dict[str, Any]:
+    from tests.harness.test_cloud_platform_render import _values
+
+    return _values(_cloud_config(*providers))
+
+
+@pytest.mark.parametrize("declared", [[BEDROCK], [BEDROCK, GATEWAY], []],
+                         ids=["bedrock", "bedrock-and-gateway", "none"])  # fmt: skip
+def test_the_cloud_platform_render_tells_the_conduit_its_profile(
+    declared: list[dict[str, Any]],
+) -> None:
+    """The Conduit offers and takes the two kinds by `OSPREY_PROFILE` (`model_admin`): the
+    cloud-platform render renders an engine of each kind, and writes the profile they need."""
+    values = _cloud_values(*declared)
+    assert values["environment"]["OSPREY_PROFILE"] == CLOUD
+    installed = Installed.from_env(LOCALS, {**values["environment"]})
+    assert [p.name for p in installed.providers] == [p["name"] for p in declared]
+
+
+def test_an_iam_role_engine_s_held_key_is_blanked_in_every_cloud_platform_workload() -> None:
+    from tests.harness.test_cloud_platform_render import _containers
+
+    containers = _containers(_cloud_values(BEDROCK))
     readers = [c for c in containers if c.get("envFrom")]
     assert readers
     for container in readers:
@@ -830,14 +862,15 @@ def test_an_iam_role_engine_s_held_key_is_blanked_in_every_cluster_workload() ->
     assert all(e["name"] != "OSPREY_MODEL_KEY_BEDROCK" for e in gateway["env"])
 
 
-@pytest.mark.usefixtures("as_on_cloud_platform")
-@pytest.mark.parametrize("declared", [[BEDROCK], []], ids=["bedrock-declared", "none-declared"])
+@pytest.mark.parametrize(
+    "declared", [[BEDROCK], [BEDROCK, GATEWAY]], ids=["bedrock", "bedrock-and-gateway"]
+)
 def test_the_gateway_workload_carries_no_static_aws_key(declared: list[dict[str, Any]]) -> None:
     """The gateway's pod signs Bedrock's calls by its own identity alone (the review's item 8):
     botocore prefers static keys in the environment to the pod's web identity, so none is given,
-    whether Bedrock is declared at install or added later in *Admin › Models* (none declared: the
-    render cannot know)."""
-    values = _cluster_values(*declared)
+    declared at install (a cloud-platform render runs the gateway only with an engine enabled, P7;
+    one added later in *Admin › Models* is held by the case after this)."""
+    values = _cloud_values(*declared)
     gateway = next(w for w in values["workloads"] if w["name"] == "litellm")
     # Nothing reaches it unnamed: it reads no Secret whole, so a key held there is not handed on.
     assert not gateway.get("envFrom")
@@ -859,12 +892,11 @@ def test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key(
     assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
 
 
-@pytest.mark.usefixtures("as_on_cloud_platform")
 def test_the_install_page_offers_no_key_field_for_an_iam_role_engine(tmp_path: Path) -> None:
     from harness.install_page import _providers
 
     draft = tmp_path / "osprey.yaml"
-    draft.write_text(yaml_dump(_declared()), encoding="utf-8")
+    draft.write_text(yaml_dump(_cloud_config(BEDROCK, GATEWAY, GEMINI)), encoding="utf-8")
     assert {p["name"] for p in _providers(draft)} == {"acme", "gemini"}
 
 

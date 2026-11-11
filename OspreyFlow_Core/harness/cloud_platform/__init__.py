@@ -46,6 +46,7 @@ from harness.cloud_platform.settings import (
 from harness.images import DigestResolver, ServiceImage
 from schemas.deployment import (
     AnalyticsEngine,
+    ENGINES_AS,
     CloudPlatformConfig,
     GraphStore,
     OspreyConfig,
@@ -256,7 +257,9 @@ def _as_cluster(config: OspreyConfig, platform: PlatformSettings) -> OspreyConfi
             else {}
         ),
     }
-    return OspreyConfig.model_validate(raw)
+    # Its engines were held to cloud-platform's rules when `config` was validated; validated
+    # again as a cluster, they are held to those still (ADR-135 Amendment 7; P11).
+    return OspreyConfig.model_validate(raw, context={ENGINES_AS: Profile.CLOUD_PLATFORM.value})
 
 
 def _in_registry(image: str, registry: str) -> str:
@@ -404,6 +407,10 @@ def _egress_hosts(
     hosts = [host.format(region=platform.aws_region) for host in profile.egress.always]
     for provider in config.models.enabled_providers:
         host = _host(provider.api_base) if provider.api_base else None
+        if provider.kind == "bedrock":
+            # Bedrock names no address: its calls reach its region's runtime, London alone
+            # (ADR-135 Amendment 4; P11 at its rebase onto P7, which refused it as addressless).
+            host = f"bedrock-runtime.{provider.region}.amazonaws.com"
         host = host or defaults.get(provider.name)
         if host is None:
             raise CloudPlatformNotRenderable(
