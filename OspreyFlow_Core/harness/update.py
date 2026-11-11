@@ -22,13 +22,15 @@ checked is the one the deployment was rendered with (`OSPREY_RELEASE_VERSION` in
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -120,6 +122,102 @@ def check(directory: Path, repo_root: Path, *, github_api: str = GITHUB_API) -> 
 # --- update -------------------------------------------------------------------------------------
 
 Run = Callable[[Sequence[str]], tuple[int, str]]
+
+
+#: The open lock an `update` hands its `--files-only` child, by descriptor number: the child is a
+#: process of its own, and would otherwise find its own parent's lock held and refuse.
+LOCK_FD_VARIABLE = "OSPREYFLOW_REFRESH_LOCK_FD"
+#: The deployments this process holds the lock of: how deeply, and by which descriptor.
+_HELD: dict[Path, list[int]] = {}
+
+
+class ChangeUnderWay(Exception):
+    """Another refresh or update of the deployment holds its lock, or this account cannot open
+    it."""
+
+
+def lock_path(directory: Path) -> Path:
+    """Beside the deployment, keyed by its resolved folder, so two names for it share one lock."""
+    real = directory.resolve()
+    return real.parent / f".{real.name}.refresh-lock"
+
+
+def _inherited(path: Path) -> int | None:
+    """The lock a parent `update` handed this process, believed only when the descriptor is that
+    very file and flocks (it shares the parent's open file, so it does while the parent holds
+    it)."""
+    raw = os.environ.get(LOCK_FD_VARIABLE, "")
+    if not raw.isdigit():
+        return None
+    descriptor = int(raw)
+    try:
+        held, on_disk = os.fstat(descriptor), os.stat(path)
+        if (held.st_dev, held.st_ino) != (on_disk.st_dev, on_disk.st_ino):
+            return None
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    return descriptor
+
+
+def _opened(path: Path) -> int:
+    """The lock opened **read-only** (`flock` needs no write access, so one a run under sudo left
+    root's stops no later run); made `644` on the open file if new, whatever the umask."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        try:
+            return os.open(path, os.O_RDONLY)
+        except PermissionError:
+            raise ChangeUnderWay(
+                f"The refresh lock {path} belongs to another account (a run under sudo) and this "
+                "one cannot open it, so nothing was changed. Remove it as that account (sudo rm "
+                f"{path}), then run this again."
+            ) from None
+    os.fchmod(descriptor, 0o644)
+    return descriptor
+
+
+@contextlib.contextmanager
+def one_change(directory: Path) -> Iterator[None]:
+    """One refresh or update of a deployment at a time, **for the whole of it**: `start --build`'s
+    files pass, build, stores' move, `up` and restarts, and `update`'s backup, files step, pull,
+    stores' move, `up`, restarts and rollback (the orchestrator's review of c5209b1, item 7). Two
+    would share one stage, move the stores together and clear each other's pending record."""
+    key = directory.resolve()
+    if key in _HELD:
+        _HELD[key][0] += 1
+        try:
+            yield
+        finally:
+            _HELD[key][0] -= 1
+        return
+    path = lock_path(directory)
+    descriptor = _inherited(path)
+    owned = descriptor is None
+    if descriptor is None:
+        descriptor = _opened(path)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(descriptor)
+            raise ChangeUnderWay(
+                "another refresh or update of this deployment is under way, so nothing was "
+                "changed; wait for it to finish, then run this again."
+            ) from None
+    _HELD[key] = [1, descriptor]
+    try:
+        yield
+    finally:
+        _HELD.pop(key, None)
+        if owned:
+            os.close(descriptor)
+
+
+def held_lock(directory: Path) -> int | None:
+    """The descriptor of the lock this process holds for `directory`, if it holds it."""
+    held = _HELD.get(directory.resolve())
+    return held[1] if held else None
 
 
 class UpdateFailed(Exception):
@@ -362,7 +460,25 @@ def apply_update(
     bundle: Path | None = None,
     confirm: Callable[[str], bool],
 ) -> int:
-    """0 updated (or already current), 1 refused or failed and rolled back, 2 rollback failed."""
+    """0 updated (or already current), 1 refused or failed and rolled back, 2 rollback failed.
+    Under the deployment's lock for the whole of it, its files step's child included."""
+    try:
+        with one_change(directory):
+            return _apply_update(directory, repo, host, to=to, bundle=bundle, confirm=confirm)
+    except ChangeUnderWay as refused:
+        print(f"ospreyflow: {refused}", file=sys.stderr)
+        return 1
+
+
+def _apply_update(
+    directory: Path,
+    repo: Path,
+    host: Host,
+    *,
+    to: str | None,
+    bundle: Path | None,
+    confirm: Callable[[str], bool],
+) -> int:
     from harness.bundle import BundleRefused
     from harness.bundle import open_bundle as unpack
 
@@ -630,12 +746,16 @@ DEPLOYMENT_DIR = "OSPREYFLOW_DEPLOYMENT_DIR"
 
 
 def _subprocess(
-    argv: Sequence[str], cwd: Path | None = None, env: Mapping[str, str] | None = None
+    argv: Sequence[str],
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    pass_fds: Sequence[int] = (),
 ) -> tuple[int, str]:
     try:
         done = subprocess.run(
-            list(argv), capture_output=True, text=True, check=False, cwd=cwd, timeout=7200, env=env
-        )
+            list(argv), capture_output=True, text=True, check=False, cwd=cwd, timeout=7200,
+            env=env, pass_fds=tuple(pass_fds),
+        )  # fmt: skip
     except (OSError, subprocess.SubprocessError) as failed:
         return 1, str(failed)
     return done.returncode, (done.stdout + done.stderr).strip()
@@ -695,7 +815,14 @@ def real_host(
         # The deployment named to refresh, never left for it to find (ADR-114 Amendment 39): a
         # deployment kept by name is not the checkout's own (ADR-138).
         def run_here(argv: Sequence[str]) -> tuple[int, str]:
-            return _subprocess(argv, cwd=repo, env={**os.environ, DEPLOYMENT_DIR: str(directory)})
+            env = {**os.environ, DEPLOYMENT_DIR: str(directory)}
+            env.pop(LOCK_FD_VARIABLE, None)
+            held = held_lock(directory)
+            if held is None:
+                return _subprocess(argv, cwd=repo, env=env)
+            # The child under this update's own lock, handed on rather than refused (item 7).
+            env[LOCK_FD_VARIABLE] = str(held)
+            return _subprocess(argv, cwd=repo, env=env, pass_fds=(held,))
 
         said = _ok_real(
             run_here,

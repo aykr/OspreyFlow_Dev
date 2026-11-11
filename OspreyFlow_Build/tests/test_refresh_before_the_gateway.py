@@ -490,3 +490,37 @@ def test_a_long_syntax_mount_declares_its_own_named_volume(deployment: Path) -> 
     refresh.files_up_to_date(_checkout(deployment))
     declared = set(_compose(deployment)["volumes"])
     assert "operator-notes" in declared and not any(name.startswith("{") for name in declared)
+
+
+def test_the_files_step_runs_under_its_update_s_own_lock(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`update` holds the deployment's lock for the whole of it (the orchestrator's review of
+    c5209b1, item 7), and its `--files-only` child, a process of its own, would find it held and
+    refuse; the child is handed the parent's open lock instead, and runs."""
+    _after_the_gateway_database(deployment)
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(CORE), str(CORE / "packages")]))
+    host = update.real_host(deployment, CORE)
+    with update.one_change(deployment):
+        changed = host.files_up_to_date()
+    assert set(changed) >= {"proxy_changed", "theme_changed", "routing_changed"}
+
+
+def test_a_descriptor_named_that_is_not_the_lock_holds_nothing(
+    deployment: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The handed-on lock is believed only when the descriptor is that very file, flocked: a stray
+    number in the environment (or another file's descriptor) is no lock held."""
+    import fcntl
+
+    _after_the_gateway_database(deployment)
+    other = os.open(tmp_path / "not-the-lock", os.O_RDONLY | os.O_CREAT, 0o644)
+    held = os.open(update.lock_path(deployment), os.O_RDONLY | os.O_CREAT, 0o644)
+    fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)  # another refresh, under way
+    monkeypatch.setenv(update.LOCK_FD_VARIABLE, str(other))
+    try:
+        with pytest.raises(refresh.RefreshFailed, match="under way"):
+            refresh.files_up_to_date(_checkout(deployment))
+    finally:
+        os.close(held)
+        os.close(other)

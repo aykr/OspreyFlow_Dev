@@ -42,7 +42,6 @@ is still `python -m harness.apply`. Every compose call reads the deployment's ow
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import json
 import os
 import re
@@ -55,7 +54,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from harness import compose_env, ingest_uploads, model_downloads, register_sign_in, store_volumes
+from harness import (
+    compose_env,
+    ingest_uploads,
+    model_downloads,
+    register_sign_in,
+    store_volumes,
+    update,
+)
 from harness.apply import _compose, release_registry
 from harness.atomic import replace_whole
 from harness.keycloak_theme import (
@@ -716,61 +722,16 @@ def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
         return _files_up_to_date_staged(directory, repo_root)
 
 
-#: The deployments this process holds the refresh lock of, and how deeply (`one_refresh` is entered
-#: by `refresh` for the whole run and again by its files pass).
-_HELD: dict[Path, int] = {}
-
-
 @contextlib.contextmanager
 def one_refresh(directory: Path) -> Iterator[None]:
-    """One refresh of a deployment at a time, **for the whole of it** (the files pass, the build,
-    the stores' move, `up` and the restarts): two would share one stage, move the stores together
-    and clear each other's pending record. The lock file is opened **read-only**, so one a run under
-    sudo left root's stops no later run (`flock` needs no write access); made `644` if new, the mode
-    set on the open file whatever the umask; one this account cannot open said in words."""
-    key = directory.resolve()
-    if _HELD.get(key):
-        _HELD[key] += 1
-        try:
+    """One refresh or update of a deployment at a time, for the whole of it (`harness.update`'s
+    `one_change`, which `update` holds too and hands to its `--files-only` child); refused in words
+    as a `RefreshFailed`."""
+    try:
+        with update.one_change(directory):
             yield
-        finally:
-            _HELD[key] -= 1
-        return
-    path = directory.parent / f".{directory.name}.refresh-lock"
-    try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    except FileExistsError:
-        descriptor = _open_held_lock(path)
-    else:
-        # The mode set on the open file, whatever the umask took off (a run under sudo with umask
-        # 077 would leave root's 600, which the operator's next run could not open).
-        os.fchmod(descriptor, 0o644)
-    try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        os.close(descriptor)
-        raise RefreshFailed(
-            "another refresh of this deployment is under way, so nothing was changed; wait for it "
-            "to finish, then run this again."
-        ) from None
-    _HELD[key] = 1
-    try:
-        yield
-    finally:
-        _HELD.pop(key, None)
-        os.close(descriptor)
-
-
-def _open_held_lock(path: Path) -> int:
-    """An existing lock opened read-only; one this account may not read is said in words."""
-    try:
-        return os.open(path, os.O_RDONLY)
-    except PermissionError:
-        raise RefreshFailed(
-            f"The refresh lock {path} belongs to another account (a run under sudo) and this one "
-            "cannot open it, so nothing was changed. Remove it as that account (sudo rm "
-            f"{path}), then run this again."
-        ) from None
+    except update.ChangeUnderWay as refused:
+        raise RefreshFailed(str(refused)) from None
 
 
 #: The restarts a files pass found needed, kept in the deployment's `state/` from before its files

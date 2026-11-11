@@ -112,7 +112,7 @@ def test_a_second_refresh_at_once_is_refused(deployment: Path) -> None:
     lock = deployment.parent / f".{deployment.name}.refresh-lock"
     with lock.open("w") as held:
         fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)  # another refresh of it, under way
-        with pytest.raises(refresh.RefreshFailed, match="another refresh of this deployment"):
+        with pytest.raises(refresh.RefreshFailed, match="another refresh or update of this deployment"):
             refresh.files_up_to_date(_checkout(deployment))
     refresh.files_up_to_date(_checkout(deployment))  # released: it goes ahead
 
