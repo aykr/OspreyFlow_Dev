@@ -1,20 +1,20 @@
-# case-b · P12 part 1 (Laurium as its own service) · report, 11 November 2026 (the test server)
+# case-b · P12 part 1 · report after the orchestrator's review of a5fa3c1b, 11 November 2026 (the test server)
 
-**Exit (part 1).**
-- **ADR-135 Amendment 6, met**, written first (f6f85fcf), from LICENCE_CHECK's ruling.
-- **Laurium's service, met**: `services/laurium/`, Python 3.13 (`python:3.13-slim@sha256:e48f59cd…`), Laurium 0.6.0 and `en-core-web-sm` 3.8.0 (Explosion's release) by hash, every install `--require-hashes`, never the `encoder` extra (the image gate refuses it). Builds; its licence gate passes 126 packages. Another host refused at start, planted: `test_settings.py`, `test_laurium_service.py::test_a_setting_naming_another_host_stops_the_service_at_start`.
-- **The adapter, met**: `packages/adapters/extract_laurium/`, schema checked before the call and the answer after, typed refusals in our words, the engine's tag and key. Findings reach the review queue as located candidates (`test_findings_inferred.py`), *inferred* until accepted (rule 5).
-- **The suite on both engines, met** through the stand-in served over HTTP as `litellm`: `test_suite_extract.py` (6 cases × 2) plus the service's 14, 26 passed in Laurium's environment (`make laurium-service`). The stand-in is the measured one, unchanged.
-- **No LangChain without Laurium, met** at the source (`tools/no_langchain_check.py`, `make ci` via `P12_MAKEFILE.diff`), the image leg in `P12_CI.diff`. **Licence record, met**: §7 entry, `RECORDED_LICENCE_EVIDENCE` (three entries), MoJ notices.
-- **Red record**: 45 offline and 9 live plants, all red (`P12_RED_RECORD.md`, `plants_P12.py`).
-- **Lane-reviewer, run**: do not merge, 11 findings, all fixed and planted (SERVER_LOG "The lane-reviewer's round").
+**Exit (part 1).** The amendment is drafted; the reservation is put back for the orchestrator to mark at merge.
+- **Laurium's service, met offline only.** Another host is refused at start (`test_settings.py`) and at the call that picks it (`test_laurium_service.py::test_every_model_call_goes_to_the_gateway_and_no_other_host`, planted: `['api.openai.com'] == []`).
+- **The master key never crosses into Laurium's container, met** (ADR decision 8, `keys.py`; `test_adapter.py::test_no_call_from_the_adapter_carries_the_master_key`, 4 plants red). **A credential step: two review rounds.**
+- **Findings *inferred*, met through the real store's write** (`test_findings_inferred.py`, `test_laurium_findings_pending.py`, promoting plant red in both). Postgres's own acceptance of the row is not proven by them (`test_review_store.py`'s, live).
+- **The suite on both engines: NOT met against a real gateway.** Laurium is registered in `MODEL_PORT_ADAPTERS`; the stand-in refusals pass on both. **The leased live run was not taken**: the lease asked for approval. Laurium has never met a real gateway or model.
+- **Rule 1 not kept for the extract suite**: it was committed after `adapter.py` and `app.py` (red record).
+- **Schema mapping, met** for all 33 entity types of default, fibo and niem. **No LangChain without Laurium**: the source leg is met; the image leg is carried.
+- **Red record**: 53 offline and 14 in Laurium's environment, all red (`P12_RED_RECORD.md`).
 
-**Gates** (main unmoved, at 459ae1d4): make test at 310648a1 5 failed / 10982 passed. make -k ci at a5fa3c1b failed only in core-check. Each failure explained in `gates/`: the scratch venv; main's libxslt; the server's own; a11y not run.
+**Gates at 283cfeb7** (main unmoved at 459ae1d4; run directly, not through the lease, which asked for approval; full outputs in `gates/283cfeb7.*`). make test: 4 failed / 11,033 passed. make test-js: 1 timing budget failed under server load (passes alone). make -k ci: core-check only (ESLint and trivy fs on the venv, a11y without a slot; with slot 3, 34 passed). Each is explained in SERVER_LOG "Built"; none is in a branch file.
 
-**Left, and why.** Not run here, since each asks for approval: `docker run` of the image (its start refusal; the image leg on real images), `trivy` on Laurium's image, a11y with slot 3. Not done yet: Laurium's request against the real gateway (rule 15), and the Superset image's LangChain. Part 2 waits for P7 and P11 part 1.
+**Left, and why.** Each needs approval this unattended session cannot give: the leased live run (the blocker), the image's start refusal, the image leg and trivy on Laurium's image (out of `P12_CI.diff`), moving the venv, a11y. Friction row `2026-11-11-case-b-server-session-cannot-lease.md`.
 
-**Commits**: f6f85fcf…a5fa3c1b on `lane/case-b-p12`, never pushed.
+**Commits**: f6f85fcf…a5fa3c1b, then ca85e385…283cfeb7 and the records after, on `lane/case-b-p12`; never pushed.
 
-**Requests**: apply both diffs at merge; accept the `pyproject.toml` mypy override and the `harness/service_inventory.py` row; `rm -rf OspreyFlow_Core/services/laurium/.venv`.
+**Requests**: apply both diffs at merge; ratify `factory.require` in `test_suite.py`/`test_suite_vision.py` (SERVER_LOG decision 15); move the venv; run, or allow, the leased live run (SERVER_LOG question 2 has the command).
 
-**Questions for the owner**: none that stop the work (SERVER_LOG, "Questions held"). Nothing of mine is still running.
+**Questions for the owner**: the proxy hazard for part 2 (ADR decision 4). Nothing of mine is still running.
