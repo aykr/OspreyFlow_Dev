@@ -63,12 +63,6 @@ FROM java-${CONDUIT_JAVA} AS java-chosen
 
 FROM python:3.12-slim AS conduit
 
-# Base-image OS packages lag the upstream image's own last-published point
-# release; picking up current Debian security patches at build time is
-# what keeps `trivy image` (below) a real gate rather than permanently red
-# on packages this service does not touch.
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
-
 # No `git`: publishing commits a recipe in-process with dulwich (Apache-2.0), so nothing this image
 # carries execs the binary, which is GPL-2.0-only (the owner's ruling of 9 November 2026; ADR-140
 # Amendment 17). `tests/test_connectors_are_carried_into_the_image.py` fails if `git` is installed
@@ -149,4 +143,11 @@ FROM conduit AS conduit-omitted
 LABEL org.ospreyflow.runtime.java.included="omitted"
 
 FROM conduit-${CONDUIT_JAVA}
+# Base-image OS packages lag the upstream image's own last-published point
+# release; picking up current Debian security patches at build time, in the
+# image's final stage, is what keeps `trivy image` a real gate rather than
+# permanently red on packages this service does not touch
+# (`tests/test_images_built_fresh.py`). As root for the upgrade alone.
+USER root
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 USER 10001:10001
