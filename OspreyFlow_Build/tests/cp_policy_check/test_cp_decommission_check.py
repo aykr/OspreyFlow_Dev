@@ -96,7 +96,10 @@ def _clean() -> dict[str, Any]:
                 _disk("vol-0platform", NAMESPACE, "platform-team-scratch"),
             ],
         },
-        "state": "module.namespace.aws_eks_access_entry.team\nmodule.namespace.aws_iam_role.team\n",
+        # The platform's own resources in the same folder: in a module of its own, and at the
+        # folder's root beside ours, of a type and name the render does not declare.
+        "state": "module.namespace.aws_eks_access_entry.team\nmodule.namespace.aws_iam_role.team\n"
+        "aws_iam_role.platform_team_reader\n",
         "buckets": "someone-elses-bucket\nospreyflow-dev-9f9f9f9f-media\n",
     }
 
@@ -126,6 +129,7 @@ def test_a_namespace_holding_only_the_platform_s_own_passes(
     assert sorted(found.not_ours) == [
         "ConfigMap/kube-root-ca.crt", "Secret/platform-team-registry-pull",
         "ServiceAccount/default",
+        "terraform/aws_iam_role.platform_team_reader",
         "terraform/module.namespace.aws_eks_access_entry.team",
         "terraform/module.namespace.aws_iam_role.team",
     ]  # fmt: skip
