@@ -34571,8 +34571,12 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       engine's or a map source's; `mail.port` for the mail server; and a connector host's
       `host:port` from `cloud_platform.connector_hosts`, a bare host on 443 (the final review of
       P7b, item 5, as agreed with the orchestrator). A SQL connection needs its database's port
-      there, or its connection times out. A host given twice with two ports is reached on both;
-      the Conduit's allow-list (`OSPREY_CONNECTOR_EGRESS`) keeps the hosts alone.
+      there, or its connection times out. A host given twice with two ports is reached on both.
+      The Conduit's allow-list (`OSPREY_CONNECTOR_EGRESS`) holds the hosts alone and the egress
+      the hosts and their ports, so a connection to a listed host on an unlisted port passes the
+      Conduit and times out at the egress. The render says, in words at the head of
+      `values.yaml` (and in the poc shape's INSTALL.md), which hosts are named without a port and
+      so reached on 443 alone. An IPv6 literal is refused in its own words: a host is named.
     - The deny runs at order 200, before the place Calico gives the namespace's Kubernetes
       policies (1000). On this profile the cluster's `ospreyflow-internal` policy is not rendered
       at all, so no Kubernetes policy here types Egress (the final review, item 1).
@@ -34603,9 +34607,11 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
     - `make cp-policy-check` refuses an Allow beyond DNS under a policy selecting every pod
       (`wide-egress`); a deny with no order, or one at 1000 or after (`deny-order`); an Allow
       without its protocol and ports (`allow-ports`), the rule to the API server by its
-      `kubernetes` Service alone excepted, matched exactly, as Calico takes no ports there; and a
+      `kubernetes` Service alone excepted, matched exactly, as Calico takes no ports there, and
+      each port a single number (a range such as `"1:65535"` or a named port is refused); and a
       selector it cannot narrow (`unreadable-selector`): an empty one is every pod, and `has(...)`,
-      a part-of label or `all()` in a rule is refused. A DNS rule names the platform's DNS's
+      a part-of label or `all()` in a rule is refused, as is a rule's `notSelector`,
+      `notNamespaceSelector` or `serviceAccounts.selector`. A DNS rule names the platform's DNS's
       namespace, or it is no DNS rule. An ingress peer names workloads by name alone, or it is
       `wide-ingress` (an `Exists` expression, an instance label, the part-of label, every pod).
 22. **Our Secret only to what reads it** (the same review). P7 gave the whole deployment Secret to
@@ -34620,8 +34626,11 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       (case-b's Laurium) is refused one until it is listed, with no other edit to the check. The
       list holds the keys the render gives each store, Keycloak, the gateway and Superset. The
       gateway also holds this deployment's keyed engines' keys, read from its own `osprey.yaml`
-      in Helm's output (`model_key_variables`), never by a prefix: an IAM-role engine's held key
-      is refused it (ADR-135 Amendments 4 and 7).
+      in Helm's output (`model_key_variables`), never by a prefix or a fixed name: an IAM-role
+      engine's held key is refused it, and so is `OSPREY_MODEL_PROVIDER_KEY` when the single
+      `models.provider` is an IAM-role one (ADR-135 Amendments 4 and 7).
+    - The ceiling (`OSPREY_HIGHEST_MARKING`) is the ConfigMap's alone, in no key of our Secret, so
+      the Secret the Conduit and the workers read whole cannot say otherwise.
     - Our Secret is whatever the values name it (`secrets.name`), as the chart reads it, and it
       is held however a pod reads it: `envFrom`, a key, a `secret` volume (whole or by items), or
       a `projected` volume's `secret` source (the final review, item 2).
@@ -34649,9 +34658,10 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
       in the check and not read from the render, and on a listed pod under any account but its
       own: IRSA's (the platform's `secrets.irsa.service_account`) for the Conduit, the workers and
       the report sync, the gateway's own for the gateway, one of their own for P9's pods; never
-      the namespace's `default`. The bucket role's account on any other pod, or the gateway's on
-      any but the gateway, is refused whether or not a token is mounted: IRSA's webhook gives a
-      pod its role by the account alone (the final review, item 6).
+      the namespace's `default`. An account named by the older `serviceAccount` field counts as
+      one named by `serviceAccountName`. The bucket role's account on any other pod, or the
+      gateway's on any but the gateway, is refused whether or not a token is mounted: IRSA's
+      webhook gives a pod its role by the account alone (the final review, item 6).
     - The other profiles' renders are unchanged: the chart writes the setting only when the render
       gives it.
 
@@ -34671,7 +34681,10 @@ planted fault refused in the poc shape's own render, the claim rendered, mounted
 ReadWriteMany), `tests/cp_policy_check/test_cp_decommission_check.py`,
 `tests/harness/test_cloud_platform_identity.py`, the ceiling's, the first render's and the moving
 tag's cases in `tests/harness/test_cloud_platform_render.py`, and the refusals' in
-`tests/cli/test_images_verb.py`.
+`tests/cli/test_images_verb.py`; for points 21-24, `tests/cp_policy_check/test_cp_egress_order.py`
+(the evaluator over Helm's own output, every pod against every pod, host, port, network, the
+internet and DNS) and `tests/harness/test_cloud_platform_egress.py` (the rows, the ports, the
+token, the ceiling and `connector_hosts`).
 
 ### ADR-148, Amendment 6 (11 November 2026) — Entra ID's claims as built (P10 part 1): mapped by settings, one construction path, the tenant, issuer, client and scope pinned, a principal keyed by `oid` within its tenant
 

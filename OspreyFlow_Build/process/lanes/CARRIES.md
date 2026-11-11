@@ -185,3 +185,4 @@ takes them (then struck through with the brief's commit). Newest last.
 | platform | `cp-policy-check` names a pod by its `app.kubernetes.io/name` label, not by (kind, name): a pod labelled as another passes as it | platform, P7b final review | a hygiene step |
 | platform | The renders comparison (`process/lanes/platform/gates/p7_renders_unchanged.py`) is a lane script read by hand, not a pytest | platform, P7b final review | a hygiene step |
 | platform | `services/ingest/ceiling.py` reads an unset ceiling as the scheme's highest where the profile has none of its own | platform, P7b final review | with the seeds' ceiling (studio-b) |
+| platform | A question for the platform team: which pods read the platform's own Terraform-made Secrets (RDS's, ElastiCache's, the bucket's), which point 22's whole-secret rule does not cover; a pod given one now passes `cp-policy-check` | platform, P7b final review (second pass) | the platform team's answers, then a rule |
