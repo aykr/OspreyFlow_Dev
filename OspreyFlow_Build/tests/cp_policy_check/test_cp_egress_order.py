@@ -285,23 +285,15 @@ def test_a_store_s_password_named_to_superset_is_refused(
     ]
 
 
-def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more() -> None:
-    """P9's pods by their own rows (the render's `egress_policy(..., others=...)`, as P9's render
-    gives their names), evaluated in Helm's own output: the backup runner reaches ArcadeDB and
-    ClickHouse, which admit it; a restore alone reaches the cluster's API; ClickHouse reaches S3."""
-    from harness.cloud_platform import egress_policy
-    config_path = FIXTURES / "poc.yaml"
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    raw["cloud_platform"]["egress_nets"]["kms.eu-west-2.amazonaws.com"] = ["198.18.2.0/24"]
-    values_text, registry = render_values(config_path)
-    values = yaml.safe_load(values_text)
-    from schemas.deployment import OspreyConfig
-
-    config = OspreyConfig.model_validate(raw)
-    pods_of_p9 = ("backup", "backup-claims", "restore", "restore-claims")
-    values["egress"] = egress_policy(config, load_platform("client"), load_profile(),
-                                     values["workloads"], others=pods_of_p9)  # fmt: skip
-    docs = helm_template(yaml.safe_dump(values))
+def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
+    rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
+) -> None:
+    """P9's pods by their own rows (the render's `egress_policy(..., others=...)`), evaluated in
+    Helm's own output: the backup and the restore reach ArcadeDB and ClickHouse, which admit them;
+    the claims' runs reach none of ours; a restore alone reaches the cluster's API; each reaches S3
+    and STS and nothing else outside; ClickHouse reaches S3."""
+    docs, values, registry = rendered
+    pods_of_p9 = tuple(load_profile().egress.others)
     labels = {name: {"app.kubernetes.io/name": name, "app.kubernetes.io/part-of": "ospreyflow"}
               for name in pods_of_p9}  # fmt: skip
     pods = {**_pods(docs), **labels}
@@ -312,14 +304,43 @@ def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more() -> Non
         return allowed and (dest.get("labels") is None or _ingress(docs, pods[source], dest))
 
     api_server = {"service": ("default", "kubernetes"), "port": 443}
-    assert reaches("restore", api_server) and reaches("restore-claims", api_server)
-    assert not [p for p in ("backup", "backup-claims", "api", "worker", "workspace")
-                if reaches(p, api_server)]  # fmt: skip
-    for source in pods_of_p9:
-        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}), source
-        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}), source
+    assert [p for p in pods if reaches(p, api_server)] == ["restore"]
+    stores = {"backup": True, "restore": True, "backup-claims": False, "restore-claims": False}
+    for source, reached in stores.items():
+        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}) == reached, source
+        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}) == reached, source
         assert not reaches(source, {"labels": pods["api"], "port": 8000}), source
+        assert not reaches(source, {"ip": _internet(values), "port": 443}), source
+        for host in values["egress"]["hosts"]:
+            outside = {"ip": _one_address(host["nets"]), "port": 443}
+            assert reaches(source, outside) == host["host"].startswith(("s3.", "sts.")), (
+                source, host["host"])  # fmt: skip
+    assert not [h for h in values["egress"]["hosts"] if h["host"].startswith("kms.")]
     s3 = next(h for h in values["egress"]["hosts"] if h["host"].startswith("s3."))
     assert reaches("clickhouse", {"ip": _one_address(s3["nets"]), "port": 443})
     found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
     assert not [v for v in found if v.rule in {"wide-egress", "wide-ingress", "open-egress"}]
+
+
+def test_a_secret_of_its_own_for_clickhouse_and_p9_s_pods_passes(
+    rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
+) -> None:
+    """The ClickHouse backup user's password in a Secret of its own (P9's `backups.tf`), read by
+    ClickHouse whole and by key: not our Secret, so the whole-secret rule passes it, as it refuses
+    ours read the same way (`test_the_whole_secret_to_a_pod_that_reads_none_is_refused`)."""
+    docs, _, registry = copy.deepcopy(rendered)
+    doc = next(d for d in docs if d["metadata"]["name"] == "clickhouse" and pod_spec(d))
+    container = pod_spec(doc)["containers"][0]
+    own = "ospreyflow-clickhouse-backup"
+    container.setdefault("envFrom", []).append({"secretRef": {"name": own}})
+    container.setdefault("env", []).append(
+        {"name": "CLICKHOUSE_BACKUP_PASSWORD",
+         "valueFrom": {"secretKeyRef": {"name": own, "key": "password"}}}
+    )  # fmt: skip
+    assert not [v for v in check_manifests(docs, registry, controller_namespace=CONTROLLER)
+                if v.rule == "whole-secret"]  # fmt: skip
+    container["envFrom"].append({"secretRef": {"name": "ospreyflow-secrets"}})
+    found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
+    assert [(v.rule, v.detail) for v in found if v.rule == "whole-secret"] == [
+        ("whole-secret", "reads ospreyflow-secrets whole")
+    ]

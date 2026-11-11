@@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
 
 #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
 #: reached only by the workloads `egress.reach` names for it.
-HOST_KINDS = ("always", "identity", "keys", "engines", "maps", "mail", "connectors")
+HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors")
 #: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
 KUBE_API = "kube-api"
 
@@ -201,8 +201,9 @@ class EgressHosts(_Strict):
     #: STS alone (a subset of `always`), for a workload that signs in by a role of its own and
     #: never reaches the buckets: the gateway's, for Bedrock (P11 part 2).
     identity: list[str] = Field(default_factory=list)
-    #: KMS, for the backups' own key (P9, ADR-148 Amendment 7).
-    keys: list[str] = Field(default_factory=list)
+    #: The pods rendered outside the workloads that have rows by their own pods' names (P9's
+    #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
+    others: list[str] = Field(default_factory=list)
     managed: list[str] = Field(default_factory=list)
     paths: dict[str, list[str]] = Field(default_factory=dict)
 

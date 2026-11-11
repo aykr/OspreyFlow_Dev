@@ -43,7 +43,9 @@ def _rows(values: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def test_every_rendered_workload_has_its_row(values: dict[str, Any]) -> None:
-    assert set(_rows(values)) == {w["name"] for w in values["workloads"]}
+    others = set(load_profile().egress.others)
+    assert others == {"backup", "backup-claims", "restore", "restore-claims"}
+    assert set(_rows(values)) == {w["name"] for w in values["workloads"]} | others
 
 
 def test_a_workload_reaches_only_what_its_rows_give_it(values: dict[str, Any]) -> None:
@@ -124,32 +126,27 @@ def test_the_glass_and_the_recogniser_hold_no_secret_and_superset_its_own_alone(
 # ---- P9's pods, rendered beside the workloads (the orchestrator's rulings from P9 round 2) ----
 
 
-def test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api() -> None:
-    """P9's backup and restore pods are rendered beside the workloads (`values.backups`), so the
-    render's `egress_policy` is given their names: each gets its row, the stores admit them, a
-    restore alone reaches the cluster's API (`kube-api`), and KMS is rendered once they exist."""
-    from harness.cloud_platform import egress_policy
-    from harness.cloud_platform.settings import load_platform
-
-    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
-    raw["cloud_platform"]["egress_nets"]["kms.eu-west-2.amazonaws.com"] = ["198.18.2.0/24"]
-    config = OspreyConfig.model_validate(raw)
-    values = _values("poc")
-    platform, profile = load_platform("client"), load_profile()
-    without = egress_policy(config, platform, profile, values["workloads"])
-    assert not [h for h in without["hosts"] if h["host"].startswith("kms.")]
-    pods = ("backup", "backup-claims", "restore", "restore-claims")
-    policy = egress_policy(config, platform, profile, values["workloads"], others=pods)
-    rows = {r["name"]: r for r in policy["workloads"]}
-    for name in pods:
-        assert {"kms.eu-west-2.amazonaws.com", "s3.eu-west-2.amazonaws.com",
-                "sts.eu-west-2.amazonaws.com"} <= set(rows[name]["hosts"]), name  # fmt: skip
-        assert {t["name"] for t in rows[name]["toPods"]} == {"arcadedb", "clickhouse"}, name
+def test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api(
+    values: dict[str, Any],
+) -> None:
+    """P9's backup and restore pods render beside the workloads (`values.backups`), so the render
+    gives `egress_policy` their names (`egress.others`): each has its row and admits nothing. The
+    backup and the restore reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
+    cluster's API (`kube-api`); the claims' runs reach none of ours (a claim is a mount). All four
+    reach S3 and STS, and nothing reaches KMS: S3 calls it on their behalf (SSE-KMS)."""
+    rows = _rows(values)
+    hosts = {h["host"] for h in values["egress"]["hosts"]}
+    assert not [h for h in hosts if h.startswith("kms.")]
+    s3_sts = {h for h in hosts if h.startswith(("s3.", "sts."))}
+    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"arcadedb", "clickhouse"},
+              "backup-claims": set(), "restore-claims": set()}  # fmt: skip
+    for name, reached in stores.items():
+        assert set(rows[name]["hosts"]) == s3_sts, name
+        assert {t["name"] for t in rows[name].get("toPods", [])} == reached, name
         assert "fromPods" not in rows[name] and "ports" not in rows[name], name
-        assert rows[name].get("toKubeApi", False) == name.startswith("restore"), name
+        assert not rows[name].get("managed"), name
+        assert rows[name].get("toKubeApi", False) == (name == "restore"), name
     for store in ("arcadedb", "clickhouse"):
-        assert set(pods) <= set(rows[store]["fromPods"]), store
-    # The KMS host is no other pod's.
-    assert [n for n, r in rows.items() if "kms.eu-west-2.amazonaws.com" in r.get("hosts", [])] == [
-        *pods
-    ]
+        callers = set(rows[store]["fromPods"]) & set(stores)
+        assert callers == {"backup", "restore"}, store
+    assert [n for n, r in rows.items() if r.get("toKubeApi")] == ["restore"]

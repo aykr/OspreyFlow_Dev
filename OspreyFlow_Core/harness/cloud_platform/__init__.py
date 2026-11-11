@@ -471,7 +471,6 @@ def _egress_hosts_by_kind(
     kinds: dict[str, list[str]] = {
         "always": [host.format(region=platform.aws_region) for host in profile.egress.always],
         "identity": [host.format(region=platform.aws_region) for host in profile.egress.identity],
-        "keys": [host.format(region=platform.aws_region) for host in profile.egress.keys],
         "engines": engine_hosts(config, profile), "maps": [], "mail": [], "connectors": [],
     }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:
@@ -502,11 +501,6 @@ def egress_policy(
     # backup and restore, by their pods' names), which admit nothing and reach what their rows give.
     rows = [*workloads, *({"name": name} for name in others)]
     by_kind = _egress_hosts_by_kind(config, platform, profile)
-    if workloads or others:
-        # A host no rendered pod reaches is not rendered (KMS before P9's pods exist).
-        reached = {w["name"] for w in rows}
-        by_kind = {kind: hosts for kind, hosts in by_kind.items()
-                   if reached & set(profile.egress.reach.get(kind, []))}  # fmt: skip
     hosts = sorted({h for hs in by_kind.values() for h in hs})
     missing = [host for host in hosts if not given.get(host)]
     if missing:
@@ -957,7 +951,8 @@ def render_cloud_platform(
         "imagePullSecrets": [],
         "podSecurity": {"user": UID, "group": UID},
         "networkPolicy": {"openEgress": False},
-        "egress": egress_policy(config, platform, profile, workloads),
+        # P9's backup and restore pods render beside the workloads; their rows by their names.
+        "egress": egress_policy(config, platform, profile, workloads, others=profile.egress.others),
         "ingress": _ingress(config, platform, names, profile, environment),
         "environment": environment,
         "files": {

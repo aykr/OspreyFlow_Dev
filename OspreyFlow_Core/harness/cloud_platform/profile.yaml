@@ -51,11 +51,12 @@ egress:
   # workers.
   # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
   identity: ["sts.{region}.amazonaws.com"]
-  # KMS: the backups' own key (P9), which its backup and restore pods use.
-  keys: ["kms.{region}.amazonaws.com"]
+  # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
+  # The pods rendered outside the workloads that have rows by their own pods' names: P9's backup
+  # and restore (ADR-148 Amendment 7). A row whose pod is not rendered selects nothing.
+  others: [backup, backup-claims, restore, restore-claims]
   reach:
     identity: [litellm]
-    keys: [backup, backup-claims, restore, restore-claims]
     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
     # P9's backup and restore pods.
     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
@@ -80,11 +81,11 @@ egress:
     clickhouse-keeper: [clickhouse-keeper]
     # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names: ArcadeDB's
     # backup and ClickHouse's BACKUP and RESTORE; a restore also asks the cluster's API whether the
-    # writers have stopped (`kube-api`, the `kubernetes` Service), as no other workload may.
+    # writers have stopped (`kube-api`, the `kubernetes` Service), as no other workload may. The
+    # claims' runs (`backup-claims`, `restore-claims`) call none of ours: a claim is a mount, and
+    # they reach S3 and STS alone (`reach.always`).
     backup: [arcadedb, clickhouse]
-    backup-claims: [arcadedb, clickhouse]
     restore: [kube-api, arcadedb, clickhouse]
-    restore-claims: [kube-api, arcadedb, clickhouse]
 
 # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
 # shared platform may carry a LimitRange, whose defaults are given to exactly the containers that
