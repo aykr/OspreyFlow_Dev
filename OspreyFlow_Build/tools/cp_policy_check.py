@@ -218,38 +218,55 @@ def _too_wide(net: str) -> str:
     return too_wide_for_egress(net) or ""
 
 
-#: ADR-148 Amendment 5 point 22: who may read our Secret whole, and the keys each workload that may
-#: not is allowed by name. Held here on its own, as the group-0 list is, not read from the harness's
-#: `profile.yaml`, so a render that widens either is refused here.
+#: ADR-148 Amendment 5 point 22: who may read our Secret whole, and the keys of it each other pod
+#: is given by name. Default-deny: a pod not in `NAMED_SECRET_ALLOWED` may hold no key of ours, so a
+#: new workload (case-b's Laurium) is refused one until it is listed here. Held here on its own, as
+#: the group-0 list is, not read from the harness's `profile.yaml`, so a render that widens either
+#: is refused here.
 SECRET = "ospreyflow-secrets"
 WHOLE_SECRET_ALLOWED = frozenset({"api", "worker", "report-sync"})
 NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
-    "workspace": frozenset(),
-    "ner": frozenset(),
+    "arcadedb": frozenset({"OSPREY_ARCADEDB_CLUSTER_TOKEN", "OSPREY_ARCADEDB_PASSWORD"}),
+    "clickhouse": frozenset({"OSPREY_CLICKHOUSE_PASSWORD"}),
+    "keycloak": frozenset({"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD",
+                           "OSPREY_KEYCLOAK_DB_PASSWORD"}),
+    "litellm": frozenset({"OSPREY_LITELLM_DB_PASSWORD", "OSPREY_LITELLM_MASTER_SECRET",
+                          "OSPREY_LITELLM_SALT_SECRET", "OSPREY_MODEL_PROVIDER_KEY"}),
     "superset": frozenset({"SUPERSET_SECRET_KEY", "SUPERSET_OIDC_CLIENT_SECRET",
                            "SUPERSET_GUEST_TOKEN_SECRET", "SUPERSET_EMBEDDER_PASSWORD",
                            "REPORT_MART_READER_PASSWORD"}),
 }  # fmt: skip
+#: Keys named by what they hold rather than listed: each model engine's key, the gateway's alone
+#: (`OSPREY_MODEL_KEY_<NAME>`, harness/render.py).
+NAMED_SECRET_PREFIXES: dict[str, tuple[str, ...]] = {"litellm": ("OSPREY_MODEL_KEY_",)}
+
+
+def _pod_name(doc: dict[str, Any]) -> str:
+    """A pod by its workload's name: a Job's own name carries a hash of its steps."""
+    return str(_pod_labels(doc).get("app.kubernetes.io/name")
+               or (doc.get("metadata") or {}).get("name"))  # fmt: skip
 
 
 def _whole_secret(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violation]:
     """Amendment 5 point 22: our Secret (the stores' passwords, the gateway's master key) whole
-    only to the workloads that read it whole, and to the Glass, the recogniser and the dashboards
-    only the keys each reads, by name."""
-    workload = str((doc.get("metadata") or {}).get("name"))
+    only to the workloads that read it whole, and to every other pod only the keys it is listed as
+    reading, by name; none to a pod not listed."""
+    workload = _pod_name(doc)
     for container in _containers(spec):
         at = f"{_name(doc)}/{container.get('name')}"
         for source in container.get("envFrom") or []:
             if (source.get("secretRef") or {}).get("name") == SECRET:
                 if workload not in WHOLE_SECRET_ALLOWED:
                     yield Violation("whole-secret", at, f"reads {SECRET} whole")
-        allowed = NAMED_SECRET_ALLOWED.get(workload)
-        if allowed is None:
+        if workload in WHOLE_SECRET_ALLOWED:
             continue
+        allowed = NAMED_SECRET_ALLOWED.get(workload, frozenset())
+        prefixes = NAMED_SECRET_PREFIXES.get(workload, ())
         for variable in container.get("env") or []:
             ref = (variable.get("valueFrom") or {}).get("secretKeyRef") or {}
-            if ref.get("name") == SECRET and ref.get("key") not in allowed:
-                yield Violation("whole-secret", at, f"is given {SECRET}'s {ref.get('key')}")
+            key = str(ref.get("key"))
+            if ref.get("name") == SECRET and key not in allowed and not key.startswith(prefixes):
+                yield Violation("whole-secret", at, f"is given {SECRET}'s {key}")
 
 
 #: Amendment 5 point 24: the pods that may mount their service account's token, each only with an
@@ -265,7 +282,7 @@ def _token(doc: dict[str, Any], spec: dict[str, Any]) -> Iterator[Violation]:
     `automountServiceAccountToken` is false) must be one that needs it, with its own account."""
     if spec.get("automountServiceAccountToken") is False:
         return
-    pod = _pod_labels(doc).get("app.kubernetes.io/name") or (doc.get("metadata") or {}).get("name")
+    pod = _pod_name(doc)
     if pod in TOKEN_ALLOWED and spec.get("serviceAccountName"):
         return
     yield Violation("token", _name(doc), "mounts its service account's token")

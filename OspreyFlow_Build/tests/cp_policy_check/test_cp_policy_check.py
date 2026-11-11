@@ -799,3 +799,43 @@ def test_the_irsa_pods_mount_their_tokens_and_pass(rendered: tuple[dict[str, Any
     api.pop("serviceAccountName")
     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
     assert [(v.rule, v.where) for v in found] == [("token", "Deployment/api")]
+
+
+# ---- a key of ours by name, default-deny (Amendment 5 point 22) --------------------------------
+
+
+def _secret_violations(values: dict[str, Any], registry: str) -> list[tuple[str, str]]:
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    return [(v.where, v.detail) for v in found if v.rule == "whole-secret"]
+
+
+def test_a_new_workload_given_one_key_of_ours_is_refused(
+    rendered: tuple[dict[str, Any], str],
+) -> None:
+    """A workload the check has never heard of (as case-b's Laurium is today), given one key of
+    our Secret by name, the way the render names one: refused, with no edit to the check."""
+    values, registry = copy.deepcopy(rendered)
+    newcomer = copy.deepcopy(_workload(values, "ner"))
+    newcomer["name"] = "newcomer"
+    values["workloads"].append(newcomer)
+    assert _secret_violations(values, registry) == []  # holding none, it passes
+    newcomer.setdefault("env", []).append(
+        {"name": "ARCADEDB_PASSWORD", "secret": "OSPREY_ARCADEDB_PASSWORD"}
+    )
+    assert _secret_violations(values, registry) == [
+        ("Deployment/newcomer/newcomer", "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD")
+    ]
+
+
+def test_the_gateway_holds_each_engine_s_key_and_no_store_s(
+    rendered: tuple[dict[str, Any], str],
+) -> None:
+    values, registry = copy.deepcopy(rendered)
+    gateway = _workload(values, "litellm")
+    gateway["env"].append({"name": "OSPREY_MODEL_KEY_ANTHROPIC",
+                           "secret": "OSPREY_MODEL_KEY_ANTHROPIC"})  # fmt: skip
+    assert _secret_violations(values, registry) == []
+    gateway["env"].append({"name": "ARCADEDB_PASSWORD", "secret": "OSPREY_ARCADEDB_PASSWORD"})
+    assert _secret_violations(values, registry) == [
+        ("Deployment/litellm/litellm", "is given ospreyflow-secrets's OSPREY_ARCADEDB_PASSWORD")
+    ]
