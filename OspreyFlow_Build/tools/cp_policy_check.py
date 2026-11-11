@@ -279,8 +279,10 @@ NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
     "clickhouse": frozenset({"OSPREY_CLICKHOUSE_PASSWORD"}),
     "keycloak": frozenset({"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD",
                            "OSPREY_KEYCLOAK_DB_PASSWORD"}),
+    # The engines' keys are not listed: this deployment's keyed engines' alone (`_engine_keys`),
+    # the single `models.provider`'s (`OSPREY_MODEL_PROVIDER_KEY`) only when it is keyed.
     "litellm": frozenset({"OSPREY_LITELLM_DB_PASSWORD", "OSPREY_LITELLM_MASTER_SECRET",
-                          "OSPREY_LITELLM_SALT_SECRET", "OSPREY_MODEL_PROVIDER_KEY"}),
+                          "OSPREY_LITELLM_SALT_SECRET"}),
     "superset": frozenset({"SUPERSET_SECRET_KEY", "SUPERSET_OIDC_CLIENT_SECRET",
                            "SUPERSET_GUEST_TOKEN_SECRET", "SUPERSET_EMBEDDER_PASSWORD",
                            "REPORT_MART_READER_PASSWORD"}),
@@ -381,7 +383,8 @@ def _token(
     role's web identity by the account alone."""
     pod = _pod_name(doc)
     where = _name(doc)
-    account = str(spec.get("serviceAccountName") or "default")
+    # `serviceAccount` is the older field Kubernetes still reads when `serviceAccountName` is unset.
+    account = str(spec.get("serviceAccountName") or spec.get("serviceAccount") or "default")
     if account == irsa and pod not in IRSA_PODS:
         yield Violation("token", where, f"runs as {irsa}, the bucket role's account")
     if gateway and account == gateway and pod != "litellm":
@@ -444,6 +447,17 @@ def _selectors(doc: dict[str, Any], dns_namespace: str) -> Iterator[Violation]:
     for field, peer in (("egress", "destination"), ("ingress", "source")):
         for rule in spec.get(field) or []:
             ends = rule.get(peer) or {}
+            for field_name in ("notSelector", "notNamespaceSelector"):
+                if field_name in ends:
+                    yield Violation(
+                        "unreadable-selector", where, f"a rule's {field_name} {ends[field_name]!r}"
+                    )
+            accounts = ends.get("serviceAccounts") or {}
+            if "selector" in accounts:
+                yield Violation(
+                    "unreadable-selector", where,
+                    f"a rule's service-account selector {accounts['selector']!r}",
+                )  # fmt: skip
             if "selector" in ends and not _readable(ends["selector"]):
                 yield Violation(
                     "unreadable-selector", where, f"a rule's selector {ends['selector']!r}"
@@ -471,18 +485,26 @@ def _is_api_server(rule: dict[str, Any]) -> bool:
 
 
 def _allow_ports(doc: dict[str, Any]) -> Iterator[Violation]:
-    """Amendment 5 point 21: every Calico Allow names its protocol and its ports."""
+    """Amendment 5 point 21: every Calico Allow names its protocol and its ports, each a single
+    port by number: a range (`"1:65535"`) or a named port is refused."""
     if not _is_calico(doc):
         return
     for rule in (doc.get("spec") or {}).get("egress") or []:
         if rule.get("action") != "Allow" or _is_api_server(rule):
             continue
-        if rule.get("protocol") not in {"TCP", "UDP"} or not (rule.get("destination") or {}).get(
-            "ports"
-        ):
+        ports = (rule.get("destination") or {}).get("ports")
+        if rule.get("protocol") not in {"TCP", "UDP"} or not ports:
             yield Violation(
                 "allow-ports", _name(doc), f"an Allow without its protocol and ports: {rule}"
             )
+        elif not all(_one_port(port) for port in ports):
+            yield Violation(
+                "allow-ports", _name(doc), f"an Allow by a range or a named port: {ports}"
+            )
+
+
+def _one_port(port: Any) -> bool:
+    return isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535
 
 
 def _wide_egress(doc: dict[str, Any], dns_namespace: str) -> Iterator[Violation]:

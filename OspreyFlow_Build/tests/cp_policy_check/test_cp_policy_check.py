@@ -1147,3 +1147,87 @@ def test_the_conduit_and_the_workers_are_told_the_ceiling(
             assert maps == ["ospreyflow-env"], (name, maps)
             told = [e for e in container.get("env") or [] if e["name"] == "OSPREY_HIGHEST_MARKING"]
             assert not told, (name, told)
+
+
+# ---- the final review's second pass ------------------------------------------------------------
+
+
+def test_a_keyless_single_provider_s_key_is_refused_to_the_gateway(tmp_path: Path) -> None:
+    """Item 1: the single `models.provider`'s key (`OSPREY_MODEL_PROVIDER_KEY`) is the gateway's
+    only when that provider is keyed. A single IAM-role provider (Bedrock) has none, so the key,
+    planted on the gateway in the render's own shape, is refused."""
+    raw = yaml.safe_load((FIXTURES / "production-bedrock.yaml").read_text(encoding="utf-8"))
+    bedrock = next(p for p in raw["models"]["providers"] if p["name"] == "bedrock")
+    raw["models"] = {"local_only": False, "provider": bedrock}
+    config = tmp_path / "osprey.yaml"
+    config.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    text, registry = render_values(config)
+    values = yaml.safe_load(text)
+    assert _secret_violations(values, registry) == []
+    _workload(values, "litellm")["env"].append(
+        {"name": "OSPREY_MODEL_PROVIDER_KEY", "secret": "OSPREY_MODEL_PROVIDER_KEY"}
+    )
+    assert _secret_violations(values, registry) == [
+        ("Deployment/litellm/litellm", "is given ospreyflow-secrets's OSPREY_MODEL_PROVIDER_KEY")
+    ]
+
+
+def test_the_gateway_s_account_on_another_pod_is_refused() -> None:
+    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on the dashboards,
+    even with no token mounted, refused."""
+    values, registry = _bedrock()
+    gateway = _workload(values, "litellm")["serviceAccountName"]
+    _workload(values, "superset")["serviceAccountName"] = gateway
+    found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    assert [(v.rule, v.where, v.detail) for v in found if v.rule == "token"] == [
+        ("token", "Deployment/superset", f"runs as {gateway}, the gateway's account")
+    ]
+
+
+def test_the_older_service_account_field_is_read() -> None:
+    """Item 5: Kubernetes still reads `serviceAccount` when `serviceAccountName` is unset, so the
+    bucket role's account named there on the dashboards is refused as by the newer field."""
+    values, registry = _bedrock()
+    irsa = _workload(values, "api")["serviceAccountName"]
+    docs = helm_template(yaml.safe_dump(values))
+    spec = pod_spec(_doc(docs, "Deployment", "superset"))
+    assert spec is not None and "serviceAccountName" not in spec
+    spec["serviceAccount"] = irsa
+    assert [(v.rule, v.detail) for v in check_manifests(docs, registry) if v.rule == "token"] == [
+        ("token", f"runs as {irsa}, the bucket role's account")
+    ]
+
+
+@pytest.mark.parametrize("ports", [["1:65535"], [443, "8000:9000"], ["https"]],
+                         ids=["every-port", "a-range", "a-named-port"])  # fmt: skip
+def test_an_allow_by_a_range_or_a_named_port_is_refused(
+    development: tuple[dict[str, Any], str], ports: list[Any]
+) -> None:
+    """Item 4: single ports by number alone; Calico's range string opens every port in it."""
+    docs, registry = _helm(development)
+    policy = _calico(docs, "default.ospreyflow-egress-api")
+    rule = next(r for r in policy["spec"]["egress"] if "nets" in r["destination"])
+    rule["destination"]["ports"] = ports
+    assert _found(docs, registry) == [
+        ("allow-ports", f"an Allow by a range or a named port: {ports}")
+    ]
+
+
+@pytest.mark.parametrize(
+    "ends",
+    [
+        {"notSelector": "app.kubernetes.io/name == 'workspace'"},
+        {"serviceAccounts": {"selector": "all()"}},
+        {"notNamespaceSelector": "kubernetes.io/metadata.name == 'kube-system'"},
+    ],
+    ids=["not-selector", "service-account-selector", "not-namespace-selector"],
+)
+def test_a_rule_s_negative_or_account_selector_is_refused(
+    development: tuple[dict[str, Any], str], ends: dict[str, Any]
+) -> None:
+    """Item 5: a rule's `notSelector`, `notNamespaceSelector` or `serviceAccounts.selector` is
+    one this check cannot narrow (everything but, or every account's pods)."""
+    docs, registry = _helm(development)
+    policy = _calico(docs, "default.ospreyflow-egress-api")
+    policy["spec"]["egress"][0]["destination"].update(ends)
+    assert {rule for rule, _ in _found(docs, registry)} == {"unreadable-selector"}
