@@ -13,7 +13,7 @@ studio	L1.5	L	done	Phase 8: expert steps (merged 1ddbc9a)
 studio-b	L1.6	L	done	Phase 9: connectors; the screening-list connector and templates
 studio	L1.7	L	done	Phase 10: Operations, external orchestration; Releases as YAML (merged cdafe2d, with its eight diffs applied and the guides' PDFs regenerated)
 studio-b	L1.8	S	done	The Studio's tips and who-can refusals; Domain model wording
-studio-b	L1.9	L	review	S3 and Athena connectors: part 1 merged (5b06ad4, two review rounds; an access step, listed for the owner); part 2 (the declared sources, the namespace IAM role, the egress rows) ready at 17c243a9, in orchestrator review
+studio-b	L1.9	L	building	S3 and Athena connectors: part 1 merged (5b06ad4, two review rounds; an access step, listed for the owner); part 2 (the declared sources, the namespace IAM role, the egress rows) orchestrator review round 1 at 17c243a9: no must-fix, seven fixes before merge (S3 fake models IAM refusals, the wide-statement check, the results location)
 studio-b	L1.10	S	done	The deployment's marking ceiling (ADR-148 decision 10) (merged c1b168c)
 glass	L2.1	M	done	The alerts gap map
 glass	L2.2	L	done	Three places: switcher, banner, Home, rail, GOV.UK header
