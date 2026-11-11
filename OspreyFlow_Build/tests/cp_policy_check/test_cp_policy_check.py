@@ -452,6 +452,39 @@ def test_the_open_egress_policy_is_refused(development: tuple[dict[str, Any], st
     assert rule == "open-egress" and detail.startswith("an egress rule to everywhere")
 
 
+@pytest.mark.parametrize(
+    ("cidr", "why"),
+    [
+        ("0.0.0.0/0", "0.0.0.0/0 is a default route"),
+        ("10.0.0.0/8", "10.0.0.0/8 is wider than /16"),
+        ("2001:db8::/32", "2001:db8::/32 is wider than /48"),
+    ],
+)
+def test_a_kubernetes_egress_address_block_that_opens_egress_is_refused(
+    development: tuple[dict[str, Any], str], cidr: str, why: str
+) -> None:
+    """A Kubernetes `NetworkPolicy` egress rule whose `to` is an `ipBlock` (the round-2 review's
+    first unproven branch). Planted as a template edit would emit it, a second `to` rule in
+    `ospreyflow-internal` beside its pods and DNS rules: it has a `to`, so only the address-block
+    branch can see it."""
+    docs, registry = _helm(development)
+    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
+    internal["spec"]["egress"].append({"to": [{"ipBlock": {"cidr": cidr}}]})
+    [(rule, where, detail)] = _isolation(docs, registry)
+    assert (rule, where) == ("open-egress", "NetworkPolicy/ospreyflow-internal")
+    assert detail.startswith(why)
+
+
+def test_a_kubernetes_egress_address_block_within_the_cap_passes(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """The branch's other side: a /16 address block is not refused."""
+    docs, registry = _helm(development)
+    internal = _doc(docs, "NetworkPolicy", "ospreyflow-internal")
+    internal["spec"]["egress"].append({"to": [{"ipBlock": {"cidr": "10.1.0.0/16"}}]})
+    assert _isolation(docs, registry) == []
+
+
 # ---- other tenants (the independent review of P7, item 4) ------------------------------------
 
 
@@ -519,6 +552,45 @@ def test_the_public_policy_admitting_every_address_is_refused(
     values["ingress"]["enabled"] = False
     found = _isolation(helm_template(yaml.safe_dump(values)), registry)
     assert ("ingress-isolation", "NetworkPolicy/ospreyflow-public") in {(r, w) for r, w, _ in found}
+
+
+def _with_calico_ingress(docs: list[dict[str, Any]], source: dict[str, Any]) -> None:
+    """The allow policy given Calico ingress, as a template edit would emit it: `Ingress` added to
+    its types and one Allow rule from `source`."""
+    allow = _doc(docs, "NetworkPolicy", "default.ospreyflow-allow-egress")
+    allow["spec"]["types"] = ["Egress", "Ingress"]
+    allow["spec"]["ingress"] = [{"action": "Allow", "protocol": "TCP", "source": source}]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        {"selector": "all()", "namespaceSelector": "all()"},  # every namespace's pods
+        {"nets": ["10.0.0.0/8"]},  # addresses
+        {},  # every source
+    ],
+    ids=["another-namespace", "nets", "no-source"],
+)
+def test_a_calico_ingress_allow_beyond_a_selector_is_refused(
+    development: tuple[dict[str, Any], str], source: dict[str, Any]
+) -> None:
+    """A Calico ingress Allow whose source is more than a selector (the round-2 review's second
+    unproven branch). The namespace's Kubernetes policies still select every pod, so only the
+    Calico branch can see it."""
+    docs, registry = _helm(development)
+    _with_calico_ingress(docs, source)
+    [(rule, where, detail)] = _isolation(docs, registry)
+    assert (rule, where) == ("ingress-isolation", "NetworkPolicy/default.ospreyflow-allow-egress")
+    assert detail.startswith("a Calico rule admitting beyond the namespace's own pods")
+
+
+def test_a_calico_ingress_allow_from_a_selector_alone_passes(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    """The branch's other side: a source of a selector alone (this namespace's pods) passes."""
+    docs, registry = _helm(development)
+    _with_calico_ingress(docs, {"selector": "all()"})
+    assert _isolation(docs, registry) == []
 
 
 # ---- resources and the volumes' group (the independent review of P7, items 8 and 11) ------------
