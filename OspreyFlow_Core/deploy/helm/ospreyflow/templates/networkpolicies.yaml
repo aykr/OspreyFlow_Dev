@@ -106,7 +106,7 @@ spec:
 {{- range .hosts }}{{ $_ := set $nets .host .nets }}{{ end }}
 {{- $managed := .managedNets }}
 {{- range .workloads }}
-{{- if or .toPods .managed .hosts }}
+{{- if or .toPods .toKubeApi .managed .hosts }}
 ---
 # What {{ .name }} alone may reach (Amendment 5 point 21): the namespace's workloads it calls, and
 # the networks of the hosts it is given; nothing else, by the deny below.
@@ -128,6 +128,15 @@ spec:
       destination:
         selector: {{ printf "app.kubernetes.io/name == '%s'" .name | quote }}
         ports: {{ toJson .ports }}
+    {{- end }}
+    {{- if .toKubeApi }}
+    # The cluster's API server, by its Service (a restore asks whether the writers have stopped).
+    - action: Allow
+      protocol: TCP
+      destination:
+        services:
+          name: kubernetes
+          namespace: default
     {{- end }}
     {{- if .managed }}
     - action: Allow

@@ -39,6 +39,7 @@ from typing import Any
 import yaml
 
 from harness.cloud_platform.settings import (
+    KUBE_API,
     PlatformSettings,
     ProfileSettings,
     load_platform,
@@ -470,6 +471,7 @@ def _egress_hosts_by_kind(
     kinds: dict[str, list[str]] = {
         "always": [host.format(region=platform.aws_region) for host in profile.egress.always],
         "identity": [host.format(region=platform.aws_region) for host in profile.egress.identity],
+        "keys": [host.format(region=platform.aws_region) for host in profile.egress.keys],
         "engines": engine_hosts(config, profile), "maps": [], "mail": [], "connectors": [],
     }  # fmt: skip
     for map_provider in config.map.providers if config.map is not None else []:
@@ -489,13 +491,23 @@ def egress_policy(
     platform: PlatformSettings,
     profile: ProfileSettings | None = None,
     workloads: Sequence[dict[str, Any]] = (),
+    others: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Decision 7's policies' settings: the networks allowed out, each host's by name, from the
     deployment's `egress_nets` or, for an AWS service, the platform's settings; and (Amendment 5
     point 21) what each rendered workload alone may reach, from `profile.yaml`'s `egress`."""
     profile = profile or load_profile()
     given = {**platform.egress.service_nets, **_cp(config).egress_nets}
-    hosts = _egress_hosts(config, platform, profile)
+    # Every pod that has a row: the workloads, and the pods rendered outside them (`others`: P9's
+    # backup and restore, by their pods' names), which admit nothing and reach what their rows give.
+    rows = [*workloads, *({"name": name} for name in others)]
+    by_kind = _egress_hosts_by_kind(config, platform, profile)
+    if workloads or others:
+        # A host no rendered pod reaches is not rendered (KMS before P9's pods exist).
+        reached = {w["name"] for w in rows}
+        by_kind = {kind: hosts for kind, hosts in by_kind.items()
+                   if reached & set(profile.egress.reach.get(kind, []))}  # fmt: skip
+    hosts = sorted({h for hs in by_kind.values() for h in hs})
     missing = [host for host in hosts if not given.get(host)]
     if missing:
         raise CloudPlatformNotRenderable(
@@ -508,9 +520,7 @@ def egress_policy(
         "dnsNamespace": platform.egress.dns_namespace,
         "managedNets": list(platform.egress.managed_nets),
         "hosts": [{"host": host, "nets": list(given[host])} for host in hosts],
-        "workloads": _egress_by_workload(
-            _egress_hosts_by_kind(config, platform, profile), profile, workloads
-        ),
+        "workloads": _egress_by_workload(by_kind, profile, rows),
     }
 
 
@@ -530,6 +540,7 @@ def _egress_by_workload(
             for target in egress.paths.get(name, [])
             if ports.get(target)
         ]
+        to_api = KUBE_API in egress.paths.get(name, [])
         hosts = sorted({h for kind, hs in by_kind.items() if name in egress.reach.get(kind, [])
                         for h in hs})  # fmt: skip
         # Amendment 5 point 23: who may reach it, from the same rows, so the two never drift.
@@ -541,6 +552,8 @@ def _egress_by_workload(
             entry["fromPods"] = callers
         if to_pods:
             entry["toPods"] = to_pods
+        if to_api:
+            entry["toKubeApi"] = True
         if name in egress.managed:
             entry["managed"] = True
         if hosts:

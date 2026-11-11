@@ -119,3 +119,37 @@ def test_the_glass_and_the_recogniser_hold_no_secret_and_superset_its_own_alone(
             assert named <= set(secrets.named.get(name, [])), (name, named)
     for name in ("workspace", "ner"):
         assert not [e for e in workloads[name].get("env", []) if "secret" in e], name
+
+
+# ---- P9's pods, rendered beside the workloads (the orchestrator's rulings from P9 round 2) ----
+
+
+def test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api() -> None:
+    """P9's backup and restore pods are rendered beside the workloads (`values.backups`), so the
+    render's `egress_policy` is given their names: each gets its row, the stores admit them, a
+    restore alone reaches the cluster's API (`kube-api`), and KMS is rendered once they exist."""
+    from harness.cloud_platform import egress_policy
+    from harness.cloud_platform.settings import load_platform
+
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["egress_nets"]["kms.eu-west-2.amazonaws.com"] = ["198.18.2.0/24"]
+    config = OspreyConfig.model_validate(raw)
+    values = _values("poc")
+    platform, profile = load_platform("client"), load_profile()
+    without = egress_policy(config, platform, profile, values["workloads"])
+    assert not [h for h in without["hosts"] if h["host"].startswith("kms.")]
+    pods = ("backup", "backup-claims", "restore", "restore-claims")
+    policy = egress_policy(config, platform, profile, values["workloads"], others=pods)
+    rows = {r["name"]: r for r in policy["workloads"]}
+    for name in pods:
+        assert {"kms.eu-west-2.amazonaws.com", "s3.eu-west-2.amazonaws.com",
+                "sts.eu-west-2.amazonaws.com"} <= set(rows[name]["hosts"]), name  # fmt: skip
+        assert {t["name"] for t in rows[name]["toPods"]} == {"arcadedb", "clickhouse"}, name
+        assert "fromPods" not in rows[name] and "ports" not in rows[name], name
+        assert rows[name].get("toKubeApi", False) == name.startswith("restore"), name
+    for store in ("arcadedb", "clickhouse"):
+        assert set(pods) <= set(rows[store]["fromPods"]), store
+    # The KMS host is no other pod's.
+    assert [n for n, r in rows.items() if "kms.eu-west-2.amazonaws.com" in r.get("hosts", [])] == [
+        *pods
+    ]

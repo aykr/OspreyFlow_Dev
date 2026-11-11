@@ -61,6 +61,10 @@ def _rule_matches(rule: dict[str, Any], dest: dict[str, Any], dns_namespace: str
     destination = rule.get("destination") or {}
     if "ports" in destination and dest["port"] not in destination["ports"]:
         return False
+    if "services" in destination:
+        wanted = (destination["services"].get("namespace"), destination["services"].get("name"))
+        if dest.get("service") != wanted:
+            return False
     if "selector" in destination:
         if dest.get("labels") is None or not _selects(destination["selector"], dest["labels"]):
             return False
@@ -279,3 +283,43 @@ def test_a_store_s_password_named_to_superset_is_refused(
     assert [(v.rule, v.detail) for v in found] == [
         ("whole-secret", "is given ospreyflow-secrets's ARCADEDB_ROOT_PASSWORD")
     ]
+
+
+def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more() -> None:
+    """P9's pods by their own rows (the render's `egress_policy(..., others=...)`, as P9's render
+    gives their names), evaluated in Helm's own output: the backup runner reaches ArcadeDB and
+    ClickHouse, which admit it; a restore alone reaches the cluster's API; ClickHouse reaches S3."""
+    from harness.cloud_platform import egress_policy
+    config_path = FIXTURES / "poc.yaml"
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["cloud_platform"]["egress_nets"]["kms.eu-west-2.amazonaws.com"] = ["198.18.2.0/24"]
+    values_text, registry = render_values(config_path)
+    values = yaml.safe_load(values_text)
+    from schemas.deployment import OspreyConfig
+
+    config = OspreyConfig.model_validate(raw)
+    pods_of_p9 = ("backup", "backup-claims", "restore", "restore-claims")
+    values["egress"] = egress_policy(config, load_platform("client"), load_profile(),
+                                     values["workloads"], others=pods_of_p9)  # fmt: skip
+    docs = helm_template(yaml.safe_dump(values))
+    labels = {name: {"app.kubernetes.io/name": name, "app.kubernetes.io/part-of": "ospreyflow"}
+              for name in pods_of_p9}  # fmt: skip
+    pods = {**_pods(docs), **labels}
+    dns = values["egress"]["dnsNamespace"]
+
+    def reaches(source: str, dest: dict[str, Any]) -> bool:
+        allowed = _egress(docs, pods[source], dest, dns)
+        return allowed and (dest.get("labels") is None or _ingress(docs, pods[source], dest))
+
+    api_server = {"service": ("default", "kubernetes"), "port": 443}
+    assert reaches("restore", api_server) and reaches("restore-claims", api_server)
+    assert not [p for p in ("backup", "backup-claims", "api", "worker", "workspace")
+                if reaches(p, api_server)]  # fmt: skip
+    for source in pods_of_p9:
+        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}), source
+        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}), source
+        assert not reaches(source, {"labels": pods["api"], "port": 8000}), source
+    s3 = next(h for h in values["egress"]["hosts"] if h["host"].startswith("s3."))
+    assert reaches("clickhouse", {"ip": _one_address(s3["nets"]), "port": 443})
+    found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
+    assert not [v for v in found if v.rule in {"wide-egress", "wide-ingress", "open-egress"}]
