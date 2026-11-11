@@ -17,6 +17,16 @@ or copies a folder's files by their own names (`directory / item.name`, which re
 `deployment.env` when the folder is a deployment's). Each such write is either the stage's or
 rollback point's own fresh copy, listed in `ALLOWED` with its reason, or a defect. It is shown red
 with each writer's real shape (`test_the_scan_flags_...`), and a stale `ALLOWED` entry fails.
+
+**What the scan does not see** (the orchestrator's review of ad4bef7, item 4): it judges a
+destination by its text, not by the value it holds, so a write through a name that says nothing of
+an env file is invisible to it: `path.write_bytes(content)` in `store_volumes.FilesHeld.put_back`
+(where `path` may be `deployment.env`), `target.open("r+b")` in refresh's move of a mounted file,
+`os.open` with flags held in a variable, `copytree` and `os.fdopen`. Planted out, put-back's own
+`deployment.env` branch leaves this scan green; `test_atomic_writes.py`'s hard-link witness for it
+goes red. So **each known writer is held by its own witness at its call site**, and the scan holds
+only a new writer that names an env file or copies a folder's files by name. Following the value
+(a data-flow check) is carried.
 """
 
 from __future__ import annotations
@@ -40,7 +50,8 @@ ALLOWED = {
     # a copy into it creates a file; it replaces nothing.
     ("harness/update.py", "_keep_rollback_point", "point / item.name"),
     # Put-back's one copy in place, of a file that holds no secret (a container mounting it on its
-    # own keeps seeing it); the helper refuses a `*.env` name (`test_the_put_back_copy_refuses_...`).
+    # own keeps seeing it); the helper refuses a `*.env` name
+    # (`test_the_put_back_copy_refuses_...`).
     # A copy in `_put_back` itself, as c5209b1 had, is not allowed (`test_the_gate_flags_...`).
     ("harness/update.py", "_copy_not_a_secret", "directory / item.name"),
     # The refresh's stage is made new and 700 for each run (ADR-114 Am 39); a copy into it creates a
