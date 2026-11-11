@@ -5,7 +5,7 @@ case-b	P12	part 2 round 1: the routing marker at the review queue's route only (
 studio-b	L1.9	part 1 merged (two rounds); part 2 after P7	13 Nov	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 platform	P7b	per-workload egress and ingress, secrets by need, P9's rows: gating now; lands after P9, before the server's quiet window at 12:00 UK on 13 Nov if P9 is in, else 14 Nov	13 Nov, before 12:00, or 14 Nov	B
-docs	D2c	part 2 (Entra) built at 2f21e72, review and server gates next; backups after P9	13 Nov	B
+docs	D2c	parts 1 and 2 merged (guide 1.81); backups after P9, the profile side after P10 part 2	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5 reviewed twice, not ready: fixes queued behind P10 part 2 (T1P5_FINDINGS.md); reset split to its own step	14 Nov	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
