@@ -264,3 +264,7 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
    uninstalls itself last (the service never runs it). Then **trivy 0 HIGH or CRITICAL; started with no network and
    its gateway's address alone, as 10001:10001, `/healthz` 200 after about 6 s** (`gates/c235226.laurium-image-2.txt`).
    Core's image scans gain `trivy-image-laurium` in `check` as `P12p2_core_makefile.diff` (Core's Makefile).
+9. **Minors:** §6a.2's sizing said to be Deep read's, Laurium's 0.25 CPU and 1 GiB on top by default (the guide diff);
+   `packages/schemas` and the generated TypeScript named in the friction row; carried there: the Glass's profile
+   guess (`engine_kinds` includes `gateway`), and the readiness latch under a key rotation. **Part 1's
+   `P12_MAKEFILE.diff` and `P12_CI.diff` are applied on main** (2128e5b); nothing of part 1's is removed.
