@@ -12,7 +12,7 @@
    - Still carried: the 5 × 3 grid for `bgOverlap`, a sixth line box, decision 3 under a cover, the root's spread, a modal `<dialog>`, and `clip-path` (RED_RECORD).
 3. **merger-c2's three blockers: fixed.** The SVG under-path is a fail-closed allowlist laid at the shared ancestor (MP1 at 3.98:1, MP2, MP3; W1).
 4. **Findings:** 78 looks and 140 findings in `a11y/contrastFindings.json`. Shell's menu-shadow listings came off with the true reach. Case's handle-over-label listings are new, all with their owners.
-5. **Gates:** GATES.
+5. **Gates: ready-to-merge at d41df45** (tree e149207, rebased onto main affd759). `make -k ci` exit 0; `make test` pytest 10828 passed, 2 failed, vitest 3058 passed, 1 failed, all three environment (Valkey port, GPU, MatrixView timing); browser 975 + 34 passed in 14.1 min against 13.8. d9f1479 failed colour-drift and no-branches on my own text, fixed in d41df45 (`gates/d41df45.{test,ci,browser}.txt`). Not sent to merger-c2, which is closed this morning: the orchestrator's word.
 6. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-probe.md`. **Still running:** nothing.
 
 ## Decisions taken (each the recommended option; the owner may overrule)
