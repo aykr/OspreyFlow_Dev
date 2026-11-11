@@ -210,7 +210,9 @@ def test_a_namespace_without_the_deny_egress_policy_is_refused(
 ) -> None:
     values, registry = copy.deepcopy(development)
     values.pop("egress")
-    assert _rules(values, registry) == {"no-deny-egress"}
+    # With the egress rows gone, each workload's own ingress goes too (Amendment 5 point 23), so
+    # the internal policy admits every pod of ours again, which is refused as well.
+    assert _rules(values, registry) == {"no-deny-egress", "wide-ingress"}
 
 
 def test_a_deny_policy_that_does_not_cover_every_pod_is_refused(
@@ -356,9 +358,14 @@ def _with_a_job(development: tuple[dict[str, Any], str]) -> tuple[list[dict[str,
     """The profile renders no Job today (the cluster's are the model downloads it drops), so one is
     given in the values' `jobs`, as the API's own pod, and templated by the chart's `jobs.yaml`."""
     values, registry = copy.deepcopy(development)
-    values["jobs"] = [{**_workload(values, "api"), "name": "migrate"}]
+    # As the API's pod, but reading no secret whole: `migrate` is not one of the workloads that may.
+    values["jobs"] = [{**_workload(values, "api"), "name": "migrate", "envFrom": False}]
     docs = helm_template(yaml.safe_dump(values))
-    assert check_manifests(docs, registry) == []  # the Job alone, unplanted, passes
+    # The Job alone, unplanted, passes but for having no ingress policy of its own (no Job is
+    # rendered on this profile; P9's bring their rows), which `_apart_from_its_ingress` sets apart.
+    assert {(v.rule, v.where.split("/")[0]) for v in check_manifests(docs, registry)} <= {
+        ("ingress-isolation", "Job")
+    }
     return docs, registry
 
 
@@ -373,7 +380,7 @@ def test_a_job_s_pod_is_held_to_the_rules(development: tuple[dict[str, Any], str
     docs, registry = _with_a_job(development)
     job = _a_job(docs)
     job["spec"]["template"]["spec"]["containers"][0]["securityContext"]["privileged"] = True
-    found = check_manifests(docs, registry)
+    found = _apart_from_its_ingress(check_manifests(docs, registry), job)
     assert [(v.rule, v.where.split(" ")[0], v.detail) for v in found] == [
         ("privileged", _name_of(job), "privileged: true")
     ]
@@ -392,10 +399,19 @@ def test_a_cron_job_s_pod_is_held_to_the_rules(development: tuple[dict[str, Any]
         "spec": {"schedule": "0 2 * * *", "jobTemplate": {"spec": job["spec"]}},
     }
     docs = [cron if d is job else d for d in docs]
-    found = check_manifests(docs, registry)
+    found = _apart_from_its_ingress(check_manifests(docs, registry), cron)
     assert [(v.rule, v.where.split(" ")[0], v.detail) for v in found] == [
         ("privileged", _name_of(cron), "privileged: true")
     ]
+
+
+def _apart_from_its_ingress(found: list[Violation], planted: dict[str, Any]) -> list[Violation]:
+    """A planted Job's pod has no ingress policy of its own (the profile renders no Job; P9's
+    backups bring theirs with their rows), so it is also refused as one any address may reach:
+    that finding is the planted pod's alone, and set apart here."""
+    unselected = [v for v in found if v.rule == "ingress-isolation"]
+    assert [v.where for v in unselected] == [_name_of(planted)] * len(unselected)
+    return [v for v in found if v.rule != "ingress-isolation"]
 
 
 def _name_of(doc: dict[str, Any]) -> str:
@@ -438,8 +454,12 @@ def test_managed_networks_that_open_egress_are_refused(
 ) -> None:
     values, registry = copy.deepcopy(development)
     values["egress"]["managedNets"] = ["0.0.0.0/0"]
-    [(rule, detail)] = _found(helm_template(yaml.safe_dump(values)), registry)
-    assert rule == "open-egress" and detail.startswith("0.0.0.0/0 is a default route")
+    found = _found(helm_template(yaml.safe_dump(values)), registry)
+    # Refused in the policy of each workload that reads a managed store (Amendment 5 point 21).
+    assert found and all(
+        rule == "open-egress" and detail.startswith("0.0.0.0/0 is a default route")
+        for rule, detail in found
+    )
 
 
 def test_a_platform_s_widest_networks_pass(development: tuple[dict[str, Any], str]) -> None:

@@ -31,7 +31,8 @@ from tools.cp_policy_check import (
 )
 
 CONTROLLER = load_platform("client").ingress.controller_namespace
-INTERNET = "203.0.113.9"
+#: Addresses on the internet, the first outside every network the render names is used.
+INTERNET_CANDIDATES = ("198.51.100.77", "203.0.113.9", "192.0.2.77", "100.64.0.77")
 DNS = "dns"
 
 
@@ -120,6 +121,13 @@ def _pods(docs: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     return out
 
 
+def _internet(values: dict[str, Any]) -> str:
+    named = [ipaddress.ip_network(n) for h in values["egress"]["hosts"] for n in h["nets"]]
+    named += [ipaddress.ip_network(n) for n in values["egress"]["managedNets"]]
+    return next(a for a in INTERNET_CANDIDATES
+                if not any(ipaddress.ip_address(a) in n for n in named))  # fmt: skip
+
+
 def _one_address(nets: list[str]) -> str:
     return str(next(ipaddress.ip_network(nets[0]).hosts()))
 
@@ -146,7 +154,7 @@ def test_who_reaches_whom_is_the_rows_and_nothing_more(
     for source in pods:
         assert _reaches(docs, values, source, {"namespace": values["egress"]["dnsNamespace"],
                                                "port": 53}), source  # fmt: skip
-        assert not _reaches(docs, values, source, {"ip": INTERNET, "port": 443}), source
+        assert not _reaches(docs, values, source, {"ip": _internet(values), "port": 443}), source
         assert _reaches(docs, values, source, {"ip": managed, "port": 5432}) == (
             source in egress.managed
         ), source
@@ -183,7 +191,9 @@ def test_case_b_s_cases(rendered: tuple[list[dict[str, Any]], dict[str, Any], st
         callers = [
             s for s in pods if _reaches(docs, values, s, {"labels": pods["litellm"], "port": 4000})
         ]
-        assert callers == ["api"]
+        paths = load_profile().egress.paths
+        assert callers == sorted(s for s in pods if "litellm" in paths.get(s, []))
+        assert "api" in callers and not {"workspace", "ner", "superset"} & set(callers)
 
 
 # ---- the rules, each red on the shape it refuses -----------------------------------------------
@@ -219,7 +229,7 @@ def test_ingress_from_every_pod_of_ours_is_refused(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:
     """P7's internal policy's ingress half, planted back: every pod of ours admitted to all."""
-    docs, _, registry = rendered
+    docs, _, registry = copy.deepcopy(rendered)
     internal = next(d for d in docs if d["metadata"]["name"] == "ospreyflow-internal")
     assert internal["spec"]["policyTypes"] == ["Egress"]
     internal["spec"]["policyTypes"] = ["Ingress", "Egress"]
@@ -236,7 +246,7 @@ def test_ingress_from_every_pod_of_ours_is_refused(
 def test_the_whole_secret_to_a_pod_that_reads_none_is_refused(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str], workload: str,
 ) -> None:  # fmt: skip
-    docs, _, registry = rendered
+    docs, _, registry = copy.deepcopy(rendered)
     doc = next((d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == workload),
                None)  # fmt: skip
     if doc is None:
@@ -252,7 +262,7 @@ def test_the_whole_secret_to_a_pod_that_reads_none_is_refused(
 def test_a_store_s_password_named_to_superset_is_refused(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:
-    docs, _, registry = rendered
+    docs, _, registry = copy.deepcopy(rendered)
     doc = next((d for d in docs if d["metadata"]["name"] == "superset" and pod_spec(d)), None)
     if doc is None:
         pytest.skip("superset is not rendered here")
