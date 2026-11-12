@@ -57,9 +57,7 @@ def two_clickhouse_instances(
         yield instances[0], instances[1]
     finally:
         for instance in instances:
-            if instance._process.poll() is None:
-                instance._process.kill()
-                instance._process.wait(timeout=10)
+            instance.kill()  # the process if still running, and its log either way
 
 
 def _load(database: str, case: str, count: int) -> None:
