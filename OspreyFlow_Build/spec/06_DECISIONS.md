@@ -35781,3 +35781,93 @@ Tests:
 - `tests/harness/test_cloud_platform_poc.py`'s recovery step.
 
 Planted faults: `process/lanes/admin/P10_P2_RED_RECORD.md`.
+
+### ADR-132, Amendment 7 (12 November 2026) — The phase banner's words are the deployment's to set (`appearance.banner_text`)
+
+Status: as built by the platform-b lane (step gate-b), at the owner's request of 12 November 2026
+(about 23:15), for the demonstration on Friday 13 November. The owner's wording, used on the
+demonstration's deployment: **"Demonstration only: this is not a government service, and all data is
+synthetic."**
+
+1. **`appearance.banner_text`** in `osprey.yaml`: one line of at most 200 characters, never blank
+   (refused in words otherwise). It replaces the banner's fixed "This is a new service.".
+2. **Where it shows:** the Glass's banner (`PhaseBanner`, in `BrandFrame`, under either brand) and the
+   GOV.UK sign-in page (`harness/govuk_chrome.js`, given it as `bannerText`). At `alpha` or `beta` the
+   words follow the phase's tag; at `live` or `none` they are shown **alone**, in the same "Service
+   phase" region. Always set as text, never as markup. The OspreyFlow-branded sign-in page has no
+   banner and is unchanged.
+3. **Unset, nothing changes:** the setting is left out of `/deployment.json` and of the sign-in
+   theme's settings (never written as `null`), so every deployment that does not set it renders byte
+   for byte as before (`gate/B-unset-renders.raw.txt`, every profile and fixture).
+4. **Tests:** `PhaseBanner.test.tsx`, `brand.test.tsx`, `BrandFrame.test.tsx`,
+   `tests/harness/test_banner_text.py`, `test_keycloak_theme_govuk.py`,
+   `keycloak_theme/govuk_sign_in.test.mjs`; by keyboard and axe in the dark, light and GOV.UK themes
+   (`keyboard/shell.spec.ts`, `a11y/every-harness.spec.ts`'s `shell-harness.html?banner=1`); each red
+   first (`process/lanes/platform-b/gate/A*`).
+
+### ADR-114, Amendment 41 (12 November 2026) — A shared key asked by the front proxy, on all three names, against a bcrypt hash set on the server
+
+Status: as built by the platform-b lane (step gate-b), at the owner's request of 12 November 2026, for a
+deployment shown to people who are not its users (the demonstration). Small only.
+
+**Decision.**
+
+1. **`network.access_key: true`** in `osprey.yaml` (default false) says the deployment's front proxy
+   asks every browser for a shared key, the browser's own user name and password box (HTTP Basic), on
+   **all three names** (the Glass, `id.` and `bi.`), before any page, asset, sign-in or API answer.
+   **Small only** (refused in words for any other profile): its proxy is the product's own, and its
+   address is always `https://`, so the key, which a browser sends again with every request, only
+   ever travels over TLS.
+2. **The key is never stored; its bcrypt hash is set on the server**, never in `osprey.yaml`, the
+   repository, a message or a log. The owner runs `python -m harness.access_key set <the deployment's
+   folder> [--user demo]` on the server: it reads the key twice without echo (at least 12 characters,
+   no spaces at either end), hashes it with **the proxy image's own `caddy hash-password --algorithm
+   bcrypt`** (the key on standard input, never a command line), and writes
+   `access-key.caddy.pending` (`600`): the user name, the hash and a new random pass. It says to run
+   `ospreyflow apply`, which carries it into place as `access-key.caddy` (moved with the staged
+   files, preflight reading it there) and, the proxy's mounted file having changed, restarts the proxy.
+   The pending file is removed once in place. Setting the key again replaces the hash and the pass.
+3. **The render never reads the file.** The Caddyfile `import`s it from `/etc/caddy/access-key.caddy`,
+   mounted read-only into the proxy alone, so no rendered file, change preview or drift report holds
+   the hash. A deployment that asks and has no file set does not start its proxy (Caddy refuses a
+   missing import): it fails closed. Preflight (`access-key`) says so first, and refuses a file others
+   may read or one edited by hand, never quoting it.
+4. **The pass.** Once a browser has answered with the key, Caddy gives it a session cookie
+   (`osprey_pass`, `Domain=<host>`, HttpOnly, Secure, SameSite=Lax), a random value set with the hash
+   (not the key), so it is asked **once** for all three names, and its own requests that carry a token
+   of their own (the Glass's API sends `Authorization: Bearer`, which a browser sends in place of the
+   key), its WebSocket and its frames still pass. The pass is given only when the key was checked.
+   **The key's own `Authorization` is taken off** before anything behind the proxy sees it (on the
+   identity provider, except at a token endpoint, where a client may sign in with Basic).
+5. **What goes without the key**, every one checked live: a CORS preflight (`OPTIONS`, which never
+   carries a credential), and on the identity provider the three answers the Glass asks from its own
+   origin, where a browser sends no stored credential and no cookie: `/realms/osprey/protocol/
+   openid-connect/token`, `.../certs` and `/realms/osprey/.well-known/openid-configuration`. Each
+   answers nothing without a code, a refresh token or a signature to check. **The sign-in page, the
+   master realm and the admin console stay behind the key.** The loopback doors and the proxy's own
+   health answer are not public names and are not asked. The server-side calls (the Conduit's and
+   Superset's to Keycloak) go by the internal network, never through the proxy.
+6. **`X-Robots-Tag: noindex, nofollow`** on every answer of a deployment that asks, a refusal and a
+   redirect to `https://` included.
+7. **The tools on the server** that reach the deployment by its names (`apply`, the sign-in
+   registration, backup and restore, through `harness.site.deployment_origins` or `carry_the_pass`)
+   present the pass from the same file, which only its owner can read, on those three names alone.
+8. **Unset, nothing changes**: no import, no mount, no header; `access_key` is left out of every dump
+   of the settings while false (the cluster's and cloud platform's values carry `osprey.yaml`), so every
+   profile's and fixture's render is byte for byte main's (`gate/B-unset-renders.raw.txt`; the first
+   run found `access_key: false` in those values, fixed before the commit).
+
+**Tests.** `tests/harness/test_access_key.py` (the setting, the render, the helper, preflight, the
+carry and the restart, the tools' pass) and `tests/harness/test_access_key_proxy.py`, **the
+access-control test of each name** (rule 4), against the real Caddy 2.11.4 running the rendered
+Caddyfile and the helper's file: no key and a wrong key or user refused; the key let in, given the
+pass, its `Authorization` never reaching behind; the pass with a Bearer token; another pass refused;
+the open answers given no pass for an unchecked key; the sign-in page, a path that climbs out of the
+token endpoint, the master realm and the admin console refused; no key file, no start; unset,
+answered as before. Red first: the real proxy against seven planted defects and the unit cases
+against nine (`process/lanes/platform-b/gate/B-*-plants.raw.txt`). `test_access_key_proxy.py` needs a
+`caddy` binary (`OSPREY_TEST_CADDY`) and is skipped in words without one, as on GitHub's runners.
+
+**Cost.** A browser's first request is answered 401 until the key is given; an organisation's own
+sign-in that returns by a cross-site POST (SAML) would be asked for the key again, since a SameSite=Lax
+pass is not sent there; none is in use on the demonstration. The pass lasts until the browser closes.
