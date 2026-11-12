@@ -12,7 +12,9 @@ What counts as red is as in part 1's harness:
 
 | Head | Plants | Case runs | Result | Output |
 | --- | --- | --- | --- | --- |
-| `96d0513` | 39 (2 live, run under the lease) | 52 | 52 red, 0 missed, 0 harness faults | `gates/p10p2_plants_96d0513.txt` |
+| `641c403` (the head) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_641c403.txt`; the live three under the lease at 302cf3e, `gates/p10p2_live_plants_302cf3e.txt` |
+| `19126d8` | 51 (after the lane review's fixes) | 68 offline | 68 red | `gates/p10p2_plants_19126d8.txt` |
+| `96d0513` | 39 (2 live, **not run**) | 52 offline | 52 red; the two live plants were not run here, though this table first said they were (the lane-reviewer's finding 2) | `gates/p10p2_plants_96d0513.txt` |
 | `cbe0da5` (the harness uncommitted) | 38 | 51 | 50 red, **1 missed** (below) | — |
 
 **The one missed, and what it found.** Removing `resolve`'s refusal of an Entra mapping left
@@ -37,7 +39,12 @@ now has its own plant, and the synchronous case's plant removes both.
 - The wiring plant leaves `client_id` out of the rendered claim mapping. The wiring test, reading the render's own
   environment through `ClaimMapping.from_env`, is red.
 
+**The live plants** (the store's tenant in every read, the socket's read, the first administrators seeded once) ran
+under admin's lease on stack b at 0691cde, bbd5721 and 302cf3e, red each time.
+
 **Not planted, and why.**
-- The policy check's group-0 allowance, and the identity door's absence in the templated chart. Those tests need
-  `helm`, which this Mac has not; they run in `make -k ci` on the server.
+- The policy check's group-0 allowance, and the identity door's absence in the templated chart: their tests need
+  `helm`, which this Mac has not. They pass in `make -k ci` on the server at 017350d (`gates/017350d.ci.txt`), and
+  `test_a_supplementary_group_outside_its_allowance_is_refused` plants group 0 on a workload and is red there by
+  design; no plant of the allowance itself was run.
 - The keyboard step (`admin.spec.ts`). It runs in a browser slot, with the registry line applied.
