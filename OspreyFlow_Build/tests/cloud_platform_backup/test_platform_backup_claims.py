@@ -294,3 +294,34 @@ def test_the_sets_verify_refuses_a_changed_claim_before_anything(
     aws.stand_in.put(BUCKET, f"sets/{set_id}/claims/ingest.tar.gz", b"\x1f\x8b not the set's", KEY_ARN)
     with pytest.raises(pb.BackupRefused, match="the claim ingest .* the manifest says"):
         pb.verify_set(bucket, set_id, claims=("ingest",))
+
+
+def test_a_restore_failing_while_it_puts_the_set_in_never_removes_what_it_restored(
+    aws: Running, run: Any, claims: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The claim's old contents are set aside (never deleted) before the set's are moved in, and
+    a failure part-way keeps both, saying where each is: the finally never removes restored
+    entries once the old contents are out of place (the orchestrator's review of 7916044)."""
+    _, bucket, set_id = _finished_with_claims(run, claims)
+    target = tmp_path / "restored"
+    (target / "ingest" / "written after the set").mkdir(parents=True)
+    (target / "ingest" / "written after the set" / "note.txt").write_text("the claim as it was")
+    real = Path.rename
+
+    def failing(self: Path, to: Any) -> Any:  # the set's first entry moved into the claim fails
+        if ".osprey-restore" in str(self) and Path(to).parent.name == "ingest":
+            raise OSError(28, "No space left on device")
+        return real(self, to)
+
+    monkeypatch.setattr(Path, "rename", failing)
+    with pytest.raises(pb.BackupRefused, match="No space left") as refused:
+        pb.fetch_claims(bucket, set_id, target)
+    root = target / "ingest"
+    held = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+    # Nothing of either is lost: the old contents, and every file of the set, are on the claim.
+    assert any(h.endswith("written after the set/note.txt") for h in held), held
+    for file in (claims / "ingest").rglob("*"):
+        rel = file.relative_to(claims / "ingest").as_posix()
+        if file.is_file() and not rel.startswith("lost+found/"):  # never in a set
+            assert any(h.endswith(rel) for h in held), rel
+    assert ".osprey-before" in str(refused.value) and ".osprey-restore" in str(refused.value)

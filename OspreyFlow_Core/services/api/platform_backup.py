@@ -429,8 +429,13 @@ class Stores:
     timeout: float = 6 * 3600
 
     def arcadedb_backup(self) -> Path:
-        """ArcadeDB's `BACKUP DATABASE`; the zip it wrote, in the mounted folder."""
+        """ArcadeDB's `BACKUP DATABASE`; the zip it wrote, in the mounted folder. A zip already
+        there is a run's that was killed or evicted before its own cleanup: removed first, or they
+        fill the claim and every later run fails for space."""
         s = self.settings
+        for stale in sorted((s.arcadedb_folder / s.arcadedb_database).glob("*.zip")):
+            if stale.is_file() and not stale.is_symlink():
+                stale.unlink()
         token = base64.b64encode(f"{s.arcadedb_user}:{s.arcadedb_password}".encode()).decode()
         body = json.dumps({"language": "sql", "command": "BACKUP DATABASE"}).encode()
         request = _request(
@@ -748,14 +753,54 @@ def sets(bucket: Bucket) -> list[FoundSet]:
     return [FoundSet(s, c) for s, c in sorted(seen.items())]
 
 
+def _malformed(manifest: Any) -> list[str]:
+    """What is wrong with a manifest's shape (each part's fields and their types), in words."""
+    if not isinstance(manifest, dict):
+        return ["it is not an object"]
+    problems: list[str] = []
+
+    def fields(where: str, part: Any, wanted: dict[str, type]) -> None:
+        if not isinstance(part, dict):
+            problems.append(f"{where} is not an object")
+            return
+        for name, kind in wanted.items():
+            if not isinstance(part.get(name), kind) or isinstance(part.get(name), bool):
+                problems.append(f"{where}.{name} is not a {kind.__name__}")
+
+    fields("arcadedb", manifest.get("arcadedb"), {"key": str, "bytes": int, "sha256": str})
+    analytics = manifest.get("clickhouse")
+    fields("clickhouse", analytics, {"prefix": str})
+    files = analytics.get("files", []) if isinstance(analytics, dict) else []
+    if not isinstance(files, list):
+        problems.append("clickhouse.files is not a list")
+    else:
+        for index, file in enumerate(files):
+            fields(f"clickhouse.files[{index}]", file, {"key": str, "bytes": int, "etag": str})
+    claims = manifest.get("claims") or {}
+    if not isinstance(claims, dict):
+        problems.append("claims is not an object")
+    else:
+        for name, part in claims.items():
+            fields(f"claims.{name}", part, {"key": str, "bytes": int, "sha256": str})
+    return problems
+
+
 def manifest_of(bucket: Bucket, set_id: str) -> dict[str, Any]:
+    """The set's manifest, refused in words unless a finished set's, of a manifest's shape."""
     try:
-        manifest: dict[str, Any] = json.loads(bucket.get_bytes(f"sets/{set_id}/{MANIFEST}"))
+        manifest: Any = json.loads(bucket.get_bytes(f"sets/{set_id}/{MANIFEST}"))
     except Exception as error:  # noqa: BLE001 - reported in words
         raise BackupRefused(
             "restore", f"read set {set_id}", f"no finished set by that name ({_said(error)})"
         ) from error
-    return manifest
+    if problems := _malformed(manifest):
+        raise BackupRefused(
+            "restore",
+            f"read set {set_id}",
+            "its manifest is malformed: " + "; ".join(problems) + "; nothing was touched",
+        )
+    found: dict[str, Any] = manifest
+    return found
 
 
 def latest(bucket: Bucket) -> str:
@@ -831,12 +876,16 @@ def verify_set(
     return manifest
 
 
+#: Where Kubernetes mounts a pod's own service account's token, namespace and CA.
+SERVICE_ACCOUNT_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+
+
 def _pods(selector: str) -> list[dict[str, Any]]:
     """The namespace's pods matching `selector`, by this pod's own service account (its Role: get
     and list pods, nothing else)."""
     import ssl
 
-    account = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    account = SERVICE_ACCOUNT_DIR
     namespace = (account / "namespace").read_text().strip()
     request = urllib.request.Request(
         f"https://kubernetes.default.svc/api/v1/namespaces/{namespace}/pods?"
@@ -852,10 +901,11 @@ def _pods(selector: str) -> list[dict[str, Any]]:
 def writers_stopped(
     settings: Settings, pods: Callable[[str], list[dict[str, Any]]] | None = None
 ) -> None:
-    """A restore refuses while anything that writes runs (the orchestrator's ruling 4): ArcadeDB,
-    the Conduit, the workers and the report sync, in every shape. A pod finished (Succeeded,
-    Failed) is not running. **It fails closed**: with no writers named, or the pods unlisted, it
-    refuses; it never proceeds unconfirmed."""
+    """A restore refuses while anything that writes runs (the orchestrator's ruling 4): the writers
+    the render names (`OSPREY_BACKUP_WRITERS`: ArcadeDB, every workload that mounts the set's claims
+    or writes the stores, the backups' own runs). A pod finished (Succeeded, Failed) is not
+    running. **It fails closed**: with no writers named, or the pods unlisted, it refuses; it never
+    proceeds unconfirmed."""
     if not settings.writers:
         raise BackupRefused(
             "restore",
@@ -867,14 +917,13 @@ def writers_stopped(
     try:
         found = (pods or _pods)(selector)
     except Exception as error:  # noqa: BLE001 - reported in words
-        # Fails closed: until the namespace's egress lets the restore reach the cluster's API (P7b's
-        # per-workload rows), no restore proceeds on this profile, never one that guessed.
+        # Fails closed: unless the cluster's API answers this pod's own account (its egress row to
+        # the API, its Role), no restore proceeds, never one that guessed.
         raise BackupRefused(
             "restore",
             "see what runs",
-            f"cannot confirm the writers are stopped: the pods could not be listed ({error}); on "
-            "the cloud-platform profile every restore refuses so until P7b's restore row lands "
-            "(its egress to the cluster's API); nothing was touched",
+            f"cannot confirm the writers are stopped: the pods could not be listed "
+            f"({_http_said(error)}); nothing was touched",
         ) from error
     finished = ("Succeeded", "Failed")
     running = sorted(
@@ -884,8 +933,8 @@ def writers_stopped(
         raise BackupRefused(
             "restore",
             "see what runs",
-            f"{', '.join(running)} still running: stop ArcadeDB, the Conduit, the workers and the "
-            "report sync first (the recovery runbook); nothing was touched",
+            f"{', '.join(running)} still running: stop every writer first "
+            f"({', '.join(settings.writers)}; the recovery runbook); nothing was touched",
         )
 
 
@@ -929,9 +978,19 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
         target = folder / name
         target.mkdir(parents=True, exist_ok=True)
         staging = target / ".osprey-restore"
+        before = target / ".osprey-before"
+        if before.exists():
+            raise BackupRefused(
+                "claims",
+                f"restore {name}",
+                f"{before} is there: a restore stopped while it replaced the claim; it holds the "
+                "claim's old contents. See the recovery runbook before restoring again; nothing "
+                "was touched",
+            )
         shutil.rmtree(staging, ignore_errors=True)
         staging.mkdir()
         archive = target / ".osprey-restore.tar.gz"
+        swapping = False
         try:
             try:
                 size, digest = bucket.get_to(part["key"], archive)
@@ -951,17 +1010,30 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
                     tar.extractall(staging, filter="data")
             except (tarfile.TarError, OSError) as error:
                 raise BackupRefused("claims", f"unpack {name}", str(error)) from error
-            for entry in target.iterdir():
-                if entry.name in (LOST_FOUND, staging.name, archive.name):
-                    continue
-                if entry.is_dir() and not entry.is_symlink():
-                    shutil.rmtree(entry)
-                else:
-                    entry.unlink()
-            for entry in staging.iterdir():
-                entry.rename(target / entry.name)
+            # The old contents set aside on the claim (renamed, never deleted), then the set's moved
+            # in, then the old removed: a failure part-way keeps both, and says where each is.
+            swapping = True
+            try:
+                before.mkdir()
+                for entry in list(target.iterdir()):
+                    if entry.name not in (LOST_FOUND, staging.name, archive.name, before.name):
+                        entry.rename(before / entry.name)
+                for entry in list(staging.iterdir()):
+                    entry.rename(target / entry.name)
+            except OSError as error:
+                raise BackupRefused(
+                    "claims",
+                    f"put {name} in place",
+                    f"{error}; the claim's old contents are in {before}, the set's not yet moved "
+                    f"in are in {staging}: nothing was removed (the recovery runbook)",
+                ) from error
+            shutil.rmtree(before)
         finally:
-            shutil.rmtree(staging, ignore_errors=True)
+            # Once the old contents are out of place, the set's are never removed here.
+            if not swapping:
+                shutil.rmtree(staging, ignore_errors=True)
+            elif staging.exists() and not any(staging.iterdir()):
+                staging.rmdir()
             archive.unlink(missing_ok=True)
         restored.append(name)
     return restored

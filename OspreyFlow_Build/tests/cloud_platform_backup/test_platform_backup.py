@@ -16,8 +16,10 @@ servers are the kind run's (`process/lanes/case/gates/p9_kind.sh`).
 from __future__ import annotations
 
 import datetime as dt
+import io
 import json
 import urllib.error
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -492,3 +494,93 @@ def test_the_fake_judges_the_backup_users_databases_as_clickhouse_did() -> None:
         "ospreyflow_before_x",
     ]
     assert _databases_named("BACKUP DATABASE ospreyflow TO S3('u')") == []
+
+
+def test_a_zip_a_killed_run_left_on_the_claim_is_removed_before_arcadedbs_backup(aws: Running, run: Any) -> None:
+    """A run killed or evicted after ArcadeDB wrote its zip never reaches its own cleanup: the zip
+    stays on the backups claim, and with enough of them every later night fails for space. Each
+    run removes what is there before it asks ArcadeDB for a backup (the orchestrator's review)."""
+    settings, bucket, stores, fake = run
+    folder = settings.arcadedb_folder / settings.arcadedb_database
+    folder.mkdir(parents=True, exist_ok=True)
+    stale = folder / "ospreyflow-backup-20261110-020000.zip"
+    stale.write_bytes(b"a killed run's")
+    kept = folder / "notes.txt"
+    kept.write_text("not a zip: left alone")
+    seen: list[bool] = []
+    answer = fake.__call__
+
+    def watching(request: Any, timeout: float) -> bytes:
+        if "/api/v1/command/" in request.full_url:
+            seen.append(stale.exists())
+        return answer(request, timeout)
+
+    stores.http = watching
+    pb.take(settings, bucket, stores)
+    assert seen == [False], "the stale zip was still there when ArcadeDB was asked"
+    assert kept.exists()
+
+
+@pytest.mark.parametrize(
+    ("broken", "words"),
+    [
+        (lambda m: [], "not an object"),
+        (lambda m: {k: v for k, v in m.items() if k != "arcadedb"}, "arcadedb"),
+        (lambda m: {**m, "arcadedb": {**m["arcadedb"], "sha256": 7}}, "arcadedb.sha256"),
+        (lambda m: {**m, "clickhouse": {**m["clickhouse"], "files": "all"}}, "clickhouse.files"),
+        (lambda m: {**m, "claims": {"ingest": {"key": "k"}}}, "claims.ingest"),
+    ],
+    ids=["a list", "no arcadedb", "a number for a digest", "files not a list", "a claim without its digest"],
+)
+def test_a_malformed_manifest_is_refused_in_words(aws: Running, run: Any, broken: Any, words: str) -> None:
+    """A manifest that parses but is not a manifest's shape (written by hand, or by another
+    version) is refused naming what is wrong, never a KeyError or a TypeError part-way."""
+    settings, bucket, stores, _ = run
+    set_id = pb.take(settings, bucket, stores)["set"]
+    manifest = pb.manifest_of(bucket, set_id)
+    aws.stand_in.put(BUCKET, f"sets/{set_id}/manifest.json", json.dumps(broken(manifest)).encode(), KEY_ARN)
+    with pytest.raises(pb.BackupRefused, match="malformed") as refused:
+        pb.verify_set(bucket, set_id)
+    assert words in str(refused.value)
+
+
+#: The runner's own call to the cluster's API, before the `run` fixture replaces it with a listing.
+REAL_PODS = pb._pods
+
+
+def test_the_api_refusing_the_restores_account_its_pods_list_is_refused_in_words(
+    run: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The restore's own call to the cluster's API, refused by RBAC (a Role not bound, say): the
+    API answers 403 with its Status, and the restore refuses saying so, touching nothing."""
+    import ssl
+
+    settings, _, _, _ = run
+    account = tmp_path / "serviceaccount"
+    account.mkdir()
+    (account / "namespace").write_text("ospreyflow-dev")
+    (account / "token").write_text("a-token")
+    (account / "ca.crt").write_text("")
+    monkeypatch.setattr(pb, "SERVICE_ACCOUNT_DIR", account)
+    monkeypatch.setattr(pb, "_pods", REAL_PODS)  # the fixture's listing replaced by the real call
+    monkeypatch.setattr(ssl, "create_default_context", lambda **_: None)
+    status = {
+        "kind": "Status", "apiVersion": "v1", "status": "Failure", "reason": "Forbidden", "code": 403,
+        "message": 'pods is forbidden: User "system:serviceaccount:ospreyflow-dev:ospreyflow-backup" cannot list '
+                   'resource "pods" in API group "" in the namespace "ospreyflow-dev"',
+    }  # fmt: skip
+    asked: list[str] = []
+
+    def api(request: Any, timeout: float, context: Any = None) -> Any:
+        asked.append(request.full_url)
+        assert request.get_header("Authorization") == "Bearer a-token"
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", Message(), io.BytesIO(json.dumps(status).encode()))
+
+    monkeypatch.setattr(pb.urllib.request, "urlopen", api)
+    with pytest.raises(pb.BackupRefused) as refused:
+        pb.writers_stopped(settings)
+    assert asked and "/namespaces/ospreyflow-dev/pods?labelSelector=" in asked[0]
+    words = str(refused.value)
+    assert "cannot confirm the writers are stopped" in words and "HTTP 403" in words
+    assert 'cannot list resource \\"pods\\"' in words or 'cannot list resource "pods"' in words
+    assert "nothing was touched" in words
