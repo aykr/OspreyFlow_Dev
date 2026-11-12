@@ -649,6 +649,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         4. the image note stays.
 
         Still yours: the item 4 and 5 diffs in `process/lanes/docs/sites-proposal/`.
+      - **Part 1's checks (17:40 UTC), osprey-small from main b380d456, frozen:**
+        - pass: services, sign-in for all four, pack counts, the analyst an Editor everywhere, and demo-admin's rule
+          rights (deploy, not write);
+        - fail, not a defect: Questions (no text documents until chapter 4 loads the reports; the model answers
+          directly, 59 s cold);
+        - fail, as configured: dashboards (an Admin dashboard identity is yours);
+        - partial, by design: Ledger's list and alerts, which come mid-demo.
+
+        The pristine post-seed backup is `/srv/ospreyflow/backups/small/20261112T173107Z-small-…`, restored in
+        about 25 s. Recommended: no v0.5.0 fall-back. You walk it tonight.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
