@@ -58,3 +58,27 @@ and `get_principal` for the route.
 Join, by the row-reading guard (an empty bound marking cell reads as one the person may not view). The first draft
 of those two tests expected the Join's words and failed; they now assert the withheld sample, the refusal a person
 actually gets (Amendment 19, "What it costs").
+
+## Round 2 · the lane-reviewer's findings at 77502ae, each red first
+
+| Finding | Red before the fix |
+| --- | --- |
+| 1 · a default left below a raised source marking still carried (rule 3) | `test_staged_pipeline_run.py::test_a_default_left_below_a_raised_source_marking_is_not_carried`: `DID NOT RAISE` (the owners' rows carried OFFICIAL after the source was raised to SECRET, and joined) |
+| 2 · the setting's answer, the whole source, given to someone the read refuses (rule 4) | `test_dataset_sources.py::test_an_approver_who_may_not_read_the_source_cannot_set_its_default`: `200 == 403`, the answer holding the source's location (the person: Deploy pipelines and Add ingest files, not Edit pipelines; the first two drafts of the case used a person the scoping or the read refused earlier, so they never reached the route, and were corrected) |
+| 4 · the unmarked words for a marked table's empty cell | `test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default` (now asserting the words do not name the setting): failed |
+| 5 · a case that passed with no carry at all | `test_a_default_marked_differently_from_the_other_table_is_still_refused` now asserts the carried cell and the words; plant 19 below |
+| 7 · drafts not following a default change | `test_a_source_approver_declares_changes_and_clears_a_default_marking_audited`: `[] == [(ds-a, …, OFFICIAL)] * 3` |
+| 9 · the Releases tab stuck after a refusal at the write | `ReleasesTab.test.tsx` "shows a refusal at the write as a refused check …": failed |
+| 13 · the source page silent on a default no longer carried | `sources.test.tsx` "says a default left below the source's own marking is not carried": failed |
+
+Plants for the seams the reviewer found untested (item 8) and the strengthened case (item 5):
+
+| # | Plant | Red |
+| --- | --- | --- |
+| 19 | `staging_catalogue.py`: no carry at all (`carry_declared_marking` returns the table) | `test_a_default_marked_differently_from_the_other_table_is_still_refused` |
+| 20 | `app.py`: Load Preview's `sources=` left out | `test_studio_staging_routes.py::test_load_preview_reads_the_sources_declared_default_as_the_run_does` |
+| 21 | `cli/ospreyflow/main.py`: the dispatch's `replace_own_draft=` left out | `test_conduit_client.py::test_replace_own_draft_reaches_the_route_through_the_command[True]` |
+
+Item 6's Postgres half (`test_studio_recipes_store.py::test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere_on_both_stores[postgres]`)
+is a live case, run in the leased live set at the gate; its in-memory half passes here. Item 3's window inside
+`save_draft`'s own lock is carried to the case lane (REPORT.md), not fixed here.
