@@ -272,7 +272,17 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path === "/v1/datasets/harbour-extract/release" && method === "GET")
     return reply({ files: { "release.yaml": "apiVersion: ospreyflow.io/v1\n", "model.yaml": "packs: {}\n" }, left_out: 0 });
   if (path === "/v1/datasets/harbour-extract/release/import" && method === "POST") {
-    const dryRun = new URL(String(input)).searchParams.get("dry_run") === "true";
+    const query = new URL(String(input)).searchParams;
+    const dryRun = query.get("dry_run") === "true";
+    // CARRIES row 90: `&draft=own` holds the importer's own in-progress model draft, which the
+    // Conduit refuses to replace until `replace_own_draft=true` confirms it.
+    if (startParams.get("draft") === "own") {
+      if (query.get("replace_own_draft") !== "true")
+        return reply({ dry_run: dryRun, items: [], missing_connections: [], notes: [], replaces_own_draft: true,
+          refused: ["the domain model has your own in-progress draft (version 3), opened 10 November 2026 at 09:00 UTC: importing replaces it"] }, 422); // prettier-ignore
+      return reply({ dry_run: dryRun, refused: [], missing_connections: [], notes: [], replaces_own_draft: true,
+        items: [{ role: "domain_model", name: "the domain model", action: "replaces_draft" }] }); // prettier-ignore
+    }
     return reply({ dry_run: dryRun, items: [{ role: "pipeline", name: "Wing phone calls", action: "new_draft" }],
       refused: [], missing_connections: [], notes: [] }); // prettier-ignore
   }

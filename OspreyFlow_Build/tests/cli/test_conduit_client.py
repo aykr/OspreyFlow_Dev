@@ -267,3 +267,32 @@ def test_run_through_the_command_needs_the_service_identity(
     env = {"OSPREY_API_URL": "http://c", "OSPREY_TOKEN": "svc-token"}
     assert _main(product, tmp_path / "home", *args, "--wait", "--fail-on", "held", env=env) == 0
     assert conduit[0].url.path == "/v1/runs"
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_replace_own_draft_is_sent_only_when_given(tmp_path: Path, confirmed: bool) -> None:
+    """CARRIES row 90: the confirmation travels as the route's own query, never by default."""
+    (tmp_path / "release.yaml").write_text("x")
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"items": [], "refused": []})
+
+    code = release_import(
+        _conduit(handler), token="t", dataset="pid", folder=tmp_path, dry_run=False,
+        replace_own_draft=confirmed, say=lambda _: None,
+    )  # fmt: skip
+    assert code == 0
+    assert seen[0].url.params["replace_own_draft"] == ("true" if confirmed else "false")
+
+
+def test_the_parser_takes_replace_own_draft() -> None:
+    from cli.ospreyflow.main import _parser
+
+    args = _parser().parse_args(
+        ["release", "import", "bundle", "--dataset", "pid", "--replace-own-draft"]
+    )
+    assert args.replace_own_draft is True
+    plain = _parser().parse_args(["release", "import", "bundle", "--dataset", "pid"])
+    assert plain.replace_own_draft is False

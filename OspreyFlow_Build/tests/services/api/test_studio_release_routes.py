@@ -435,3 +435,117 @@ def test_a_secret_planted_in_the_deployments_environment_is_never_exported(
     assert answer.status_code == 422, answer.text
     assert "one of this deployment's secrets" in answer.text
     assert planted not in answer.text
+
+
+# --- CARRIES row 90 (L1.7's review): an import never silently replaces an in-progress draft ------
+
+
+def _held_by(world: _World, who: str) -> TargetModel:
+    """An in-progress draft of the dataset's model, opened by `who`, as the real store holds one."""
+    world.models.draft_model = TargetModel(
+        dataset_id="pid", version=3, state="draft", packs={"niem": 1},
+        reference_lists=["lst-wings"], created_at=_AT, created_by=who,
+    )  # fmt: skip
+    return world.models.draft_model
+
+
+def _import(client: TestClient, files: dict[str, str], **params: object):  # type: ignore[no-untyped-def]
+    return client.post("/v1/datasets/pid/release/import", params=params, json={"files": files})
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_another_persons_draft_is_refused_in_words_naming_them(
+    store: Path, ingest: Path, confirmed: bool, dry_run: bool
+) -> None:
+    """Their draft is theirs: no confirmation of the importer's replaces it, and a dry run says so
+    before the import is tried."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    held = _held_by(world, "analyst-7")
+    world.recipes.create_calls.clear()
+    answer = _import(client, files, dry_run=dry_run, replace_own_draft=confirmed)
+    assert answer.status_code == 422, answer.text
+    plan = answer.json()
+    (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
+    assert "analyst-7" in words and "Studio › Model" in words and "discard" in words
+    assert plan["replaces_own_draft"] is False, "another's draft is never offered to confirm"
+    assert world.models.draft_model == held and world.models.saved == []
+    assert world.recipes.create_calls == []
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_the_importers_own_draft_is_refused_until_confirmed(
+    store: Path, ingest: Path, dry_run: bool
+) -> None:
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    held = _held_by(world, ENGINEER.id)
+    world.recipes.create_calls.clear()
+    answer = _import(client, files, dry_run=dry_run)
+    assert answer.status_code == 422, answer.text
+    plan = answer.json()
+    (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
+    assert "your own" in words and "--replace-own-draft" in words
+    assert plan["replaces_own_draft"] is True
+    assert world.models.draft_model == held and world.models.saved == []
+    assert world.recipes.create_calls == []
+
+
+def test_the_importers_own_draft_is_replaced_when_confirmed(store: Path, ingest: Path) -> None:
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    _held_by(world, ENGINEER.id)
+    world.recipes.create_calls.clear()
+    answer = _import(client, files, replace_own_draft=True)
+    assert answer.status_code == 200, answer.text
+    plan = answer.json()
+    assert plan["refused"] == [] and plan["replaces_own_draft"] is True
+    assert ("domain_model", "replaces_draft") in {(i["role"], i["action"]) for i in plan["items"]}
+    assert world.models.saved and world.models.saved[-1].packs == {"niem": 1}
+    assert len(world.recipes.create_calls) == 1
+
+
+def test_with_no_draft_the_import_opens_one_without_a_confirmation(
+    store: Path, ingest: Path
+) -> None:
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    world.recipes.create_calls.clear()
+    answer = _import(client, files)
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["replaces_own_draft"] is False
+    assert world.models.draft_model is not None
+    assert world.models.draft_model.created_by == ENGINEER.id
+
+
+def test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write(
+    store: Path, ingest: Path
+) -> None:
+    """The plan and the write each read the draft: someone opening one in between is refused at
+    the write, before the model, a pipeline or a list is written (the strict option)."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    world.recipes.create_calls.clear()
+    reads = 0
+    real_draft = world.models.draft
+
+    async def opened_meanwhile(dataset_id: str) -> TargetModel | None:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            _held_by(world, "analyst-7")
+        return await real_draft(dataset_id)
+
+    world.models.draft = opened_meanwhile  # type: ignore[method-assign]
+    answer = _import(client, files)
+    assert answer.status_code == 422, answer.text
+    assert any("analyst-7" in p for p in answer.json()["refused"])
+    assert world.models.saved == [] and world.recipes.create_calls == []
+    assert world.models.draft_model is not None
+    assert world.models.draft_model.created_by == "analyst-7"

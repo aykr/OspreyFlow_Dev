@@ -1063,6 +1063,7 @@ from .studio_recipes import (
     reconcile_recipe_pins,
 )
 from .studio_release import (
+    DraftHeld,
     apply_import,
     bundle_from_text,
     deployment_secrets,
@@ -11487,11 +11488,14 @@ async def import_dataset_release(
     handling_scheme: HandlingSchemeDep,
     ontology: OntologyDep,
     dry_run: bool = False,
+    replace_own_draft: bool = False,
 ) -> ReleaseImportPlan:
     """*Import* and `ospreyflow release import [--dry-run]`: the bundle read and checked, every
     pipeline judged by the canvas's own gates, then (unless `dry_run`) everything written as a
     draft. A bundle that cannot be read, or any refusal, writes nothing (422, the plan's words).
-    Nothing goes live: *Make live* stays a person's audited step."""
+    Nothing goes live: *Make live* stays a person's audited step. An in-progress draft of the
+    model is never replaced silently: another person's is refused, naming them, and the importer's
+    own only with `replace_own_draft` (CARRIES row 90)."""
     try:
         bundle = bundle_from_text(body.files)
     except BundleRefused as refused:
@@ -11513,6 +11517,7 @@ async def import_dataset_release(
         sources=sources,
         scheme=handling_scheme,
         ontology=ontology,
+        replace_own_draft=replace_own_draft,
     )
     plan = planned.plan
     if plan.refused:
@@ -11527,15 +11532,24 @@ async def import_dataset_release(
             result_cardinality=len(plan.items),
         )
         return plan
-    made = await apply_import(
-        bundle,
-        planned,
-        dataset_id=dataset_id,
-        principal=principal,
-        models=models,
-        recipes=studio_recipes,
-        rows_kept=rows_kept,
-    )
+    try:
+        made = await apply_import(
+            bundle,
+            planned,
+            dataset_id=dataset_id,
+            principal=principal,
+            models=models,
+            recipes=studio_recipes,
+            rows_kept=rows_kept,
+            replace_own_draft=replace_own_draft,
+        )
+    except DraftHeld as held:
+        refused_now = plan.model_copy(
+            update={"items": [], "refused": held.problems, "replaces_own_draft": held.own}
+        )
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content=refused_now.model_dump(mode="json")
+        )
     await audit.record(
         principal=principal,
         action="import_dataset_release",
@@ -11544,6 +11558,8 @@ async def import_dataset_release(
             "release": bundle.manifest.metadata.name,
             "version": bundle.manifest.metadata.version,
             "pipelines": made,
+            # CARRIES row 90: the importer's own in-progress draft replaced, by their confirmation.
+            "replaced_own_draft": plan.replaces_own_draft,
         },
         result_cardinality=len(plan.items),
     )

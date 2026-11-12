@@ -1075,6 +1075,31 @@ test("a release is checked, then imported as drafts, by keyboard", async ({ page
   registerCovered(REGISTRY, "check-and-import-a-release-by-keyboard");
 });
 
+// CARRIES row 90: an import replaces the importer's own in-progress model draft only once they
+// confirm it, the checkbox reached by Tab from the check, never by a pointer.
+test("an importer's own draft is replaced only once confirmed, by keyboard", async ({ page }) => {
+  await page.goto(`${HARNESS}?rights=releases&draft=own`);
+  await tab(page, "5 Releases");
+  const folder = mkdtempSync(join(tmpdir(), "ospreyflow-release-"));
+  writeFileSync(join(folder, "release.yaml"), "apiVersion: ospreyflow.io/v1\n");
+  await page.getByLabel("Choose the release's folder").setInputFiles(folder);
+  await expect(page.getByRole("button", { name: "Check the release" })).toBeEnabled();
+  await press(page, "Check the release");
+  await expect(page.getByText(/your own in-progress draft/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import as drafts" })).toBeDisabled();
+  await page.keyboard.press("Tab");
+  const confirm = page.getByRole("checkbox", { name: "Replace my draft of the domain model" });
+  await expect(confirm).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(confirm).toBeChecked();
+  await expect(page.getByText("Would write the domain model as the draft, in place of the one open now.")).toBeVisible();
+  await press(page, "Import as drafts");
+  await expect(page.getByText("Everything imported is a draft. Make the model live in 1 Model when it is ready.")).toBeVisible();
+  const imports = (await asked(page)).filter((a) => a.path === "/v1/datasets/harbour-extract/release/import");
+  expect(imports).toHaveLength(3);
+  registerCovered(REGISTRY, "replace-own-draft-on-import-by-keyboard");
+});
+
 // ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's quota bar, Owned externally, and the DAG.
 test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG read", async ({ page }) => {
   // The default deployed pipeline watches a folder, so it is refused in words; one with no schedule

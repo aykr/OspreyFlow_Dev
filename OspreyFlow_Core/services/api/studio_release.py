@@ -43,7 +43,7 @@ from services.ingest.release import (
 from services.ingest.staging import ObjectStorageConfig
 
 from ontology.handling import HandlingScheme, principal_may_view
-from schemas.dataset_model import ReferenceList, TargetModelDraftInput
+from schemas.dataset_model import ReferenceList, TargetModel, TargetModelDraftInput
 from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     DeduplicateConfig,
@@ -215,6 +215,50 @@ class ExportResult:
     left_out: int
 
 
+class DraftHeld(Exception):
+    """The dataset's model has an in-progress draft the import may not replace: another person's,
+    or the importer's own without their confirmation (CARRIES row 90). Nothing is written."""
+
+    def __init__(self, problems: list[str], *, own: bool) -> None:
+        super().__init__("; ".join(problems))
+        self.problems = problems
+        self.own = own
+
+
+def held_draft_problem(
+    draft: TargetModel | None, principal: Principal, *, replace_own_draft: bool
+) -> DraftHeld | None:
+    """Whether an import may write the domain model over `draft` (CARRIES row 90, L1.7's review;
+    the strict option). No draft: yes. Another person's: never, whatever the importer confirms, in
+    words naming whose it is and how to go on, since it is their unsaved work. The importer's own:
+    only when they confirm it (`replace_own_draft`, the Studio's *Replace my draft* and
+    `ospreyflow release import --replace-own-draft`)."""
+    if draft is None:
+        return None
+    opened = draft.created_at.strftime("%d %B %Y at %H:%M UTC")
+    if draft.created_by != principal.id:
+        return DraftHeld(
+            [
+                f"the domain model has an in-progress draft (version {draft.version}) by "
+                f"{draft.created_by}, opened {opened}: an import never replaces another person's "
+                f"draft. Ask {draft.created_by} to make it live or discard it in Studio › Model, "
+                "then import again"
+            ],
+            own=False,
+        )
+    if replace_own_draft:
+        return None
+    return DraftHeld(
+        [
+            f"the domain model has your own in-progress draft (version {draft.version}), opened "
+            f"{opened}: importing replaces it, and what you have not made live is lost. Confirm "
+            "Replace my draft (ospreyflow release import --replace-own-draft) to go on, or make "
+            "it live or discard it in Studio › Model first"
+        ],
+        own=True,
+    )
+
+
 @dataclass(frozen=True)
 class ImportPlan:
     """The plan as answered, the dataset's own lists the import would add, and each pipeline as it
@@ -325,13 +369,19 @@ async def plan_import(
     sources: SourceStore,
     scheme: HandlingScheme,
     ontology: OntologySchema,
+    replace_own_draft: bool = False,
 ) -> ImportPlan:
     """What the import writes and every refusal, judged before anything is written. Returns the
-    plan and the dataset's own lists the import would add (definitions at the receiving id)."""
+    plan and the dataset's own lists the import would add (definitions at the receiving id). An
+    in-progress draft of the model is refused here, a dry run's plan included
+    (`held_draft_problem`)."""
     refused: list[str] = []
     notes: list[str] = []
     items: list[ReleaseImportItem] = []
     draft = await models.draft(dataset_id)
+    held = held_draft_problem(draft, principal, replace_own_draft=replace_own_draft)
+    if held is not None:
+        refused.extend(held.problems)
     items.append(
         ReleaseImportItem(
             role="domain_model",
@@ -426,6 +476,7 @@ async def plan_import(
             refused=refused,
             missing_connections=missing,
             notes=notes,
+            replaces_own_draft=draft is not None and draft.created_by == principal.id,
         ),
         own_lists=own_lists,
         pipelines=settled,
@@ -441,11 +492,17 @@ async def apply_import(
     models: TargetModelStore,
     recipes: StudioRecipeStore,
     rows_kept: ListRows,
+    replace_own_draft: bool = False,
 ) -> list[str]:
     """Writes the plan's drafts; returns the new pipeline drafts' ids. Never called for a dry run
-    or a plan with a refusal."""
+    or a plan with a refusal. The draft is read again first: one another person opened since the
+    plan raises `DraftHeld` before anything is written."""
     assert not planned.plan.dry_run and not planned.plan.refused
-    if await models.draft(dataset_id) is None:
+    open_model = await models.draft(dataset_id)
+    held = held_draft_problem(open_model, principal, replace_own_draft=replace_own_draft)
+    if held is not None:
+        raise held
+    if open_model is None:
         await models.open_draft(dataset_id, principal)
     await models.save_draft(
         dataset_id,
