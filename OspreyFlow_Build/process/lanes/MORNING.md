@@ -501,7 +501,6 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       Patch 5 (make test runs all its parts) went in reshaped. As one shell line holding `$(MAKE)` it ran the suite
       even under `make -n` (found when I checked it; it died on its arguments before any test ran). Each part is now
       its own recipe line with a failure marker, and its record is beside it in `merger/owner-diffs/`.
-    - the Makefile patch so `make test` runs all three of its parts (below, under P10 part 2's review);
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
     - **What happened overnight:**
       - **About 22:05, P7b landed** (3673660), after a final review, a re-check and a second pass. cp-policy-check
