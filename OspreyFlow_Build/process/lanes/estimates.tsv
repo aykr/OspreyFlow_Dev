@@ -1,5 +1,5 @@
-# as of 2026-11-12T17:30Z
-rules	lists	independent review found four rule-3 leaks; fixing, with the owner's close ruling	13 Nov	B
+# as of 2026-11-12T22:00Z
+rules	lists	second pass gating now (make test, make -k ci, live plants); then the orchestrator's review	13 Nov, morning	B
 rules-b	guides	done: merged 5675103; the guides' own text is docs' follow-up	done	A
 admin	P10	done: part 2 merged (e5e81bd); two patches for you	done	B
 case	P9	done: merged	done	B
@@ -10,7 +10,7 @@ platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after the demo	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
-demo	rebuild	the demo lane (sol) rebuilds osprey-small from main once studio carries lands: backup done and verified; then install, demo accounts, five packs, the owner's checks	12 Nov, checks reported by 20:00	A
+demo	rebuild	done: at https://govuk.ospreyflow.app, walked by the owner; the memory cap after Friday's demo	done	A
 
 docs	D2e	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
 docs	sites	items 1-3 and 7 merged; the publish diffs (4, 5) await the owner; screenshots after Friday	after Friday	B
