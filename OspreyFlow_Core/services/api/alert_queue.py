@@ -53,6 +53,7 @@ from .alerts import (
     AlertTriageConflict,
     QueueRow,
     QueueShow,
+    as_read,
     evidence_node_ids,
     purge_copies,
     raiser_reads_admitting,
@@ -161,6 +162,8 @@ async def monitoring_queue(
     for row in rows:
         if not readable.whole(row.alert) or row.alert.id not in admitted:
             continue
+        # ADR-146 Amendment 7: served with only the citations the reader may read whole.
+        row.alert = as_read(row.alert, readable.citations_read(row.alert))
         ids = evidence_node_ids(row.alert)
         named = {i: readable.nodes[i] for i in ids}
         shown.append(_queued(row, summary_of(row.alert, named), lead_of=lead_of))
@@ -210,7 +213,22 @@ async def _visible_row(
         store, [row.alert], reader
     ):
         raise AlertNotFoundError(alert_id)
+    # ADR-146 Amendment 7: everything downstream (the explanation, the canvas, a close's confirms,
+    # what a triage returns) reads the alert as served, with only the citations the reader may
+    # read whole; a close confirms only the matches the closer could read (rules 3 and 5).
+    row.alert = as_read(row.alert, readable.citations_read(row.alert))
     return row, {i: readable.nodes[i] for i in evidence_node_ids(row.alert)}
+
+
+def _as_shown(updated: Alert, shown: Alert) -> Alert:
+    """A triage's stored result, as the reader was shown the alert (ADR-146 Amendment 7): only the
+    citations they were shown, matched by their words, which a repoint never changes. An alert
+    shown without citations has none stored (one with any is shown only with one), and is returned
+    as stored."""
+    if not shown.citations:
+        return updated
+    seen = {c.words for c in shown.citations}
+    return as_read(updated, [n for n, c in enumerate(updated.citations) if c.words in seen])
 
 
 async def _visible_alert(
@@ -354,11 +372,11 @@ async def claim(
     alert_id: str,
     member: Principal,
 ) -> Alert:
-    await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
-    return await store.set_queue_triage(
+    shown, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
+    return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["open"], status="claimed",
         assignee=member.id,
-    )  # fmt: skip
+    ), shown)  # fmt: skip
 
 
 async def release(
@@ -372,10 +390,10 @@ async def release(
     alert, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     if alert.assignee not in (None, member.id):
         raise AlertTriageConflict(alert_id)
-    return await store.set_queue_triage(
+    return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["claimed"], status="open",
         assignee=None,
-    )  # fmt: skip
+    ), alert)  # fmt: skip
 
 
 class CloseRefused(Exception):
@@ -429,11 +447,11 @@ async def dispose(
     if alert.status in ("closed", "closing"):
         raise AlertTriageConflict(alert_id)
     if needs_second_person(row):
-        return await store.set_queue_triage(
+        return _as_shown(await store.set_queue_triage(
             alert_id, investigation_id, member, expect_status=["open", "claimed"],
             status="closing", assignee=alert.assignee or member.id, disposition=disposition,
             disposition_reason=reason, close_proposed_by=member.id,
-        )  # fmt: skip
+        ), alert)  # fmt: skip
     return await _close(
         store, graph, investigation_id, alert, nodes, member, disposition=disposition,
         reason=reason, expect=["open", "claimed"], working_set=working_set,
@@ -481,10 +499,10 @@ async def send_back(
     alert, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     if alert.status != "closing":
         raise AlertTriageConflict(alert_id)
-    return await store.set_queue_triage(
+    return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["closing"], status="claimed",
         assignee=alert.close_proposed_by or alert.assignee, close_proposed_by=None,
-    )  # fmt: skip
+    ), alert)  # fmt: skip
 
 
 async def _close(
@@ -559,7 +577,7 @@ async def _close(
             if working_set is not None and repoint.remarked_nodes:
                 await purge_copies(working_set, repoint.remarked_nodes)
                 await repoint.purged()
-    return await store.set_queue_triage(
+    return _as_shown(await store.set_queue_triage(
         alert_id,
         investigation_id,
         member,
@@ -572,7 +590,7 @@ async def _close(
         # No node here: the close's record owns the node's rename (to the newest revision the graph
         # holds, after any re-mark), and writing the confirmed node back would undo it.
         close_proposed_by=proposed_by,
-    )
+    ), alert)
 
 
 class AssignmentRefused(Exception):
@@ -612,15 +630,15 @@ async def assign(
             raise AssignmentRefused(
                 "That person is not a member of the team who can work on this case's alerts."
             )
-        return await store.set_queue_triage(
+        return _as_shown(await store.set_queue_triage(
             alert_id, investigation_id, member, expect_status=["open", "claimed"],
             status="claimed", assignee=assignee,
-        )  # fmt: skip
+        ), row.alert)  # fmt: skip
     if routed is not None:
-        return await store.set_queue_triage(
+        return _as_shown(await store.set_queue_triage(
             alert_id, investigation_id, member, expect_status=["open", "claimed"],
             status="claimed", assignee=member.id,
-        )  # fmt: skip
+        ), row.alert)  # fmt: skip
     if assignee not in allowed:
         raise AssignmentRefused("That person is not a member of this case who can work on alerts.")
     if row.audience != "case" and assignee != member.id:
@@ -628,10 +646,10 @@ async def assign(
             "An alert shared with a team, or its owner's alone, is claimed by someone who can see "
             "it; it cannot be given to another person."
         )
-    return await store.set_queue_triage(
+    return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["open", "claimed"], status="claimed",
         assignee=assignee,
-    )  # fmt: skip
+    ), row.alert)  # fmt: skip
 
 
 class SuppressRefused(Exception):
@@ -665,8 +683,9 @@ async def suppress(
         raise SuppressRefused(f"A suppression ends at most {SUPPRESS_DAYS_MAX} days ahead.")
     if row.alert.status == "closed":
         raise AlertTriageConflict(alert_id)
-    return await store.set_suppression(
-        alert_id, investigation_id, member, until=until, reason=reason
+    return _as_shown(
+        await store.set_suppression(alert_id, investigation_id, member, until=until, reason=reason),
+        row.alert,
     )
 
 

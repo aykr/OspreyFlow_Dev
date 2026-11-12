@@ -54,6 +54,7 @@ from ports.graph import GraphPort
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
     Alert,
+    AlertCitation,
     AlertMode,
     CircularFlowParams,
     EdgeWrite,
@@ -339,6 +340,9 @@ class Finding:
     edge_ids: list[str] = field(default_factory=list)
     events: tuple[EventRecord, ...] = ()
     pending: tuple[NodeWrite | EdgeWrite, ...] = ()
+    #: ADR-146 Amendment 7: what it cites that a reader is cleared for one by one (a screening
+    #: match on each list). Each citation's ids are among `node_ids` and `edge_ids` too.
+    citations: tuple[AlertCitation, ...] = ()
 
     @classmethod
     def from_hit(
@@ -643,12 +647,21 @@ async def write_alert_node(
                 node_ids=[renamed.get(i, i) for i in finding.node_ids],
                 edge_ids=[renamed.get(i, i) for i in finding.edge_ids],
                 pending=(),
+                citations=tuple(
+                    c.model_copy(update={"node_ids": [renamed.get(i, i) for i in c.node_ids],
+                                         "edge_ids": [renamed.get(i, i) for i in c.edge_ids]})
+                    for c in finding.citations
+                ),  # fmt: skip
             )
+    # ADR-146 Amendment 7: the node is marked by what the alert rests on outside its citations, so
+    # a reader cleared for one list's match and not another's still reads it; the `ALERTED_ON` to
+    # a citation's party is marked by that citation too (`_citation_markings`).
     marking = alert_handling(
-        scheme, await _referent_handlings(graph, scheme, finding, unseen, known or {})
+        scheme, await _referent_handlings(graph, scheme, core_of(finding), unseen, known or {})
     )
     if marking is None:
         return None, finding
+    by_target = await _citation_markings(graph, scheme, finding, marking, unseen, known or {})
     now = datetime.now(UTC)
     provenance = Provenance(
         state=ProvenanceState.INFERRED,
@@ -677,6 +690,8 @@ async def write_alert_node(
     )
     (node_id,) = await graph.upsert_nodes([node], tx)
     record.node_ids.append(node_id)
+    # A citation's party no single marking can join to the node's gets no `ALERTED_ON`.
+    targets = [(t, by_target.get(t, marking)) for t in finding.node_ids]
     alerted = [
         EdgeWrite(
             id=new_edge_id(),
@@ -685,16 +700,61 @@ async def write_alert_node(
             target=target,
             basis="probabilistic",
             provenance=provenance,
-            handling=marking,
+            handling=link_marking,
             created_by=finding.deployer.id,
             created_at=now,
             load_id=load_id,
             datasets=into,
         )
-        for target in finding.node_ids
+        for target, link_marking in targets
+        if link_marking is not None
     ]
     record.edges(alerted, await graph.upsert_edges(alerted, tx))
     return node_id, finding
+
+
+def core_of(finding: Finding) -> Finding:
+    """The finding without its citations (ADR-146 Amendment 7): what every reader of the alert
+    must be able to read, and what its own node is marked by."""
+    if not finding.citations:
+        return finding
+    nodes = {i for c in finding.citations for i in c.node_ids}
+    edges = {i for c in finding.citations for i in c.edge_ids}
+    return replace(
+        finding,
+        node_ids=[i for i in finding.node_ids if i not in nodes],
+        edge_ids=[i for i in finding.edge_ids if i not in edges],
+        pending=tuple(w for w in finding.pending if w.id not in nodes | edges),
+        citations=(),
+    )
+
+
+async def _citation_markings(
+    graph: GraphPort,
+    scheme: HandlingScheme,
+    finding: Finding,
+    marking: Handling,
+    unseen: Handling | None,
+    known: Mapping[str, Handling],
+) -> dict[str, Handling | None]:
+    """Each cited party's `ALERTED_ON` marking: the node's, raised to everything its citation rests
+    on; `None` where no single marking is safe (`alert_handling`), and no link is written."""
+    out: dict[str, Handling | None] = {}
+    for citation in finding.citations:
+        ids = {*citation.node_ids, *citation.edge_ids}
+        part = replace(
+            finding,
+            node_ids=list(citation.node_ids),
+            edge_ids=list(citation.edge_ids),
+            events=(),
+            pending=tuple(w for w in finding.pending if w.id in ids),
+            citations=(),
+        )
+        handlings = await _referent_handlings(graph, scheme, part, unseen, known)
+        joined = alert_handling(scheme, [marking, *handlings])
+        for node_id in citation.node_ids:
+            out[node_id] = joined
+    return out
 
 
 def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str) -> Alert:
@@ -715,6 +775,7 @@ def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str
         window=finding.window,
         trigger=finding.rule.trigger,
         alert_node_id=alert_node_id,
+        citations=list(finding.citations),
     )
 
 

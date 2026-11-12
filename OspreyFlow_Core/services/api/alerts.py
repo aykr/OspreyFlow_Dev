@@ -57,6 +57,7 @@ from schemas.domain import (
     CLOSING_REASONS,
     Alert,
     AlertAudience,
+    AlertCitation,
     AlertKind,
     AlertMode,
     AlertSeverity,
@@ -123,6 +124,9 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS routed_team TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppressed_until DATE;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppress_reason TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppressed_by TEXT;
+-- ADR-146 Amendment 7: what the alert cites that a reader is cleared for one by one (JSON, a
+-- list of `AlertCitation`); NULL for every alert without any.
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS citations TEXT;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 -- ADR-109 Amendment 10: a write that supersedes links (or an alert's node) alerts may cite keeps
@@ -174,7 +178,7 @@ _COLUMNS = (
     "id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, dataset_id, "
     "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id, status, assignee, "
     "disposition, disposition_reason, decided_by, decided_at, severity, team, close_proposed_by, "
-    "close_proposed_at, routed_team, suppressed_until, suppress_reason, suppressed_by"
+    "close_proposed_at, routed_team, suppressed_until, suppress_reason, suppressed_by, citations"
 )
 
 
@@ -209,6 +213,9 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         suppressed_until=row["suppressed_until"],
         suppress_reason=row["suppress_reason"],
         suppressed_by=row["suppressed_by"],
+        citations=[AlertCitation.model_validate(c) for c in json.loads(row["citations"])]
+        if row["citations"]
+        else [],
     )
 
 
@@ -448,6 +455,19 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
 _CITES_ANY_SQL = "COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $1::text[]"
 
 
+def _renamed_in_citations_sql(field: str, param: int) -> str:
+    """ADR-146 Amendment 7: each citation's `field` (`node_ids` or `edge_ids`) with the rename map
+    in parameter `$param` applied in place, as the alert's own lists are, in the same statement;
+    the citations' order and every other field kept. NULL stays NULL."""
+    return (
+        "CASE WHEN citations IS NULL THEN NULL ELSE (SELECT COALESCE(jsonb_agg(jsonb_set(c.v, "
+        f"'{{{field}}}', COALESCE((SELECT jsonb_agg(COALESCE(${param}::jsonb ->> x.e, x.e) "
+        f"ORDER BY x.n) FROM jsonb_array_elements_text(c.v -> '{field}') WITH ORDINALITY "
+        "AS x(e, n)), '[]'::jsonb)) ORDER BY c.n), '[]'::jsonb)::text "
+        "FROM jsonb_array_elements(citations::jsonb) WITH ORDINALITY AS c(v, n)) END"
+    )
+
+
 def _names_any_sql(param: int) -> str:
     """An alert naming any of the ids in parameter `$param` among its `referent_node_ids` (ADR-109
     Amendment 12)."""
@@ -559,7 +579,8 @@ async def _repoint_cited_links(conn: asyncpg.Connection, repoint: Mapping[str, s
     rows = await conn.fetch(
         "UPDATE alerts SET edge_ids = (SELECT jsonb_agg(COALESCE($2::jsonb ->> t.e, t.e) "
         "ORDER BY t.n)::text FROM jsonb_array_elements_text(edge_ids::jsonb) "
-        f"WITH ORDINALITY AS t(e, n)) WHERE {_CITES_ANY_SQL} RETURNING id",
+        f"WITH ORDINALITY AS t(e, n)), citations = {_renamed_in_citations_sql('edge_ids', 2)} "
+        f"WHERE {_CITES_ANY_SQL} RETURNING id",
         sorted(repoint),
         json.dumps(dict(repoint)),
     )
@@ -708,7 +729,7 @@ class AlertStore:
             await conn.execute(
                 f"INSERT INTO alerts ({_COLUMNS}, handlings) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)",
+                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -738,6 +759,7 @@ class AlertStore:
                 alert.suppressed_until,
                 alert.suppress_reason,
                 alert.suppressed_by,
+                json.dumps([c.model_dump() for c in alert.citations]) if alert.citations else None,
                 None
                 if handlings is None
                 else json.dumps([h.model_dump() for h in distinct_handlings(handlings)]),
@@ -1200,7 +1222,9 @@ class AlertStore:
                 "UPDATE alerts SET referent_node_ids = (SELECT jsonb_agg(COALESCE("
                 "$1::jsonb ->> t.e, t.e) ORDER BY t.n)::text "
                 "FROM jsonb_array_elements_text(referent_node_ids::jsonb) "
-                f"WITH ORDINALITY AS t(e, n)) WHERE {_names_any_sql(2)} RETURNING id",
+                "WITH ORDINALITY AS t(e, n)), "
+                f"citations = {_renamed_in_citations_sql('node_ids', 1)} "
+                f"WHERE {_names_any_sql(2)} RETURNING id",
                 json.dumps(named),
                 sorted(named),
             )
@@ -1681,6 +1705,61 @@ class AlertTriageConflict(Exception):
     """The alert was not in a state that allows this (someone else claimed or closed it)."""
 
 
+#: ADR-146 Amendment 7: where a screening alert's stored words put its matches. The stored alert,
+#: its `Alert` node and its audit entry say these words, naming no list and saying no count;
+#: `as_read` puts in their place the matches the reader may see, each in its own words.
+SCREENING_MATCH_WORDS = "matches an entry on a screening list"
+
+
+def citation_ids(alert: Alert) -> tuple[set[str], set[str]]:
+    """Every node and link the alert's citations name (ADR-146 Amendment 7)."""
+    return (
+        {i for c in alert.citations for i in c.node_ids},
+        {i for c in alert.citations for i in c.edge_ids},
+    )
+
+
+def as_read(alert: Alert, kept: Iterable[int]) -> Alert:
+    """The alert as a reader is served it (ADR-146 Amendment 7): only the citations at the
+    positions `kept` (those the reader may read whole, `ReadableEvidence.citations_read`); every
+    other citation's nodes and links gone from `referent_node_ids` and `edge_ids` too, and its
+    words, its list's name and the number of citations with it, so nothing served says a list the
+    reader may not see was matched (rule 3). An alert without citations is served as stored."""
+    if not alert.citations:
+        return alert
+    keep = sorted(set(kept))
+    shown = [alert.citations[n] for n in keep if 0 <= n < len(alert.citations)]
+    nodes, edges = citation_ids(alert)
+    shown_nodes = {i for c in shown for i in c.node_ids}
+    shown_edges = {i for c in shown for i in c.edge_ids}
+    words = alert.words
+    if words is not None and SCREENING_MATCH_WORDS in words:
+        words = words.replace(
+            SCREENING_MATCH_WORDS, "matches " + "; and ".join(c.words for c in shown), 1
+        )
+    return alert.model_copy(
+        update={
+            "citations": shown,
+            "referent_node_ids": [
+                i for i in alert.referent_node_ids if i not in nodes or i in shown_nodes
+            ],
+            "edge_ids": [i for i in alert.edge_ids if i not in edges or i in shown_edges],
+            "words": words,
+        }
+    )
+
+
+def edges_shown_with(alert: Alert, node_ids: Iterable[str]) -> list[str]:
+    """The links an alert cites outside its citations, and those of each citation all of whose
+    nodes are among `node_ids` (ADR-146 Amendment 7): what a pack's alert item, frozen as its adder
+    was shown it, is checked by. A citation its adder was not shown is not in the item, and asks
+    nothing of its reader; one it shows is checked as the queue checks it."""
+    have = set(node_ids)
+    _, cited = citation_ids(alert)
+    shown = {i for c in alert.citations if set(c.node_ids) <= have for i in c.edge_ids}
+    return [i for i in alert.edge_ids if i not in cited or i in shown]
+
+
 def evidence_node_ids(alert: Alert) -> list[str]:
     """The nodes an alert rests on: the entities it concerns and its own `Alert` node."""
     return [*alert.referent_node_ids, *([alert.alert_node_id] if alert.alert_node_id else [])]
@@ -1713,13 +1792,27 @@ class ReadableEvidence:
         )
 
     def whole(self, alert: Alert) -> bool:
-        """ADR-039's all-or-nothing: every node, link and transaction the alert cites is
-        readable."""
+        """Whether the alert may be shown to the reader. ADR-039's all-or-nothing for everything
+        it cites outside its citations: every node, link and transaction readable; and, for an
+        alert with citations (ADR-146 Amendment 7), at least one citation readable whole. What of
+        it is then served is `as_read(alert, self.citations_read(alert))`, never the alert as
+        stored."""
+        nodes, edges = citation_ids(alert)
         return (
-            all(i in self.nodes for i in evidence_node_ids(alert))
-            and set(alert.edge_ids) <= self.edge_ids
+            all(i in self.nodes for i in evidence_node_ids(alert) if i not in nodes)
+            and {i for i in alert.edge_ids if i not in edges} <= self.edge_ids
             and set(alert.event_ids) <= self.event_ids
+            and (not alert.citations or bool(self.citations_read(alert)))
         )
+
+    def citations_read(self, alert: Alert) -> list[int]:
+        """The positions of the alert's citations the reader may read whole (ADR-146
+        Amendment 7): every node and link each names."""
+        return [
+            n
+            for n, c in enumerate(alert.citations)
+            if all(i in self.nodes for i in c.node_ids) and set(c.edge_ids) <= self.edge_ids
+        ]
 
 
 async def read_evidence(
@@ -1833,13 +1926,24 @@ async def remark_alerts(
         if node is None:
             continue  # taken back or superseded since: nothing to re-mark
         report.checked += 1
-        referents = await graph.get_nodes(sorted(set(alert.referent_node_ids)), reader)
-        links = await graph.get_edges(sorted(set(alert.edge_ids)), reader) if alert.edge_ids else []
+        # ADR-146 Amendment 7: an alert's node is marked by what it rests on outside its citations
+        # (a reader cleared for one list's match and not another's still reads it), so a re-mark
+        # reads that alone. Its stored handlings are its citations' too (the trends count it for a
+        # reader cleared for all), and an alert with citations cites no transaction, so they are
+        # not read; one that cites a transaction is not re-marked by a guess.
+        cited_nodes, cited_edges = citation_ids(alert)
+        if alert.citations and alert.event_ids:
+            report.unsafe.append(alert.id)
+            continue
+        core_nodes = sorted(set(alert.referent_node_ids) - cited_nodes)
+        core_edges = sorted(set(alert.edge_ids) - cited_edges)
+        referents = await graph.get_nodes(core_nodes, reader) if core_nodes else []
+        links = await graph.get_edges(core_edges, reader) if core_edges else []
         end_ids = sorted({end for e in links for end in (e.source, e.target)})
         ends = await graph.get_nodes(end_ids, reader) if end_ids else []
         unread = (
-            len(referents) < len(set(alert.referent_node_ids))
-            or len(links) < len(set(alert.edge_ids))
+            len(referents) < len(core_nodes)
+            or len(links) < len(core_edges)
             or len(ends) < len(end_ids)
         )
         if unread:
@@ -1852,7 +1956,7 @@ async def remark_alerts(
             *(n.handling for n in referents),
             *(e.handling for e in links),
             *(n.handling for n in ends),
-            *(await alerts.handlings_of(alert.id) or []),
+            *([] if alert.citations else (await alerts.handlings_of(alert.id) or [])),
         ]
         required = alert_handling(scheme, rests_on)
         if required is None:

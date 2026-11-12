@@ -337,7 +337,13 @@ class Rescreener:
         changed: Sequence[ScreeningEntry],
         diff: ListDiff,
     ) -> tuple[int, int]:
-        from .kyc_rules import CUSTOMER_TYPES, KycContext, party_name, screening_finding
+        from .kyc_rules import (
+            CUSTOMER_TYPES,
+            KycContext,
+            lists_cleared_for,
+            party_name,
+            screening_finding,
+        )
         from .rule_evaluation import PartlyRaised, RuleGate
 
         params = rule.params
@@ -371,7 +377,10 @@ class Rescreener:
         customers = raised = 0
         try:
             for entity_type in CUSTOMER_TYPES:
-                entries = [e for e in changed if e.entity_type == entity_type]
+                # Only a list the deployer is cleared for (ADR-146 Amendment 7).
+                entries = lists_cleared_for(
+                    [e for e in changed if e.entity_type == entity_type], deployer, self.scheme
+                )
                 if not entries:
                     continue
                 cursor: str | None = None
@@ -385,11 +394,12 @@ class Rescreener:
                         customers += 1
                         dob = node.properties.get("date_of_birth")
                         born = _date(dob)
-                        for hit in screen(
-                            party_name(node), born, entries, min_score=params.min_score
-                        ):
+                        # Every changed entry the customer matches, one alert citing each
+                        # (ADR-146 Amendment 7).
+                        hits = screen(party_name(node), born, entries, min_score=params.min_score)
+                        if hits:
                             finding = await screening_finding(
-                                rule, deployer, node, node, hit, context
+                                rule, deployer, node, node, hits, context
                             )
                             if await gate.seen(finding):
                                 continue
