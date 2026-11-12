@@ -500,10 +500,16 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
     )
 
     # `docker compose config` — static YAML + variable-interpolation validation, no daemon
-    # interaction and no image pull. The five `${VAR:?...}` secrets below are minted by
-    # `harness.apply` at apply time (after render), never by `render` alone — this test calls
-    # only `render`, so they are supplied here as dummy values, the same way an operator's own
-    # apply-time env file would carry real ones by the time this validation matters for real.
+    # interaction and no image pull. The `${VAR:?...}` secrets are minted by `harness.apply` at
+    # apply time (after render), never by `render` alone — this test calls only `render`, so they
+    # are supplied here as dummy values, the same way an operator's own apply-time env file would
+    # carry real ones by the time this validation matters for real. Read from the rendered file,
+    # not listed by hand: a hand list missed the gateway's three (ADR-135 Amendment 2, 2bb0030)
+    # and GitHub run 43198701543 refused the render.
+    required = set(re.findall(r"\$\{([A-Z0-9_]+):\?", compose_text))
+    assert "OSPREY_POSTGRES_PASSWORD" in required, (
+        f"no required secret read from the file: {required}"
+    )
     config_check = subprocess.run(
         [
             "docker",
@@ -518,14 +524,7 @@ def test_the_image_renders_local_lite_pull_mode_with_only_an_empty_workspace_mou
         capture_output=True,
         text=True,
         timeout=30,
-        env={
-            **os.environ,
-            "OSPREY_ARCADEDB_PASSWORD": "x",
-            "OSPREY_KEYCLOAK_ADMIN_PASSWORD": "x",
-            "OSPREY_KEYCLOAK_DB_PASSWORD": "x",  # Keycloak's own database (ADR-114 B4a)
-            "OSPREY_MINIO_PASSWORD": "x",
-            "OSPREY_POSTGRES_PASSWORD": "x",
-        },
+        env={**os.environ, **dict.fromkeys(required, "x")},
     )
     assert config_check.returncode == 0, (
         "the rendered pull-mode compose file does not validate: "
