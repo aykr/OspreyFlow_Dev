@@ -390,7 +390,9 @@ def _taken() -> int:
         raise pytest.UsageError(f"{TAKEN} is a number of Valkey databases, not {os.environ[TAKEN]!r}") from error
 
 
-@pytest.hookimpl(tryfirst=True)
+# optionalhook: since T1 part 5 the root conftest loads this plugin in every run, including where pytest-xdist
+# is not installed (the Mac's own environment), and pluggy refuses an unknown hook unless it is optional.
+@pytest.hookimpl(tryfirst=True, optionalhook=True)
 def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
     """`-n auto` on a host with more CPUs than Valkey databases left: as many workers as fit, not a refusal."""
     cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)

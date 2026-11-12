@@ -58,3 +58,23 @@ def test_make_tests_own_arguments_without_the_flag_load_the_plugin_under_xdist()
     assert headers and headers[0].startswith("worker_isolation: 2 workers") and "no stores made" in headers[0], (
         f"exit {ran.returncode}\n{ran.stdout[-1500:]}\n{ran.stderr[-1500:]}"
     )
+
+
+def test_the_plugin_loads_where_pytest_xdist_is_not_installed() -> None:
+    """Found at T1 part 5's merge (12 November 2026): the root conftest loads tests.worker_isolation in every run,
+    and its xdist hook made pluggy refuse the whole session ("unknown hook 'pytest_xdist_auto_num_workers'") where
+    pytest-xdist is absent, as on the Mac's own environment; every pytest run there stopped before collecting. The
+    hook is optional. Shown here with xdist switched off, through the real conftest and pytest.ini."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    build = Path(__file__).resolve().parents[1]
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", "-p", "no:xdist", "-p", "no:cacheprovider", "--collect-only", "-q",
+         str(build / "tests" / "test_worker_isolation_wired.py")],
+        cwd=build, capture_output=True, text=True, env={**__import__("os").environ, "ARCADEDB_HTTP_PORT": "9",
+                                                         "POSTGRES_PORT": "9"},
+    )  # fmt: skip
+    assert done.returncode == 0, done.stdout[-600:] + done.stderr[-600:]
+    assert "unknown hook" not in done.stdout + done.stderr
