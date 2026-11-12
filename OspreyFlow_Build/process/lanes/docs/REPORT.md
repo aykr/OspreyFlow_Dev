@@ -16,6 +16,7 @@ Branch `lane/docs-d2c` fresh from main e59da4f (the orchestrator named 33e402d; 
 | Review | One lane-reviewer round, eight must-fix items, all fixed | — |
 | Docs gates; `test_docs_pdf` | Gates green; `test_docs_pdf` red until the orchestrator makes the PDF at merge, as asked | `gates/d2c-p3-docs-tests.txt` |
 | Server gates at c4f149c | `make -k ci`: test-file-coverage-check (known) and harness-a11y (load timeouts; passed 34 of 34 alone, as main did); `make test`: the four known (GPU, release_local_matrix, test-file-coverage, entra_people_live's 19 errors) and `test_docs_pdf` (expected); `make live-collect` green | `gates/c4f149c.{ci,test,live-collect}.txt` |
+| Server gates at 0878e2a (on main 8bb7f7b, after the orchestrator's review) | `make -k ci` green; `make test`: the GPU case and `test_docs_pdf` (expected), and test-js's first-frame budget and a hook timeout under load 44–71, main 0ac0abc failing the same budget alone; `make live-collect` green | `gates/0878e2a.{ci,test,live-collect}.txt` |
 
 **For the owner: the page shared with the client** (ADR-142 Amendment 8 decision 9) shows Laurium inside the Conduit and
 the Workers. What is true, to correct it:
