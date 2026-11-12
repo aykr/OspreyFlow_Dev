@@ -33848,22 +33848,28 @@ them hidden from a reader, would have been withheld from that reader whole. This
 
 **Decision.**
 1. **A list may carry a marking.** A list file names `marking: {classification, handling_code}` from the
-   deployment's scheme. Anything else is refused in words, and nothing loads. Each entry keeps the marking
-   (`screening_entries.classification`, `handling_code`). Left out, it is OFFICIAL with code P, as every list was
+   deployment's scheme. Anything else is refused in words, and nothing loads. So are a classification above the
+   deployment's highest marking (`OSPREY_HIGHEST_MARKING`, ADR-148) and a handling code restricted to one unit:
+   a list's matches are written in the deployer's unit, and such a code would name the wrong one. Each entry
+   keeps the marking (`screening_entries.classification`, `handling_code`). Left out, it is OFFICIAL with code P, as every list was
    before, so no stored list changes. A re-marked entry is a changed entry, which a refresh re-screens. The
    listed party the gate writes carries its list's marking (`kyc_rules.list_handling`), and so does the `SAME_AS`
    to it, which is marked by both its ends. **A reader is cleared for a list** when the adapters let them read a
-   match on it: its listed party and its `SAME_AS`, each read as the reader. *Limit:* a list subscribed to under
-   ADR-133 (the refresh's adapters) has no way yet to name a marking, and stays OFFICIAL, P. Studio lists
-   (ADR-140 Amendment 13) are not read by the gate and are unchanged.
+   match on it: its listed party and its `SAME_AS`, each read as the reader. A refresh's file carries no
+   marking, so an update keeps the marking the list holds (`apply_update`), never dropping it to OFFICIAL.
+   *Limit:* a subscription (ADR-133) cannot name a marking yet, so a list first loaded by subscription is
+   OFFICIAL, P. Studio lists (ADR-140 Amendment 13) are not read by the gate and are unchanged.
 2. **One alert per screened party.** A screening finding cites every entry one party matches, on whichever lists,
    at onboarding (`judge_screening`) and in a refresh's re-screening (`Rescreener`). Each match is an
    `AlertCitation`: its words, its listed party and its `SAME_AS`. Every citation's ids are among the alert's
-   referents and links as stored. Two owners are still two alerts. A refresh raises, for one list, one alert
+   referents and links as stored. A match reuses its own list's listed party, looked up by its list
+   (`find_node`'s `also`), never another list's party of the same name. Two owners are still two alerts. A refresh raises, for one list, one alert
    per party citing that list's changed entries.
 3. **What is stored names no list.** The alert's stored words, its `Alert` node's words and its `rule_fired`
    audit entry say "*… matches an entry on a screening list — a suggestion to confirm, not a finding*"
-   (`alerts.SCREENING_MATCH_WORDS`). They name no list and give no count.
+   (`alerts.SCREENING_MATCH_WORDS`). They name no list and give no count. The node's sources name the
+   screened party alone, never a list's entry (`rule_evaluation.alert_node_refs`): an entry's id names its list.
+   The entries are kept in the finding's signature, so a match on a new entry still raises a new alert.
 4. **Each list's match shown only to a reader cleared for that list (rule 3).** A reader is shown the alert when
    they may read everything it rests on outside its citations (all or nothing, as before) and at least one
    citation whole. Each citation is shown only if every node and link it names is readable. What is served is
@@ -33879,15 +33885,21 @@ them hidden from a reader, would have been withheld from that reader whole. This
 5. **The alert's own node.** Its marking comes from what the alert rests on outside its citations
    (`rule_evaluation.core_of`). A reader cleared for one list reads it, and a re-mark (`remark_alerts`) reads
    only that part. The `ALERTED_ON` link to each cited party is marked by that citation too. Where no single
-   marking can join them, that link is not written. The trends count the alert only for a reader cleared for
+   marking can join them, that link is not written. A match whose write the store merges into one it already
+   holds drops only itself from what these markings are read from, so a new list's match beside it keeps its
+   own marking. The trends count the alert only for a reader cleared for
    every handling it rests on (its stored handlings include each citation's), so they undercount and never say
    more.
 6. **A true positive confirms only the matches its closer can read (the owner's ruling, 12 November 2026,
    narrowing ADR-109 Amendment 7 where it meets rules 3 and 5).** A match hidden from the closer stays
    `inferred`. A person does not confirm what they cannot see, and refusing the close would tell the closer that
    a hidden list matched. A reader cleared for the hidden list still opens the closed alert with both matches,
-   the confirmed one followed to its new revision. Repoints and renames rewrite each citation's ids in the same
-   statement as the alert's own (`_renamed_in_citations_sql`).
+   the confirmed one followed to its new revision. **The closer is the person whose close confirms:** for a
+   high-severity alert, the approver (ADR-133 decision 7). An approver confirms the matches they can read,
+   whatever the proposer could, and a match the approver cannot read stays inferred even where the proposer
+   could read it. Repoints and renames rewrite each citation's ids in the same statement as the alert's own
+   (`_renamed_in_citations_sql`). `AlertStore.set_triage` no longer takes `edge_ids`, which rewrote the links
+   and left the citations; no caller used it once the repoint journal took its place.
 7. **Due diligence keeps one `owner_listed` factor per list.** Each factor is read through the graph as the
    reader, so a reader not cleared for a list is given no factor for it.
 8. **A rule screens only against lists its deployer is cleared for** (`kyc_rules.lists_cleared_for`, at
@@ -33897,7 +33909,9 @@ them hidden from a reader, would have been withheld from that reader whole. This
 9. **Live files remove the lists they load (CARRIES row 113).** Each live file that loads a screening list into
    the shared store removes its own lists by name in its fixture's teardown, after the `yield`, so on a failure
    too (`tests/services/api/screening_cleanup.remove_screening_lists`: entries, subscription, updates and each
-   update's per-unit counts, in one transaction; it refuses to remove every list). The files are
+   update's per-unit counts, in one transaction; it refuses to remove every list). It removes them by name, or
+   by the prefix the file's own names share. `test_screening_refresh` and `test_screening_list_routes` share the
+   prefix "Synthetic list", so live files run one at a time. The files are
    `test_kyc_rules`, `test_screening_refresh`, `test_screening_list_store`, `test_screening_list_routes` (its
    `world`, shared by `test_list_refresh_schedule`) and `test_list_refresh_schedule`. Every other live file that
    writes list rows does so in its own database or schema and drops it (`test_ledger_monitoring_storyline`,
@@ -33905,14 +33919,15 @@ them hidden from a reader, would have been withheld from that reader whole. This
    unchanged: their tests count the store's subscriptions. *Logged.*
 
 **Tests that would fail (rule 12).** The offline ones are shown red by plants at their real call sites
-(`process/lanes/rules/lists/AM7_RED_RECORD.txt`, P1–P14). The live ones were shown red under a lease (the same
-folder).
+(`process/lanes/rules/lists/AM7_RED_RECORD.txt`: P1 to P24, and P3b). The live ones, and CARRIES row 113's
+cross-file red, by `process/lanes/rules/lists/am7_live_plants.py` under the rules lane's lease (its record
+beside it).
 - A list's marking ignored, outside the scheme, or a re-marking not a change (1):
   `test_a_lists_marking_is_carried_by_each_entry_and_an_unmarked_list_is_official_p`;
   `test_a_marking_the_scheme_does_not_define_is_refused_in_words`; `test_a_change_of_marking_is_a_change_of_the_entry`.
 - Two alerts for one owner on two lists, or a list named in what is stored (2, 3):
   `test_one_owner_on_two_lists_raises_one_alert_citing_both`;
-  `test_the_stored_words_name_no_list_and_say_no_count`.
+  `test_one_finding_cites_each_list_and_its_words_name_none`.
 - A hidden list's name, ids or count served at any read path (4):
   `test_the_queue_shows_a_reader_cleared_for_one_list_that_list_alone`;
   `test_what_the_queue_serves_is_what_an_alert_citing_that_list_alone_would_be`;
@@ -33929,8 +33944,22 @@ folder).
   `test_an_alert_whose_owner_the_reader_may_not_read_is_not_shown_whatever_the_lists`;
   `test_a_citation_is_read_whole_or_not_at_all`.
 - A hidden match confirmed, or a confirmed match's citation left on the superseded link (6):
-  `test_a_true_positive_confirms_only_the_matches_the_closer_can_read`.
+  `test_a_true_positive_confirms_only_the_matches_the_closer_can_read`;
+  `test_a_repoint_and_a_rename_rewrite_each_citation_with_the_alerts_own_lists`.
+- The node's sources naming a list, its words or the audit's naming one (3):
+  `test_the_alert_node_names_no_list_and_is_marked_by_what_is_outside_its_citations`.
+- A marking lost, or a link's marking or the node's raised (1, 5):
+  `test_a_refresh_keeps_a_marked_lists_marking_and_screens_it_only_for_a_deployer_cleared_for_it`;
+  `test_an_update_keeps_a_marked_lists_marking`; `test_a_marking_above_the_deployments_highest_is_refused_in_words`;
+  `test_each_cited_partys_alerted_on_is_marked_by_its_list`;
+  `test_a_cited_party_no_single_marking_joins_to_the_node_gets_no_alerted_on`;
+  `test_a_match_merged_on_one_list_keeps_the_new_lists_marking`;
+  `test_a_re_mark_reads_only_what_is_outside_the_citations`;
+  `test_what_the_trends_count_it_by_holds_every_lists_marking`.
+- Another list's party reused (2): `test_a_match_reuses_its_own_lists_party_never_another_lists_of_the_same_name`.
 - `owner_listed` for a list the reader may not read (7): the live reader-cleared case above, by count.
+- A load's rule writes (a SECRET list's party and match) answered to its loader: no route answers the id lists
+  (`LoadReportView`), `test_no_route_answers_the_ids_a_loads_rules_wrote`.
 - A list screened that the deployer may not read (8):
   `test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for`;
   `test_a_rule_screens_only_against_lists_its_deployer_is_cleared_for`.
@@ -33938,8 +33967,9 @@ folder).
   with `test_screening_refresh.py` run first before the teardowns, green after.
 
 **Not changed.** A monitoring alert, and every alert without citations, is all or nothing as before. The rule
-audit withholds an entry about a cited alert from a reader not cleared for every list it cites. That is strict,
-and leaks nothing.
+audit withholds an entry about a cited alert from a reader not cleared for every list it cites
+(`test_the_rule_audit_withholds_a_firing_citing_a_list_the_reader_may_not_read`). That is strict, and leaks
+nothing.
 
 ### ADR-142, Amendment 7 (10 November 2026) — a second merge session prepares merges; the orchestrator alone lands them
 

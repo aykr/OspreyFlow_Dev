@@ -309,10 +309,3 @@ def test_a_pack_item_asks_its_reader_for_the_matches_it_shows_and_no_other() -> 
     alone asks a later reader for A's match, and one showing both asks for both."""
     assert edges_shown_with(BOTH, ["n-a", "n-b", "l-a"]) == ["e-1", "s-a"]
     assert edges_shown_with(BOTH, ["n-a", "n-b", "l-a", "l-b"]) == ["e-1", "s-a", "s-b"]
-
-
-def test_the_stored_words_name_no_list_and_say_no_count() -> None:
-    """What the alert is stored with (its row, its `Alert` node, its audit entry) names neither
-    list; only `as_read` puts the matches a reader may see in place."""
-    assert BOTH.words is not None
-    assert "Synthetic list" not in BOTH.words and SCREENING_MATCH_WORDS in BOTH.words
