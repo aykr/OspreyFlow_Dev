@@ -14,6 +14,22 @@ index 27672f1..c666e1b 100644
      api = built["api"].argv
      assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
      assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")
+diff --git a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py
+index 7f7db99..2836e18 100644
+--- a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py
++++ b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py
+@@ -389,8 +389,10 @@ def test_an_irsa_account_named_as_a_backups_account_is_refused(field: str, taken
+ 
+ 
+ def test_the_writers_are_the_rendered_workloads_that_write_the_stores_or_mount_the_sets_claims() -> None:
++    # No report sync on the profile until it signs in through Entra ID (ADR-148 Amendment 8, the
++    # orchestrator's ruling (a)): the production fixture renders none, so it is no writer there.
+     expected = {"development": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"],
+-                "production": ["api", "arcadedb", "backup", "backup-claims", "report-sync", "worker", "workspace"]}  # fmt: skip
++                "production": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"]}  # fmt: skip
+     for fixture, writers in expected.items():
+         assert rendered.values(fixture)["backups"]["writers"] == writers, fixture
+     for fixture in rendered.fixtures():
 diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
 index 7e9a321..4ade33b 100644
 --- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
@@ -177,10 +193,10 @@ index 56a71db..e15d023 100644
    connector_sources:
      s3:
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
-index 368b97b..1fcf0eb 100644
+index 031e18f..d342aa8 100644
 --- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
 +++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
-@@ -15,6 +15,17 @@ cloud_platform:
+@@ -19,6 +19,17 @@ cloud_platform:
    egress_nets:
      s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
      sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
@@ -262,7 +278,7 @@ index 1a5420c..fef7aee 100644
  map:
    default: osm-local
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
-index 11ed572..51f61f5 100644
+index b360edf..48f00c7 100644
 --- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
 +++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
 @@ -1,13 +1,15 @@
@@ -282,9 +298,9 @@ index 11ed572..51f61f5 100644
 +  sync: false
 +  superset: false
  models:
-   local_only: false
-   provider:
-@@ -24,6 +26,17 @@ cloud_platform:
+   # ADR-135 Amendment 9: named; left unset, the profile presets Laurium.
+   extraction_engine: deep_read
+@@ -26,6 +28,17 @@ cloud_platform:
      s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
      sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
      api.openai.com: ["203.0.113.0/24"]
@@ -978,7 +994,7 @@ index 9c4545d..e2dcb7a 100644
              "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
          },
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-index 9c588bf..20d2fb2 100644
+index 3aa19c2..da7713e 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 +++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 @@ -9,15 +9,14 @@
@@ -1001,7 +1017,7 @@ index 9c588bf..20d2fb2 100644
  
  # How each image of ours is built (decision 8): its Dockerfile and context, from OspreyFlow_Core,
  # and its build arguments. The Conduit without Java on this profile (decision 12). An image of
-@@ -35,6 +34,9 @@ ours:
+@@ -37,6 +36,9 @@ ours:
  egress:
    # On every render: the bucket (S3) and IRSA's role (STS). `{region}` is the platform's.
    always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
@@ -1011,7 +1027,7 @@ index 9c588bf..20d2fb2 100644
    # A model engine that names no `api_base` is reached at its provider's own host.
    engine_hosts:
      openai: api.openai.com
-@@ -47,9 +49,10 @@ egress:
+@@ -49,9 +51,10 @@ egress:
    # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
    # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
    # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
@@ -1025,7 +1041,7 @@ index 9c588bf..20d2fb2 100644
    # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
    identity: ["sts.{region}.amazonaws.com"]
    # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
-@@ -58,16 +61,17 @@ egress:
+@@ -60,16 +63,17 @@ egress:
    others: [backup, backup-claims, restore, restore-claims]
    reach:
      identity: [litellm]
@@ -1045,30 +1061,30 @@ index 9c588bf..20d2fb2 100644
    # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
    # 443 is added when the deployment searches with it.
    managed_ports: [5432, 6379]
-@@ -76,11 +80,9 @@ egress:
+@@ -78,11 +82,9 @@ egress:
    # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
    paths:
      workspace: [api]
--    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset]
+-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset, laurium]
 -    worker: [arcadedb, clickhouse, keycloak, ner]
 -    report-sync: [api, keycloak]
 -    superset: [keycloak]
 -    keycloak: [keycloak]
-+    api: [arcadedb, clickhouse, litellm, ner, superset]
++    api: [arcadedb, clickhouse, litellm, ner, superset, laurium]
 +    worker: [arcadedb, clickhouse, ner]
 +    report-sync: [api]
      arcadedb: [arcadedb]
      clickhouse: [clickhouse, clickhouse-keeper]
      clickhouse-keeper: [clickhouse-keeper]
-@@ -110,7 +112,6 @@ resources:
+@@ -114,7 +116,6 @@ resources:
    report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
    ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
 -  keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
-   # Requested at its limit: the store is the last thing a node under pressure should evict.
-   arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
-@@ -151,6 +152,5 @@ poc:
+   # Laurium 0.6.0, LangChain and spaCy's small English model in one process (ADR-135 Amendment 6).
+   laurium: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+@@ -157,6 +158,5 @@ poc:
      api: "2"
      worker: "2"
      ner: "1"
@@ -1099,10 +1115,10 @@ index 6fea034..594ab3f 100644
      #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
      others: list[str] = Field(default_factory=list)
 diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
-index 975d92d..77fb656 100644
+index e9eb528..a5f3c95 100644
 --- a/OspreyFlow_Core/harness/render.py
 +++ b/OspreyFlow_Core/harness/render.py
-@@ -1229,7 +1229,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
+@@ -1236,7 +1236,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
      _gateway_database(config, services)
      if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
          services["keycloak-db"] = _keycloak_database_step(config)
@@ -1160,7 +1176,7 @@ index 72178a6..f8a632e 100644
  
  
 diff --git a/OspreyFlow_Core/packages/schemas/deployment.py b/OspreyFlow_Core/packages/schemas/deployment.py
-index d03c67c..0e14c66 100644
+index c396d3c..3389d8e 100644
 --- a/OspreyFlow_Core/packages/schemas/deployment.py
 +++ b/OspreyFlow_Core/packages/schemas/deployment.py
 @@ -31,7 +31,7 @@ from __future__ import annotations
@@ -1172,7 +1188,7 @@ index d03c67c..0e14c66 100644
  from urllib.parse import urlsplit
  
  import yaml
-@@ -1076,6 +1076,113 @@ class ConnectorSources(BaseModel):
+@@ -1088,6 +1088,113 @@ class ConnectorSources(BaseModel):
          return sorted({s.host() for s in self.s3} | {a.host() for a in self.athena})
  
  
@@ -1286,7 +1302,7 @@ index d03c67c..0e14c66 100644
  class CloudPlatformConfig(BaseModel):
      """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
      namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
-@@ -1129,8 +1236,14 @@ class CloudPlatformConfig(BaseModel):
+@@ -1141,8 +1248,14 @@ class CloudPlatformConfig(BaseModel):
          default=None,
          pattern=_KUBE_NAME,
          description="Default: none — the platform's own certificate. The Kubernetes Secret "
@@ -1304,10 +1320,10 @@ index d03c67c..0e14c66 100644
      connector_hosts: list[str] = Field(
          default_factory=list,
 diff --git a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
-index 4439c7b..7248f26 100644
+index 4d9221c..1e1aa3c 100644
 --- a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
 +++ b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
-@@ -198,9 +198,45 @@ export type Registry = string | null;
+@@ -202,9 +202,45 @@ export type Registry = string | null;
   */
  export type AllowFrom = string[];
  /**
@@ -1354,7 +1370,7 @@ index 4439c7b..7248f26 100644
  /**
   * The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both
   */
-@@ -758,6 +794,10 @@ export interface CloudPlatformConfig {
+@@ -763,6 +799,10 @@ export interface CloudPlatformConfig {
    allow_from?: AllowFrom;
    egress_nets?: EgressNets;
    tls_secret?: TlsSecret;
@@ -1365,7 +1381,7 @@ index 4439c7b..7248f26 100644
    connector_hosts?: ConnectorHosts;
    connector_sources?: ConnectorSources;
  }
-@@ -767,6 +807,44 @@ export interface CloudPlatformConfig {
+@@ -772,6 +812,44 @@ export interface CloudPlatformConfig {
  export interface EgressNets {
    [k: string]: string[];
  }
