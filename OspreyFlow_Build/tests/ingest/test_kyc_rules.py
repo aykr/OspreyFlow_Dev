@@ -64,6 +64,7 @@ from schemas.domain import (
     SourceRef,
     TypologyRuleInput,
 )
+from tests.services.api.screening_cleanup import remove_screening_lists
 from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 SCHEME = load_uk_le_scheme()
@@ -105,10 +106,15 @@ async def stores() -> AsyncIterator[dict[str, Any]]:
     made["list_name"] = list_name
     cfg = ValkeyConfig.from_env()
     made["valkey"] = Valkey(host=cfg.host, port=cfg.port, db=cfg.db)
-    yield made
-    for key in ("rules", "held", "alerts", "audit", "screening"):
-        await made[key].close()
-    await made["valkey"].aclose()
+    try:
+        yield made
+    finally:
+        for key in ("rules", "held", "alerts", "audit", "screening"):
+            await made[key].close()
+        await made["valkey"].aclose()
+        # Its own list removed, on a failure too: the next file's gate screens against every list
+        # the store holds (CARRIES row 113, `screening_cleanup`).
+        await remove_screening_lists(dsn, names=[list_name])
 
 
 class _OwnList:

@@ -33,6 +33,7 @@ from conduit_common.identity import new_id
 from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
 from schemas.screening import ScreeningListUpdate, ScreeningSubscriptionInput
+from tests.services.api.screening_cleanup import remove_screening_lists
 from tests.services.api.test_rule_schedule import _Valkey
 from tests.services.api.test_screening_list_routes import (  # noqa: F401 - `world` is a fixture
     ANALYST,
@@ -42,14 +43,22 @@ from tests.services.api.test_screening_list_routes import (  # noqa: F401 - `wor
     world,
 )
 
+#: This file's lists' names begin so (`lists` removes them by it).
+SCHEDULED = "Scheduled test "
 OWNER = Principal(id="list-owner", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
 
 
 @pytest.fixture
 async def lists() -> AsyncIterator[ScreeningListStore]:
-    store = await ScreeningListStore.connect(PostgresConfig.from_env().dsn)
-    yield store
-    await store.close()
+    dsn = PostgresConfig.from_env().dsn
+    store = await ScreeningListStore.connect(dsn)
+    try:
+        yield store
+    finally:
+        await store.close()
+        # Its own lists, and the refusals recorded for them, removed on a failure too (CARRIES row
+        # 113, `screening_cleanup`); the `world` fixture removes the routes' own.
+        await remove_screening_lists(dsn, prefixes=[SCHEDULED])
 
 
 class _Refreshes:
@@ -63,7 +72,7 @@ class _Refreshes:
 
 
 async def _subscribed(lists: ScreeningListStore, schedule: ListSchedule) -> tuple[str, datetime]:
-    name = f"Scheduled {new_id()}"
+    name = f"{SCHEDULED}{new_id()}"
     await lists.subscribe(ScreeningSubscriptionInput(list_name=name, source="opensanctions",
                                                      location="lists/x.json"), OWNER.id, synthetic=False)  # fmt: skip
     status = await lists.set_schedule(name, schedule, OWNER.id)

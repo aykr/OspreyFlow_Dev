@@ -13,6 +13,7 @@ from __future__ import annotations
 import shutil
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,7 @@ from services.api.screening_refresh import SYNTHETIC_MANIFEST
 
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal
+from tests.services.api.screening_cleanup import remove_screening_lists
 
 from .corpus_counts import field_names_reachable
 
@@ -120,9 +122,17 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[_Wo
     })  # fmt: skip
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            yield w, client
-            if w.store is not None:
-                client.portal.call(w.store.close)  # type: ignore[union-attr]
+            try:
+                yield w, client
+            finally:
+                if w.store is not None:
+                    client.portal.call(w.store.close)  # type: ignore[union-attr]
+                    # Its own lists ("Synthetic list" and the UN, OFAC, OFSI and UKSL ones)
+                    # removed, on a failure too (CARRIES row 113, `screening_cleanup`).
+                    client.portal.call(
+                        partial(remove_screening_lists, PostgresConfig.from_env().dsn,
+                                prefixes=["Synthetic list"])
+                    )  # fmt: skip
     finally:
         app.dependency_overrides.clear()
         app.router.lifespan_context = previous

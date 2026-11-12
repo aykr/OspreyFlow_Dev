@@ -53,6 +53,7 @@ from schemas.domain import (
     TypologyRule,
 )
 from schemas.screening import ScreeningSubscriptionInput
+from tests.services.api.screening_cleanup import remove_screening_lists
 
 SCHEME = load_uk_le_scheme()
 NOW = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
@@ -201,8 +202,13 @@ async def store() -> AsyncIterator[ScreeningListStore]:
     await conn.execute("DELETE FROM screening_list_updates; DELETE FROM screening_lists; "
                        "DELETE FROM screening_entries WHERE list_name LIKE 'Synthetic list%'")  # fmt: skip
     await conn.close()
-    yield made
-    await made.close()
+    try:
+        yield made
+    finally:
+        await made.close()
+        # Its own lists ("Synthetic list", "Synthetic list OFAC") removed, on a failure too: the
+        # KYC gate screens against every list the store holds (CARRIES row 113, `screening_cleanup`).
+        await remove_screening_lists(dsn, prefixes=["Synthetic list"])
 
 
 @pytest.fixture

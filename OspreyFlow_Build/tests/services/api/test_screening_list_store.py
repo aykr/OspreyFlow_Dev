@@ -31,6 +31,7 @@ from services.api.typology_rules import TypologyRuleStore
 from conduit_common.identity import new_id
 from schemas.domain import KycScreeningParams, Principal, StructuringParams, TypologyRuleInput
 from schemas.screening import ScreeningListUpdate, ScreeningSubscriptionInput
+from tests.services.api.screening_cleanup import remove_screening_lists
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-a", datasets=["ds-1"])
 
@@ -43,8 +44,12 @@ async def store() -> AsyncIterator[ScreeningListStore]:
     await conn.execute("DELETE FROM screening_list_updates; DELETE FROM screening_lists; "
                        "DELETE FROM screening_entries WHERE list_name LIKE 'Store test%'")  # fmt: skip
     await conn.close()
-    yield made
-    await made.close()
+    try:
+        yield made
+    finally:
+        await made.close()
+        # Its own list removed, on a failure too (CARRIES row 113, `screening_cleanup`).
+        await remove_screening_lists(dsn, prefixes=["Store test"])
 
 
 def _entry(ref: str, name: str, **more: object) -> ScreeningEntry:
