@@ -664,6 +664,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - R1 runs **beside** osprey-small: after your Friday demo, its sizing is capped (memory_gib 62 → about 24,
           one apply) and its model unloads when idle, so kind gets about 30–32 GiB.
         - R1 is briefed to platform on sol: it prepares off the server until Friday evening.
+      - **Both looks for Friday (your idea, about 20:15): not as two deployments tonight.** The product refuses a second
+        Small beside osprey-small:
+        - doctor's 443 and 2480 checks;
+        - `--name` refused for Small (ADR-138 Am 1 item 11);
+        - without a name, Compose would share osprey-small's project and volumes;
+        - the GPU can't hold a second model.
+
+        That needs an ADR-114 amendment and code, so it is Part 3. The demo lane is checking how one deployment can
+        show both looks.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
