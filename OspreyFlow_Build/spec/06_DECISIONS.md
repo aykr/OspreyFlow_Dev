@@ -35489,7 +35489,10 @@ review rounds, listed for the owner.*
       administrator is given Admin again **only when nobody can manage people** (`people_managers` empty: no enabled
       person who has signed in holds `manage_people`, by their roles and the custom roles' rights), added to what
       they hold. Each Admin role a start gives (the install's, and a way back in) writes an audit row,
-      `grant_first_administrator`, by `first-administrators`. Otherwise an administrator's change stands, a named
+      `grant_first_administrator`, by `first-administrators` (`user_id` and `roles`, as `set_person_roles` writes;
+      named on purpose in the audit census's words-shown list). Written by the system, it is in the audit log but,
+      like every entry the system writes, not shown in Admin › Audit (audit_section's rule for an entry with no
+      person's unit). Otherwise an administrator's change stands, a named
       person's roles cleared on purpose included. The seed runs under `PEOPLE_LOCK`, the lock every change that could
       leave nobody able to manage people takes. The runbook's recovery step says so.
     - **The signing keys** (`principal_auth.SigningKeys`, which replaced `PyJWKClient`): kept for

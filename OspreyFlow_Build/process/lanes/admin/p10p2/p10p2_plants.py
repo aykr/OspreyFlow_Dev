@@ -28,7 +28,7 @@ from pathlib import Path
 CORE = Path.cwd()
 ROOT = CORE.parent
 HERE = Path(__file__).resolve().parent
-DIFFS = [HERE / f"{name}.diff" for name in ("readers", "render", "glass-sign-in", "runbook")]
+DIFFS = [HERE / f"{name}.diff" for name in ("readers", "render", "glass-sign-in", "runbook", "resolver-doubles")]
 T = "../OspreyFlow_Build/tests/"
 ENTRA = T + "services/api/test_auth_entra_claims.py"
 PEOPLE = T + "services/api/test_entra_people.py"
