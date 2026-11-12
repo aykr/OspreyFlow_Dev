@@ -46,6 +46,7 @@ export type LocalOnly = boolean;
 export type SendableHandlingCodes = string[];
 export type Source = "osprey.yaml" | "models file";
 export type EngineKinds = ("provider" | "gateway" | "bedrock")[];
+export type ExtractionEngine = "deep_read" | "laurium";
 
 /**
  * `GET /v1/admin/models`.
@@ -58,6 +59,7 @@ export interface ModelsAdminView {
   sendable_handling_codes: SendableHandlingCodes;
   source: Source;
   engine_kinds?: EngineKinds;
+  extraction_engine?: ExtractionEngine;
   [k: string]: unknown;
 }
 /**

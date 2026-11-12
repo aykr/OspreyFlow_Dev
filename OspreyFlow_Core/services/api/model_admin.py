@@ -39,7 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlsplit
 
 import asyncpg
@@ -251,6 +251,8 @@ class Installed:
     locals: dict[str, str | None]
     #: What the cloud-platform render made (None on every other profile, which allows any host).
     made: RoutesMade | None = None
+    #: ADR-135 Amendment 9: the extraction engine the render chose (`OSPREY_EXTRACTION_ENGINE`).
+    extraction_engine: Literal["deep_read", "laurium"] = "deep_read"
 
     @classmethod
     def from_env(cls, local: DeploymentModels, environ: Mapping[str, str]) -> Installed:
@@ -293,6 +295,9 @@ class Installed:
                 if c.strip()
             ],
             made=RoutesMade.from_env(environ),
+            extraction_engine=(
+                "laurium" if environ.get("OSPREY_EXTRACTION_ENGINE") == "laurium" else "deep_read"
+            ),
             locals={
                 "extraction": local.extraction,
                 "vision": local.vision,
@@ -844,6 +849,7 @@ class ModelAdmin:
             sendable_handling_codes=list(self._installed.sendable),
             source="models file" if self._settings is not None else "osprey.yaml",
             engine_kinds=engine_kinds_offered(self._file.profile),
+            extraction_engine=self._installed.extraction_engine,
         )
 
     @property

@@ -344,6 +344,14 @@ export function Models({ api }: { api: ModelsApi }) {
                 : `Case content may leave this deployment only with handling code${view.sendable_handling_codes.length === 1 ? "" : "s"} ${view.sendable_handling_codes.join(", ") || "(none)"}, and only from a dataset whose egress allows it (Admin › Datasets).`}{" "}
               Settings come from {view.source}.
             </p>
+            {/* ADR-135 Amendments 5, 8 and 9: chosen at set-up on the cloud-platform profile (the one that
+                offers Laurium, and the gateway kind), shown, not changed here. */}
+            {(view.engine_kinds ?? []).includes("gateway") && (
+              <p className="label" style={{ margin: "0.5rem 0 0" }}>
+                Extraction engine: {view.extraction_engine === "laurium" ? "Laurium" : "OspreyFlow Deep read"}, chosen
+                at set-up: change it in osprey.yaml, re-render, and have the platform team apply it.
+              </p>
+            )}
           </section>
 
           <section aria-labelledby="models-engines">

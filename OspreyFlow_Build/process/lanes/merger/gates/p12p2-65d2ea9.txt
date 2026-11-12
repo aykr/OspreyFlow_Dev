@@ -1,0 +1,14 @@
+Running on ospreyflow-test (stack offline, osprey-runs/merge/OspreyFlow_Build/), logged at osprey-runs/merge.meta/runs/20261112T054605Z/log: bash -c cd ../OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider -n auto tests/harness/test_laurium_cp_policy.py tests/harness/test_laurium_network_policy.py tests/harness/test_laurium_render.py tests/cp_policy_check tests/harness/test_cloud_platform_egress.py tests/harness/test_cloud_platform_render.py tests/harness/test_cloud_platform_poc.py tests/harness/test_cloud_sources_render.py tests/cloud_platform_backup tests/test_admin_guide.py tests/test_docs_pdf.py 2>&1 | tail -1; make cp-policy-check 2>&1 | grep -i "violation"; make schemas-check 2>&1 | tail -1; make lanes-check 2>&1 | tail -1; make test-file-coverage-check 2>&1 | tail -1; make live-collect >/tmp/lc2.txt 2>&1; echo live-collect-rc=$?
+848 passed, 6 skipped, 2 warnings in 151.65s (0:02:31)
+development-sources.yaml: 64 manifests, 0 violation(s)
+development.yaml: 60 manifests, 0 violation(s)
+poc.yaml: 57 manifests, 0 violation(s)
+production-bedrock.yaml: 71 manifests, 0 violation(s)
+production.yaml: 67 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+schemas-check: 598 generated types match committed output.
+adr-reservations-check: every heading above the baseline is reserved.
+test-file-coverage-check: 1010 test file(s), 0 allowlisted, no new drift.
+live-collect-rc=0
+Wall time: 633 s, exit 0 (no stack, no lease; set-up before it 12 s)
+# Orchestrator's note: merged with P12p2_platform, _glass_models and _docs_admin_guide (guide 1.84, PDF made at merge); P12p2_CI.diff and P12p2_core_makefile.diff are the owner's (MORNING item 38).

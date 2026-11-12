@@ -1,0 +1,83 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 91dcb30..47d573c 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -43,7 +43,9 @@ const EXTRA_STATES: Record<string, string[]> = {
+   // the two kinds), Bedrock chosen in the add form beside an IAM-role engine's row, and the organisation's own
+   // gateway chosen.
+   "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail",
+-                          "open=add&kind=bedrock&iam=1&cloud=1", "open=add&kind=gateway&cloud=1"],  // prettier-ignore
++                          "open=add&kind=bedrock&iam=1&cloud=1", "open=add&kind=gateway&cloud=1",
++                          // ADR-135 Amendment 9: the extraction engine Laurium, shown read-only.
++                          "cloud=1&engine=laurium"],  // prettier-ignore
+   // ADR-146 decisions 2 and 6: Home with Rules and Monitoring's card and an alert's row.
+   "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue"],
+   // ADR-147: Admin › Maps with a provider being added, a key being entered and an area being added
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx
+index 71a93a8..a097ab3 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx
++++ b/OspreyFlow_Core/apps/workspace/keyboard/models-harness.tsx
+@@ -59,6 +59,8 @@ const view = () => ({
+   source: "models file",
+   // ADR-135 Amendment 7 decision 1: `cloud=1` is the cloud-platform profile, which offers the two kinds.
+   engine_kinds: params.get("cloud") ? ["provider", "gateway", "bedrock"] : ["provider"],
++  // ADR-135 Amendment 9: `engine=laurium`, the extraction engine the render chose (read-only).
++  extraction_engine: params.get("engine") === "laurium" ? "laurium" : "deep_read",
+ });
+ 
+ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx
+index 0a69184..51c09a5 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.test.tsx
+@@ -209,3 +209,31 @@ describe("Models", () => {
+     expect(screen.queryByRole("button", { name: "Add an engine" })).toBeNull();
+   });
+ });
++
++// ADR-135 Amendment 5 decision 2 and Amendment 9 (P12 part 2): the extraction engine is chosen at
++// set-up and shown here read-only on the cloud-platform profile (the one that offers Laurium), with
++// how it is changed there (Amendment 8's words); nothing on the page changes it.
++describe("Models' extraction engine", () => {
++  const CLOUD = { engine_kinds: ["provider", "gateway", "bedrock"] };
++  it.each([
++    ["laurium", "Laurium"],
++    ["deep_read", "OspreyFlow Deep read"],
++  ])("names %s as chosen at set-up, with how to change it, and offers no control for it", async (engine, name) => {
++    stub((path) => (path === "/v1/admin/models" ? { status: 200, body: { ...VIEW, ...CLOUD, extraction_engine: engine } } : undefined));
++    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
++    const said = await screen.findByText(new RegExp(`Extraction engine: ${name}`));
++    expect(said.textContent).toContain(
++      "chosen at set-up: change it in osprey.yaml, re-render, and have the platform team apply it.",
++    );
++    expect(screen.queryByRole("combobox", { name: /extraction engine/i })).toBeNull();
++    expect(screen.queryByRole("button", { name: /extraction engine/i })).toBeNull();
++    expect(screen.queryByRole("radio", { name: /laurium|deep read/i })).toBeNull();
++  });
++
++  it("says nothing of it on a profile that offers no Laurium", async () => {
++    stub((path) => (path === "/v1/admin/models" ? { status: 200, body: { ...VIEW, extraction_engine: "deep_read" } } : undefined));
++    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
++    await screen.findByText(/Settings come from/);
++    expect(screen.queryByText(/Extraction engine:/)).toBeNull();
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx
+index c17b80c..335a83b 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx
+@@ -344,6 +344,14 @@ export function Models({ api }: { api: ModelsApi }) {
+                 : `Case content may leave this deployment only with handling code${view.sendable_handling_codes.length === 1 ? "" : "s"} ${view.sendable_handling_codes.join(", ") || "(none)"}, and only from a dataset whose egress allows it (Admin › Datasets).`}{" "}
+               Settings come from {view.source}.
+             </p>
++            {/* ADR-135 Amendments 5, 8 and 9: chosen at set-up on the cloud-platform profile (the one that
++                offers Laurium, and the gateway kind), shown, not changed here. */}
++            {(view.engine_kinds ?? []).includes("gateway") && (
++              <p className="label" style={{ margin: "0.5rem 0 0" }}>
++                Extraction engine: {view.extraction_engine === "laurium" ? "Laurium" : "OspreyFlow Deep read"}, chosen
++                at set-up: change it in osprey.yaml, re-render, and have the platform team apply it.
++              </p>
++            )}
+           </section>
+ 
+           <section aria-labelledby="models-engines">

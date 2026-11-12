@@ -1,0 +1,31 @@
+diff --git a/OspreyFlow_Core/Makefile b/OspreyFlow_Core/Makefile
+index eb6c91f..19fc675 100644
+--- a/OspreyFlow_Core/Makefile
++++ b/OspreyFlow_Core/Makefile
+@@ -1,4 +1,4 @@
+-.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
++.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset trivy-image-laurium test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
+ 
+ PY := .venv/bin/python
+ RUFF := .venv/bin/ruff
+@@ -7,7 +7,7 @@ MYPY := .venv/bin/mypy
+ # What runs from this folder alone (`06_DECISIONS.md` ADR-114 Amendment 2). The specification's own
+ # gates and the test suites are the developer repository's, in its Makefile; its `ci` runs this
+ # `check` first. A user of this repository needs nothing from it.
+-check: lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset harness-a11y
++check: lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset trivy-image-laurium harness-a11y
+ 
+ lint:
+ 	$(RUFF) check .
+@@ -74,6 +74,11 @@ trivy-image-superset:
+ 	docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+ 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
+ 
++# ADR-135 Amendments 6 and 9: Laurium's own image, built from its folder alone, scanned as every image of ours.
++trivy-image-laurium:
++	docker build --pull -f services/laurium/Dockerfile -t ospreyflow/laurium:ci services/laurium
++	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/laurium:ci
++
+ # Install, start, stop and update the deployment with the `ospreyflow` command (`cli/`; ADR-114):
+ # `ospreyflow install --mode lite`, `ospreyflow start [--build]`, `ospreyflow status`, `ospreyflow open`.
+ # Demo packs: `ospreyflow demo add <pack>`. The sign-in again: `ospreyflow repair-sign-in`.

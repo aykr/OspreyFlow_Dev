@@ -109,6 +109,10 @@ export type Transcription = "Systran/faster-whisper-tiny.en";
  */
 export type Embedding = "all-minilm:22m-l6-v2-fp16";
 /**
+ * ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, laurium (its own service, every call through the gateway). Left unset: laurium on cloud-platform (its preset), deep_read on every other profile.
+ */
+export type ExtractionEngine = ("deep_read" | "laurium") | null;
+/**
  * Default: keycloak. The identity provider people sign in through.
  */
 export type IdentityProvider = string;
@@ -654,6 +658,7 @@ export interface ModelsConfig {
   vision?: Vision;
   transcription?: Transcription;
   embedding?: Embedding;
+  extraction_engine?: ExtractionEngine;
 }
 /**
  * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached

@@ -26,7 +26,10 @@ COPY licence_gate.py licence-gate.txt ./
 RUN pip install --require-hashes --only-binary :all: --no-deps -r licence-gate.txt \
  && python licence_gate.py \
  && pip uninstall -y pip-licenses prettytable wcwidth \
- && rm licence_gate.py licence-gate.txt
+ && rm licence_gate.py licence-gate.txt \
+ # pip itself last: the service never runs it, and its vendored copies (setuptools 70.3.0, urllib3 2.7.0 in
+ # pip 26.2.2's vendor.txt) are what trivy found in this image (P12 part 2, round 2, item 2).
+ && python -m pip uninstall -y pip
 
 COPY __init__.py app.py app_contract.py schema_map.py settings.py ./laurium_service/
 COPY NOTICE ./NOTICE

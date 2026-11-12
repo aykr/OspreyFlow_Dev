@@ -1,0 +1,192 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T185757Z/log: bash -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q --runxfail ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py
+FFFF..FF.....                                                            [100%]
+=================================== FAILURES ===================================
+_________ test_laurium_reaches_the_gateway_and_dns_alone[development] __________
+
+name = 'development'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_laurium_reaches_the_gateway_and_dns_alone(name: str) -> None:
+        docs, values = _manifests(name)
+        managed, host = _outside(values)
+        answers = {
+            "gateway:4000": decide(docs, LAURIUM, pod("litellm", 4000), "Egress"),
+            "dns/udp": decide(docs, LAURIUM, _dns(values, "UDP"), "Egress"),
+            "dns/tcp": decide(docs, LAURIUM, _dns(values, "TCP"), "Egress"),
+            "gateway:5432": decide(docs, LAURIUM, pod("litellm", 5432), "Egress"),
+            "arcadedb:2480": decide(docs, LAURIUM, pod("arcadedb", 2480), "Egress"),
+            "clickhouse:8123": decide(docs, LAURIUM, pod("clickhouse", 8123), "Egress"),
+            "api:8000": decide(docs, LAURIUM, pod("api", 8000), "Egress"),
+            "a managed store": decide(docs, LAURIUM, managed, "Egress"),
+            "an outside host": decide(docs, LAURIUM, host, "Egress"),
+        }
+>       assert answers == {
+            "gateway:4000": "Allow", "dns/udp": "Allow", "dns/tcp": "Allow",
+            "gateway:5432": "Deny", "arcadedb:2480": "Deny", "clickhouse:8123": "Deny",
+            "api:8000": "Deny", "a managed store": "Deny", "an outside host": "Deny",
+        }  # fmt: skip
+E       AssertionError: assert {'gateway:400... 'Allow', ...} == {'gateway:400...: 'Deny', ...}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'clickhouse:8123': 'Allow'} != {'clickhouse:8123': 'Deny'}
+E         {'api:8000': 'Allow'} != {'api:8000': 'Deny'}
+E         {'arcadedb:2480': 'Allow'} != {'arcadedb:2480': 'Deny'}
+E         {'gateway:5432': 'Allow'} != {'gateway:5432': 'Deny'}...
+E         
+E         ...Full output truncated (3 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:295: AssertionError
+__________ test_laurium_reaches_the_gateway_and_dns_alone[production] __________
+
+name = 'production'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_laurium_reaches_the_gateway_and_dns_alone(name: str) -> None:
+        docs, values = _manifests(name)
+        managed, host = _outside(values)
+        answers = {
+            "gateway:4000": decide(docs, LAURIUM, pod("litellm", 4000), "Egress"),
+            "dns/udp": decide(docs, LAURIUM, _dns(values, "UDP"), "Egress"),
+            "dns/tcp": decide(docs, LAURIUM, _dns(values, "TCP"), "Egress"),
+            "gateway:5432": decide(docs, LAURIUM, pod("litellm", 5432), "Egress"),
+            "arcadedb:2480": decide(docs, LAURIUM, pod("arcadedb", 2480), "Egress"),
+            "clickhouse:8123": decide(docs, LAURIUM, pod("clickhouse", 8123), "Egress"),
+            "api:8000": decide(docs, LAURIUM, pod("api", 8000), "Egress"),
+            "a managed store": decide(docs, LAURIUM, managed, "Egress"),
+            "an outside host": decide(docs, LAURIUM, host, "Egress"),
+        }
+>       assert answers == {
+            "gateway:4000": "Allow", "dns/udp": "Allow", "dns/tcp": "Allow",
+            "gateway:5432": "Deny", "arcadedb:2480": "Deny", "clickhouse:8123": "Deny",
+            "api:8000": "Deny", "a managed store": "Deny", "an outside host": "Deny",
+        }  # fmt: skip
+E       AssertionError: assert {'gateway:400... 'Allow', ...} == {'gateway:400...: 'Deny', ...}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'clickhouse:8123': 'Allow'} != {'clickhouse:8123': 'Deny'}
+E         {'api:8000': 'Allow'} != {'api:8000': 'Deny'}
+E         {'arcadedb:2480': 'Allow'} != {'arcadedb:2480': 'Deny'}
+E         {'gateway:5432': 'Allow'} != {'gateway:5432': 'Deny'}...
+E         
+E         ...Full output truncated (3 lines hidden), use '-vv' to show
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:295: AssertionError
+______________ test_only_the_conduit_reaches_laurium[development] ______________
+
+name = 'development'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_only_the_conduit_reaches_laurium(name: str) -> None:
+        docs, _ = _manifests(name)
+        into = {
+            who: decide(docs, pod("laurium", 8000), pod(who, 8000), "Ingress")
+            for who in ("api", "worker", "workspace", "arcadedb", "litellm")
+        }
+>       assert into == {
+            "api": "Allow",
+            "worker": "Deny",
+            "workspace": "Deny",
+            "arcadedb": "Deny",
+            "litellm": "Deny",
+        }
+E       AssertionError: assert {'api': 'Allo... 'Allow', ...} == {'api': 'Allo...: 'Deny', ...}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'litellm': 'Allow'} != {'litellm': 'Deny'}
+E         {'worker': 'Allow'} != {'worker': 'Deny'}
+E         {'arcadedb': 'Allow'} != {'arcadedb': 'Deny'}
+E         {'workspace': 'Allow'} != {'workspace': 'Deny'}
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:310: AssertionError
+______________ test_only_the_conduit_reaches_laurium[production] _______________
+
+name = 'production'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_only_the_conduit_reaches_laurium(name: str) -> None:
+        docs, _ = _manifests(name)
+        into = {
+            who: decide(docs, pod("laurium", 8000), pod(who, 8000), "Ingress")
+            for who in ("api", "worker", "workspace", "arcadedb", "litellm")
+        }
+>       assert into == {
+            "api": "Allow",
+            "worker": "Deny",
+            "workspace": "Deny",
+            "arcadedb": "Deny",
+            "litellm": "Deny",
+        }
+E       AssertionError: assert {'api': 'Allo... 'Allow', ...} == {'api': 'Allo...: 'Deny', ...}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'litellm': 'Allow'} != {'litellm': 'Deny'}
+E         {'worker': 'Allow'} != {'worker': 'Deny'}
+E         {'arcadedb': 'Allow'} != {'arcadedb': 'Deny'}
+E         {'workspace': 'Allow'} != {'workspace': 'Deny'}
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:310: AssertionError
+_________ test_lauriums_row_widened_lets_it_reach_a_store[development] _________
+
+name = 'development'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_lauriums_row_widened_lets_it_reach_a_store(name: str) -> None:
+        """Red first, in the shape Helm emits: Laurium's own egress policy with an Allow to every pod
+        added, as a wider row would render it, lets Laurium reach ArcadeDB. (Taking the row out would
+        not do: under P7b's default deny a missing row denies, and this would stay xfailed for the
+        wrong reason; the lane-reviewer's item 8.)"""
+        docs, _ = _manifests(name)
+        ours = [d for d in docs if (d.get("metadata") or {}).get("name") == LAURIUM_EGRESS]
+>       assert len(ours) == 1, "Laurium's egress policy was not rendered"
+E       AssertionError: Laurium's egress policy was not rendered
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:339: AssertionError
+_________ test_lauriums_row_widened_lets_it_reach_a_store[production] __________
+
+name = 'production'
+
+    @UNTIL_P7B
+    @pytest.mark.parametrize("name", FIXTURE_NAMES)
+    def test_lauriums_row_widened_lets_it_reach_a_store(name: str) -> None:
+        """Red first, in the shape Helm emits: Laurium's own egress policy with an Allow to every pod
+        added, as a wider row would render it, lets Laurium reach ArcadeDB. (Taking the row out would
+        not do: under P7b's default deny a missing row denies, and this would stay xfailed for the
+        wrong reason; the lane-reviewer's item 8.)"""
+        docs, _ = _manifests(name)
+        ours = [d for d in docs if (d.get("metadata") or {}).get("name") == LAURIUM_EGRESS]
+>       assert len(ours) == 1, "Laurium's egress policy was not rendered"
+E       AssertionError: Laurium's egress policy was not rendered
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py:339: AssertionError
+============================= slowest 30 durations =============================
+0.95s call     tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[production]
+0.94s call     tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+0.83s call     tests/harness/test_laurium_network_policy.py::test_nothing_of_lauriums_policy_without_laurium
+0.13s setup    tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+
+(26 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[production]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_only_the_conduit_reaches_laurium[development]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_only_the_conduit_reaches_laurium[production]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_lauriums_row_widened_lets_it_reach_a_store[development]
+FAILED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_lauriums_row_widened_lets_it_reach_a_store[production]
+6 failed, 7 passed in 3.35s
+Wall time: 3 s, exit 1 (no stack, no lease; set-up before it 11 s)
+rc=1

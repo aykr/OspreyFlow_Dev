@@ -29,6 +29,8 @@ ours:
   worker: {dockerfile: services/worker/Dockerfile, context: .}
   report-sync: {dockerfile: services/report_sync/Dockerfile, context: .}
   superset: {dockerfile: deploy/superset/Dockerfile, context: deploy/superset}
+  # ADR-135 Amendment 6: built from its own folder alone, only when Laurium is chosen.
+  laurium: {dockerfile: services/laurium/Dockerfile, context: services/laurium}
 
 # The hosts the namespace reaches (decision 7), each allowed by its networks
 # (`cloud_platform.egress_nets`, or the platform's `egress.service_nets`) or the render is refused.
@@ -76,7 +78,7 @@ egress:
   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
   paths:
     workspace: [api]
-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset]
+    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset, laurium]
     worker: [arcadedb, clickhouse, keycloak, ner]
     report-sync: [api, keycloak]
     superset: [keycloak]
@@ -84,6 +86,8 @@ egress:
     arcadedb: [arcadedb]
     clickhouse: [clickhouse, clickhouse-keeper]
     clickhouse-keeper: [clickhouse-keeper]
+    # Laurium (ADR-135 Amendment 9), rendered only when it is the extraction engine: the gateway alone.
+    laurium: [litellm]
     # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names, each reaching
     # what its commands call: the backup ArcadeDB's backup and ClickHouse's BACKUP; the restore
     # ClickHouse's RESTORE alone (ArcadeDB's is from the zip on the Job's own claim, no call). Both
@@ -112,6 +116,8 @@ resources:
   superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
   keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
   litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
+  # Laurium 0.6.0, LangChain and spaCy's small English model in one process (ADR-135 Amendment 6).
+  laurium: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
   # Requested at its limit: the store is the last thing a node under pressure should evict.
   arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
   clickhouse: {cpu: "1", memory: 8Gi, memory_limit: 8Gi}

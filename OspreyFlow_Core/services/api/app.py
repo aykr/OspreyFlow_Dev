@@ -762,6 +762,7 @@ from .kyc_expiries import KycExpiryStore
 from .kyc_sweep import SweepReport
 from .kyc_sweep import run_daily as run_daily_kyc_sweep
 from .kyc_sweep import sweep as kyc_sweep
+from .laurium_start import close_laurium, laurium_in_the_conduit, routed_model
 from .link_changes import (
     ChangeNotMadeError,
     InvalidChangeError,
@@ -1245,11 +1246,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # client's provider sees only material whose handling code the deployment declared sendable
     # and whose every dataset allows that provider, and an engine an analyst names is used only
     # when it is enabled and has a key.
-    model: ModelPort = RoutedModel(
+    # ADR-135 Amendments 6 and 9 (P12 part 2): `extract` by Laurium's service for the review
+    # queue's document extraction when the deployment chose it (`OSPREY_EXTRACTION_ENGINE`),
+    # every other call the gateway's; inside the routes, so each keeps its engine's key and the
+    # egress rules (`services.api.laurium_start.routed_model`).
+    model: ModelPort = routed_model(
         ModelLiteLLMAdapter(litellm_client, embed_model=models.embedding),
         routes=routes_from_env(models, os.environ),
         # ADR-136: and only from datasets whose egress allows the engine.
         egress=datasets_store,
+        environ=os.environ,
+        master=LiteLLMConfig.from_env().api_key,
     )
     # `spec/09_INGEST_STUDIO.md` §6's reverse index: "an ontology edit flags
     # every recipe that depends on the changed version". This deployment's
@@ -1453,6 +1460,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await model_admin.start()
     if routed is not None:
         routed.follow(model_admin.routes)
+    # ADR-135 Amendment 6 decision 8: Laurium's own key, the deployment's extraction model alone,
+    # any older one (a master key since rotated) deleted; tried again in the background until held,
+    # never stopping the Conduit, Laurium's calls refused until then (`laurium_start`).
+    laurium_key_start = await laurium_in_the_conduit(
+        model, gateway_http, gateway_config.api_key, [models.extraction]
+    )
     app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme
@@ -1634,6 +1647,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # one left here would fail them; without it they judge with the weights file's influencers.
         app.state.strength_influencers = None
         await litellm_client.aclose()
+        if laurium_key_start is not None:
+            await laurium_key_start.stop()
+        await close_laurium(model)
         app.state.model_admin = None
         await model_admin.close()
         await model_admin_audit.close()
@@ -5579,6 +5595,8 @@ async def run_extraction_route(
         extraction_model=body.model,
         # ADR-136: text extracted in a case is of the case's datasets.
         datasets=principal.datasets,
+        # ADR-135 Amendment 9: the review queue's extraction, the one call Laurium serves.
+        laurium_may_read=True,
     )
     await audit.record(
         principal=principal,

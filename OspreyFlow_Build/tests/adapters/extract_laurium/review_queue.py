@@ -117,7 +117,7 @@ class CandidateRows:
 
 
 async def extract_into_queue(
-    adapter: ExtractLauriumAdapter,
+    adapter: ExtractLauriumAdapter, *, laurium_may_read: bool = False
 ) -> tuple[list[ExtractionCandidateRecord], CandidateRows]:
     """The one path an extraction takes to the review queue, with the real store over `CandidateRows`."""
     rows = CandidateRows()
@@ -132,6 +132,7 @@ async def extract_into_queue(
         handling=HANDLING,
         principal=PRINCIPAL,
         extraction_model=MODEL,
+        laurium_may_read=laurium_may_read,
     )
     return stored, rows
 

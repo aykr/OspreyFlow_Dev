@@ -9,6 +9,8 @@ reporting:
   sync: true
   superset: true
 models:
+  # ADR-135 Amendment 9: named; left unset, the profile presets Laurium.
+  extraction_engine: deep_read
   local_only: false
   provider:
     name: openai

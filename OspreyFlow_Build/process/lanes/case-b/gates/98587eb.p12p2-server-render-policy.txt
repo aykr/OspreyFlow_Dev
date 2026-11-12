@@ -1,0 +1,71 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T172052Z/log: bash -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -rA -q ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py ../OspreyFlow_Build/tests/harness/test_laurium_render.py ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py
+xxxx..xx................................                                 [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+============================= slowest 30 durations =============================
+1.64s call     tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+1.57s call     tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[production]
+1.09s call     tests/harness/test_laurium_network_policy.py::test_nothing_of_lauriums_policy_without_laurium
+0.72s call     tests/harness/test_laurium_render.py::test_lauriums_pod_reads_no_secret_and_only_its_gateway[production]
+0.48s call     tests/harness/test_laurium_render.py::test_lauriums_pod_reads_no_secret_and_only_its_gateway[development]
+0.47s call     tests/harness/test_laurium_render.py::test_laurium_chosen_renders_its_workload_its_image_and_the_gateway[production]
+0.45s call     tests/harness/test_laurium_render.py::test_lauriums_pod_has_no_way_out_and_its_resources_named[production]
+0.44s call     tests/harness/test_laurium_render.py::test_laurium_chosen_renders_its_workload_its_image_and_the_gateway[development]
+0.43s call     tests/harness/test_laurium_render.py::test_lauriums_pod_has_no_way_out_and_its_resources_named[development]
+0.33s call     tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[None-production]
+0.31s call     tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[deep_read-production]
+0.26s call     tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[None-development]
+0.25s call     tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[deep_read-development]
+0.10s call     tests/harness/test_laurium_render.py::test_every_other_profile_is_unchanged[small]
+0.09s call     tests/harness/test_laurium_render.py::test_every_other_profile_is_unchanged[lite]
+0.04s setup    tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development]
+
+(14 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_the_evaluator_still_lets_the_conduit_through[development]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_the_evaluator_still_lets_the_conduit_through[production]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_nothing_of_lauriums_policy_without_laurium
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_the_evaluator_reads_p7bs_shape_as_calico_does
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_the_evaluator_lets_an_all_selector_through_as_today
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_the_evaluator_refuses_a_selector_it_cannot_read
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[None-development]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[None-production]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[deep_read-development]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_nothing_of_laurium_is_rendered_unless_chosen[deep_read-production]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_laurium_chosen_renders_its_workload_its_image_and_the_gateway[development]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_laurium_chosen_renders_its_workload_its_image_and_the_gateway[production]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_lauriums_pod_reads_no_secret_and_only_its_gateway[development]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_lauriums_pod_reads_no_secret_and_only_its_gateway[production]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_lauriums_pod_has_no_way_out_and_its_resources_named[development]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_lauriums_pod_has_no_way_out_and_its_resources_named[production]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_every_other_profile_is_unchanged[lite]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_every_other_profile_is_unchanged[small]
+PASSED ../OspreyFlow_Build/tests/harness/test_laurium_render.py::test_the_fixture_loader_is_the_renders_own
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_the_default_is_deep_read_on_every_profile[cloud-platform]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_the_default_is_deep_read_on_every_profile[local-lite]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_the_default_is_deep_read_on_every_profile[small]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_the_default_is_deep_read_on_every_profile[cluster]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_laurium_is_taken_on_cloud_platform
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_laurium_is_refused_on_every_other_profile_in_words[local-lite]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_laurium_is_refused_on_every_other_profile_in_words[small]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_laurium_is_refused_on_every_other_profile_in_words[cluster]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_a_cloud_platform_cluster_translation_carries_laurium
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_any_other_value_is_refused[Laurium]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_any_other_value_is_refused[deep-read]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_any_other_value_is_refused[]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_any_other_value_is_refused[local]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_any_other_value_is_refused[None]
+PASSED ../OspreyFlow_Build/tests/schemas/test_extraction_engine_setting.py::test_any_other_value_is_refused[1]
+XFAIL ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[development] - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything
+XFAIL ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_laurium_reaches_the_gateway_and_dns_alone[production] - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything
+XFAIL ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_only_the_conduit_and_the_workers_reach_laurium[development] - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything
+XFAIL ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_only_the_conduit_and_the_workers_reach_laurium[production] - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything
+XFAIL ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_without_lauriums_own_policy_it_reaches_everything[development] - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything
+XFAIL ../OspreyFlow_Build/tests/harness/test_laurium_network_policy.py::test_without_lauriums_own_policy_it_reaches_everything[production] - until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's `laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything
+34 passed, 6 xfailed, 1 warning in 14.44s
+Wall time: 17 s, exit 0 (no stack, no lease; set-up before it 17 s)

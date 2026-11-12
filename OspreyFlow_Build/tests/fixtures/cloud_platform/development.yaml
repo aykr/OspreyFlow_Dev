@@ -5,6 +5,10 @@ components:
   analytics_engine: clickhouse
 network:
   public_origin: https://ospreyflow-dev.apps.example.org
+# ADR-135 Amendment 9: named, so this fixture keeps its meaning; left unset, the profile
+# presets Laurium (Amendment 5 decision 2).
+models:
+  extraction_engine: deep_read
 cloud_platform:
   platform: client
   namespace: ospreyflow-dev

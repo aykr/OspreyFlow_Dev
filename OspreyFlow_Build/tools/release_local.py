@@ -5,12 +5,12 @@ the push, executable directly against this checkout.
 it needs a real tag push and `packages: write` credentials for `ghcr.io/ospreyflow` this sandbox
 does not have. `actionlint` (`06_DECISIONS.md` ADR-049 Stage 2 §5b/§7's own brief, item 2) checks
 the YAML is well-formed; it says nothing about whether the *commands* it runs actually work. This
-script runs the same four builds, the same trivy gate (same flags, same severity, same
-`--ignore-unfixed`), the same `--build-arg OSPREY_BUILT_FROM_SHA` for the harness image, and the
-same `make bundle` — against this repository's own real Dockerfiles, real trivy binary, real
-`make bundle` command — with `--dry-run` standing in for the four `docker push` calls, printing
-the exact references it would have pushed instead of reaching the registry. **The only step this
-script cannot exercise is the push itself** — said here, not left implicit.
+script runs the same builds (`SERVICES`, the release's matrix), the same trivy gate (same flags,
+same severity, same `--ignore-unfixed`), the same `--build-arg OSPREY_BUILT_FROM_SHA` for the
+harness image, and the same `make bundle` — against this repository's own real Dockerfiles, real
+trivy binary, real `make bundle` command — with `--dry-run` standing in for the `docker push` calls,
+printing the exact references it would have pushed instead of reaching the registry. **The only step
+this script cannot exercise is the push itself** — said here, not left implicit.
 
 **Round 13cg: nor does it run `ci-status-gate`**, the job that now runs before `build-scan-push`
 and refuses the release unless `ci.yml` reported green for the commit being tagged
@@ -29,14 +29,17 @@ from harness.render import REPO_ROOT, git_sha
 
 REGISTRY = "ghcr.io/ospreyflow"
 
-#: (service, Dockerfile, build-arg name to bake the release sha under, or None). Mirrors
-#: `.github/workflows/release.yml`'s own matrix exactly — a fifth entry there needs a fifth one
-#: here, not a second copy of the list to drift from it.
-SERVICES: tuple[tuple[str, str, str | None], ...] = (
-    ("api", "services/api/Dockerfile", None),
-    ("ingest", "services/ingest/Dockerfile", None),
-    ("workspace", "apps/workspace/Dockerfile", None),
-    ("harness", "harness/Dockerfile", "OSPREY_BUILT_FROM_SHA"),
+#: (service, Dockerfile, build-arg name to bake the release sha under or None, build context
+#: relative to the Core checkout). Mirrors `.github/workflows/release.yml`'s own matrix exactly
+#: (`tests/test_release_local_matrix.py` reads it) — an entry there needs one here, not a second
+#: copy of the list to drift from it. Laurium's image is built from its own folder alone (ADR-135
+#: Amendments 6 and 9).
+SERVICES: tuple[tuple[str, str, str | None, str], ...] = (
+    ("api", "services/api/Dockerfile", None, "."),
+    ("ingest", "services/ingest/Dockerfile", None, "."),
+    ("workspace", "apps/workspace/Dockerfile", None, "."),
+    ("harness", "harness/Dockerfile", "OSPREY_BUILT_FROM_SHA", "."),
+    ("laurium", "services/laurium/Dockerfile", None, "services/laurium"),
 )
 
 
@@ -46,17 +49,17 @@ def _run(cmd: list[str], **kwargs: object) -> None:
 
 
 def build_and_scan(sha: str) -> list[str]:
-    """Builds and trivy-scans all four owned images, tagged the same way the release workflow
-    tags them (`<service>:<sha>` plus `:latest`). Returns every reference a real run would push,
-    in push order — the list `push()` below either pushes for real or only prints."""
+    """Builds and trivy-scans every owned image in `SERVICES`, tagged the same way the release
+    workflow tags them (`<service>:<sha>` plus `:latest`). Returns every reference a real run would
+    push, in push order — the list `push()` below either pushes for real or only prints."""
     refs: list[str] = []
-    for service, dockerfile, build_arg_name in SERVICES:
+    for service, dockerfile, build_arg_name, context in SERVICES:
         sha_tag = f"{REGISTRY}/{service}:{sha}"
         latest_tag = f"{REGISTRY}/{service}:latest"
         cmd = ["docker", "build", "--pull", "-f", dockerfile]
         if build_arg_name is not None:
             cmd += ["--build-arg", f"{build_arg_name}={sha}"]
-        cmd += ["-t", sha_tag, str(REPO_ROOT)]
+        cmd += ["-t", sha_tag, str(REPO_ROOT / context)]
         _run(cmd)
         _run(
             [

@@ -681,6 +681,18 @@ class ModelsConfig(BaseModel):
         default="all-minilm:22m-l6-v2-fp16",
         description="ADR-095: the local model that turns text into vectors.",
     )
+    #: ADR-135 Amendments 5 and 6 (P12 part 2): which engine runs `ModelPort.extract`. Deep read is
+    #: the LiteLLM adapter; Laurium is its own service, rendered only when chosen, on
+    #: `cloud-platform` alone (`OspreyConfig._extraction_engine_suits_the_profile`). Left unset,
+    #: the profile's preset (Amendment 5 decision 2; Amendment 9): `laurium` on `cloud-platform`,
+    #: `deep_read` on every other. Stored as written (unset stays unset, so a dump round-trips); the
+    #: effective engine is read from `OspreyConfig.extraction_engine`.
+    extraction_engine: Literal["deep_read", "laurium"] | None = Field(
+        default=None,
+        description="ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, "
+        "laurium (its own service, every call through the gateway). Left unset: laurium on "
+        "cloud-platform (its preset), deep_read on every other profile.",
+    )
 
     @property
     def enabled_providers(self) -> list[ModelProviderConfig]:
@@ -1910,6 +1922,40 @@ class OspreyConfig(BaseModel):
         for provider in self.models.enabled_providers:
             if refused := engine_refusal(provider, profile):
                 raise ValueError(f"models.providers: {provider.name}: {refused}")
+        return self
+
+    #: Set while validating a cloud-platform deployment's cluster translation (`ENGINES_AS`), so the
+    #: translation reads cloud-platform's preset.
+    _engines_as_cloud_platform: bool = PrivateAttr(default=False)
+
+    @property
+    def extraction_engine(self) -> Literal["deep_read", "laurium"]:
+        """The engine `ModelPort.extract` runs on: as named, or the profile's preset (ADR-135
+        Amendment 5 decision 2, the owner's; Amendment 9): `laurium` on `cloud-platform` (and its
+        cluster translation), `deep_read` on every other profile."""
+        named = self.models.extraction_engine
+        if named is not None:
+            return named
+        cloud = self.profile is Profile.CLOUD_PLATFORM or self._engines_as_cloud_platform
+        return "laurium" if cloud else "deep_read"
+
+    @model_validator(mode="after")
+    def _extraction_engine_suits_the_profile(self, info: ValidationInfo) -> OspreyConfig:
+        """ADR-135 Amendments 5 and 6 (P12 part 2; the orchestrator's ruling of 11 November):
+        Laurium on `cloud-platform` alone, as the engine kinds are (`_engines_suit_the_profile`),
+        its cluster translation carried by `ENGINES_AS` alike."""
+        engines_as = (info.context or {}).get(ENGINES_AS)
+        translated = engines_as == MODEL_ROUTE_PROFILE and self.profile is Profile.CLUSTER
+        profile = MODEL_ROUTE_PROFILE if translated else self.profile.value
+        # Read, never written (the lane-reviewer's item 3): the preset is resolved by the
+        # `extraction_engine` property, so a dump of this configuration names only what was named.
+        self._engines_as_cloud_platform = translated
+        if self.models.extraction_engine == "laurium" and profile not in MODEL_ROUTE_PROFILES:
+            raise ValueError(
+                f"models.extraction_engine: laurium is for profile: {MODEL_ROUTE_PROFILE} "
+                f"(ADR-135 Amendment 6); this deployment is profile: {profile}. Name deep_read, "
+                "or leave it out."
+            )
         return self
 
     @model_validator(mode="after")

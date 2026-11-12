@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.83** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.84** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.84 | 2026-11-12 | Appendix A: `models.extraction_engine`, Deep read or Laurium, Laurium on the `cloud-platform` profile alone and its preset there when left unset (P12 part 2, ADR-135 Amendment 9). §6a.2: Laurium's own service, rendered with that preset, and the totals said to be Deep read's. |
 | 1.83 | 2026-11-11 | Appendix A from L1.9 part 2 (ADR-140 Amendment 21): `cloud_platform.connector_sources`, the S3 buckets and Athena workgroups a cloud-platform deployment declares; a constrained list's items named by their type. |
 | 1.82 | 2026-11-11 | Appendix A from P7b as merged (ADR-148 Amendment 5): `cloud_platform.shape` (standard or poc, poc a development namespace's only); `cloud_platform.connector_hosts` as host or host:port, a bare host meaning 443, so a SQL connection names its port here; and `deployment.highest_marking`'s cloud-platform default, OFFICIAL-SENSITIVE. |
 | 1.81 | 2026-11-11 | §6a after its review. §6a.7: the token check, not the Conduit, is what is built, since neither the Conduit's settings nor the profile pass it a mapping yet; the mapping's shape said not to be an `osprey.yaml` block; what fails to load in full (a GUID in lower case, a list in a clearance or unit table, an empty table, scope or `groups_claim`); `sub` required too; a group overage refused only where a group table is used, and its remedy; `acct` optional; guests among the shapes untried against a real tenant. §6a.8: the first administrator named in the settings, refused at render when there is none; Entra's egress line struck (no record yet decides it). §6a.2: room above the totals for set-up jobs and rolling updates. §6a.3: `gateway.tf` makes the gateway's service account too. §6a.5 and §10.1: an engine's way out also needs the new values installed (`helm upgrade`). §6a.6: three synthetic deployments. |
@@ -1111,12 +1112,14 @@ measurements**: no load has yet run on the platform.
 | The report sync, when reporting is on | 1 | 2 | 0.1 | 256 MiB | 512 MiB |
 | Superset, when reporting is on | 1 | 2 | 0.25 | 1 GiB | 2 GiB |
 | The model gateway (LiteLLM) | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
+| Laurium's extraction service, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
 | Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
 With no engine enabled and reporting off in development (the gateway's pod is rendered all the same),
 and reporting and an engine on in production, the requests come to **about 27 GiB of memory and 4 CPU
 in development**, and **about 70 GiB and 9.7 CPU in production**; the memory limits to about 34 GiB
-and 86 GiB. These count each running copy alone: a set-up job (0.1 CPU and 256 MiB) and the extra copy a
+and 86 GiB. **These totals are for Deep read**: the profile's preset extraction engine is Laurium, whose own
+service adds 0.25 CPU and 1 GiB asked for (2 GiB limit) on top, unless `models.extraction_engine: deep_read` is named. These count each running copy alone: a set-up job (0.1 CPU and 256 MiB) and the extra copy a
 rolling update starts need room above them, so a ResourceQuota on requests and memory limits must
 be larger, or pods are left unscheduled; one on `limits.cpu` refuses
 them whatever its size, until a CPU limit is set.
@@ -2545,6 +2548,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.vision` | `moondream:1.8b-v2-q4_K_M` | `moondream:1.8b-v2-q4_K_M` | The local model that describes an image and reads its text. |
 | `models.transcription` | `Systran/faster-whisper-tiny.en` | `Systran/faster-whisper-tiny.en` | The local model that transcribes a video's speech. |
 | `models.embedding` | `all-minilm:22m-l6-v2-fp16` | `all-minilm:22m-l6-v2-fp16` | The local model that turns text into vectors. |
+| `models.extraction_engine` | `deep_read` \| `laurium` or none | none | ADR-135 Amendments 5 and 6: deep_read or, at profile: cloud-platform only, laurium (its own service, every call through the gateway). Left unset: laurium on cloud-platform (its preset), deep_read on every other profile. |
 | `governance` | section | — | Identity, handling, ontology and the marking shown on screen. |
 | `governance.identity_provider` | str | `keycloak` | The identity provider people sign in through. |
 | `governance.handling_scheme` | str | `uk-law-enforcement` | The handling scheme every item is marked under. |

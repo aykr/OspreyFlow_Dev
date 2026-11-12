@@ -1,0 +1,272 @@
+Running on ospreyflow-test (stack b, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b.meta/runs/20261111T180258Z/log: bash process/lanes/case-b/p12p2_live_run.sh
+
+=== the gateway, and the models it serves (18:02:59Z)
+liveliness: 200
+models: ['Systran/faster-whisper-tiny.en', 'all-minilm:22m-l6-v2-fp16', 'moondream:1.8b-v2-q4_K_M', 'qwen2.5:0.5b-instruct', 'qwen2.5:7b-instruct']
+
+=== Laurium's environment, by hash (18:02:59Z)
+Using CPython 3.13.18
+Creating virtual environment at: laurium-env/.venv
+Activate with: source laurium-env/.venv/bin/activate
+laurium-env: exit 0
+
+=== the exit case on qwen2.5:7b-instruct (three runs, each its own) (18:02:59Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py . [ 33%]
+..                                                                       [100%]
+
+==================================== PASSES ====================================
+============================== slowest durations ===============================
+3.65s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+1.92s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+1.84s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+0.14s setup    tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+
+(5 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+PASSED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+============================== 3 passed in 7.76s ===============================
+exit case on qwen2.5:7b-instruct: exit 0
+
+=== the exit case on qwen2.5:0.5b-instruct (three runs, each its own) (18:03:08Z)
+============================= test session starts ==============================
+platform linux -- Python 3.13.18, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.16.0, asyncio-1.4.0, Faker-40.54.0, langsmith-0.14.17
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py F [ 33%]
+FF                                                                       [100%]
+
+=================================== FAILURES ===================================
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[1] __________
+
+attempt = 1
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:66: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.extract_laurium.adapter.ExtractLauriumAdapter object at 0x75954347b770>
+req = ExtractionRequest(document_id='doc-live-1', text="Extract the person's name mentioned: Owen Wilson went to the store."...d': ['name'], 'additionalProperties': False}, model='qwen2.5:0.5b-instruct', handling=None, engine=None, datasets=None)
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        try:
+            Draft202012Validator.check_schema(req.json_schema)
+        except SchemaError as exc:
+            raise InvalidExtractionSchemaError(
+                f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
+            ) from exc
+    
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
+        call = current_call()
+        tag: str | None = None
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
+    
+        body: dict[str, Any] = {
+            "document_id": req.document_id,
+            "text": req.text,
+            "json_schema": req.json_schema,
+            "model": req.model,
+            "tag": tag,
+        }
+        try:
+            resp = await self._http.post(
+                "/v1/extract", json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError:
+            raise ExtractionFailedError(
+                "Laurium's service could not be reached, or did not answer in time."
+            ) from None
+    
+        if resp.status_code != 200:
+>           raise _refusal(resp, req.model)
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+
+packages/adapters/extract_laurium/adapter.py:124: ExtractionFailedError
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[2] __________
+
+attempt = 2
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:66: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.extract_laurium.adapter.ExtractLauriumAdapter object at 0x7595424c4190>
+req = ExtractionRequest(document_id='doc-live-2', text="Extract the person's name mentioned: Owen Wilson went to the store."...d': ['name'], 'additionalProperties': False}, model='qwen2.5:0.5b-instruct', handling=None, engine=None, datasets=None)
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        try:
+            Draft202012Validator.check_schema(req.json_schema)
+        except SchemaError as exc:
+            raise InvalidExtractionSchemaError(
+                f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
+            ) from exc
+    
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
+        call = current_call()
+        tag: str | None = None
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
+    
+        body: dict[str, Any] = {
+            "document_id": req.document_id,
+            "text": req.text,
+            "json_schema": req.json_schema,
+            "model": req.model,
+            "tag": tag,
+        }
+        try:
+            resp = await self._http.post(
+                "/v1/extract", json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError:
+            raise ExtractionFailedError(
+                "Laurium's service could not be reached, or did not answer in time."
+            ) from None
+    
+        if resp.status_code != 200:
+>           raise _refusal(resp, req.model)
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+
+packages/adapters/extract_laurium/adapter.py:124: ExtractionFailedError
+_________ test_laurium_reads_a_conforming_answer_from_a_real_model[3] __________
+
+attempt = 3
+
+    @pytest.mark.parametrize("attempt", [1, 2, 3])
+    async def test_laurium_reads_a_conforming_answer_from_a_real_model(attempt: int) -> None:
+        """Three runs, each its own: a model that answers Laurium once in three is not one it reads."""
+        request = ExtractionRequest(
+            document_id=f"doc-live-{attempt}",
+            text="Extract the person's name mentioned: Owen Wilson went to the store.",
+            json_schema=SCHEMA,
+            model=MODEL,
+        )
+        async with laurium_live_adapter(MODEL) as adapter:
+>           result = await adapter.extract(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py:66: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.extract_laurium.adapter.ExtractLauriumAdapter object at 0x7595424c56d0>
+req = ExtractionRequest(document_id='doc-live-3', text="Extract the person's name mentioned: Owen Wilson went to the store."...d': ['name'], 'additionalProperties': False}, model='qwen2.5:0.5b-instruct', handling=None, engine=None, datasets=None)
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        try:
+            Draft202012Validator.check_schema(req.json_schema)
+        except SchemaError as exc:
+            raise InvalidExtractionSchemaError(
+                f"not a valid JSON Schema (Draft 2020-12): {exc.message}"
+            ) from exc
+    
+        # Decision 8: a scoped key for every call, never the master key, which is admin on the
+        # gateway and must not cross into Laurium's container.
+        call = current_call()
+        tag: str | None = None
+        try:
+            token = laurium_key(self._master)
+            if call is not None:
+                tag = usage_tag(call.engine, call.job)
+                if call.engine != LOCAL:
+                    token = engine_key(self._master, call.engine)
+        except ValueError:
+            raise ExtractionFailedError(
+                "There is no gateway key to derive Laurium's from: a deployment fault."
+            ) from None
+    
+        body: dict[str, Any] = {
+            "document_id": req.document_id,
+            "text": req.text,
+            "json_schema": req.json_schema,
+            "model": req.model,
+            "tag": tag,
+        }
+        try:
+            resp = await self._http.post(
+                "/v1/extract", json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        except httpx.HTTPError:
+            raise ExtractionFailedError(
+                "Laurium's service could not be reached, or did not answer in time."
+            ) from None
+    
+        if resp.status_code != 200:
+>           raise _refusal(resp, req.model)
+E           adapters.model_litellm.errors.ExtractionFailedError: Laurium could not read model 'qwen2.5:0.5b-instruct''s answer into the given schema.
+
+packages/adapters/extract_laurium/adapter.py:124: ExtractionFailedError
+============================== slowest durations ===============================
+2.59s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+0.92s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+0.88s call     tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+0.14s setup    tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+
+(5 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[1]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[2]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_laurium_reads_a_real_model_live.py::test_laurium_reads_a_conforming_answer_from_a_real_model[3]
+============================== 3 failed in 4.97s ===============================
+exit case on qwen2.5:0.5b-instruct: exit 1
+
+=== what is left on the gateway (18:03:15Z)
+keys: [('orch-probe-2', {})]
+Wall time: 16 s, exit 0 (stack b, the lease case-b took at 2026-11-11T18:01:21Z; set-up before it 11 s)

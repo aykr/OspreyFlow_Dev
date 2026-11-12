@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, cast
@@ -48,6 +49,7 @@ from services.extract.profile import DEFAULT_CONFIDENCE_FLOOR, ExtractionProfile
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
 
+from adapters.extract_laurium.composed import laurium_reads
 from ports.graph import GraphPort
 from ports.model import ModelPort
 from ports.recognise import RecognisePort
@@ -397,6 +399,7 @@ async def run_extraction(
     datasets: Sequence[str] | None = None,
     window_chars: int = 40_000,
     overlap_chars: int = 2_000,
+    laurium_may_read: bool = False,
 ) -> list[ExtractionCandidateRecord]:
     """`09_INGEST_STUDIO.md` §4 end to end: builds the schema from the profile, calls
     `ModelPort.extract()`, turns the result into candidates, and persists them `pending` — no
@@ -412,17 +415,21 @@ async def run_extraction(
     candidates: list[ExtractionCandidate] = []
     seen: set[tuple[str, str]] = set()
     for offset, window in text_windows(text, window_chars, overlap_chars):
-        result = await model.extract(
-            ExtractionRequest(
-                document_id=document_id,
-                text=window,
-                json_schema=schema,
-                model=extraction_model,
-                handling=handling,
-                # ADR-136: the datasets the text comes from; not given is `none`.
-                datasets=list(datasets) if datasets is not None else None,
+        # ADR-135 Amendment 9: document extraction into the review queue is the one call Laurium
+        # serves, when the deployment chose it; its route alone passes `laurium_may_read`. Email
+        # extraction and a document's content call this too, and stay Deep read.
+        with laurium_reads() if laurium_may_read else nullcontext():
+            result = await model.extract(
+                ExtractionRequest(
+                    document_id=document_id,
+                    text=window,
+                    json_schema=schema,
+                    model=extraction_model,
+                    handling=handling,
+                    # ADR-136: the datasets the text comes from; not given is `none`.
+                    datasets=list(datasets) if datasets is not None else None,
+                )
             )
-        )
         for found in extract_candidates(result, profile, ontology, window, handling):
             located = _shifted(found, offset)
             key = (located.entity_type, located.locator)

@@ -65,6 +65,7 @@ PORTS: dict[str, list[int]] = {
     "workspace": [8080],
     "api": [8000],
     "superset": [8088],
+    "laurium": [8000],
     "keycloak": [8080, 9000, 7800],
     "arcadedb": [2480, 2434],
     "clickhouse": [8123, 9000, 9009],

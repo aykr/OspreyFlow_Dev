@@ -1,0 +1,153 @@
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
+index 368b97b..031e18f 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
+@@ -5,6 +5,10 @@ components:
+   analytics_engine: clickhouse
+ network:
+   public_origin: https://ospreyflow-dev.apps.example.org
++# ADR-135 Amendment 9: named, so this fixture keeps its meaning; left unset, the profile
++# presets Laurium (Amendment 5 decision 2).
++models:
++  extraction_engine: deep_read
+ cloud_platform:
+   platform: client
+   namespace: ospreyflow-dev
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
+index 11ed572..b360edf 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
+@@ -9,6 +9,8 @@ reporting:
+   sync: true
+   superset: true
+ models:
++  # ADR-135 Amendment 9: named; left unset, the profile presets Laurium.
++  extraction_engine: deep_read
+   local_only: false
+   provider:
+     name: openai
+diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+index 9c588bf..3aa19c2 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
++++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+@@ -29,6 +29,8 @@ ours:
+   worker: {dockerfile: services/worker/Dockerfile, context: .}
+   report-sync: {dockerfile: services/report_sync/Dockerfile, context: .}
+   superset: {dockerfile: deploy/superset/Dockerfile, context: deploy/superset}
++  # ADR-135 Amendment 6: built from its own folder alone, only when Laurium is chosen.
++  laurium: {dockerfile: services/laurium/Dockerfile, context: services/laurium}
+ 
+ # The hosts the namespace reaches (decision 7), each allowed by its networks
+ # (`cloud_platform.egress_nets`, or the platform's `egress.service_nets`) or the render is refused.
+@@ -76,7 +78,7 @@ egress:
+   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
+   paths:
+     workspace: [api]
+-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset]
++    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset, laurium]
+     worker: [arcadedb, clickhouse, keycloak, ner]
+     report-sync: [api, keycloak]
+     superset: [keycloak]
+@@ -84,6 +86,8 @@ egress:
+     arcadedb: [arcadedb]
+     clickhouse: [clickhouse, clickhouse-keeper]
+     clickhouse-keeper: [clickhouse-keeper]
++    # Laurium (ADR-135 Amendment 9), rendered only when it is the extraction engine: the gateway alone.
++    laurium: [litellm]
+     # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names, each reaching
+     # what its commands call: the backup ArcadeDB's backup and ClickHouse's BACKUP; the restore
+     # ClickHouse's RESTORE alone (ArcadeDB's is from the zip on the Job's own claim, no call). Both
+@@ -112,6 +116,8 @@ resources:
+   superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+   keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+   litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
++  # Laurium 0.6.0, LangChain and spaCy's small English model in one process (ADR-135 Amendment 6).
++  laurium: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+   # Requested at its limit: the store is the last thing a node under pressure should evict.
+   arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
+   clickhouse: {cpu: "1", memory: 8Gi, memory_limit: 8Gi}
+diff --git a/OspreyFlow_Core/harness/cluster.py b/OspreyFlow_Core/harness/cluster.py
+index a3eb4fd..fa55323 100644
+--- a/OspreyFlow_Core/harness/cluster.py
++++ b/OspreyFlow_Core/harness/cluster.py
+@@ -65,6 +65,7 @@ PORTS: dict[str, list[int]] = {
+     "workspace": [8080],
+     "api": [8000],
+     "superset": [8088],
++    "laurium": [8000],
+     "keycloak": [8080, 9000, 7800],
+     "arcadedb": [2480, 2434],
+     "clickhouse": [8123, 9000, 9009],
+diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
+index 975d92d..e9eb528 100644
+--- a/OspreyFlow_Core/harness/render.py
++++ b/OspreyFlow_Core/harness/render.py
+@@ -63,6 +63,7 @@ from harness.images import (
+     daemon_then_registry_digest_resolver,
+     unresolved_digest_resolver,
+ )
++from harness.laurium import laurium_env, laurium_services
+ from harness.profiles import arcadedb_java_memory_opts, postgres_command, store_memory
+ from harness.realm import CONDUIT_CLIENT_ID
+ from harness.reporting import reporting_env, reporting_services
+@@ -1224,6 +1225,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
+             config, api_image=api.image, building=api.building, build_context=api.build_context
+         )
+     )
++    # ADR-135 Amendment 6 (P12 part 2): Laurium's service, when it is the extraction engine.
++    services.update(
++        laurium_services(
++            config, api_image=api.image, building=api.building, build_context=api.build_context
++        )
++    )
+     _keys_for_the_gateway_alone(config, services)
+     _connection_secrets_for_the_conduit_alone(config, services)
+     _gateway_database(config, services)
+@@ -1640,6 +1647,7 @@ def _render_env(config: OspreyConfig) -> str:
+     # key is here: only the gateway reads one, from the secrets apply writes.
+     lines += model_engines_env(config)
+     lines += reporting_env(config)
++    lines += laurium_env(config)
+     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
+     # value; every one of these is a name, a path or a choice already written in osprey.yaml.
+     return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"
+diff --git a/OspreyFlow_Core/services/api/model_admin.py b/OspreyFlow_Core/services/api/model_admin.py
+index 18ceeb3..547c341 100644
+--- a/OspreyFlow_Core/services/api/model_admin.py
++++ b/OspreyFlow_Core/services/api/model_admin.py
+@@ -39,7 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
+ from dataclasses import dataclass, field
+ from datetime import UTC, datetime
+ from pathlib import Path
+-from typing import Any, Protocol, cast
++from typing import Any, Literal, Protocol, cast
+ from urllib.parse import urlsplit
+ 
+ import asyncpg
+@@ -251,6 +251,8 @@ class Installed:
+     locals: dict[str, str | None]
+     #: What the cloud-platform render made (None on every other profile, which allows any host).
+     made: RoutesMade | None = None
++    #: ADR-135 Amendment 9: the extraction engine the render chose (`OSPREY_EXTRACTION_ENGINE`).
++    extraction_engine: Literal["deep_read", "laurium"] = "deep_read"
+ 
+     @classmethod
+     def from_env(cls, local: DeploymentModels, environ: Mapping[str, str]) -> Installed:
+@@ -293,6 +295,9 @@ class Installed:
+                 if c.strip()
+             ],
+             made=RoutesMade.from_env(environ),
++            extraction_engine=(
++                "laurium" if environ.get("OSPREY_EXTRACTION_ENGINE") == "laurium" else "deep_read"
++            ),
+             locals={
+                 "extraction": local.extraction,
+                 "vision": local.vision,
+@@ -844,6 +849,7 @@ class ModelAdmin:
+             sendable_handling_codes=list(self._installed.sendable),
+             source="models file" if self._settings is not None else "osprey.yaml",
+             engine_kinds=engine_kinds_offered(self._file.profile),
++            extraction_engine=self._installed.extraction_engine,
+         )
+ 
+     @property

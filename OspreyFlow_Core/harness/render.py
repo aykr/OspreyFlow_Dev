@@ -63,6 +63,7 @@ from harness.images import (
     daemon_then_registry_digest_resolver,
     unresolved_digest_resolver,
 )
+from harness.laurium import laurium_env, laurium_services
 from harness.profiles import arcadedb_java_memory_opts, postgres_command, store_memory
 from harness.realm import CONDUIT_CLIENT_ID
 from harness.reporting import reporting_env, reporting_services
@@ -1224,6 +1225,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             config, api_image=api.image, building=api.building, build_context=api.build_context
         )
     )
+    # ADR-135 Amendment 6 (P12 part 2): Laurium's service, when it is the extraction engine.
+    services.update(
+        laurium_services(
+            config, api_image=api.image, building=api.building, build_context=api.build_context
+        )
+    )
     _keys_for_the_gateway_alone(config, services)
     _connection_secrets_for_the_conduit_alone(config, services)
     _gateway_database(config, services)
@@ -1640,6 +1647,7 @@ def _render_env(config: OspreyConfig) -> str:
     # key is here: only the gateway reads one, from the secrets apply writes.
     lines += model_engines_env(config)
     lines += reporting_env(config)
+    lines += laurium_env(config)
     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
     # value; every one of these is a name, a path or a choice already written in osprey.yaml.
     return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"

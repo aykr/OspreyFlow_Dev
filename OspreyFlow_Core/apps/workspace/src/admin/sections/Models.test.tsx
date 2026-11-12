@@ -209,3 +209,31 @@ describe("Models", () => {
     expect(screen.queryByRole("button", { name: "Add an engine" })).toBeNull();
   });
 });
+
+// ADR-135 Amendment 5 decision 2 and Amendment 9 (P12 part 2): the extraction engine is chosen at
+// set-up and shown here read-only on the cloud-platform profile (the one that offers Laurium), with
+// how it is changed there (Amendment 8's words); nothing on the page changes it.
+describe("Models' extraction engine", () => {
+  const CLOUD = { engine_kinds: ["provider", "gateway", "bedrock"] };
+  it.each([
+    ["laurium", "Laurium"],
+    ["deep_read", "OspreyFlow Deep read"],
+  ])("names %s as chosen at set-up, with how to change it, and offers no control for it", async (engine, name) => {
+    stub((path) => (path === "/v1/admin/models" ? { status: 200, body: { ...VIEW, ...CLOUD, extraction_engine: engine } } : undefined));
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    const said = await screen.findByText(new RegExp(`Extraction engine: ${name}`));
+    expect(said.textContent).toContain(
+      "chosen at set-up: change it in osprey.yaml, re-render, and have the platform team apply it.",
+    );
+    expect(screen.queryByRole("combobox", { name: /extraction engine/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /extraction engine/i })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /laurium|deep read/i })).toBeNull();
+  });
+
+  it("says nothing of it on a profile that offers no Laurium", async () => {
+    stub((path) => (path === "/v1/admin/models" ? { status: 200, body: { ...VIEW, extraction_engine: "deep_read" } } : undefined));
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    await screen.findByText(/Settings come from/);
+    expect(screen.queryByText(/Extraction engine:/)).toBeNull();
+  });
+});

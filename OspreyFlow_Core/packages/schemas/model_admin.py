@@ -109,6 +109,9 @@ class ModelsAdminView(BaseModel):
     #: The kinds of engine this deployment's profile takes (ADR-135 Amendment 7 decision 1): a
     #: provider alone, or on `cloud-platform` also the client's gateway and Bedrock in London.
     engine_kinds: list[EngineKind] = Field(default_factory=lambda: list(_PROVIDER_ONLY))
+    #: ADR-135 Amendment 5 decision 2 and Amendment 9: the extraction engine the deployment was
+    #: rendered with, chosen at set-up (`osprey.yaml`), read-only here.
+    extraction_engine: Literal["deep_read", "laurium"] = "deep_read"
 
 
 class EngineInput(BaseModel):

@@ -43,7 +43,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   // the two kinds), Bedrock chosen in the add form beside an IAM-role engine's row, and the organisation's own
   // gateway chosen.
   "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail",
-                          "open=add&kind=bedrock&iam=1&cloud=1", "open=add&kind=gateway&cloud=1"],  // prettier-ignore
+                          "open=add&kind=bedrock&iam=1&cloud=1", "open=add&kind=gateway&cloud=1",
+                          // ADR-135 Amendment 9: the extraction engine Laurium, shown read-only.
+                          "cloud=1&engine=laurium"],  // prettier-ignore
   // ADR-146 decisions 2 and 6: Home with Rules and Monitoring's card and an alert's row.
   "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue"],
   // ADR-147: Admin › Maps with a provider being added, a key being entered and an area being added
