@@ -551,6 +551,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         today. **Your word, about 12:00: yes, Gemini.** The rebuild's osprey.yaml gets `local_only: false` and
         `sendable_handling_codes: [P]`, so you can add Gemini and its key yourself in Admin › Models. I never
         handle the key.
+      - **GitHub CI on feb4a79 ran (the first since 8 Nov): 33 of 39 jobs green, 6 red.** None of the six is seen
+        on the test server, and none blocks the demo (the rebuild installs from main on the server). The six are
+        a CARRIES row for a hygiene lane **after the demo**, your word about 12:20.
       - **ADR-146 Am 7 is bigger than S.** No screening list carried a marking, and alerts are shown or withheld
         whole. Rules is building it at size M:
         - a list's own marking, OFFICIAL by default;
