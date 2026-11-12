@@ -54,6 +54,8 @@ CA_DIR = "/etc/standin-ca"
 #: AWS_DEFAULT_REGION, never an endpoint override): inside its pod, kind's are the stand-in's.
 AWS_NAMES = (f"s3.{REGION}.amazonaws.com", f"sts.{REGION}.amazonaws.com")
 KEPT = ("arcadedb", "clickhouse", "clickhouse-keeper")
+#: The kind driver's probe pod, by a label of its own (its paths: `Run.probe_paths`).
+PROBE_LABEL = "p9-kind/probe"
 #: The images those and the backups run: the only ones copied into the cluster's registry.
 DEPLOYED_IMAGES = ("arcadedb", "clickhouse-server", "clickhouse-keeper", "api")
 #: Memory on kind's 8 GB (the render's are the platform's): enough to run, not to measure speed by.
@@ -619,7 +621,35 @@ class Run:
 
     # -- the stores, from a pod of the deployment -------------------------------------------------
 
+    def probe_paths(self) -> None:
+        """Kind alone: the probe's own paths to ArcadeDB and ClickHouse, which P7b's rows give
+        only to the workloads that call them (each a writer the restore refuses to run beside).
+        The probe stands for an operator's own tools, outside the deployment's rows: a Kubernetes
+        ingress rule into the two stores and a Calico egress rule out of the probe, its label alone."""
+        stores = {"matchExpressions": [{"key": "app.kubernetes.io/name", "operator": "In",
+                                        "values": ["arcadedb", "clickhouse"]}]}  # fmt: skip
+        apply({
+            "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+            "metadata": {"name": "p9-kind-probe-in", "namespace": self.ns},
+            "spec": {"podSelector": stores, "policyTypes": ["Ingress"],
+                     "ingress": [{"from": [{"podSelector": {"matchLabels": {PROBE_LABEL: "true"}}}],
+                                  "ports": [{"protocol": "TCP", "port": 2480}, {"protocol": "TCP", "port": 8123}]}]},
+        })  # fmt: skip
+        apply({
+            "apiVersion": "projectcalico.org/v3", "kind": "NetworkPolicy",
+            "metadata": {"name": "default.p9-kind-probe-out", "namespace": self.ns},
+            "spec": {"tier": "default", "order": 150, "selector": f"{PROBE_LABEL} == 'true'", "types": ["Egress"],
+                     "egress": [{"action": "Allow", "protocol": "TCP",
+                                 "destination": {"selector": "app.kubernetes.io/name in {'arcadedb', 'clickhouse'}",
+                                                 "ports": [2480, 8123]}}]},
+        })  # fmt: skip
+
     def probe(self, code: str) -> str:
+        self.probe_paths()
+        labelled = kubectl("-n", self.ns, "get", "pod", "p9-probe", "--ignore-not-found",
+                           "-o", "jsonpath={.metadata.labels}")  # fmt: skip
+        if labelled and PROBE_LABEL not in labelled:  # an earlier run's, before its own paths
+            kubectl("-n", self.ns, "delete", "pod", "p9-probe", "--wait=true")
         if not kubectl(
             "-n", self.ns, "get", "pod", "p9-probe", "--ignore-not-found", "-o", "name"
         ).strip():
@@ -639,7 +669,7 @@ class Run:
                     "metadata": {
                         "name": "p9-probe",
                         "namespace": self.ns,
-                        "labels": {"app.kubernetes.io/part-of": "ospreyflow"},
+                        "labels": {"app.kubernetes.io/part-of": "ospreyflow", PROBE_LABEL: "true"},
                     },
                     "spec": {
                         "securityContext": {
