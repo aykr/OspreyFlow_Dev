@@ -354,7 +354,7 @@ runner.PLANTS = [
      '                    self.clickhouse(\n                        f"RENAME DATABASE {old} TO {database}{on}", "put the live one back"\n                    )',
      '                    pass',
      [TP + "test_a_swap_refused_between_its_renames_puts_the_live_database_back_and_says_where_each_is"]),
-    ("a set's finish time not recorded", RUN, '    manifest["finished"] = finished', '    finished = finished',
+    ("a set's finish time not recorded", RUN, '    manifest["finished"] = finished_at.astimezone', '    _ = finished_at.astimezone',
      [TP + "test_a_set_records_when_it_finished_and_sets_says_it"]),
     ("the restore's Keeper path the set's alone (kind, round 4: the same set's second restore refused, Code 253)", RUN,
      "f\"'/clickhouse/databases/{restoring}_{attempt}', '{{shard}}', '{{replica}}')\"",

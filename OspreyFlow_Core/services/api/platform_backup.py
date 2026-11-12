@@ -672,10 +672,10 @@ def take(
     manifest["seconds"] = round(tick() - started, 1)
     # When the set finished (UTC): the time a restore brings the managed database (RDS) back to,
     # point in time, so the stores and it agree (ADR-148 Amendment 7; the recovery runbook).
-    finished = (
+    finished_at = (
         dt.datetime.now(dt.UTC) if now is None else now + dt.timedelta(seconds=manifest["seconds"])
     )
-    manifest["finished"] = finished.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    manifest["finished"] = finished_at.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         bucket.put_bytes(prefix + MANIFEST, json.dumps(manifest, indent=2).encode())
     except Exception as error:  # noqa: BLE001 - reported in words
