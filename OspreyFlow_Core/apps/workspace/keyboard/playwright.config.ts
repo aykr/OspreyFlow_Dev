@@ -21,5 +21,17 @@ export default defineConfig({
   },
   use: {
     baseURL: `http://localhost:${PORT}`,
+    // A date is typed as a British analyst types it, day first (ADR-146 Amendment 1). A date
+    // field's order follows the browser process's own locale, not Playwright's `locale` (which
+    // only emulates `navigator.language` and Intl): `alerts.spec.ts` already set `locale:
+    // "en-GB"`, and GitHub's runner (C.UTF-8, so en-US) still read "01122026" as 12 January
+    // (run 43198701543). Chromium on Linux takes its locale from LANGUAGE/LC_ALL/LANG, so the
+    // browser is started with en_GB there; on macOS it follows the OS, already day first on the
+    // Mac. `--lang` is Chromium's own switch, for the hosts that honour it.
+    locale: "en-GB",
+    launchOptions: {
+      args: ["--lang=en-GB"],
+      env: { ...process.env, LANGUAGE: "en_GB", LC_ALL: "en_GB.UTF-8", LANG: "en_GB.UTF-8" },
+    },
   },
 });
