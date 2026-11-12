@@ -1,0 +1,3 @@
+# 3 with the diff at 25acbe0, this Mac: collects and lints only. Its run needs ArcadeDB, Valkey and a model: proved at the owner's next push (GitHub's conformance-model job).
+1 test collected in 0.67s
+[*] 1 fixable with `--fix`.

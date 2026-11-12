@@ -7,7 +7,12 @@ pass that re-verifies all three clauses together, the same discipline Phase 5a's
 `test_hmp_graph.py` established for its acceptance scenario rather than trusting five stages'
 worth of individually-passing tests to compose correctly.
 
-Real LiteLLM/Ollama, real ArcadeDB, real Valkey (`make dev-up`) — no fakes anywhere in this file.
+Real LiteLLM/Ollama, real ArcadeDB, real Valkey (`make dev-up`). Two stand-ins: the extraction
+candidate store below (an echo; persistence is proved elsewhere), and clause 3's case layer
+(`in_a_case_with_a_layer`, since ADR-143 Amendment 1 an analyst's split goes into one): the split
+lands in a test layer no case owns, read here with every dataset, so clause 3 proves the pair is
+kept apart and the conflict recorded, not a case's own `trigger.honoured_splits`
+(`test_trigger_layers.py` has that).
 
 One test function, not many, for the same reason `test_hmp_graph.py` gives: building the shared
 state (a live extraction call, a live graph, a live working-set session) is expensive enough that
@@ -19,6 +24,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
 from services.api.review import run_extraction
 from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
@@ -48,6 +54,7 @@ from schemas.domain import (
     SourceRef,
 )
 from tests.scenarios.fixtures.witness_statement import WITNESS_STATEMENT_TEXT
+from tests.services.api.case_dataset import in_a_case_with_a_layer  # noqa: F401 (a fixture)
 
 CLEARED = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
@@ -105,6 +112,9 @@ class _NullExtractionCandidateStore:
         pass
 
 
+# ADR-143 Amendment 1 (bc52eef): clause 3's manual split is an analyst's own write, so it needs a
+# case's layer to go into, as under a route; refused outside one (NoAnalystLayerError).
+@pytest.mark.usefixtures("in_a_case_with_a_layer")
 async def test_phase6_exit_criterion_end_to_end() -> None:
     ontology = load_default_ontology()
     scheme = load_uk_le_scheme()
