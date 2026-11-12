@@ -44,11 +44,17 @@ def test_make_tests_own_arguments_without_the_flag_load_the_plugin_under_xdist()
     build = Path(__file__).resolve().parents[1]
     core = build.parent / "OspreyFlow_Core"
     target = f"{Path(__file__).resolve()}::test_the_root_conftest_names_the_worker_isolation_plugin"
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTEST_ADDOPTS", "PYTEST_XDIST_WORKER")}
+    # Offline, so it makes no store and needs none of the Valkey databases an enclosing run (make test's own, up to
+    # all 15) has taken: no lane, no forced stores, and the enclosing run's count of databases taken cleared.
+    dropped = ("PYTEST_ADDOPTS", "PYTEST_XDIST_WORKER", "OSPREY_LANE", "OSPREY_WORKER_STORES",
+               "OSPREY_WORKER_VALKEY_TAKEN")  # fmt: skip
+    env = {k: v for k, v in os.environ.items() if k not in dropped}
     ran = subprocess.run(
         [sys.executable, "-m", "pytest", "-c", str(build / "pytest.ini"), "-p", "no:cacheprovider",
          "-n", "2", "--dist", "loadgroup", target],
         cwd=core, env=env, capture_output=True, text=True, timeout=300,
     )  # fmt: skip
     headers = [line for line in ran.stdout.splitlines() if line.startswith("worker_isolation: ")]
-    assert headers and headers[0].startswith("worker_isolation: 2 workers"), ran.stdout[-2000:]
+    assert headers and headers[0].startswith("worker_isolation: 2 workers") and "no stores made" in headers[0], (
+        f"exit {ran.returncode}\n{ran.stdout[-1500:]}\n{ran.stderr[-1500:]}"
+    )
