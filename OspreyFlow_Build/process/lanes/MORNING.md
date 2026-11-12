@@ -568,6 +568,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         they stood. The other two (`images push --registry` and the cloud-platform schema) are on main reworked.
         It is kept locally as the tag `archive/lane-platform-pre-rebase` (77cae38), never pushed. `lane/platform`
         now starts at main, and the heartbeat shows platform merged.
+      - **T1 part 5 is accepted** (7af3fc6, checked by me). It covers:
+        - the test-run reaper;
+        - the `stop <lane>` verb;
+        - the run folders;
+        - a patch applier that writes all or nothing.
+
+        You said yes to its Makefile change at merge. It lands after rules-b's "guides" gates, because those gates
+        run main's `stack_lease.sh`, which T1 part 5 changes.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
