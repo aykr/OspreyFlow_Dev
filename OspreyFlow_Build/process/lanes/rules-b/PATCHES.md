@@ -36,3 +36,10 @@ All four apply at the branch head (`git apply --check`); the audit patch was reg
 ## T3 (10 November 2026)
 
 `a11y-siblings-T3.patch` (the same undecided-contrast check at the sibling axe scans: `apps/workspace/a11y/{a11y,canvas-focus}.spec.ts`, `apps/harness/a11y/{a11y,install-page}.spec.ts`) was ratified by the orchestrator to go in directly. It is in the branch, and the patch file is gone.
+
+## guides (12 November 2026)
+
+| Patch | Owner | What | Its test, red first |
+| --- | --- | --- | --- |
+| `registry-guides.patch` | shared (`keyboard/actionRegistry.ts`) | `START_ACTIONS` gains `read-a-place-s-guide-from-home-by-keyboard` and `read-why-a-guide-was-refused-on-home-by-keyboard`. It goes in with the merge itself, as `start.spec.ts` proves both | each id's case in `start.spec.ts` (the browser gate's record in `gates/`) |
+| `docs-guides.patch` | docs (`docs/user-guide.md` §3 Home, `docs/administration-guide.md` §9.1) | A line each: the guide under each card, opened in a new tab, only with a card the person's roles open, checked again by the Conduit; the version the deployment was built with. The PDFs and `manifest.json` are re-rendered by docs as usual | none of the lane's: a docs change. The byte-for-byte test reads whatever `docs/pdf/` holds, so a re-render keeps it green |

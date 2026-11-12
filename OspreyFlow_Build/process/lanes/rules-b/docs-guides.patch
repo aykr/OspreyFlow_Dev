@@ -1,0 +1,33 @@
+diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
+index 7b5f278..0de86e9 100644
+--- a/OspreyFlow_Core/docs/administration-guide.md
++++ b/OspreyFlow_Core/docs/administration-guide.md
+@@ -1828,6 +1828,12 @@ one of its sections' rights. A side list groups its sections, each shown only to
+ right, and each section's routes refuse anyone without it, so hiding a section is never the control.
+ Under the GOV.UK theme the list is a GOV.UK side navigation.
+ 
++Home links this guide under Admin's card (**Read the administration guide (PDF)**), the user guide
++under the Glass's and the developer guide under the Ingest Studio's, each only for someone whose roles
++open that place. The Conduit sends a guide only to such a person, and refuses anyone else in words
++(`GET /v1/guides/{user|developer|administration}`). The guides are the PDFs the deployment was built
++with: a newer guide reaches Home after `ospreyflow start --build`.
++
+ | Group | Section | Right | What it does |
+ | --- | --- | --- | --- |
+ | People | **People and roles** | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; the Super user preset; **Disable…** with its transfers (section 9.9), re-enable; reset a sign-in; remove an account; join someone the organisation's sign-in refused to their account (section 9.7); name an Author for a case that has none |
+diff --git a/OspreyFlow_Core/docs/user-guide.md b/OspreyFlow_Core/docs/user-guide.md
+index d5bc24b..e2dd7c4 100644
+--- a/OspreyFlow_Core/docs/user-guide.md
++++ b/OspreyFlow_Core/docs/user-guide.md
+@@ -142,6 +142,11 @@ clearance and your roles, and then shows:
+ - **a card for each place your roles open**, each with **Open ‹place›** and its key (`G`, `I`, `R`,
+   `A`). An analyst sees the Glass and Rules and Monitoring. With no place at all it says "Your account
+   opens no place yet. Ask an administrator to give you a role.";
++- **the guide for each of those places**, under its card's words: **Read the user guide (PDF)** under
++  the Glass, **Read the developer guide (PDF)** under the Ingest Studio and **Read the administration
++  guide (PDF)** under Admin. Each opens in a new tab, as the version this deployment was built with.
++  A guide appears only with its place's card, and the deployment checks your roles again before it
++  sends it;
+ - **Needs your attention**: what is waiting for you, such as alerts on your cases ("Nothing needs you
+   now." when there is none);
+ - **Recent cases**: up to six, with your level on each, how many entities each holds and when it was

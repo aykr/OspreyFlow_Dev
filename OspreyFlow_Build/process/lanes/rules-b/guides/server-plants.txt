@@ -1,0 +1,24 @@
+=== PLANT: the route's place check removed (if False and ...)
+64 failed, 13 passed in 3.08s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[analyst]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[compliance]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[loader]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[none]
+=== PLANT: guides.PLACE_RIGHTS[ingest] gains run_pipelines (a loader would read the developer guide)
+3 failed, 74 passed in 2.35s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_s_place_rights_are_places_json_s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[loader]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_pipelines]
+=== PLANT: the route serves another PDF (architecture-guide.pdf) for every guide
+3 failed, 74 passed in 2.20s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[administration]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[developer]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[user]
+=== PLANT: the Dockerfile's COPY docs/pdf line removed
+1 failed, 76 passed in 2.57s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_image_carries_the_three_guides_and_their_manifest
+=== PLANT: the Dockerfile carries the architecture guide too
+1 failed, 76 passed in 2.50s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_image_carries_the_three_guides_and_their_manifest
+=== PLANT: none (all restored)
+77 passed in 2.44s

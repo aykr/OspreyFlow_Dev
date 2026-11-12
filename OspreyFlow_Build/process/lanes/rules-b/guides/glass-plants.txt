@@ -1,0 +1,28 @@
+=== PLANT: the guides of places the rights do not open are linked too (outside the cards)
+× shows an analyst only the guides of the places their rights open 13ms
+× shows a Reports Viewer only the guides of the places their rights open 9ms
+× shows a loader holding only Studio actions only the guides of the places their rights open 5ms
+× shows someone opening only the Studio only the guides of the places their rights open 8ms
+× shows an auditor only the guides of the places their rights open 6ms
+× shows nobody only the guides of the places their rights open 4ms
+× links no guide while the rights could not be read 4ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+=== PLANT: every link asks for the user guide
+× asks for the card's own guide when its link is activated 18ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+FAIL  src/home/HomePage.test.tsx > Home's guides > asks for the card's own guide when its link is activated
+Tests  1 failed | 63 passed (64)
+=== PLANT: the token sent in the URL, not a header
+× fetches the guide with the token in the Authorization header and opens its blob URL in the tab 6ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+FAIL  src/home/guides.test.ts > openGuide > fetches the guide with the token in the Authorization header and opens its blob URL in the tab
+Tests  1 failed | 63 passed (64)
+=== PLANT: a refused guide's tab left open
+× says the Conduit's words for a refusal, and closes the tab it opened 2ms
+× says the status when the answer carries no words, and when the Conduit cannot be reached 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+FAIL  src/home/guides.test.ts > openGuide > says the Conduit's words for a refusal, and closes the tab it opened
+FAIL  src/home/guides.test.ts > openGuide > says the status when the answer carries no words, and when the Conduit cannot be reached
+Tests  2 failed | 62 passed (64)
+=== PLANT: none (all restored)
+Tests  64 passed (64)
