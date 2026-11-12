@@ -1,0 +1,45 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_statelessness.py b/OspreyFlow_Build/tests/services/api/test_statelessness.py
+index e1fd952..731f6b8 100644
+--- a/OspreyFlow_Build/tests/services/api/test_statelessness.py
++++ b/OspreyFlow_Build/tests/services/api/test_statelessness.py
+@@ -61,7 +61,7 @@ def _free_port() -> int:
+         return int(sock.getsockname()[1])
+ 
+ 
+-def _wait_until_up(base_url: str, *, timeout_s: float = 15.0) -> None:
++def _wait_until_up(base_url: str, *, timeout_s: float = 60.0) -> None:
+     deadline = time.monotonic() + timeout_s
+     last_error: Exception | None = None
+     while time.monotonic() < deadline:
+@@ -92,6 +92,7 @@ class _ConduitInstance:
+         analytics_db_path = (
+             Path(tempfile.mkdtemp(prefix="ospreyflow-analytics-")) / "analytics.duckdb"
+         )
++        self._log = tempfile.TemporaryFile()
+         env = {
+             **os.environ,
+             "OIDC_JWKS_URL": jwks_url,
+@@ -115,7 +116,9 @@ class _ConduitInstance:
+             env=env,
+             cwd=repo_root,
+             stdout=subprocess.DEVNULL,
+-            stderr=subprocess.DEVNULL,
++            # Kept, not discarded: GitHub run 43198701543's second Conduit "never came up" and
++            # nothing said why. Its last lines go into the error below.
++            stderr=self._log,
+         )
+         # A deeper root cause than `_spawn_two_instances`'s own list-based cleanup covers: `Popen`
+         # above already spawned a real process by the time `_wait_until_up` can fail. If it does,
+@@ -124,6 +127,12 @@ class _ConduitInstance:
+         # the point of failure, rather than relying on a caller that never gets the object back.
+         try:
+             _wait_until_up(self.base_url)
++        except TimeoutError as exc:
++            self._process.kill()
++            self._process.wait(timeout=10)
++            self._log.seek(0)
++            said = self._log.read().decode("utf-8", "replace")[-4000:]
++            raise TimeoutError(f"{exc}; the Conduit's own last words:\n{said}") from exc
+         except Exception:
+             self._process.kill()
+             self._process.wait(timeout=10)
