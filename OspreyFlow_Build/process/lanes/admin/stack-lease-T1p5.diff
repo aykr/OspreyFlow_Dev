@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
-index f98173e..ada4b7a 100755
+index f98173e..0d79259 100755
 --- a/OspreyFlow_Build/scripts/stack_lease.sh
 +++ b/OspreyFlow_Build/scripts/stack_lease.sh
-@@ -11,24 +11,28 @@
+@@ -11,24 +11,32 @@
  #   OspreyFlow_Build/scripts/stack_lease.sh up <lane>                     start the holder's own stack
  #   OspreyFlow_Build/scripts/stack_lease.sh down <lane>                   stop it again, before release
  #   OspreyFlow_Build/scripts/stack_lease.sh ports <lane>                  the export line for the holder's stack
@@ -15,10 +15,14 @@ index f98173e..ada4b7a 100755
  #                                                                          T1 part 3), run with remote on its stack; --all, every one
  #   OspreyFlow_Build/scripts/stack_lease.sh remote-log <lane>             follow the lane's last remote run again (after
  #                                                                          a dropped ssh session), exiting with its code
++#   OspreyFlow_Build/scripts/stack_lease.sh stop <lane>                   end the lane's last run on its host: TERM to its
++#                                                                          process group, then KILL to what is left, and
++#                                                                          its exit written. This is how a run is ended:
++#                                                                          Ctrl-C here ends only the follow, never the run
 +#   OspreyFlow_Build/scripts/stack_lease.sh reap <lane>                   end what the lane's last run left behind on its
 +#                                                                          host (every process still carrying its
-+#                                                                          OSPREY_RUN_TAG), when its own reaper never ran;
-+#                                                                          refused while that run is still running
++#                                                                          OSPREY_RUN_TAG), once it has ended; refused
++#                                                                          while it is still running
  #
  # `remote` copies the caller's worktree to <host>:~/osprey-runs/<lane>, sending only what git tracks or would
  # track (`git ls-files -co --exclude-standard`), so nothing gitignored ever leaves this machine (rule 9: the
@@ -31,7 +35,7 @@ index f98173e..ada4b7a 100755
  #
  # A lane holds at most one stack. The leased stacks are the throwaway ones (SESSIONS_RUNBOOK.md §4), never
  # `make dev-up`: dev.yaml publishes ArcadeDB on 2480, the owner's own deployment's port (8 November 2026, a
-@@ -132,56 +136,87 @@ for d,ds,fs in os.walk(\".\"):
+@@ -132,56 +140,105 @@ for d,ds,fs in os.walk(\".\"):
    else
      rssh "$h" "rm -rf $rmeta/lease && mkdir -p $rmeta/lease"
    fi
@@ -72,7 +76,7 @@ index f98173e..ada4b7a 100755
 +    # ignored). Stopping a run is TERM; making INT work would need the run started with INT restored (CARRIES).
 +    printf 'export OSPREY_RUN_TAG=$HOME/%s\n' "$run"
 +    printf '%s\n' "$REAPER"
-+    printf 'trap osprey_reap EXIT\n'
++    printf 'trap '"'"'osprey_reap "$OSPREY_RUN_TAG"'"'"' EXIT\n'
      printf '%q ' "$@"; echo; } > "$list.cmd"
    rc=0
    setup=$(( $(date +%s) - t_setup ))
@@ -80,12 +84,15 @@ index f98173e..ada4b7a 100755
    rssh "$h" "if [ -f $rmeta/runs/last/pid ] && kill -0 \$(cat $rmeta/runs/last/pid) 2>/dev/null; then exit 3; fi
 -    mkdir -p $run && cat > $run/cmd.sh && $keep ln -sfn \$HOME/$run $rmeta/runs/last
 -    cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; t0=\$(date +%s); bash $run/cmd.sh; c=\$?; w=\$((\$(date +%s)-t0)); echo \$w > $run/wall; echo \"Wall time: \$w s, exit \$c ($where; set-up before it $setup s)\"; echo \$c > $run/exit' > $run/log 2>&1 < /dev/null &
-+    mkdir -p $rmeta/runs && mkdir $run && cat > $run/cmd.sh && $keep ln -sfn \$HOME/$run $rmeta/runs/last
++    mkdir -p $rmeta/runs && mkdir $run || exit 4
++    cat > $run/cmd.sh && $keep ln -sfn \$HOME/$run $rmeta/runs/last || exit 5
 +    { cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; t0=\$(date +%s); bash $run/cmd.sh; c=\$?; w=\$((\$(date +%s)-t0)); echo \$w > $run/wall; echo \"Wall time: \$w s, exit \$c ($where; set-up before it $setup s)\"; echo \$c > $run/exit' > $run/log 2>&1 < /dev/null; } > /dev/null 2>&1 &
      exit 0" < "$list.cmd" || rc=$?
    case $rc in
      0) ;;
      3) echo "$who's last remote run is still running on $h: follow it with remote-log $who, or wait for it." >&2; return 1 ;;
++    4) echo "The run's folder $run could not be made new on $h (one of that name is there already): nothing was started." >&2; return 1 ;;
++    5) echo "The run's folder $run on $h could not be set up (its command, lease or last link): nothing was started." >&2; return 1 ;;
      *) echo "Could not start the run on $h." >&2; return 1 ;;
    esac
    echo "Running on $h (stack $s, $rroot/$rel), logged at $run/log: $*" >&2
@@ -93,22 +100,37 @@ index f98173e..ada4b7a 100755
  }
 +# The reaper a run's cmd.sh defines, and `reap` sends (T1 part 5): it ends every process whose environment holds
 +# exactly OSPREY_RUN_TAG=<tag> (TERM, then KILL two seconds later), never itself. /proc is Linux's; the hosts are.
-+# An empty tag is refused, never read as "every process tagged with nothing". Before the KILL, each pid's environment
-+# is read again: a pid that ended on TERM and was given to another process is never sent -9.
++# The tag is its argument alone: an empty one is refused, never read as "every process tagged with nothing" nor taken
++# from the caller's own environment. The environment is read whole, NUL-separated (`grep -z`), so a value holding a
++# newline never matches, and with no redirection that could print its own error. Each pid's environment is read
++# again before TERM and before KILL: a pid that ended and was given to another process is never signalled.
++# OSPREY_REAPED holds how many were ended, for the caller's words.
 +# shellcheck disable=SC2016
 +REAPER='osprey_reap() {
-+  local tag="${1:-$OSPREY_RUN_TAG}" p pid hit="" n=0
++  local tag="$1" p pid hit="" n=0
++  OSPREY_REAPED=0
 +  [ -n "$tag" ] || { echo "No run tag to reap by: nothing reaped." >&2; return 2; }
-+  osprey_tagged() { tr "\0" "\n" < "/proc/$1/environ" 2>/dev/null | grep -qxF "OSPREY_RUN_TAG=$tag"; }
++  osprey_tagged() { grep -qzxF "OSPREY_RUN_TAG=$tag" "/proc/$1/environ" 2>/dev/null; }
 +  for p in /proc/[0-9]*; do
 +    pid="${p#/proc/}"
 +    [ "$pid" = "$$" ] && continue
 +    if osprey_tagged "$pid"; then hit="$hit $pid"; fi
 +  done
-+  for pid in $hit; do kill "$pid" 2>/dev/null && n=$((n + 1)); done
++  for pid in $hit; do osprey_tagged "$pid" && kill "$pid" 2>/dev/null && n=$((n + 1)); done
 +  if [ -n "$hit" ]; then sleep 2; for pid in $hit; do if osprey_tagged "$pid"; then kill -9 "$pid" 2>/dev/null; fi; done; fi
++  OSPREY_REAPED=$n
 +  if [ "$n" -gt 0 ]; then echo "Reaped $n process(es) the run left behind ($tag)." >&2; fi
 +  return 0
++}'
++# Whether any process of a run's own session is alive: the wrapper is its session's leader (setsid), so cmd.sh and its
++# command are in it even once the wrapper is gone; a leftover server that made a session of its own is not.
++# shellcheck disable=SC2016
++SESSION_ALIVE='osprey_session_alive() {
++  local sid="$1" p
++  for p in /proc/[0-9]*/stat; do
++    [ "$(cut -d")" -f2- "$p" 2>/dev/null | cut -d" " -f5)" = "$sid" ] && return 0
++  done
++  return 1
 +}'
  # The host offline runs go to: $OSPREY_OFFLINE_HOST, or the first host lane_stack_hosts.tsv names.
  offline_host() {
@@ -122,7 +144,7 @@ index f98173e..ada4b7a 100755
    h="$(host_of "$s")"
    for p in $(grep -v '^#' "$TABLE" | awk -F'\t' -v s="$s" '$1 == s && $4 != "-" { print $4 }'); do
      fwd="$fwd -L 127.0.0.1:$p:127.0.0.1:$p"
-@@ -255,25 +290,46 @@ stack_state() {
+@@ -255,25 +312,46 @@ stack_state() {
        return 1
      fi
    fi
@@ -169,7 +191,7 @@ index f98173e..ada4b7a 100755
      fi
      if [ -n "$want" ]; then
        case " $STACKS " in *" $want "*) ;; *) echo "No stack '$want' (one of: $STACKS)." >&2; exit 2;; esac
-@@ -340,24 +396,25 @@ case "$cmd" in
+@@ -340,24 +418,25 @@ case "$cmd" in
      fi
      echo "Test stack $s ${cmd} for $who: ${these[*]}${remote:+ (on $remote, tunnelled to 127.0.0.1 here)}"
      ;;
@@ -195,7 +217,7 @@ index f98173e..ada4b7a 100755
      # The closed ports, no lane and no lease: the port guard refuses every live port, as for an offline run here.
      run_on_host "$who" "$h" "ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994" "" "offline" "$@"
      ;;
-@@ -365,56 +422,78 @@ case "$cmd" in
+@@ -365,56 +444,119 @@ case "$cmd" in
      who="${2:?usage: stack_lease.sh live <lane> [--all | --base <ref>] [-- <pytest args…>]}"
      shift 2
      all=""
@@ -230,6 +252,38 @@ index f98173e..ada4b7a 100755
      [ -n "$h" ] || { echo "No host to follow a run on." >&2; exit 1; }
      follow "$h" "${OSPREY_REMOTE_ROOT:-osprey-runs}/$who.meta"
      ;;
++  stop)
++    # Ends the lane's last run (remote, live or offline) on its host (T1 part 5; the orchestrator's ruling): TERM to
++    # its process group (the wrapper is its session's and group's leader), up to 15 s for it to end, then KILL to the
++    # group and every process of the run's tag still there; then the run's exit file (143, or 137 when a KILL was
++    # needed), unless the run wrote its own, so its follow ends and the lane's next run is allowed. Ctrl-C on this
++    # machine ends only the follow, never the run.
++    who="${2:?usage: stack_lease.sh stop <lane>}"
++    s="$(held_by "$who")"
++    h=""; [ -n "$s" ] && h="$(host_of "$s")"
++    [ -n "$h" ] || h="$(offline_host)"
++    [ -n "$h" ] || { echo "No host to stop a run on." >&2; exit 1; }
++    rmeta="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who.meta"
++    rc=0
++    printf '%s\n%s\n%s\n' "$REAPER" "$SESSION_ALIVE" \
++      't=$(readlink "$1/runs/last") || { echo "No run of this lane is recorded on this host." >&2; exit 0; }
++      w=$(cat "$t/pid" 2>/dev/null)
++      [ -n "$w" ] || { echo "The run $t recorded no pid: nothing stopped." >&2; exit 3; }
++      if [ -f "$t/exit" ] && ! kill -0 "$w" 2>/dev/null && ! osprey_session_alive "$w"; then echo "The run $t has ended already (exit $(cat "$t/exit"))."; exit 0; fi
++      kill -TERM -- "-$w" 2>/dev/null
++      code=143
++      for i in $(seq 1 30); do osprey_session_alive "$w" || break; sleep 0.5; done
++      if osprey_session_alive "$w"; then kill -KILL -- "-$w" 2>/dev/null; code=137; fi
++      osprey_reap "$t" >/dev/null 2>&1
++      [ -f "$t/exit" ] || echo "$code" > "$t/exit"
++      echo "Stopped the run $t (exit $(cat "$t/exit"))."' \
++      | rssh "$h" "bash -s -- $rmeta" || rc=$?
++    case $rc in
++      0) ;;
++      3) exit 3 ;;
++      *) echo "Could not reach $h to stop the run." >&2; exit 1 ;;
++    esac
++    ;;
 +  reap)
 +    # What the lane's last run (remote, live or offline) left behind, when its wrapper was itself killed and its
 +    # own reaper never ran: every process on the host still carrying that run's OSPREY_RUN_TAG (T1 part 5).
@@ -239,11 +293,20 @@ index f98173e..ada4b7a 100755
 +    [ -n "$h" ] || h="$(offline_host)"
 +    [ -n "$h" ] || { echo "No host to reap a run on." >&2; exit 1; }
 +    rmeta="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who.meta"
-+    # Sent on stdin, so nothing in it is expanded here; the tag is the run folder `last` points at. A run whose pid
-+    # still answers (kill -0, as a run's start checks) is running: reaping it would end it, so it is refused.
++    # Sent on stdin, so nothing in it is expanded here; the tag is the run folder `last` points at. It fails closed
++    # (T1 part 5's review): reaped only once the run has ended, its exit written, or its recorded pid dead with no
++    # process of its session left (cmd.sh and its command outlive a killed wrapper in it). Otherwise refused: a
++    # running run is ended with `stop`.
 +    rc=0
-+    printf '%s\n%s\n' "$REAPER" \
-+      't=$(readlink "$1/runs/last") || { echo "No run of this lane is recorded on this host." >&2; exit 0; }; if [ -f "$t/pid" ] && kill -0 "$(cat "$t/pid")" 2>/dev/null; then echo "The run $t is still running: stop it, or let it end; nothing reaped." >&2; exit 3; fi; osprey_reap "$t" || exit $?; echo "Reaped what $t left, if anything."' \
++    printf '%s\n%s\n%s\n' "$REAPER" "$SESSION_ALIVE" \
++      't=$(readlink "$1/runs/last") || { echo "No run of this lane is recorded on this host." >&2; exit 0; }
++      w=$(cat "$t/pid" 2>/dev/null)
++      if [ ! -f "$t/exit" ]; then
++        if [ -z "$w" ]; then echo "The run $t recorded no pid and no exit: it may be starting; nothing reaped." >&2; exit 3; fi
++        if kill -0 "$w" 2>/dev/null || osprey_session_alive "$w"; then echo "The run $t is still running: end it with stop; nothing reaped." >&2; exit 3; fi
++      fi
++      osprey_reap "$t" || exit $?
++      if [ "$OSPREY_REAPED" -gt 0 ]; then echo "Reaped $OSPREY_REAPED process(es) the run $t left behind."; else echo "No process tagged for the run $t was found: nothing reaped."; fi' \
 +      | rssh "$h" "bash -s -- $rmeta" || rc=$?
 +    case $rc in
 +      0) ;;
@@ -271,12 +334,12 @@ index f98173e..ada4b7a 100755
      ;;
    *)
 -    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | live <lane> [--all | --base <ref>] [-- <pytest args…>] | offline <lane> -- <command…> | remote-log <lane> | release <lane> | status" >&2
-+    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | live <lane> [--all | --base <ref>] [-- <pytest args…>] | offline <lane> -- <command…> | remote-log <lane> | reap <lane> | release <lane> | status" >&2
++    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | live <lane> [--all | --base <ref>] [-- <pytest args…>] | offline <lane> -- <command…> | remote-log <lane> | stop <lane> | reap <lane> | release <lane> | status" >&2
      exit 2
      ;;
  esac
 diff --git a/OspreyFlow_Build/tests/test_stack_lease.py b/OspreyFlow_Build/tests/test_stack_lease.py
-index 0ed1f03..5bf53a0 100644
+index 0ed1f03..68ab5f3 100644
 --- a/OspreyFlow_Build/tests/test_stack_lease.py
 +++ b/OspreyFlow_Build/tests/test_stack_lease.py
 @@ -1,67 +1,84 @@
@@ -564,7 +627,7 @@ index 0ed1f03..5bf53a0 100644
  _RUNNER = {
      "as ps prints it": 'echo "runner $(ps -o ppid= -p $PPID)"',
      "padded, as on the server": 'printf "runner %10s\\n" "$(ps -o ppid= -p $PPID)"',
-@@ -744,57 +762,405 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
+@@ -744,61 +762,569 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
      assert (run / "wall").read_text().strip().isdigit()
      lines = (run / "log").read_text().splitlines()
      # The pid file holds the host's own shell, the one running cmd.sh (what follow's tail --pid waits on).
@@ -761,6 +824,7 @@ index 0ed1f03..5bf53a0 100644
 +    run = home / "osprey-runs" / "case.meta" / "runs" / "20261111T080000Z"
 +    run.mkdir(parents=True)
 +    (home / "osprey-runs" / "case.meta" / "runs" / "last").symlink_to(run)
++    (run / "pid").write_text(f"{_dead_pid()}\n")  # the wrapper, killed: reap fails closed on anything else
 +    left = subprocess.Popen(["sleep", "300"], env={**os.environ, "OSPREY_RUN_TAG": str(run)})
 +    bystander = subprocess.Popen(["sleep", "300"], env={**os.environ, "OSPREY_RUN_TAG": f"{run}0"})
 +    try:
@@ -798,6 +862,146 @@ index 0ed1f03..5bf53a0 100644
 +    return run
 +
 +
++def _dead_pid() -> int:
++    """A pid that was a process and has ended (and been waited on)."""
++    gone = subprocess.Popen(["true"])
++    gone.wait()
++    return gone.pid
++
++
++@_REAPS
++def test_reap_refuses_while_a_process_of_the_runs_session_lives_on(lease, tmp_path: Path) -> None:
++    """Fails closed (T1 part 5's review, should-fix 6): the wrapper killed, its cmd.sh and command go on in its
++    session. That run is still running, and reap refuses it, in words; nothing is ended."""
++    lease("acquire", "studio", "a run")
++    lease("acquire", "case", "a run")
++    home = _host(tmp_path)
++    run = _recorded_run(home)
++    leader = subprocess.Popen(
++        ["sh", "-c", "sleep 300 & echo $! > \"$1\"; wait", "sh", str(tmp_path / "member.pid")],
++        start_new_session=True, env={**os.environ, "OSPREY_RUN_TAG": str(run)},
++    )  # fmt: skip
++    member = _pid_from(tmp_path / "member.pid")
++    (run / "pid").write_text(f"{leader.pid}\n")
++    os.kill(leader.pid, 9)
++    leader.wait()
++    try:
++        reaped = lease("reap", "case", docker="all-up")
++        assert reaped.returncode == 3, reaped.stdout + reaped.stderr
++        assert "still running" in reaped.stderr and "stop" in reaped.stderr
++        assert _alive(member), "a process of the running run was ended"
++    finally:
++        _end(member)
++
++
++@_REAPS
++def test_reap_says_when_no_tagged_process_was_found(lease, tmp_path: Path) -> None:
++    """An ended run with nothing left behind: reap says no tagged process was found, never "reaped"."""
++    lease("acquire", "studio", "a run")
++    lease("acquire", "case", "a run")
++    home = _host(tmp_path)
++    run = _recorded_run(home, _dead_pid())
++    (run / "exit").write_text("0\n")
++    reaped = lease("reap", "case", docker="all-up")
++    assert reaped.returncode == 0, reaped.stderr
++    assert "No process tagged for the run" in reaped.stdout and "Reaped" not in reaped.stdout
++
++
++@_REAPS
++def test_the_reaper_never_matches_a_tag_inside_another_value(tmp_path: Path) -> None:
++    """The environment is read NUL-separated: a value holding a newline and then the tag is not the tag (should-fix
++    3), so that process is never ended."""
++    tag = str(tmp_path / "run")
++    lookalike = subprocess.Popen(["sleep", "300"], env={**os.environ, "NOTE": f"x\nOSPREY_RUN_TAG={tag}"})
++    try:
++        subprocess.run(_reaper_shell(f'osprey_reap "{tag}"'), capture_output=True, text=True, timeout=30)
++        time.sleep(0.3)
++        assert lookalike.poll() is None, "a process whose other value merely held the tag was ended"
++    finally:
++        lookalike.kill()
++
++
++@_REAPS
++def test_a_runs_log_holds_no_error_of_the_reapers_own_reading(lease, tmp_path: Path) -> None:
++    """The reaper reads every process's environment; none of its reads may print an error into the run's log (a
++    redirection that failed printed "Permission denied" or "No such file" before; should-fix 3). As root on the
++    server every environment is readable, so this guards the shape rather than proving the old one red there."""
++    lease("acquire", "studio", "a run")
++    lease("acquire", "case", "a run")
++    home = _host(tmp_path)
++    wt = _lane_worktree(tmp_path)
++    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
++    log = (_finished_run(home) / "log").read_text()
++    assert "Permission denied" not in log and "No such file" not in log, log
++
++
++def test_two_runs_named_alike_are_refused_in_words_not_shared(lease, tmp_path: Path) -> None:
++    """Should-fix 4: with the clock and the random suffix pinned (date and od stood in for on PATH), two runs get one
++    name; the second's folder cannot be made new, so it is refused in words and nothing of it starts."""
++    lease("acquire", "studio", "a run")
++    lease("acquire", "case", "a run")
++    home = _executing_host(tmp_path)
++    _held_lease_on_host(home)
++    wt = _lane_worktree(tmp_path)
++    real_date = shutil.which("date")
++    (tmp_path / "bin" / "date").write_text(
++        f'#!/bin/sh\ncase "$*" in *%Y%m%dT%H%M%SZ*) echo 20261112T090000Z;; *) exec "{real_date}" "$@";; esac\n'
++    )
++    (tmp_path / "bin" / "od").write_text("#!/bin/sh\necho ' 0a1b2c3d'\n")
++    for tool in ("date", "od"):
++        (tmp_path / "bin" / tool).chmod(0o755)
++    first = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true")
++    assert first.returncode == 0, first.stderr
++    runs = home / "osprey-runs" / "case.meta" / "runs"
++    for _ in range(100):
++        if (runs / "20261112T090000Z-0a1b2c3d" / "exit").exists():
++            break
++        time.sleep(0.05)
++    second = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "echo", "second")
++    assert second.returncode != 0, second.stderr
++    assert "could not be made new" in second.stderr and "nothing was started" in second.stderr, second.stderr
++    assert "second" not in (runs / "20261112T090000Z-0a1b2c3d" / "log").read_text()
++
++
++@_REAPS
++def test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed(lease, tmp_path: Path) -> None:
++    """`stop <lane>` (the orchestrator's ruling, should-fix 5), end to end through the verb: TERM to the run's process
++    group, then KILL to what is left; cmd.sh, its command and the detached server are gone, the run's exit is
++    written, the follow ends, and the lane's next run is allowed."""
++    lease("acquire", "studio", "a run")
++    lease("acquire", "case", "a run")
++    home = _host(tmp_path)
++    pidfile = tmp_path / "server.pid"
++    wt = _lane_worktree(tmp_path)
++    lease("status", docker="all-up")
++    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
++           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
++    follower = subprocess.Popen(
++        ["bash", str(SCRIPT), "remote", "case", "--",
++         "sh", "-c", f'python3 -c "$1" "{pidfile}"; sleep 300', "sh", _DETACHED],
++        cwd=wt / "OspreyFlow_Build", env=env, stdin=subprocess.DEVNULL,
++        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
++    )  # fmt: skip
++    server = _pid_from(pidfile)
++    try:
++        runs = home / "osprey-runs" / "case.meta" / "runs"
++        run = next(p for p in runs.iterdir() if p.name != "last")
++        wrapper = _pid_from(run / "pid")
++        stopped = lease("stop", "case", docker="all-up")
++        assert stopped.returncode == 0, stopped.stderr
++        assert "Stopped the run" in stopped.stdout, stopped.stdout
++        assert _gone_within(wrapper) and _gone_within(server), "the run or its server outlived stop"
++        assert (run / "exit").read_text().strip() == "143", "TERM to the run's group was not enough (a KILL was needed)"
++        follower.wait(timeout=20)  # the follow ends
++        again = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true")
++        assert again.returncode == 0, again.stderr
++    finally:
++        _end(server)
++        _end_tagged(home)
++        follower.kill()
++        follower.wait()
++
++
 +@_REAPS
 +def test_reap_refuses_a_run_that_is_still_running(lease, tmp_path: Path) -> None:
 +    """T1 part 5's review, must-fix 4: `reap` while the run's pid still answers (kill -0, as a run's start checks)
@@ -823,14 +1027,22 @@ index 0ed1f03..5bf53a0 100644
 +def test_the_reaper_refuses_an_empty_tag(tmp_path: Path) -> None:
 +    """An empty tag is refused, never read as every process tagged with nothing (must-fix 4)."""
 +    untagged = subprocess.Popen(["sleep", "300"], env={**os.environ, "OSPREY_RUN_TAG": ""})
++    caller_tag = str(tmp_path / "callers-run")
++    callers = subprocess.Popen(["sleep", "300"], env={**os.environ, "OSPREY_RUN_TAG": caller_tag})
 +    try:
-+        ran = subprocess.run(_reaper_shell('OSPREY_RUN_TAG= osprey_reap ""'), capture_output=True, text=True)
-+        assert ran.returncode == 2, ran.stderr
-+        assert "No run tag" in ran.stderr
++        for call in ('osprey_reap ""', "osprey_reap"):
++            # The caller's own OSPREY_RUN_TAG is set: the reaper must not fall back to it.
++            ran = subprocess.run(
++                _reaper_shell(f'export OSPREY_RUN_TAG="{caller_tag}"; {call}'), capture_output=True, text=True
++            )
++            assert ran.returncode == 2, ran.stderr
++            assert "No run tag" in ran.stderr
 +        time.sleep(0.5)
 +        assert untagged.poll() is None, "a process with an empty tag was reaped"
++        assert callers.poll() is None, "the caller's own run was reaped by an empty argument"
 +    finally:
 +        untagged.kill()
++        callers.kill()
 +
 +
 +_IGNORES_TERM = "import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\ntime.sleep(300)\n"
@@ -907,8 +1119,13 @@ index 0ed1f03..5bf53a0 100644
 +    lease("status", docker="all-up")
 +    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
 +           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
++    # The run's command carries a sentinel of this case's own (its tmp path) in its arguments, so it alone is ended
++    # after; a bystander whose command line holds "sleep 6" (a sleep 60) must outlive the case (T1 part 5's review,
++    # must-fix 1: `pkill -f "sleep 6"` ended any such process of the same user, on a shared server).
++    sentinel = str(tmp_path / "start-call-sentinel")
++    bystander = subprocess.Popen(["sleep", "60"])
 +    caller = subprocess.Popen(
-+        ["bash", str(SCRIPT), "remote", "case", "--", "sleep", "6"],
++        ["bash", str(SCRIPT), "remote", "case", "--", "python3", "-c", "import time; time.sleep(6)", sentinel],
 +        cwd=wt / "OspreyFlow_Build", env=env, stdin=subprocess.DEVNULL,
 +        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
 +    )  # fmt: skip
@@ -920,7 +1137,12 @@ index 0ed1f03..5bf53a0 100644
 +    finally:
 +        caller.kill()
 +        caller.wait()
-+        subprocess.run(["pkill", "-f", "sleep 6"], check=False)
++        subprocess.run(["pkill", "-f", sentinel], check=False)
++    try:
++        time.sleep(0.3)
++        assert bystander.poll() is None, "the case ended a bystander whose command line held 'sleep 6'"
++    finally:
++        bystander.kill()
 +
 +
  # --- live: the lane's live tests selected by its change (admin's T1 part 3, 10 November 2026) ----------------
@@ -965,6 +1187,7 @@ index 0ed1f03..5bf53a0 100644
      (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
      for tool in ("ssh", "setsid"):
          (bin_dir / tool).chmod(0o755)
++    _held_lease_on_host(home)  # as remote mirrors the lease before the start call
      return home
  
  
@@ -973,7 +1196,11 @@ index 0ed1f03..5bf53a0 100644
          if path.exists():
              return
          time.sleep(0.05)
-@@ -839,24 +1205,104 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
+ 
+ 
+ def test_live_runs_exactly_the_selection_from_the_core_folder_with_extra_arguments(lease, tmp_path: Path) -> None:
+     """At the real call site: the start call run as the host runs it, so the quoting is the shell's own (a lost
+@@ -839,24 +1365,102 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
      none = _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case")
      assert none.returncode == 1 and "holds no stack" in none.stderr
      lease("acquire", "studio", "a run")
@@ -1018,7 +1245,7 @@ index 0ed1f03..5bf53a0 100644
 +    ids=["remote-one-down", "remote-all-down", "live-one-down", "live-all-down"],
 +)
 +def test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent(
-+    lease, tmp_path: Path, down: tuple[str, ...], verb: str
++    lease, tmp_path: Path, down: tuple[str, ...], monkeypatch: pytest.MonkeyPatch, verb: str
 +) -> None:
 +    lease("acquire", "studio", "a run")
 +    lease("acquire", "case", "a run")  # stack b, on the server
@@ -1027,12 +1254,10 @@ index 0ed1f03..5bf53a0 100644
 +    selector = tmp_path / "select.sh"
 +    selector.write_text(f'#!/bin/sh\ntouch "{tmp_path}/selected"\necho tests/services/api/test_route_rights.py\n')
 +    selector.chmod(0o755)
-+    os.environ["OSPREY_LIVE_SELECT"] = str(selector)
-+    try:
++    monkeypatch.setenv("OSPREY_LIVE_SELECT", str(selector))
++    if True:
 +        args = ("remote", "case", "--", "true") if verb == "remote" else ("live", "case")
 +        ran = _remote_after(lease, tmp_path, wt, _names_docker(down), *args)
-+    finally:
-+        del os.environ["OSPREY_LIVE_SELECT"]
 +    assert ran.returncode == 1, ran.stdout + ran.stderr
 +    assert "not up" in ran.stderr and all(c in ran.stderr for c in down), ran.stderr
 +    assert "stack_lease.sh up case" in ran.stderr, ran.stderr

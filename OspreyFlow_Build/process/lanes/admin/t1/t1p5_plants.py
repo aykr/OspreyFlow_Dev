@@ -92,7 +92,7 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
     ),
     (
         "the reaper is not run when the run ends",
-        [("    printf 'trap osprey_reap EXIT\\n'\n", "")],
+        [("    printf 'trap '\"'\"'osprey_reap \"$OSPREY_RUN_TAG\"'\"'\"' EXIT\\n'\n", "")],
         [
             "test_a_run_reaps_a_server_that_left_its_process_group",
             "test_a_run_ended_by_a_signal_still_reaps_its_server",
@@ -100,7 +100,7 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
     ),
     (
         "the tag matched as a prefix, so another run's processes are ended",
-        [('grep -qxF "OSPREY_RUN_TAG=$tag"', 'grep -qF "OSPREY_RUN_TAG=$tag"')],
+        [('grep -qzxF "OSPREY_RUN_TAG=$tag"', 'grep -qzF "OSPREY_RUN_TAG=$tag"')],
         ["test_reap_ends_what_a_run_whose_wrapper_was_killed_left_behind"],
     ),
     (
@@ -109,26 +109,56 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         "every run's processes under the same home ended, not this run's alone",
         [
             (
-                'grep -qxF "OSPREY_RUN_TAG=$tag"; }',
-                'grep -qF "OSPREY_RUN_TAG=${tag%%/osprey-runs/*}/osprey-runs/"; }',
+                'grep -qzxF "OSPREY_RUN_TAG=$tag" "/proc/$1/environ"',
+                'grep -qzF "OSPREY_RUN_TAG=${tag%%/osprey-runs/*}/osprey-runs/" "/proc/$1/environ"',
             )
         ],
         ["test_the_reaper_leaves_every_process_outside_the_run_alone"],
     ),
     (
+        "should-fix 3: the environment read line by line (a value holding a newline then the tag matches)",
+        [
+            (
+                '  osprey_tagged() { grep -qzxF "OSPREY_RUN_TAG=$tag" "/proc/$1/environ" 2>/dev/null; }\n',
+                '  osprey_tagged() { tr "\\0" "\\n" < "/proc/$1/environ" 2>/dev/null | grep -qxF "OSPREY_RUN_TAG=$tag"; }\n',
+            )
+        ],
+        ["test_the_reaper_never_matches_a_tag_inside_another_value"],
+    ),
+    (
         "reap reaps nothing",
-        [('osprey_reap "$t" || exit $?; echo', "echo")],
+        [('      osprey_reap "$t" || exit $?\n', "")],
         ["test_reap_ends_what_a_run_whose_wrapper_was_killed_left_behind"],
     ),
     (
-        "must-fix 4: reap ends a run that is still running",
+        "must-fix 4 / should-fix 6: reap ends a run whose wrapper still answers",
         [
             (
-                'if [ -f "$t/pid" ] && kill -0 "$(cat "$t/pid")" 2>/dev/null; then echo "The run $t is still running: stop it, or let it end; nothing reaped." >&2; exit 3; fi; ',
-                "",
+                '        if kill -0 "$w" 2>/dev/null || osprey_session_alive "$w"; then',
+                "        if false; then",
             )
         ],
         ["test_reap_refuses_a_run_that_is_still_running"],
+    ),
+    (
+        "should-fix 6: reap ends a run whose wrapper was killed while its session goes on",
+        [
+            (
+                '        if kill -0 "$w" 2>/dev/null || osprey_session_alive "$w"; then',
+                '        if kill -0 "$w" 2>/dev/null; then',
+            )
+        ],
+        ["test_reap_refuses_while_a_process_of_the_runs_session_lives_on"],
+    ),
+    (
+        "minor 10: reap says it reaped when nothing tagged was found",
+        [
+            (
+                'else echo "No process tagged for the run $t was found: nothing reaped."; fi',
+                'else echo "Reaped what $t left, if anything."; fi',
+            )
+        ],
+        ["test_reap_says_when_no_tagged_process_was_found"],
     ),
     (
         "must-fix 4: an empty tag reaps every process tagged with nothing",
@@ -136,6 +166,16 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
             (
                 '  [ -n "$tag" ] || { echo "No run tag to reap by: nothing reaped." >&2; return 2; }\n',
                 "",
+            )
+        ],
+        ["test_the_reaper_refuses_an_empty_tag"],
+    ),
+    (
+        "minor 10: an empty argument falls back to the caller's own tag",
+        [
+            (
+                '  local tag="$1" p pid hit="" n=0\n',
+                '  local tag="${1:-$OSPREY_RUN_TAG}" p pid hit="" n=0\n',
             )
         ],
         ["test_the_reaper_refuses_an_empty_tag"],
@@ -164,14 +204,44 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         "must-fix 6: the run's folder named by the second alone",
         [
             ("-$(od -An -N4 -tx4 /dev/urandom | tr -d ' ')\"", '"'),
-            ("mkdir -p $rmeta/runs && mkdir $run && cat", "mkdir -p $run && cat"),
+            ("mkdir -p $rmeta/runs && mkdir $run || exit 4\n", "mkdir -p $run\n"),
         ],
         ["test_two_runs_of_one_lane_in_one_second_never_share_a_folder"],
+    ),
+    (
+        "should-fix 4: the start not chained on the folder's being made new",
+        [
+            (
+                "mkdir -p $rmeta/runs && mkdir $run || exit 4\n",
+                "mkdir -p $rmeta/runs && mkdir $run\n",
+            )
+        ],
+        ["test_two_runs_named_alike_are_refused_in_words_not_shared"],
     ),
     (
         "the start call's backgrounded list holding ssh's output open",
         [("> $run/log 2>&1 < /dev/null; } > /dev/null 2>&1 &", "> $run/log 2>&1 < /dev/null; } &")],
         ["test_the_start_call_returns_while_the_run_goes_on"],
+    ),
+    (
+        "should-fix 5: stop signals the wrapper alone, not the run's process group",
+        [('      kill -TERM -- "-$w" 2>/dev/null\n', '      kill -TERM "$w" 2>/dev/null\n')],
+        ["test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed"],
+    ),
+    (
+        "should-fix 5: stop gives the run no time before the KILL",
+        [
+            (
+                '      for i in $(seq 1 30); do osprey_session_alive "$w" || break; sleep 0.5; done\n',
+                "",
+            )
+        ],
+        ["test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed"],
+    ),
+    (
+        "should-fix 5: stop writes no exit file (the follow waits, then gives up)",
+        [('      [ -f "$t/exit" ] || echo "$code" > "$t/exit"\n', "")],
+        ["test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed"],
     ),
 ]
 
