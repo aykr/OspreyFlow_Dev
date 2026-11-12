@@ -26,6 +26,9 @@ fi
 echo "building $TAG from $(pwd) (services/api/Dockerfile)"
 DOCKER_BUILDKIT=1 docker build -q -f services/api/Dockerfile -t "$TAG" . >/dev/null
 echo "inside the image, /app/docs/pdf:"
+echo "the folders, as root, and what the Conduit's own user (the image's USER) can list:"
+docker run --rm --user 0 --entrypoint stat "$TAG" -c "%a %U %n" /app/docs /app/docs/pdf
+docker run --rm --entrypoint ls "$TAG" /app/docs/pdf
 inside=$(docker run --rm --entrypoint sh "$TAG" -c 'cd /app/docs/pdf && for f in *; do printf "%s %s %s\n" "$(sha256sum "$f" | cut -d" " -f1)" "$(stat -c %a "$f")" "$f"; done')
 echo "$inside"
 [ -f "$PDF.unplanted" ] && mv -f "$PDF.unplanted" "$PDF"

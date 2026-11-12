@@ -287,6 +287,11 @@ def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None
     assert len(carried) == 1, carried
     # 0444 whatever the checkout's modes, so a 0600 file in a checkout cannot make the route fail.
     assert "--chmod=0444" in carried[0].split(), carried[0]
+    # And the folder made before it: `COPY --chmod` would give a folder it creates mode 0444,
+    # which the Conduit's user cannot enter (the image check's finding on the test server).
+    stage = _final_stage(REPO_ROOT / "services/api/Dockerfile")
+    made = [i for i, line in enumerate(stage) if line.startswith("RUN mkdir -p /app/docs/pdf")]
+    assert made and made[0] < stage.index(carried[0]), "the guides' folder is not made first"
     tokens = [t for t in carried[0].split()[1:] if not t.startswith("--")]
     sources, target = tokens[:-1], tokens[-1]
     assert sorted(sources) == sorted(

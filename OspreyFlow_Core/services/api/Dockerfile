@@ -136,6 +136,10 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
 # read them).
 # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
 # reads.
+# The folder is made first (755): `COPY --chmod` gives a folder it creates the files' mode too, and a
+# 0444 folder cannot be entered by the Conduit's user, so the route would answer 503 (found by the guides'
+# image check on the test server, 12 November 2026: `ls: cannot access '/app/docs/pdf': Permission denied`).
+RUN mkdir -p /app/docs/pdf
 COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
 
 USER 10001:10001
