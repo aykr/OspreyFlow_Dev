@@ -8,7 +8,8 @@ shell, and stopped at the first command that fails. A block fenced `bash` runs w
 runbook is followed; a block fenced `bash platform` only on the client's platform (the Terraform
 pull requests, the registry's sign-in and the AWS accounts' own commands), for which a rehearsal on
 a local cluster supplies its stand-in instead (the files the platform's blocks would write) and
-says so. `command_blocks` reads them back, so a rehearsal runs the text the client's team reads.
+says so. A block fenced `bash later` is in no sequence (R1): the way back in when no administrator
+is left, and the backups' removal when their retention ends, each run only when its words say. `command_blocks` reads them back, so a rehearsal runs the text the client's team reads.
 Every command runs with the rights a namespace's tenant has: nothing cluster-wide is listed or
 changed (the disks are the platform team's command), and every AWS call names its region.
 """
@@ -78,6 +79,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     assert cp is not None and cp.namespace is not None and cp.registry is not None
     secrets = platform.secrets
     theirs = " ".join(s.name for s in (secrets.postgres, secrets.redis, secrets.s3))
+    if cp.tls_secret:  # the certificate the platform's team makes for the deployment's name (R1)
+        theirs += f" {cp.tls_secret}"
     rollouts = "\n".join(
         f'kubectl -n "$NS" rollout status {w["kind"].lower()}/{w["name"]} --timeout=900s'
         for w in values["workloads"]
@@ -101,6 +104,7 @@ own install of it), and the deployment's `osprey.yaml` (or `CONFIG` naming it). 
 pointed at the namespace, `helm` 3.16 or later, Docker with `buildx`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder. If a command fails, stop there: put right what it says, then run its block again.
+A block fenced `bash later` is not part of that order: the words before it say when, if ever, it is run.
 
 **Before step 5, from the client's Entra administrator** (ADR-148 Amendment 8; step 6 checks it):
 two app registrations in tenant `{claims.tenant_id}`, the Glass (application id `{claims.client_id}`)
@@ -121,7 +125,7 @@ kubectl auth can-i create persistentvolumeclaims -n "$NS"
 
 Copy `$FOLDER/terraform/` into the namespace's folder in the environments repository and raise the
 pull request. Once it is applied, the namespace holds the managed stores' Secrets, our Secret and the
-service account the Conduit reads S3 as.
+service account the Conduit reads S3 as{f", and the platform's team has made the certificate's Secret, `{cp.tls_secret}`" if cp.tls_secret else ""}.
 
 ```bash platform
 echo "Raise the pull request with $FOLDER/terraform/, and wait for it to be applied."
@@ -187,7 +191,7 @@ ConfigMap, so a restart alone would read the old one, and the install restarts t
 manage people, the Conduit adds the Admin role to each one named there, and audits it
 (`grant_first_administrator`). While anyone can manage people, it changes nobody's roles.
 
-```bash
+```bash later
 {RENDER}
 helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
 kubectl -n "$NS" rollout status deploy/api --timeout 10m
@@ -233,6 +237,7 @@ backup in them, until the retention you agree ends; section 9 removes them then.
 deployment's rendered folder, `kubectl` pointed at the namespace, `helm`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder; if a command fails, stop there.
+A block fenced `bash later` is not part of that order: the words before it say when, if ever, it is run.
 
 ## 1. The settings
 
@@ -438,7 +443,7 @@ Only then the key: its own policy refuses everyone its deletion, so that policy 
 by one keeping the account's administration, and the deletion scheduled (thirty days, cancellable).
 A key deleted while the bucket still held a set would leave that set unreadable.
 
-```bash platform
+```bash later
 B="${{PREFIX}}{BUCKET_SUFFIX}"
 aws s3api delete-bucket-policy --region "$REGION" --bucket "$B"
 while :; do

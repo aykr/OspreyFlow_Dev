@@ -23,3 +23,9 @@ FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_en
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_check_says_what_its_curl_options_are
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left
 5 failed, 24 passed in 3.06s
+E               AssertionError: DECOMMISSION.md
+E               assert not True
+E                +  where True = any(<generator object test_a_block_for_later_is_never_in_the_sequence.<locals>.<genexpr> at 0x10764b370>)
+1 failed, 29 deselected in 0.55s
+E       AssertionError: assert 'ospreyflow-poc-certificate' in 'for secret in rds-postgresql-instance-output elasticache-redis s3-bucket-output ospreyflow-secrets; do'
+1 failed, 30 deselected in 0.52s

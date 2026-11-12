@@ -215,6 +215,8 @@ def test_the_decommission_removes_every_claim_the_render_makes(
     )
 
 
+_LATER = re.compile(r"^```bash later\n(.*?)^```\n", re.S | re.M)
+
 #: What the runbooks read from the operator's shell and never set themselves: each named in the
 #: runbook's own words as something to give (`STATE`, `DISKS`, ...), or bash's and the system's.
 _GIVEN = {
@@ -233,7 +235,7 @@ def test_every_variable_a_runbook_reads_is_one_it_sets_or_asks_for(
     characters), is a variable the runbook sets, or one it asks the operator for; the text after
     a variable is fenced off by `${NAME}` where a word character follows."""
     for name, text in runbooks.items():
-        blocks = "".join(command_blocks(text, on_the_platform=True))
+        blocks = "".join(command_blocks(text, on_the_platform=True) + _LATER.findall(text))
         set_here = set(re.findall(r"(?:^|[\s;(]|export )([A-Za-z_]\w*)=", blocks, re.M))
         set_here |= set(re.findall(r"\bfor ([A-Za-z_]\w*) in\b", blocks))
         set_here |= set(re.findall(r"\bread -r ([A-Za-z_]\w*)", blocks))
@@ -293,6 +295,31 @@ def test_the_entra_registrations_are_asked_for_before_the_deployment(
     ):
         assert named in needs, named
     assert "Before step 5" not in text[text.index("## 5.") :]
+
+
+def test_a_block_for_later_is_never_in_the_sequence(runbooks: dict[str, str], tmp_path: Any) -> None:
+    """R1's reading: both runbooks say "run each block in order", yet the decommission's step 9
+    (when the retention ends: the kept backups bucket emptied and deleted, its key scheduled for
+    deletion) was a `bash platform` block in that order, so a platform team following it to the
+    letter would destroy the retained last backup at the decommission itself; and the install's way
+    back in (only when no administrator is left) stood in the sequence too. Each is fenced
+    `bash later`: in neither sequence, still shell that parses, and the runbook says what the fence
+    means before its first block."""
+    import subprocess
+
+    for name, marker in (
+        ("DECOMMISSION.md", "aws kms schedule-key-deletion"),
+        ("INSTALL.md", "rollout status deploy/api --timeout 10m"),
+    ):
+        text = runbooks[name]
+        for on_the_platform in (True, False):
+            assert not any(marker in b for b in command_blocks(text, on_the_platform=on_the_platform)), name
+        held = [b for b in _LATER.findall(text) if marker in b]
+        assert len(held) == 1, name
+        script = tmp_path / "later.sh"
+        script.write_text(held[0], encoding="utf-8")
+        assert subprocess.run(["bash", "-n", str(script)]).returncode == 0, name
+        assert text.index("`bash later`") < text.index("```bash"), name
 
 
 def test_the_install_check_says_what_its_curl_options_are(runbooks: dict[str, str]) -> None:
@@ -389,7 +416,7 @@ def test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left(
     assert "grant_first_administrator" in recovery
     # R1: the list is in the ConfigMap, so a render and a restart alone read the old list; the
     # recovery renders pinned, installs the values, then waits for the Conduit.
-    (block,) = command_blocks(recovery, on_the_platform=False)
+    (block,) = _LATER.findall(recovery)  # in no sequence: only when no administrator is left
     lines = block.splitlines()
     assert [i for i, x in enumerate(lines) if "harness.render" in x] == [0], block
     assert "--allow-unpinned" not in block
@@ -480,3 +507,18 @@ def test_the_standard_shape_leaves_the_configuration_s_copy_as_it_was() -> None:
         yaml.safe_load(_values(_config())["files"]["osprey.yaml"])["cloud_platform"]["shape"]
         == "poc"
     )
+
+
+def test_the_install_checks_the_certificate_secret_the_settings_name() -> None:
+    """R1's reading: `cloud_platform.tls_secret` names a Secret the platform's team makes, and step
+    2 checked every other Secret the deployment reads but that one, so a missing certificate first
+    showed at step 7 as curl's TLS error. Named, it is checked with the rest; not named, the
+    platform's wildcard is used and nothing is checked."""
+    poc = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    poc["cloud_platform"]["tls_secret"] = "ospreyflow-poc-certificate"
+    named = render(OspreyConfig.model_validate(poc), resolver=_resolver).artefacts["INSTALL.md"]
+    step = named[named.index("## 2.") : named.index("## 3.")]
+    (check,) = [b for b in command_blocks(step, on_the_platform=False) if "get secret" in b]
+    assert "ospreyflow-poc-certificate" in check.splitlines()[0]
+    unnamed = _artefacts(_config())["INSTALL.md"]
+    assert "certificate" not in unnamed[unnamed.index("## 2.") : unnamed.index("## 3.")]
