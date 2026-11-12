@@ -27,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+import asyncpg
 import duckdb
 import pytest
 import yaml
@@ -36,7 +37,7 @@ from services.api.audit import AuditWriter
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.held_rows import HeldRowStore
 from services.api.rule_evaluation import RuleGate
-from services.api.screening import ScreeningListStore
+from services.api.screening import ScreeningListStore, normalised
 from services.api.studio_publish import load_with_rules
 from services.api.typology_rules import TypologyRuleStore
 from services.ingest.recipe_loader import load_recipe
@@ -73,6 +74,10 @@ SYNTHETIC_LIST = CORE / "packages/demo_fixtures/screening_list_synthetic.yaml"
 OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify", roles=["analyst"])  # deploy_rules: may have written a rule (ADR-146 Amendment 6 decision 13)
 SECRET_LOADER = Principal(id="kyc-secret-loader", clearance="SECRET", org_unit="verify", roles=["analyst"])  # deploys rules too: deploy_rules (ADR-146 Amendment 6 decision 13)
 SHARED_PHONE = "447700900777"
+#: When this module was imported, which is before any test of the run wrote a row: a list loaded
+#: after it was loaded by this run (`test_no_other_file_leaves_a_list_naming_this_files_people`).
+#: Rows an earlier, killed run left are older and are `_OwnList`'s to keep out.
+RUN_STARTED = datetime.now(UTC)
 
 
 def _application(name: str, **overrides: str) -> dict[str, str]:
@@ -183,6 +188,25 @@ async def test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_
         assert same_as[0].properties["score"] >= 0.9
         listed = await graph.get_node(same_as[0].target, OFFICER)
         assert listed is not None and listed.properties["listing"] == "sanction"
+
+
+async def test_no_other_file_leaves_a_list_naming_this_files_people(stores: dict[str, Any]) -> None:
+    """CARRIES row 113 (ADR-146 Amendment 7): a list another live file loaded in this run is gone
+    by the time this file runs, so the gate, which screens against every list the store holds, does
+    not match this file's people twice. Red with `test_screening_refresh.py` run first, before its
+    teardown removed its "Synthetic list" (Elena Petrova and Priya Nair on both)."""
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        rows = await conn.fetch(
+            "SELECT list_name, name FROM screening_entries WHERE entity_type = 'Person' "
+            "AND list_name <> $1 AND loaded_at >= $2",
+            stores["list_name"], RUN_STARTED,
+        )  # fmt: skip
+    finally:
+        await conn.close()
+    people = {normalised("Elena Petrova"), normalised("Priya Nair")}
+    others = sorted({r["list_name"] for r in rows if normalised(r["name"]) in people})
+    assert others == [], f"lists another file left in the store this run, naming this file's people: {others}"
 
 
 async def test_an_owner_below_the_threshold_is_not_screened(stores: dict[str, Any]) -> None:
