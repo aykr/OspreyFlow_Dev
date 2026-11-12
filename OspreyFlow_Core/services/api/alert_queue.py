@@ -164,10 +164,33 @@ async def monitoring_queue(
             continue
         # ADR-146 Amendment 7: served with only the citations the reader may read whole.
         row.alert = as_read(row.alert, readable.citations_read(row.alert))
+        # The owner's ruling of 12 November 2026: an alert with citations stands for each reader as
+        # their citations do (`served_triage`), so its status and assignee filters are applied to
+        # what they are shown (the store lets such an alert through both; `list_queue`).
+        if not _as_filtered(row.alert, reader, statuses=statuses, show=show):
+            continue
         ids = evidence_node_ids(row.alert)
         named = {i: readable.nodes[i] for i in ids}
         shown.append(_queued(row, summary_of(row.alert, named), lead_of=lead_of))
     return shown
+
+
+def _as_filtered(
+    alert: Alert, reader: Principal, *, statuses: Sequence[str] | None, show: QueueShow | None
+) -> bool:
+    """The queue's status and *Mine*/*Unassigned* filters over the alert as the reader is shown it;
+    for an alert without citations the store's query has already applied them, the same way."""
+    if statuses is not None and alert.status not in statuses:
+        return False
+    if show == "mine" and alert.assignee != reader.id:
+        return False
+    return not (show == "unassigned" and alert.assignee is not None)
+
+
+def _cited_words(alert: Alert) -> set[str]:
+    """The citations a member was shown (`as_read`), by their words, which a repoint never changes:
+    all a per-citation triage may decide (the owner's ruling of 12 November 2026)."""
+    return {c.words for c in alert.citations}
 
 
 async def queue(
@@ -373,6 +396,8 @@ async def claim(
     member: Principal,
 ) -> Alert:
     shown, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
+    if shown.status != "open":  # as shown: a cited alert closed for them is not theirs to take
+        raise AlertTriageConflict(alert_id)
     return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["open"], status="claimed",
         assignee=member.id,
@@ -388,7 +413,7 @@ async def release(
     member: Principal,
 ) -> Alert:
     alert, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
-    if alert.assignee not in (None, member.id):
+    if alert.status != "claimed" or alert.assignee not in (None, member.id):
         raise AlertTriageConflict(alert_id)
     return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["claimed"], status="open",
@@ -446,6 +471,12 @@ async def dispose(
     await _refuse_a_dataset_alert_closer(alert, closer)
     if alert.status in ("closed", "closing"):
         raise AlertTriageConflict(alert_id)
+    if needs_second_person(row) and alert.citations:
+        # The owner's ruling: the proposal is of the citations the member was shown, each.
+        return _as_shown(await store.triage_citations(
+            alert_id, investigation_id, member, words=_cited_words(alert), action="propose",
+            disposition=disposition, disposition_reason=reason,
+        ), alert)  # fmt: skip
     if needs_second_person(row):
         return _as_shown(await store.set_queue_triage(
             alert_id, investigation_id, member, expect_status=["open", "claimed"],
@@ -499,6 +530,10 @@ async def send_back(
     alert, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     if alert.status != "closing":
         raise AlertTriageConflict(alert_id)
+    if alert.citations:
+        return _as_shown(await store.triage_citations(
+            alert_id, investigation_id, member, words=_cited_words(alert), action="send_back",
+        ), alert)  # fmt: skip
     return _as_shown(await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["closing"], status="claimed",
         assignee=alert.close_proposed_by or alert.assignee, close_proposed_by=None,
@@ -530,10 +565,20 @@ async def _close(
         # Amendment 2, "a read that is written back"); they are not sent to the Glass.
         with sources_in_full():
             cited_edges = await _cited_edges(alert, graph, member, list(nodes))
+        # The owner's ruling of 12 November 2026: only the matches this close decides, those of the
+        # citations the member was shown that are open (or, approving, proposed), and of those
+        # only the ones decided a true match.
+        deciding = {
+            i for c in alert.citations
+            if c.status == ("closing" if proposed_by is not None else "open")
+            and (proposed_by is None or c.disposition == "true_positive")
+            for i in c.edge_ids
+        }  # fmt: skip
         matches = [
             e for e in cited_edges
             if alert.typology == "kyc_screening" and e.type == "SAME_AS"
             and e.provenance.state is not ProvenanceState.ASSERTED
+            and (not alert.citations or e.id in deciding)
         ]  # fmt: skip
         if (node is not None and node.provenance.state is not ProvenanceState.ASSERTED) or matches:
             # ADR-099 Amendment 15: a close that confirms writes, and a composite is read-only:
@@ -577,6 +622,13 @@ async def _close(
             if working_set is not None and repoint.remarked_nodes:
                 await purge_copies(working_set, repoint.remarked_nodes)
                 await repoint.purged()
+    if alert.citations:
+        # The owner's ruling: the close decides each citation the member was shown, never another.
+        return _as_shown(await store.triage_citations(
+            alert_id, investigation_id, member, words=_cited_words(alert),
+            action="approve" if proposed_by is not None else "close",
+            disposition=disposition, disposition_reason=reason,
+        ), alert)  # fmt: skip
     return _as_shown(await store.set_queue_triage(
         alert_id,
         investigation_id,
@@ -616,7 +668,7 @@ async def assign(
     alert shared with a team, or its owner's alone, may be read by people the case's member list
     does not show, so it is claimed by a person who can see it, never handed to one who may not."""
     row, _ = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
-    if row.alert.status == "closed":
+    if row.alert.status not in ("open", "claimed"):  # as the member is shown it
         raise AlertTriageConflict(alert_id)
     routed = row.alert.routed_team
     if routed is not None and assignee != member.id:
@@ -681,7 +733,7 @@ async def suppress(
         raise SuppressRefused("A suppression ends today or later.")
     if until > now + timedelta(days=SUPPRESS_DAYS_MAX):
         raise SuppressRefused(f"A suppression ends at most {SUPPRESS_DAYS_MAX} days ahead.")
-    if row.alert.status == "closed":
+    if row.alert.status == "closed":  # as the member is shown it
         raise AlertTriageConflict(alert_id)
     return _as_shown(
         await store.set_suppression(alert_id, investigation_id, member, until=until, reason=reason),

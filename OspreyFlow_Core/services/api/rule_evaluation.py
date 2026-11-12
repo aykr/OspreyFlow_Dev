@@ -73,7 +73,7 @@ from schemas.domain import (
     TypologyRule,
 )
 
-from .alerts import AlertStore
+from .alerts import AlertStore, CitedHandlings
 from .audit import AuditWriter
 from .dataset_scope import (
     CompositeReadOnlyError,
@@ -348,6 +348,10 @@ class Finding:
     #: node, which a reader cleared for one list reads (ADR-146 Amendment 7; the lane review's
     #: item 1: the node's sources named every list's entry, a hidden one's too).
     cited_refs: tuple[str, ...] = ()
+    #: Each citation's list marking, in order (its listed party's): what a reader must be cleared
+    #: for to be shown that citation, for a count told to the loader (the orchestrator's review,
+    #: item 7; `counted_for`).
+    citation_handlings: tuple[Handling, ...] = ()
 
     @classmethod
     def from_hit(
@@ -725,6 +729,16 @@ def alert_node_refs(finding: Finding) -> list[str]:
     """What the `Alert` node's sources name: the finding's refs outside its citations' (ADR-146
     Amendment 7)."""
     return [r for r in finding.refs if r not in set(finding.cited_refs)]
+
+
+def counted_for(finding: Finding, reader: Principal, scheme: HandlingScheme) -> bool:
+    """Whether a load's report counts this alert for `reader` (the orchestrator's review of ADR-146
+    Amendment 7, item 7): an alert with citations is shown only to a reader cleared for one of
+    them, so it is counted only for one; the load's own rows and their customers are the loader's,
+    so the rest of what it rests on is theirs to read."""
+    if not finding.citations:
+        return True
+    return any(handling_readable(scheme, reader, h) for h in finding.citation_handlings)
 
 
 def core_of(finding: Finding) -> Finding:
@@ -1135,8 +1149,9 @@ class RuleGate:
                 if why is not None:
                     verdict.withheld[len(verdict.findings)] = why
                 verdict.findings.append((stored, node_id))
-            if fresh:
-                verdict.notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
+            told = [f for f in fresh if counted_for(f, self.loader, self.scheme)]
+            if told:
+                verdict.notes.append(f"Rule “{rule.name}” raised {len(told)} alert(s).")
         return verdict
 
     async def _alert_node_in_load(
@@ -1188,11 +1203,38 @@ class RuleGate:
             *(e.handling for e in finding.events),
         ]
 
+    async def _cited_handlings(
+        self, finding: Finding, node_id: str | None
+    ) -> CitedHandlings | None:
+        """For an alert with citations, what it rests on outside them and each citation's
+        handlings, read as its deployer (the orchestrator's review of ADR-146 Amendment 7, item 6:
+        the trends count it once per reader, as the queue shows it). `None` when any cannot be read
+        so, or for an alert without citations."""
+        if not finding.citations:
+            return None
+        core = await self._rests_on(core_of(finding), node_id)
+        groups: list[list[Handling]] = []
+        for c in finding.citations:
+            nodes = await self.graph.get_nodes(list(c.node_ids), finding.deployer)
+            edges = await self.graph.get_edges(list(c.edge_ids), finding.deployer)
+            if {n.id for n in nodes} != set(c.node_ids) or {e.id for e in edges} != set(c.edge_ids):
+                return None
+            groups.append([*(n.handling for n in nodes), *(e.handling for e in edges)])
+        return None if core is None else (core, groups)
+
     async def _raise_row(
         self, finding: Finding, node_id: str | None, *, withheld: NodeWithheld | None = None
     ) -> Alert:
         alert = alert_row(finding, node_id, self.investigation_id)
-        await self.alert_store.save(alert, handlings=await self._rests_on(finding, node_id))
+        handlings = await self._rests_on(finding, node_id)
+        if finding.citations:
+            await self.alert_store.save(
+                alert,
+                handlings=handlings,
+                cited_handlings=await self._cited_handlings(finding, node_id),
+            )
+        else:
+            await self.alert_store.save(alert, handlings=handlings)
         await self._remember(finding)
         detail: dict[str, object] = {
             "rule_id": finding.rule.id,
@@ -1292,8 +1334,9 @@ class RuleGate:
                 )
                 for finding in fresh:
                     await self.raise_committed(finding, load_id=load_id, writes=writes)
-                if fresh:
-                    notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
+                told = [f for f in fresh if counted_for(f, self.loader, self.scheme)]
+                if told:
+                    notes.append(f"Rule “{rule.name}” raised {len(told)} alert(s).")
             except Exception as exc:  # noqa: BLE001 - best-effort, audited and said
                 await self._audit(
                     "rule_failed",

@@ -53,7 +53,7 @@ from schemas.domain import (
     TypologyRule,
 )
 from schemas.screening import ScreeningSubscriptionInput
-from tests.services.api.screening_cleanup import remove_screening_lists
+from tests.services.api.screening_cleanup import EVERYTHING, remove_screening_lists
 
 SCHEME = load_uk_le_scheme()
 NOW = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
@@ -154,7 +154,7 @@ class _Queue:
         self.audit: list[dict[str, Any]] = []
         self.signatures: set[str] = set()
 
-    async def save(self, alert: Alert, handlings: Any = None) -> None:
+    async def save(self, alert: Alert, handlings: Any = None, cited_handlings: Any = None) -> None:
         self.alerts.append(alert)
 
     async def record(self, **entry: Any) -> None:
@@ -209,10 +209,13 @@ async def store() -> AsyncIterator[ScreeningListStore]:
     try:
         yield made
     finally:
-        await made.close()
         # Its own lists ("Synthetic list", "Synthetic list OFAC") removed, on a failure too: the
-        # KYC gate screens against every list the store holds (CARRIES row 113, `screening_cleanup`).
-        await remove_screening_lists(dsn, prefixes=["Synthetic list"])
+        # KYC gate screens against every list the store holds (CARRIES row 113, `screening_cleanup`);
+        # first, so a store that fails to close cannot leave them (the orchestrator's review, a note).
+        try:
+            await remove_screening_lists(dsn, prefixes=["Synthetic list"])
+        finally:
+            await made.close()
 
 
 @pytest.fixture
@@ -366,7 +369,7 @@ async def test_a_real_list_without_an_exceptions_entry_is_refused_and_nothing_lo
     status = await store.subscription("Synthetic list")
     assert status is not None and status.version is None and status.entries == 0
     assert status.failure == update.words
-    assert not [e for e in await store.entries("Person") if e.list_name == "Synthetic list"]
+    assert not [e for e in await store.entries("Person", cleared=EVERYTHING) if e.list_name == "Synthetic list"]
     # With the device's own entry, a real list of a connector whose licence is confirmed loads, as
     # real data. (OpenSanctions' is not: `test_a_real_list_whose_licence_is_not_confirmed_...`.)
     _admit(exceptions, "ofac_sdn")
@@ -526,9 +529,13 @@ async def test_a_refresh_keeps_a_marked_lists_marking_and_screens_it_only_for_a_
     await _marked_v1(store, root, graph, queue)
     second = await _refresh(store, root, _rescreener(graph, queue, [_rule()]))
     assert (second.outcome, second.added, second.changed, second.delisted) == ("updated", 1, 1, 1)
-    assert {(e.classification, e.handling_code) for e in await store.entries("Person")
+    assert {(e.classification, e.handling_code) for e in await store.entries("Person", cleared=EVERYTHING)
             if e.list_name == "Synthetic list"} == {("SECRET", "P")}  # fmt: skip
     assert queue.alerts == [] and second.alerts == 0
+    # The orchestrator's review, item 2: a deployer not cleared for the list screened nothing and
+    # records nothing about it (its rule audit is read by every member of its case). Red with the
+    # entry recorded for every rule: the list's name and its changed entries' count, to everyone.
+    assert not [a for a in queue.audit if a.get("action") == "rule_evaluated"], queue.audit
 
 
 async def test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking(
@@ -546,3 +553,11 @@ async def test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_list
     assert alert.words is not None and "Synthetic list" not in alert.words
     (same_as,) = [e for e in graph.written_edges if e.type == "SAME_AS"]
     assert same_as.handling.classification == "SECRET"
+    # The orchestrator's review, item 2: the entry names the list with its marking, so the rule
+    # audit gives it only to a reader cleared for the list (`readable_rule_audit`), and counts the
+    # changed entries the deployer was cleared for.
+    (evaluated,) = [a for a in queue.audit if a.get("action") == "rule_evaluated"]
+    said = evaluated["resolved_query"]
+    assert (said["list_name"], said["list_classification"], said["list_handling_code"]) == (
+        "Synthetic list", "SECRET", "P")  # fmt: skip
+    assert said["entries"] == 2 and said["findings"] == 1

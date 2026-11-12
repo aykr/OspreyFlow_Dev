@@ -51,7 +51,7 @@ from schemas.domain import (
 from .alerts import SCREENING_MATCH_WORDS
 from .ownership import OWNERSHIP_EDGE_TYPES, read_structure
 from .rule_evaluation import Finding, handling_readable
-from .screening import ScreeningEntry, ScreeningHit, ScreeningListStore, screen
+from .screening import ListClearance, ScreeningEntry, ScreeningHit, ScreeningListStore, screen
 
 CUSTOMER_TYPES = ("Person", "Organisation")
 
@@ -203,7 +203,11 @@ def _listed_write(hit: ScreeningHit, deployer: Principal, now: datetime) -> Node
         properties = {"name": entry.name}
         if entry.country:
             properties["country"] = entry.country
-    properties.update({"listing": entry.listing, "list_name": entry.list_name})
+    # The orchestrator's review, item 9: the entry's own id (`<list>:<ref>`, one per entry of one
+    # list), which a later match on the same entry finds its party by, whatever its name.
+    properties.update(
+        {"listing": entry.listing, "list_name": entry.list_name, "list_entry_id": entry.id}
+    )
     return NodeWrite(
         id=new_node_id(),
         type=entry.entity_type,
@@ -225,16 +229,14 @@ async def _listed_party(
     hit: ScreeningHit, ctx: KycContext, deployer: Principal, now: datetime
 ) -> tuple[str, NodeWrite | None, Handling]:
     """The listed party's node: the one already written for this entry if the deployer can read
-    it, else a new one to write with the alert."""
+    it, else a new one to write with the alert. Found by the entry's own id (the orchestrator's
+    review, item 9), never by a name: two entries sharing a family name, on one list or two, are
+    two parties, and no number of people sharing a name can reach the lookup's bound."""
     candidate = _listed_write(hit, deployer, now)
-    key = "family_name" if hit.entry.entity_type == "Person" else "name"
-    # The node of this list's entry, never another list's of the same name (`also`: a check made
-    # after a lookup that returns one node would be a coin toss; the lane review's item 6).
     found = await ctx.graph.find_node(
-        hit.entry.entity_type, key, str(candidate.properties[key]), deployer,
-        also={"list_name": hit.entry.list_name},
+        hit.entry.entity_type, "list_entry_id", hit.entry.id, deployer
     )  # fmt: skip
-    if found is not None and found.properties.get("list_name") == hit.entry.list_name:
+    if found is not None and found.properties.get("list_entry_id") == hit.entry.id:
         return found.id, None, found.handling
     return candidate.id, candidate, candidate.handling
 
@@ -271,8 +273,10 @@ async def screening_finding(
     now = datetime.now(UTC)
     pending: list[NodeWrite | EdgeWrite] = []
     citations: list[AlertCitation] = []
+    citation_handlings: list[Handling] = []
     for hit in hits:
         listed_id, listed_write, listed_handling = await _listed_party(hit, ctx, deployer, now)
+        citation_handlings.append(listed_handling)
         same_as = EdgeWrite(
             id=new_edge_id(),
             type="SAME_AS",
@@ -318,6 +322,7 @@ async def screening_finding(
         edge_ids=sorted({*cited_edges, *chain_edges}),
         pending=tuple(pending),
         citations=tuple(citations),
+        citation_handlings=tuple(citation_handlings),
     )
 
 
@@ -389,10 +394,10 @@ async def judge_screening(
     assert isinstance(params, KycScreeningParams)
     if ctx.screening is None:
         raise RuntimeError("this deployment has no screening list store")
-    entries = {
-        t: lists_cleared_for(await ctx.screening.entries(t), deployer, ctx.scheme)
-        for t in CUSTOMER_TYPES
-    }
+    # ADR-146 Amendment 7 point 8: only the lists the deployer is cleared for, in the store's own
+    # query (the orchestrator's review, item 1: never filtered after the read).
+    cleared = ListClearance.of(deployer, ctx.scheme)
+    entries = {t: await ctx.screening.entries(t, cleared=cleared) for t in CUSTOMER_TYPES}
     findings: list[Finding] = []
     for customer in customers_in(written, ctx.scheme, deployer):
         dob = _date(customer.properties.get("date_of_birth"))

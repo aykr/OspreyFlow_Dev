@@ -2821,3 +2821,31 @@ def test_an_activity_read_names_its_accounts_and_a_whole_window(factory: Analyti
         ActivityRequest(filter=_filter(node_ids=["a"]), baseline_days=28)
     with pytest.raises(ValueError):
         ActivityRequest(filter=_filter(node_ids=["a"], window=ACT_WINDOW), baseline_days=367)
+
+
+async def test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-146 Amendment 7 (the orchestrator's review of 12 November 2026, item 6): an alert citing
+    list A (OFFICIAL) and list B (SECRET) is kept as one row per set of its citations, each with the
+    outcome its readers are shown and each citation outside it a hidden group (`hidden_from`). The
+    OFFICIAL reader counts the A row alone, closed, and is given no SECRET marking; the SECRET reader
+    the A-and-B row alone, open. Kept again with fewer rows, the old ones are gone: an alert's rows are
+    replaced whole. Red with the hidden groups ignored: the SECRET reader counted three rows."""
+    secret = OFFICIAL.model_copy(update={"id": "analyst-secret", "clearance": "SECRET"})
+    alert, when = str(ULID()), _week(0)
+    core, a, b = [_handling("OFFICIAL")], [_handling("OFFICIAL")], [_handling("SECRET")]
+
+    def row(mask: int, outcome: str, handlings: list[Handling], hidden: list[list[Handling]]) -> AlertFact:
+        return _fact(raised_at=when, alert_id=alert, outcome=outcome, handlings=handlings).model_copy(
+            update={"fact_id": f"{alert}#{mask}", "hidden_from": hidden})  # fmt: skip
+
+    facts = [row(1, "false_positive", core + a, [b]), row(2, "open", core + b, [a]), row(3, "open", core + a + b, [])]
+    low, high = await _alert_trend(factory, facts, _alerts(group_by="outcome"), OFFICIAL, secret)
+    assert (low.total, low.series, low.classifications) == (1.0, ["false_positive"], ["OFFICIAL"])
+    assert (high.total, high.series) == (1.0, ["open"])
+    async with factory.context([]) as adapter:
+        await adapter.load_alert_facts(facts)
+        await adapter.load_alert_facts([row(3, "open", core + a + b, [])])
+        again = await adapter.alert_trend(_alerts(group_by="outcome"), OFFICIAL)
+    assert again.total == 0.0

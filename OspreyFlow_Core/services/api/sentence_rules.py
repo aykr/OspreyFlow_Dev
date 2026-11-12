@@ -45,6 +45,7 @@ from .rule_sentences import (
     sentence_of,
     sentence_words,
 )
+from .screening import ListClearance
 
 if TYPE_CHECKING:
     from .rule_evaluation import Finding, RuleGate
@@ -199,7 +200,11 @@ async def _context(
         else:
             if gate.screening is None:
                 raise RuntimeError("this run has no screening lists to screen against")
-            entries[subject] = await gate.screening.entries(subject)
+            # ADR-146 Amendment 7 point 8 (the orchestrator's review, item 1): only the lists the
+            # deployer is cleared for, in the store's own query.
+            entries[subject] = await gate.screening.entries(
+                subject, cleared=ListClearance.of(deployer, gate.scheme)
+            )
     influencers, exclude, settings = await strength_context(
         gate.influencers, gate.investigation_id
     )

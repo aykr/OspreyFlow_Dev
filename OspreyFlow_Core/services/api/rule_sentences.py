@@ -699,7 +699,9 @@ async def _meets_relationship(
     hits = screen(_screening_name(node), None, entries, min_score=relationship.min_score)
     if not hits:
         return None
-    return f"a {hits[0].score:.2f} match to an entry on {hits[0].entry.list_name}"
+    # ADR-146 Amendment 7 (the orchestrator's review, item 1): a sentence's alert cites no list, so
+    # its words name none: a reader of the subject not cleared for the list is told no list's name.
+    return f"a {hits[0].score:.2f} match to an entry on a screening list"
 
 
 async def _meets_strength(

@@ -160,20 +160,27 @@ async def test_a_cited_party_no_single_marking_joins_to_the_node_gets_no_alerted
     assert "l-a-held" not in marks and _alert_node(graph) is not None and marks["cust-1"] == "OFFICIAL"
 
 
-async def test_what_the_trends_count_it_by_holds_every_lists_marking() -> None:
-    """Point 5: the trends count the alert only for a reader cleared for all it rests on, its
-    citations included, so they never count it for a reader not shown it."""
+async def test_what_the_trends_count_it_by_keeps_each_lists_marking_apart() -> None:
+    """Point 5, after the orchestrator's review (item 6): the trends count the alert for a reader
+    as the queue shows it, its core and at least one citation, so what it rests on outside its
+    citations and each citation's are kept apart, each list's marking with its own citation. Red
+    before: one list of every handling, a SECRET list's among them, counted only for a reader
+    cleared for every list (the queue showed it to one cleared for one; the trend did not count it,
+    so the queue less the trend said a hidden list matched)."""
     graph, stores, gate = _world()
     saved: list[Any] = []
 
-    async def save(alert: Any, *, handlings: Any = None) -> None:
-        saved.append(handlings)
+    async def save(alert: Any, *, handlings: Any = None, cited_handlings: Any = None) -> None:
+        saved.append(cited_handlings)
 
     stores.save = save  # type: ignore[method-assign]
     await gate.raise_committed(await _finding(graph, gate))
     # Read back as the deployer after the commit: the new writes are the graph's now.
-    (handlings,) = saved
-    assert handlings is not None and "SECRET" in {h.classification for h in handlings}
+    (split,) = saved
+    assert split is not None
+    core, (a, b) = split
+    assert {h.classification for h in core} == {"OFFICIAL"}
+    assert {h.classification for h in a} == {"OFFICIAL"} and "SECRET" in {h.classification for h in b}
 
 
 async def test_a_re_mark_reads_only_what_is_outside_the_citations() -> None:
@@ -213,33 +220,73 @@ def test_no_route_answers_the_ids_a_loads_rules_wrote() -> None:
     assert not {"rule_node_ids", "rule_created_edge_ids", "rule_merged_edge_ids"} & set(LoadReportView.model_fields)
 
 
-async def test_a_match_reuses_its_own_lists_party_never_another_lists_of_the_same_name() -> None:
-    """The lane review's item 6: both lists name PETROVA, and list B's party is the first a lookup
-    by name finds. A hit on list A reuses list A's party (asked for by its list, `also`, as the port
-    takes it). Red with the lookup by name alone and the list checked after: B's came back, did not
-    fit, and A's party was written again, a duplicate whose match no other alert shares."""
+class HeldParties(WritingGraph):
+    """Listed parties already held, found as the port finds them (`find_node`): the visible nodes
+    sharing the value, read one past the adapter's bound (50), the first carrying every `also`
+    value, and `FindLimitExceeded` where none does and more than the bound share it (rule 2)."""
 
-    class HeldParties(WritingGraph):
-        held = [
-            SimpleNamespace(id="b-party", type="Person", handling=_handling(),
-                            properties={"family_name": "Petrova", "list_name": "Synthetic list B"}),
-            SimpleNamespace(id="a-party", type="Person", handling=_handling(),
-                            properties={"family_name": "Petrova", "list_name": "Synthetic list A"}),
-        ]  # fmt: skip
+    BOUND = 50
 
-        async def find_node(self, entity_type: str, field: str, value: str, principal: Any,
-                            *, also: Any = None) -> Any:  # fmt: skip
-            for node in self.held:
-                if (node.type == entity_type and node.properties.get(field) == value
-                        and all(node.properties.get(k) == v for k, v in (also or {}).items())):  # fmt: skip
-                    return node
-            return None
+    def __init__(self, held: list[Any]) -> None:
+        super().__init__({"cust-1": _handling(), "owner-1": _handling()}, {})
+        self.held = held
 
-    graph = HeldParties({"cust-1": _handling(), "owner-1": _handling()}, {})
+    async def find_node(self, entity_type: str, field: str, value: str, principal: Any,
+                        *, also: Any = None) -> Any:  # fmt: skip
+        from ports.graph import FindLimitExceeded
+
+        sharing = [n for n in self.held if n.type == entity_type and n.properties.get(field) == value]
+        read = sharing[: self.BOUND + 1]
+        for node in read:
+            if all(node.properties.get(k) == v for k, v in (also or {}).items()):
+                return node
+        if len(sharing) > self.BOUND:
+            raise FindLimitExceeded(entity_type, field, self.BOUND)
+        return None
+
+
+def _party(node_id: str, entry: ScreeningEntry, family: str = "Petrova") -> Any:
+    return SimpleNamespace(id=node_id, type="Person", handling=_handling(),
+                           properties={"family_name": family, "list_name": entry.list_name,
+                                       "list_entry_id": entry.id})  # fmt: skip
+
+
+async def _cited_party(graph: HeldParties, entry: ScreeningEntry) -> tuple[list[str], list[Any]]:
     gate = _sweep_gate(graph, Stores())
     ctx = KycContext(graph=graph, scheme=SCHEME, screening=None, compute=None, today=date(2026, 11, 12))  # type: ignore[arg-type]
     finding = await screening_finding(gate.rules[0], SWEEPER, CUSTOMER, OWNER,  # type: ignore[arg-type]
-                                      [ScreeningHit(entry=ENTRY_A, score=0.97)], ctx)  # fmt: skip
+                                      [ScreeningHit(entry=entry, score=0.97)], ctx)  # fmt: skip
     (citation,) = finding.citations
-    assert citation.node_ids == ["a-party"]
-    assert not [w for w in finding.pending if getattr(w, "type", None) == "Person"]
+    return citation.node_ids, [w for w in finding.pending if getattr(w, "type", None) == "Person"]
+
+
+async def test_a_match_reuses_its_own_lists_party_never_another_lists_of_the_same_name() -> None:
+    """The lane review's item 6: both lists name PETROVA, and list B's party is the first a lookup
+    by name finds. A hit on list A reuses list A's party. Red with the lookup by name alone and the
+    list checked after: B's came back, did not fit, and A's party was written again."""
+    graph = HeldParties([_party("b-party", ENTRY_B), _party("a-party", ENTRY_A)])
+    ids, written = await _cited_party(graph, ENTRY_A)
+    assert ids == ["a-party"] and written == []
+
+
+async def test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name() -> None:
+    """The orchestrator's review, item 9: two entries of one list share a family name; a hit on the
+    second reuses the second's party. Red with the party looked up by family name and list: the
+    first entry's came back, and the match was cited to the wrong person."""
+    second = ScreeningEntry(id="Synthetic list A:a-2", list_name="Synthetic list A",
+                            listing="sanction", entity_type="Person", name="PETROVA, Irina")  # fmt: skip
+    graph = HeldParties([_party("first", ENTRY_A), _party("second", second)])
+    ids, written = await _cited_party(graph, second)
+    assert ids == ["second"] and written == []
+
+
+async def test_a_match_on_a_name_many_parties_share_still_finds_its_own() -> None:
+    """Item 9: more people sharing the family name than the lookup's bound neither fails the rule
+    (`FindLimitExceeded`) nor hides the entry's own party. Red with the lookup by family name and
+    list: the bound was reached before the entry's own party, and the rule failed."""
+    others = [_party(f"other-{n}", ScreeningEntry(id=f"Synthetic list A:o-{n}",
+              list_name="Synthetic list A", listing="sanction", entity_type="Person",
+              name="PETROVA, Other")) for n in range(60)]  # fmt: skip
+    graph = HeldParties([*others, _party("own", ENTRY_A)])
+    ids, written = await _cited_party(graph, ENTRY_A)
+    assert ids == ["own"] and written == []

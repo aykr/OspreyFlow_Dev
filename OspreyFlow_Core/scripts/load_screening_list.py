@@ -28,7 +28,7 @@ from typing import Any
 import yaml
 from scripts.real_data_exceptions import APPROVED_USES, is_permitted
 from services.api.config import PostgresConfig
-from services.api.screening import ScreeningEntry, ScreeningListStore
+from services.api.screening import MarkingLowered, ScreeningEntry, ScreeningListStore
 from services.api.screening_refresh import LICENCE_NOT_CONFIRMED
 from services.ingest.ceiling import DeploymentCeiling
 
@@ -135,7 +135,10 @@ async def _load(path: Path, use: str) -> int:
     list_name, entries = parse_list(yaml.safe_load(path.read_text(encoding="utf-8")), use=use)
     store = await ScreeningListStore.connect(PostgresConfig.from_env().dsn)
     try:
-        count = await store.replace_list(list_name, entries)
+        # The orchestrator's review, item 8: a reload never lowers the list's kept marking.
+        count = await store.replace_list(list_name, entries, scheme=load_uk_le_scheme())
+    except MarkingLowered as lowered:
+        raise ListRefused(str(lowered)) from lowered
     finally:
         await store.close()
     print(f"Loaded {count} entries into {list_name!r}.")

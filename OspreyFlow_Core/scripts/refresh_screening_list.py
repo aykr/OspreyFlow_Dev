@@ -33,7 +33,7 @@ async def _run(list_name: str | None) -> int:
     try:
         store = resources.screening_lists
         if list_name is None:
-            for status in await store.subscriptions():
+            for status in await store.subscriptions(cleared=None):
                 failure = f" — {status.failure}" if status.failure else ""
                 print(
                     f"{status.list_name}: {status.source}, version {status.version or 'none'}, "

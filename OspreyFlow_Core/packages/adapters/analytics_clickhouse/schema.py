@@ -163,6 +163,17 @@ def drop_database(database: str, cluster: str | None) -> str:
     return f"DROP DATABASE IF EXISTS {database}{on}" + (" SYNC" if cluster else "")
 
 
+#: ADR-146 Amendment 7 (the orchestrator's review, item 6), as the DuckDB store's
+#: (`adapters/analytics_duckdb/schema.py`): an alert with citations kept as one row per set of
+#: them, each citation outside the set a group of handling rows. A store made before them reads its
+#: one row per alert as its own set, group 0.
+ADD_ALERT_FACT_SETS = (
+    "ALTER TABLE alert_facts ADD COLUMN IF NOT EXISTS fact_id String DEFAULT alert_id",
+    "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS fact_id String DEFAULT alert_id",
+    "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS grp UInt8 DEFAULT 0",
+)
+
+
 async def create_tables(client: ClickHouseClient) -> None:
     for statement in (
         CREATE_EVENTS_TABLE,
@@ -181,3 +192,5 @@ async def create_tables(client: ClickHouseClient) -> None:
     )
     if int(present[0]) == 0:
         await client.command(ADD_EVENTS_LOAD_ID)
+    for statement in ADD_ALERT_FACT_SETS:
+        await client.command(statement)

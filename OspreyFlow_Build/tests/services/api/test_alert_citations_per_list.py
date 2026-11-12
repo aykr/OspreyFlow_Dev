@@ -144,15 +144,27 @@ async def test_the_canvas_draws_for_a_reader_cleared_for_one_list_that_list_alon
 TRIAGE = ["claim", "release", "dispose", "approve_close", "send_back", "assign"]
 
 
+def _before(path: str) -> Alert:
+    """The alert each path acts on: claimed by the reader to release; to approve or send back, a
+    close of both matches proposed by someone else (the owner's ruling of 12 November 2026: kept on
+    each citation, the alert claimed by its proposer); otherwise open."""
+    if path in ("approve_close", "send_back"):
+        proposed = {"status": "closing", "close_proposed_by": "other",
+                    "disposition": "false_positive"}  # fmt: skip
+        return BOTH.model_copy(update={
+            "status": "claimed", "assignee": "other",
+            "citations": [c.model_copy(update=proposed) for c in BOTH.citations],
+        })  # fmt: skip
+    if path == "release":
+        return BOTH.model_copy(update={"status": "claimed", "assignee": READER.id})
+    return BOTH
+
+
 @pytest.mark.parametrize("path", TRIAGE)
 async def test_each_triage_returns_to_a_reader_cleared_for_one_list_that_list_alone(path: str) -> None:
     """What a claim, release, close (proposed, approved or sent back) or assignment returns is the
     stored row as the triage left it, served as the reader was shown the alert."""
-    alert = BOTH.model_copy(
-        update={"status": "closing" if path in ("approve_close", "send_back") else "claimed"
-                if path == "release" else "open", "close_proposed_by": "other", "disposition":
-                "false_positive", "assignee": READER.id if path == "release" else None}
-    )  # fmt: skip
+    alert = _before(path)
     _, graph, analytics, _ = _world(NOT_B, [alert])
     store = TriageStore([alert])
     returned = await _path(path)(store, graph, analytics, alert.id)
@@ -183,11 +195,7 @@ async def test_a_suppression_returns_to_a_reader_cleared_for_one_list_that_list_
 async def test_each_path_refuses_a_reader_cleared_for_neither_list_as_for_a_missing_alert(
     path: str,
 ) -> None:
-    alert = BOTH.model_copy(
-        update={"status": "closing" if path in ("approve_close", "send_back") else "claimed"
-                if path == "release" else "open", "close_proposed_by": "other", "disposition":
-                "false_positive", "assignee": READER.id if path == "release" else None}
-    )  # fmt: skip
+    alert = _before(path)
     _, graph, analytics, _ = _world({"l-a", "s-a", *NOT_B}, [alert])
     store = TriageStore([alert])
     with pytest.raises(AlertNotFoundError):
@@ -250,27 +258,62 @@ class _Audit:
         return list(self.entries)
 
 
-async def test_the_rule_audit_withholds_a_firing_citing_a_list_the_reader_may_not_read() -> None:
-    """Strict, and the spec's "Not changed": an entry about an alert is read by everything the
-    alert cites, its citations included, so its ids (which name every list's match) reach only a
-    reader cleared for every list; one cleared for A alone is given no entry about it, and no count
-    (`total`)."""
+async def test_the_rule_audit_reads_a_firing_citing_two_lists_as_the_queue_reads_its_alert() -> None:
+    """The orchestrator's review, item 4 (correcting the strict reading recorded before it): an
+    entry about an alert with citations is read as the queue reads the alert, its core whole and
+    at least one citation. A reader cleared for A alone is given the firing, with its stored words
+    (which name no list) and without B's ids; withholding it told them a hidden list had matched an
+    alert their queue showed them. A reader cleared for neither is given none, and no count."""
     from services.api.rule_holds import readable_rule_audit
 
     from schemas.domain import RuleAuditEntry
 
     firing = RuleAuditEntry(recorded_at=NOW, principal_id="deployer", action="rule_fired", result_cardinality=1,
                             detail={"rule_id": "kyc", "alert_id": BOTH.id, "words": BOTH.words,
-                                    "node_ids": BOTH.referent_node_ids, "edge_ids": BOTH.edge_ids})  # fmt: skip
-    pages = []
-    for hidden in (NOT_B, set()):
+                                    "node_ids": BOTH.referent_node_ids, "edge_ids": BOTH.edge_ids,
+                                    "event_ids": []})  # fmt: skip
+    evaluated = RuleAuditEntry(recorded_at=NOW, principal_id="deployer", action="rule_evaluated",
+                               result_cardinality=1, detail={"rule_id": "kyc", "findings": 1})  # fmt: skip
+    pages = {}
+    for name, hidden in (("a", NOT_B), ("neither", {"l-a", "s-a", *NOT_B}), ("both", set())):
         _, graph, analytics, _ = _world(hidden, [BOTH])
-        page = await readable_rule_audit(
-            _Audit([firing]), graph, CASE, READER, analytics=analytics,  # type: ignore[arg-type]
+        pages[name] = await readable_rule_audit(
+            _Audit([firing, evaluated]), graph, CASE, READER, analytics=analytics,  # type: ignore[arg-type]
             alerts=_PackAlerts([BOTH]),  # type: ignore[arg-type]
         )  # fmt: skip
-        pages.append((len(page.entries), page.total))
-    assert pages == [(0, 0), (1, 1)]
+    shown, counted = pages["a"].entries
+    assert pages["a"].total == 2 and shown.detail["words"] == BOTH.words
+    assert not NOT_B & {*shown.detail["node_ids"], *shown.detail["edge_ids"]}
+    assert "Synthetic list B" not in shown.model_dump_json()
+    assert counted.detail.get("findings") == 1, "every firing of the rule is shown: its count too"
+    assert [e.action for e in pages["neither"].entries] == ["rule_evaluated"]
+    assert pages["neither"].entries[0].detail.get("findings_withheld") is True
+    assert set(pages["both"].entries[0].detail["edge_ids"]) == set(BOTH.edge_ids)
+
+
+async def test_the_rule_audit_names_a_lists_re_screening_only_to_a_reader_cleared_for_the_list() -> None:
+    """The orchestrator's review, item 2: a list's refresh re-screens with its marking recorded
+    (`Rescreener._rule`), and the entry, its name and its counts, is given only to a reader cleared
+    for that list; any other is given no entry, and no total that counts it."""
+    from services.api.rule_holds import readable_rule_audit
+
+    from schemas.domain import Principal, RuleAuditEntry
+
+    rescreened = RuleAuditEntry(recorded_at=NOW, principal_id="admin", action="rule_evaluated", result_cardinality=1,
+                                detail={"rule_id": "kyc", "trigger": "list_update", "list_name": "Synthetic list B",
+                                        "version": "2", "entries": 3, "findings": 1,
+                                        "list_classification": "SECRET", "list_handling_code": "P"})  # fmt: skip
+    seen = {}
+    for clearance in ("OFFICIAL", "SECRET"):
+        reader = Principal(id="r", clearance=clearance, org_unit="unit-1")
+        _, graph, analytics, _ = _world(set(), [])
+        page = await readable_rule_audit(
+            _Audit([rescreened]), graph, CASE, reader, analytics=analytics,  # type: ignore[arg-type]
+            alerts=_PackAlerts([]),  # type: ignore[arg-type]
+        )  # fmt: skip
+        seen[clearance] = (page.total, page.model_dump_json())
+    assert seen["OFFICIAL"][0] == 0 and "Synthetic list B" not in seen["OFFICIAL"][1]
+    assert seen["SECRET"][0] == 1 and "Synthetic list B" in seen["SECRET"][1]
 
 
 # --- the pieces each path is built from ------------------------------------------------------------

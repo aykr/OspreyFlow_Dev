@@ -126,13 +126,14 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[_Wo
                 yield w, client
             finally:
                 if w.store is not None:
-                    client.portal.call(w.store.close)  # type: ignore[union-attr]
                     # Its own lists ("Synthetic list" and the UN, OFAC, OFSI and UKSL ones)
-                    # removed, on a failure too (CARRIES row 113, `screening_cleanup`).
+                    # removed, on a failure too (CARRIES row 113, `screening_cleanup`), before the
+                    # store is closed (the orchestrator's review, a note).
                     client.portal.call(
                         partial(remove_screening_lists, PostgresConfig.from_env().dsn,
                                 prefixes=["Synthetic list"])
                     )  # fmt: skip
+                    client.portal.call(w.store.close)  # type: ignore[union-attr]
     finally:
         app.dependency_overrides.clear()
         app.router.lifespan_context = previous
@@ -424,3 +425,82 @@ def test_the_glass_says_the_same_licence_reasons_as_the_conduit() -> None:
     assert sorted(LICENCE_NOT_CONFIRMED) == ["opensanctions", "un_consolidated"]
     for source, reason in LICENCE_NOT_CONFIRMED.items():
         assert f'{source}:\n    "{reason}",' in block, source
+
+
+# --- a list shown only to whom its marking clears (ADR-146 Amendment 7; the review's item 3) -------
+
+SECRET_LIST = "Synthetic list SECRET (routes)"
+SECRET_ADMIN = ADMIN.model_copy(update={"id": "admin-secret", "clearance": "SECRET"})
+
+
+def _with_a_secret_list(w: _World, client: TestClient) -> None:
+    """The unmarked list subscribed and refreshed through the routes, and a SECRET one loaded,
+    subscribed and refreshed through the store (as the operator's command loads it)."""
+    from datetime import UTC, datetime
+
+    from services.api.screening import ScreeningEntry, UnitCounts
+
+    from conduit_common.identity import new_id
+    from schemas.screening import ScreeningListUpdate, ScreeningSubscriptionInput
+
+    client.post("/v1/admin/screening-lists", json=LIST)
+    client.post("/v1/admin/screening-lists/Synthetic list/refresh")
+    store = client.portal.call(w.screening)
+    entry = ScreeningEntry(id=f"{SECRET_LIST}:1", list_name=SECRET_LIST, listing="sanction",
+                           entity_type="Person", name="Ann Secret", classification="SECRET",
+                           handling_code="P")  # fmt: skip
+    client.portal.call(partial(store.replace_list, SECRET_LIST, [entry], scheme=load_uk_le_scheme()))
+    client.portal.call(partial(store.subscribe, ScreeningSubscriptionInput(
+        list_name=SECRET_LIST, source="opensanctions", location="lists/secret.json"), "operator",
+        synthetic=True))  # fmt: skip
+    client.portal.call(partial(store.apply_update, SECRET_LIST, "s1", [entry], synthetic=True))
+    update = ScreeningListUpdate(id=new_id(), list_name=SECRET_LIST, at=datetime.now(UTC),
+                                 outcome="updated", version="s1", words="")  # fmt: skip
+    client.portal.call(partial(store.record_update, update, list_words="Version s1.",
+                               by_unit={"unit-a": UnitCounts(1, 0)}))  # fmt: skip
+
+
+def test_a_list_is_shown_only_to_a_reader_cleared_for_its_marking(world: tuple[_World, TestClient]) -> None:
+    """Rule 4, each way, on both reads: the OFFICIAL administrator and analyst are shown the
+    unmarked list alone, its refreshes alone; the SECRET administrator both. Red with the store's
+    reads unfiltered: the SECRET list's name, version and count in both answers."""
+    w, client = world
+    _with_a_secret_list(w, client)
+    for who in (ADMIN, ANALYST):
+        w.as_ = who
+        shown = client.get("/v1/screening-lists")
+        assert shown.status_code == 200 and SECRET_LIST not in shown.text, shown.text
+    w.as_ = ADMIN
+    managed = client.get("/v1/admin/screening-lists")
+    assert managed.status_code == 200 and SECRET_LIST not in managed.text, managed.text
+    w.as_ = SECRET_ADMIN
+    assert SECRET_LIST in client.get("/v1/screening-lists").text
+    managed = client.get("/v1/admin/screening-lists").json()
+    assert SECRET_LIST in {item["list_name"] for item in managed["lists"]}
+    assert SECRET_LIST in {u["list_name"] for u in managed["updates"]}
+
+
+def test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Its refresh and its schedule are answered as for a name no one subscribed, with the same
+    status and body, before anything is read or changed; its name, offered for a new subscription,
+    is refused before anything is written. Red with the routes reading the list by name: the
+    refresh ran and answered its version and counts."""
+    w, client = world
+    _with_a_secret_list(w, client)
+    w.as_ = ADMIN
+    never = "Synthetic list never subscribed"
+    for method, path in (("POST", "/refresh"), ("PUT", "/schedule")):
+        body = {"schedule": None} if method == "PUT" else None
+        hidden = client.request(method, f"/v1/admin/screening-lists/{SECRET_LIST}{path}", json=body)
+        missing = client.request(method, f"/v1/admin/screening-lists/{never}{path}", json=body)
+        assert (hidden.status_code, missing.status_code) == (404, 404), (path, hidden.text)
+        assert hidden.json()["detail"]["error"] == missing.json()["detail"]["error"] == "not_found"
+        assert hidden.text.replace(SECRET_LIST, never) == missing.text
+    taken = client.post("/v1/admin/screening-lists", json={**LIST, "list_name": SECRET_LIST,
+                                                           "location": "lists/other.json"})  # fmt: skip
+    assert taken.status_code == 422 and SECRET_LIST not in taken.text, taken.text
+    store = client.portal.call(w.screening)
+    status = client.portal.call(partial(store.subscription, SECRET_LIST))
+    assert status is not None and status.location == "lists/secret.json", "the hidden list is unchanged"

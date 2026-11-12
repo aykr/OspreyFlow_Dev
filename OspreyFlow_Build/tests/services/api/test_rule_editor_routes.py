@@ -40,6 +40,7 @@ from services.api.app import (
     get_audit,
     get_datasets,
     get_graph,
+    get_handling_scheme,
     get_hotlists_store,
     get_investigations,
     get_ontology,
@@ -74,7 +75,7 @@ async def _no_lifespan(_: FastAPI) -> AsyncIterator[None]:
 class _NoScreeningLists:
     """The rule tested reads no screening list; the store is still asked for, so it is given."""
 
-    async def entries(self, entity_type: str) -> list[Any]:
+    async def entries(self, entity_type: str, *, cleared: Any) -> list[Any]:
         return []
 
 
@@ -169,6 +170,7 @@ def _world(policy: str) -> Iterator[tuple[_World, TestClient]]:
         get_datasets: lambda: w.datasets, get_graph: lambda: w.graph,
         get_analytics: lambda: AnalyticsDuckDBAdapter(con, SCHEME), get_hotlists_store: _Hotlists,
         get_screening_lists: _NoScreeningLists, get_principal_names: _NoNames,
+        get_handling_scheme: lambda: SCHEME,
     })  # fmt: skip
     try:
         with TestClient(app, raise_server_exceptions=False) as client:

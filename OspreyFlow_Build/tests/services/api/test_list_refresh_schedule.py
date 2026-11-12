@@ -33,7 +33,7 @@ from conduit_common.identity import new_id
 from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
 from schemas.screening import ScreeningListUpdate, ScreeningSubscriptionInput
-from tests.services.api.screening_cleanup import remove_screening_lists
+from tests.services.api.screening_cleanup import EVERYTHING, remove_screening_lists
 from tests.services.api.test_rule_schedule import _Valkey
 from tests.services.api.test_screening_list_routes import (  # noqa: F401 - `world` is a fixture
     ANALYST,
@@ -55,10 +55,13 @@ async def lists() -> AsyncIterator[ScreeningListStore]:
     try:
         yield store
     finally:
-        await store.close()
         # Its own lists, and the refusals recorded for them, removed on a failure too (CARRIES row
-        # 113, `screening_cleanup`); the `world` fixture removes the routes' own.
-        await remove_screening_lists(dsn, prefixes=[SCHEDULED])
+        # 113, `screening_cleanup`); the `world` fixture removes the routes' own. First, so a store
+        # that fails to close cannot leave them (the orchestrator's review, a note).
+        try:
+            await remove_screening_lists(dsn, prefixes=[SCHEDULED])
+        finally:
+            await store.close()
 
 
 class _Refreshes:
@@ -111,7 +114,7 @@ async def test_an_owner_without_the_right_is_refused_in_words_and_nothing_is_rea
     refresh = _Refreshes()
     await _executor(lists, refresh, OWNER.model_copy(update={"roles": ["analyst"]}), {name}).tick(at)
     assert refresh.calls == []
-    (update,) = [u for u in await lists.updates(org_unit=OWNER.org_unit, limit=50) if u.list_name == name]
+    (update,) = [u for u in await lists.updates(org_unit=OWNER.org_unit, cleared=EVERYTHING, limit=50) if u.list_name == name]
     assert (update.outcome, update.trigger) == ("refused", "schedule")
     assert update.words == (f"The scheduled refresh was refused: the schedule's owner, {OWNER.id}, no "
                             "longer holds load_screening_lists. The list was left as it was.")  # fmt: skip

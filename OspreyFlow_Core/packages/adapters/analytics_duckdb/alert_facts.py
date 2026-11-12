@@ -15,14 +15,21 @@ An alert is counted for a reader only when all of these hold, each in the query:
   one events are read through, over the alert's handling rows. The check is written as "not among
   the alerts with a handling the reader may not view", a subquery that needs no correlation, so
   DuckDB and ClickHouse read the same text; `COALESCE(..., FALSE)` keeps a `NULL` from reading as
-  "may view".
+  "may view";
+- **no citation outside its row's set is one the reader may view whole** (ADR-146 Amendment 7, the
+  orchestrator's review, item 6): an alert with citations is kept as one row per set of them
+  (`fact_id`), each citation outside the set a group (`grp` > 0) of handling rows, and a row is not
+  counted for a reader who may view every handling of one of its groups. So exactly one row of
+  such an alert is counted for a reader (the set they may read), or none.
 
 Both engines read `?` parameters, so the predicate is shared; only the period expression differs.
 """
 
 from __future__ import annotations
 
-from schemas.analytics import AlertTrendRequest
+from collections.abc import Sequence
+
+from schemas.analytics import AlertFact, AlertTrendRequest
 from schemas.domain import Principal
 from schemas.rights import teams_of
 
@@ -38,9 +45,11 @@ ALERT_TREND_COLUMNS = {
 
 FACT_COLUMNS = (
     "alert_id, investigation_scope, kind, rule, typology, severity, outcome, raised_at, owner_id, "
-    "audience, team, dataset_id, known"
+    "audience, team, dataset_id, known, fact_id"
 )
-HANDLING_COLUMNS = "alert_id, handling_classification, handling_code, owning_unit, originator"
+HANDLING_COLUMNS = (
+    "alert_id, handling_classification, handling_code, owning_unit, originator, fact_id, grp"
+)
 
 
 def alert_predicate(
@@ -80,8 +89,14 @@ def alert_predicate(
     clauses.append("known = 1")
     viewable = access.predicate(principal)
     clauses.append(
-        "alert_id NOT IN (SELECT alert_id FROM alert_fact_handlings "
-        f"WHERE NOT COALESCE(({viewable.where}), FALSE))"
+        "fact_id NOT IN (SELECT fact_id FROM alert_fact_handlings "
+        f"WHERE grp = 0 AND NOT COALESCE(({viewable.where}), FALSE))"
+    )
+    params += viewable.params
+    clauses.append(
+        "fact_id NOT IN (SELECT fact_id FROM alert_fact_handlings WHERE grp > 0 "
+        "GROUP BY fact_id, grp "
+        f"HAVING MIN(CASE WHEN COALESCE(({viewable.where}), FALSE) THEN 1 ELSE 0 END) = 1)"
     )
     params += viewable.params
     for field, values in sorted(req.filters.items()):
@@ -93,6 +108,29 @@ def alert_predicate(
     return SqlPredicate(" AND ".join(clauses), params)
 
 
+#: The handling rows of the counted rows a trend's marking is read from: their own, never a hidden
+#: citation's (`grp` > 0), whose marking would name a list the reader may not see.
+def counted_handlings(where: str) -> str:
+    return f"fact_id IN (SELECT fact_id FROM alert_facts WHERE {where}) AND grp = 0"
+
+
+def fact_rows(facts: Sequence[AlertFact]) -> tuple[list[list[object]], list[list[object]]]:
+    """Each fact's `alert_facts` row (`FACT_COLUMNS`, in order) and its handling rows
+    (`HANDLING_COLUMNS`): its own handlings in group 0, each of `hidden_from` in a group of its
+    own."""
+    facts_out: list[list[object]] = []
+    handlings_out: list[list[object]] = []
+    for f in facts:
+        fact_id = f.fact_id or f.alert_id
+        facts_out.append([f.alert_id, f.investigation_scope, f.kind, f.rule, f.typology, f.severity,
+                          f.outcome, f.raised_at, f.owner_id, f.audience, f.team, f.dataset_id,
+                          0 if f.handlings is None else 1, fact_id])  # fmt: skip
+        for grp, group in enumerate([f.handlings or [], *f.hidden_from]):
+            handlings_out += [[f.alert_id, h.classification, h.handling_code, h.owning_unit,
+                               h.originator, fact_id, grp] for h in group]  # fmt: skip
+    return facts_out, handlings_out
+
+
 def series_expression(req: AlertTrendRequest) -> str:
     return "NULL" if req.group_by is None else ALERT_TREND_COLUMNS[req.group_by]
 
@@ -102,5 +140,7 @@ __all__ = [
     "FACT_COLUMNS",
     "HANDLING_COLUMNS",
     "alert_predicate",
+    "counted_handlings",
+    "fact_rows",
     "series_expression",
 ]

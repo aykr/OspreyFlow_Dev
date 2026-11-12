@@ -34,6 +34,7 @@ from services.api.app import (
     get_analytics,
     get_audit,
     get_graph,
+    get_handling_scheme,
     get_hotlists_store,
     get_investigations,
     get_ontology,
@@ -142,7 +143,7 @@ def world() -> Iterator[dict[str, Any]]:
         get_analytics: lambda: AnalyticsDuckDBAdapter(con, SCHEME), get_hotlists_store: _Hotlists,
         get_screening_lists: lambda: _Refuses("screening store"), get_audit: lambda: things["audit"],
         get_patterns_store: lambda: things["patterns"], get_typology_rules: lambda: things["rules"],
-        get_alerts_store: lambda: _Refuses("alert store"),
+        get_alerts_store: lambda: _Refuses("alert store"), get_handling_scheme: lambda: SCHEME,
     })  # fmt: skip
     yield things
     app.dependency_overrides.clear()
