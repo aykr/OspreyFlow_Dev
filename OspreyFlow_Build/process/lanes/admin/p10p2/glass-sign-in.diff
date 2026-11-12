@@ -34,6 +34,126 @@ index 0000000..ed00a11
 +            {**entra_claims(**_GOOD)}, BY_EXTENSION, StoredPerson(roles=(), disabled=True)
 +        )
 +    assert str(refused.value) == found.group(1)
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.html b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.html
+new file mode 100644
+index 0000000..f0b6d97
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.html
+@@ -0,0 +1,11 @@
++<!doctype html>
++<html lang="en" data-theme="dark">
++  <head>
++    <meta charset="UTF-8" />
++    <title>Account unread harness</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/keyboard/account-unread-harness.tsx"></script>
++  </body>
++</html>
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.tsx
+new file mode 100644
+index 0000000..38833d7
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.tsx
+@@ -0,0 +1,42 @@
++// The top bar when the Conduit cannot say who the person is (ADR-148 Amendment 8): the words, *Try
++// again* and *Sign out*, on their own, for `account-unread.spec.ts` (rule 13) and the every-harness axe
++// scan in both themes and under GOV.UK (`?brand=govuk`). What each button did is recorded on
++// `window.__acted`.
++import { createRoot } from "react-dom/client";
++
++import "../src/design/tokens.css";
++import "../src/design/primitives.css";
++import "../src/shell/chrome.css";
++import { AccountUnread } from "../src/auth/AccountUnread";
++import { applyHarnessBrand } from "./brandHarness";
++
++await applyHarnessBrand();
++
++const acted: string[] = [];
++(window as unknown as { __acted: string[] }).__acted = acted;
++
++function Harness() {
++  return (
++    <header className="app-header top-bar" data-app="glass">
++      <h1 className="label" style={{ margin: 0 }}>
++        Account unread harness
++      </h1>
++      <div
++        className="app-header__account"
++        style={{
++          display: "flex",
++          alignItems: "center",
++          gap: "var(--sp-8)",
++          marginLeft: "auto",
++        }}
++      >
++        <AccountUnread
++          onTryAgain={() => acted.push("try-again")}
++          onSignOut={() => acted.push("sign-out")}
++        />
++      </div>
++    </header>
++  );
++}
++
++createRoot(document.getElementById("root")!).render(<Harness />);
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/account-unread.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/account-unread.spec.ts
+new file mode 100644
+index 0000000..359dcdf
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/account-unread.spec.ts
+@@ -0,0 +1,49 @@
++// The account-unread notice by keyboard alone (ADR-148 Amendment 8; `CLAUDE.md` rule 13): when the
++// Conduit cannot say who the person is, *Try again* and *Sign out* are each reached by Tab and pressed
++// with the keyboard. No `page.mouse`, no `.click()`.
++import { expect, test, type Page } from "@playwright/test";
++
++import {
++  ACCOUNT_UNREAD_ACTIONS,
++  assertAllCovered,
++  registerCovered,
++} from "./actionRegistry";
++
++const REGISTRY = "ACCOUNT_UNREAD_ACTIONS";
++const HARNESS = "/keyboard/account-unread-harness.html";
++
++function acted(page: Page): Promise<string[]> {
++  return page.evaluate(
++    () => (window as unknown as { __acted: string[] }).__acted,
++  );
++}
++
++test("the account is asked for again by keyboard when it could not be read", async ({
++  page,
++}) => {
++  await page.goto(HARNESS);
++  await expect(page.getByRole("alert")).toContainText(
++    "Your account could not be read just now",
++  );
++  await page.keyboard.press("Tab");
++  await expect(page.getByRole("button", { name: "Try again" })).toBeFocused();
++  await page.keyboard.press("Enter");
++  expect(await acted(page)).toEqual(["try-again"]);
++  registerCovered(REGISTRY, "try-reading-the-account-again-by-keyboard");
++});
++
++test("Sign out is reached by keyboard with no account read", async ({
++  page,
++}) => {
++  await page.goto(HARNESS);
++  await page.keyboard.press("Tab");
++  await page.keyboard.press("Tab");
++  await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
++  await page.keyboard.press("Space");
++  expect(await acted(page)).toEqual(["sign-out"]);
++  registerCovered(REGISTRY, "sign-out-with-no-account-read-by-keyboard");
++});
++
++test("every registered account-unread action has its own proving test case above", () => {
++  assertAllCovered("ACCOUNT_UNREAD_ACTIONS", ACCOUNT_UNREAD_ACTIONS);
++});
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
 index 4059b22..be4c19b 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
@@ -176,7 +296,7 @@ index 4ed79b8..20664d9 100644
 +  });
 +});
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
-index 460c470..6743137 100644
+index 460c470..9c8d18f 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
 @@ -17,18 +17,22 @@ import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
@@ -204,7 +324,15 @@ index 460c470..6743137 100644
  import { SignInScreen } from "./auth/SignInScreen";
  import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
  import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
-@@ -254,7 +258,13 @@ export function App() {
+@@ -57,6 +61,7 @@ import { PlaceSwitcher } from "./shell/PlaceSwitcher";
+ import { useLastGlassView } from "./shell/placeMemory";
+ import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
+ import { Button } from "./design/primitives/Button";
++import { AccountUnread } from "./auth/AccountUnread";
+ import { Toast } from "./design/primitives/Toast";
+ import { Dossier } from "./dossier/Dossier";
+ import { ExportPanel } from "./export/ExportPanel";
+@@ -254,7 +259,13 @@ export function App() {
    const [rights, setRights] = useState<ReadonlySet<string> | null>(null);
    // Start waits for the rights, so a tile does not appear late or a single place go unnoticed.
    const [rightsSettled, setRightsSettled] = useState(false);
@@ -219,7 +347,7 @@ index 460c470..6743137 100644
    // `null` until the very first bootstrap effect below has run once — distinguishes "still
    // checking whether this load is a redirect callback" from "checked, and there is no session",
    // which is the difference between showing nothing for one frame and showing the sign-in screen
-@@ -308,7 +318,7 @@ export function App() {
+@@ -308,7 +319,7 @@ export function App() {
            clearRedirectCallbackParams();
            if (cancelled) return;
            setBearerToken(user.access_token);
@@ -228,7 +356,7 @@ index 460c470..6743137 100644
            scheduleRenewal(user.expires_at);
            restoreViewStateAfterReauth();
            const noted = takeNotedAddress();
-@@ -363,6 +373,25 @@ export function App() {
+@@ -363,6 +374,25 @@ export function App() {
    }
  
    const unauthenticatedHandledRef = useRef(false);
@@ -254,7 +382,7 @@ index 460c470..6743137 100644
    useEffect(() => {
      if (!bearerToken) {
        setRights(null);
-@@ -403,8 +432,8 @@ export function App() {
+@@ -403,8 +433,8 @@ export function App() {
    const sessionPromptRef = useRef<"ended" | "unreachable" | null>(null);
    const [sessionPromptBusy, setSessionPromptBusy] = useState(false);
    const [sessionPromptProblem, setSessionPromptProblem] = useState<string | null>(null);
@@ -265,7 +393,7 @@ index 460c470..6743137 100644
    const askToSignInAgain = useCallback((why: "ended" | "unreachable" | null) => {
      sessionPromptRef.current = why;
      setSessionPrompt(why);
-@@ -412,12 +441,12 @@ export function App() {
+@@ -412,12 +442,12 @@ export function App() {
    }, []);
    const adoptRenewedUser = useCallback(
      (user: RenewedUser) => {
@@ -280,7 +408,7 @@ index 460c470..6743137 100644
        } else {
          renewedRef.current = { for: bearerTokenRef.current, token: user.access_token };
        }
-@@ -459,14 +488,23 @@ export function App() {
+@@ -459,14 +489,23 @@ export function App() {
     * `true` when a renewed token is in place, so the refused call can be made once more. The two need
     * different reactions, and a bare 401 cannot tell them apart on its own — only "has this session
     * ever produced a usable token" can. */
@@ -306,7 +434,7 @@ index 460c470..6743137 100644
        setSignInReason(
          "Your sign-in could not be used to reach the workspace. Check with your " +
            "administrator that this deployment's identity provider is configured correctly.",
-@@ -1494,10 +1532,20 @@ export function App() {
+@@ -1494,10 +1533,16 @@ export function App() {
        onOpenOperations={rights?.has("operate_schedules") ? openOperations : undefined}
      />
    ) : null;
@@ -314,11 +442,7 @@ index 460c470..6743137 100644
 +  // left without words or a way out.
 +  const accountUnread =
 +    !isDevBypass && !principal && resolvedFailed ? (
-+      <div role="alert" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
-+        <span>Your account could not be read just now, so nothing is offered.</span>
-+        <Button onClick={() => setResolvedAttempt((n) => n + 1)}>Try again</Button>
-+        <Button onClick={() => void signOut()}>Sign out</Button>
-+      </div>
++      <AccountUnread onTryAgain={() => setResolvedAttempt((n) => n + 1)} onSignOut={() => void signOut()} />
 +    ) : null;
    const account = (
      <>
@@ -328,7 +452,7 @@ index 460c470..6743137 100644
      </>
    );
    const startScreenShown =
-@@ -1682,6 +1730,7 @@ export function App() {
+@@ -1682,6 +1727,7 @@ export function App() {
                // button that keeps the clearance in view. The Glass derives nothing from any of it.
                <AccountMenu principal={principal} onSignOut={() => void signOut()} />
              )}
@@ -372,6 +496,39 @@ index 8e18f37..e524bfa 100644
    });
  });
  
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/AccountUnread.tsx b/OspreyFlow_Core/apps/workspace/src/auth/AccountUnread.tsx
+new file mode 100644
+index 0000000..e28a7f8
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/AccountUnread.tsx
+@@ -0,0 +1,27 @@
++// ADR-148 Amendment 8 (the orchestrator's reviews of P10 part 2): when the Conduit cannot say who the
++// person is (`GET /v1/me` did not answer), nothing it gates is offered, and the person is told so in
++// words, with *Try again* (which asks again) and *Sign out* within reach. Its own component so the
++// keyboard walkthrough and the axe scan reach it on a harness (`account-unread-harness.html`; rule 13).
++import { Button } from "../design/primitives/Button";
++
++export const ACCOUNT_UNREAD_WORDS =
++  "Your account could not be read just now, so nothing is offered.";
++
++export function AccountUnread({
++  onTryAgain,
++  onSignOut,
++}: {
++  onTryAgain: () => void;
++  onSignOut: () => void;
++}) {
++  return (
++    <div
++      role="alert"
++      style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}
++    >
++      <span>{ACCOUNT_UNREAD_WORDS}</span>
++      <Button onClick={onTryAgain}>Try again</Button>
++      <Button onClick={onSignOut}>Sign out</Button>
++    </div>
++  );
++}
 diff --git a/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts
 new file mode 100644
 index 0000000..fb98f2b

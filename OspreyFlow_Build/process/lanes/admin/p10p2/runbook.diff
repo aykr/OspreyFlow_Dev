@@ -149,7 +149,7 @@ index dac87b3..0000000
 -        pass
 -    assert asked[0][:4] == ["kubectl", "-n", "ospreyflow-poc", "port-forward"]
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
-index b9bbc62..bae40e4 100644
+index b9bbc62..7ee3e40 100644
 --- a/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
 @@ -247,7 +247,9 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
@@ -163,7 +163,7 @@ index b9bbc62..bae40e4 100644
      text = runbooks["INSTALL.md"]
      order = [
          text.index('"$CONFIG" --allow-unpinned\n```'),
-@@ -255,13 +257,49 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
+@@ -255,13 +257,51 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
          text.index("ospreyflow images push"),
          text.index('-m harness.render --config "$CONFIG"\n```\n\n## 5'),
          text.index("helm upgrade --install"),
@@ -199,14 +199,16 @@ index b9bbc62..bae40e4 100644
 +    runbooks: dict[str, str],
 +) -> None:
 +    """The orchestrator's review of P10 part 2, item 4(c): an administrator locked out of Admin is
-+    recovered by naming a person who holds no role in `first_administrators`, rendering again and
-+    restarting the Conduit, which gives Admin to such a person at start (`seed_first_administrators`;
-+    its live case, `test_a_named_first_administrator_holding_no_role_is_given_admin_again`)."""
++    recovered by naming a person in `first_administrators`, rendering again and restarting the
++    Conduit, which gives each one named Admin at start when nobody can manage people (the second
++    review's amended ruling; `seed_first_administrators`; its live case,
++    `test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again`)."""
 +    text = runbooks["INSTALL.md"]
 +    step = text[text.index("## 6.") : text.index("## 7.")]
 +    recovery = step[step.index("If no administrator is left") :]
 +    assert "cloud_platform.claims.first_administrators" in recovery
-+    assert "holds no role" in recovery
++    assert "only when nobody can manage people" in " ".join(recovery.split())
++    assert "grant_first_administrator" in recovery
 +    assert "harness.render" in recovery
 +    assert 'kubectl -n "$NS" rollout restart deploy/api' in recovery
 +
@@ -298,7 +300,7 @@ index d28f627..0000000
 -if __name__ == "__main__":
 -    sys.exit(main())
 diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
-index 05efa62..999c909 100644
+index 05efa62..fe46f76 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
 @@ -84,6 +84,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
@@ -310,7 +312,7 @@ index 05efa62..999c909 100644
      return f"""# Install: OspreyFlow in `{cp.namespace}` ({cp.shape} shape)
  
  Rendered for this deployment, before its images are pushed, by `PYTHONPATH=.:packages
-@@ -160,14 +162,29 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
+@@ -160,14 +162,30 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
  {rollouts}
  ```
  
@@ -333,10 +335,11 @@ index 05efa62..999c909 100644
 +kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUER
 +```
 +
-+**If no administrator is left** (each has left, or lost the Admin role): add the Entra object id of
-+a person who holds no role in this deployment to `cloud_platform.claims.first_administrators` in
-+`osprey.yaml`, render again (step 3) and restart the Conduit. At start the Conduit gives the Admin
-+role to each one named there who holds no role at all, and changes no one who holds any role.
++**If no administrator is left** (nobody enabled who has signed in can manage people): add the Entra
++object id of a person who is not disabled here to `cloud_platform.claims.first_administrators` in
++`osprey.yaml`, render again (step 3) and restart the Conduit. At start, and only when nobody can
++manage people, the Conduit adds the Admin role to each one named there, and audits it
++(`grant_first_administrator`). While anyone can manage people, it changes nobody's roles.
 +
 +```bash
 +{RENDER}

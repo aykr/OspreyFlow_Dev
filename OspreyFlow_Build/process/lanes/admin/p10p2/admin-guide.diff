@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-index b9666af..d21dd60 100644
+index b9666af..17f2ab8 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 +++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 @@ -751,12 +751,10 @@ decisions are ADR-148's.
@@ -143,22 +143,26 @@ index b9666af..d21dd60 100644
  A clearance or unit group grants one value; a handling-codes group grants a list, and a person's
  codes are the union of their mapped groups'. A group the table does not name grants nothing.
  
-@@ -1088,6 +1093,14 @@ A mapping other than the fixed claim names that Keycloak uses (`clearance`, `org
+@@ -1088,6 +1093,18 @@ A mapping other than the fixed claim names that Keycloak uses (`clearance`, `org
  **Pinned to the tenant and to the Glass.** Every Entra tenant shares one set of signing keys, so a
  signature alone says nothing about whose token it is. With a tenant set:
  
 +- the signature must be RS256, whatever `OIDC_ALGORITHMS` says; a token up to 60 seconds past its
 +  expiry is still accepted, for clock drift;
-+- the Conduit keeps Entra's signing keys and fetches them again for a key id it does not know at
-+  most once every five minutes. A fetch waits at most five seconds and never holds up other
-+  requests. If Entra cannot be reached, sign-in is refused with a 503 saying so ("sign-in is
-+  unavailable: the identity provider could not be reached. Try again shortly."), never as a
-+  rejected token;
++- the Conduit keeps Entra's signing keys for `OIDC_JWKS_TTL_SECONDS`, and fetches them again for a
++  key id it does not hold at most once every five minutes: a key Entra publishes within five
++  minutes of such a fetch is refused until the next. One request fetches while the others go on
++  with the keys held; a fetch waits at most five seconds, in threads of its own, and never holds up
++  other requests. When a fetch fails after the keys' time is up, the keys held are used for up to an
++  hour more (logged), so a short outage signs nobody out. If Entra cannot give keys (unreachable,
++  refusing, an answer that is not a key set, or a set with no key the Conduit can use), sign-in is
++  refused with a 503 saying so ("sign-in is unavailable: the identity provider could not be
++  reached. Try again shortly."), never as a rejected token, on the run API too;
 +
  - the Conduit's token check refuses to start unless its `OIDC_ISSUER` and `OIDC_AUDIENCE` are set,
    and checks both on every token;
  - the token must carry `sub`, `oid` and `exp`, and its `tid` must be the tenant;
-@@ -1119,9 +1132,37 @@ On a deployment using the fixed names (Keycloak), a token carrying `tid` is refu
+@@ -1119,9 +1136,40 @@ On a deployment using the fixed names (Keycloak), a token carrying `tid` is refu
  words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
  
  **Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
@@ -174,21 +178,24 @@ index b9666af..d21dd60 100644
 +  *Admin › People* sends you to the Entra admin centre for them. *Disable* is the deployment's own,
 +  and a disabled person is refused at their next request, an open live connection included.
 +- **The first administrators** are named by object id in `cloud_platform.claims.first_administrators`
-+  (at least one; a render with none is refused). At start the Conduit gives each the Admin role once.
-+  Taking it from them later stands, with one exception: a named person who holds **no role at all**
-+  is given Admin again at the next start. That is the way back in when nobody can administer:
-+  name such a person, render again and restart the Conduit (the install runbook's step 6 gives the
-+  commands).
++  (at least one; a render with none is refused). The Conduit gives each the Admin role when it first
++  records them. Taking it from them later stands, with one exception: at a start when **nobody can
++  manage people** (no enabled person who has signed in holds the right), each one named is given
++  Admin again, added to what they hold, and the audit log records it
++  (`grant_first_administrator`). That is the way back in: name a person who is not disabled here,
++  render again and restart the Conduit (the install runbook's step 6 gives the commands).
 +- **Locking everyone out is refused.** A change that would leave nobody who can manage people is
 +  refused; only an enabled person who has **signed in at least once** counts, so a person added by
 +  object id who has never signed in is no proof anyone can administer.
 +- **Clearance and unit come from the token**, and are recorded at each sign-in. A clearance or unit
 +  recorded more than 24 hours ago is not trusted for anything given to that person without their
 +  being present: a case transfer to them is refused, in words saying their access is out of date,
-+  and a promotion's ageing alert leaves them out, until they sign in again.
++  they cannot be named a case's Author, and a promotion's ageing alert leaves them out (the log says
++  how many, and why), until they sign in again. While they are active it is recorded again at most
++  hourly.
 +- **If the Conduit cannot read the store**, sign-in is refused with a 503 in words, never treated as
-+  no roles. The Glass then says the account could not be read, offers *Try again*, and keeps
-+  *Sign out* within reach.
++  no roles, and an open live connection is closed to be tried again later. The Glass then says the
++  account could not be read, offers *Try again*, and keeps *Sign out* within reach.
 +- **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
 +  pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
 +  registration.
@@ -199,7 +206,7 @@ index b9666af..d21dd60 100644
  
  **Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
  one real token from the organisation's development tenant is to settle each:
-@@ -1142,15 +1183,9 @@ one real token from the organisation's development tenant is to settle each:
+@@ -1142,15 +1190,9 @@ one real token from the organisation's development tenant is to settle each:
  
  ### 6a.8 Coming
  
@@ -218,7 +225,7 @@ index b9666af..d21dd60 100644
  - **Backups and restore**: a scheduled backup of ArcadeDB and ClickHouse to S3, encrypted, and a
    restore rehearsed on the development namespace, with its measured times.
  - **The volume-expansion and upgrade runbooks** for ArcadeDB and ClickHouse.
-@@ -1176,10 +1211,9 @@ None stops the render; each is the team's to answer before the first install.
+@@ -1176,10 +1218,9 @@ None stops the render; each is the team's to answer before the first install.
  3. **Calico's version**, and whether its policies take a tier: the render names them `default.`, as
     Calico 3.28 and later store them. The build's schema check (kubeconform) skips the schemas it
     does not have, so Calico's objects are not checked against one.
@@ -232,7 +239,7 @@ index b9666af..d21dd60 100644
     the allow policy names.
  
  Added in this guide, beyond ADR-148's own list:
-@@ -2299,7 +2333,20 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -2299,7 +2340,20 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `cloud_platform.registry` | str or none | none | Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there |
  | `cloud_platform.allow_from` | list of str | — | The networks (CIDR) the platform's ingress admits; empty: every address |
  | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
@@ -268,7 +275,7 @@ index 659bb03..7d62243 100644
      "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
      "governance.organisation_provider": "Small on a server of your own: the organisation's identity "
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index c7900d4..e25ce3e 100644
+index c7900d4..233b168 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
 @@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
@@ -280,7 +287,7 @@ index c7900d4..e25ce3e 100644
  
  | Version | Date | What changed |
  | --- | --- | --- |
-+| 1.84 | 2026-11-12 | Sign-in on `cloud-platform` through Entra ID, as built (ADR-148 Amendment 8, P10 part 2). §6a.7: `cloud_platform.claims` in `osprey.yaml`, `groups_claim` described; RS256 alone, 60 seconds' leeway, the signing keys kept and fetched again at most once in five minutes, Entra unreachable a 503 in words; roles in the deployment's Postgres by tenant and `oid`, a person added by object id, *Disable*; the first administrators, and the way back in when nobody can administer; locking everyone out refused, counting only people who have signed in; a clearance or unit read over a day ago not trusted for a transfer or an alert; the Glass's words when the account cannot be read; a service identity's app-only token. §6a.8: sign-in struck, what is still to come on Entra kept. Keycloak struck from §6a (its pod, group 0, resources, secrets, image, egress and `id.` door; reporting's `bi.` door refused); Entra's sign-in host in the egress list; §6a.9's group 0 question struck. Appendix A: `cloud_platform.claims`, from the schema; `tls_secret` names the Glass's name alone. |
++| 1.84 | 2026-11-12 | Sign-in on `cloud-platform` through Entra ID, as built (ADR-148 Amendment 8, P10 part 2). §6a.7: `cloud_platform.claims` in `osprey.yaml`, `groups_claim` described; RS256 alone, 60 seconds' leeway, the signing keys kept, fetched by one request at a time and again at most once in five minutes for an unknown key, held an hour through an outage, Entra unable to give keys a 503 in words; roles in the deployment's Postgres by tenant and `oid`, a person added by object id, *Disable*; the first administrators, and the way back in when nobody can manage people (audited); locking everyone out refused, counting only people who have signed in; a clearance or unit read over a day ago not trusted for a transfer or an alert; the Glass's words when the account cannot be read; a service identity's app-only token. §6a.8: sign-in struck, what is still to come on Entra kept. Keycloak struck from §6a (its pod, group 0, resources, secrets, image, egress and `id.` door; reporting's `bi.` door refused); Entra's sign-in host in the egress list; §6a.9's group 0 question struck. Appendix A: `cloud_platform.claims`, from the schema; `tls_secret` names the Glass's name alone. |
  | 1.83 | 2026-11-11 | Appendix A from L1.9 part 2 (ADR-140 Amendment 21): `cloud_platform.connector_sources`, the S3 buckets and Athena workgroups a cloud-platform deployment declares; a constrained list's items named by their type. |
  | 1.82 | 2026-11-11 | Appendix A from P7b as merged (ADR-148 Amendment 5): `cloud_platform.shape` (standard or poc, poc a development namespace's only); `cloud_platform.connector_hosts` as host or host:port, a bare host meaning 443, so a SQL connection names its port here; and `deployment.highest_marking`'s cloud-platform default, OFFICIAL-SENSITIVE. |
  | 1.81 | 2026-11-11 | §6a after its review. §6a.7: the token check, not the Conduit, is what is built, since neither the Conduit's settings nor the profile pass it a mapping yet; the mapping's shape said not to be an `osprey.yaml` block; what fails to load in full (a GUID in lower case, a list in a clearance or unit table, an empty table, scope or `groups_claim`); `sub` required too; a group overage refused only where a group table is used, and its remedy; `acct` optional; guests among the shapes untried against a real tenant. §6a.8: the first administrator named in the settings, refused at render when there is none; Entra's egress line struck (no record yet decides it). §6a.2: room above the totals for set-up jobs and rolling updates. §6a.3: `gateway.tf` makes the gateway's service account too. §6a.5 and §10.1: an engine's way out also needs the new values installed (`helm upgrade`). §6a.6: three synthetic deployments. |
@@ -425,22 +432,26 @@ index c7900d4..e25ce3e 100644
  A clearance or unit group grants one value; a handling-codes group grants a list, and a person's
  codes are the union of their mapped groups'. A group the table does not name grants nothing.
  
-@@ -1315,6 +1321,14 @@ A mapping other than the fixed claim names that Keycloak uses (`clearance`, `org
+@@ -1315,6 +1321,18 @@ A mapping other than the fixed claim names that Keycloak uses (`clearance`, `org
  **Pinned to the tenant and to the Glass.** Every Entra tenant shares one set of signing keys, so a
  signature alone says nothing about whose token it is. With a tenant set:
  
 +- the signature must be RS256, whatever `OIDC_ALGORITHMS` says; a token up to 60 seconds past its
 +  expiry is still accepted, for clock drift;
-+- the Conduit keeps Entra's signing keys and fetches them again for a key id it does not know at
-+  most once every five minutes. A fetch waits at most five seconds and never holds up other
-+  requests. If Entra cannot be reached, sign-in is refused with a 503 saying so ("sign-in is
-+  unavailable: the identity provider could not be reached. Try again shortly."), never as a
-+  rejected token;
++- the Conduit keeps Entra's signing keys for `OIDC_JWKS_TTL_SECONDS`, and fetches them again for a
++  key id it does not hold at most once every five minutes: a key Entra publishes within five
++  minutes of such a fetch is refused until the next. One request fetches while the others go on
++  with the keys held; a fetch waits at most five seconds, in threads of its own, and never holds up
++  other requests. When a fetch fails after the keys' time is up, the keys held are used for up to an
++  hour more (logged), so a short outage signs nobody out. If Entra cannot give keys (unreachable,
++  refusing, an answer that is not a key set, or a set with no key the Conduit can use), sign-in is
++  refused with a 503 saying so ("sign-in is unavailable: the identity provider could not be
++  reached. Try again shortly."), never as a rejected token, on the run API too;
 +
  - the Conduit's token check refuses to start unless its `OIDC_ISSUER` and `OIDC_AUDIENCE` are set,
    and checks both on every token;
  - the token must carry `sub`, `oid` and `exp`, and its `tid` must be the tenant;
-@@ -1346,9 +1360,37 @@ On a deployment using the fixed names (Keycloak), a token carrying `tid` is refu
+@@ -1346,9 +1364,40 @@ On a deployment using the fixed names (Keycloak), a token carrying `tid` is refu
  words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
  
  **Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
@@ -456,21 +467,24 @@ index c7900d4..e25ce3e 100644
 +  *Admin › People* sends you to the Entra admin centre for them. *Disable* is the deployment's own,
 +  and a disabled person is refused at their next request, an open live connection included.
 +- **The first administrators** are named by object id in `cloud_platform.claims.first_administrators`
-+  (at least one; a render with none is refused). At start the Conduit gives each the Admin role once.
-+  Taking it from them later stands, with one exception: a named person who holds **no role at all**
-+  is given Admin again at the next start. That is the way back in when nobody can administer:
-+  name such a person, render again and restart the Conduit (the install runbook's step 6 gives the
-+  commands).
++  (at least one; a render with none is refused). The Conduit gives each the Admin role when it first
++  records them. Taking it from them later stands, with one exception: at a start when **nobody can
++  manage people** (no enabled person who has signed in holds the right), each one named is given
++  Admin again, added to what they hold, and the audit log records it
++  (`grant_first_administrator`). That is the way back in: name a person who is not disabled here,
++  render again and restart the Conduit (the install runbook's step 6 gives the commands).
 +- **Locking everyone out is refused.** A change that would leave nobody who can manage people is
 +  refused; only an enabled person who has **signed in at least once** counts, so a person added by
 +  object id who has never signed in is no proof anyone can administer.
 +- **Clearance and unit come from the token**, and are recorded at each sign-in. A clearance or unit
 +  recorded more than 24 hours ago is not trusted for anything given to that person without their
 +  being present: a case transfer to them is refused, in words saying their access is out of date,
-+  and a promotion's ageing alert leaves them out, until they sign in again.
++  they cannot be named a case's Author, and a promotion's ageing alert leaves them out (the log says
++  how many, and why), until they sign in again. While they are active it is recorded again at most
++  hourly.
 +- **If the Conduit cannot read the store**, sign-in is refused with a 503 in words, never treated as
-+  no roles. The Glass then says the account could not be read, offers *Try again*, and keeps
-+  *Sign out* within reach.
++  no roles, and an open live connection is closed to be tried again later. The Glass then says the
++  account could not be read, offers *Try again*, and keeps *Sign out* within reach.
 +- **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
 +  pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
 +  registration.
@@ -481,7 +495,7 @@ index c7900d4..e25ce3e 100644
  
  **Not yet tried against a real tenant.** The token shapes above are as Microsoft documents them, and
  one real token from the organisation's development tenant is to settle each:
-@@ -1369,15 +1411,9 @@ one real token from the organisation's development tenant is to settle each:
+@@ -1369,15 +1418,9 @@ one real token from the organisation's development tenant is to settle each:
  
  ### 6a.8 Coming
  
@@ -500,7 +514,7 @@ index c7900d4..e25ce3e 100644
  - **Backups and restore**: a scheduled backup of ArcadeDB and ClickHouse to S3, encrypted, and a
    restore rehearsed on the development namespace, with its measured times.
  - **The volume-expansion and upgrade runbooks** for ArcadeDB and ClickHouse.
-@@ -1403,10 +1439,9 @@ None stops the render; each is the team's to answer before the first install.
+@@ -1403,10 +1446,9 @@ None stops the render; each is the team's to answer before the first install.
  3. **Calico's version**, and whether its policies take a tier: the render names them `default.`, as
     Calico 3.28 and later store them. The build's schema check (kubeconform) skips the schemas it
     does not have, so Calico's objects are not checked against one.
@@ -514,7 +528,7 @@ index c7900d4..e25ce3e 100644
     the allow policy names.
  
  Added in this guide, beyond ADR-148's own list:
-@@ -2573,7 +2608,20 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
+@@ -2573,7 +2615,20 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
  | `cloud_platform.registry` | str or none | none | Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there |
  | `cloud_platform.allow_from` | list of str | — | The networks (CIDR) the platform's ingress admits; empty: every address |
  | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
