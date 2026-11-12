@@ -1,0 +1,53 @@
+head 87503fe on main 1cbc164 with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack), 2026-11-12
+Exit status: 0 (make -k ci: no target failed)
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261112T032443Z/log: make -k ci
+make -C ../OspreyFlow_Core check
+make[1]: Entering directory '/root/osprey-runs/admin/OspreyFlow_Core'
+All checks passed!
+  34 passed (24.2s)
+make[1]: Leaving directory '/root/osprey-runs/admin/OspreyFlow_Core'
+licence-check: 80 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+licence-check: 355 packages, all allowed.
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+============================== 8 passed in 4.81s ===============================
+Success! The configuration is valid.
+Success! 9 passed, 0 failed.
+Success! The configuration is valid.
+Success! 11 passed, 0 failed.
+Success! The configuration is valid.
+Success! 12 passed, 0 failed.
+Success! The configuration is valid.
+Success! 11 passed, 0 failed.
+1 chart(s) linted, 0 chart(s) failed
+============================= 54 passed in 12.65s ==============================
+development-sources.yaml: 51 manifests, 0 violation(s)
+development.yaml: 51 manifests, 0 violation(s)
+poc.yaml: 44 manifests, 0 violation(s)
+production-bedrock.yaml: 51 manifests, 0 violation(s)
+production.yaml: 51 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+============ 370 passed, 6 skipped, 1 warning in 270.76s (0:04:30) =============
+schemas-check: 601 generated types match committed output.
+authorized-query-check: 162 files under services/api, no offenders.
+demo-guide-check: 12 registered demo(s), all documented.
+domain-model-coverage-check: 104 class(es), 0 allowlisted, no new drift.
+route-coverage-check: 419 route(s), 0 allowlisted, no new drift.
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+test-file-coverage-check: 996 test file(s), 0 allowlisted, no new drift.
+doc-citations-check: 2588 file(s) scanned, every cited path exists.
+================ 17 passed, 2 skipped, 743 deselected in 1.34s =================
+0.23s call     tests/test_stack_lease.py::test_live_all_and_base_are_passed_to_the_selector
+============================= 132 passed in 26.59s =============================
+adr-reservations-check: every heading above the baseline is reserved.
+============================= 10 passed in 16.49s ==============================
+no-branches-check: 1632 files, no branch named.
+============================== 12 passed in 1.22s ==============================
+no-langchain-check: no LangChain, spaCy or Laurium outside Laurium's own image (source).
+============================== 28 passed in 1.46s ==============================
+osprey bundle: 80 file(s) -> /root/osprey-runs/admin/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+Wall time: 769 s, exit 0 (no stack, no lease; set-up before it 12 s)

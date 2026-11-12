@@ -2,7 +2,7 @@
 
 Branch `lane/admin-p10p2`. The plants harness is `p10p2/p10p2_plants.py`. Each plant edits the real code where the
 behaviour lives, runs the cases meant to catch it, expects them red, and restores the file. The shared files' diffs
-(`readers.diff`, `render.diff`, `glass-sign-in.diff`) are applied first, so a fault in them is planted where it will
+(`readers.diff`, `render.diff`, `glass-sign-in.diff`, and since the review of 3848c32 `runbook.diff`) are applied first, so a fault in them is planted where it will
 merge, and reverted at the end.
 
 What counts as red is as in part 1's harness:
@@ -12,7 +12,8 @@ What counts as red is as in part 1's harness:
 
 | Head | Plants | Case runs | Result | Output |
 | --- | --- | --- | --- | --- |
-| `cc684ec` (the head, on L1.9 part 2's main) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_cc684ec.txt`; the live three under the lease at 2516c4b, `gates/p10p2_live_targeted_2516c4b.txt` |
+| `d994612` (the head after the orchestrator's review of 3848c32, on main 1cbc164; the code as 87503fe) | 76: 68 offline, 8 live | 88 offline + 10 live | 98 red, 0 missed, 0 harness faults | `gates/p10p2_plants_d994612.txt`; the live ten under admin's lease on stack c at 87503fe, `gates/p10p2_live_targeted_87503fe.txt` |
+| `cc684ec` (on L1.9 part 2's main) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_cc684ec.txt`; the live three under the lease at 2516c4b, `gates/p10p2_live_targeted_2516c4b.txt` |
 | `641c403` | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_641c403.txt`; the live three under the lease at 302cf3e, `gates/p10p2_live_plants_302cf3e.txt` |
 | `19126d8` | 51 (after the lane review's fixes) | 68 offline | 68 red | `gates/p10p2_plants_19126d8.txt` |
 | `96d0513` | 39 (2 live, **not run**) | 52 offline | 52 red; the two live plants were not run here, though this table first said they were (the lane-reviewer's finding 2) | `gates/p10p2_plants_96d0513.txt` |
@@ -49,3 +50,13 @@ under admin's lease on stack b at 0691cde, bbd5721 and 302cf3e, red each time.
   `test_a_supplementary_group_outside_its_allowance_is_refused` plants group 0 on a workload and is red there by
   design; no plant of the allowance itself was run.
 - The keyboard step (`admin.spec.ts`). It runs in a browser slot, with the registry line applied.
+
+**The review of 3848c32's plants** (24 new): item 6's three tenant filters (`rows`, `one`, `update`), each red against
+the live cases that read another tenant's row; item 4's way back in (live), the lock-out count, and the runbook's
+recovery step; item 5's stale access at each of its four sites (the transfer's refusal, the `stale` set, the alert's
+filter and its words, `access_current` itself) and the sign-in recording when access was read (live); item 7's
+bearer 1013; item 8's refetch limit, the thread, the 503's two halves; the notes' RS256, leeway, `exp`, `profile`
+scope and the set-up console; item 3's notice and its *Try again*. Item 3 was also shown red by hand before the
+plant existed (the notice removed: `Unable to find role="alert"`). The first run of the harness had one harness
+fault, the stale-alert plant's site moved by the log line added to `recipients_of`; repointed at d994612 and the whole
+harness run again.

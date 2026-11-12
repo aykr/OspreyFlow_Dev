@@ -1,0 +1,26 @@
+head 87503fe on main 1cbc164 with the ten p10p2 diffs applied; stack c (b was case-b's), admin's lease taken 2026-11-12T03:38:04Z, down and released after
+
+--- the orchestrator's targeted list, with the promotion files (promotion_ageing.py changed)
+Running on ospreyflow-test (stack c, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261112T033829Z/log: bash -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_cloud_connector_access.py ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py ../OspreyFlow_Build/tests/connectors/test_athena_connector_live.py ../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py 2>&1 | grep -E '^FAILED|^ERROR|passed|failed'
+96 passed, 11 skipped, 31 warnings in 41.21s
+Wall time: 42 s, exit 0 (stack c, the lease admin took at 2026-11-12T03:38:04Z; set-up before it 11 s)
+exit 0
+
+--- the live plants (p10p2_plants.py --only-live)
+Running on ospreyflow-test (stack c, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261112T033932Z/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/admin/p10p2/p10p2_plants.py --only-live
+control (diffs applied, no plant): green (exit 0) — 13 passed in 3.36s
+glass control: green (exit 0)
+[the store reads every tenant's row for an object id] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 1.52s
+[first administrators re-granted at every start] test_first_administrators_are_seeded_once_and_a_removal_stands: red (exit 1) — 1 failed in 1.02s
+[the socket's read takes any tenant's row for an object id] test_the_sockets_read_is_this_tenants_and_records_nobody: red (exit 1) — 1 failed in 0.92s
+[item 6: Admin › People lists every tenant's rows] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 1.48s
+[item 6: Admin › People lists every tenant's rows] test_the_sockets_read_is_this_tenants_and_records_nobody: red (exit 1) — 1 failed in 0.92s
+[item 6: one person read from any tenant] test_one_person_is_read_by_this_tenant_alone: red (exit 1) — 1 failed in 0.93s
+[item 6: a role or Disable written to every tenant's row] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 1.56s
+[item 6: a role or Disable written to every tenant's row] test_adding_by_object_id_once_and_the_refusals_the_fakes_model: red (exit 1) — 1 failed in 0.90s
+[item 4(a): a named first administrator holding no role never given Admin again] test_a_named_first_administrator_holding_no_role_is_given_admin_again: red (exit 1) — 1 failed in 0.89s
+[item 5: a sign-in's access read never recorded as read] test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in: red (exit 1) — 1 failed in 0.89s
+control (restored, branch alone): green (exit 0) — 216 passed, 1 warning in 85.14s (0:01:25)
+76 plants, 10 case runs: 10 red, 0 missed, 0 harness faults
+Wall time: 106 s, exit 0 (stack c, the lease admin took at 2026-11-12T03:38:04Z; set-up before it 12 s)
+exit 0
