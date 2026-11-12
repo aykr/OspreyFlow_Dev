@@ -1,0 +1,3 @@
+Test stack d's Postgres (osprey-test-d-pg): max_connections 400.
+Test stack d up for studio: osprey-test-d-arcadedb osprey-test-d-pg osprey-test-d-valkey osprey-test-d-objectstore osprey-test-d-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Test stack d down for studio: osprey-test-d-arcadedb osprey-test-d-pg osprey-test-d-valkey osprey-test-d-objectstore osprey-test-d-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
