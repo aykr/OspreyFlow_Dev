@@ -97,8 +97,12 @@ async def test_a_cluster_makes_its_database_replicated_on_every_node(
     tables = [s for s in sent if s.lstrip().startswith("CREATE TABLE")]
     assert _names(tables) == TABLES
     assert all("ENGINE = ReplicatedMergeTree" in s for s in tables)
+    # The server here answers every column missing (an old store), so each is added, once.
     assert [s for s in sent if s.startswith("ALTER")] == [
-        "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id Nullable(String)"
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id Nullable(String)",
+        "ALTER TABLE alert_facts ADD COLUMN IF NOT EXISTS fact_id String DEFAULT alert_id",
+        "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS fact_id String DEFAULT alert_id",
+        "ALTER TABLE alert_fact_handlings ADD COLUMN IF NOT EXISTS grp UInt8 DEFAULT 0",
     ]
 
 
