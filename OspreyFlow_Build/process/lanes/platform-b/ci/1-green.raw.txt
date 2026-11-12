@@ -1,4 +1,5 @@
-# 1 with the diff, CI=true (ports pinned closed, 59991-59994)
-25 passed, 2 skipped in 3.06s
-# 1 with the diff, CI unset (same ports)
-27 passed in 4.32s
+# 1, re-run on the rebased branch (main 9aff917 + this branch's eight commits), this Mac, ports pinned closed (59991-59994)
+## CI=true
+25 passed, 2 skipped in 2.76s
+## CI unset
+27 passed in 3.94s

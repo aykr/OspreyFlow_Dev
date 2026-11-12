@@ -1,3 +1,3 @@
-# 3 with the diff at 25acbe0, this Mac: collects and lints only. Its run needs ArcadeDB, Valkey and a model: proved at the owner's next push (GitHub's conformance-model job).
-1 test collected in 0.67s
-[*] 1 fixable with `--fix`.
+# 3, on the rebased branch (main 9aff917 + this branch), this Mac: collects only; its run needs ArcadeDB, Valkey and a model, proved at the owner's next push (GitHub's conformance-model job). Ruff's I001 below is main's too.
+1 test collected in 0.95s
+I001 [*] Import block is un-sorted or un-formatted
