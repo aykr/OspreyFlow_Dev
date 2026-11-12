@@ -360,6 +360,23 @@ runner.PLANTS = [
      "f\"'/clickhouse/databases/{restoring}_{attempt}', '{{shard}}', '{{replica}}')\"",
      "f\"'/clickhouse/databases/{restoring}', '{{shard}}', '{{replica}}')\"",
      [TP + "test_the_same_set_restored_twice_on_a_cluster_is_never_refused_by_its_own_keeper_path"]),
+    # ---- round 5: the orchestrator's second review of afc1a5f -------------------------------------------------------
+    ("restore-graph saying the live database was put back when it was not", GRAPH,
+     '    elif mv "$old" "$live"; then', '    elif mv "$old" "$live" || true; then',
+     [TG + "test_a_failed_put_back_says_where_each_copy_is_and_never_that_it_was_put_back"]),
+    ("restore-graph saying 'not touched' when there was no live database", GRAPH,
+     '    if [ -e "$live" ]; then\n        echo "restore-graph refused: $1; the live database ($live) was not touched" >&2',
+     '    if true; then\n        echo "restore-graph refused: $1; the live database ($live) was not touched" >&2',
+     [TG + "test_a_deployment_whose_database_was_lost_gets_the_set"]),
+    ("restore-graph's removal of the old copy unchecked", GRAPH,
+     'if [ "$aside" = yes ] && ! rm -rf "$old"; then', 'rm -rf "$old"; if false; then',
+     [TG + "test_an_old_copy_that_cannot_be_removed_is_said_plainly"]),
+    ("the check taking a page file that is not whole pages", CHECK,
+     "if (paged.matches() && file.length() % Long.parseLong(paged.group(1)) != 0)", "if (false)",
+     [TG + "test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning"]),
+    ("the check taking a zip that holds no file", CHECK,
+     'if (entries == 0) refuse("the set\'s zip holds no file");', "if (false) refuse(\"\");",
+     [TG + "test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning"]),
 ]
 
 if __name__ == "__main__":

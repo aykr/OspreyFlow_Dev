@@ -86,7 +86,37 @@ def test_a_killed_runs_restoring_folder_is_cleared_and_the_restore_goes_on(scena
 
 
 def test_a_deployment_whose_database_was_lost_gets_the_set(scenarios: dict[str, str]) -> None:
-    assert scenarios["live-lost"].startswith("exit=0 live=set 300 restoring=no before=no")
+    line = scenarios["live-lost"]
+    assert line.startswith("exit=0 live=set 300 restoring=no before=no"), line
+    assert "there was no live database" in line
+    line = scenarios["no-zip-no-live"]
+    assert line.startswith("exit=1 live=none restoring=no before=no"), line
+    assert "there was no live database" in line and "not touched" not in line
+
+
+def test_a_failed_put_in_puts_the_live_database_back_and_says_where_the_restored_one_is(
+    scenarios: dict[str, str],
+) -> None:
+    """The restored copy's rename into place refused (a full or read-only claim): the live one is
+    renamed back, and the words say so, and where the restored copy is."""
+    line = scenarios["put-in-fails"]
+    assert line.startswith("exit=1 live=live 25 restoring=yes before=no"), line
+    assert "the live one was put back" in line and "not touched" not in line
+
+
+def test_a_failed_put_back_says_where_each_copy_is_and_never_that_it_was_put_back(
+    scenarios: dict[str, str],
+) -> None:
+    line = scenarios["put-back-fails"]
+    assert line.startswith("exit=1 live=none restoring=yes before=yes"), line
+    assert "nor the live one put back" in line and "the live data is at" in line
+    assert "was put back" not in line and "not touched" not in line
+
+
+def test_an_old_copy_that_cannot_be_removed_is_said_plainly(scenarios: dict[str, str]) -> None:
+    line = scenarios["old-not-removed"]
+    assert line.startswith("exit=1 live=set 300 restoring=no before=yes"), line
+    assert "could not be removed" in line
 
 
 def test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning(tmp_path: Path) -> None:
@@ -97,6 +127,8 @@ def test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning(tmp
     assert found["restored"].startswith("exit=0 | opens:"), found["restored"]
     for case, words in {"bucket-cut-mid-page": "bytes, the zip's", "bucket-cut-to-one-page": "bytes, the zip's",
                         "schema-empty": "schema.json is 0 bytes", "bucket-missing": "not restored",
-                        "no-database": "not restored"}.items():  # fmt: skip
+                        "no-database": "not restored",
+                        "stray-short-page-file": "is not a whole number of pages",
+                        "empty-zip": "the set's zip holds no file"}.items():  # fmt: skip
         assert found[case].startswith("exit=1 | does not open:"), (case, found[case])
         assert words in found[case], (case, found[case])

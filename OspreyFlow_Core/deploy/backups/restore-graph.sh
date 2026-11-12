@@ -11,10 +11,10 @@
 # 3. Only then the swap, by rename on the one claim: the live one to <database>.before, the
 #    restored one in its place; the old one removed last.
 #
-# Any failure before the swap removes <database>.restoring and leaves the live database as it
-# was, refused in words. A <database>.before already there is a restore stopped between its two
-# renames: it holds the old data (the live folder may be missing), and this refuses until an
-# operator has looked (the recovery runbook).
+# Each refusal says what it did and did not do. Before the swap nothing of the live database has
+# moved; once it has, the words say where each copy is. A <database>.before already there is a
+# restore stopped between its renames, and this refuses until an operator has looked (the
+# recovery runbook decides by whether <database>.restoring is still there).
 set -u
 db="$1"
 zip="$2"
@@ -24,9 +24,14 @@ live="$dbs/$db"
 new="$dbs/$db.restoring"
 old="$dbs/$db.before"
 
+# Before anything of the live database has moved: the restored copy removed, the live one as it was.
 refuse() {
     rm -rf "$new"
-    echo "restore-graph refused: $1; the live database ($live) was not touched" >&2
+    if [ -e "$live" ]; then
+        echo "restore-graph refused: $1; the live database ($live) was not touched" >&2
+    else
+        echo "restore-graph refused: $1; there was no live database ($live) to keep" >&2
+    fi
     exit 1
 }
 
@@ -40,12 +45,32 @@ rm -rf "$new" # a killed run's, never the live one
 cd /home/arcadedb || refuse "no ArcadeDB in this image"
 ./bin/restore.sh -f "file://$zip" -d "$new" || refuse "ArcadeDB's restore of the set's zip failed"
 java -cp "lib/*" "$check" "$new" "$zip" || refuse "the restored database is not the set's"
+aside=no
 if [ -e "$live" ]; then
     mv "$live" "$old" || refuse "the live database could not be set aside"
+    aside=yes
 fi
+# From here the live database has moved (when there was one): the words say where each copy is.
 if ! mv "$new" "$live"; then
-    [ -e "$old" ] && mv "$old" "$live"
-    refuse "the restored database could not be put in place; the live one was put back"
+    if [ "$aside" = no ]; then
+        echo "restore-graph refused: the restored database could not be put in place; it is at $new;" \
+            "there was no live database" >&2
+    elif mv "$old" "$live"; then
+        echo "restore-graph refused: the restored database could not be put in place; the live one" \
+            "was put back at $live; the restored one is at $new" >&2
+    else
+        echo "restore-graph refused: the restored database could not be put in place, nor the live" \
+            "one put back: the live data is at $old, the restored at $new (the recovery runbook)" >&2
+    fi
+    exit 1
 fi
-rm -rf "$old"
-echo "restore-graph: $db restored from the set, checked and put in place; the old one removed"
+if [ "$aside" = yes ] && ! rm -rf "$old"; then
+    echo "restore-graph: $db restored from the set, checked and put in place; the old copy at $old" \
+        "could not be removed: remove it before the next restore (the recovery runbook)" >&2
+    exit 1
+fi
+if [ "$aside" = yes ]; then
+    echo "restore-graph: $db restored from the set, checked and put in place; the old one removed"
+else
+    echo "restore-graph: $db restored from the set, checked and put in place; there was no live database"
+fi
