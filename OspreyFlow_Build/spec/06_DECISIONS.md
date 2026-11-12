@@ -35360,7 +35360,7 @@ review rounds, listed for the owner.*
      validated as an object id, and one already recorded is a 409 that names it.
    - The first administrators are named by object id at install (`cloud_platform.claims.first_administrators`,
      rendered as `OSPREY_FIRST_ADMINISTRATORS`) and given the Admin role once. Taking it away later is not undone at
-     the next start, except for a named person who holds no role at all (point 9).
+     the next start, except when nobody can manage people (point 10).
    - An empty list is refused when the settings load, and the Conduit refuses to start without one. It is never read
      as "everyone".
 3. **What Entra holds is refused in words** (409 `entra_holds_accounts`):
@@ -35458,10 +35458,8 @@ review rounds, listed for the owner.*
      docs lane's guide (1.81 §6a.8) says so. The docs lane's gap (b), recorded here.
 
 9. **The orchestrator's review of 3848c32 (12 November 2026)**, its rulings marked for the owner.
-   - **The way back in** (the orchestrator's ruling): at start, an object id in `first_administrators` that holds
-     **no role at all** is given Admin again (`ON CONFLICT … DO UPDATE … WHERE cardinality(roles) = 0`); one holding
-     any role keeps it, so a removal stands. Naming such a person, rendering again and restarting the Conduit is the
-     recovery step in the install runbook's step 6.
+   - **The way back in**: as amended by the second review (point 10), which replaced this round's "holds no role"
+     rule.
    - **Locking everyone out** (`leaves_no_people_manager`) counts only an enabled manager who has **signed in at
      least once** (`PersonAccount.signed_in`, from the store's `first_seen`). A person added by object id who never
      signed in is no proof anyone can administer.
@@ -35471,12 +35469,9 @@ review rounds, listed for the owner.*
      to a person in their absence: a case transfer to them is refused in words ("their clearance and unit were last
      read from Entra ID over a day ago: they sign in again first"), and a promotion's ageing alert leaves them out,
      its log saying how many and why (`recipients`, `recipients_of`; `cleared_to` then never sees such a
-     clearance). Display elsewhere is unchanged. Keycloak's people (no `access_read_at`) are always current.
-   - **The signing keys** (`principal_auth.SigningKeys`): kept for `OIDC_JWKS_TTL_SECONDS`; a key id not in them is
-     fetched again at most once in five minutes; each fetch waits at most five seconds, in a thread, so a slow or
-     unreachable Entra never holds the event loop. Unreachable is `SigningKeysUnavailable`: a 503 in words
-     (`identity_provider_unavailable`, "sign-in is unavailable: the identity provider could not be reached. Try again
-     shortly."), never "token rejected"; on the run API a 503 too.
+     clearance), and they are not named a case's Author (point 10). Display elsewhere is unchanged. Keycloak's
+     people (no `access_read_at`) are always current.
+   - **The signing keys** (`principal_auth.SigningKeys`): as the second review left them (point 10).
    - **The token check on Entra**: RS256 alone, whatever `OIDC_ALGORITHMS` says; a leeway of 60 seconds on the
      times; the service identity's token must carry `exp`.
    - **The Glass asks for `openid profile`** and the API's scope, for the names it shows. When `/v1/me` does not
@@ -35488,6 +35483,43 @@ review rounds, listed for the owner.*
      table once.
    - **Carried**: the service identity's app-role check (requiring an orchestrator's application to hold an app role
      this API defines), measured on the client's tenant first (CARRIES).
+
+10. **The orchestrator's second review of 67f3d2a (12 November 2026)**, its amended ruling marked for the owner.
+    - **The way back in, amended** (the orchestrator's ruling, for the owner as amended): at start, a named first
+      administrator is given Admin again **only when nobody can manage people** (`people_managers` empty: no enabled
+      person who has signed in holds `manage_people`, by their roles and the custom roles' rights), added to what
+      they hold. Each Admin role a start gives (the install's, and a way back in) writes an audit row,
+      `grant_first_administrator`, by `first-administrators`. Otherwise an administrator's change stands, a named
+      person's roles cleared on purpose included. The seed runs under `PEOPLE_LOCK`, the lock every change that could
+      leave nobody able to manage people takes. The runbook's recovery step says so.
+    - **The signing keys** (`principal_auth.SigningKeys`, which replaced `PyJWKClient`): kept for
+      `OIDC_JWKS_TTL_SECONDS`, counted at the server (N sign-ins, one fetch). One thread fetches while the others use
+      the last good set. Past the keys' time a failed fetch leaves the last good set in use for
+      `KEYS_GRACE_SECONDS` (an hour, logged), then a 503. A key id not held is fetched for at most once in five
+      minutes; a set fetched in the same call opens that window. **A key Entra publishes within five minutes of
+      such a fetch is refused (401) until the next fetch is due or the keys' time is up**: pinned by a test, and
+      carried to the live checks. Each fetch is bounded by five seconds and runs in `KEYS_EXECUTOR`, the keys' own
+      four threads, never `asyncio.to_thread`'s shared pool. Every way the identity provider can fail to give keys
+      (unreachable, a refusal, a body that is not JSON, a set with no usable key) is `SigningKeysUnavailable`, a 503
+      in words, never a 500 nor a 401 that signs people out. The URL must be http or https. The run API's verifier
+      shares the person path's set (one cache, one fetch limit), with its own 503, RS256 pin and leeway tested.
+    - **Owner resolution on Keycloak**: the exchanged token is checked in the keys' threads, and its keys
+      unreadable is `PrincipalExchangeUnavailable` (ADR-044's path: the run marked stopped), as before this step,
+      never an exception the scheduler, a monitor, a screening run or a recipe run does not expect. That it runs in a
+      thread is not shown red on this path alone (the same `in_keys_thread` is, on the person path).
+    - **`access_read_at` refreshed at most hourly** while the person is active: tested live both ways (two hours
+      old, refreshed; thirty minutes, not).
+    - **An open socket** closes with the code its admission gives: 1013 when the store cannot answer, 1008 when the
+      person is disabled, gone, their roles changed or their case level lost (point 1, now as the code does).
+    - **Name an Author** refuses a person whose access was read over 24 hours ago (409 `access_out_of_date`, in the
+      transfer's words), so the rule fails closed the same way everywhere a unit or clearance is trusted in the
+      person's absence.
+    - **The transfer's markings check** no longer reads the stale set: `check_transfers`, run first, refuses a stale
+      recipient, so that branch could not be reached.
+    - **The account-unread notice** is its own component (`src/auth/AccountUnread.tsx`), with a keyboard spec
+      (`account-unread.spec.ts`, registered as `ACCOUNT_UNREAD_ACTIONS`) and an axe scan in dark, light and GOV.UK
+      (`account-unread-harness.html`), each shown red.
+    - **The bootstrap's advisory lock** is shown deterministically: while another session holds it, `connect` waits.
 
 **Still to measure against the client's development tenant**, unchanged from Amendment 6's list (rule 15): the token
 version, the extension names, the claims-mapping policy's keys, guests and federated members, and the Glass's access
