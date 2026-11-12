@@ -1,0 +1,25 @@
+# The sites (ospreyflow.org, ospreyflow.net): tests/test_sites.py against the drafts as delivered (8fecd8d), before build.py's changes reached the committed pages. On the Mac on closed ports, no stack, 2026-11-12T16:55:41Z. Each red is a real violation in the drafts, except the build check, red because the committed pages were not yet build.py's output.
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_sites.py
+FAILED tests/test_sites.py::test_the_sites_pass[laurium] - assert ["org/featu...
+FAILED tests/test_sites.py::test_the_sites_pass[placeholder] - assert ['net/c...
+FAILED tests/test_sites.py::test_the_sites_pass[statement] - AssertionError: ...
+FAILED tests/test_sites.py::test_the_pages_are_build_pys_output - AssertionEr...
+FAILED tests/test_sites.py::test_the_statement_check_flags_a_page_without_it
+5 failed, 36 passed in 1.45s
+
+# The build check shown red on drift: one space appended to the committed org/governance.html, then build.py rerun.
+FAILED tests/test_sites.py::test_the_pages_are_build_pys_output - AssertionError: PosixPath('governance.html')
+1 failed, 40 deselected (then, rebuilt: 1 passed)
+
+# Added with item 3: installs_without_a_mode, run against the drafts as delivered (8fecd8d, unpacked into the scratchpad): red on both public-sector pages, the command the install refuses ('Say which mode to install').
+['net/public-sector.html: 'ospreyflow install --starter govuk-crime …', 'org/public-sector.html: 'ospreyflow install --starter govuk-crime …']
+# After item 3's corrections, at ccc0521 (12 November 2026, about 17:40 UK): tests/test_sites.py 43 passed; with tests/test_website_wording.py, 74 passed.
+
+# After the lane-reviewer's round: thirteen new cases, run against the checks as they stood at ccc0521 (that commit's
+# test_sites.py and client_hashes.py, in a scratch tree, the new cases' CHECKS replaced by the old), all red; then
+# against the new checks, green. Each names a hole the reviewer found.
+FAILED test_the_client_check_reads_dots_accents_invisible_characters_and_addresses[E.X.A.M.P.L.E.] [an accent] [&shy; and a zero-width space] [an address]
+FAILED test_the_placeholder_check_flags_build_pys_placeholder_card
+FAILED test_the_request_check_flags_each_other_way_out[//… stylesheet] [//… image] [srcset] [style="url(…)"] [<style>]
+FAILED test_the_link_check_flags_a_link_out_of_the_sites_folder[../build.py] [../net/contact.html] [../../README.md]
+13 failed, 43 deselected

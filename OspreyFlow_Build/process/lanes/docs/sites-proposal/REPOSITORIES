@@ -1,0 +1,3 @@
+# Each new site's own repository, written by the owner once they have created it (publish_pages.sh --site).
+# org https://github.com/<owner>/<repository>
+# net https://github.com/<owner>/<repository>
