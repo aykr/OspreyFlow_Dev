@@ -611,6 +611,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         is kept. I asked case-b, platform and platform-b to pause and end their sessions; studio had none
         running. Each resumes on sol, and none is reopened until it has a step: an idle session would only
         spend tokens. Only the orchestrator stays on ayan.
+      - **P10 part 2, third review (relayed on sol, about 07:30): one must-fix**, a test that passed only when
+        run alone, and five small fixes in the Entra key fetching:
+        - the run API's fetch ran in a shared thread pool;
+        - the re-grant's audit row was written outside its transaction;
+        - the 5 s bound applied to each read, not the whole fetch;
+        - a failed fetch could turn 503s into 401s;
+        - the re-grant's lock had no plant.
+
+        I confirmed the main ones in the code. Admin is doing one more pass, which I'll check myself.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
