@@ -25,6 +25,7 @@ import datetime as dt
 import json
 import os
 import secrets
+import re
 import subprocess
 import sys
 import time
@@ -34,6 +35,7 @@ from typing import Any
 import yaml
 
 HERE = Path(__file__).resolve().parent
+CORE = HERE.parents[4] / "OspreyFlow_Core"
 BUILD = HERE.parents[3]
 STANDIN_CODE = BUILD / "tests" / "fixtures" / "cloud_platform" / "s3_standin.py"
 CONFIG = HERE / "p9_kind_osprey.yaml"
@@ -745,56 +747,42 @@ class Run:
                     },
                 }
             )
-        if kubectl(
-            "-n", self.ns, "get", "pod", "p9-shared", "--ignore-not-found", "-o", "name"
-        ).strip():
-            return
-        apply(
-            {
-                "apiVersion": "v1",
-                "kind": "Pod",
-                "metadata": {
-                    "name": "p9-shared",
-                    "namespace": self.ns,
-                    # The Conduit's labels, as the restore's writers check finds the Conduit.
-                    "labels": {
-                        "app.kubernetes.io/part-of": "ospreyflow",
-                        "app.kubernetes.io/name": "api",
-                        "ospreyflow.io/shared": "true",
-                    },
-                },
+        # Since round 5 a Deployment named as the Conduit's (`api`), so the runbook's own step 2
+        # (`kubectl scale deployment,statefulset -l …`) stops it as it stops the Conduit; an earlier
+        # run's bare pod removed.
+        kubectl("-n", self.ns, "delete", "pod", "p9-shared", "--ignore-not-found", "--wait=true")
+        labels = {"app.kubernetes.io/part-of": "ospreyflow", "app.kubernetes.io/name": "api",
+                  "ospreyflow.io/shared": "true"}  # fmt: skip
+        if kubectl("-n", self.ns, "get", "deployment", "api", "--ignore-not-found", "-o", "name").strip():
+            kubectl("-n", self.ns, "scale", "deployment/api", "--replicas=1")
+        else:
+            apply({
+                "apiVersion": "apps/v1", "kind": "Deployment",
+                "metadata": {"name": "api", "namespace": self.ns, "labels": labels},
                 "spec": {
-                    "securityContext": {
-                        "runAsNonRoot": True,
-                        "runAsUser": security["user"],
-                        "runAsGroup": security["group"],
-                        "fsGroup": security["group"],
+                    "replicas": 1,
+                    "selector": {"matchLabels": {"app.kubernetes.io/name": "api"}},
+                    "template": {
+                        "metadata": {"labels": labels},
+                        "spec": {
+                            "securityContext": {"runAsNonRoot": True, "runAsUser": security["user"],
+                                                "runAsGroup": security["group"], "fsGroup": security["group"]},
+                            "containers": [{
+                                "name": "shared", "image": values["backups"]["image"],
+                                "command": ["/app/.venv/bin/python", "-c", "import time; time.sleep(10**9)"],
+                                "volumeMounts": [{"name": "ingest", "mountPath": "/claims/ingest"}],
+                            }],
+                            "volumes": [{"name": "ingest", "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"}}],
+                        },
                     },
-                    "containers": [
-                        {
-                            "name": "shared",
-                            "image": values["backups"]["image"],
-                            "command": [
-                                "/app/.venv/bin/python",
-                                "-c",
-                                "import time; time.sleep(10**9)",
-                            ],
-                            "volumeMounts": [{"name": "ingest", "mountPath": "/claims/ingest"}],
-                        }
-                    ],
-                    "volumes": [
-                        {
-                            "name": "ingest",
-                            "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"},
-                        }
-                    ],
                 },
-            }
-        )
-        kubectl("-n", self.ns, "wait", "--for=condition=Ready", "pod/p9-shared", "--timeout=300s")
+            })  # fmt: skip
+        kubectl("-n", self.ns, "rollout", "status", "deployment/api", "--timeout=300s")
 
     def stop_shared(self) -> None:
-        kubectl("-n", self.ns, "delete", "pod", "p9-shared", "--ignore-not-found", "--wait=true")
+        kubectl("-n", self.ns, "scale", "deployment/api", "--replicas=0", check=False)
+        kubectl("-n", self.ns, "wait", "--for=delete", "pod", "-l", "app.kubernetes.io/name=api",
+                "--timeout=300s", check=False)  # fmt: skip
 
     def in_shared(self, code: str) -> str:
         return kubectl(
@@ -802,7 +790,7 @@ class Run:
             self.ns,
             "exec",
             "-i",
-            "p9-shared",
+            "deployment/api",
             "--",
             "/app/.venv/bin/python",
             "-",
@@ -1136,6 +1124,84 @@ class Run:
         self.save("live_restore")
         print(f"{'PASS' if passed else 'FAIL'} a restore beside live databases, and two failures part-way")
         if not passed:
+            raise SystemExit("FAIL: see the record")
+
+    def irsa_filter(self) -> None:
+        """Kind alone, standing for EKS's IRSA webhook: what it adds to a pod at admission (the
+        projected token, the role, the stand-in's endpoints and CA) added to each Job rendered on
+        stdin, as `restore` adds it; everything else passed through unchanged."""
+        image = self.values()["backups"]["image"]
+        out = []
+        for doc in yaml.safe_load_all(sys.stdin.read()):
+            if doc and doc.get("kind") == "Job":
+                self.irsa(doc["spec"]["template"]["spec"], image)
+            if doc:
+                out.append(doc)
+        sys.stdout.write(yaml.safe_dump_all(out, sort_keys=False))
+
+    def runbook_walk(self) -> None:
+        """The recovery runbook's restore, its commands as written (the orchestrator's second
+        review, must-fix 1; rule 15: the operator's procedure itself had never run): after a backup
+        Job has finished (its pods kept), with the stores changed since the set, the block that
+        begins "# 1. No backup during the restore" is read from RUNBOOK.md, its placeholders filled
+        as an operator fills them, and run by bash. Kind's own: `helm` runs Helm's image and adds
+        what EKS's IRSA webhook adds to the Jobs (`irsa_filter`); `python3` has PyYAML."""
+        self.standin_port_path()
+        self.restore_api_path(True)
+        self.shared_pod()
+        seeded = self.seed()
+        ok, _, set_id = self.backup()
+        if not ok:
+            raise SystemExit("the backup failed")
+        kept = kubectl("-n", self.ns, "get", "pods", "-l", "app.kubernetes.io/name in (backup,backup-claims)",
+                       "-o", "name").split()  # fmt: skip
+        changed = self.change("a")
+        text = (CORE / "deploy" / "RUNBOOK.md").read_text(encoding="utf-8")
+        start = text.index("# 1. No backup during the restore")
+        block = text[start : text.index("```", start)]
+        filled = (block.replace("<namespace>", self.ns).replace("<render>", str(self.out))
+                  .replace("<set>", set_id).replace("<each one noted>", "api").replace("<as noted>", "1"))  # fmt: skip
+        assert "<" not in re.sub(r"<\(|<<", "", filled.replace("2>/dev/null", "")), "a placeholder left unfilled"
+        shim = self.state / "runbook-shim"
+        shim.mkdir(exist_ok=True)
+        (shim / "helm").write_text(
+            "#!/bin/sh\n"
+            f'docker run --rm --network host -v "{CORE}/deploy/helm/ospreyflow:{CORE}/deploy/helm/ospreyflow:ro" '
+            f'-v "{self.out}:{self.out}:ro" -w "{CORE}" alpine/helm:3.16.3 "$@" \\\n'
+            f'  | PYTHONPATH={CORE}:{CORE}/packages:{CORE.parent / "OspreyFlow_Build"} {CORE}/.venv/bin/python '
+            f'{HERE / "p9_kind.py"} irsa_filter --state "{self.state}" --namespace "{self.ns}"\n'
+        )
+        (shim / "python3").write_text(f'#!/bin/sh\nexec {CORE}/.venv/bin/python "$@"\n')
+        for f in ("helm", "python3"):
+            (shim / f).chmod(0o755)
+        (self.state / "runbook-walk.sh").write_text(filled)
+        started = time.monotonic()
+        done = subprocess.run(
+            ["bash", "-x", str(self.state / "runbook-walk.sh")], cwd=CORE, capture_output=True, text=True,
+            env={**os.environ, "PATH": f"{shim}:{os.environ['PATH']}"}, check=False,
+        )  # fmt: skip
+        seconds = round(time.monotonic() - started, 1)
+        print(done.stdout[-6000:], done.stderr[-12000:], sep="\n")
+        kubectl("-n", self.ns, "rollout", "status", "statefulset/arcadedb", "--timeout=900s", check=False)
+        kubectl("-n", self.ns, "wait", "--for=condition=Ready", "pod/arcadedb-0", "--timeout=900s", check=False)
+        self.shared_pod()
+        after = self.counts()
+        left = self.leftovers()
+        suspended = [kubectl("-n", self.ns, "get", "cronjob", c, "-o", "jsonpath={.spec.suspend}", check=False)
+                     for c in ("ospreyflow-backup", "ospreyflow-backup-claims")]  # fmt: skip
+        self.remove_copies([f"sets/{set_id}/"])
+        record = {
+            "set": set_id, "seeded": seeded, "changed": changed, "after": after, "leftovers": left,
+            "kept_backup_pods": kept, "cronjobs_suspended_after": suspended, "seconds": seconds,
+            "bash_exit": done.returncode, "script": filled,
+            "as_the_set": after == seeded,
+            "pass": after == seeded and left == {"arcadedb": [], "clickhouse": [], "claims": []}
+                    and bool(kept) and suspended == ["false", "false"] and "timed out" not in done.stderr,
+        }  # fmt: skip
+        self.record = {"runbook_walk": record}
+        self.save("runbook_walk")
+        print(f"{'PASS' if record['pass'] else 'FAIL'} the runbook's restore, as written")
+        if not record["pass"]:
             raise SystemExit("FAIL: see the record")
 
     def last_logs(self, container: str) -> str:
@@ -1772,6 +1838,8 @@ def main() -> None:
             "osprey_bound_red",
             "restore_refused",
             "live_restore",
+            "runbook_walk",
+            "irsa_filter",
         ],
     )
     parser.add_argument("--state", type=Path, required=True)
