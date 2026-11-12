@@ -1,0 +1,15 @@
+Running on ospreyflow-test (stack offline, osprey-runs/merge/OspreyFlow_Build/), logged at osprey-runs/merge.meta/runs/20261112T091138Z/log: bash -c mkdir -p ~/osprey-runs/merge-out; cd ../OspreyFlow_Build; SKIP_JS=1 make test > ~/osprey-runs/merge-out/main-test.txt 2>&1; echo test-rc=$?; OSPREY_PORTS_SLOT=14 make -k ci > ~/osprey-runs/merge-out/main-ci.txt 2>&1; echo ci-rc=$?; grep -E "[0-9]+ passed" ~/osprey-runs/merge-out/main-test.txt | tail -1; grep -E "^FAILED|^ERROR|make test: a part|live-collect" ~/osprey-runs/merge-out/main-test.txt | head -8; grep -E "^make.*Error" ~/osprey-runs/merge-out/main-ci.txt | tail -5; grep -E "manifests, [0-9]+ violation|no new drift" ~/osprey-runs/merge-out/main-ci.txt | head -7
+test-rc=2
+ci-rc=0
+==== 1 failed, 12764 passed, 33 skipped, 131 warnings in 844.51s (0:14:04) =====
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+make live-collect || touch /root/osprey-runs/merge/OspreyFlow_Build/.make-test-failed
+make test: a part above failed
+development-sources.yaml: 58 manifests, 0 violation(s)
+development.yaml: 54 manifests, 0 violation(s)
+poc.yaml: 52 manifests, 0 violation(s)
+production-bedrock.yaml: 58 manifests, 0 violation(s)
+production.yaml: 54 manifests, 0 violation(s)
+domain-model-coverage-check: 104 class(es), 0 allowlisted, no new drift.
+route-coverage-check: 419 route(s), 0 allowlisted, no new drift.
+Wall time: 1702 s, exit 0 (no stack, no lease; set-up before it 11 s)

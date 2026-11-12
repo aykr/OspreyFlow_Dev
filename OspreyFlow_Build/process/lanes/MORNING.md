@@ -501,6 +501,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       Patch 5 (make test runs all its parts) went in reshaped. As one shell line holding `$(MAKE)` it ran the suite
       even under `make -n` (found when I checked it; it died on its arguments before any test ran). Each part is now
       its own recipe line with a failure marker, and its record is beside it in `merger/owner-diffs/`.
+      Main with all five, on the server (`merger/gates/main-4b04fe8.txt`):
+      - make test: 12,764 passed, 1 failed (the server's GPU case alone), and live-collect ran after it;
+      - make -k ci: exit 0;
+      - cp-policy-check: 0 violations on all five fixtures.
+
+      Nothing else on main is red.
+      I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
+      the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
     - **What happened overnight:**
       - **About 22:05, P7b landed** (3673660), after a final review, a re-check and a second pass. cp-policy-check
