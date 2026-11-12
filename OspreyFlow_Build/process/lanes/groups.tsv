@@ -92,3 +92,4 @@ docs	D2e	Housekeeping	After the client's install
 docs	sites	Housekeeping	Housekeeping
 platform	R1	Housekeeping	Client install
 platform-b	ci-green	Housekeeping	Housekeeping
+platform-b	gate-b	Four places, the Glass and Admin	Small
