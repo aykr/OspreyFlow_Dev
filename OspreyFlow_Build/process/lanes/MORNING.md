@@ -762,6 +762,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - the offboarding plan shows a hidden list's name and can hand its schedule to someone uncleared.
 
         Both confirmed in the code and being fixed. It lands after the demo if its gates miss Friday's 11:30.
+      - **Friday morning, re-ordered for your 06:30–09:30 absence:**
+        1. gate-b merged by 08:30;
+        2. the demo lane deploys the banner only (the key prompt off) while you are away;
+        3. **about 09:30, you run (2 minutes):**
+           `ssh -t ospreyflow-test 'cd /opt/ospreyflow && sudo -u osprey PYTHONPATH=cli:.:packages .venv/bin/python -m harness.access_key set deploy/generated/small'`
+           (it asks for the key twice and shows nothing; I'll confirm the exact line once gate-b has merged);
+        4. the demo lane switches the key prompt on and checks it, by 10:30.
+
+        If the key isn't set by 11:00, the demo runs with the banner alone, behind your address allowlist.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
