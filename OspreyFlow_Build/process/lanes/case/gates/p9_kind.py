@@ -557,7 +557,23 @@ class Run:
                     {"name": "standin-ca", "mountPath": CA_DIR, "readOnly": True}
                 )
 
+    def standin_port_path(self) -> None:
+        """Kind alone: the stand-in answers on its own port (9443) where S3 and STS answer on 443.
+        P7b's rows give P9's pods and ClickHouse S3 and STS on 443 to the pod network here (the kind
+        platform's `service_nets`); this adds that port alone, to the stand-in alone."""
+        apply({
+            "apiVersion": "projectcalico.org/v3", "kind": "NetworkPolicy",
+            "metadata": {"name": "default.p9-kind-standin-port", "namespace": self.ns},
+            "spec": {"tier": "default", "order": 150,
+                     "selector": "app.kubernetes.io/name in {'backup', 'backup-claims', 'restore', 'restore-claims', 'clickhouse'}",
+                     "types": ["Egress"],
+                     "egress": [{"action": "Allow", "protocol": "TCP",
+                                 "destination": {"namespaceSelector": f"kubernetes.io/metadata.name == '{STANDIN_NS}'",
+                                                 "selector": "app == 's3-standin'", "ports": [STANDIN_PORT]}}]},
+        })  # fmt: skip
+
     def patch(self) -> None:
+        self.standin_port_path()
         image = self.values()["backups"]["image"]
         cron = json.loads(
             kubectl("-n", self.ns, "get", "cronjob", "ospreyflow-backup", "-o", "json")
@@ -1051,6 +1067,7 @@ class Run:
         failures planted part-way, each leaving the live database it was meant to protect."""
         from harness import cloud_platform_backups as backups
 
+        self.standin_port_path()
         self.shared_pod()
         seeded = self.seed()
         ok, logs, set_id = self.backup()
