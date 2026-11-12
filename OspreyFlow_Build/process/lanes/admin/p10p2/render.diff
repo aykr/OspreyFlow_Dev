@@ -154,6 +154,28 @@ index 7e9a321..4ade33b 100644
      assert spec is not None and "serviceAccountName" not in spec
      spec["serviceAccount"] = irsa
      assert [(v.rule, v.detail) for v in check_manifests(docs, registry) if v.rule == "token"] == [
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml
+index 56a71db..e15d023 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml
+@@ -19,6 +19,17 @@ cloud_platform:
+     # The declared bucket and Athena, by their networks (synthetic): the Conduit's alone.
+     synthetic-exports.s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+     athena.eu-west-2.amazonaws.com: ["198.18.3.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.2.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+   # What S3 and Athena connections may read (synthetic names): Admin refuses any other.
+   connector_sources:
+     s3:
 diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
 index 368b97b..1fcf0eb 100644
 --- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
@@ -750,7 +772,7 @@ index 1310135..4107ecf 100644
  
  @dataclass(frozen=True)
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index 9d68c2b..ee0f9fd 100644
+index 7d0d7f6..5b193d4 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
 @@ -60,8 +60,26 @@ from schemas.deployment import (
@@ -853,9 +875,9 @@ index 9d68c2b..ee0f9fd 100644
          "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
 +        "sign_in": [(host, 443) for host in profile.egress.sign_in],
          "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
-     }  # fmt: skip
-     for map_provider in config.map.providers if config.map is not None else []:
-@@ -887,7 +945,7 @@ def render_cloud_platform(
+         # ADR-140 Amendment 21: each declared S3 bucket and Athena workgroup by its own host, on
+         # 443. Never a results or table location's bucket: Athena reaches those itself.
+@@ -890,7 +948,7 @@ def render_cloud_platform(
      from harness.cloud_platform.terraform import render_terraform
      from harness.cluster import render_cluster
      from harness.render import service_images
@@ -864,7 +886,7 @@ index 9d68c2b..ee0f9fd 100644
  
      _refuse(config)
      platform = load_platform(_cp(config).platform)
-@@ -968,7 +1026,11 @@ def render_cloud_platform(
+@@ -971,7 +1029,11 @@ def render_cloud_platform(
  
          raise UnpinnedImagesError(copies.unresolved)
  
@@ -877,7 +899,7 @@ index 9d68c2b..ee0f9fd 100644
      # ArcadeDB's heap is its own container's, from its limit (above), never the cluster's
      # machine-sized setting, which nothing else reads.
      environment.pop("OSPREY_ARCADEDB_HEAP", None)
-@@ -993,23 +1055,37 @@ def render_cloud_platform(
+@@ -996,7 +1058,9 @@ def render_cloud_platform(
      environment["OSPREY_HIGHEST_MARKING"] = highest_marking(config)
      # What the cluster's install writes into our Secret, and this profile has no install to write.
      install = _what_the_install_writes(config, as_cluster, set(variables))
@@ -885,11 +907,12 @@ index 9d68c2b..ee0f9fd 100644
 +    environment.update({k: v for k, v in install.settings.items() if k not in REALM_SETTINGS})
 +    # Entra ID's, last, so nothing the cluster's realm wrote stands (ADR-148 Amendment 8).
 +    environment.update(entra_settings(config))
-     if _cp(config).connector_hosts:
-         # The Conduit's own allow-list, from the list the egress policy allows (one list, both).
-         # Hosts alone: the Conduit's allow-list matches a host; the port is the egress policy's.
-         hosts = {connector_address(e)[0] for e in _cp(config).connector_hosts}
-         environment["OSPREY_CONNECTOR_EGRESS"] = ",".join(sorted(hosts))
+     sources = _cp(config).connector_sources
+     if _cp(config).connector_hosts or sources.declared():
+         # The Conduit's own allow-list, from the lists the egress policy allows (one list, both).
+@@ -1010,16 +1074,28 @@ def render_cloud_platform(
+             sources.model_dump(mode="json"), sort_keys=True
+         )
      secrets = values["secrets"]
 -    secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
 +    secrets["keys"] = sorted(
@@ -921,7 +944,7 @@ index 9d68c2b..ee0f9fd 100644
      storage: dict[str, Any] = {
          "className": platform.storage.class_name,
          "sharedClassName": platform.storage.class_name,
-@@ -1034,6 +1110,8 @@ def render_cloud_platform(
+@@ -1044,6 +1120,8 @@ def render_cloud_platform(
          "environment": environment,
          "files": {
              **files,
@@ -931,7 +954,7 @@ index 9d68c2b..ee0f9fd 100644
              "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
          },
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-index 0af3ab4..429cec5 100644
+index 90bbaee..76c7535 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 +++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 @@ -9,15 +9,14 @@
@@ -964,18 +987,21 @@ index 0af3ab4..429cec5 100644
    # A model engine that names no `api_base` is reached at its provider's own host.
    engine_hosts:
      openai: api.openai.com
-@@ -47,8 +49,8 @@ egress:
+@@ -47,9 +49,10 @@ egress:
    # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
    # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
    # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
--  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host the Conduit and the
--  # workers.
-+  # the Conduit, Entra ID's sign-in host the Conduit (P10 part 2), a connector host the Conduit and
-+  # the workers; nothing reaches the mail server since P10 part 2 (Keycloak sent its sign-in mail).
+-  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host and a declared S3 or
+-  # Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
+-  # (ADR-140 Amendment 21; the worker's jobs read none).
++  # the Conduit, Entra ID's sign-in host the Conduit (P10 part 2), a connector host and a declared S3
++  # or Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
++  # (ADR-140 Amendment 21; the worker's jobs read none); nothing reaches the mail server since P10
++  # part 2 (Keycloak sent its sign-in mail).
    # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
    identity: ["sts.{region}.amazonaws.com"]
    # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
-@@ -57,15 +59,16 @@ egress:
+@@ -58,16 +61,17 @@ egress:
    others: [backup, backup-claims, restore, restore-claims]
    reach:
      identity: [litellm]
@@ -987,14 +1013,15 @@ index 0af3ab4..429cec5 100644
      maps: [api]
 -    mail: [keycloak]
 +    mail: []
-     connectors: [api, worker]
+     connectors: [api]
+     sources: [api]
    # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
 -  managed: [api, worker, report-sync, superset, keycloak, litellm]
 +  managed: [api, worker, report-sync, superset, litellm]
    # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
    # 443 is added when the deployment searches with it.
    managed_ports: [5432, 6379]
-@@ -74,11 +77,9 @@ egress:
+@@ -76,11 +80,9 @@ egress:
    # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
    paths:
      workspace: [api]
@@ -1009,7 +1036,7 @@ index 0af3ab4..429cec5 100644
      arcadedb: [arcadedb]
      clickhouse: [clickhouse, clickhouse-keeper]
      clickhouse-keeper: [clickhouse-keeper]
-@@ -106,7 +107,6 @@ resources:
+@@ -108,7 +110,6 @@ resources:
    report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
    ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
@@ -1017,7 +1044,7 @@ index 0af3ab4..429cec5 100644
    litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
    # Requested at its limit: the store is the last thing a node under pressure should evict.
    arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
-@@ -147,6 +147,5 @@ poc:
+@@ -149,6 +150,5 @@ poc:
      api: "2"
      worker: "2"
      ner: "1"
@@ -1025,15 +1052,15 @@ index 0af3ab4..429cec5 100644
      arcadedb: "2"
      clickhouse: "2"
 diff --git a/OspreyFlow_Core/harness/cloud_platform/settings.py b/OspreyFlow_Core/harness/cloud_platform/settings.py
-index 5707c7f..d101179 100644
+index 6fea034..594ab3f 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/settings.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/settings.py
 @@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
  
  #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
  #: reached only by the workloads `egress.reach` names for it.
--HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors")
-+HOST_KINDS = ("always", "identity", "sign_in", "engines", "maps", "mail", "connectors")
+-HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors", "sources")
++HOST_KINDS = ("always", "identity", "sign_in", "engines", "maps", "mail", "connectors", "sources")
  #: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
  KUBE_API = "kube-api"
  
@@ -1108,20 +1135,20 @@ index 72178a6..d698f5e 100644
  
  
 diff --git a/OspreyFlow_Core/packages/schemas/deployment.py b/OspreyFlow_Core/packages/schemas/deployment.py
-index 2aa6099..5c1aec6 100644
+index d03c67c..cc4f30a 100644
 --- a/OspreyFlow_Core/packages/schemas/deployment.py
 +++ b/OspreyFlow_Core/packages/schemas/deployment.py
 @@ -31,7 +31,7 @@ from __future__ import annotations
  import re
  from enum import StrEnum
  from pathlib import Path
--from typing import Literal
-+from typing import Any, Literal
+-from typing import Annotated, Literal
++from typing import Annotated, Any, Literal
  from urllib.parse import urlsplit
  
  import yaml
-@@ -944,6 +944,107 @@ def too_wide_for_egress(net: str) -> str | None:
-     return None
+@@ -1076,6 +1076,107 @@ class ConnectorSources(BaseModel):
+         return sorted({s.host() for s in self.s3} | {a.host() for a in self.athena})
  
  
 +_ENTRA_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -1228,7 +1255,7 @@ index 2aa6099..5c1aec6 100644
  class CloudPlatformConfig(BaseModel):
      """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
      namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
-@@ -1000,6 +1101,12 @@ class CloudPlatformConfig(BaseModel):
+@@ -1132,6 +1233,12 @@ class CloudPlatformConfig(BaseModel):
          "holding the certificate for the deployment's names (its id. and bi. names among them), "
          "where the platform's wildcard does not cover them",
      )
@@ -1242,7 +1269,7 @@ index 2aa6099..5c1aec6 100644
          default_factory=list,
          description="The hosts a SQL or API connection may reach, each as host or host:port (a "
 diff --git a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
-index e029cfe..fbb58b8 100644
+index 4439c7b..34ae386 100644
 --- a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
 +++ b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
 @@ -201,6 +201,39 @@ export type AllowFrom = string[];
@@ -1285,7 +1312,7 @@ index e029cfe..fbb58b8 100644
  /**
   * The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both
   */
-@@ -716,6 +749,10 @@ export interface CloudPlatformConfig {
+@@ -758,6 +791,10 @@ export interface CloudPlatformConfig {
    allow_from?: AllowFrom;
    egress_nets?: EgressNets;
    tls_secret?: TlsSecret;
@@ -1294,9 +1321,9 @@ index e029cfe..fbb58b8 100644
 +   */
 +  claims?: EntraSignInConfig | null;
    connector_hosts?: ConnectorHosts;
+   connector_sources?: ConnectorSources;
  }
- /**
-@@ -724,6 +761,44 @@ export interface CloudPlatformConfig {
+@@ -767,6 +804,44 @@ export interface CloudPlatformConfig {
  export interface EgressNets {
    [k: string]: string[];
  }
@@ -1339,5 +1366,5 @@ index e029cfe..fbb58b8 100644
 +  [k: string]: unknown;
 +}
  /**
-  * What this deployment publishes to its host.
-  *
+  * The S3 buckets and Athena workgroups an S3 or Athena connection may read (ADR-140 Amendment 21). Each becomes the Conduit's own egress row on 443 and an entry on its allow-list, and the namespace's IAM role gains read-only statements scoped to it. Admin › Connections refuses an S3 or Athena connection not declared here; declare it, re-render and run helm upgrade (and apply the Terraform)
+  */
