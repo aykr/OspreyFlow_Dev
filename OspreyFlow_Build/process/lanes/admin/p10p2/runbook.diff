@@ -300,10 +300,10 @@ index d28f627..0000000
 -if __name__ == "__main__":
 -    sys.exit(main())
 diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
-index 05efa62..fe46f76 100644
+index 1520fe0..2f3db82 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
-@@ -84,6 +84,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
+@@ -85,6 +85,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
      hosts = [r["host"] for r in values["ingress"]["rules"]]
      glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
      host = cp.registry.split("/")[0]
@@ -312,7 +312,7 @@ index 05efa62..fe46f76 100644
      return f"""# Install: OspreyFlow in `{cp.namespace}` ({cp.shape} shape)
  
  Rendered for this deployment, before its images are pushed, by `PYTHONPATH=.:packages
-@@ -160,14 +162,30 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
+@@ -161,14 +163,30 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
  {rollouts}
  ```
  

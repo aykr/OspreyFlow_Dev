@@ -550,7 +550,7 @@ index 0000000..6fe5e6e
 +    served = {p["service"] for rule in values["ingress"]["rules"] for p in rule["paths"]}
 +    assert served <= {w["name"] for w in values["workloads"]}
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
-index d2df5e3..bf595ff 100644
+index 02c9b45..e88781b 100644
 --- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
 @@ -24,8 +24,18 @@ from typing import Any
@@ -622,7 +622,7 @@ index d2df5e3..bf595ff 100644
  
  
  @pytest.mark.parametrize("fixture", ["development", "production"])
-@@ -313,9 +327,6 @@ def test_a_variable_a_command_names_is_defined_before_it(values: dict[str, Any])
+@@ -319,9 +333,6 @@ def test_a_variable_a_command_names_is_defined_before_it(values: dict[str, Any])
              assert "$$(POSTGRES_HOST)" not in part, container["name"]
              for name in set(re.findall(r"(?<!\$)\$\(([A-Z_][A-Z0-9_]*)\)", part)):
                  assert name in {e["name"] for e in env}, (container["name"], name)
@@ -632,7 +632,7 @@ index d2df5e3..bf595ff 100644
  
  
  def test_the_conduit_knows_its_profile(values: dict[str, Any]) -> None:
-@@ -378,10 +389,14 @@ def test_the_conduit_is_planned_without_java() -> None:
+@@ -393,10 +404,14 @@ def test_the_conduit_is_planned_without_java() -> None:
  
  #: The fixtures' networks for S3 and STS (synthetic; the platform's own are its settings file's
  #: or the deployment's `egress_nets`).
@@ -648,7 +648,7 @@ index d2df5e3..bf595ff 100644
  
  
  def _hosts(values: dict[str, Any]) -> dict[str, list[str]]:
-@@ -396,6 +411,23 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
+@@ -411,6 +426,23 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
      assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
  
  
@@ -672,7 +672,7 @@ index d2df5e3..bf595ff 100644
  def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
      monkeypatch: pytest.MonkeyPatch,
  ) -> None:
-@@ -406,11 +438,12 @@ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
+@@ -421,11 +453,12 @@ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
          _artefacts(_config("development", cloud_platform={"egress_nets": {}}))
      monkeypatch.setenv(FOLDERS_VARIABLE, str(FIXTURES / "platforms"))
      kind = load_platform("kind")
@@ -688,7 +688,7 @@ index d2df5e3..bf595ff 100644
      }
  
  
-@@ -473,32 +506,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
+@@ -488,32 +521,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
      assert ingress["className"] == platform.ingress.class_name
      assert ingress["annotations"][platform.ingress.allow_list_annotation] == "192.0.2.0/24"
      assert ingress["annotations"]["nginx.ingress.kubernetes.io/enable-modsecurity"] == "true"
@@ -729,7 +729,7 @@ index d2df5e3..bf595ff 100644
      assert rules["ospreyflow-dev.apps.example.org"]["paths"] == [
          {"path": "/", "service": "workspace", "port": 8080}
      ]
-@@ -511,10 +538,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
+@@ -526,10 +553,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
  
  
  def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named(
@@ -744,7 +744,7 @@ index d2df5e3..bf595ff 100644
      import harness.cloud_platform as cp
  
      platform = load_platform("client")
-@@ -522,9 +551,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
+@@ -537,9 +566,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
          update={"ingress": platform.ingress.model_copy(update={"wildcard": "*.apps.example.org"})}
      )
      monkeypatch.setattr(cp, "load_platform", lambda _name: covering)
@@ -760,7 +760,7 @@ index d2df5e3..bf595ff 100644
      assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
  
  
-@@ -738,8 +770,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
+@@ -753,8 +785,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
      raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
      raw["cloud_platform"]["egress_nets"]["login.example.org"] = ["198.51.100.9/32"]
      values = _values(OspreyConfig.model_validate(raw))
@@ -770,7 +770,7 @@ index d2df5e3..bf595ff 100644
      assert _hosts(values)["login.example.org"] == ["198.51.100.9/32"]
  
  
-@@ -979,5 +1010,7 @@ def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_p
+@@ -994,5 +1025,7 @@ def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_p
      assert not (out / "terraform" / "opensearch.tf").exists()
      assert (out / "notes.txt").is_file()  # not ours: never removed
      assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {
@@ -780,7 +780,7 @@ index d2df5e3..bf595ff 100644
 +        "notes.txt",
      }
 diff --git a/OspreyFlow_Build/tools/cp_policy_check.py b/OspreyFlow_Build/tools/cp_policy_check.py
-index 1310135..4107ecf 100644
+index a8a7c43..254df35 100644
 --- a/OspreyFlow_Build/tools/cp_policy_check.py
 +++ b/OspreyFlow_Build/tools/cp_policy_check.py
 @@ -74,9 +74,8 @@ CALICO_DESTINATIONS = {"nets", "selector", "namespaceSelector", "serviceAccounts
@@ -796,7 +796,7 @@ index 1310135..4107ecf 100644
  
  @dataclass(frozen=True)
 diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
-index 7d0d7f6..5b193d4 100644
+index 9c4545d..e2dcb7a 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
 @@ -60,8 +60,26 @@ from schemas.deployment import (
@@ -978,7 +978,7 @@ index 7d0d7f6..5b193d4 100644
              "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
          },
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-index 90bbaee..76c7535 100644
+index 9c588bf..20d2fb2 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 +++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 @@ -9,15 +9,14 @@
@@ -1060,7 +1060,7 @@ index 90bbaee..76c7535 100644
      arcadedb: [arcadedb]
      clickhouse: [clickhouse, clickhouse-keeper]
      clickhouse-keeper: [clickhouse-keeper]
-@@ -108,7 +110,6 @@ resources:
+@@ -110,7 +112,6 @@ resources:
    report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
    ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
@@ -1068,7 +1068,7 @@ index 90bbaee..76c7535 100644
    litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
    # Requested at its limit: the store is the last thing a node under pressure should evict.
    arcadedb: {cpu: "1", memory: 12Gi, memory_limit: 12Gi}
-@@ -149,6 +150,5 @@ poc:
+@@ -151,6 +152,5 @@ poc:
      api: "2"
      worker: "2"
      ner: "1"
