@@ -91,6 +91,15 @@ def test_the_command_exits_one_on_a_violation(site: Path) -> None:
 
 
 def test_the_organisations_shared_mailbox_is_not_a_personal_identifier(site: Path) -> None:
-    """The owner's decision 2: servicecentre@solirius.com, on .org's Contribute page and .net's Contact page."""
-    assert "servicecentre@solirius.com" in (site / "contribute.html").read_text()
+    """The owner's decision 2: servicecentre@solirius.com. Planted on a page that names nobody, so only the rule's
+    own reading of the address can fail it."""
+    _plant(site / "governance.html", "</main>",
+           '<p><a href="mailto:servicecentre@solirius.com">servicecentre@solirius.com</a></p>')  # fmt: skip
     assert identifier_check.violations(site) == []
+
+
+@pytest.mark.parametrize("shape", ["MATTHEW COULDRIDGE", "Will&nbsp;Forbes", "Graham\nBurnside"])
+def test_a_team_name_in_another_case_or_spacing_is_refused(site: Path, shape: str) -> None:
+    _plant(site / "features.html", "</main>", f"<p>{shape}</p>")
+    assert identifier_check.violations(site) == [
+        "features.html: a personal identifier (people are named on team.html alone)"]

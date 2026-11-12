@@ -7,6 +7,7 @@ path on this machine. One exception, the owner's decision of 12 November 2026: o
 
 from __future__ import annotations
 
+import html
 import re
 import sys
 from html.parser import HTMLParser
@@ -54,6 +55,11 @@ class _Cards(HTMLParser):
             self.names[-1] += data
 
 
+def _flat(text: str) -> str:
+    """Entities read, every run of space one, lower case: "Will&nbsp;Forbes" and "WILL\nFORBES" are one name."""
+    return " ".join(html.unescape(text).split()).casefold()
+
+
 def violations(folder: Path) -> list[str]:
     names = team_names()
     found: list[str] = []
@@ -65,17 +71,17 @@ def violations(folder: Path) -> list[str]:
         if where == TEAM_PAGE:
             cards = _Cards()
             cards.feed(text)
-            if sorted(n.strip() for n in cards.names) != sorted(names):
+            if sorted(" ".join(n.split()) for n in cards.names) != sorted(names):
                 found.append(f"{where}: its person cards name someone other than TEAM_NAMES' six, or not each once")
             # The six names in their own cards are allowed; anything of the owner's beyond them is not.
             for name in names:
                 text = text.replace(f"<h3>{name}</h3>", "", 1)
             if OWNER.search(text):
                 found.append(f"{where}: a personal identifier outside the person cards")
-            if any(name in text for name in names):
+            if any(_flat(name) in _flat(text) for name in names):
                 found.append(f"{where}: a team member named outside their own card")
             continue
-        if OWNER.search(text) or any(name in text for name in names):
+        if OWNER.search(text) or any(_flat(name) in _flat(text) for name in names):
             found.append(f"{where}: a personal identifier (people are named on {TEAM_PAGE} alone)")
     return found
 

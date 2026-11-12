@@ -1,6 +1,6 @@
---- publish_pages.orig.sh	2026-11-12 16:47:07
-+++ marketing_site/publish_pages.sh	2026-11-12 16:47:07
-@@ -12,27 +12,59 @@
+--- publish_pages.orig.sh	2026-11-12 17:16:58
++++ marketing_site/publish_pages.sh	2026-11-12 17:16:07
+@@ -12,27 +12,69 @@
  #
  #   sh OspreyFlow_Build/marketing_site/publish_pages.sh           # commit locally, print the push
  #   sh OspreyFlow_Build/marketing_site/publish_pages.sh --push    # and push it
@@ -20,7 +20,17 @@
 -DEPLOY="$HERE/deploy"
  BRANCH=gh-pages
 +SITE=""
-+if [ "${1:-}" = "--site" ]; then SITE="${2:-}"; shift 2; fi
++PUSH=""
++# The arguments in any order; anything else stops before anything is done.
++while [ $# -gt 0 ]; do
++  case "$1" in
++    --push) PUSH=1; shift ;;
++    --site)
++      [ $# -ge 2 ] || { echo "STOP: --site takes org or net." >&2; exit 1; }
++      SITE="$2"; shift 2 ;;
++    *) echo "STOP: unknown argument '$1' (--site org|net, --push)." >&2; exit 1 ;;
++  esac
++done
 +case "$SITE" in
 +  "")
 +    PRODUCT="$(cd "$DEV/.." && pwd)/OspreyFlow_user_repo"
@@ -53,7 +63,7 @@
 +if [ -z "$SITE" ]; then
 +  FILES="index.html intro-video.html public-sector.html monitoring.html .nojekyll"
 +else
-+  FILES="index.html .nojekyll CNAME"
++  FILES="index.html"
 +fi
 +for f in $FILES; do
    [ -f "$DEPLOY/$f" ] || { echo "STOP: $DEPLOY/$f is missing." >&2; exit 1; }
@@ -68,7 +78,7 @@
    echo "STOP: the files above carry a personal identifier or a local path." >&2
    exit 1
  fi
-@@ -51,16 +83,21 @@
+@@ -51,20 +93,28 @@
  trap 'git -C "$PRODUCT" worktree remove --force "$WORK" >/dev/null 2>&1 || true' EXIT
  
  find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
@@ -80,8 +90,11 @@
 +  cp -R "$DEPLOY/assets" "$WORK/assets"
 +  [ ! -f "$DEPLOY/CNAME" ] || cp "$DEPLOY/CNAME" "$WORK/"
 +else
-+  # A generated site is published whole: every file build.py wrote, nothing else (no README, no build.py).
++  # A generated site is published whole: every file build.py wrote, nothing else (no README, no build.py), and the two
++  # files Pages reads, written here so build.py's output and its drift test are unchanged.
 +  cp -R "$DEPLOY/." "$WORK/"
++  : > "$WORK/.nojekyll"
++  echo "ospreyflow.$SITE" > "$WORK/CNAME"
 +fi
  
  cd "$WORK"
@@ -94,3 +107,8 @@
    git log --oneline -1
  fi
  
+-if [ "${1:-}" = "--push" ]; then
++if [ -n "$PUSH" ]; then
+   git push -q origin "$BRANCH"
+   echo "Pushed $BRANCH to $(git -C "$PRODUCT" remote get-url origin)."
+ else
