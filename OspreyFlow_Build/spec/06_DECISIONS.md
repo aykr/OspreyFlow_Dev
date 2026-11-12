@@ -33830,6 +33830,117 @@ unchanged except where this says so.
 
 The records are in `process/lanes/rules/l2.11/RED_RECORD.md`.
 
+### ADR-146, Amendment 7 (12 November 2026) — one owner named on two screening lists: one alert citing both, each list's match shown only to a reader cleared for that list; and live files removing the lists they load
+
+Status: accepted, **the owner's ruling of 12 November 2026** (about 11:30, relayed by the orchestrator: the
+orchestrator's recommendation stands) and **the owner's ruling on the close, the same day** (about 12:05),
+written in the rules lane at step *lists* as built (CARRIES rows 113 and 114). ADR-109 Amendment 7 is
+unchanged except where point 6 says so.
+
+**Context.** `test_kyc_rules` (10 November) found that an owner named on two screening lists raised two alerts
+and two `owner_listed` factors, one per list (CARRIES row 114). It also found that the KYC gate screens against
+every list the store holds, while live files left their lists behind in the lane stacks' shared store, so one
+file's list doubled the next file's matches (CARRIES row 113; `test_kyc_rules` had read its own list alone since
+then, `_OwnList`). **A gap in the spec (rule 11):** until now no screening list carried a marking. A list's
+entries, the listed party the gate writes and its `SAME_AS` were all OFFICIAL, P, so "a reader cleared for that
+list" meant nothing in the code. Alerts were also all or nothing (ADR-039), so one alert citing two lists, one of
+them hidden from a reader, would have been withheld from that reader whole. This amendment closes both gaps.
+
+**Decision.**
+1. **A list may carry a marking.** A list file names `marking: {classification, handling_code}` from the
+   deployment's scheme. Anything else is refused in words, and nothing loads. Each entry keeps the marking
+   (`screening_entries.classification`, `handling_code`). Left out, it is OFFICIAL with code P, as every list was
+   before, so no stored list changes. A re-marked entry is a changed entry, which a refresh re-screens. The
+   listed party the gate writes carries its list's marking (`kyc_rules.list_handling`), and so does the `SAME_AS`
+   to it, which is marked by both its ends. **A reader is cleared for a list** when the adapters let them read a
+   match on it: its listed party and its `SAME_AS`, each read as the reader. *Limit:* a list subscribed to under
+   ADR-133 (the refresh's adapters) has no way yet to name a marking, and stays OFFICIAL, P. Studio lists
+   (ADR-140 Amendment 13) are not read by the gate and are unchanged.
+2. **One alert per screened party.** A screening finding cites every entry one party matches, on whichever lists,
+   at onboarding (`judge_screening`) and in a refresh's re-screening (`Rescreener`). Each match is an
+   `AlertCitation`: its words, its listed party and its `SAME_AS`. Every citation's ids are among the alert's
+   referents and links as stored. Two owners are still two alerts. A refresh raises, for one list, one alert
+   per party citing that list's changed entries.
+3. **What is stored names no list.** The alert's stored words, its `Alert` node's words and its `rule_fired`
+   audit entry say "*… matches an entry on a screening list — a suggestion to confirm, not a finding*"
+   (`alerts.SCREENING_MATCH_WORDS`). They name no list and give no count.
+4. **Each list's match shown only to a reader cleared for that list (rule 3).** A reader is shown the alert when
+   they may read everything it rests on outside its citations (all or nothing, as before) and at least one
+   citation whole. Each citation is shown only if every node and link it names is readable. What is served is
+   `alerts.as_read`: only those citations; every other citation's ids gone from `referent_node_ids` and
+   `edge_ids`; and the words with the readable matches in place, in the stored order. Nothing served names a
+   hidden list or says how many matches there are: the alert served is the one an alert citing the readable
+   lists alone would be. This holds at every read path: the queue (`monitoring_queue`, so `queue`, Home's counts
+   and the Reports figures), the explanation, the alert's address, the canvas, and the return of every triage
+   (claim, release, dispose, approve, send back, assign, suppress; `_as_shown`). It holds for a pack's alert item
+   too, which is frozen as its adder was shown the alert: it is read back by the citations it shows
+   (`alerts.edges_shown_with`), so its own adder reads it, and an item showing a list is withheld from a reader
+   not cleared for it.
+5. **The alert's own node.** Its marking comes from what the alert rests on outside its citations
+   (`rule_evaluation.core_of`). A reader cleared for one list reads it, and a re-mark (`remark_alerts`) reads
+   only that part. The `ALERTED_ON` link to each cited party is marked by that citation too. Where no single
+   marking can join them, that link is not written. The trends count the alert only for a reader cleared for
+   every handling it rests on (its stored handlings include each citation's), so they undercount and never say
+   more.
+6. **A true positive confirms only the matches its closer can read (the owner's ruling, 12 November 2026,
+   narrowing ADR-109 Amendment 7 where it meets rules 3 and 5).** A match hidden from the closer stays
+   `inferred`. A person does not confirm what they cannot see, and refusing the close would tell the closer that
+   a hidden list matched. A reader cleared for the hidden list still opens the closed alert with both matches,
+   the confirmed one followed to its new revision. Repoints and renames rewrite each citation's ids in the same
+   statement as the alert's own (`_renamed_in_citations_sql`).
+7. **Due diligence keeps one `owner_listed` factor per list.** Each factor is read through the graph as the
+   reader, so a reader not cleared for a list is given no factor for it.
+8. **A rule screens only against lists its deployer is cleared for** (`kyc_rules.lists_cleared_for`, at
+   onboarding and in a refresh). A rule runs as its deployer, and it judges no customer its deployer may not
+   read; for the same reason it screens no one against a list its deployer may not read (rule 3). Decision
+   taken in the lane, the strict option, logged for the owner to overrule.
+9. **Live files remove the lists they load (CARRIES row 113).** Each live file that loads a screening list into
+   the shared store removes its own lists by name in its fixture's teardown, after the `yield`, so on a failure
+   too (`tests/services/api/screening_cleanup.remove_screening_lists`: entries, subscription, updates and each
+   update's per-unit counts, in one transaction; it refuses to remove every list). The files are
+   `test_kyc_rules`, `test_screening_refresh`, `test_screening_list_store`, `test_screening_list_routes` (its
+   `world`, shared by `test_list_refresh_schedule`) and `test_list_refresh_schedule`. Every other live file that
+   writes list rows does so in its own database or schema and drops it (`test_ledger_monitoring_storyline`,
+   `test_custom_roles_store`). Three of the files still empty every subscription when they set up. That is
+   unchanged: their tests count the store's subscriptions. *Logged.*
+
+**Tests that would fail (rule 12).** The offline ones are shown red by plants at their real call sites
+(`process/lanes/rules/lists/AM7_RED_RECORD.txt`, P1–P14). The live ones were shown red under a lease (the same
+folder).
+- A list's marking ignored, outside the scheme, or a re-marking not a change (1):
+  `test_a_lists_marking_is_carried_by_each_entry_and_an_unmarked_list_is_official_p`;
+  `test_a_marking_the_scheme_does_not_define_is_refused_in_words`; `test_a_change_of_marking_is_a_change_of_the_entry`.
+- Two alerts for one owner on two lists, or a list named in what is stored (2, 3):
+  `test_one_owner_on_two_lists_raises_one_alert_citing_both`;
+  `test_the_stored_words_name_no_list_and_say_no_count`.
+- A hidden list's name, ids or count served at any read path (4):
+  `test_the_queue_shows_a_reader_cleared_for_one_list_that_list_alone`;
+  `test_what_the_queue_serves_is_what_an_alert_citing_that_list_alone_would_be`;
+  `test_the_explanation_shows_a_reader_cleared_for_one_list_that_list_alone`;
+  `test_the_canvas_draws_for_a_reader_cleared_for_one_list_that_list_alone`;
+  `test_each_triage_returns_to_a_reader_cleared_for_one_list_that_list_alone` (six paths);
+  `test_a_suppression_returns_to_a_reader_cleared_for_one_list_that_list_alone`;
+  `test_a_pack_item_added_by_a_reader_cleared_for_one_list_holds_that_list_alone`;
+  `test_a_pack_item_is_read_by_the_matches_it_shows`; and live,
+  `test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone`.
+- Shown with no readable citation, or with what is outside the citations hidden (4):
+  `test_a_reader_cleared_for_neither_list_is_not_shown_the_alert`;
+  `test_each_path_refuses_a_reader_cleared_for_neither_list_as_for_a_missing_alert`;
+  `test_an_alert_whose_owner_the_reader_may_not_read_is_not_shown_whatever_the_lists`;
+  `test_a_citation_is_read_whole_or_not_at_all`.
+- A hidden match confirmed, or a confirmed match's citation left on the superseded link (6):
+  `test_a_true_positive_confirms_only_the_matches_the_closer_can_read`.
+- `owner_listed` for a list the reader may not read (7): the live reader-cleared case above, by count.
+- A list screened that the deployer may not read (8):
+  `test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for`;
+  `test_a_rule_screens_only_against_lists_its_deployer_is_cleared_for`.
+- A live file's list left for the next file (9): `test_no_other_file_leaves_a_list_naming_this_files_people`, red
+  with `test_screening_refresh.py` run first before the teardowns, green after.
+
+**Not changed.** A monitoring alert, and every alert without citations, is all or nothing as before. The rule
+audit withholds an entry about a cited alert from a reader not cleared for every list it cites. That is strict,
+and leaks nothing.
+
 ### ADR-142, Amendment 7 (10 November 2026) — a second merge session prepares merges; the orchestrator alone lands them
 
 *The owner's word, 10 November: "set up a second merge session", with some of today's merges handed over too.*
