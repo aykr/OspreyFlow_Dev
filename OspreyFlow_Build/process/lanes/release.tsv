@@ -3,6 +3,6 @@ last	v0.5.0
 published	2026-11-11 06:35 UTC
 cut	4b8de6c
 repository	aykr/OspreyFlow
-next	v0.5.1: the client-install chain merged (P9, P10, P11, P12, L1.9, P7b, D2c), then a rehearsed upgrade from v0.5.0
-chain	14 Nov
-small	v0.5.0 (updated from v0.4.12 on 11 Nov 2026, 15:06 UTC, for the owner's demo; frozen)
+next	v0.5.1: the client-install chain is merged; then studio carries, rules lists and rules-b guides, and a rehearsed upgrade from v0.5.0
+chain	merged 12 Nov
+small	v0.5.0 (updated 11 Nov for the owner's demo); to be rebuilt from main with the guides tonight, 12 Nov (the owner's word)
