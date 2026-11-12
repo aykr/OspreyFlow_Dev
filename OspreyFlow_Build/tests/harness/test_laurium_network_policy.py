@@ -7,23 +7,19 @@ Calico reads the policies selecting a pod in order (a Kubernetes NetworkPolicy a
 rule whose match holds ends it with its action, an explicit Deny included; a policy that selected
 the pod and matched nothing denies at the end of its tier. Today the namespace's `allow-egress`
 (order 100, selector `all()`) admits every pod to every pod, the managed stores' networks and each
-allowed host (case-b's finding of 11 November). **Platform's P7b replaces it** (the orchestrator's
-relay of 11 November): one Calico policy per source workload,
-`default.ospreyflow-egress-<workload>`, from `profile.yaml`'s `egress.paths`, with only
-`default.ospreyflow-allow-dns` on `all()`; Laurium is held by its row there, `laurium: [litellm]`
-(`process/lanes/case-b/P12p2_egress_paths.md`), not by a policy of its own.
+allowed host (case-b's finding of 11 November). **Platform's P7b replaced it** (merged at 3673660,
+ADR-148 Amendment 5): one Calico policy per source workload, `default.ospreyflow-egress-<workload>`,
+from `profile.yaml`'s `egress.paths`, with only `default.ospreyflow-allow-dns` on `all()`; Laurium is
+held by its row there, `laurium: [litellm]`, with `laurium` in the Conduit's row (P12 part 2), not by a
+policy of its own. Read here on every cloud-platform fixture, as `make cp-policy-check` reads them.
 
-**Until P7b and that row land, the Helm-read cases are `xfail(strict=True)`** (`UNTIL_P7B`): they
-fail now (Laurium reaches everything), and the day they pass the mark fails them, so it is taken
-off. The evaluator itself is proven now on hand-written manifests in P7b's announced shape.
-
-Laurium's pod, once P7b lands: **the gateway on 4000 and DNS, allowed; the gateway on another port,
-ArcadeDB, ClickHouse, a managed store's network, an allowed outside host, denied.** Into it: the
-Conduit alone (no worker holds a model; the lane-reviewer's item 12), allowed; any other pod, denied
-(P7b derives ingress from the same rows, the orchestrator's ruling). Controls show the evaluator still
-lets the Conduit reach a store and the managed stores, so a denial means something; and the plant, in
-the shape Helm emits, widens Laurium's own row to every pod (removing it would not do: under P7b's
-default deny a missing row denies), which must let Laurium reach a store.
+Laurium's pod: **the gateway on 4000 and DNS, allowed; the gateway on another port, ArcadeDB,
+ClickHouse, a managed store's network, an allowed outside host, denied.** Into it: the Conduit alone
+(no worker holds a model; the lane-reviewer's item 12), allowed; any other pod, denied (P7b derives
+ingress from the same rows). Controls show the evaluator still lets the Conduit reach a store and the
+managed stores, so a denial means something; and the plant, in the shape Helm emits, widens Laurium's
+own row to every pod (removing it would not do: under P7b's default deny a missing row denies), which
+must let Laurium reach a store.
 
 Needs Docker (Helm's pinned image, `tools.helm_chart`): run on the test server, never on the Mac.
 """
@@ -75,8 +71,8 @@ def pod(name: str, port: int = 0, protocol: str = "TCP") -> Endpoint:
 
 
 class UnreadableShape(Exception):
-    """A manifest this evaluator cannot read (round 2, item 4): never an `AssertionError`, so it can
-    never pass as a strict xfail's expected failure."""
+    """A manifest this evaluator cannot read (round 2, item 4): never an `AssertionError`, so it is
+    never mistaken for the policy's own answer."""
 
 
 # --- Calico's selectors, as far as the chart writes them -------------------------------------
@@ -259,7 +255,7 @@ def _outside(values: dict[str, Any]) -> tuple[Endpoint, Endpoint]:
     egress = values["egress"]
     managed = ipaddress.ip_network(egress["managedNets"][0], strict=False)
     host_nets = [n for h in egress.get("hosts", []) for n in h["nets"]]
-    if not host_nets:  # never a plain assert: it would pass as the strict xfail's AssertionError
+    if not host_nets:  # the evaluator's, not the policy's: never a plain assert
         raise UnreadableShape("the render names no outside host to try")
     host = ipaddress.ip_network(host_nets[0], strict=False)
     return Endpoint(ip=str(next(managed.hosts())), port=5432), Endpoint(
@@ -276,21 +272,12 @@ def _dns(values: dict[str, Any], protocol: str) -> Endpoint:
     )
 
 
-FIXTURE_NAMES = ["development", "production"]
+FIXTURE_NAMES = sorted(p.stem for p in FIXTURES.glob("*.yaml"))
 LAURIUM = pod("laurium")
 #: P7b's policy for Laurium's egress, by platform's naming.
 LAURIUM_EGRESS = "default.ospreyflow-egress-laurium"
-UNTIL_P7B = pytest.mark.xfail(
-    strict=True,
-    # Only the stated failure (Laurium reaching what it must not, or no policy of its rendered),
-    # an assertion; an unreadable manifest (`UnreadableShape`) or any other error is FAILED.
-    raises=AssertionError,
-    reason="until P7b's per-workload egress (platform, ADR-148 Amendment 5) and case-b's "
-    "`laurium: [litellm]` row land: today allow-egress (all()) admits Laurium to everything",
-)
 
 
-@UNTIL_P7B
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
 def test_laurium_reaches_the_gateway_and_dns_alone(name: str) -> None:
     docs, values = _manifests(name)
@@ -313,7 +300,6 @@ def test_laurium_reaches_the_gateway_and_dns_alone(name: str) -> None:
     }  # fmt: skip
 
 
-@UNTIL_P7B
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
 def test_only_the_conduit_reaches_laurium(name: str) -> None:
     docs, _ = _manifests(name)
@@ -341,13 +327,12 @@ def test_the_evaluator_still_lets_the_conduit_through(name: str) -> None:
     assert decide(docs, pod("api"), pod("litellm", 4000), "Egress") == "Allow"
 
 
-@UNTIL_P7B
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
 def test_lauriums_row_widened_lets_it_reach_a_store(name: str) -> None:
     """Red first, in the shape Helm emits: Laurium's own egress policy with an Allow to every pod
     added, as a wider row would render it, lets Laurium reach ArcadeDB. (Taking the row out would
-    not do: under P7b's default deny a missing row denies, and this would stay xfailed for the
-    wrong reason; the lane-reviewer's item 8.)"""
+    not do: under P7b's default deny a missing row denies, and Laurium would be held for the wrong
+    reason; the lane-reviewer's item 8.)"""
     docs, _ = _manifests(name)
     ours = [d for d in docs if (d.get("metadata") or {}).get("name") == LAURIUM_EGRESS]
     assert len(ours) == 1, "Laurium's egress policy was not rendered"

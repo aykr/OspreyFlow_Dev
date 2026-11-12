@@ -13,8 +13,7 @@ the orchestrator's rulings of 11 November).
 - **No egress label** on Laurium's pod (what it may reach is the evaluator's, below).
 
 Where its traffic may go is read from Helm's own output in `tests/harness/test_laurium_network_policy.py`
-(it needs Docker), strict-xfailed until P7b's per-workload egress and Laurium's row land: no policy
-holds it to the gateway yet.
+(it needs Docker), against P7b's per-workload egress and Laurium's own row there, `laurium: [litellm]`.
 """
 
 from __future__ import annotations
@@ -55,11 +54,16 @@ def _workloads(artefacts: dict[str, str]) -> dict[str, dict[str, Any]]:
     return {w["name"]: w for w in values["workloads"]}
 
 
-FIXTURE_NAMES = ["development", "production"]
+#: Every cloud-platform fixture, as `make cp-policy-check` reads them (P7b's, P9's and L1.9's included).
+FIXTURE_NAMES = sorted(p.stem for p in FIXTURES.glob("*.yaml"))
+#: The fixtures that name `deep_read` themselves, so platform's own renders keep their meaning.
+NAMING_DEEP_READ = ["development", "production"]
 
 
-@pytest.mark.parametrize("name", FIXTURE_NAMES)
-@pytest.mark.parametrize("engine", [None, "deep_read"])
+@pytest.mark.parametrize(
+    ("name", "engine"),
+    [*((n, "deep_read") for n in FIXTURE_NAMES), *((n, None) for n in NAMING_DEEP_READ)],
+)
 def test_nothing_of_laurium_is_rendered_unless_chosen(name: str, engine: str | None) -> None:
     artefacts = _artefacts(_config(name, engine))
     for path, text in artefacts.items():
@@ -144,18 +148,11 @@ def test_left_unset_cloud_platform_renders_laurium_its_preset(name: str) -> None
     assert {"laurium", "litellm"} <= set(workloads)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,  # only the field's absence; a render that raises is FAILED
-    reason="until P7b lands (ADR-148 Amendment 5 point 24, lane/platform-p7b b530eb6): the render "
-    "then sets automountToken from whether a pod has a service account of its own",
-)
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
 def test_lauriums_pod_mounts_no_service_account_token(name: str) -> None:
     """Laurium calls no Kubernetes API and has no account of its own, so its pod mounts no token
     (`automountServiceAccountToken: false`, cp-policy-check's `token` rule; the lane reviewer's item
-    17, built by platform in P7b). Strict: it fails the day P7b lands and holds, so the mark is
-    taken off."""
+    17, built by platform in P7b)."""
     laurium = _workloads(_artefacts(_config(name, "laurium")))["laurium"]
     assert not laurium.get("serviceAccountName")
     assert laurium.get("automountToken") is False

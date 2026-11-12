@@ -27,7 +27,7 @@ index 11ed572..b360edf 100644
    provider:
      name: openai
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-index 78d2c81..9e6c934 100644
+index 9c588bf..3aa19c2 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 +++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 @@ -29,6 +29,8 @@ ours:
@@ -39,7 +39,25 @@ index 78d2c81..9e6c934 100644
  
  # The hosts the namespace reaches (decision 7), each allowed by its networks
  # (`cloud_platform.egress_nets`, or the platform's `egress.service_nets`) or the render is refused.
-@@ -60,6 +62,8 @@ resources:
+@@ -76,7 +78,7 @@ egress:
+   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
+   paths:
+     workspace: [api]
+-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset]
++    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset, laurium]
+     worker: [arcadedb, clickhouse, keycloak, ner]
+     report-sync: [api, keycloak]
+     superset: [keycloak]
+@@ -84,6 +86,8 @@ egress:
+     arcadedb: [arcadedb]
+     clickhouse: [clickhouse, clickhouse-keeper]
+     clickhouse-keeper: [clickhouse-keeper]
++    # Laurium (ADR-135 Amendment 9), rendered only when it is the extraction engine: the gateway alone.
++    laurium: [litellm]
+     # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names, each reaching
+     # what its commands call: the backup ArcadeDB's backup and ClickHouse's BACKUP; the restore
+     # ClickHouse's RESTORE alone (ArcadeDB's is from the zip on the Job's own claim, no call). Both
+@@ -112,6 +116,8 @@ resources:
    superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
    litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
@@ -61,7 +79,7 @@ index a3eb4fd..fa55323 100644
      "arcadedb": [2480, 2434],
      "clickhouse": [8123, 9000, 9009],
 diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
-index a3aeb9d..167ad01 100644
+index 975d92d..e9eb528 100644
 --- a/OspreyFlow_Core/harness/render.py
 +++ b/OspreyFlow_Core/harness/render.py
 @@ -63,6 +63,7 @@ from harness.images import (

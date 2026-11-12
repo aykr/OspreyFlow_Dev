@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-index 7df3e25..b7d35ac 100644
+index 91dcb30..47d573c 100644
 --- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-@@ -42,7 +42,9 @@ const EXTRA_STATES: Record<string, string[]> = {
+@@ -43,7 +43,9 @@ const EXTRA_STATES: Record<string, string[]> = {
    // the two kinds), Bedrock chosen in the add form beside an IAM-role engine's row, and the organisation's own
    // gateway chosen.
    "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail",
