@@ -581,6 +581,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         nobody at all can manage people, and an audit row is written each time. This replaces my 02:30 ruling.
         Admin also chose to ignore a stale clearance in the markings check; I accepted it, because it fails
         closed.
+      - **About 05:10, P9 landed** (4ffd4a2): backups and restores on the cloud-platform profile. It went
+        through three review rounds and the orchestrator's. The operator's restore runbook was walked as
+        written on kind: after a restore, every count and checksum matched the set.
+
+        On the merged tree, make test failed only the GPU case, and live-collect, make -k ci and
+        cp-policy-check (0 violations on five fixtures) were green. Case took osprey-p9 down and stopped its
+        Friday timer, so the server holds nothing of case's.
+
+        Next: P12 part 2 rebases onto it.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

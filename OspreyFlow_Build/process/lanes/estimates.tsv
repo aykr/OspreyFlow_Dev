@@ -1,7 +1,7 @@
-# as of 2026-11-12T05:00Z
+# as of 2026-11-12T05:10Z
 admin	P10	part 1 merged; part 2: second review found four must-fixes (the key cache untested, the re-grant, keyboard cases, the refresh untested) and a Keycloak regression; fixing	12 Nov, evening	B
-case	P9	orchestrator review: one must-fix (the ArcadeDB restore dropped the live graph first) and seven fixes; then a rebase onto L1.9 part 2 and a kind restore over a live database	12 Nov, afternoon	B
-case-b	P12	part 2 accepted after three rounds; after P9 lands, rebase and merge with Laurium's egress row and the owner's release.yml patch	12 Nov	B
+case	P9	done: merged	done	B
+case-b	P12	part 2 accepted; P9 is in: rebase and merge with Laurium's egress row and the owner's release.yml patch	12 Nov	B
 studio-b	L1.9	done: part 2 merged (184b798)	done	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 docs	D2c	parts 1 and 2 merged (guide 1.81); backups after P9, the profile side after P10 part 2	13 Nov	B
