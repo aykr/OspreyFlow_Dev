@@ -161,20 +161,22 @@ On the client's platform the stores are not containers on one machine and there 
 the managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning, and **this section covers what the deployment runs
 itself**: ArcadeDB, ClickHouse and, in the proof-of-concept shape, the Ingest root's claim
-(`ospreyflow-ingest`: uploads and the drop folder). **The restore below is proven for the single-replica
-shapes** (development, and the poc shape); the production shape's (three ArcadeDB copies, ClickHouse ON
-CLUSTER with two replicas) is P9b's, and until then is not attempted.
+(`ospreyflow-ingest`: uploads and the drop folder). **The restore below is supported for one copy of
+each store** (development, and the proof-of-concept shape); the production shape's (three ArcadeDB
+copies, ClickHouse ON CLUSTER with two replicas) is not supported yet, and the render refuses it.
 
-**The schedule.** Two CronJobs, daily at 02:15 UTC: `ospreyflow-backup` (ArcadeDB's `BACKUP DATABASE`,
-then ClickHouse's `BACKUP … TO S3`) and, in the poc shape, `ospreyflow-backup-claims` (each claim of its
-own, read-only, beside the pods that mount it). Both write one set,
-`s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by their schedule slot; `manifest.json` is written
-last, only once every part is there. A set without it is unfinished and is never restored from. Every
-object is encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`). Two roles write it,
-each to its own prefix (ClickHouse's own, for its part; the runner's, for the rest), and no key is stored
-anywhere. Neither role can erase a set: the bucket is versioned, so an object overwritten keeps its
-previous version for 7 days, and a set's objects expire by the bucket's lifecycle rule 35 days after
-they were written (the retention is the total, 35 days).
+**The schedule.** Two CronJobs, daily at 02:15 UTC (their time zone is UTC whatever the cluster's):
+`ospreyflow-backup` (ArcadeDB's `BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in the
+proof-of-concept shape, `ospreyflow-backup-claims` (each claim of its own, read-only, beside the pods
+that mount it). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by their
+schedule slot; `manifest.json` is written last, only once every part is there, with the time the set
+finished. A set without it is unfinished and is never restored from. Every object is encrypted by the
+backups bucket's own KMS key (`alias/<namespace>-backups`). Two roles write it, each to its own prefix
+(ClickHouse's own, for its part; the runner's, for the rest), and no key is stored anywhere. Neither role
+can erase a set: the bucket is versioned, so an object overwritten keeps its previous version for 7 days,
+and a set's objects expire by the bucket's lifecycle rule 35 days after they were written (the retention
+is the total, 35 days). A run killed part-way leaves ArcadeDB's zip on its backups claim; the next run
+removes it before it starts.
 
 **Is last night's backup there?** A backup Job that completed wrote a finished set (the manifest is its
 last write), and its log names the set:
@@ -184,14 +186,15 @@ kubectl -n <namespace> get jobs -l app.kubernetes.io/name=backup --sort-by=.meta
 kubectl -n <namespace> logs job/<the newest> | grep 'backup: set'
 ```
 
-A failed run is a failed Job, its log naming the store, the step and the refusing service's own words;
-the alert on it is P9b's. Every set, finished or not, as the runner sees them:
+A failed run is a failed Job, its log naming the store, the step and the refusing service's own words.
+No alert is raised on it yet: look each morning. Every set, finished or not, and when each finished, as
+the runner sees them:
 
 ```bash
 kubectl -n <namespace> create job "backup-sets-$(date +%s)" --from=cronjob/ospreyflow-backup --dry-run=client -o json \
   | python3 -c 'import json, sys; j = json.load(sys.stdin); j["spec"]["template"]["spec"]["containers"][0]["command"][-1] = "sets"; print(json.dumps(j))' \
   | kubectl -n <namespace> create -f -
-kubectl -n <namespace> logs -f job/<that job>
+kubectl -n <namespace> logs -f job/<that job>      # <set>  finished  <YYYY-MM-DDTHH:MM:SSZ>, or <set>  unfinished
 ```
 
 **A backup now** (before an upgrade, or the decommission's last backup): both runs for one slot, each
@@ -208,9 +211,9 @@ kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True
 kubectl -n <namespace> get job "ospreyflow-backup-$S" -o jsonpath='{.status.succeeded}'   # 1: the set is finished
 ```
 
-**Before an upgrade, with the Conduit stopped** (so the parts agree; see *Consistency*). In the poc shape
-the claims run is placed beside the shared folders' pods, which are then stopped, so its Job is made
-without that placement (the claim is free once they are stopped):
+**Before an upgrade, with the Conduit stopped** (so the parts agree; see *Consistency*). In the
+proof-of-concept shape the claims run is placed beside the shared folders' pods, which are then stopped,
+so its Job is made without that placement (the claim is free once they are stopped):
 
 ```bash
 kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
@@ -232,22 +235,41 @@ kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-
 ```
 
 **A restore** of set `<set>` (it replaces what ArcadeDB, ClickHouse and the claims hold), **for one copy of
-each store only**: the render refuses it in the production shape (P9b). It refuses, touching nothing,
-while anything that writes still runs, while it cannot see what runs, or while any part of the set is
-missing, changed or another set's. **It needs the profile's egress row giving the restore's pods the
-cluster's API** (P7b's per-workload egress); without it every restore refuses, "cannot confirm the writers
-are stopped". It reads ArcadeDB's zip and each claim twice (the first step checks every part, the next
-checks its own as it reads it): a large set's restore takes that much longer.
+each store only**. It refuses, touching nothing, while anything that writes still runs, while it cannot see
+what runs, or while any part of the set is missing, changed or another set's. *What writes* is the render's
+own list (`backups.writers` in `values.yaml`): ArcadeDB, every workload that mounts the set's claims or
+writes the stores (directly, or through the Conduit), and the backups' own runs. Each store is replaced
+only once its restored copy is proven: ArcadeDB's is restored beside the live database, checked against the
+set's zip and opened, then swapped in, the old one removed last; ClickHouse's is restored into a database of
+its own, then swapped in by rename. A failure before the swap leaves the live database as it was. It reads
+ArcadeDB's zip and each claim twice (the first step checks every part, the next checks its own as it reads
+it): a large set's restore takes that much longer.
+
+**The managed database first.** The stores and PostgreSQL must agree: restoring ArcadeDB and ClickHouse to
+a set while PostgreSQL stays as it is now would bring back, visible under today's grants, anything withdrawn
+or deleted since the set. So before the stores, PostgreSQL (RDS) is restored point in time to the set's
+finish time (`sets` prints it), by the platform team's own RDS procedure, and the deployment pointed at it:
 
 ```bash
-# 1. Note each copy count, then stop everything that writes and wait for it to be gone.
-kubectl -n <namespace> get statefulset/arcadedb deployment/api deployment/worker deployment/report-sync \
+aws rds restore-db-instance-to-point-in-time --source-db-instance-identifier <the deployment's instance> \
+  --target-db-instance-identifier <a new name> --restore-time <the set's finish time>
+# then the platform team points the namespace's database settings at the new instance (its Terraform)
+```
+
+```bash
+# 1. No backup during the restore: both CronJobs suspended, and any backup Job still running left to finish.
+for c in ospreyflow-backup ospreyflow-backup-claims; do
+  kubectl -n <namespace> patch cronjob "$c" -p '{"spec":{"suspend":true}}' 2>/dev/null
+done
+kubectl -n <namespace> get jobs -l 'app.kubernetes.io/name in (backup,backup-claims)'   # none still Running
+# 2. Note each copy count, then stop everything that writes and wait for it to be gone.
+W=$(python3 -c 'import sys, yaml; print(",".join(yaml.safe_load(open(sys.argv[1]))["backups"]["writers"]))' <render>/values.yaml)
+kubectl -n <namespace> get deployment,statefulset -l "app.kubernetes.io/name in ($W)" \
   -o custom-columns=NAME:.metadata.name,COPIES:.spec.replicas
-kubectl -n <namespace> scale statefulset/arcadedb --replicas=0
-kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=0
-kubectl -n <namespace> wait --for=delete pod -l 'app.kubernetes.io/name in (arcadedb,api,worker,report-sync)' --timeout=10m
-# 2. The restore's Jobs, rendered for the set (never by `helm upgrade`, which would start ArcadeDB);
-#    a Job of the same name from an earlier attempt removed first.
+kubectl -n <namespace> scale deployment,statefulset -l "app.kubernetes.io/name in ($W)" --replicas=0
+kubectl -n <namespace> wait --for=delete pod -l "app.kubernetes.io/name in ($W)" --timeout=10m
+# 3. The restore's Jobs, rendered for the set by its own name (never `latest`; never by `helm upgrade`,
+#    which would start ArcadeDB); a Job of the same name from an earlier attempt removed first.
 kubectl -n <namespace> delete job -l 'app.kubernetes.io/name in (restore,restore-claims)' --ignore-not-found --wait
 helm template ospreyflow deploy/helm/ospreyflow -n <namespace> -f <render>/values.yaml \
   --set backups.restore.set=<set> --show-only templates/backups.yaml \
@@ -256,18 +278,37 @@ for j in $(kubectl -n <namespace> get jobs -l 'app.kubernetes.io/name in (restor
   kubectl -n <namespace> wait --for=jsonpath='{.status.conditions[0].status}'=True "$j" --timeout=6h
   kubectl -n <namespace> logs "$j" --all-containers | tail -3     # each step says what it did, or why not
   kubectl -n <namespace> get "$j" -o jsonpath='{.status.succeeded}' | grep -qx 1 \
-    || { echo "$j did not finish: start nothing; read its log (a refused verify touched nothing)"; break; }
+    || { echo "$j did not finish: start nothing; read its log (below, If it fails)"; break; }
 done
-# 3. Only when every Job finished: start them again, each at the copy count noted in step 1.
+# 4. Only when every Job finished: start each again at the copy count noted in step 2, ArcadeDB first,
+#    then the backups resumed.
 kubectl -n <namespace> scale statefulset/arcadedb --replicas=1
 kubectl -n <namespace> rollout status statefulset/arcadedb
-kubectl -n <namespace> scale deployment/api deployment/worker deployment/report-sync --replicas=<as noted>
+kubectl -n <namespace> scale deployment/<each one noted> --replicas=<as noted>
+for c in ospreyflow-backup ospreyflow-backup-claims; do
+  kubectl -n <namespace> patch cronjob "$c" -p '{"spec":{"suspend":false}}' 2>/dev/null
+done
 ```
 
-If a Job did not finish after its `verify` passed (ArcadeDB's `restore.sh` failing, say), ArcadeDB's
-database may already be removed: restore another set, or the same one again, before starting ArcadeDB.
-ClickHouse is never left without its database: its restore is swapped in only once complete (and put
-straight in if ClickHouse's database was lost).
+**Where the data is if a restore stopped part-way.** Each store keeps its live data until the restored copy
+is in place, and says where each is if it stops between:
+
+- **ArcadeDB** (on its `databases-arcadedb-0` claim): the restore writes `<database>.restoring` beside the
+  live `<database>`, then renames the live one to `<database>.before` and the restored one into its place,
+  and removes `<database>.before` last. A restore that stopped between the two renames leaves
+  `<database>.before` holding the old data, and the next restore refuses until it is dealt with: in a pod
+  of ArcadeDB's image mounting that claim (as the restore Job does), if `<database>` is missing, rename
+  `<database>.before` back to `<database>`; if both are there, the swap finished and `<database>.before` is
+  the old copy, to remove.
+- **ClickHouse**: the restore writes `<database>_restoring_<set>`, renames the live one to
+  `<database>_before_<set>` and the restored one into its place, and drops `<database>_before_<set>` last.
+  If the second rename is refused, the live one is renamed back and the restore refuses, naming the
+  restored copy it kept (`<database>_restoring_<set>`, to drop); if even that rename back fails, it says the
+  live data is in `<database>_before_<set>`: `RENAME DATABASE <database>_before_<set> TO <database>`.
+- **The claims**: each claim's old contents are moved into `.osprey-before/` on the claim, then the set's
+  moved in from `.osprey-restore/`, and `.osprey-before/` removed last. A failure between says where each
+  is, and the next restore refuses while `.osprey-before/` is there: move its contents back, or remove it
+  once the set's are all in place.
 
 **An upgrade that brings the backups in.** First the namespace's Terraform, with `backups.tf`, is applied
 (the platform team's pull request): ClickHouse cannot start without its backup role's service account and
@@ -283,15 +324,11 @@ kubectl -n <namespace> delete pod arcadedb-0      # in production, then arcadedb
 
 ### Measured
 
-Measured on kind (`osprey-p9`, two nodes at 4 GB each, Calico, `gp2-expand` by local-path) on 11 November
-2026, against the S3 stand-in, **under the case lane's lease on test stack b** (taken for this run alone, no stack
-started; its lease file is in the record). The server was shared with other lanes' work (its load average 10 to
-15). The seed is synthetic: 5,000 vertices and 1,000 edges, 200,000 ClickHouse rows, and 301 files (7.7 MB) on the
+Measured on a two-node test cluster (4 GB a node, Calico enforcing the policies, the platform's storage
+class) against a stand-in for S3, STS and KMS that refuses what they refuse, on 11 November 2026. The data
+is synthetic: 5,000 vertices and 1,000 edges, 200,000 ClickHouse rows, and 301 files (7.7 MB) on the
 Ingest claim; the set was 9.6 MB in 17 objects. These are what that cluster did, not a service level: the
-platform's disks, network and S3 differ, and a real database is larger. The record is
-the case lane's `p9_kind_roundtrip_timed.r3.json` (round 3, under the case lane's
-lease on test stack c; another lane's live run held stack b on the same server meanwhile; round 2's, under lease b,
-was 70.2 s).
+platform's disks, network and S3 differ, and a real database is larger.
 
 | Path | Measured | What dominates it |
 | --- | --- | --- |
@@ -301,11 +338,11 @@ was 70.2 s).
 | Starting ArcadeDB and the claims' pod again | 23.0 s | ArcadeDB's start and readiness |
 | **End to end, destroyed → restored and compared** | **70.8 s** | stopping and starting, not data |
 
-**What the 70.8 s leaves out.** On kind one pod stood for the Conduit and the workers; the real Conduit,
-workers and report sync are stopped and started around the restore too, and their start (the Conduit's
-above all) adds to it. At this size the data is negligible and the restore is the stores' stop and start;
-a real restore's time grows with the set. Measure it again on the client's development namespace
-(decision 13's rehearsal) before production holds real data.
+**What the 70.8 s leaves out.** One pod stood for the Conduit and the workers; the real Conduit, workers
+and report sync are stopped and started around the restore too, and their start (the Conduit's above all)
+adds to it, as does the managed database's point-in-time restore. At this size the data is negligible and
+the restore is the stores' stop and start; a real restore's time grows with the set. Measure it again on
+the client's development namespace (decision 13's rehearsal) before production holds real data.
 
 **Consistency.** The CronJob does not stop the Conduit: ArcadeDB's backup is consistent within the graph
 and ClickHouse's within each table, but the parts are taken minutes apart. A load running across 02:15
@@ -314,13 +351,21 @@ upgrade, above).
 
 ### If it fails
 
-- **`restore: see what runs: … still running`**: stop ArcadeDB, the Conduit, the workers and the report
-  sync first; nothing was touched.
+- **`restore: see what runs: … still running`**: stop every writer it names first (step 2); nothing was
+  touched.
 - **`restore: see what runs: cannot confirm the writers are stopped`**: the restore's pods could not ask the
-  cluster's API which pods run (on this profile, until P7b's restore row lands, always), or no writers were
-  named; nothing was touched. It never proceeds unconfirmed.
+  cluster's API which pods run (its answer is in the message: a 403 is the Role not bound to the backups'
+  service account, a timeout the namespace's egress to the API), or no writers were named; nothing was
+  touched. It never proceeds unconfirmed.
 - **`restore: verify set …: … is missing` or `is not the file the set wrote`**: a part of that set has
   expired or changed; restore another set. Nothing was touched.
+- **`restore: read set …: its manifest is malformed`**: the manifest is not one the runner wrote; restore
+  another set. Nothing was touched.
+- **`restore-graph refused: …; the live database … was not touched`**: ArcadeDB's restore of the zip
+  failed, or the restored copy was not the set's (the check names the file); ArcadeDB's database is as it
+  was. Restore another set, or the same one again once the cause is fixed (a full claim, say).
+- **`restore-graph refused: <database>.before is there`**: a restore stopped between its renames; see
+  *Where the data is* above before restoring again.
 - **`Backup S3 requires 1 or 3 arguments`**: a statement handing ClickHouse a session token. ClickHouse
   25.8 takes none; it writes as its own role by its own pod (`ospreyflow-backup-clickhouse`).
 - **ClickHouse `Access Denied` at once, its log showing `sts.us-east-1`**: its pod lacks
