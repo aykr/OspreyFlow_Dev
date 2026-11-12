@@ -1,0 +1,21 @@
+ADR-146 Amendment 7 offline plants at e9e8930 (lane/rules-lists), 2026-11-12T11:14:39Z, on the Mac, stack-free (closed ports, OSPREY_LANE unset)
+built, test_alert_citations_per_list.py: GREEN - 28 passed in 0.40s
+built, test_screening.py: GREEN - 15 passed in 0.79s
+P1 the queue serves the alert as stored (no as_read) [services/api/alert_queue.py; -k test_the_queue_shows or test_what_the_queue_serves]: RED - 2 failed, 26 deselected in 0.42s
+P2 a single alert's read (explain, canvas, triage) serves it as stored [services/api/alert_queue.py; -k test_the_explanation or test_the_canvas or test_each_triage or test_a_pack_item_added]: RED - 9 failed, 19 deselected in 0.51s
+P3 a triage returns the stored row as the store gave it [services/api/alert_queue.py; -k test_each_triage]: RED - 6 failed, 22 deselected in 0.43s
+P3b a suppression returns the stored row as the store gave it [services/api/alert_queue.py; -k test_a_suppression_returns]: RED - 1 failed, 27 deselected in 0.40s
+P4 an alert with citations shown with none readable [services/api/alerts.py; -k test_a_reader_cleared_for_neither or test_each_path_refuses_a_reader_cleared_for_neither]: RED - 8 failed, 20 deselected in 0.43s
+P5 all or nothing over the citations too (the old check) [services/api/alerts.py; -k test_the_queue_shows or test_the_explanation or test_each_triage or test_a_pack_item_is]: RED - 9 failed, 19 deselected in 0.51s
+P6 a citation read by its party alone, not its SAME_AS [services/api/alerts.py; -k test_a_citation_is_read_whole]: RED - 1 failed, 27 deselected in 0.41s
+P7 the served words name every list (the hidden list's name leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 20 deselected in 0.46s
+P8 a hidden citation's ids kept in what is served (the count leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 20 deselected in 0.46s
+P9 a pack item asks its reader for every citation (its own adder cannot read it back) [services/api/packs.py; -k test_a_pack_item_is_read]: RED - 1 failed, 27 deselected in 0.46s
+P10 a pack item asks only for what is outside the citations (B's match not asked) [services/api/alerts.py; -k test_a_pack_item_asks]: RED - 1 failed, 27 deselected in 0.46s
+P11 a list's marking not read from its file [scripts/load_screening_list.py; -k test_a_lists_marking]: RED - 1 failed, 14 deselected in 0.48s
+P12 a classification the scheme does not define taken [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 4 passed, 10 deselected in 0.42s
+P13 a re-marked entry read as unchanged [services/api/screening.py; -k test_a_change_of_marking]: RED - 1 failed, 14 deselected in 0.41s
+P14 a rule screens against every list, its deployer cleared or not [services/api/kyc_rules.py; -k test_a_rule_screens_only]: RED - 1 failed, 14 deselected in 0.81s
+restored, test_alert_citations_per_list.py: GREEN - 28 passed in 0.42s
+restored, test_screening.py: GREEN - 15 passed in 0.80s
+exit 0
