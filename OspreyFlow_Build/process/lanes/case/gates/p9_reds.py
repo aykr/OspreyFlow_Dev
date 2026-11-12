@@ -94,8 +94,9 @@ runner.PLANTS = [
     ("a part unpacked without tarfile's data filter", RUN, 'filter="data"', 'filter="fully_trusted"',
      [TC + "test_a_part_reaching_outside_its_claim_is_refused"]),
     ("files written after the set left in the claim by its restore", RUN,
-     "                    shutil.rmtree(entry)\n                else:\n                    entry.unlink()",
-     "                    pass\n                else:\n                    pass",
+     ["                for entry in list(target.iterdir()):\n                    if entry.name not in (LOST_FOUND, staging.name, archive.name, before.name):\n                        entry.rename(before / entry.name)\n",
+      "                for entry in list(staging.iterdir()):\n                    entry.rename(target / entry.name)\n"],
+     ["", "                shutil.copytree(staging, target, dirs_exist_ok=True)\n"],
      [TC + "test_a_restore_puts_each_claim_back_as_it_was"]),
     # ---- the stand-in -----------------------------------------------------------------------------------------------
     ("the stand-in ends a session at a policy change (AWS does not)", STANDIN,
@@ -103,8 +104,8 @@ runner.PLANTS = [
      [TS + "test_a_policy_changed_by_the_lever_judges_the_sessions_already_running"]),
     # ---- the chart (Helm, on the server) ----------------------------------------------------------------------------
     ("the backup pod given the whole Secret (envFrom)", CHART,
-     '"env" (concat $env ($b.arcadedb.env | default list)) "resources" $b.resources',
-     '"env" (concat $env ($b.arcadedb.env | default list)) "envFrom" true "resources" $b.resources',
+     '"env" (concat $env $graphEnv $analyticsEnv) "resources" $b.resources',
+     '"env" (concat $env $graphEnv $analyticsEnv) "envFrom" true "resources" $b.resources',
      [TH + "test_the_cronjob_runs_on_arcadedbs_node_with_its_claim_one_run_at_a_time"]),
     ("the claims mounted writable by the claims run", CHART, "                readOnly: true\n", "",
      [TH + "test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only"]),
@@ -187,9 +188,9 @@ runner.PLANTS = [
      [TH + "test_the_backups_account_may_see_pods_and_nothing_else"]),
     # ---- round 3 ----------------------------------------------------------------------------------------------------
     ("the backup user's password back in the shared Secret", RENDER,
-     '''    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(deployment_user)
-''', '''    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(deployment_user)
-    values["secrets"]["keys"] = sorted({*values["secrets"]["keys"], CLICKHOUSE_BACKUP_PASSWORD})
+     '''    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(
+''', '''    values["secrets"]["keys"] = sorted({*values["secrets"]["keys"], CLICKHOUSE_BACKUP_PASSWORD})
+    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(
 ''',
      [TR + "test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password",
       TR + "test_the_shared_secrets_terraform_never_makes_the_backup_users_password"]),
@@ -254,12 +255,12 @@ runner.PLANTS = [
      '"name" "writers" "image" $b.image', '"name" "writers-unused" "image" $b.image',
      [TH + "test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_replaced"]),
     ("the backup user's grant back to `ospreyflow.*` (kind, round 3: the restore refused its own temporary database)",
-     RENDER, "        <query>GRANT ALL ON ospreyflow*.*</query>", "        <query>GRANT ALL ON ospreyflow.*</query>",
+     RENDER, "        <query>GRANT ALL ON {database}*.*</query>", "        <query>GRANT ALL ON {database}.*</query>",
      [TP + "test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set"]),
     ("the live ClickHouse database set aside though it is gone (kind, round 3: the disaster restore refused)", RUN,
-     '        if live.strip() == "1":', "        if True:",
+          '        aside = live.strip() == "1"', "        aside = True",
      [TP + "test_a_restore_into_a_deployment_whose_clickhouse_database_is_gone_puts_the_sets_in"]),
-    ("the live ClickHouse database never set aside", RUN, '        if live.strip() == "1":', "        if False:",
+    ("the live ClickHouse database never set aside", RUN, '        aside = live.strip() == "1"', "        aside = False",
      [TP + "test_a_restore_beside_the_live_clickhouse_database_swaps_it_and_drops_the_old"]),
     ("an IRSA account named as one of the backups' let through (P7b: each pod under its own account)", RENDER,
      "    if taken := {irsa.service_account, irsa.gateway_service_account} & {", "    if taken := set() & {",
@@ -286,7 +287,7 @@ runner.PLANTS = [
      [TG + "test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was"]),
     ("restore-graph swapping in a restored database its check refused", GRAPH,
      'java -cp "lib/*" "$check" "$new" "$zip" || refuse', 'java -cp "lib/*" "$check" "$new" "$zip" || true',
-     [TG + "test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[check-refuses"]),
+     [TG + "test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was"]),
     ("restore-graph going on over a restore stopped between its renames", GRAPH,
      'if [ -e "$old" ]; then\n    echo "restore-graph refused', 'if false; then\n    echo "restore-graph refused',
      [TG + "test_a_restore_stopped_between_its_renames_is_never_overwritten"]),
@@ -315,10 +316,10 @@ runner.PLANTS = [
      [TR + "test_the_writers_are_the_rendered_workloads_that_write_the_stores_or_mount_the_sets_claims"]),
     ("a writer through another writer not followed", RENDER,
      "        found |= more\n        targets |= more\n", "        found |= more\n",
-     [TR + "test_a_new_workload_that_writes_is_a_writer_without_naming_it[calls a writer]"]),
+     [TR + "test_a_new_workload_that_writes_is_a_writer_without_naming_it"]),
     ("a workload mounting a set's claim not a writer", RENDER,
      '        if any(m.get("claim") for m in mounts):', "        if False:",
-     [TR + "test_a_new_workload_that_writes_is_a_writer_without_naming_it[mounts a set's claim]"]),
+     [TR + "test_a_new_workload_that_writes_is_a_writer_without_naming_it"]),
     ("the databases fixed, not the render's", RENDER,
      '        str(environment.get(variable) or DEFAULT_DATABASE)', "        DEFAULT_DATABASE",
      [TR + "test_the_databases_are_the_ones_the_render_gives_the_conduit"]),
@@ -348,6 +349,12 @@ runner.PLANTS = [
     ("the stand-in taking a part under 5 MiB but the last", STANDIN,
      "if any(len(upload.parts[n]) < MIN_PART for n in numbers[:-1]):", "if False:",
      [TS + "test_a_part_under_five_mib_but_the_last_is_refused_as_s3_does"]),
+    ("ClickHouse's live database left aside when the restored one's rename is refused", RUN,
+     '                    self.clickhouse(\n                        f"RENAME DATABASE {old} TO {database}{on}", "put the live one back"\n                    )',
+     '                    pass',
+     [TP + "test_a_swap_refused_between_its_renames_puts_the_live_database_back_and_says_where_each_is"]),
+    ("a set's finish time not recorded", RUN, '    manifest["finished"] = finished', '    finished = finished',
+     [TP + "test_a_set_records_when_it_finished_and_sets_says_it"]),
 ]
 
 if __name__ == "__main__":
