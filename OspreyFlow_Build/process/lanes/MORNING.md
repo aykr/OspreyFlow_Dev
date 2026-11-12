@@ -494,7 +494,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 38. **Overnight, 11–12 November (your word, about 21:10: carry on, the Mac stays on).** I'll fill this in as the
     night goes. For you in the morning:
     - the push (none since 10:20);
-    - the `release.yml` patch for P12 part 2;
+    - P12 part 2's two patches for you, from the repository root, both checked to apply on main:
+      `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_CI.diff` (ci.yml and release.yml: Laurium's image), then
+      `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_core_makefile.diff` (OspreyFlow_Core/Makefile: Laurium's
+      image scanned in `make check`);
     - the Makefile patch so `make test` runs all three of its parts (below, under P10 part 2's review);
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
     - **What happened overnight:**
@@ -590,6 +593,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         Friday timer, so the server holds nothing of case's.
 
         Next: P12 part 2 rebases onto it.
+      - **About 06:00, P12 part 2 landed** (1a063a8): Laurium on the cloud-platform profile, with the preset kept as
+        you ruled; admin guide 1.84. Its only egress is the gateway, and only api reaches it. On the merged tree,
+        848 tests passed, cp-policy-check found 0 violations on all five fixtures, and schemas, reservations,
+        coverage and live-collect were green. `ci.yml`, `release.yml` and Core's Makefile are yours, by the
+        two patches at the top of this item. Each was checked to apply on main.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
