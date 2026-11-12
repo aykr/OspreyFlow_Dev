@@ -12,7 +12,7 @@ egress:
     api: [..., laurium]         # appended to platform's own list
 ```
 
-Rendered only when Laurium is a workload (`models.extraction_engine: laurium`): a path naming a workload not
+**Applied** in `P12p2_platform.diff` against eec25d1 (12 November). Rendered only when Laurium is a workload (`models.extraction_engine: laurium`): a path naming a workload not
 rendered must render nothing (asked of platform: the row's own guard, or the render's).
 
 `tests/harness/test_laurium_network_policy.py` reads Helm's output in Calico's order: Laurium reaches litellm on

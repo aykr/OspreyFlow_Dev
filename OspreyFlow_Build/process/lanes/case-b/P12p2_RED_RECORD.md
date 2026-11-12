@@ -294,3 +294,50 @@ is still running") and nothing ran twice. Its runs are the gates below, each rec
 failed alone too with the server at load ~31 and 4 GiB free (`gates/a44f448.rerun-render-memory.txt`). No file under
 `OspreyFlow_Core` differs from 69bb4f8, where it passed; the same case fails in the admin lane's server gates on main
 (`process/lanes/admin/gates/0989d88.test.txt` and others): the server's, not this branch's.
+
+## Rebase for merge (12 November 2026)
+
+The orchestrator's message of 12 November: main eec25d1 (P7b 3673660, L1.9 part 2 184b798, P9 4ffd4a2). **The owner's
+ruling: Laurium stays the cloud-platform preset.**
+
+- **Rebased** onto eec25d1: 43 commits replayed, one conflict (`CARRIES.md`, both sides' rows kept); the `wip(case-b)`
+  handoff commit dropped.
+- **Laurium's egress rows** in platform's `profile.yaml` (`P12p2_platform.diff`): `laurium: [litellm]`, and `laurium`
+  appended to api's row alone. P7b's render skips a target that is not rendered (`_egress_by_workload`, `if
+  ports.get(target)`), so with `deep_read` named the rows render nothing.
+- **The strict xfails taken off**: `UNTIL_P7B` (`test_laurium_network_policy.py`) and the token test's
+  (`test_laurium_render.py`); the three Laurium network files now range over **every** cloud-platform fixture
+  (`FIXTURES.glob`, as cp-policy-check reads them: development, development-sources, poc, production,
+  production-bedrock), the fixture-as-is "nothing rendered" case kept to the two that name `deep_read`.
+- **The guide at 1.84** (above L1.9's 1.83), text only: the PDF and its manifest entry are the orchestrator's to make at
+  merge (its ruling of 12 November), so `test_docs_pdf` fails on the administration guide's PDF alone until then.
+
+**The gates** at 65d2ea9 with the five diffs applied, offline on ospreyflow-test (`p12p2_merge_gates.sh`, one
+background call; `gates/65d2ea9.merge-gates.txt`, run 20261112T050915Z; the "head" line it prints is the server copy's
+own stale `.git`, not this branch, which the copy carries as a working tree):
+
+| Step | Result |
+| --- | --- |
+| The three Laurium network files on the merged render | **71 passed** (network policy 26, render 40, cp-policy 5) |
+| `make cp-policy-check`, unfiltered | 0 violations on each of the five fixtures (lines below); its tests 384 passed, 6 skipped |
+| `OSPREY_PORTS_SLOT=14 make -k ci` | **exit 0** (harness-a11y 34 passed; trivy-image-laurium included) |
+| `make test` | 2 failed, 12603 passed, 33 skipped: the server's GPU case (`test_webapp_preflight`, carried) and `test_docs_pdf` (the guide's PDF, the orchestrator's at merge) |
+| `make live-collect`, on its own | exit 0 |
+| axe, the Models harness in slot 14 (`gates/65d2ea9.a11y-models-harness.txt`) | 40 passed, `cloud=1&engine=laurium` included |
+| `make test-js`, on the Mac (`gates/65d2ea9.test-js.txt`) | 365 files, 3097 passed; harness 7 files, 51 passed |
+
+```
+development-sources.yaml: 64 manifests, 0 violation(s)
+development.yaml: 60 manifests, 0 violation(s)
+poc.yaml: 57 manifests, 0 violation(s)
+production-bedrock.yaml: 71 manifests, 0 violation(s)
+production.yaml: 67 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+```
+
+poc, production-bedrock and development-sources leave the engine unset, so they render Laurium by the preset: the
+unfiltered check holds P7b's rules (`token`, `wide-egress`, `whole-secret`) with Laurium in the namespace on three
+shapes, beside `test_laurium_cp_policy.py`'s five with it named.
+
+**To apply at merge, from the repository root:** `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_{CI,platform,glass_models,core_makefile,docs_admin_guide}.diff`
+(the owner's `P12p2_CI.diff` first or in the same push), then the guide's PDF (`python -m tools.docs_pdf --write`).
