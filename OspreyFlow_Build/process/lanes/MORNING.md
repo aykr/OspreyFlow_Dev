@@ -550,6 +550,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         This lifts v0.5.0's freeze for osprey-small for that rebuild alone; the demo then runs main as merged
         today. Still yours to say at rebuild time: whether `local_only: false` and `sendable_handling_codes: [P]`
         go into its osprey.yaml, for Gemini.
+      - **ADR-146 Am 7 is bigger than S.** No screening list carried a marking, and alerts are shown or withheld
+        whole. Rules is building it at size M:
+        - a list's own marking, OFFICIAL by default;
+        - one alert per screened party, citing each list;
+        - each citation shown only to a reader who can read it.
+
+        **One narrowing, which you can overrule:** a true positive confirms only the matches the closer can read.
+        A hidden one stays inferred (rules 3 and 5). It lands tomorrow morning, or after the demo.
+      - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
+        core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
