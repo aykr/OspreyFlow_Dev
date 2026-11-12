@@ -28,6 +28,10 @@ export type RedirectHttp = boolean;
  * Small on a server of your own, with network.tls only: the one address of the server the front proxy publishes on. Default: none — every interface.
  */
 export type ListenAddress = string | null;
+/**
+ * Small over https:// only: the front proxy asks every browser for a shared key (the browser's own user name and key box) on all three names before anything loads, and every answer says noindex. The key's bcrypt hash is set on the server by `python -m harness.access_key set <the deployment's folder>`, never here. Default: false (ADR-114 Amendment 41).
+ */
+export type AccessKey = boolean;
 
 /**
  * What this deployment publishes to its host.
@@ -47,6 +51,7 @@ export interface NetworkConfig {
   tls?: TlsFiles | null;
   redirect_http?: RedirectHttp;
   listen_address?: ListenAddress;
+  access_key?: AccessKey;
 }
 /**
  * ADR-114 Amendment 33 decision 3: the organisation's own certificate for a Small on a server
