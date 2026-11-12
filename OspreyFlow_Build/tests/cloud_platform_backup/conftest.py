@@ -200,6 +200,10 @@ class FakeStores:
         #: ClickHouse's databases, as its DDL changes them (round 3 on kind: a RENAME of a database
         #: that is not there is refused, Code 81, which a fake answering every DDL with "" hid).
         self.databases: set[str] = {"ospreyflow"}
+        #: A Replicated database's Keeper path, which a RENAME keeps (kind, round 4: the restored
+        #: database renamed into the live one's place kept `…_restoring_<set>`'s path, and the same
+        #: set's next restore was refused making it again, Code 253).
+        self.keeper: dict[str, str] = {}
 
     def _s3(self) -> Any:
         """ClickHouse's S3 client as **its own** role, by its pod's web identity (never the process's
@@ -250,9 +254,15 @@ class FakeStores:
             if names[0] not in self.databases and " IF EXISTS " not in body:
                 refuse(81, 404, f"Database {names[0]} does not exist. (UNKNOWN_DATABASE)")
             self.databases.discard(names[0])
+            self.keeper.pop(names[0], None)
         elif body.startswith("CREATE DATABASE"):
             if names[0] in self.databases:
                 refuse(82, 500, f"Database {names[0]} already exists. (DATABASE_ALREADY_EXISTS)")
+            if path := re.search(r"Replicated\('([^']+)'", body):
+                if path.group(1) in self.keeper.values():
+                    refuse(253, 500, f"Replica clickhouse-0 of shard 01 of replicated database at {path.group(1)} "
+                                     "already exists. (REPLICA_ALREADY_EXISTS)")  # fmt: skip
+                self.keeper[names[0]] = path.group(1)
             self.databases.add(names[0])
         else:
             source, target = names[:2]
@@ -262,6 +272,8 @@ class FakeStores:
                 refuse(82, 500, f"Database {target} already exists. (DATABASE_ALREADY_EXISTS)")
             self.databases.discard(source)
             self.databases.add(target)
+            if source in self.keeper:
+                self.keeper[target] = self.keeper.pop(source)
         return b""
 
     def __call__(self, request: urllib.request.Request, timeout: float) -> bytes:

@@ -1124,6 +1124,10 @@ class Run:
                   and record["arcadedb_planted"]["stores_untouched"]
                   and record["arcadedb_planted"]["leftovers"]["arcadedb"] == []
                   and "restore-graph refused" in record["arcadedb_planted"]["restore_graph"]
+                  # Red for the reason planted (rule 15): refused at RESTORE, by S3, not earlier.
+                  and "RESTORE" in record["clickhouse_planted"]["restore_analytics"]
+                  and "Access Denied" in record["clickhouse_planted"]["restore_analytics"]
+                  and "make the restore's own database" not in record["clickhouse_planted"]["restore_analytics"]
                   and record["clickhouse_planted"]["clickhouse_untouched"]
                   and record["clickhouse_planted"]["arcadedb_restored"]
                   and record["clickhouse_planted"]["leftovers"]["clickhouse"] == [])  # fmt: skip

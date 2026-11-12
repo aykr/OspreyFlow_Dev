@@ -15,6 +15,7 @@ servers are the kind run's (`process/lanes/case/gates/p9_kind.sh`).
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import io
 import json
@@ -636,3 +637,18 @@ def test_a_set_records_when_it_finished_and_sets_says_it(
     assert pb.main(["sets"]) == 0
     assert capsys.readouterr().out.splitlines() == [
         f"{manifest['set']}\tfinished\t{manifest['finished']}", "20261112T021500Z\tunfinished"]
+
+
+def test_the_same_set_restored_twice_on_a_cluster_is_never_refused_by_its_own_keeper_path(run: Any) -> None:
+    """ON CLUSTER the restore makes a Replicated database; a RENAME keeps its Keeper path, so the
+    database swapped in still holds `…_restoring_<set>`'s path. The same set restored again (a
+    retry, which the runbook offers) must not make that path again: ClickHouse refuses it, Code 253
+    (kind, round 4). Each attempt's path is its own."""
+    settings, bucket, stores, fake = run
+    clustered = dataclasses.replace(settings, clickhouse_cluster="osprey")
+    on_cluster = pb.Stores(clustered, http=fake)
+    manifest = pb.take(settings, bucket, stores)
+    fake.keeper["ospreyflow"] = "/clickhouse/databases/ospreyflow"
+    for _ in range(2):
+        pb.restore_analytics(clustered, bucket, on_cluster, manifest["set"])
+    assert fake.databases == {"ospreyflow"}

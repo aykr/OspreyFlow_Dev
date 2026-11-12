@@ -47,6 +47,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -505,11 +506,15 @@ class Stores:
         database = _identifier(self.settings.clickhouse_database)
         stamp_ = _identifier(set_id.lower())
         restoring, old = f"{database}_restoring_{stamp_}", f"{database}_before_{stamp_}"
+        # Its Keeper path is this attempt's own: a RENAME keeps the path, so the database swapped
+        # in by an earlier restore of this set still holds `…_restoring_<set>`'s, and making it
+        # again is refused (Code 253, kind round 4).
+        attempt = uuid.uuid4().hex[:12]
         on = self._on_cluster()
         self.clickhouse(f"DROP DATABASE IF EXISTS {restoring}{on} SYNC", "clear the restore's own")
         self.clickhouse(
             f"CREATE DATABASE {restoring}{on} ENGINE = Replicated("
-            f"'/clickhouse/databases/{restoring}', '{{shard}}', '{{replica}}')"
+            f"'/clickhouse/databases/{restoring}_{attempt}', '{{shard}}', '{{replica}}')"
             if self.settings.clickhouse_cluster
             else f"CREATE DATABASE {restoring}",
             "make the restore's own database",

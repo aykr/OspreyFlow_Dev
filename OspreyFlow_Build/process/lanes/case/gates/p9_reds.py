@@ -356,6 +356,10 @@ runner.PLANTS = [
      [TP + "test_a_swap_refused_between_its_renames_puts_the_live_database_back_and_says_where_each_is"]),
     ("a set's finish time not recorded", RUN, '    manifest["finished"] = finished', '    finished = finished',
      [TP + "test_a_set_records_when_it_finished_and_sets_says_it"]),
+    ("the restore's Keeper path the set's alone (kind, round 4: the same set's second restore refused, Code 253)", RUN,
+     "f\"'/clickhouse/databases/{restoring}_{attempt}', '{{shard}}', '{{replica}}')\"",
+     "f\"'/clickhouse/databases/{restoring}', '{{shard}}', '{{replica}}')\"",
+     [TP + "test_the_same_set_restored_twice_on_a_cluster_is_never_refused_by_its_own_keeper_path"]),
 ]
 
 if __name__ == "__main__":
