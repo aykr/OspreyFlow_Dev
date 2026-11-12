@@ -16,6 +16,8 @@ tests that claim to catch it, expects them red, and puts the file back (in a `fi
 - **L7** (item 8): a rename leaving the citations' nodes; **L2b** the same for the repoint, by the
   store's own case.
 
+- **L20 to L23** (the lane review of the second pass): a hold's note, an unmarked list's reader, an
+  approval's confirm, and the listed party's properties on the real ArcadeDB store.
 - **L8 to L19** (the orchestrator's review of 12 November 2026 and the owner's ruling of ~15:30): the
   store's `WHERE` filters, a list's kept marking, a reload's refusal, the routes' hidden-list answer,
   the refresh's audit, a load's count, a close's confirm and its decisions, and the trends' groups.
@@ -51,17 +53,21 @@ REVIEW = [f"{KYC}::{n}" for n in (
     "test_a_close_decides_only_the_matches_its_closer_may_read",
     "test_a_loads_report_counts_only_the_alerts_its_loader_may_read",
     "test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_proposed_match",
+    "test_each_proposal_confirms_by_its_own_disposition",
+    "test_a_held_loads_note_counts_only_the_matches_its_loader_may_read",
 )]  # fmt: skip
 STORE_CASES = [f"{STORE}::{n}" for n in (
     "test_a_lists_entries_are_read_only_for_a_clearance_admitting_its_marking",
     "test_a_lists_subscription_and_refreshes_are_read_only_for_a_clearance_admitting_it",
     "test_an_emptied_list_keeps_its_marking",
     "test_a_reload_that_would_lower_a_lists_marking_is_refused_and_changes_nothing",
+    "test_a_list_held_with_no_marking_is_hidden_from_a_reader_below_official",
 )]  # fmt: skip
 ROUTES = f"{B}/services/api/test_screening_list_routes.py"
 ROUTE_CASES = [f"{ROUTES}::{n}" for n in (
     "test_a_list_is_shown_only_to_a_reader_cleared_for_its_marking",
     "test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed",
+    "test_a_reader_cleared_for_a_list_refreshes_and_schedules_it",
 )]  # fmt: skip
 REFRESH_SECRET = f"{REFRESH}::test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking"
 TRENDS = f"{B}/conformance/analytics_port/test_suite.py::test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader"
@@ -237,6 +243,36 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         "THEN 1 ELSE 0 END) = 1)\"",
         "THEN 1 ELSE 0 END) = 2)\"",
         [TRENDS],
+    ),
+    # --- after the lane review of the second pass ------------------------------------------------
+    (
+        "L20 a hold's note said of a match its loader may not read (defect 8)",
+        "OspreyFlow_Core/services/api/rule_evaluation.py",
+        "                    if counted_for(finding, self.loader, self.scheme):\n",
+        "                    if True:\n",
+        [REVIEW[5]],
+    ),
+    (
+        "L21 a list with no marking visible to a reader below OFFICIAL (defect 9)",
+        "OspreyFlow_Core/services/api/screening.py",
+        "                kept = (DEFAULT_CLASSIFICATION, DEFAULT_HANDLING_CODE)\n",
+        "                pass\n",
+        [STORE_CASES[4]],
+    ),
+    (
+        "L22 an approval's confirm read from the first proposal shown (defect 4)",
+        "OspreyFlow_Core/services/api/alert_queue.py",
+        '        or (c.status == "closing" and proposed_by is not None and c.disposition == "true_positive"\n',
+        '        or (c.status == "closing" and proposed_by is not None and disposition == "true_positive"\n',
+        [REVIEW[4]],
+    ),
+    (
+        "L23 the listed party written with an undeclared property (defect 1, on ArcadeDB)",
+        "OspreyFlow_Core/services/api/kyc_rules.py",
+        '    properties.update({"listing": entry.listing, "list_name": entry.list_name})',
+        '    properties.update({"listing": entry.listing, "list_name": entry.list_name,'
+        ' "list_entry_id": entry.id})',
+        [AM7[0]],
     ),
 ]
 

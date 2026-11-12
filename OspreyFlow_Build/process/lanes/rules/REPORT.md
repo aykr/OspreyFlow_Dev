@@ -1,9 +1,11 @@
 # rules lane · report · rules-lists, second pass: the orchestrator's review and the owner's ruling on every close (12 November 2026, evening)
 
 The review of 97826d0 found four rule-3 leaks and the owner ruled at about 15:30 that a close decides only the
-citations its closer may read, for every disposition. All built in one pass, each red first
-(`lists/AM7_RED_RECORD.txt` P20 to P40 at their call sites; `lists/REVIEW2_RED_BEFORE.txt`, the new cases
-against the code before the pass; live, `lists/am7_live_plants.py` L8 to L19), Am 7 rewritten as built.
+citations its closer may read, for every disposition. All built in one pass; my lane-reviewer then found 15
+defects, fixed below. Red first: `lists/AM7_RED_RECORD.txt` (offline P1 to P48 at their call sites, headed
+by the commit and the code's identity) and `lists/REVIEW2_RED_BEFORE.txt` (the new cases against the code
+before the pass). The live plants L8 to L23 (`lists/am7_live_plants.py`) are **not yet run**: they wait for
+the orchestrator's word on a lease tonight. Am 7 rewritten as built.
 
 | Review item | State | Proving test |
 | --- | --- | --- |
@@ -15,7 +17,7 @@ against the code before the pass; live, `lists/am7_live_plants.py` L8 to L19), A
 | 6. Trends count a cited alert once per reader as the queue shows it | done | `test_the_trends_count_a_cited_alert_once_for_each_reader_as_the_queue_shows_it`; conformance `test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader` (both adapters; P36 to P38, L19) |
 | 7. A load's report counts only what its loader may read | done | `test_a_loads_report_counts_only_the_alerts_its_loader_may_read`, offline (P39) and live (L16) |
 | 8. A reload never lowers a list's marking | done | `test_a_reload_that_would_lower_a_lists_marking_is_refused` (P40), live `…_is_refused_and_changes_nothing` (L13) |
-| 9. The listed party keyed by its entry id | done | `test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name`, `test_a_match_on_a_name_many_parties_share_still_finds_its_own` (P24) |
+| 9. The listed party keyed by its entry id | **done otherwise:** keyed by its name and every property it is written with, never failing past the bound; by entry id it needs an ontology version (not this lane's), logged | `test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_same_name`, `test_a_match_on_a_name_more_parties_share_than_the_lookup_reads_never_fails_the_rule`, `test_a_written_party_is_one_the_ontology_declares` (P24, P41, P42; live L23) |
 | 10. Point 6 with a differing approver; Home's counts, Reports figures, the address; risk with a hidden factor | done | `test_an_approver_cleared_for_one_list_approves_only_that_lists_proposal`; `test_homes_counts_…`, `test_the_reports_figures_…`, `test_the_alerts_address_…`; live `test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in` |
 | 11. Out-of-map files listed for ratification | done | below |
 | Notes: removal before close; the plants' code identity; collection error apart from red | done | the five fixtures; each record's header; the runners' BROKEN |
@@ -32,11 +34,24 @@ other areas changed for the new signatures: `test_rule_editor_routes.py`, `test_
 scheme's dependency), `test_alert_evidence_withheld.py` (`TriageStore.triage_citations`, the real decision),
 `test_alert_node_marking.py` (`save`'s `cited_handlings`), the analytics conformance suite (one case).
 
+**The lane-reviewer's findings on the pass, and what became of each.** 1: `list_entry_id` was undeclared in the
+ontology, so ArcadeDB would refuse every new party; the fakes accepted it (rule 15). Reworked as above, and
+the fakes now validate writes and refuse a lookup on a field ArcadeDB cannot find by. 2: records claimed before
+they existed; now recorded offline, and the live ones are said to be unrun. 3: self-approval beside another's
+proposal, refused. 4: confirm read from the first proposal, now each its own. 5: a partial close cleared
+another reader's claim, now kept. 6: a sentence alert on a hidden list shown to its subject's readers, now
+marked as the list. 7: the hidden-name refusal is unique to hidden lists; the spec now says so, logged for the
+owner. 8: the hold note, now only for the loader's own matches (held rows' reasons logged). 9: an unmarked list
+is OFFICIAL for `hidden`. 10: the audit also reads the list's marking now. 11: item 7's call sites are planted
+live only (L16, L20). 12: stored and served decider agree. 13: the positive route case added. 14: friction
+row updated; the schemas commit is the orchestrator's to take, as before. 15: logged with 7.
+
 ## Decisions taken (second pass)
 - A list's marking is kept apart from its entries (`screening_list_markings`), so an emptied list keeps it.
 - A code change at the same classification counts as lowering (codes are not ranked): strict.
-- A hidden list's name, offered for a new subscription, is refused before anything is written; the refusal says
-  a name is taken, as any unique name does. Logged.
+- A hidden list's name, offered for a new subscription, is refused before anything is written. That refusal is
+  unique to hidden names, so it tells the administrator one exists (a name, not its contents). For the owner.
+- The listed party is found by its properties, not an entry id: an entry id needs an ontology version.
 - A close that leaves a citation open hands the alert back open and unassigned; a proposal leaves it claimed by
   its proposer. A claim and a suppression stay the alert's, shown to every reader (no list, match or count);
   a suppression's free-text reason is the lead's to word. Logged.
