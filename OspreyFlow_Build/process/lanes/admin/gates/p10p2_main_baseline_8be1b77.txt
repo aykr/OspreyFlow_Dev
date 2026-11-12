@@ -1,0 +1,113 @@
+main 889884d, a throwaway worktree at /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/0265890d-ec13-4ce9-936c-c1316e6dee63/scratchpad/mainwt (node_modules linked from the lane's), removed after; 2026-11-12T04:24Z
+
+$ npx playwright test --config keyboard/playwright.config.ts keyboard/admin-models.spec.ts
+
+Running 13 tests using 1 worker
+
+[WebServer] 04:24:40 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 04:24:40 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 04:24:40 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 04:24:40 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+  ✓   1 keyboard/admin-models.spec.ts:29:1 › an engine is added by keyboard (295ms)
+  ✘   2 keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for (5.2s)
+  ✓   3 keyboard/admin-models.spec.ts:79:1 › the organisation's own gateway is added by keyboard, signed in by its token (259ms)
+  ✓   4 keyboard/admin-models.spec.ts:105:1 › an engine is edited by keyboard (186ms)
+  ✓   5 keyboard/admin-models.spec.ts:114:1 › a lost key is entered again by keyboard, and the field is empty afterwards (192ms)
+  ✓   6 keyboard/admin-models.spec.ts:124:1 › a key is rotated by keyboard (187ms)
+  ✓   7 keyboard/admin-models.spec.ts:133:1 › a key is removed by keyboard (152ms)
+  ✓   8 keyboard/admin-models.spec.ts:140:1 › an engine's connection is tested by keyboard (150ms)
+  ✓   9 keyboard/admin-models.spec.ts:147:1 › each job's default engine is set by keyboard (161ms)
+  ✓  10 keyboard/admin-models.spec.ts:156:1 › an engine is removed by keyboard (153ms)
+  ✓  11 keyboard/admin-models.spec.ts:164:1 › an engine's limits are set by keyboard (185ms)
+  ✓  12 keyboard/admin-models.spec.ts:180:1 › the usage's period is chosen by keyboard, and days are chosen by keyboard (1.3s)
+  ✘  13 keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above (127ms)
+
+
+  1) keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator: getByLabel('Engine name', { exact: true })
+    Expected: "bedrock"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveValue" getByLabel('Engine name', { exact: true }) with timeout 5000ms
+      - waiting for getByLabel('Engine name', { exact: true })
+
+
+      62 |   await page.getByLabel("Kind of engine", { exact: true }).focus();
+      63 |   await page.keyboard.press("End"); // the last kind listed, Bedrock
+    > 64 |   await expect(page.getByLabel("Engine name", { exact: true })).toHaveValue("bedrock");
+         |                                                                 ^
+      65 |   await expect(page.getByText(/no key is kept/)).toBeVisible();
+      66 |   await typeInto(page, "Label analysts see", "Bedrock");
+      67 |   await typeInto(page, /Extraction and Ask: the provider/, "anthropic.claude-3-haiku");
+        at /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/0265890d-ec13-4ce9-936c-c1316e6dee63/scratchpad/mainwt/OspreyFlow_Core/apps/workspace/keyboard/admin-models.spec.ts:64:65
+
+    Error Context: test-results/admin-models-Bedrock-in-Lo-80070--role-with-no-key-asked-for/error-context.md
+
+  2) keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above 
+
+    Error: MODELS_ACTIONS: keyboard action(s) registered with no proving test case: add-a-model-engine-by-keyboard, add-bedrock-by-iam-role-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/0265890d-ec13-4ce9-936c-c1316e6dee63/scratchpad/mainwt/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/0265890d-ec13-4ce9-936c-c1316e6dee63/scratchpad/mainwt/OspreyFlow_Core/apps/workspace/keyboard/admin-models.spec.ts:201:3
+
+    Error Context: test-results/admin-models-every-registe-5e289-own-proving-test-case-above/error-context.md
+
+  2 failed
+    keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for 
+    keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above 
+  11 passed (9.8s)
+exit 1
+
+$ npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts -g 'places-harness.html open=views'
+
+Running 4 tests using 1 worker
+
+  ✓  1 a11y/every-harness.spec.ts:364:7 › places-harness.html open=views (dark) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓  2 a11y/every-harness.spec.ts:364:7 › places-harness.html open=views (light) has no automated WCAG 2.2 A or AA violations (868ms)
+  ✘  3 a11y/every-harness.spec.ts:364:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations (963ms)
+  ✓  4 a11y/every-harness.spec.ts:388:5 › places-harness.html open=views: every labelled field's name contains its visible label (2.5.3) (611ms)
+
+
+  1) a11y/every-harness.spec.ts:364:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations 
+
+    Error: colour contrast axe left undecided, too low or unmeasurable
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   ".govuk-notification-banner__content > .btn: not measurable: hidden at every point, under an opaque element over the words or clipped (axe: bgOverlap) [own surfaces 18.34:1] (\"Case: Kestrel\")",
+    + ]
+
+      381 |         // gone fails too, so the list never outlives what it excuses.
+      382 |         const { unlisted, gone } = await checkUndecidedContrast(page, results, CONTRAST_FINDINGS[title]);
+    > 383 |         expect(unlisted, "colour contrast axe left undecided, too low or unmeasurable").toEqual([]);
+          |                                                                                         ^
+      384 |         expect(gone, "listed contrast findings no longer found as listed: update CONTRAST_FINDINGS").toEqual([]);
+      385 |       });
+      386 |     }
+        at /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/0265890d-ec13-4ce9-936c-c1316e6dee63/scratchpad/mainwt/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts:383:89
+
+    Error Context: test-results/every-harness-places-harne-45583-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  1 failed
+    a11y/every-harness.spec.ts:364:7 › places-harness.html open=views (govuk) has no automated WCAG 2.2 A or AA violations 
+  3 passed (4.7s)
+exit 1

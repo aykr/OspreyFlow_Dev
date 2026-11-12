@@ -2,7 +2,7 @@
 
 Branch `lane/admin-p10p2`. The plants harness is `p10p2/p10p2_plants.py`. Each plant edits the real code where the
 behaviour lives, runs the cases meant to catch it, expects them red, and restores the file. The shared files' diffs
-(`readers.diff`, `render.diff`, `glass-sign-in.diff`, and since the review of 3848c32 `runbook.diff`) are applied first, so a fault in them is planted where it will
+(`readers.diff`, `render.diff`, `glass-sign-in.diff`, since the review of 3848c32 `runbook.diff`, and since the second review `resolver-doubles.diff`) are applied first, so a fault in them is planted where it will
 merge, and reverted at the end.
 
 What counts as red is as in part 1's harness:
@@ -12,6 +12,7 @@ What counts as red is as in part 1's harness:
 
 | Head | Plants | Case runs | Result | Output |
 | --- | --- | --- | --- | --- |
+| `9bf0aa8` (the head after the orchestrator's second review of 67f3d2a, on main 510141b) | 95: 83 offline, 12 live | 106 offline + 15 live | 121 red, 0 missed, 0 harness faults | `gates/p10p2_plants_9bf0aa8.txt`; the live fifteen under admin's lease on stack b at 9bf0aa8, `gates/p10p2_live_targeted_9bf0aa8.txt` |
 | `d994612` (the head after the orchestrator's review of 3848c32, on main 1cbc164; the code as 87503fe) | 76: 68 offline, 8 live | 88 offline + 10 live | 98 red, 0 missed, 0 harness faults | `gates/p10p2_plants_d994612.txt`; the live ten under admin's lease on stack c at 87503fe, `gates/p10p2_live_targeted_87503fe.txt` |
 | `cc684ec` (on L1.9 part 2's main) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_cc684ec.txt`; the live three under the lease at 2516c4b, `gates/p10p2_live_targeted_2516c4b.txt` |
 | `641c403` | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_641c403.txt`; the live three under the lease at 302cf3e, `gates/p10p2_live_plants_302cf3e.txt` |
@@ -60,3 +61,14 @@ scope and the set-up console; item 3's notice and its *Try again*. Item 3 was al
 plant existed (the notice removed: `Unable to find role="alert"`). The first run of the harness had one harness
 fault, the stale-alert plant's site moved by the log line added to `recipients_of`; repointed at d994612 and the whole
 harness run again.
+
+**The second review's plants** (19 new, 7 moved): the keys' cache (fetched at every sign-in), the unknown-kid window, one
+thread fetching, the grace and its end, the keys' own executor, a body not JSON and a set with no usable key, the
+http-or-https rule; owner resolution's keys unreadable (Keycloak); the run API's 503, RS256, leeway and shared keys; the
+re-grant only when nobody can manage people, both ways, and its audit row; the hourly refresh both ways; the
+bootstrap's lock (now shown deterministically: `connect` waits while another session holds it); the socket's 1013
+before a message; Name an Author's 24 h rule. The account-unread notice's keyboard spec and axe scans were shown red by
+hand (playwright, which the harness does not run): `gates/p10p2_mac_41e1d6a.txt`. **Not shown red alone**: owner
+resolution's use of the keys' threads (the same error mapping catches it either way; the same `in_keys_thread` is red on
+the person path). The first full run had one harness fault: Name an Author's case is in a file `resolver-doubles.diff`
+carries, which the harness did not yet apply (no tests ran); it does now, and the whole harness was run again.
