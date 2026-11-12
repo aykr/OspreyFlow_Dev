@@ -201,12 +201,7 @@ async def create_tables(client: ClickHouseClient) -> None:
         if client.cluster:
             statement = statement.replace("ENGINE = MergeTree", "ENGINE = ReplicatedMergeTree")
         await client.command(statement)
-    (present,) = await client.rows(
-        "SELECT count() FROM system.columns "
-        "WHERE database = ? AND table = 'events' AND name = 'load_id'",
-        [client.database],
-    )
-    if int(present[0]) == 0:
+    if not await _has_column(client, "events", "load_id"):
         await client.command(ADD_EVENTS_LOAD_ID)
     for table, column, statement in ADD_ALERT_FACT_SETS:
         if not await _has_column(client, table, column):

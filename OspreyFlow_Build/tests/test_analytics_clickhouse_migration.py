@@ -50,11 +50,7 @@ class RecordingClient:
         asked = params[0]
         if asked != self.database:
             return [[0]]
-        if len(params) == 3:  # the table and column asked as parameters (the alert facts' sets)
-            table, column = str(params[1]), str(params[2])
-        else:  # `events.load_id`, named in the text
-            table, column = "events", "load_id"
-            assert "'events'" in sql and "'load_id'" in sql
+        table, column = str(params[1]), str(params[2])  # each column asked about by name
         return [[1 if column in self.tables.get(table, set()) else 0]]
 
     def alters(self) -> list[str]:

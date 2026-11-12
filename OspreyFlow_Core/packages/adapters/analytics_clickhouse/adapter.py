@@ -449,8 +449,9 @@ class AnalyticsClickHouseAdapter:
 
     async def load_alert_facts(self, facts: Sequence[AlertFact]) -> None:
         """Each fact replaces what was kept for its alert: its rows deleted (the mutation waited
-        for), then written again. Unproven on a real ClickHouse here: no server ran in this
-        build."""
+        for), then written again. Proven on a real ClickHouse by the analytics port's conformance
+        suite (`test_an_alert_kept_per_set_of_its_citations_is_counted_once_for_each_reader`, run
+        on a leased test stack)."""
         if not facts:
             return
         ids = [f.alert_id for f in facts]
