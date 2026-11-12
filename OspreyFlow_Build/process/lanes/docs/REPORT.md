@@ -1,3 +1,53 @@
+# docs lane · the sites step, ospreyflow.org and ospreyflow.net · 12 November 2026
+
+Branch `lane/docs-sites` from main 5a8c2d8, on the Mac, no server, no stack. Nothing published, pushed or created; the
+current six-page site and `publish_pages.sh` unchanged. Head: see `git log`. Nothing running.
+
+| Item | State | Proof |
+| --- | --- | --- |
+| 1. The two sites beside the current one; build.py kept (accepted, conditions a–c) | Done: the drafts committed as delivered (8fecd8d, their HTML build.py's byte for byte), then build.py writing `sites/org/` and `sites/net/`, `--out`, images only with `--images` | `test_the_pages_are_build_pys_output`, red on a one-space drift |
+| 2. Every page held to the rules, red first | Done: 12 checks, each with planted cases in build.py's shapes; red on the drafts for Laurium, the placeholders, the old statement, an install without `--mode`, and the build | `tests/test_sites.py` (56 cases); `gates/sites-red-first.txt` |
+| No client named, by hash (the orchestrator's design) | Built against a synthetic entry; `client_hashes.py` for the owner, a count printed, never a name | `test_the_client_check_*`, `test_the_script_appends_hashes_and_prints_no_name` |
+| 3. Every claim on Features, Get started and UK public sector checked against v0.5.0 (4b8de6c) and main | Done; listed below. Each page says what is in v0.5.0; Features heads what is only on main | the guides and code, file and line in the fact-check (this session) |
+| 4. and 5. Proposals for the owner | Committed unapplied: `process/lanes/docs/sites-proposal/` | `RED_RECORD.txt`: 17 of 19 red against today's rule, 19 green |
+| 6. Screenshots | Waits for the demo's freeze after Friday | — |
+| 7. The current site once these are live | Proposed: four redirect pages, the repository's website field, Pages off after six months | `sites/README.md` |
+| Review | One lane-reviewer round, 8 must-fix items and 6 minor, fixed except as said below | — |
+
+**Item 3, what changed** (all true in v0.5.0 unless said):
+- Sign-in through Entra ID, ADFS or another OpenID Connect provider on a server of your own alone; elsewhere OspreyFlow's own accounts (`cli/ospreyflow/answers.py` 368–377; admin guide §5a.1).
+- An update backed up first and rolled back on failure only on one computer or a server of your own, installed from a release; Enterprise by installing the new release (admin guide §14's table; `harness/update.py`). Signed releases kept (true).
+- The public-sector install command given its `--mode lite` (without it the install refuses: `cli/ospreyflow/main.py` 722); a test now holds every install command shown to its mode.
+- The Vault: DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, S3-compatible storage or Azure Blob (admin guide 132, 2939).
+- Connection strength is count and recency, rarity shown beside it; the map's boundary filters; the timeline dims; the Matrix gives strength and rarity (user guide §5.3, §5.4, §5.11, §5.12).
+- The UN and OpenSanctions lists synthetic until their licences are confirmed; a list is re-screened when one you load changes (admin guide §9.5).
+- A second person for a high-severity close; a whole-deployment rule removed (v0.5.0 cannot make one).
+- Drawn items' source: a note, a document or both. Pipelines: each source with its own profile, mapping and load. Loaded data reaches a dataset only through a published pipeline.
+- Get started: Blank loads no demonstration data; four guides, the Architecture Guide added; Small's needs (Git, uv; amd64, Python 3.12, port 443, access to the releases).
+- UK public sector: the GOV.UK look "to be used" for gov.uk services (stated, not enforced); calling out says what the install and a server fetch; accessibility scans "on every screen we test, in light and dark, under GOV.UK on most".
+- Features' last section headed "On main, coming with the next release": the shared-platform profile (not yet installed on a platform), S3 and Athena, the owner's extraction-engine line, the model route on that profile. The change-log pointer dropped (its Unreleased section is empty).
+- Beyond the three pages, the same claims on .net and Home; Contribute's checks, sign-off, guide count and scans; .net's "air-gapped" claim struck; nothing promised "with the next release".
+- The map and Verify images were swapped in the drafts (each showed the other's screen): swapped back.
+
+**The owner's four decisions, applied as given:** (1) Couldridge, in the Team page and TEAM_NAMES; (2) servicecentre@solirius.com
+on .net's Contact and .org's Contribute, with "Put 'OspreyFlow security' in the subject", and the checklist line;
+(3) "How it is built" unchanged; (4) Laurium not named, "a second, open-source extraction engine for structured facts in
+documents", with a test.
+
+**For the owner:**
+1. **A hash is not a secret.** Anyone can hash a list of UK forces and departments and see which are in `client_names.sha256`.
+   Keep the file out of git, use a keyed hash, or accept it, before a real name is added (README says so).
+2. **The extraction engine line** is yours verbatim. On main it runs on the shared-platform profile alone and no screen reaches
+   it; the next line says "on the shared-platform profile", this one does not. Add the qualifier or keep it.
+3. **Contribute's process**: "Before it is merged, the project's checks run on it" describes practice, not code: the public
+   repository runs no workflow on a pull request. Confirm or strike.
+4. **The images** predate v0.5.0 (the old brand, tabs and Inspector fields); the Features page says so until item 6.
+
+**Not done:** item 6; the client names' red run (the owner's session); item 5's run against real repositories.
+**Carried, minor:** `build.py`'s `SHOTS` holds six entries no page shows, kept for item 6's captures.
+
+---
+
 # docs lane · D2c part 4, the model route on the `cloud-platform` profile (administration guide §6a.9) · 12 November 2026
 
 Branch `lane/docs-d2c4` fresh from main 5bc60ba. No HANDOFF.md, no earlier commits: the brief was untouched. Head: see `git log`. Nothing running.
