@@ -1,0 +1,701 @@
+<unknown>:469: SyntaxWarning: invalid escape sequence '\.'
+OspreyFlow_Build/process/friction/2026-11-12-rules-b-guides.md: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/PATCHES.md: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/docs-guides.patch: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/every-harness-guides.patch: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/gates/02f3752.browser.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/gates/02f3752.ci.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/gates/02f3752.live.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/gates/02f3752.test.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/guides/glass-plants.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/guides/image_check.sh: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/guides/keyboard-plants.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/guides/server-plants.txt: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/registry-guides.patch: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/spec02-guides.patch: live_map.tsv says none
+OspreyFlow_Build/process/lanes/rules-b/spec03-guides.patch: live_map.tsv says none
+OspreyFlow_Build/spec/06_DECISIONS.md: live_map.tsv says none
+OspreyFlow_Build/tests/services/api/test_guides.py: imported by 0 live test files
+OspreyFlow_Build/tests/services/api/test_no_corpus_counts_on_the_wire.py: imported by 0 live test files
+OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py: imported by 0 live test files
+OspreyFlow_Build/tests/services/api/test_route_rights.py: imported by 1 live test files
+OspreyFlow_Core/apps/workspace/keyboard/start-harness.tsx: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/src/home/guides.test.ts: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/src/home/guides.ts: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/src/home/home.css: live_map.tsv says tests/harness
+OspreyFlow_Core/apps/workspace/src/shell/startScreen.tsx: live_map.tsv says tests/harness
+OspreyFlow_Core/services/api/Dockerfile: live_map.tsv says tests/harness
+OspreyFlow_Core/services/api/app.py: live_map.tsv adds tests/scenarios/test_phase7_stage6c_watch_routes.py
+OspreyFlow_Core/services/api/app.py: imported by 63 live test files
+OspreyFlow_Core/services/api/guides.py: live_map.tsv adds tests/scenarios/test_phase7_stage6c_watch_routes.py
+OspreyFlow_Core/services/api/guides.py: imported by 63 live test files
+72 of 309 live test files.
+live: 72 live test files (--base main).
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261112T115609Z/log: sh -c cd ../OspreyFlow_Core && exec .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE "$@" sh ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py ../OspreyFlow_Build/tests/harness/test_apply_env.py ../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py ../OspreyFlow_Build/tests/harness/test_first_admin.py ../OspreyFlow_Build/tests/harness/test_harness_image.py ../OspreyFlow_Build/tests/harness/test_identity.py ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py ../OspreyFlow_Build/tests/harness/test_restore_exit_test.py ../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py ../OspreyFlow_Build/tests/harness/test_sustained_load.py ../OspreyFlow_Build/tests/harness/test_workspace_bundle.py ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_routes_live.py ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py ../OspreyFlow_Build/tests/ingest/test_document_holds_its_own_text.py ../OspreyFlow_Build/tests/ingest/test_document_holds_its_own_text_live.py ../OspreyFlow_Build/tests/ingest/test_gazetteer_ids_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_phase7_exit.py ../OspreyFlow_Build/tests/ingest/test_phase7_exit_live.py ../OspreyFlow_Build/tests/ingest/test_phase8_exit.py ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py ../OspreyFlow_Build/tests/ingest/test_pid_seed_order.py ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py ../OspreyFlow_Build/tests/ingest/test_report_found_by_message_id_live.py ../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py ../OspreyFlow_Build/tests/ingest/test_site_grid_recipe_end_to_end.py ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_assessment_routes.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_case_writes_store.py ../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py ../OspreyFlow_Build/tests/services/api/test_export_routes.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pid_access_control.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_row_key_withdrawal_ledger.py ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py ../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py ../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py ../OspreyFlow_Build/tests/services/api/test_statelessness.py ../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py ../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_live.py ../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py ../OspreyFlow_Build/tests/test_seed_target_models_store.py
+................FFFFFFFFFFs....sssssssss......s..ssssssssssssss.ssss.... [ 15%]
+.....................................................ssss............... [ 31%]
+..................................................................F..... [ 47%]
+........................................................................ [ 63%]
+........................................................................ [ 79%]
+........................................................................ [ 95%]
+......................                                                   [100%]
+=================================== FAILURES ===================================
+_ test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_ARCADEDB_PASSWORD-ARCADEDB_ROOT_PASSWORD] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre0')
+server_name = 'OSPREY_ARCADEDB_PASSWORD', client_name = 'ARCADEDB_ROOT_PASSWORD'
+
+    @pytest.mark.parametrize(("server_name", "client_name"), PAIRED_CREDENTIAL_NAMES)
+    def test_both_names_of_a_split_credential_carry_the_same_value(
+        tmp_path: Path, server_name: str, client_name: str
+    ) -> None:
+        """Both halves present, and equal. Presence alone is not the assertion: two names holding two
+        different generated secrets is precisely the ArcadeDB fault, and it passes a presence check."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre0')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre0/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre0/local-lite
+_ test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_USER-POSTGRES_USER] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre1')
+server_name = 'OSPREY_POSTGRES_USER', client_name = 'POSTGRES_USER'
+
+    @pytest.mark.parametrize(("server_name", "client_name"), PAIRED_CREDENTIAL_NAMES)
+    def test_both_names_of_a_split_credential_carry_the_same_value(
+        tmp_path: Path, server_name: str, client_name: str
+    ) -> None:
+        """Both halves present, and equal. Presence alone is not the assertion: two names holding two
+        different generated secrets is precisely the ArcadeDB fault, and it passes a presence check."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre1')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre1/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre1/local-lite
+_ test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_DB-POSTGRES_DB] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre2')
+server_name = 'OSPREY_POSTGRES_DB', client_name = 'POSTGRES_DB'
+
+    @pytest.mark.parametrize(("server_name", "client_name"), PAIRED_CREDENTIAL_NAMES)
+    def test_both_names_of_a_split_credential_carry_the_same_value(
+        tmp_path: Path, server_name: str, client_name: str
+    ) -> None:
+        """Both halves present, and equal. Presence alone is not the assertion: two names holding two
+        different generated secrets is precisely the ArcadeDB fault, and it passes a presence check."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre2')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre2/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre2/local-lite
+_ test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_USER-MINIO_ACCESS_KEY] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre3')
+server_name = 'OSPREY_MINIO_USER', client_name = 'MINIO_ACCESS_KEY'
+
+    @pytest.mark.parametrize(("server_name", "client_name"), PAIRED_CREDENTIAL_NAMES)
+    def test_both_names_of_a_split_credential_carry_the_same_value(
+        tmp_path: Path, server_name: str, client_name: str
+    ) -> None:
+        """Both halves present, and equal. Presence alone is not the assertion: two names holding two
+        different generated secrets is precisely the ArcadeDB fault, and it passes a presence check."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre3')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre3/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre3/local-lite
+_ test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_PASSWORD-MINIO_SECRET_KEY] _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre4')
+server_name = 'OSPREY_MINIO_PASSWORD', client_name = 'MINIO_SECRET_KEY'
+
+    @pytest.mark.parametrize(("server_name", "client_name"), PAIRED_CREDENTIAL_NAMES)
+    def test_both_names_of_a_split_credential_carry_the_same_value(
+        tmp_path: Path, server_name: str, client_name: str
+    ) -> None:
+        """Both halves present, and equal. Presence alone is not the assertion: two names holding two
+        different generated secrets is precisely the ArcadeDB fault, and it passes a presence check."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre4')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre4/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_both_names_of_a_split_cre4/local-lite
+________ test_a_generated_secret_is_not_empty_and_is_not_a_placeholder _________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_a_generated_secret_is_not0')
+
+    def test_a_generated_secret_is_not_empty_and_is_not_a_placeholder(tmp_path: Path) -> None:
+        """A pair that agreed because both sides were empty would satisfy the test above."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:178: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_a_generated_secret_is_not0')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_a_generated_secret_is_not0/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_a_generated_secret_is_not0/local-lite
+____________ test_demo_analyst_password_is_absent_without_the_flag _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_0')
+
+    def test_demo_analyst_password_is_absent_without_the_flag(tmp_path: Path) -> None:
+        """`06_DECISIONS.md` ADR-050 objection 3's resolution: "absent by default." A plain apply must
+        not mint a credential for a subject nobody asked to exist."""
+>       env = _rendered_env(tmp_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:191: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_0')
+
+    def _rendered_env(tmp_path: Path) -> dict[str, str]:
+        """Runs the real `main()` far enough to write the environment file, then stops.
+    
+        `--no-build` is not enough on its own — the next stage would reach for a Docker daemon — so
+        this drives the CLI and reads the artefact it wrote, accepting whatever exit code the later
+        stages produce. What is under test is the *file*, and the file is written by the same code path
+        a real apply uses rather than by a re-implementation of it here.
+        """
+        main(["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"])
+        env_path = tmp_path / "local-lite" / "deployment.env"
+>       assert env_path.exists(), "apply did not get as far as writing the deployment environment file"
+E       AssertionError: apply did not get as far as writing the deployment environment file
+E       assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_0/local-lite/deployment.env').exists
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:147: AssertionError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_0/local-lite
+_ test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_1')
+
+    def test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag(
+        tmp_path: Path,
+    ) -> None:
+        """The render-time half of `--demo-analyst`, which needs no live Keycloak: a real generated
+        password lands in the environment file, and the realm document (also real, also written at
+        this stage) names the subject `harness/keycloak_admin.py`'s `set_demo_analyst_password` would
+        later set that password on."""
+        import json
+    
+        from harness.apply import main
+        from harness.realm import DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT
+    
+        main(
+            [
+                "--profile",
+                "local-lite",
+                "--out-root",
+                str(tmp_path),
+                "--build",
+                "--no-build",
+                "--demo-analyst",
+            ]
+        )
+    
+        env_path = tmp_path / "local-lite" / "deployment.env"
+        values: dict[str, str] = {}
+>       for line in env_path.read_text(encoding="utf-8").splitlines():
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:222: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.12/pathlib.py:1029: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_1/local-lite/deployment.env')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_1/local-lite/deployment.env'
+
+/usr/lib/python3.12/pathlib.py:1015: FileNotFoundError
+----------------------------- Captured stderr call -----------------------------
+
+apply: FAILED at stage 'preflight'
+  ports: 1 of 2 port(s) this deployment publishes are already in use: 2480 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+  (completed) render [0s]: 7 artefact(s) → /tmp/pytest-of-root/pytest-6007/test_demo_analyst_password_is_1/local-lite
+_ test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_the_deployment_this_file_0')
+capsys = <_pytest.capture.CaptureFixture object at 0x71003cb8e180>
+
+    def test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it(
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The mechanism `_teardown_local_lite_deployment` relies on, proven directly rather than
+        inferred from reading it: on a runtime with room, `main()` really does reach a running
+        `osprey-local-lite` deployment (not merely a rendered file), and the exact teardown command the
+        fixture runs after every test really does remove it. Calls that command itself, ahead of the
+        fixture's own identical call, so this test's assertion is about the command's effect, not about
+        whether the fixture happened to run — the fixture then runs again on top of an already-empty
+        project, which `docker compose down`'s own idempotence (proven separately, interactively,
+        against this machine) makes a no-op rather than a second failure.
+    
+        **Verified manually, the "even on failure" half rule 15 asks for** (not re-asserted as a
+        second, permanent test here, to avoid a second copy of this fixture's own logic drifting from
+        the first): a test in this file was made to raise straight after reaching a running deployment,
+        the suite was run, and `docker ps --filter label=com.docker.compose.project=osprey-local-lite`
+        was empty immediately afterward despite the test's own failure — pytest's own guarantee that a
+        `yield`-based fixture's teardown runs whether the test it wraps passed or not, exercised
+        against this real fixture rather than assumed of it.
+    
+        **Two real branches, round 10** — the same split `tests/harness/test_six_screen_live_exit.py`
+        makes, for the identical reason: Preflight's `memory`/`disk` checks now verdict on the container
+        runtime's own daemon (`process/07_BUILD_PLAN.md` Stage 2 §2's round-10 entry), and this
+        sandbox's daemon genuinely does not have `local-lite`'s floor free. `main()` calls
+        `--build --no-build` directly rather than through `_rendered_env` here, since this branch
+        needs the real exit code
+        and stderr `_rendered_env`'s own contract discards. On a daemon below the floor, `main()`
+        correctly refuses at the `preflight` stage before `up` ever runs — asserted by name, not merely
+        by a nonzero exit code, so an unrelated preflight failure (a stale port, a leftover DuckDB lock)
+        still fails this test rather than being waved through as "expected". On a runtime with room
+        (CI's own runner) apply reaches `up` and the original assertion runs unchanged.
+        """
+        exit_code = main(
+            ["--profile", "local-lite", "--out-root", str(tmp_path), "--build", "--no-build"]
+        )
+        running = _local_lite_containers()
+    
+        if exit_code != 0:
+            stderr = capsys.readouterr().err
+            stage_marker = "FAILED at stage 'preflight'"
+            assert stage_marker in stderr, (
+                "apply failed before reaching a running deployment for a reason other than preflight "
+                f"— not the resource-floor refusal this branch tolerates. stderr:\n{stderr}"
+            )
+            failing_names = {
+                line.strip().split(":", 1)[0]
+                for line in stderr.split(stage_marker, 1)[1].splitlines()
+                if line.strip() and ":" in line and not line.strip().startswith("(completed)")
+            }
+            assert failing_names, f"no failing check names were found in stderr:\n{stderr}"
+>           assert failing_names <= {"memory", "disk"}, (
+                f"preflight refused on {failing_names - {'memory', 'disk'}}, not just memory/disk — "
+                "that is an unexpected failure, not the resource-floor refusal this branch tolerates"
+            )
+E           AssertionError: preflight refused on {'ports'}, not just memory/disk — that is an unexpected failure, not the resource-floor refusal this branch tolerates
+E           assert {'ports'} <= {'disk', 'memory'}
+E             
+E             Extra items in the left set:
+E             'ports'
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:290: AssertionError
+______ test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs ______
+
+    def test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs() -> None:
+        """**Owner ruling R6, 27 September 2026 — the flow has to be performable by the subject the
+        deployment actually provisions.** R6 describes an analyst picking a file from the ingest folder
+        and mapping it; every step of that is gated by a Studio role
+        (`GET /v1/ingest/source-files` -> `source_author`, publish -> `source_approver`, run ->
+        `loader`), and the demo analyst held only `analyst`. The route existed and the deployment's
+        only sign-in-able subject could not call it — found building R6's own over-the-wire coverage,
+        not by reading.
+    
+        `09_INGEST_STUDIO.md` §8 permits one principal to hold several ("nothing here implies
+        exclusivity"), and no route enforces that an approver is not the author, so this is not a
+        separation-of-duties control being defeated. It is a disposable demo subject, provisioned only
+        when `--demo-analyst` is passed.
+        """
+        from harness.realm import DEMO_ANALYST_SUBJECT, render_realm
+    
+        from schemas.deployment import OspreyConfig
+    
+        from schemas.rights import Right, rights_for
+    
+        realm = render_realm(OspreyConfig(), demo_analyst=True)
+        demo = next(u for u in realm["users"] if u["username"] == DEMO_ANALYST_SUBJECT)
+        # ADR-112: the flow needs the rights, whatever role names carry them.
+>       assert rights_for(demo["attributes"]["roles"]) >= {
+            Right.ADD_INGEST_FILES,
+            Right.EDIT_PIPELINES,
+            Right.PUBLISH_PIPELINES,
+            Right.RUN_PIPELINES,
+        }, (
+            "the demo analyst cannot walk the Ingest Studio, so R6's own flow 403s at its first step: "
+            f"{demo['attributes']['roles']}"
+        )
+E       AssertionError: the demo analyst cannot walk the Ingest Studio, so R6's own flow 403s at its first step: ['analyst']
+E       assert frozenset({<R...rules'>, ...}) >= {<Right.ADD_I...n_pipelines'>}
+E         
+E         Extra items in the right set:
+E         <Right.PUBLISH_PIPELINES: 'publish_pipelines'>
+E         <Right.RUN_PIPELINES: 'run_pipelines'>
+E         <Right.EDIT_PIPELINES: 'edit_pipelines'>
+
+../OspreyFlow_Build/tests/harness/test_apply_env.py:342: AssertionError
+____________________ test_phase8_exit_criterion_end_to_end _____________________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x70ff92a86e30>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x70ff92a846d0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-6007/test_phase8_exit_criterion_end0')
+git_repo = PosixPath('/tmp/pytest-of-root/pytest-6007/test_phase8_exit_criterion_end0/repo')
+
+    def test_phase8_exit_criterion_end_to_end(
+        api_env: None,
+        keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+        tmp_path: Path,
+        git_repo: Path,
+    ) -> None:
+        import asyncio
+    
+        private_key, _ = keypair
+        import time as _time
+    
+        # A one-hour expiry, not the default 300s (`tests/conftest.py::default_claims`) — this
+        # walkthrough's own real ArcadeDB/Postgres round trips run measurably longer than that,
+        # confirmed directly (a real run's own token expired mid-test at the B14 jump call before
+        # this fix, `401 signature has expired`, not assumed).
+        # An analyst who loads too: since ADR-112 a `loader` alone holds no `create_case`, and B14's
+        # address asks for the queue's read and Rules and Monitoring (ADR-146 Amendment 2).
+        headers = _bearer(private_key, roles=["analyst", "loader"], exp=int(_time.time()) + 3600)
+    
+        from services.api.app import app
+    
+        # === Scenario B ===============================================================================
+    
+        # B1-B3
+        cdr_ids = asyncio.run(_ingest_cdr_fixture(tmp_path))
+    
+        async def _build_b_graph() -> dict[str, object]:
+            client, graph = await _graph_client()
+            try:
+                # B4-B7: two cohorts, one on the shared CDR endpoint, one on a shared handle.
+                cohort_1_person_ids = await _seed_cohort(
+                    graph, shared_endpoint_id=cdr_ids["b_party_endpoint_id"], prefix="c1"
+                )
+                cohort_2_person_ids, handle_id = await _seed_handle_cohort(graph, prefix="c2")
+    
+                # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
+                # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
+                # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
+                # (`spec/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+                # stand-in for something else.
+    
+                # B9/B10: the real Person pair — see this file's own helper docstring for why neither
+                # cohort above can serve this, and why this pair is provably the same generator's own
+                # output.
+                b9_a_id, b9_b_id, b9_cluster_id, b9_score = await _seed_and_resolve_b9_b10_person_pair(
+                    graph, scheme=load_uk_le_scheme()
+                )
+    
+                # B15: the seizure record's device/SIM legs.
+                seizure_ids = await _write_seizure_device_legs(graph)
+    
+                return {
+                    "cohort_1_person_ids": cohort_1_person_ids,
+                    "cohort_2_person_ids": cohort_2_person_ids,
+                    "handle_id": handle_id,
+                    "b9_a_id": b9_a_id,
+                    "b9_b_id": b9_b_id,
+                    "b9_cluster_id": b9_cluster_id,
+                    "b9_score": b9_score,
+                    **seizure_ids,
+                }
+            finally:
+                await client.aclose()
+    
+        b_graph = asyncio.run(_build_b_graph())
+    
+        with TestClient(app) as client:
+            investigation_b = client.post("/v1/investigations", headers=headers, json=new_case())
+            assert investigation_b.status_code == 201, investigation_b.text
+            inv_b_id = investigation_b.json()["id"]
+    
+            async def _fetch(node_id: str) -> dict:
+                _client, graph = await _graph_client()
+                try:
+                    node = await graph.get_node(node_id, PRINCIPAL)
+                    assert node is not None
+                    return node.model_dump(mode="json")
+                finally:
+                    await _client.aclose()
+    
+            # === B4: seed the four first-cohort Person entities, no edges between them.
+            cohort_1_nodes = [asyncio.run(_fetch(pid)) for pid in b_graph["cohort_1_person_ids"]]
+            seeded_b4 = client.post(
+                f"/v1/investigations/{inv_b_id}/seed",
+                headers=headers,
+                json={"nodes": cohort_1_nodes, "edges": []},
+            )
+            assert seeded_b4.status_code == 200, seeded_b4.text
+>           assert len(seeded_b4.json()["delta"]["nodes"]) == 4
+E           assert 0 == 4
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py:768: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [12/Nov/2026 12:06:22] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+WARNING  services.api.hotlists:hotlists.py:124 232 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_assessment_routes.py::test_save_judgement_route_rejects_zero_supporting_references
+tests/services/api/test_assessment_routes.py::test_save_judgement_route_rejects_an_unverifiable_citation_and_names_it
+tests/services/api/test_export_routes.py::test_export_route_blocks_a_consult_originator_item_and_names_it_over_http
+tests/services/api/test_export_routes.py::test_export_route_ignores_a_client_submitted_node_handling_and_uses_the_live_graph
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+tests/services/api/test_rule_editor_routes.py::test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------------------- 332 unmarked test(s) reached a store ---------------------
+tests/connectors/test_sql_connector_live.py::test_a_login_that_can_write_is_refused: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_row_past_the_byte_cap_is_never_held[incremental]: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_row_past_the_byte_cap_is_never_held[whole]: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_server_without_tls_is_refused: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_sql_sources_refreshed_file_loads_only_new_rows: ArcadeDB on port 2492, Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_watermark_on_a_time_reads_past_its_value: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_a_write_in_the_connectors_session_is_refused_by_the_server: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_refusals_are_refused_in_words: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_the_byte_cap_counts_bytes_not_characters: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_routes: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_verify_full_reads_over_tls_from_a_server_it_trusts: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_verify_full_refuses_a_certificate_for_another_name: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_verify_full_refuses_a_certificate_from_a_ca_it_does_not_trust: Postgres on port 55434
+tests/connectors/test_sql_connector_live.py::test_visit_bookings_is_read_incrementally_and_a_refresh_reads_only_new_rows: Postgres on port 55434
+tests/harness/test_restore_drawn_layer.py::test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer: ArcadeDB on port 2492
+tests/harness/test_restore_drawn_layer.py::test_the_restore_check_fails_with_the_layer_lost: ArcadeDB on port 2492
+tests/ingest/test_case_gazetteer_routes_live.py::test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still_loads: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_document_holds_its_own_text_live.py::test_three_report_rows_load_as_documents_that_hold_their_text_and_are_linked: ArcadeDB on port 2492
+… and 312 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+725.80s setup    tests/services/api/test_pid_access_control.py::test_j1_the_principals_star_is_49_in_a_and_45_in_c_for_the_analyst_and_the_cleared
+42.44s call     tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger
+21.44s call     tests/services/api/test_alert_address_live.py::test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum
+17.50s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+17.10s setup    tests/services/api/test_statelessness.py::test_a_second_process_continues_an_investigation_the_first_was_killed_mid
+16.32s call     tests/ingest/test_pid_seed_order.py::test_no_recipe_test_omits_an_earlier_file_that_writes_an_element_its_file_also_writes
+16.17s call     tests/ingest/test_case_gazetteer_routes_live.py::test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still_loads
+13.09s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+13.02s call     tests/ingest/test_gazetteer_ids_withheld_live.py::test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifiers
+12.84s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest
+12.56s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+12.40s setup    tests/services/api/test_statelessness_clickhouse.py::test_two_conduits_on_one_clickhouse_answer_alike_and_the_second_survives_the_first
+12.22s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable
+12.12s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+11.78s teardown tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+11.32s setup    tests/services/api/test_pid_access_control.py::test_amendment_7_circle_is_red_under_each_planted_wrong_rule_at_all_three_points
+11.15s setup    tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_type_ahead_suggests_nothing_by_one_and_says_no_more
+9.12s call     tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+9.11s call     tests/services/api/test_promotion_sweep_live.py::test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days
+8.94s call     tests/services/api/test_recipe_pins_lifespan.py::test_starting_the_conduit_stamps_legacy_pins_before_it_flags
+8.78s call     tests/services/api/test_promotion_sweep_live.py::test_the_lifespans_own_seam_over_the_real_promotion_record_raises_the_alert
+8.69s call     tests/ingest/test_document_holds_its_own_text.py::test_a_ref_skipped_by_when_writes_no_link_for_that_row
+8.65s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+8.62s call     tests/services/api/test_statelessness.py::test_a_failed_second_instance_does_not_orphan_the_first
+8.56s call     tests/scenarios/test_phase6a_glass_surfaces.py::test_phase6a_exit_criterion_end_to_end
+8.49s call     tests/ingest/test_pid_seed_order.py::test_the_omission_check_fails_for_a_file_that_marks_an_element_first
+8.03s call     tests/services/api/test_reports.py::test_the_pole_figures_count_nothing_the_reader_cannot_read_at_the_route
+7.93s call     tests/ingest/test_document_holds_its_own_text_live.py::test_three_report_rows_load_as_documents_that_hold_their_text_and_are_linked
+7.65s call     tests/ingest/test_pid_seed_order.py::test_every_recipe_tests_load_steps_are_a_subsequence_of_the_seed_order
+7.42s call     tests/ingest/test_report_found_by_message_id_live.py::test_a_second_load_finds_each_report_by_its_id_and_makes_no_report_of_its_own
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_ARCADEDB_PASSWORD-ARCADEDB_ROOT_PASSWORD]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_USER-POSTGRES_USER]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_DB-POSTGRES_DB]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_USER-MINIO_ACCESS_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_PASSWORD-MINIO_SECRET_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_a_generated_secret_is_not_empty_and_is_not_a_placeholder
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_absent_without_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+11 failed, 410 passed, 33 skipped, 8 warnings in 1683.00s (0:28:03)
+Wall time: 1685 s, exit 1 (stack b, the lease rules-b took at 2026-11-12T11:26:05Z; set-up before it 12 s)
+exit 1

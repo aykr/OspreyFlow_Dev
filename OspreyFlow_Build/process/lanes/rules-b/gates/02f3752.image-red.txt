@@ -1,0 +1,18 @@
+# The guides' image check at 02f3752, on the test server under the rules-b lease (stack b), 2026-11-12T12:25:38Z. Raw.
+
+== image_check.sh (plain)
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261112T122548Z/log: bash OspreyFlow_Build/process/lanes/rules-b/guides/image_check.sh
+building osprey-rules-b-guides-check:1003914 from /root/osprey-runs/rules-b/OspreyFlow_Core (services/api/Dockerfile)
+inside the image, /app/docs/pdf:
+sh: 1: cd: can't cd to /app/docs/pdf
+Wall time: 2 s, exit 2 (stack b, the lease rules-b took at 2026-11-12T11:26:05Z; set-up before it 10 s)
+rc=2
+
+== image_check.sh --plant (a stale user guide in the build context: must fail)
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261112T122603Z/log: bash OspreyFlow_Build/process/lanes/rules-b/guides/image_check.sh --plant
+PLANT: one byte appended to docs/pdf/user-guide.pdf in the build context
+building osprey-rules-b-guides-check:1005191 from /root/osprey-runs/rules-b/OspreyFlow_Core (services/api/Dockerfile)
+inside the image, /app/docs/pdf:
+sh: 1: cd: can't cd to /app/docs/pdf
+Wall time: 3 s, exit 2 (stack b, the lease rules-b took at 2026-11-12T11:26:05Z; set-up before it 12 s)
+rc=2

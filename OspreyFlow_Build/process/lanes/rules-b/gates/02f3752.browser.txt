@@ -1,0 +1,59 @@
+# Browser gate at 02f3752 (tree 1784b605bab3db1c0a30738608c647ff93b5a105), local on the Mac, OSPREY_PORTS_SLOT=9 (the slot the orchestrator granted), no Docker, 2026-11-12T11:26:26Z.
+# With registry-guides.patch and every-harness-guides.patch applied in the worktree, uncommitted, as at merge.
+# Commands as run, output raw (only Playwright's [n/m] progress lines dropped).
+
+== npx playwright test --config keyboard/playwright.config.ts keyboard/start.spec.ts keyboard/hit-targets.spec.ts --reporter=line
+
+Running 26 tests using 2 workers
+
+[WebServer] 11:26:34 [vite] (client) [Unhandled rejection] TypeError: Failed to fetch
+[WebServer]  > postJson src/analytics/api.ts:30:25
+[WebServer]     28 |    action: string,
+[WebServer]     29 |  ): Promise<T> {
+[WebServer]     30 |    const response = await fetch(`${apiBaseUrl}${path}`, {
+[WebServer]        |                           ^
+[WebServer]     31 |      method: "POST",
+[WebServer]     32 |      headers: authHeaders(bearerToken),
+[WebServer]  > fetchHistogram src/analytics/api.ts:63:9
+[WebServer]  > src/timeline/Timeline.tsx:260:26
+[WebServer]  > src/timeline/Timeline.tsx:278:7
+[WebServer]  > Object.react_stack_bottom_frame ../../node_modules/react-dom/cjs/react-dom-client.development.js:28656:19
+[WebServer]  > runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1045:29
+[WebServer]  > commitHookEffectListMount ../../node_modules/react-dom/cjs/react-dom-client.development.js:13748:28
+[WebServer]  > commitHookPassiveMountEffects ../../node_modules/react-dom/cjs/react-dom-client.development.js:13835:10
+[WebServer]  > commitPassiveMountOnFiber ../../node_modules/react-dom/cjs/react-dom-client.development.js:16906:12
+[WebServer]  > recursivelyTraversePassiveMountEffects ../../node_modules/react-dom/cjs/react-dom-client.development.js:16851:12
+[WebServer] 
+
+[WebServer] 11:26:41 [vite] (client) [Unhandled rejection] TypeError: Failed to fetch
+[WebServer]  > postJson src/analytics/api.ts:30:25
+[WebServer]     28 |    action: string,
+[WebServer]     29 |  ): Promise<T> {
+[WebServer]     30 |    const response = await fetch(`${apiBaseUrl}${path}`, {
+[WebServer]        |                           ^
+[WebServer]     31 |      method: "POST",
+[WebServer]     32 |      headers: authHeaders(bearerToken),
+[WebServer]  > fetchHistogram src/analytics/api.ts:63:9
+[WebServer]  > src/timeline/Timeline.tsx:260:26
+[WebServer]  > src/timeline/Timeline.tsx:278:7
+[WebServer]  > Object.react_stack_bottom_frame ../../node_modules/react-dom/cjs/react-dom-client.development.js:28656:19
+[WebServer]  > runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1045:29
+[WebServer]  > commitHookEffectListMount ../../node_modules/react-dom/cjs/react-dom-client.development.js:13748:28
+[WebServer]  > commitHookPassiveMountEffects ../../node_modules/react-dom/cjs/react-dom-client.development.js:13835:10
+[WebServer]  > commitPassiveMountOnFiber ../../node_modules/react-dom/cjs/react-dom-client.development.js:16906:12
+[WebServer]  > recursivelyTraversePassiveMountEffects ../../node_modules/react-dom/cjs/react-dom-client.development.js:16851:12
+[WebServer] 
+
+  26 passed (16.3s)
+pw_rc=0
+
+== npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts -g start-harness a11y/reflow.spec.ts --reporter=line
+
+Running 18 tests using 2 workers
+
+  18 passed (14.2s)
+pw_rc=0
+
+== npx vitest run src/home src/shell keyboard/registryCoverage.test.ts
+ Test Files  13 passed (13)
+      Tests  185 passed (185)

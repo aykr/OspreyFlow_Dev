@@ -1,0 +1,141 @@
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261112T125503Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -v ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_guides.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0 -- /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/bin/python
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 86 items
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it PASSED [  1%]
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route PASSED [  2%]
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too PASSED [  3%]
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route PASSED [  4%]
+../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real PASSED [  5%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_s_place_rights_are_places_json_s PASSED [  6%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_named_roles_read_the_guides_adr_145_amendment_10_gives_them PASSED [  8%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[analyst] PASSED [  9%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[compliance] PASSED [ 10%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[data_engineer] PASSED [ 11%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[loader] PASSED [ 12%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[none] PASSED [ 13%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[osprey-admin] PASSED [ 15%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[reports_viewer] PASSED [ 16%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:accept_types] PASSED [ 17%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:add_ingest_files] PASSED [ 18%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:administer_system] PASSED [ 19%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:ask_model] PASSED [ 20%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:author_rules] PASSED [ 22%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:confirm_inferred] PASSED [ 23%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:create_case] PASSED [ 24%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:decide_held_rows] PASSED [ 25%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:deploy_rules] PASSED [ 26%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:draw_on_boards] PASSED [ 27%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:edit_graph] PASSED [ 29%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:edit_pipelines] PASSED [ 30%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:edit_target_model] PASSED [ 31%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:export] PASSED [ 32%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:export_override] PASSED [ 33%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:extract_files] PASSED [ 34%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:investigate] PASSED [ 36%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:keep_watches] PASSED [ 37%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:load_screening_lists] PASSED [ 38%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_dashboards] PASSED [ 39%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_geospatial] PASSED [ 40%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_models] PASSED [ 41%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_ontology] PASSED [ 43%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_people] PASSED [ 44%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_strength_influencers] PASSED [ 45%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:merge_datasets] PASSED [ 46%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:operate_schedules] PASSED [ 47%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:promote_to_dataset] PASSED [ 48%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:propose_link_type] PASSED [ 50%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:propose_types] PASSED [ 51%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:publish_pipelines] PASSED [ 52%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_alert_queue] PASSED [ 53%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_audit] PASSED [ 54%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_data_feeds] PASSED [ 55%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_export_ledger] PASSED [ 56%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_held_rows] PASSED [ 58%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_report_feed] PASSED [ 59%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_reports] PASSED [ 60%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_rule_audit] PASSED [ 61%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:record_assessment] PASSED [ 62%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:remove_case] PASSED [ 63%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:resolve_entities] PASSED [ 65%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:revert_loads] PASSED [ 66%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:review_promotions] PASSED [ 67%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_analysis] PASSED [ 68%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_pipelines] PASSED [ 69%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:schedule_pipelines] PASSED [ 70%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:share_case] PASSED [ 72%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:trace_ownership] PASSED [ 73%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:triage_alerts] PASSED [ 74%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:verify_pipelines] PASSED [ 75%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:write_sql_transforms] PASSED [ 76%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[rule_author] PASSED [ 77%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[source_approver] PASSED [ 79%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[source_author] PASSED [ 80%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[super] PASSED [ 81%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_custom_role_s_current_rights_open_its_guide_through_the_real_get_principal PASSED [ 82%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_refusal_says_which_place_and_which_rights_open_it PASSED [ 83%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_without_a_token_nothing_is_answered PASSED [ 84%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[architecture] PASSED [ 86%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[x] PASSED [ 87%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[user-guide] PASSED [ 88%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[manifest.json] PASSED [ 89%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_no_path_reaches_another_file[/v1/guides/..%2Fmanifest.json] PASSED [ 90%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_no_path_reaches_another_file[/v1/guides/user/../manifest.json] PASSED [ 91%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_no_path_reaches_another_file[/v1/guides/user.pdf/x] PASSED [ 93%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[administration] PASSED [ 94%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[developer] PASSED [ 95%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[user] PASSED [ 96%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_deployment_built_without_the_pdf_says_so PASSED [ 97%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_image_carries_the_three_guides_and_their_manifest PASSED [ 98%]
+../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_glass_links_each_guide_under_the_place_the_conduit_serves_it_for PASSED [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 3 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+============================= slowest 30 durations =============================
+8.27s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+6.86s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+6.19s call     tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+1.99s call     tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+0.44s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.25s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.10s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.09s teardown tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+0.06s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[data_engineer]
+0.05s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[super]
+0.05s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[osprey-admin]
+0.04s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[analyst]
+0.04s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_data_feeds]
+0.04s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:propose_types]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:ask_model]
+0.03s call     tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[user]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[rule_author]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_strength_influencers]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:extract_files]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:operate_schedules]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:create_case]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:resolve_entities]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:export]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_analysis]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:confirm_inferred]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:investigate]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:trace_ownership]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[reports_viewer]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_reports]
+0.03s call     tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:remove_case]
+======================== 86 passed, 1 warning in 26.81s ========================
+Wall time: 28 s, exit 0 (stack b, the lease rules-b took at 2026-11-12T11:26:05Z; set-up before it 14 s)
+exit 0
