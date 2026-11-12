@@ -1,0 +1,472 @@
+Running on ospreyflow-test (stack b, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261112T015901Z/log: bash -c bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh deploy && bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh live_restore; echo "exit $?"
+rendered (none): arcadedb, clickhouse, clickhouse-keeper and the backups; 3 of theirs, 1 of ours
+seeded localhost:5002/arcadedata/arcadedb:26.10.1 from arcadedata/arcadedb:26.10.1
+seeded localhost:5002/clickhouse/clickhouse-keeper:25.8.33.6 from clickhouse/clickhouse-keeper:25.8.33.6
+seeded localhost:5002/clickhouse/clickhouse-server:25.8.33.6 from clickhouse/clickhouse-server:25.8.33.6
+build localhost:5002/ospreyflow/api:2a13b456f51fa4100acf7eacdfe00ae3a482206a
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 8.75kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.51kB done
+#3 DONE 0.0s
+
+#4 [builder  1/10] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 resolve docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 9.48MB 0.1s done
+#5 DONE 0.2s
+
+#6 [builder  2/10] RUN pip install --no-cache-dir uv==0.5.14
+#6 CACHED
+
+#7 [builder  3/10] WORKDIR /app
+#7 CACHED
+
+#8 [builder  4/10] COPY pyproject.toml uv.lock ./
+#8 CACHED
+
+#9 [builder  5/10] RUN uv sync --frozen --no-dev --no-install-project
+#9 CACHED
+
+#10 [builder  6/10] COPY packages ./packages
+#10 CACHED
+
+#11 [builder  7/10] COPY services ./services
+#11 DONE 1.4s
+
+#12 [builder  8/10] COPY scripts ./scripts
+#12 DONE 0.2s
+
+#13 [builder  9/10] COPY connectors ./connectors
+#13 DONE 0.1s
+
+#14 [builder 10/10] COPY recipes ./recipes
+#14 DONE 0.1s
+
+#15 [stage-4  3/13] WORKDIR /app
+#15 CACHED
+
+#16 [stage-4  4/13] COPY --from=builder /app/.venv ./.venv
+#16 CACHED
+
+#17 [stage-4  1/13] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#17 CACHED
+
+#18 [stage-4  2/13] RUN useradd --create-home --uid 10001 osprey
+#18 CACHED
+
+#19 [stage-4  5/13] COPY --from=builder /app/packages ./packages
+#19 CACHED
+
+#20 [stage-4  6/13] COPY --from=builder /app/services ./services
+#20 DONE 0.1s
+
+#21 [stage-4  7/13] COPY --from=builder /app/scripts ./scripts
+#21 DONE 0.1s
+
+#22 [stage-4  8/13] COPY --from=builder /app/connectors ./connectors
+#22 DONE 0.1s
+
+#23 [stage-4  9/13] COPY --from=builder /app/recipes ./recipes
+#23 DONE 0.1s
+
+#24 [stage-4 10/13] RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension('spatial')"     && chown -R osprey:osprey /app
+#24 DONE 32.2s
+
+#25 [stage-4 11/13] RUN mkdir -p /var/lib/osprey/data && chown -R osprey:osprey /var/lib/osprey
+#25 DONE 0.3s
+
+#26 [stage-4 12/13] RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model-settings     && chmod 700 /run/osprey/model-settings
+#26 DONE 0.2s
+
+#27 [stage-4 13/13] RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings     && chmod 700 /run/osprey/map-settings
+#27 DONE 0.2s
+
+#28 exporting to image
+#28 exporting layers
+#28 exporting layers 27.8s done
+#28 exporting manifest sha256:1ea0bf497c99201d9e7bb52097b220cbd725dde95217885cdcca2f2a662f2c95 0.0s done
+#28 exporting config sha256:19b18441803ca7b1a19e0a2940809368dc01ff7f5c84ca3016a3eba252ec52d2 0.0s done
+#28 exporting attestation manifest sha256:0f30018a31b57b16f54d509b437bb90e0226b83a2697668d2dbf5eef2e5b9ca0 0.0s done
+#28 exporting manifest list sha256:a6560c273ecab177a10592dbe34796d604f7874f680eb100264275ea230e0f99 0.0s done
+#28 naming to localhost:5002/ospreyflow/api:2a13b456f51fa4100acf7eacdfe00ae3a482206a
+#28 naming to localhost:5002/ospreyflow/api:2a13b456f51fa4100acf7eacdfe00ae3a482206a done
+#28 unpacking to localhost:5002/ospreyflow/api:2a13b456f51fa4100acf7eacdfe00ae3a482206a
+#28 unpacking to localhost:5002/ospreyflow/api:2a13b456f51fa4100acf7eacdfe00ae3a482206a 6.6s done
+#28 DONE 34.5s
+push localhost:5002/ospreyflow/api:2a13b456f51fa4100acf7eacdfe00ae3a482206a
+The push refers to repository [localhost:5002/ospreyflow/api]
+44136fa355b3: Already exists
+35fdecf0e1bb: Layer already exists
+5d461744d6e2: Pushed
+42fafe736b33: Pushed
+de45e8c137e0: Pushed
+68bced9e0afa: Layer already exists
+05e0eee5572e: Layer already exists
+fbf91ceb308b: Layer already exists
+6a1025d79bba: Layer already exists
+2cdf5e22c6c9: Pushed
+26bc5a00e427: Pushed
+37fb86c2a767: Layer already exists
+2dc99d2d0a39: Layer already exists
+f47b65d8688e: Layer already exists
+5ce030115573: Layer already exists
+52fbc41db077: Pushed
+f47a14710961: Pushed
+2687f86389c4: Pushed
+2206d70e7b5f: Pushed
+2a13b456f51fa4100acf7eacdfe00ae3a482206a: digest: sha256:a6560c273ecab177a10592dbe34796d604f7874f680eb100264275ea230e0f99 size: 856
+1 images are in localhost:5002. Render again to pin ours by the digest the registry gives for its copy.
+rendered (registry): arcadedb, clickhouse, clickhouse-keeper and the backups; 3 of theirs, 1 of ours
+namespace/platform-managed configured
+namespace/ospreyflow-dev configured
+stand-in at https://s3-standin.platform-managed.svc.cluster.local:9443, trusting the cluster's issuer https://kubernetes.default.svc.cluster.local
+persistentvolumeclaim/ospreyflow-ingest not labeled
+persistentvolumeclaim/ospreyflow-ingest annotated
+Release "ospreyflow" has been upgraded. Happy Helming!
+NAME: ospreyflow
+LAST DEPLOYED: Thu Nov 12 02:00:28 2026
+NAMESPACE: ospreyflow-dev
+STATUS: deployed
+REVISION: 3
+TEST SUITE: None
+NOTES:
+OspreyFlow is starting in ospreyflow-dev. Its one address is the proxy's load balancer:
+
+  kubectl get service proxy -n ospreyflow-dev
+
+Point the deployment's names (the address, id. and bi.) at it. Every workload reads the Secret
+ospreyflow-secrets; a pod waiting on a missing key names it in its events.
+patched: the backups' and ClickHouse's IRSA; ClickHouse's AWS names and the stand-in's CA; the Ingest root's claim and a shared pod on it
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+partitioned roll out complete: 1 new pods have been updated...
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+seeded: {'arcadedb_vertices': {'c': 5000, 's': 12497500}, 'arcadedb_edges': 1000, 'clickhouse_rows': [200000, '17805520021964338470'], 'claims': {'files': 301, 'sha256': 'c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6'}}
+backup 29907481: succeeded
+[pod/ospreyflow-backup-29907481-nzhkr/backup] backup: set 20261112T020100Z written in 1.0 s (ArcadeDB 87478 bytes; ClickHouse 569471c7-ca63-4598-9c7f-35b38b5c3096)
+[pod/ospreyflow-backup-claims-29907481-6gvzs/backup-claims] backup-claims: set 20261112T020100Z's claims part written: ingest 7694398 bytes
+
+changed (a): {'arcadedb_vertices': {'c': 5100, 's': 112502450}, 'arcadedb_edges': 1000, 'clickhouse_rows': [200300, '3678681070130931078'], 'claims': {'files': 302, 'sha256': '2cd895072cc5e902a7e3548015671de3b08dbb5f88e963b0bed63a738886e96e'}}
+ospreyflow-restore-20261112t020100z: succeeded
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/writers] restore: nothing writing
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] WARNING: Using incubator modules: jdk.incubator.vector
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] Executing full restore of database from file 'file:///restore/ospreyflow.zip' to '/home/arcadedb/databases/ospreyflow.restoring' (8 threads)...
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'schema.json'... 376b -> 666b (43% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'schema.prev.json'... 306b -> 540b (43% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'P9Person_0.1.65536.v0.bucket'... 35.51KB -> 384.00KB (90% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'dictionary.0.65536.v1.dict'... 331b -> 64.00KB (99% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'P9Knows_0.4.65536.v0.bucket'... 6.32KB -> 64.00KB (90% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'P9Person_0_1420752762198114.5.262144.v1.umtidx'... 26.39KB -> 256.00KB (89% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'P9Person_0_in_edges.3.65536.v0.bucket'... 7.44KB -> 128.00KB (94% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'P9Person_0_out_edges.2.65536.v0.bucket'... 7.44KB -> 128.00KB (94% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] - File 'configuration.json'... 31b -> 20b (-55% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] Full restore completed in 0 seconds 85.43KB -> 1.00MB (91% compression)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] Can't load log handler "java.util.logging.FileHandler"
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] java.nio.file.AccessDeniedException: ./log/arcadedb.log.0.lck
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] java.nio.file.AccessDeniedException: ./log/arcadedb.log.0.lck
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:90)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/sun.nio.fs.UnixFileSystemProvider.newFileChannel(UnixFileSystemProvider.java:224)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.nio.channels.FileChannel.open(FileChannel.java:309)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.nio.channels.FileChannel.open(FileChannel.java:369)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.FileHandler.openFiles(FileHandler.java:512)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.FileHandler.<init>(FileHandler.java:279)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:62)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:502)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.lang.reflect.ReflectAccess.newInstance(ReflectAccess.java:128)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/jdk.internal.reflect.ReflectionFactory.newInstance(ReflectionFactory.java:304)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.lang.Class.newInstance(Class.java:727)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.LogManager.createLoggerHandlers(LogManager.java:1005)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.LogManager$4.run(LogManager.java:975)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.LogManager$4.run(LogManager.java:971)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.security.AccessController.doPrivileged(AccessController.java:319)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.LogManager.loadLoggerHandlers(LogManager.java:971)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.LogManager.initializeGlobalHandlers(LogManager.java:2422)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.LogManager$RootLogger.accessCheckedHandlers(LogManager.java:2524)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.logging/java.util.logging.Logger.getHandlers(Logger.java:2093)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.log.DefaultLogger.installCustomFormatter(DefaultLogger.java:281)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.log.DefaultLogger.init(DefaultLogger.java:115)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.log.DefaultLogger.log(DefaultLogger.java:432)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.log.LogManager.log(LogManager.java:239)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.engine.PaginatedComponentFile.doNotCloseOnInterrupt(PaginatedComponentFile.java:683)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.engine.PaginatedComponentFile.open(PaginatedComponentFile.java:662)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.engine.ComponentFile.<init>(ComponentFile.java:77)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.engine.PaginatedComponentFile.<init>(PaginatedComponentFile.java:142)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.engine.FileManager.scanDirectoryForComponentFiles(FileManager.java:179)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.engine.FileManager.<init>(FileManager.java:154)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.database.LocalDatabase.openInternal(LocalDatabase.java:3420)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.database.LocalDatabase.open(LocalDatabase.java:356)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at com.arcadedb.database.DatabaseFactory.open(DatabaseFactory.java:113)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at CheckDatabase.main(CheckDatabase.java:55)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at jdk.compiler/com.sun.tools.javac.launcher.Main.execute(Main.java:484)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at jdk.compiler/com.sun.tools.javac.launcher.Main.run(Main.java:208)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] 	at jdk.compiler/com.sun.tools.javac.launcher.Main.main(Main.java:135)
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] opens: 2 types, 6000 records and 2000 edge ends read
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-graph] restore-graph: ospreyflow restored from the set, checked and put in place; the old one removed
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/restore-analytics] restore: ClickHouse restored from set 20261112T020100Z
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/verify] restore: set 20261112T020100Z verified, every part; nothing writing
+[pod/ospreyflow-restore-20261112t020100z-6d9c5/fetch-graph] restore: set 20261112T020100Z's ArcadeDB zip at /restore/ospreyflow.zip, checked against its manifest
+
+ospreyflow-restore-claims-20261112t020100z: succeeded
+[pod/ospreyflow-restore-claims-20261112t020100z-krzrp/restore-claims] restore: ingest put back from set 20261112T020100Z
+[pod/ospreyflow-restore-claims-20261112t020100z-krzrp/verify] restore: set 20261112T020100Z verified, every part; nothing writing
+
+changed (b): {'arcadedb_vertices': {'c': 5100, 's': 212502450}, 'arcadedb_edges': 1000, 'clickhouse_rows': [200300, '15686279726526385630'], 'claims': {'files': 302, 'sha256': '02a07cd4429347f72f70e1136b94b075a21984f22f1c9fd6452f6beea3c617ef'}}
+ospreyflow-restore-20261112t020100z: FAILED
+[pod/ospreyflow-restore-20261112t020100z-znwlw/verify] restore: set 20261112T020100Z verified, every part; nothing writing
+[pod/ospreyflow-restore-20261112t020100z-znwlw/fetch-graph] restore: set 20261112T020100Z's ArcadeDB zip at /restore/ospreyflow.zip, checked against its manifest
+[pod/ospreyflow-restore-20261112t020100z-znwlw/writers] restore: nothing writing
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] WARNING: Using incubator modules: jdk.incubator.vector
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] Executing full restore of database from file 'file:///restore/ospreyflow.zip' to '/home/arcadedb/databases/ospreyflow.restoring' (8 threads)...
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] Exception in thread "main" com.arcadedb.integration.restore.RestoreException: Error during restore of database from file 'file:///restore/ospreyflow.zip'
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:68)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at com.arcadedb.integration.restore.Restore.main(Restore.java:54)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] Caused by: java.util.zip.ZipException: zip END header not found
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile$Source.findEND(ZipFile.java:1649)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile$Source.initCEN(ZipFile.java:1657)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile$Source.<init>(ZipFile.java:1495)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile$Source.get(ZipFile.java:1458)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile$CleanableResource.<init>(ZipFile.java:724)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:251)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:304)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at com.arcadedb.integration.restore.format.ParallelZipExtractor.extract(ParallelZipExtractor.java:135)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at com.arcadedb.integration.restore.format.FullRestoreFormat.restoreDatabase(FullRestoreFormat.java:116)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	at com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:65)
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] 	... 1 more
+[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] restore-graph refused: ArcadeDB's restore of the set's zip failed; the live database (/home/arcadedb/databases/ospreyflow) was not touched
+
+changed (c): {'arcadedb_vertices': {'c': 5200, 's': 512507400}, 'arcadedb_edges': 1000, 'clickhouse_rows': [200600, '9224570397247707806'], 'claims': {'files': 302, 'sha256': 'bafe844666d642a0cf9bb8939de15e4369b09b4b93910574a2538c4ba41934e3'}}
+ospreyflow-restore-20261112t020100z: FAILED
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] WARNING: Using incubator modules: jdk.incubator.vector
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] Executing full restore of database from file 'file:///restore/ospreyflow.zip' to '/home/arcadedb/databases/ospreyflow.restoring' (8 threads)...
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'schema.json'... 376b -> 666b (43% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'dictionary.0.65536.v1.dict'... 331b -> 64.00KB (99% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'schema.prev.json'... 306b -> 540b (43% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'P9Knows_0.4.65536.v0.bucket'... 6.32KB -> 64.00KB (90% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'P9Person_0_out_edges.2.65536.v0.bucket'... 7.44KB -> 128.00KB (94% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'P9Person_0_1420752762198114.5.262144.v1.umtidx'... 26.39KB -> 256.00KB (89% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'P9Person_0.1.65536.v0.bucket'... 35.51KB -> 384.00KB (90% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'P9Person_0_in_edges.3.65536.v0.bucket'... 7.44KB -> 128.00KB (94% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] - File 'configuration.json'... 31b -> 20b (-55% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] Full restore completed in 0 seconds 85.43KB -> 1.00MB (91% compression)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] Can't load log handler "java.util.logging.FileHandler"
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] java.nio.file.AccessDeniedException: ./log/arcadedb.log.0.lck
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] java.nio.file.AccessDeniedException: ./log/arcadedb.log.0.lck
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:90)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/sun.nio.fs.UnixFileSystemProvider.newFileChannel(UnixFileSystemProvider.java:224)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.nio.channels.FileChannel.open(FileChannel.java:309)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.nio.channels.FileChannel.open(FileChannel.java:369)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.FileHandler.openFiles(FileHandler.java:512)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.FileHandler.<init>(FileHandler.java:279)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:62)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:502)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.lang.reflect.ReflectAccess.newInstance(ReflectAccess.java:128)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/jdk.internal.reflect.ReflectionFactory.newInstance(ReflectionFactory.java:304)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.lang.Class.newInstance(Class.java:727)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.LogManager.createLoggerHandlers(LogManager.java:1005)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.LogManager$4.run(LogManager.java:975)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.LogManager$4.run(LogManager.java:971)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.security.AccessController.doPrivileged(AccessController.java:319)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.LogManager.loadLoggerHandlers(LogManager.java:971)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.LogManager.initializeGlobalHandlers(LogManager.java:2422)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.LogManager$RootLogger.accessCheckedHandlers(LogManager.java:2524)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.logging/java.util.logging.Logger.getHandlers(Logger.java:2093)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.log.DefaultLogger.installCustomFormatter(DefaultLogger.java:281)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.log.DefaultLogger.init(DefaultLogger.java:115)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.log.DefaultLogger.log(DefaultLogger.java:432)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.log.LogManager.log(LogManager.java:239)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.engine.PaginatedComponentFile.doNotCloseOnInterrupt(PaginatedComponentFile.java:683)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.engine.PaginatedComponentFile.open(PaginatedComponentFile.java:662)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.engine.ComponentFile.<init>(ComponentFile.java:77)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.engine.PaginatedComponentFile.<init>(PaginatedComponentFile.java:142)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.engine.FileManager.scanDirectoryForComponentFiles(FileManager.java:179)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.engine.FileManager.<init>(FileManager.java:154)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.database.LocalDatabase.openInternal(LocalDatabase.java:3420)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.database.LocalDatabase.open(LocalDatabase.java:356)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at com.arcadedb.database.DatabaseFactory.open(DatabaseFactory.java:113)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at CheckDatabase.main(CheckDatabase.java:55)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at jdk.compiler/com.sun.tools.javac.launcher.Main.execute(Main.java:484)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at jdk.compiler/com.sun.tools.javac.launcher.Main.run(Main.java:208)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] 	at jdk.compiler/com.sun.tools.javac.launcher.Main.main(Main.java:135)
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] opens: 2 types, 6000 records and 2000 edge ends read
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-graph] restore-graph: ospreyflow restored from the set, checked and put in place; the old one removed
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-analytics] restore-analytics refused: clickhouse: RESTORE … FROM S3: HTTP 500: Code: 499. DB::Exception: Access Denied: while reading key: sets/20261112T020100Z/clickhouse/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))
+[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-analytics] 
+[pod/ospreyflow-restore-20261112t020100z-jjhng/verify] restore: set 20261112T020100Z verified, every part; nothing writing
+[pod/ospreyflow-restore-20261112t020100z-jjhng/fetch-graph] restore: set 20261112T020100Z's ArcadeDB zip at /restore/ospreyflow.zip, checked against its manifest
+[pod/ospreyflow-restore-20261112t020100z-jjhng/writers] restore: nothing writing
+
+== record (/root/osprey-runs/case.tools/p9_live_restore.json)
+{
+  "live_restore": {
+    "set": "20261112T020100Z",
+    "seeded": {
+      "arcadedb_vertices": {
+        "c": 5000,
+        "s": 12497500
+      },
+      "arcadedb_edges": 1000,
+      "clickhouse_rows": [
+        200000,
+        "17805520021964338470"
+      ],
+      "claims": {
+        "files": 301,
+        "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+      }
+    },
+    "swap": {
+      "changed": {
+        "arcadedb_vertices": {
+          "c": 5100,
+          "s": 112502450
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200300,
+          "3678681070130931078"
+        ],
+        "claims": {
+          "files": 302,
+          "sha256": "2cd895072cc5e902a7e3548015671de3b08dbb5f88e963b0bed63a738886e96e"
+        }
+      },
+      "seconds": {
+        "stopped": 31.2,
+        "ospreyflow-restore-20261112t020100z": 15.6,
+        "ospreyflow-restore-claims-20261112t020100z": 15.7,
+        "started": 22.2,
+        "total": 69.1
+      },
+      "restored": {
+        "arcadedb_vertices": {
+          "c": 5000,
+          "s": 12497500
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200000,
+          "17805520021964338470"
+        ],
+        "claims": {
+          "files": 301,
+          "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+        }
+      },
+      "leftovers": {
+        "arcadedb": [],
+        "clickhouse": [],
+        "claims": []
+      },
+      "as_the_set": true
+    },
+    "arcadedb_planted": {
+      "changed": {
+        "arcadedb_vertices": {
+          "c": 5100,
+          "s": 212502450
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200300,
+          "15686279726526385630"
+        ],
+        "claims": {
+          "files": 302,
+          "sha256": "02a07cd4429347f72f70e1136b94b075a21984f22f1c9fd6452f6beea3c617ef"
+        }
+      },
+      "after": {
+        "arcadedb_vertices": {
+          "c": 5100,
+          "s": 212502450
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200300,
+          "15686279726526385630"
+        ],
+        "claims": {
+          "files": 301,
+          "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+        }
+      },
+      "said": "the restore Job ospreyflow-restore-20261112t020100z failed",
+      "restore_graph": "e-graph] \tat com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:68)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat com.arcadedb.integration.restore.Restore.main(Restore.java:54)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] Caused by: java.util.zip.ZipException: zip END header not found\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.findEND(ZipFile.java:1649)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.initCEN(ZipFile.java:1657)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.<init>(ZipFile.java:1495)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.get(ZipFile.java:1458)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile$CleanableResource.<init>(ZipFile.java:724)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile.<init>(ZipFile.java:251)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat java.base/java.util.zip.ZipFile.<init>(ZipFile.java:304)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat com.arcadedb.integration.restore.format.ParallelZipExtractor.extract(ParallelZipExtractor.java:135)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat com.arcadedb.integration.restore.format.FullRestoreFormat.restoreDatabase(FullRestoreFormat.java:116)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \tat com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:65)\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] \t... 1 more\n[pod/ospreyflow-restore-20261112t020100z-znwlw/restore-graph] restore-graph refused: ArcadeDB's restore of the set's zip failed; the live database (/home/arcadedb/databases/ospreyflow) was not touched",
+      "leftovers": {
+        "arcadedb": [],
+        "clickhouse": [],
+        "claims": []
+      },
+      "stores_untouched": true
+    },
+    "clickhouse_planted": {
+      "changed": {
+        "arcadedb_vertices": {
+          "c": 5200,
+          "s": 512507400
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200600,
+          "9224570397247707806"
+        ],
+        "claims": {
+          "files": 302,
+          "sha256": "bafe844666d642a0cf9bb8939de15e4369b09b4b93910574a2538c4ba41934e3"
+        }
+      },
+      "after": {
+        "arcadedb_vertices": {
+          "c": 5000,
+          "s": 12497500
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200600,
+          "9224570397247707806"
+        ],
+        "claims": {
+          "files": 301,
+          "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+        }
+      },
+      "said": "the restore Job ospreyflow-restore-20261112t020100z failed",
+      "restore_analytics": "[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-analytics] restore-analytics refused: clickhouse: RESTORE \u2026 FROM S3: HTTP 500: Code: 499. DB::Exception: Access Denied: while reading key: sets/20261112T020100Z/clickhouse/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\n[pod/ospreyflow-restore-20261112t020100z-jjhng/restore-analytics] ",
+      "leftovers": {
+        "arcadedb": [],
+        "clickhouse": [],
+        "claims": []
+      },
+      "clickhouse_untouched": true,
+      "arcadedb_restored": true
+    },
+    "pass": true
+  },
+  "at": "2026-11-12T02:04:55+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "stack-b.lease": "holder=case\nstack=b\npurpose=P9 round 4: a restore beside live databases on osprey-p9 (kind), the review's item 4\nsince=2026-11-12T01:39:39Z\nworktree=/Users/ayankar/dev/osprey-wt/case"
+  }
+}
+PASS a restore beside live databases, and two failures part-way
+exit 0
+Wall time: 354 s, exit 0 (stack b, the lease case took at 2026-11-12T01:39:39Z; set-up before it 11 s)

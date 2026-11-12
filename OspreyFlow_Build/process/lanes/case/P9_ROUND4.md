@@ -12,7 +12,7 @@ One pass, then rebase onto main (L1.9 part 2 at 184b798, records 6331d87), refre
 - [x] 2 ClickHouse's user and password to `backup` and `restore-analytics` alone; a test tying each container's
       Secret keys to its commands (as `test_backups_rows.py` does for egress); a plant.
 - [x] 3 A stale `*.zip` in `<folder>/<db>/` (a killed run's) deleted before ArcadeDB's backup; red first.
-- [ ] 4 Kind (rule 15): a restore beside a live database changed since the set, under the lease: back as the set;
+- [x] 4 Kind (rule 15): a restore beside a live database changed since the set, under the lease: back as the set;
       a planted failure part-way leaves the live database (ArcadeDB's swap and ClickHouse's RENAME swap).
 - [x] 5 The writers derived from the rendered workloads that mount the claims or write the stores, the backup
       CronJobs' Jobs among them; a test that a new such workload is caught; RUNBOOK suspends both CronJobs first and

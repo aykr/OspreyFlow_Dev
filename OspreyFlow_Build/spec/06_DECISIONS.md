@@ -33912,7 +33912,16 @@ own ClickHouse user read and overwrite every set, measured on kind (point 4).
    the live database as it was (the live one set aside only if it is there: after its loss, the case the restore is
    for, it is not, and kind's round-3 restore was refused renaming what was gone, Code 81); if the second rename is
    refused, the live one is renamed back and the refusal names the restored copy kept (`<database>_restoring_<set>`),
-   or, if even that fails, where the live data is (`<database>_before_<set>`); each claim unpacked beside itself by tarfile's `data` filter before its contents are
+   or, if even that fails, where the live data is (`<database>_before_<set>`); ON CLUSTER, each attempt's Keeper path
+   is its own (a RENAME keeps the path, so the database swapped in still held `…_restoring_<set>`'s, and the same
+   set's next restore was refused making it again, Code 253: found on kind in round 4, the fake now keeping Keeper
+   paths as ClickHouse does). **Restored beside live databases on kind** (round 4, under the case lane's lease on
+   stack b, `gates/p9_kind_live_restore.r4.json`; every kind restore before ran after `destroy`): with the stores
+   and the claim changed since the set, both swaps ran and everything came back as the set, nothing left beside it;
+   a truncated zip its manifest matched failed in restore-graph ("ArcadeDB's restore of the set's zip failed; the
+   live database … was not touched"), ArcadeDB and ClickHouse as they were; ClickHouse's role refused its reads
+   failed at RESTORE ("Access Denied: while reading key …/.backup"), ClickHouse's live database kept, ArcadeDB's
+   swap finished; each claim unpacked beside itself by tarfile's `data` filter before its contents are
    replaced. **The restore is proven for the single-replica shapes (development, and the poc shape the client
    installs).** The production shape (three ArcadeDB copies, ON CLUSTER with two ClickHouse replicas) is P9b's.
 9. **The decommission** (the orchestrator's ruling): the backups bucket and its key are its one named exception, kept,
