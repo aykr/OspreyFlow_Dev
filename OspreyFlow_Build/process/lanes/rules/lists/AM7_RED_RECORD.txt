@@ -1,21 +1,33 @@
-ADR-146 Amendment 7 offline plants at e9e8930 (lane/rules-lists), 2026-11-12T11:14:39Z, on the Mac, stack-free (closed ports, OSPREY_LANE unset)
-built, test_alert_citations_per_list.py: GREEN - 28 passed in 0.40s
-built, test_screening.py: GREEN - 15 passed in 0.79s
-P1 the queue serves the alert as stored (no as_read) [services/api/alert_queue.py; -k test_the_queue_shows or test_what_the_queue_serves]: RED - 2 failed, 26 deselected in 0.42s
-P2 a single alert's read (explain, canvas, triage) serves it as stored [services/api/alert_queue.py; -k test_the_explanation or test_the_canvas or test_each_triage or test_a_pack_item_added]: RED - 9 failed, 19 deselected in 0.51s
-P3 a triage returns the stored row as the store gave it [services/api/alert_queue.py; -k test_each_triage]: RED - 6 failed, 22 deselected in 0.43s
-P3b a suppression returns the stored row as the store gave it [services/api/alert_queue.py; -k test_a_suppression_returns]: RED - 1 failed, 27 deselected in 0.40s
-P4 an alert with citations shown with none readable [services/api/alerts.py; -k test_a_reader_cleared_for_neither or test_each_path_refuses_a_reader_cleared_for_neither]: RED - 8 failed, 20 deselected in 0.43s
-P5 all or nothing over the citations too (the old check) [services/api/alerts.py; -k test_the_queue_shows or test_the_explanation or test_each_triage or test_a_pack_item_is]: RED - 9 failed, 19 deselected in 0.51s
-P6 a citation read by its party alone, not its SAME_AS [services/api/alerts.py; -k test_a_citation_is_read_whole]: RED - 1 failed, 27 deselected in 0.41s
-P7 the served words name every list (the hidden list's name leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 20 deselected in 0.46s
-P8 a hidden citation's ids kept in what is served (the count leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 20 deselected in 0.46s
-P9 a pack item asks its reader for every citation (its own adder cannot read it back) [services/api/packs.py; -k test_a_pack_item_is_read]: RED - 1 failed, 27 deselected in 0.46s
-P10 a pack item asks only for what is outside the citations (B's match not asked) [services/api/alerts.py; -k test_a_pack_item_asks]: RED - 1 failed, 27 deselected in 0.46s
-P11 a list's marking not read from its file [scripts/load_screening_list.py; -k test_a_lists_marking]: RED - 1 failed, 14 deselected in 0.48s
-P12 a classification the scheme does not define taken [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 4 passed, 10 deselected in 0.42s
-P13 a re-marked entry read as unchanged [services/api/screening.py; -k test_a_change_of_marking]: RED - 1 failed, 14 deselected in 0.41s
-P14 a rule screens against every list, its deployer cleared or not [services/api/kyc_rules.py; -k test_a_rule_screens_only]: RED - 1 failed, 14 deselected in 0.81s
-restored, test_alert_citations_per_list.py: GREEN - 28 passed in 0.42s
-restored, test_screening.py: GREEN - 15 passed in 0.80s
+ADR-146 Amendment 7 offline plants at 5acb2ba (lane/rules-lists), 2026-11-12T11:33:05Z, on the Mac, stack-free (closed ports, OSPREY_LANE unset)
+built, test_alert_citations_per_list.py: GREEN - 29 passed in 0.82s
+built, test_screening.py: GREEN - 17 passed in 0.78s
+built, test_alert_citations_written.py: GREEN - 9 passed in 0.91s
+P1 the queue serves the alert as stored (no as_read) [services/api/alert_queue.py; -k test_the_queue_shows or test_what_the_queue_serves]: RED - 2 failed, 27 deselected in 0.43s
+P2 a single alert's read (explain, canvas, triage) serves it as stored [services/api/alert_queue.py; -k test_the_explanation or test_the_canvas or test_each_triage or test_a_pack_item_added]: RED - 9 failed, 20 deselected in 0.50s
+P3 a triage returns the stored row as the store gave it [services/api/alert_queue.py; -k test_each_triage]: RED - 6 failed, 23 deselected in 0.42s
+P3b a suppression returns the stored row as the store gave it [services/api/alert_queue.py; -k test_a_suppression_returns]: RED - 1 failed, 28 deselected in 0.40s
+P4 an alert with citations shown with none readable [services/api/alerts.py; -k test_a_reader_cleared_for_neither or test_each_path_refuses_a_reader_cleared_for_neither]: RED - 8 failed, 21 deselected in 0.43s
+P5 all or nothing over the citations too (the old check) [services/api/alerts.py; -k test_the_queue_shows or test_the_explanation or test_each_triage or test_a_pack_item_is]: RED - 9 failed, 20 deselected in 0.49s
+P6 a citation read by its party alone, not its SAME_AS [services/api/alerts.py; -k test_a_citation_is_read_whole]: RED - 1 failed, 28 deselected in 0.39s
+P7 the served words name every list (the hidden list's name leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 21 deselected in 0.44s
+P8 a hidden citation's ids kept in what is served (the count leaks) [services/api/alerts.py; -k test_the_queue_shows or test_what_the_queue_serves or test_each_triage]: RED - 8 failed, 21 deselected in 0.43s
+P9 a pack item asks its reader for every citation (its own adder cannot read it back) [services/api/packs.py; -k test_a_pack_item_is_read]: RED - 1 failed, 28 deselected in 0.41s
+P10 a pack item asks only for what is outside the citations (B's match not asked) [services/api/alerts.py; -k test_a_pack_item_asks]: RED - 1 failed, 28 deselected in 0.40s
+P11 a list's marking not read from its file [scripts/load_screening_list.py; -k test_a_lists_marking]: RED - 1 failed, 16 deselected in 0.46s
+P12 a classification the scheme does not define taken [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 5 passed, 11 deselected in 0.43s
+P13 a re-marked entry read as unchanged [services/api/screening.py; -k test_a_change_of_marking]: RED - 1 failed, 16 deselected in 0.41s
+P14 a rule screens against every list, its deployer cleared or not [services/api/kyc_rules.py; -k test_a_rule_screens_only]: RED - 1 failed, 16 deselected in 0.79s
+P15 the Alert node's sources name every list's entry (review item 1) [services/api/rule_evaluation.py; -k test_the_alert_node_names_no_list]: RED - 1 failed, 8 deselected in 0.80s
+P16 every pending write dropped once one merges (review item 5) [services/api/rule_evaluation.py; -k test_a_match_merged_on_one_list]: RED - 1 failed, 8 deselected in 0.79s
+P17 each ALERTED_ON marked as the node, not by its citation [services/api/rule_evaluation.py; -k test_each_cited_partys_alerted_on]: RED - 1 failed, 8 deselected in 0.78s
+P18 an ALERTED_ON written where no single marking joins [services/api/rule_evaluation.py; -k test_a_cited_party_no_single_marking]: RED - 1 failed, 8 deselected in 0.77s
+P19 a re-mark reads the citations too [services/api/alerts.py; -k test_a_re_mark_reads_only]: RED - 1 failed, 8 deselected in 0.79s
+P20 the trends' handlings read without the citations (counted for a reader not shown it) [services/api/rule_evaluation.py; -k test_what_the_trends_count]: RED - 1 failed, 8 deselected in 0.79s
+P21 the rule audit reads a cited alert by what is outside its citations (review item 8) [services/api/rule_holds.py; -k test_the_rule_audit_withholds]: RED - 1 failed, 28 deselected in 0.85s
+P22 a unit-restricted code taken for a list (review item 11) [scripts/load_screening_list.py; -k test_a_marking_the_scheme]: RED - 1 failed, 5 passed, 11 deselected in 0.42s
+P23 a marking above the deployment's ceiling taken (review item 11) [scripts/load_screening_list.py; -k test_a_marking_above]: RED - 1 failed, 16 deselected in 0.40s
+P24 the listed party looked up by name alone (review item 6) [services/api/kyc_rules.py; -k test_a_match_reuses_its_own_lists_party]: RED - 1 failed, 8 deselected in 0.78s
+restored, test_alert_citations_per_list.py: GREEN - 29 passed in 0.83s
+restored, test_screening.py: GREEN - 17 passed in 0.80s
+restored, test_alert_citations_written.py: GREEN - 9 passed in 0.76s
 exit 0
