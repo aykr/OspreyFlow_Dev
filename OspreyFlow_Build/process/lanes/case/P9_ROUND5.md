@@ -17,7 +17,7 @@
       put-back.
 - [x] 7 Rule 12: CheckDatabase's page-multiple branch and its no-entries branch, each reached by a scenario red
       for it (or the claim dropped from Am 7).
-- [ ] 8 The plants and the merged record at the final head (the finish-time plant re-anchored); ROUND4's last tick
+- [x] 8 The plants and the merged record at the final head (the finish-time plant re-anchored); ROUND4's last tick
       corrected.
 
 **Notes**

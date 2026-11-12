@@ -1,18 +1,17 @@
-# Case lane · P9 round 4 (the orchestrator's review of 7916044) · report, 12 November 2026
+# Case lane · P9 round 5 (the orchestrator's second review of afc1a5f) · report, 12 November 2026
 
-Gated head **`afc1a5f`** on `lane/case-p9`, rebased on main `816ccf7` (L1.9 part 2 in). Gates (`gates/afc1a5f.notes.md`): `make -k ci` **exit 0** (cp-policy-check 0 violation(s) on all five fixtures; harness-a11y in slot 14, 34 passed); `make test` **12459 passed**, 1 failed (the server's GPU, known), 2 xfailed strict (the restores' rows awaiting `P9_rows.diff`); `make live-collect` **exit 0**. With the three diffs applied: 0 violation(s) on all five, 717 passed none held, plants **96 of 96** red, the diff's **5 of 5** (`gates/p9_cp_policy_merged.r2.txt`).
+Gated head **`382688b`** on `lane/case-p9`, rebased on main `8be1b77`; `b27f78e` re-anchors two plants (the plant file alone). Gates (`gates/382688b.notes.md`): `make -k ci` **exit 0** (cp-policy-check 0 violation(s) on all five fixtures; harness-a11y in slot 14, 34 passed); `make test` **12465 passed**, 2 failed (the server's GPU, OpenSearch's memory case: both known), 2 xfailed strict (the restores' rows awaiting `P9_rows.diff`); `make live-collect` **exit 0**. With the three diffs applied: 0 violation(s) on all five, 724 passed none held, the diff's plants 5 of 5 (`p9_cp_policy_merged.r3.txt`); P9's plants **104 of 104** red (`p9_reds.r5.log`).
 
 | Review item | State | Proof |
 | --- | --- | --- |
-| 1 MUST: ArcadeDB never removed before its restore is proven | **Fixed**: restored into `<db>.restoring`, held to the set's zip and opened (ArcadeDB opens damage with only a warning, measured), swapped by rename; any failure leaves the live one; ClickHouse's failed second RENAME puts the live one back | `test_restore_graph.py` (ArcadeDB's own image); runbook's *Where the data is* |
-| 2 ClickHouse's user to backup and restore-analytics alone | **Fixed** | `test_each_container_holds_the_secret_keys_its_command_calls_for_and_no_more` |
-| 3 a killed run's zip | **Fixed**, red first | `test_a_zip_a_killed_run_left_…` |
-| 4 kind, beside a live database (lease b) | **PASS**: back as the set, nothing left; truncated zip and ClickHouse's refused reads each leave the live data, refused for their own reason. It found a real bug: ClickHouse's Keeper path reused on the same set's second restore (Code 253), fixed red first | `gates/p9_kind_live_restore.r4.json` |
-| 5 writers from the render; CronJobs suspended | **Fixed** (transitive over the rows; the report sync and the Glass caught) | `test_a_new_workload_that_writes_is_a_writer_without_naming_it` |
-| 6 one set's name | **Fixed** | `test_a_restore_names_one_set_or_is_refused` |
-| 7 two plants red for another reason | **Fixed**; also three plants that named unselectable cases, four re-anchored | `gates/p9_cp_policy_merged.r2.txt` |
-| 8 stand-in's InvalidPart/Order, EntityTooSmall; RBAC 403; versioning | **Done** (Am 7 point 11; CARRIES row) | `test_s3_standin.py`, `test_the_api_refusing_…` |
-| 9 RDS to the set's finish | **Done**: `finished` in each manifest, `sets` prints it; Am 7 point 10; runbook's first step; CARRIES | `test_a_set_records_when_it_finished_…` |
-| 10 and notes | **Done**: Am 5 hunk dropped; runbook for the operator; UTC; database names from the render; malformed manifest; claims' swap keeps both; diffs re-cut with index lines | `P9_ROUND4.md` |
+| 1 MUST: step 2's wait held by kept backup Job pods | **Fixed** (`!job-name`); the runbook's restore **walked as written** on osprey-p9 under lease b after backups had run (13 Job pods kept): back as the set, nothing left, CronJobs resumed; the old wait shown red | `p9_kind_runbook_walk.r5.json`, `p9_runbook_wait_red.r5.txt` |
+| 2 parts mixed part-way | **Said** in Am 7 point 8 and per refusal in *If it fails*; the same set again is the way out | RUNBOOK |
+| 3 RDS re-pointed after step 2 | **Done** | RUNBOOK |
+| 4 interrupted swap | **Done**: the recovery pod's command, decided by `<database>.restoring`; the `create_database_if_absent` warning | RUNBOOK |
+| 5 room for a second copy | **Done**: the checks before step 1 | RUNBOOK |
+| 6 restore-graph's words | **Fixed**: "put back" only when it was, "not touched" only before the move, no live database said, the old copy's removal checked | `test_restore_graph.py` (failed put-in, put-back, old copy left) |
+| 7 the check's two branches | **Reached**: a stray short page file, a zip holding no file; plants red | `test_restore_graph.py` |
+| 8 plants and merged record at the final head; ROUND4's tick | **Done** | above |
+| Notes | Jobs read for writers; another set's stale restored copy dropped and said; the set-aside refusal names the fresh copy; the drop-the-old refusal in *If it fails*; P9_render.diff's exception narrowed to ClickHouse's pod; no build words; PyYAML said | `test_backups_render.py`, `test_platform_backup.py` |
 
-**For the orchestrator to apply, in order:** `P9_render.diff`, `P9_rows.diff`, `P9_decommission.diff`; and `P9_carries.diff` (yours). **Questions for the owner:** rulings A and 9 (listed in Am 7 points 4 and 10). **Running:** the osprey-p9 kind cluster, up for review (round 4's render), down on the orchestrator's word or at the latest by the server's timer, Friday 13 November 11:25 UK. No lease held.
+**For the orchestrator, in order:** `P9_render.diff`, `P9_rows.diff`, `P9_decommission.diff`; `P9_carries.diff` (yours: the Keeper path's DROP on the live-checks row, the check's time on a real graph). **Questions for the owner:** rulings A and 9 (Am 7 points 4 and 10). **Running:** osprey-p9, up for review (round 5's code), down on the orchestrator's word or by the server's timer, Friday 13 November 11:25 UK. No lease held.
