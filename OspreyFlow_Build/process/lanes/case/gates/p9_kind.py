@@ -89,6 +89,7 @@ class Run:
         self.state, self.ns, self.helm_script = state, namespace, helm_script
         self.out = state / "render"
         self.record: dict[str, Any] = {}
+        self.restore_logs = ""
 
     # -- the render -------------------------------------------------------------------------------
 
@@ -922,9 +923,11 @@ class Run:
                 "--wait=true",
             )
             apply(job)
+        self.restore_logs = ""
         for job in jobs:
             name = job["metadata"]["name"]
             ok, logs = self.wait_job(name)
+            self.restore_logs += logs
             times[name] = round(time.monotonic() - start - times["stopped"], 1)
             print(f"{name}: {'succeeded' if ok else 'FAILED'}\n{logs}")
             if not ok:
@@ -942,6 +945,149 @@ class Run:
         times["started"] = round(time.monotonic() - restarted, 1)
         times["total"] = round(time.monotonic() - start, 1)
         return times
+
+    # -- a restore beside live databases (the orchestrator's review of 7916044, item 4) ------------
+
+    def change(self, tag: str) -> dict[str, Any]:
+        """The live stores moved on since the set: people, rows and a file it does not hold."""
+        self.probe(f"change({tag!r})")
+        self.in_shared(f"change({tag!r})")
+        found = self.counts()
+        print(f"changed ({tag}):", found)
+        return found
+
+    def leftovers(self) -> dict[str, Any]:
+        """Anything a restore left beside the live data: ArcadeDB's `<db>.restoring` or `.before`,
+        ClickHouse's `_restoring_` or `_before_` databases, the claim's `.osprey-` folders."""
+        folder = kubectl("-n", self.ns, "exec", "arcadedb-0", "--", "ls", "-a", "/home/arcadedb/databases")
+        names = json.loads(self.probe("print(json.dumps(databases()))").strip().splitlines()[-1])
+        claims = json.loads(self.in_shared("print(json.dumps(leftovers()))").strip().splitlines()[-1])
+        return {
+            "arcadedb": sorted(n for n in folder.split() if n.endswith((".restoring", ".before"))),
+            "clickhouse": [n for n in names if "_restoring_" in n or "_before_" in n],
+            "claims": claims,
+        }
+
+    def plant_truncated_zip(self, set_id: str) -> None:
+        """The set's ArcadeDB zip cut to half and its manifest made to match (a zip written while
+        the claim filled, say): `verify` and `fetch-graph` pass it, ArcadeDB's own restore fails
+        part-way. The originals kept beside the bucket, put back by `unplant_zip`."""
+        self._standin_store(
+            "saved = root.parent / 'p9-saved'; saved.mkdir(exist_ok=True)\n"
+            "def at(key): return root / hashlib.sha256(key.encode()).hexdigest()\n"
+            "mkey = f'sets/{a[0]}/manifest.json'\n"
+            "manifest = json.loads(at(mkey).read_bytes())\n"
+            "zkey = manifest['arcadedb']['key']\n"
+            "for key, name in ((mkey, 'manifest'), (zkey, 'zip')):\n"
+            "    (saved / name).write_bytes(at(key).read_bytes())\n"
+            "    (saved / (name + '.json')).write_text(at(key).with_suffix('.json').read_text())\n"
+            "def put(key, body):\n"
+            "    at(key).write_bytes(body)\n"
+            "    meta = json.loads(at(key).with_suffix('.json').read_text())\n"
+            "    meta.update(size=len(body), etag=hashlib.md5(body, usedforsecurity=False).hexdigest())\n"
+            "    at(key).with_suffix('.json').write_text(json.dumps(meta))\n"
+            "half = at(zkey).read_bytes()[: at(zkey).stat().st_size // 2]\n"
+            "put(zkey, half)\n"
+            "manifest['arcadedb'].update(bytes=len(half), sha256=hashlib.sha256(half).hexdigest())\n"
+            "put(mkey, json.dumps(manifest, indent=2).encode())\n",
+            [set_id],
+        )
+
+    def unplant_zip(self, set_id: str) -> None:
+        self._standin_store(
+            "saved = root.parent / 'p9-saved'\n"
+            "def at(key): return root / hashlib.sha256(key.encode()).hexdigest()\n"
+            "mkey = f'sets/{a[0]}/manifest.json'\n"
+            "zkey = json.loads((saved / 'zip.json').read_text())['key']\n"
+            "for key, name in ((mkey, 'manifest'), (zkey, 'zip')):\n"
+            "    at(key).write_bytes((saved / name).read_bytes())\n"
+            "    at(key).with_suffix('.json').write_text((saved / (name + '.json')).read_text())\n"
+            "import shutil; shutil.rmtree(saved)\n",
+            [set_id],
+        )
+
+    def restore_expecting_failure(self, set_id: str) -> str:
+        try:
+            self.restore(set_id)
+        except SystemExit as failed:
+            return str(failed)
+        return "the restore finished"
+
+    def live_restore(self) -> None:
+        """A restore of a set beside live databases changed since it (rule 15: every kind restore
+        before ran after `destroy`): it comes back as the set, nothing left beside it; then two
+        failures planted part-way, each leaving the live database it was meant to protect."""
+        from harness import cloud_platform_backups as backups
+
+        self.shared_pod()
+        seeded = self.seed()
+        ok, logs, set_id = self.backup()
+        if not ok:
+            raise SystemExit("the backup failed")
+        stores = ("arcadedb_vertices", "arcadedb_edges", "clickhouse_rows")
+        same = lambda a, b, keys=stores: all(a.get(k) == b.get(k) for k in keys)  # noqa: E731
+        record: dict[str, Any] = {"set": set_id, "seeded": seeded}
+        # 1. Beside live databases changed since the set: both swaps run (ArcadeDB's rename on its
+        #    claim, ClickHouse's RENAME), and the stores and the claim come back as the set.
+        changed = self.change("a")
+        assert not same(changed, seeded), "the change did not change the stores"
+        record["swap"] = {"changed": changed, "seconds": self.restore(set_id)}
+        record["swap"]["restored"] = self.counts()
+        record["swap"]["leftovers"] = self.leftovers()
+        record["swap"]["as_the_set"] = record["swap"]["restored"] == seeded
+        # 2. ArcadeDB's restore failing part-way (a truncated zip its manifest matches): the restore
+        #    Job fails in restore-graph; ArcadeDB and ClickHouse are as they were changed.
+        changed = self.change("b")
+        self.plant_truncated_zip(set_id)
+        try:
+            said = self.restore_expecting_failure(set_id)
+        finally:
+            self.unplant_zip(set_id)
+        after = self.counts()
+        record["arcadedb_planted"] = {
+            "changed": changed, "after": after, "said": said, "restore_graph": self.last_logs("restore-graph"),
+            "leftovers": self.leftovers(), "stores_untouched": same(after, changed),
+        }  # fmt: skip
+        # 3. ClickHouse's RESTORE refused part-way (its role without s3:GetObject, after `verify`
+        #    passed as the runner): ClickHouse's live database stays; ArcadeDB's swap had finished.
+        changed = self.change("c")
+        arn = f"arn:aws:s3:::{self.bucket()}"
+        refused = backups.role_policies(arn, KEY_ARN, REGION)[backups.CLICKHOUSE_SERVICE_ACCOUNT]
+        for statement in refused["Statement"]:
+            if isinstance(statement.get("Action"), list):
+                statement["Action"] = [a for a in statement["Action"] if a != "s3:GetObject"]
+        self.configure(self.standin_config(clickhouse_policy=refused))
+        try:
+            said = self.restore_expecting_failure(set_id)
+        finally:
+            self.configure(self.standin_config())
+        after = self.counts()
+        record["clickhouse_planted"] = {
+            "changed": changed, "after": after, "said": said,
+            "restore_analytics": self.last_logs("restore-analytics"), "leftovers": self.leftovers(),
+            "clickhouse_untouched": after.get("clickhouse_rows") == changed.get("clickhouse_rows"),
+            "arcadedb_restored": same(after, seeded, ("arcadedb_vertices", "arcadedb_edges")),
+        }  # fmt: skip
+        # Every live test removes what it writes: the set from the stand-in.
+        self.remove_copies([f"sets/{set_id}/"])
+        empty = {"arcadedb": [], "clickhouse": [], "claims": []}
+        passed = (record["swap"]["as_the_set"] and record["swap"]["leftovers"] == empty
+                  and record["arcadedb_planted"]["stores_untouched"]
+                  and record["arcadedb_planted"]["leftovers"]["arcadedb"] == []
+                  and "restore-graph refused" in record["arcadedb_planted"]["restore_graph"]
+                  and record["clickhouse_planted"]["clickhouse_untouched"]
+                  and record["clickhouse_planted"]["arcadedb_restored"]
+                  and record["clickhouse_planted"]["leftovers"]["clickhouse"] == [])  # fmt: skip
+        record["pass"] = passed
+        self.record = {"live_restore": record}
+        self.save("live_restore")
+        print(f"{'PASS' if passed else 'FAIL'} a restore beside live databases, and two failures part-way")
+        if not passed:
+            raise SystemExit("FAIL: see the record")
+
+    def last_logs(self, container: str) -> str:
+        """The named container's words in the latest restore's logs (`restore` keeps them)."""
+        return "\n".join(line for line in self.restore_logs.splitlines() if f"/{container}]" in line)[-2000:]
 
     # -- the runs ---------------------------------------------------------------------------------
 
@@ -1508,6 +1654,14 @@ def counts():
 def destroy():
     arcade("/api/v1/server", {"command": "drop database ospreyflow"})
     ch("DROP DATABASE IF EXISTS ospreyflow ON CLUSTER osprey SYNC")
+def change(tag, vertices=100, rows=300):
+    # The live stores moved on since the set: people and rows the set does not hold.
+    base = {"a": 1, "b": 2, "c": 3}[tag] * 1_000_000
+    people = [{"n": base + i, "name": f"synthetic person added after the set {tag}{i}"} for i in range(vertices)]
+    sql("INSERT INTO P9Person CONTENT " + json.dumps(people))
+    ch(f"INSERT INTO ospreyflow.p9_rows SELECT {base} + number, 'added after the set {tag}' FROM numbers({rows})")
+def databases():
+    return sorted(ch("SHOW DATABASES").split())
 """
 
 #: The shared claim's own files, in the shared pod: synthetic uploads and a drop folder.
@@ -1537,6 +1691,11 @@ def destroy():
         if entry.name == "lost+found":
             continue
         shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+def change(tag):
+    path = ROOT / "ingest" / "uploads" / f"added after the set {tag}.bin"
+    path.write_bytes(random.Random(tag).randbytes(30_000))
+def leftovers():
+    return sorted(p.name for p in ROOT.iterdir() if p.name.startswith(".osprey-"))
 """
 
 
@@ -1559,6 +1718,7 @@ def main() -> None:
             "osprey_sources",
             "osprey_bound_red",
             "restore_refused",
+            "live_restore",
         ],
     )
     parser.add_argument("--state", type=Path, required=True)

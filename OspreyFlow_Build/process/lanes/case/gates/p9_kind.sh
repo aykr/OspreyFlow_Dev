@@ -170,6 +170,6 @@ restore_job() {  # the restore Job for a set, as an operator renders it (`--show
 case "${1:-}" in
   up) up ;; down) down ;; status) status ;; tools) tools ;; deploy) deploy ;; reset) reset ;;
   restore-job) restore_job "$2" ;;
-  roundtrip|reds|seed|backup|destroy|restore|counts|osprey_sources|osprey_bound_red|restore_refused) DRIVER "$1" --helm-script "$0" ;;
+  roundtrip|reds|seed|backup|destroy|restore|counts|osprey_sources|osprey_bound_red|restore_refused|live_restore) DRIVER "$1" --helm-script "$0" ;;
   *) echo "usage: p9_kind.sh up|deploy|roundtrip|reds|reset|down|status|seed|backup|destroy|restore|counts" >&2; exit 2 ;;
 esac
