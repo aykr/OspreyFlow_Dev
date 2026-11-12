@@ -1,5 +1,5 @@
-# as of 2026-11-12T13:10Z
-studio	carries	building on sol: the import refusal and the Join's declared default marking	12 Nov, evening	B
+# as of 2026-11-12T16:45Z
+studio	carries	final make test and make -k ci re-running at its head (one citation fix); then the orchestrator's check and merge	12 Nov, about 17:45	B
 rules	lists	independent review found four rule-3 leaks; fixing, with the owner's close ruling	13 Nov	B
 rules-b	guides	done: merged 5675103; the guides' own text is docs' follow-up	done	A
 admin	P10	done: part 2 merged (e5e81bd); two patches for you	done	B
@@ -12,4 +12,4 @@ platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5 merged 12 Nov; left: marks, sleeps, the ArcadeDB waits	after the demo	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
-orchestrator	demo	osprey-small (the demo deployment) to be rebuilt from main with the guides, once rules-b guides lands (the owner, 12 Nov ~11:50): backup first, fresh install with a one-time code to a file and local_only false with P sendable (Gemini, the owner's word), the demo packs, your Admin steps 6-7, the demo walk; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 19:00-21:00	A
+demo	rebuild	the demo lane (sol) rebuilds osprey-small from main once studio carries lands: backup done and verified; then install, demo accounts, five packs, the owner's checks	12 Nov, checks reported by 20:00	A
