@@ -564,6 +564,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         read, and a hidden one stays inferred (rules 3 and 5). It lands tomorrow morning, or after the demo.
         **Rules' own decision, which you can overrule (Am 7 point 8):** a rule screens only the lists its
         deployer is cleared for, so nobody can deploy a rule that reads a list they could not read themselves.
+      - **The old `lane/platform` branch is deleted** (your word, about 12:45). 29 of its 31 commits were in main as
+        they stood. The other two (`images push --registry` and the cloud-platform schema) are on main reworked.
+        It is kept locally as the tag `archive/lane-platform-pre-rebase` (77cae38), never pushed. `lane/platform`
+        now starts at main, and the heartbeat shows platform merged.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
