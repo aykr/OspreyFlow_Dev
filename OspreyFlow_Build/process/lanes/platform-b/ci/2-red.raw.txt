@@ -1,0 +1,9 @@
+# 2, red: main 9aff917's test_statelessness.py, this Mac, 2-probe_conduit.py (20 s wait), both shapes
+## crash
+TimeoutError after 20.0 s: http://127.0.0.1:55670 never came up
+--- the Conduit's last words (tail) ---
+http://127.0.0.1:55670 never came up
+## hang
+TimeoutError after 20.2 s: http://127.0.0.1:55771 never came up
+--- the Conduit's last words (tail) ---
+http://127.0.0.1:55771 never came up

@@ -1,0 +1,9 @@
+# 5 before the diff (setup-screens.spec.ts as main has it), this Mac
+  ✘   8 keyboard/setup-screens.spec.ts:367:1 › Tab reaches Build local basemap and Verify, each a real keyboard-triggered call (5.1s)
+  ✘  10 keyboard/setup-screens.spec.ts:474:1 › a real keyboard-triggered preflight run streams every check and enables Launch (20.6s)
+  ✘  20 keyboard/setup-screens.spec.ts:1016:1 › every registered setup-screen action has its own proving test case above (3ms)
+  1) keyboard/setup-screens.spec.ts:367:1 › Tab reaches Build local basemap and Verify, each a real keyboard-triggered call 
+    Received: inactive
+  3 failed
+    keyboard/setup-screens.spec.ts:367:1 › Tab reaches Build local basemap and Verify, each a real keyboard-triggered call 
+  17 passed (1.5m)

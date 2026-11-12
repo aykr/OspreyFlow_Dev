@@ -1,0 +1,10 @@
+# 1 at the branch before its rebase onto main 1b21930 (test_port_guard.py as main has it), this Mac, CI=true, before the diff
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease[None-case-False] - Failed: DID NOT RAISE ConnectionRefusedError
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease[studio-case-False] - Failed: DID NOT RAISE ConnectionRefusedError
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease[studio-None-False] - Failed: DID NOT RAISE ConnectionRefusedError
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_each_stack_is_reached_only_by_its_own_holder[studio-reached0-refused0] - Failed: DID NOT RAISE ConnectionRefusedError
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_each_stack_is_reached_only_by_its_own_holder[rules-reached1-refused1] - Failed: DID NOT RAISE ConnectionRefusedError
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_each_stack_s_object_store_is_refused_to_anyone_but_its_holder[9000-a] - Failed: DID NOT RAISE ConnectionRefusedError
+FAILED ../OspreyFlow_Build/tests/test_port_guard.py::test_each_stack_s_object_store_is_refused_to_anyone_but_its_holder[9002-b] - Failed: DID NOT RAISE ConnectionRefusedError
+7 failed, 18 passed, 2 skipped in 3.12s

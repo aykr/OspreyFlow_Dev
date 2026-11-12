@@ -1,0 +1,155 @@
+# 2, green: the branch's test_statelessness.py, the same probe, both shapes
+## crash
+TimeoutError after 1.7 s: http://127.0.0.1:55868 exited (3) before it came up; the Conduit's own last words:
+--- the Conduit's last words (tail) ---
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File ".venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File ".venv/lib/python3.12/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File ".venv/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File ".venv/lib/python3.12/site-packages/starlette/routing.py", line 656, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "services/api/app.py", line 1185, in lifespan
+    resources = await build_run_resources(config)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "services/api/run_resources.py", line 239, in build_run_resources
+    await arcadedb_client.create_database_if_absent()
+  File "packages/adapters/graph_arcadedb/client.py", line 265, in create_database_if_absent
+    databases = await self._server_command("list databases")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "packages/adapters/graph_arcadedb/client.py", line 284, in _server_command
+    resp = await self._post("/api/v1/server", json={"command": command})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "packages/adapters/graph_arcadedb/client.py", line 235, in _post
+    return await self._send(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "packages/adapters/graph_arcadedb/client.py", line 256, in _send
+    return await self._http.post(path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ".venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File ".venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: All connection attempts failed
+
+ERROR:    Application startup failed. Exiting.
+## hang
+TimeoutError after 22.1 s: http://127.0.0.1:55880 never came up; the Conduit's own last words:
+--- the Conduit's last words (tail) ---
+http://127.0.0.1:55880 never came up; the Conduit's own last words:
+INFO:     Started server process [33222]
+INFO:     Waiting for application startup.
+--- at the timeout: where each coroutine waits ---
+  .venv/lib/python3.12/site-packages/httpcore/_async/connection.py:103 in handle_async_request
+  .venv/lib/python3.12/site-packages/httpcore/_async/http11.py:106 in handle_async_request
+  .venv/lib/python3.12/site-packages/httpcore/_async/http11.py:177 in _receive_response_headers
+  .venv/lib/python3.12/site-packages/httpcore/_async/http11.py:217 in _receive_event
+  .venv/lib/python3.12/site-packages/httpcore/_backends/anyio.py:35 in read
+  .venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1407 in receive
+  asyncio/locks.py:212 in wait
+  .venv/lib/python3.12/site-packages/uvicorn/server.py:90 in serve
+  .venv/lib/python3.12/site-packages/uvicorn/server.py:105 in _serve
+  .venv/lib/python3.12/site-packages/uvicorn/server.py:116 in startup
+  .venv/lib/python3.12/site-packages/uvicorn/lifespan/on.py:56 in startup
+  asyncio/locks.py:212 in wait
+  .venv/lib/python3.12/site-packages/uvicorn/lifespan/on.py:86 in main
+  .venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py:30 in __call__
+  .venv/lib/python3.12/site-packages/fastapi/applications.py:1181 in __call__
+  .venv/lib/python3.12/site-packages/fastapi/telemetry/_runtime.py:238 in lifespan
+  .venv/lib/python3.12/site-packages/starlette/applications.py:96 in __call__
+  .venv/lib/python3.12/site-packages/starlette/middleware/errors.py:151 in __call__
+  .venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151 in __call__
+  .venv/lib/python3.12/site-packages/starlette/middleware/cors.py:79 in __call__
+  .venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:49 in __call__
+  .venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18 in __call__
+  .venv/lib/python3.12/site-packages/starlette/routing.py:678 in __call__
+  .venv/lib/python3.12/site-packages/fastapi/routing.py:2796 in app
+  .venv/lib/python3.12/site-packages/starlette/routing.py:656 in lifespan
+  services/api/app.py:1185 in lifespan
+  contextlib.py:210 in __aenter__
+  services/api/run_resources.py:239 in build_run_resources
+  packages/adapters/graph_arcadedb/client.py:265 in create_database_if_absent
+  packages/adapters/graph_arcadedb/client.py:284 in _server_command
+  packages/adapters/graph_arcadedb/client.py:235 in _post
+  packages/adapters/graph_arcadedb/client.py:256 in _send
+  .venv/lib/python3.12/site-packages/httpx/_client.py:1859 in post
+  .venv/lib/python3.12/site-packages/httpx/_client.py:1540 in request
+  .venv/lib/python3.12/site-packages/httpx/_client.py:1629 in send
+  .venv/lib/python3.12/site-packages/httpx/_client.py:1657 in _send_handling_auth
+  .venv/lib/python3.12/site-packages/httpx/_auth.py:103 in async_auth_flow
+  .venv/lib/python3.12/site-packages/httpx/_client.py:1694 in _send_handling_redirects
+  .venv/lib/python3.12/site-packages/httpx/_client.py:1730 in _send_single_request
+  .venv/lib/python3.12/site-packages/httpx/_transports/default.py:394 in handle_async_request
+  .venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236 in handle_async_request
+--- and every thread ---
+Thread 0x000000016eea7000 (most recent call first):
+  File "concurrent/futures/thread.py", line 90 in _worker
+  File "threading.py", line 1012 in run
+  File "threading.py", line 1075 in _bootstrap_inner
+  File "threading.py", line 1032 in _bootstrap
+
+Current thread 0x00000001f8f86240 (most recent call first):
+  File "<string>", line 19 in _dump
+  File "selectors.py", line 566 in select
+  File "asyncio/base_events.py", line 1961 in _run_once
+  File "asyncio/base_events.py", line 645 in run_forever
+  File "asyncio/base_events.py", line 678 in run_until_complete
+  File "asyncio/runners.py", line 118 in run
+  File "asyncio/runners.py", line 195 in run
+  File ".venv/lib/python3.12/site-packages/uvicorn/server.py", line 86 in run
+  File ".venv/lib/python3.12/site-packages/uvicorn/main.py", line 632 in run
+  File ".venv/lib/python3.12/site-packages/uvicorn/main.py", line 448 in main
+  File ".venv/lib/python3.12/site-packages/click/core.py", line 910 in invoke
+  File ".venv/lib/python3.12/site-packages/click/core.py", line 1415 in invoke
+  File ".venv/lib/python3.12/site-packages/click/core.py", line 1552 in main
+  File ".venv/lib/python3.12/site-packages/click/core.py", line 1631 in __call__
+  File "<string>", line 25 in <module>

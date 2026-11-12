@@ -1,0 +1,30 @@
+diff --git a/OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py b/OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
+index 482677d..8301216 100644
+--- a/OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
++++ b/OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py
+@@ -19,6 +19,7 @@ from __future__ import annotations
+ 
+ from datetime import UTC, datetime
+ 
++import pytest
+ from services.api.review import run_extraction
+ from services.api.working_set.service import WorkingSetService
+ from services.api.working_set.store import ValkeyWorkingSetStore
+@@ -48,6 +49,7 @@ from schemas.domain import (
+     SourceRef,
+ )
+ from tests.scenarios.fixtures.witness_statement import WITNESS_STATEMENT_TEXT
++from tests.services.api.case_dataset import in_a_case_with_a_layer  # noqa: F401 (a fixture)
+ 
+ CLEARED = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+ 
+@@ -105,6 +107,9 @@ class _NullExtractionCandidateStore:
+         pass
+ 
+ 
++# ADR-143 Amendment 1 (bc52eef): clause 3's manual split is an analyst's own write, so it needs a
++# case's layer to go into, as under a route; refused outside one (NoAnalystLayerError).
++@pytest.mark.usefixtures("in_a_case_with_a_layer")
+ async def test_phase6_exit_criterion_end_to_end() -> None:
+     ontology = load_default_ontology()
+     scheme = load_uk_le_scheme()

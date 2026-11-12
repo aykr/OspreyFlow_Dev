@@ -379,6 +379,11 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
   await page.keyboard.press("Tab"); // Register provider button
   await page.keyboard.press("Tab"); // Region
   await expect(page.getByLabel("Region")).toBeFocused();
+  await page.keyboard.press("Tab"); // Unit that holds the place names (227232e)
+  await expect(
+    page.getByLabel("Unit that holds the place names"),
+  ).toBeFocused();
+  await page.keyboard.type("unit-a");
   await page.keyboard.press("Tab"); // Build local basemap button
   await expect(
     page.getByRole("button", { name: "Build local basemap" }),
@@ -386,7 +391,8 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
 
   // ADR-147 decision 6: the Conduit's own build, run in its container. This console has launched
   // nothing, so the route answers 409 in words; this proves the button is keyboard-reachable and
-  // really calls the route with the region (`test_webapp_geospatial.py` proves the run itself).
+  // really calls the route with the region and the unit (`test_webapp_geospatial.py` proves the run
+  // itself).
   const [buildResponse] = await Promise.all([
     page.waitForResponse((r) =>
       r.url().includes("/api/geospatial/build-basemap"),
@@ -394,7 +400,10 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
     page.keyboard.press("Enter"),
   ]);
   expect(buildResponse.status()).toBe(409);
-  expect(buildResponse.request().postDataJSON()).toEqual({ region: "rutland" });
+  expect(buildResponse.request().postDataJSON()).toEqual({
+    region: "rutland",
+    unit: "unit-a",
+  });
   await expect(
     page.getByRole("status").filter({ hasText: "Launch it first" }),
   ).toBeVisible();

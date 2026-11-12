@@ -1,0 +1,5 @@
+# 1, re-run on the rebased branch (main 9aff917 + this branch's eight commits), this Mac, ports pinned closed (59991-59994)
+## CI=true
+25 passed, 2 skipped in 2.76s
+## CI unset
+27 passed in 3.94s

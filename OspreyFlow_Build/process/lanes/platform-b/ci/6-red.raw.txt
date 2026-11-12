@@ -1,0 +1,7 @@
+# 6, red: a host render of local-lite (pull mode, --allow-unpinned), this Mac, docker compose config with main's five hand-listed secrets (the test's env before the fix). A host reproduction of the test's step, not the test itself.
+error while interpolating services.api.environment.LITELLM_API_KEY: required variable OSPREY_LITELLM_MASTER_SECRET is missing a value: set in the env file
+error while interpolating services.litellm.environment.DATABASE_URL: required variable OSPREY_LITELLM_DB_PASSWORD is missing a value: set in the deployment env file
+error while interpolating services.litellm.environment.LITELLM_MASTER_KEY: required variable OSPREY_LITELLM_MASTER_SECRET is missing a value: set in the deployment env file
+error while interpolating services.litellm.environment.LITELLM_SALT_KEY: required variable OSPREY_LITELLM_SALT_SECRET is missing a value: set in the deployment env file
+error while interpolating services.litellm-db.environment.OSPREY_LITELLM_DB_PASSWORD: required variable OSPREY_LITELLM_DB_PASSWORD is missing a value: set in the env file
+rc=1

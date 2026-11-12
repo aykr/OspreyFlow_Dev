@@ -1,0 +1,7 @@
+# 4 with the diff (the browser started with LANGUAGE/LC_ALL/LANG en_GB, --lang, and locale) at d19c308, this Mac.
+# NOT shown red here: alerts.spec.ts:360 already had locale en-GB when GitHub failed, so locale alone is not the fix; Chromium on macOS takes a date field's order from the OS (en_GB here), so neither env, --lang nor locale can make it month first on this Mac. Proved at the owner's next push (GitHub's glass-perf-a11y-keyboard), or in a Linux Playwright container (Docker was not running on this Mac and is the owner's to start).
+# Below: no regression in the two specs; the two failures are the Mac-only Bedrock case (End on a closed <select>) and its registry, red the same without the diff.
+  ✘   4 keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for (5.2s)
+  ✘  34 keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above (128ms)
+  2 failed
+  41 passed (33.1s)

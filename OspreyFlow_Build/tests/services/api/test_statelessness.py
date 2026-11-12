@@ -31,11 +31,13 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import warnings
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,10 +63,14 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_until_up(base_url: str, *, timeout_s: float = 15.0) -> None:
+def _wait_until_up(
+    base_url: str, *, timeout_s: float = 60.0, process: subprocess.Popen[bytes] | None = None
+) -> None:
     deadline = time.monotonic() + timeout_s
     last_error: Exception | None = None
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise ConduitExited(f"{base_url} exited ({process.returncode}) before it came up")
         try:
             httpx.get(f"{base_url}/docs", timeout=1.0)
             return
@@ -72,6 +78,46 @@ def _wait_until_up(base_url: str, *, timeout_s: float = 15.0) -> None:
             last_error = exc
             time.sleep(0.2)
     raise TimeoutError(f"{base_url} never came up") from last_error
+
+
+class ConduitStartTime(UserWarning):
+    """How long a Conduit took to answer, reported on every start."""
+
+
+class ConduitExited(TimeoutError):
+    """The Conduit's process ended before it answered: said at once, not after the whole wait."""
+
+
+#: Runs the Conduit as `uvicorn` does, with one addition (GitHub run 43198701543: the second
+#: Conduit "never came up" and nothing said why): on SIGUSR1 it writes every asyncio task's stack
+#: and every thread's to stderr, so a start-up that hangs says where it waits, not only one that
+#: crashes. `--loop asyncio`, so the coroutines are Python's to find.
+_LAUNCH = """
+import faulthandler, gc, signal, sys, types
+
+def _dump(*_):
+    # Every suspended coroutine and async generator, where it waits: a task's own stack stops at
+    # the lifespan's async generator, so the frames are found, not walked.
+    print("--- at the timeout: where each coroutine waits ---", file=sys.stderr, flush=True)
+    for obj in gc.get_objects():
+        if isinstance(obj, types.CoroutineType):
+            frame = obj.cr_frame
+        elif isinstance(obj, types.AsyncGeneratorType):
+            frame = obj.ag_frame
+        else:
+            continue
+        if frame is not None:
+            code = frame.f_code
+            print(f"  {code.co_filename}:{frame.f_lineno} in {code.co_name}", file=sys.stderr)
+    print("--- and every thread ---", file=sys.stderr, flush=True)
+    faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+    sys.stderr.flush()
+
+signal.signal(signal.SIGUSR1, _dump)
+import uvicorn
+sys.argv = ["uvicorn", *sys.argv[1:]]
+uvicorn.main()
+"""
 
 
 class _ConduitInstance:
@@ -92,6 +138,7 @@ class _ConduitInstance:
         analytics_db_path = (
             Path(tempfile.mkdtemp(prefix="ospreyflow-analytics-")) / "analytics.duckdb"
         )
+        self._log = tempfile.TemporaryFile()
         env = {
             **os.environ,
             "OIDC_JWKS_URL": jwks_url,
@@ -104,9 +151,11 @@ class _ConduitInstance:
         self._process = subprocess.Popen(
             [
                 sys.executable,
-                "-m",
-                "uvicorn",
+                "-c",
+                _LAUNCH,
                 "services.api.app:app",
+                "--loop",
+                "asyncio",
                 "--host",
                 "127.0.0.1",
                 "--port",
@@ -115,31 +164,53 @@ class _ConduitInstance:
             env=env,
             cwd=repo_root,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            # Kept, not discarded: GitHub run 43198701543's second Conduit "never came up" and
+            # nothing said why. Its last lines go into the error below.
+            stderr=self._log,
         )
+        started = time.monotonic()
         # A deeper root cause than `_spawn_two_instances`'s own list-based cleanup covers: `Popen`
         # above already spawned a real process by the time `_wait_until_up` can fail. If it does,
         # this constructor raises and `self` is never returned to any caller — the process it just
         # started has no reference anywhere a `finally` could reach. Caught and killed here, at
         # the point of failure, rather than relying on a caller that never gets the object back.
         try:
-            _wait_until_up(self.base_url)
-        except Exception:
+            _wait_until_up(self.base_url, process=self._process)
+        except TimeoutError as exc:
+            if self._process.poll() is None:
+                self._process.send_signal(signal.SIGUSR1)  # where it waits (`_LAUNCH`)
+                time.sleep(2)
             self._process.kill()
             self._process.wait(timeout=10)
+            self._log.seek(0)
+            said = self._log.read().decode("utf-8", "replace")[-20000:]
+            self._log.close()
+            raise TimeoutError(f"{exc}; the Conduit's own last words:\n{said}") from exc
+        except BaseException:
+            self.kill()
+            self._log.close()
             raise
+        # Every start's time, said on every run (a pass included), so a slow second start shows
+        # beside the first's in the warnings summary rather than only when it exceeds the wait.
+        warnings.warn(
+            f"a Conduit came up in {time.monotonic() - started:.1f} s ({self.base_url})",
+            ConduitStartTime,
+            stacklevel=2,
+        )
 
     def kill(self) -> None:
         """Not `terminate()` — this proves the *second* instance's
         continuity does not depend on the first having shut down
         cleanly, only on the stores it wrote to."""
-        self._process.kill()
-        self._process.wait(timeout=10)
+        if self._process.poll() is None:
+            self._process.kill()
+            self._process.wait(timeout=10)
+        self._log.close()
 
 
 def _spawn_two_instances(jwks_url: str) -> Iterator[tuple[_ConduitInstance, _ConduitInstance]]:
     """The real bug 18 orphaned processes across two days of runs turned out to be: if the
-    *second* `_ConduitInstance`'s own constructor raises (`_wait_until_up`'s 15s timeout, under
+    *second* `_ConduitInstance`'s own constructor raises (`_wait_until_up`'s timeout, under
     resource contention this session has independently documented elsewhere), the exception fires
     before this function's own `try:` is ever entered — the already-running first instance is
     never referenced in a `finally` at all, not merely killed ungracefully. Accumulating into a
@@ -154,9 +225,7 @@ def _spawn_two_instances(jwks_url: str) -> Iterator[tuple[_ConduitInstance, _Con
         yield instances[0], instances[1]
     finally:
         for instance in instances:
-            if instance._process.poll() is None:
-                instance._process.kill()
-                instance._process.wait(timeout=10)
+            instance.kill()  # the process if still running, and its log either way
 
 
 @pytest.fixture
@@ -259,11 +328,11 @@ def test_a_failed_second_instance_does_not_orphan_the_first(
         else:
             completed.append(self)
 
-    def _fail_on_second_call(base_url: str, *, timeout_s: float = 15.0) -> None:
+    def _fail_on_second_call(base_url: str, **kwargs: object) -> None:
         calls["n"] += 1
         if calls["n"] == 2:
             raise TimeoutError("forced failure for this test")
-        real_wait_until_up(base_url, timeout_s=timeout_s)
+        real_wait_until_up(base_url, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(_ConduitInstance, "__init__", _tracking_init)
     monkeypatch.setattr(this_module, "_wait_until_up", _fail_on_second_call)
