@@ -494,13 +494,16 @@ _log = logging.getLogger(__name__)
 
 
 async def in_keys_thread[T](call: Callable[..., T], *args: Any) -> T:
-    """`call(*args)` in the keys' own threads, bounded: a slow identity provider never holds the
-    event loop, and is `SigningKeysUnavailable` once `KEYS_TIMEOUT_SECONDS` (and a second) pass."""
+    """`call(*args)` in the keys' own threads, bounded **in total** by `KEYS_TIMEOUT_SECONDS`: a
+    slow identity provider never holds the event loop, and however its answer is slow (a name that
+    does not resolve, a connection, a body that trickles in under each read's own timeout) the
+    caller has `SigningKeysUnavailable` by then. A fetch still running past it is abandoned
+    (`SigningKeys._take_fetch`), so the next caller may try again."""
     loop = asyncio.get_running_loop()
     try:
         return await asyncio.wait_for(
             loop.run_in_executor(KEYS_EXECUTOR, partial(call, *args)),
-            timeout=KEYS_TIMEOUT_SECONDS + 1,
+            timeout=KEYS_TIMEOUT_SECONDS,
         )
     except TimeoutError as exc:
         raise SigningKeysUnavailable(
@@ -516,14 +519,20 @@ class SigningKeys:
     read them (ADR-148 Amendment 8; the orchestrator's second review of P10 part 2):
 
     - **kept** for the configured time, and fetched by **one thread at a time**: while one fetches,
-      the others go on with the last good set rather than wait;
+      the others go on with the last good set rather than wait; concurrent sign-ins that find the
+      keys out of date fetch once (each reads the set's age once, before anything else);
     - past their time, a fetch that fails leaves the last good set in use for
-      `KEYS_GRACE_SECONDS` (logged), then `SigningKeysUnavailable`;
-    - for a key id not held, fetched again at most once per `UNKNOWN_KID_REFETCH_SECONDS`; a key
-      not published is `PrincipalResolutionError` (401);
-    - each fetch bounded by `KEYS_TIMEOUT_SECONDS`. Every way the identity provider can fail to
-      give keys (unreachable, a refusal, a body that is not JSON, a set with no usable key) is
-      `SigningKeysUnavailable`, a 503 in words, never "token rejected", which signs people out.
+      `KEYS_GRACE_SECONDS` (logged), then `SigningKeysUnavailable`. A key the identity provider has
+      rotated out therefore stays valid for up to the keys' time plus that hour while it cannot be
+      reached;
+    - for a key id not held, fetched again at most once per `UNKNOWN_KID_REFETCH_SECONDS`, counted
+      from the last fetch that succeeded (an unreachable identity provider is a 503 each time,
+      never a 401); a key not published is `PrincipalResolutionError` (401);
+    - each fetch bounded in total by `in_keys_thread`'s wait; a fetch held past
+      `KEYS_TIMEOUT_SECONDS` is abandoned, its answer dropped, and the next caller fetches. Every
+      way the identity provider can fail to give keys (unreachable, a refusal, a body that is not
+      JSON, a set with no usable key, a set whose keys are all for encryption or have no key id)
+      is `SigningKeysUnavailable`, a 503 in words, never "token rejected", which signs people out.
 
     Synchronous: callers on the event loop use `in_keys_thread`."""
 
@@ -538,8 +547,12 @@ class SigningKeys:
         self._held: dict[str, Any] | None = None
         self._fetched_at = float("-inf")
         self._last_unknown_fetch = float("-inf")
-        self._fetching = threading.Lock()
-        self._stamp = threading.Lock()
+        # Who is fetching now, and until when (real time, whatever `clock` is): one at a time, a
+        # fetch past its deadline abandoned. Guarded by `_state`, which nothing holds across I/O.
+        self._state = threading.Condition()
+        self._fetch_owner: object | None = None
+        self._fetch_deadline = 0.0
+        self._stamp_lock = threading.Lock()
         #: Fetches made (each a request to the identity provider), for the record.
         self.fetches = 0
 
@@ -556,32 +569,60 @@ class SigningKeys:
             raise SigningKeysUnavailable(_UNREADABLE) from exc
         keys = {k.key_id: k for k in jwk_set.keys if k.key_id and k.public_key_use in ("sig", None)}
         if not keys:
+            # Keys only for encryption, or none naming a key id: nothing a token can be checked by.
             raise SigningKeysUnavailable(_UNREADABLE)
         return keys
 
-    def _refresh(self, *, wait: bool) -> None:
-        """One fetch at a time. With `wait`, wait for a fetch under way (bounded) and use what it
-        got; without, go on with the last good set while another thread fetches."""
-        seen = self._fetched_at
-        if wait:
-            if not self._fetching.acquire(timeout=KEYS_TIMEOUT_SECONDS + 1):
+    def _take_fetch(self, *, wait: bool) -> object | None:
+        """The right to fetch, one thread at a time. A fetch held past `KEYS_TIMEOUT_SECONDS` is
+        abandoned (its thread stuck on a slow identity provider, its caller already answered by
+        `in_keys_thread`), so it is taken from it. None when another thread fetches and `wait` is
+        false; with `wait`, None when none finished within `KEYS_TIMEOUT_SECONDS`."""
+        token = object()
+        until = time.monotonic() + KEYS_TIMEOUT_SECONDS
+        with self._state:
+            while True:
+                now = time.monotonic()
+                if self._fetch_owner is None or now >= self._fetch_deadline:
+                    self._fetch_owner = token
+                    self._fetch_deadline = now + KEYS_TIMEOUT_SECONDS
+                    return token
+                if not wait or now >= until:
+                    return None
+                self._state.wait(timeout=min(until, self._fetch_deadline) - now)
+
+    def _give_back(self, token: object, keys: dict[str, Any] | None) -> None:
+        """The fetch done: its keys kept, unless it was abandoned meanwhile (then dropped)."""
+        with self._state:
+            if self._fetch_owner is token:
+                if keys is not None:
+                    self._held, self._fetched_at = keys, self._clock()
+                self._fetch_owner = None
+                self._state.notify_all()
+
+    def _refresh(self, *, wait: bool, seen: float) -> None:
+        """Fetch, one thread at a time, unless another has fetched since `seen`. With `wait`, wait
+        for a fetch under way (bounded) and use what it got; without, go on with the last good set
+        while another thread fetches."""
+        token = self._take_fetch(wait=wait)
+        if token is None:
+            if wait:
                 raise SigningKeysUnavailable(_UNREADABLE)
-        elif not self._fetching.acquire(blocking=False):
             return
+        keys: dict[str, Any] | None = None
         try:
             if self._fetched_at != seen and self._held is not None:
                 return  # another thread fetched while this one waited
             keys = self._fetch()
-            self._held, self._fetched_at = keys, self._clock()
         finally:
-            self._fetching.release()
+            self._give_back(token, keys)
 
-    def _current(self) -> dict[str, Any]:
-        age = self._clock() - self._fetched_at
+    def _current(self, seen: float) -> dict[str, Any]:
+        age = self._clock() - seen
         if age >= self._ttl:
             past_grace = self._held is None or age >= self._ttl + KEYS_GRACE_SECONDS
             try:
-                self._refresh(wait=past_grace)
+                self._refresh(wait=past_grace, seen=seen)
             except SigningKeysUnavailable:
                 if past_grace:
                     raise
@@ -590,7 +631,8 @@ class SigningKeys:
                     "%.0f s old, is used for at most %.0f s more",
                     age, self._ttl + KEYS_GRACE_SECONDS - age,
                 )  # fmt: skip
-        assert self._held is not None
+        if self._held is None:
+            raise SigningKeysUnavailable(_UNREADABLE)
         return self._held
 
     def key_for(self, token: str) -> Any:
@@ -598,35 +640,26 @@ class SigningKeys:
             kid = jwt.get_unverified_header(token).get("kid")
         except jwt.PyJWTError as exc:
             raise PrincipalResolutionError(f"token rejected: {exc}") from exc
-        before = self._fetched_at
-        keys = self._current()
+        seen = self._fetched_at
+        keys = self._current(seen)
         if kid not in keys:
-            with self._stamp:
+            with self._stamp_lock:
                 now = self._clock()
-                # A set fetched in this very call is already fresh: it opens the window.
-                due = self._fetched_at == before and (
-                    now - self._last_unknown_fetch >= UNKNOWN_KID_REFETCH_SECONDS
-                )
-                if due or self._fetched_at != before:
+                fresh = self._fetched_at != seen  # fetched in this very call: it opens the window
+                due = not fresh and now - self._last_unknown_fetch >= UNKNOWN_KID_REFETCH_SECONDS
+                if fresh:
                     self._last_unknown_fetch = now
             if due:
-                self._refresh_now()
+                self._refresh(wait=True, seen=self._fetched_at)
+                # Only once a fetch has succeeded: an unreachable identity provider stays a 503.
+                with self._stamp_lock:
+                    self._last_unknown_fetch = self._clock()
                 keys = self._held or {}
         if kid not in keys:
             raise PrincipalResolutionError(
                 "token rejected: it names a signing key the identity provider does not publish"
             )
         return keys[kid].key
-
-    def _refresh_now(self) -> None:
-        """A fetch for a key id not held: waits for its turn (bounded); failing is a 503."""
-        if not self._fetching.acquire(timeout=KEYS_TIMEOUT_SECONDS + 1):
-            raise SigningKeysUnavailable(_UNREADABLE)
-        try:
-            keys = self._fetch()
-            self._held, self._fetched_at = keys, self._clock()
-        finally:
-            self._fetching.release()
 
 
 @dataclass(frozen=True)

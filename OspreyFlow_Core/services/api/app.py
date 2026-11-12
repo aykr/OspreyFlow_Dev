@@ -144,6 +144,7 @@ from principal_auth import (
     PrincipalLookupUnavailable,
     PrincipalRevoked,
     SigningKeysUnavailable,
+    in_keys_thread,
 )
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
@@ -2253,15 +2254,19 @@ def get_run_quotas(request: Request) -> QuotaStore | None:
 RunQuotasDep = Annotated[QuotaStore | None, Depends(get_run_quotas)]
 
 
-def get_service_identity(
+async def get_service_identity(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> str:
     """The run API's caller (ADR-141 decision 10): the client a service identity's token names,
-    or 401 in words. Never a `Principal`: a service identity reads nothing as itself."""
+    or 401 in words. Never a `Principal`: a service identity reads nothing as itself. Its keys are
+    read in the keys' own threads, bounded in total, as a person's are (ADR-148 Amendment 8; never
+    anyio's shared pool, with no bound of its own)."""
     verifier: ServiceIdentityVerifier = request.app.state.service_identities
     try:
-        return verifier.client_of(credentials.credentials)
+        return await in_keys_thread(verifier.client_of, credentials.credentials)
+    except SigningKeysUnavailable as unavailable:
+        raise HTTPException(status_code=503, detail=str(unavailable)) from unavailable
     except ServiceIdentityRefused as refused:
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
 

@@ -246,6 +246,18 @@ def _team(row: asyncpg.Record, today: date, members: Sequence[TeamMember] = ()) 
     return team.model_copy(update={"acting_lead": acting_lead(team, today)})
 
 
+async def rights_on(conn: asyncpg.Connection) -> dict[str, frozenset[Right]]:
+    """Each custom role's current rights, read on a connection the caller holds (its lock and
+    transaction: the Entra people store's start, ADR-148 Amendment 8). None yet made, none."""
+    if await conn.fetchval("SELECT to_regclass('custom_roles')") is None:
+        return {}
+    rows = await conn.fetch("SELECT id, rights FROM custom_roles")
+    return {
+        r["id"]: frozenset(_RIGHT_VALUES[x] for x in r["rights"] if x in _RIGHT_VALUES)
+        for r in rows
+    }
+
+
 class CustomRoleStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool

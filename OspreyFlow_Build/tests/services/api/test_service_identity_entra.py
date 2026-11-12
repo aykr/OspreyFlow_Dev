@@ -246,3 +246,41 @@ def test_the_run_api_shares_the_person_paths_keys(jwks_url, keypair) -> None:
     assert verifier.client_of(_app_token(keypair)) == AIRFLOW
     assert verifier.client_of(_app_token(keypair)) == AIRFLOW
     assert keys.fetches == 1
+
+
+async def test_the_run_apis_sign_in_reads_its_keys_in_their_own_threads_never_the_loop() -> None:
+    """The third review's should-fix 2: `get_service_identity` is async and asks the verifier in the
+    keys' own threads, bounded in total, never on the event loop nor in anyio's shared pool: the
+    call is seen in a `signing-keys` thread, and the loop's largest gap between ticks stays under
+    0.2 s while it takes a second."""
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+
+    from fastapi.security import HTTPAuthorizationCredentials
+    from services.api.app import get_service_identity
+
+    seen: list[str] = []
+
+    class _Slow:
+        def client_of(self, token: str) -> str:
+            seen.append(threading.current_thread().name)
+            time.sleep(1.0)
+            return AIRFLOW
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(service_identities=_Slow())))
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="a-token")
+    gaps: list[float] = []
+
+    async def ticks() -> None:
+        last = time.monotonic()
+        for _ in range(12):
+            await asyncio.sleep(0.05)
+            now = time.monotonic()
+            gaps.append(now - last)
+            last = now
+
+    client, _ = await asyncio.gather(get_service_identity(request, credentials), ticks())  # type: ignore[arg-type]
+    assert client == AIRFLOW
+    assert seen and seen[0].startswith("signing-keys"), seen
+    assert max(gaps) < 0.2, max(gaps)

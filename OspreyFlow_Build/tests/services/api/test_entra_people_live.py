@@ -262,6 +262,62 @@ async def test_each_admin_role_a_start_gives_is_audited(world, monkeypatch) -> N
     ]
 
 
+async def test_a_grant_is_never_kept_without_its_audit_row(world) -> None:
+    """The third review's should-fix 3: the start's grant and its audit row are one transaction on
+    one connection, so an audit write that fails takes the grant back with it."""
+    from services.api.audit import AuditWriteError
+    from services.api.identity_admin import IdentityAdminRefused
+
+    class _Failing:
+        async def record(self, **kwargs: object) -> None:
+            raise AuditWriteError("audit write failed for action 'grant_first_administrator'")
+
+    with pytest.raises(AuditWriteError):
+        await world.store.seed_first_administrators([OID], _Failing())  # type: ignore[arg-type]
+    with pytest.raises(IdentityAdminRefused):
+        await world.store.one(OID)
+
+
+async def test_a_start_waits_for_the_people_lock(world) -> None:
+    """The seed runs under `PEOPLE_LOCK` (the lock every change that could leave nobody able to
+    manage people takes): while another session holds it, the seed does not finish."""
+    import asyncio
+
+    from services.api.custom_roles import PEOPLE_LOCK
+
+    holder = await asyncpg.connect(dsn=world.dsn)
+    try:
+        await holder.execute("SELECT pg_advisory_lock($1)", PEOPLE_LOCK)
+        seeding = asyncio.create_task(world.store.seed_first_administrators([OID]))
+        await asyncio.sleep(1.0)
+        assert not seeding.done(), "the seed ran while another held PEOPLE_LOCK"
+        await holder.execute("SELECT pg_advisory_unlock($1)", PEOPLE_LOCK)
+        assert await asyncio.wait_for(seeding, timeout=10) == [OID]
+    finally:
+        await holder.close()
+
+
+async def test_a_custom_role_that_manages_people_counts_at_the_start(world) -> None:
+    """The custom roles' rights are read inside the lock: someone signed in who manages people by a
+    custom role is someone who can administer, so a named first administrator's cleared roles
+    stand."""
+    from services.api.custom_roles import CustomRoleStore
+
+    from schemas.rights import CUSTOM_ROLE_PREFIX, Right
+
+    roles = await CustomRoleStore.connect(world.dsn)
+    try:
+        role = await roles.create("People leads", [Right.MANAGE_PEOPLE], by="adm-1")
+    finally:
+        await roles.close()
+    await world.store.seed_first_administrators([OID])
+    await world.store.person(TENANT, OTHER_ADMIN, SEEN)
+    await world.store.update(OTHER_ADMIN, "roles", [f"{CUSTOM_ROLE_PREFIX}{role.id}"])
+    await world.store.update(OID, "roles", [])
+    assert await world.store.seed_first_administrators([OID]) == []
+    assert (await world.store.one(OID)).roles == []
+
+
 async def _read_back(world, hours: float) -> object:  # type: ignore[no-untyped-def]
     conn = await asyncpg.connect(dsn=world.dsn)
     try:

@@ -1194,7 +1194,8 @@ def test_a_token_a_little_past_its_expiry_is_given_sixty_seconds(keypair, jwks_u
 class _CountingKeys:
     """A JWKS endpoint that counts the GETs it answers (what the identity provider sees), serving
     `jwks.json` from its folder afresh each time, as the shared `jwks_dir` does, and able to answer
-    slowly (`delay`) or with any body (`body`)."""
+    slowly (`delay`, before anything), trickling (`trickle`: the body a few bytes at a time, each
+    read well inside a read's own timeout, the whole past it) or with any body (`body`)."""
 
     def __init__(self, directory: Path) -> None:
         import threading
@@ -1204,6 +1205,7 @@ class _CountingKeys:
         owner = self
         self.gets = 0
         self.delay = 0.0
+        self.trickle = 0.0
         self.directory = directory
 
         class Handler(SimpleHTTPRequestHandler):
@@ -1211,6 +1213,21 @@ class _CountingKeys:
                 owner.gets += 1
                 if owner.delay:
                     time.sleep(owner.delay)
+                if owner.trickle:
+                    pause = owner.trickle  # this request's own pace, whatever later ones are given
+                    body = (owner.directory / "jwks.json").read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    for i in range(0, len(body), 64):
+                        time.sleep(pause)
+                        try:
+                            self.wfile.write(body[i : i + 64])
+                            self.wfile.flush()
+                        except OSError:
+                            return
+                    return
                 super().do_GET()
 
             def log_message(self, *args: object) -> None:
@@ -1219,6 +1236,7 @@ class _CountingKeys:
         self.server = ThreadingHTTPServer(
             ("127.0.0.1", 0), partial(Handler, directory=str(directory))
         )
+        self.server.daemon_threads = True
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         host, port = self.server.server_address[0], self.server.server_address[1]
@@ -1358,45 +1376,128 @@ def test_while_one_thread_fetches_the_others_use_the_last_good_set(counting, key
 async def test_a_slow_identity_provider_holds_only_the_keys_own_threads(
     counting, keypair, monkeypatch
 ) -> None:
-    """Item 8 and should-fix 5, with the real `SigningKeys`: while the first fetch hangs, the event
-    loop goes on, the fetch runs in the keys' own threads (never `asyncio.to_thread`'s pool), and
-    the hung sign-in is a 503 once the timeout passes."""
+    """Item 8 and the third review's must-fix 1, with the real `SigningKeys`: the fetch itself is
+    seen running in the keys' own threads (its thread's name, read inside the fetch, so threads an
+    earlier case left alive cannot satisfy it), and while it hangs the event loop never stalls (the
+    largest gap between ticks stays under 0.2 s); the hung sign-in is a 503 once the bound passes."""
     import threading
 
     import principal_auth
-    from principal_auth import SigningKeysUnavailable
+    from principal_auth import SigningKeys, SigningKeysUnavailable
 
     _publish(counting.directory, (keypair[0], "k1"))
     counting.delay = 2.0
-    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 0.5)
+    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 0.6)
+    fetched_in: list[str] = []
+    real_fetch = SigningKeys._fetch
+
+    def watched(self):  # type: ignore[no-untyped-def]
+        fetched_in.append(threading.current_thread().name)
+        return real_fetch(self)
+
+    monkeypatch.setattr(SigningKeys, "_fetch", watched)
     resolver = PrincipalResolver(
         _entra_config(counting.url), claim_mapping=BY_EXTENSION, role_source=FakePeople()
     )
-    seen: list[str] = []
-    ticks = 0
+    gaps: list[float] = []
 
-    async def other_requests() -> None:
-        nonlocal ticks
-        for _ in range(5):
+    async def ticks() -> None:
+        last = time.monotonic()
+        for _ in range(12):
             await asyncio.sleep(0.05)
-            seen.extend(t.name for t in threading.enumerate())
-            ticks += 1
+            now = time.monotonic()
+            gaps.append(now - last)
+            last = now
 
     started = time.monotonic()
     results = await asyncio.gather(
         resolver.resolve_principal(sign_token(_key(keypair), entra_claims(**_GOOD))),
-        other_requests(),
+        ticks(),
         return_exceptions=True,
     )
     assert isinstance(results[0], SigningKeysUnavailable)
-    assert ticks == 5 and time.monotonic() - started < 2.0
-    assert any(name.startswith("signing-keys") for name in seen)
-    assert not any(name.startswith("asyncio_") for name in seen)
+    assert fetched_in and all(name.startswith("signing-keys") for name in fetched_in), fetched_in
+    assert max(gaps) < 0.2, max(gaps)
+    assert time.monotonic() - started < 1.5
+
+
+async def test_a_body_that_trickles_is_bounded_in_total_and_the_next_caller_fetches_again(
+    counting, keypair, monkeypatch
+) -> None:
+    """The third review's should-fix 4: a body arriving a few bytes at a time, each read inside a
+    read's own timeout and the whole past the bound, is a 503 once `KEYS_TIMEOUT_SECONDS` pass in
+    total (`in_keys_thread`'s own wait), and the stuck fetch is abandoned: the next caller fetches
+    at once from an identity provider that now answers, rather than waiting on it."""
+    import principal_auth
+    from principal_auth import SigningKeys, SigningKeysUnavailable, in_keys_thread
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    counting.trickle = 0.3  # ~2 KB in 64-byte pieces: some 10 s in all
+    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 1.0)
+    keys = SigningKeys(counting.url, 3600.0)
+    started = time.monotonic()
+    with pytest.raises(SigningKeysUnavailable, match="did not answer"):
+        await in_keys_thread(keys.key_for, _token(keypair))
+    assert time.monotonic() - started < 1.5
+    counting.trickle = 0.0
+    started = time.monotonic()
+    assert await in_keys_thread(keys.key_for, _token(keypair)) is not None
+    assert time.monotonic() - started < 0.8, "the next caller waited on the abandoned fetch"
+
+
+def test_an_unreachable_identity_provider_stays_a_503_for_an_unknown_key(counting, keypair) -> None:
+    """The third review's should-fix 5: with keys held and the identity provider gone, a token
+    naming a key not held is a 503 every time (the five-minute window opens only on a fetch that
+    succeeded), never a 401 that would sign the person out."""
+    from principal_auth import SigningKeys, SigningKeysUnavailable
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 3600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    (counting.directory / "jwks.json").unlink()
+    for _ in range(3):
+        with pytest.raises(SigningKeysUnavailable):
+            keys.key_for(_token(keypair, "rotated-in"))
+        now[0] += 1
+
+
+def test_concurrent_sign_ins_finding_the_keys_out_of_date_fetch_once(counting, keypair) -> None:
+    """The third review's note 10, measured: twelve sign-ins at once with nothing held, against an
+    identity provider slow enough that they overlap, make one request; so do twelve at once once
+    the keys' time is up."""
+    import threading
+
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    counting.delay = 0.4
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+
+    def together() -> None:
+        go = threading.Barrier(12)
+
+        def one() -> None:
+            go.wait()
+            keys.key_for(_token(keypair))
+
+        threads = [threading.Thread(target=one) for _ in range(12)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    together()
+    assert counting.gets == 1
+    now[0] += 601
+    together()
+    assert counting.gets == 2
 
 
 @pytest.mark.parametrize(
     "answer",
-    ["unreachable", "refused", "not-json", "no-keys", "no-usable-key"],
+    ["unreachable", "refused", "not-json", "no-keys", "no-usable-key", "encryption-only", "no-kid"],
 )
 def test_every_way_the_identity_provider_fails_to_give_keys_is_a_503(
     counting, keypair, answer
@@ -1416,6 +1517,18 @@ def test_every_way_the_identity_provider_fails_to_give_keys_is_a_503(
         counting.body('{"keys": []}')
     elif answer == "no-usable-key":
         counting.body('{"keys": [{"kty": "unknown-kind", "kid": "k1"}]}')
+    elif answer in ("encryption-only", "no-kid"):
+        # A set PyJWT reads, but with no key a token can be checked by (the third review's note 8).
+        _publish(counting.directory, (keypair[0], "k1"))
+        import json
+
+        published = json.loads((counting.directory / "jwks.json").read_text())
+        jwk = published["keys"][0]
+        if answer == "encryption-only":
+            jwk["use"] = "enc"
+        else:
+            del jwk["kid"]
+        counting.body(json.dumps(published))
     resolver = PrincipalResolver(
         _config(url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID),
         claim_mapping=BY_EXTENSION,

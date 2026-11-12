@@ -54,7 +54,7 @@ from schemas.domain import Principal
 from schemas.rights import Right
 
 from .audit import AuditWriter
-from .custom_roles import PEOPLE_LOCK, CustomRoleStore, people_managers
+from .custom_roles import PEOPLE_LOCK, people_managers, rights_on
 from .identity_admin import (
     CredentialCheck,
     IdentityAdminRefused,
@@ -264,19 +264,21 @@ class EntraPeopleStore:
     # --- the install's first administrators ---------------------------------------------------
 
     async def seed_first_administrators(
-        self, oids: Iterable[str], custom: Mapping[str, Iterable[Right]] | None = None
+        self, oids: Iterable[str], audit: AuditWriter | None = None
     ) -> list[str]:
         """The named object ids given the Admin role at this start, which the caller audits:
 
         - one **not yet recorded**, with Admin (the install);
         - one already recorded, **only when nobody can manage people** (`people_managers` empty:
-          no enabled person who has signed in holds `manage_people`, by their roles and `custom`),
-          Admin added to what they hold. Otherwise what an administrator set stands, a named
-          person's roles cleared on purpose included.
+          no enabled person who has signed in holds `manage_people`, by their roles and the custom
+          roles' rights, both read inside the lock), Admin added to what they hold. Otherwise what
+          an administrator set stands, a named person's roles cleared on purpose included.
 
         Under `PEOPLE_LOCK`, the lock every change that could leave nobody able to manage people
         takes, so a start and such a change are never interleaved (the orchestrator's ruling,
-        amended 12 November 2026)."""
+        amended 12 November 2026). Each grant's audit row (`grant_first_administrator`) is written
+        on the same connection in the same transaction, so a grant is never kept without its row
+        (`audit_log` is in this database; the third review's should-fix 3)."""
         oids = list(oids)
         for oid in oids:
             if not is_object_id(oid):
@@ -287,7 +289,8 @@ class EntraPeopleStore:
             rows = await conn.fetch(
                 "SELECT * FROM entra_people WHERE tenant_id = $1", self.tenant_id
             )
-            nobody_administers = not people_managers([_person(r) for r in rows], custom or {})
+            custom = await rights_on(conn)
+            nobody_administers = not people_managers([_person(r) for r in rows], custom)
             for oid in oids:
                 added = await conn.fetchval(
                     "INSERT INTO entra_people (tenant_id, oid, roles, added_by) "
@@ -307,6 +310,14 @@ class EntraPeopleStore:
                     )
                 if added is not None:
                     given.append(oid)
+                    if audit is not None:
+                        await audit.record(
+                            principal=FIRST_ADMINISTRATORS_PRINCIPAL,
+                            action=GRANT_ACTION,
+                            resolved_query={"user_id": oid, "roles": [ADMIN_ROLE]},
+                            result_cardinality=1,
+                            conn=conn,
+                        )
         return given
 
     # --- Admin › People -----------------------------------------------------------------------
@@ -463,18 +474,7 @@ async def open_people_store(
     first = first_administrators_from_env()
     store = await EntraPeopleStore.connect(dsn, mapping.tenant_id)
     try:
-        roles = await CustomRoleStore.connect(dsn)
-        try:
-            custom = await roles.current_rights()
-        finally:
-            await roles.close()
-        for oid in await store.seed_first_administrators(first, custom):
-            await audit.record(
-                principal=FIRST_ADMINISTRATORS_PRINCIPAL,
-                action=GRANT_ACTION,
-                resolved_query={"user_id": oid, "roles": [ADMIN_ROLE]},
-                result_cardinality=1,
-            )
+        await store.seed_first_administrators(first, audit)
     except BaseException:
         await store.close()
         raise
