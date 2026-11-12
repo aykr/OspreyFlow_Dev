@@ -512,7 +512,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **GitHub's CI had not run since 11 November.** The workflow file was invalid: the conformance job set
         `OSPREY_TEST_ARCADEDB_CONTAINER` from the `job` context in the job's own env, which GitHub refuses. That
         line came in with the case lane's drawn-layer work between 8 and 11 November. Fixed (62cfdbe), and
-        actionlint is clean; it reaches GitHub at the next push.
+        actionlint is clean. You had it pushed at about 10:15 (feb4a79), and GitHub accepted the workflow:
+        run 43198701543 started all 39 jobs.
+      - **The demo check you asked for (about 10:30):** osprey-small is the demo deployment; there is no
+        separate osprey-demo. Its own model, qwen2.5:14b-instruct, answered one synthetic question through its
+        gateway in 9.4 s. I couldn't ask through Questions myself: no demo user's password is on the server,
+        and I changed nothing. Its `local_only` is true and it has no sendable codes; the demo sources are
+        handled P. Adding Gemini needs `local_only: false` and `sendable_handling_codes: [P]` in its
+        osprey.yaml, then `ospreyflow apply`, which restarts parts of it. Not done; that is yours to say.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
