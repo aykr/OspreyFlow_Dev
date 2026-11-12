@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
-"""Builds the two OspreyFlow sites as plain static files: out/org (ospreyflow.org) and out/net (ospreyflow.net).
-No external requests: system fonts, own CSS, own images, no script."""
-import math, os, random, shutil, html
-from PIL import Image
+"""Builds the two OspreyFlow sites as plain static files: org/ (ospreyflow.org) and net/ (ospreyflow.net), beside
+this file. No external requests: system fonts, own CSS, own images, no script.
 
-OUT = 'out'
+    python3 build.py                  # rewrite every page and style sheet in org/ and net/
+    python3 build.py --out <folder>   # into another folder (tests/test_sites.py compares the two)
+    python3 build.py --images <shots> # also make each shown image from its capture in <shots> (needs Pillow)
+
+The pages and style sheets in org/ and net/ are this script's output and are committed; a test fails when they
+differ from it. The images are committed too, and made only with --images, from fresh captures."""
+import argparse, math, os, random, html
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parent
 ORG, NET, APP = 'https://ospreyflow.org', 'https://ospreyflow.net', 'https://ospreyflow.app'
 REPO = 'https://github.com/aykr/OspreyFlow'
-STATEMENT = ('OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection '
-             'platform, developed by Solirius Reply and released under the Apache License 2.0.')
+STATEMENT = ('OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering, '
+             'fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the '
+             'Apache License 2.0.')
+#: The owner's decision 2 (12 November 2026): one shared mailbox for enquiries and security reports.
+MAILBOX = 'servicecentre@solirius.com'
 GDS = ('OspreyFlow is designed to meet the GDS Service Standard. Three independent checks are planned and not yet '
        'done: an independent accessibility audit, a penetration test and a data protection impact assessment '
        '(DPIA). Only a service assessment panel decides whether a service meets the Standard, and it looks at a '
@@ -268,7 +278,7 @@ def org_features():
     b += sec('Coming next', ul([
         'A profile for shared government Kubernetes platforms: one namespace, the platform\'s managed services, non-root containers and a single-copy shape for a proof of concept.',
         'S3 and Athena as sources in the Ingest Studio.',
-        'A second extraction engine: Laurium, an open-source (MIT) library for extracting structured facts from documents.',
+        'A second, open-source extraction engine for structured facts in documents.',
         "Routing to a client's own model gateway or Amazon Bedrock."]) +
         '<p>These are merged in development and arrive with the next release. The <a href="' + REPO + '">change log</a> is the record.</p>', 'tint', 'coming')
     return page('org', 'features.html', 'Features · OspreyFlow', 'Every feature in the current OspreyFlow release: analysis, ingest, monitoring, drawing boards, models and administration.', b)
@@ -372,7 +382,8 @@ def org_contribute():
         '<li>A maintainer reviews it. A change to access control or to what may leave a deployment gets a second reviewer.</li>'
         '<li>Once merged, it ships in the next release and is named in the change log.</li></ol>'
         '<p class="note">The repository\'s contributing guide and code of conduct are being added with the next release. Until then, open an issue to start a conversation.</p>')
-    b += sec('Security', '<p>Please do not open a public issue for a security problem. <span class="fill">The address for private reports is to be added.</span></p>', 'tint')
+    b += sec('Security', f'<p>Please do not open a public issue for a security problem. Report it privately to <a href="mailto:{MAILBOX}">{MAILBOX}</a>. '
+        "Put 'OspreyFlow security' in the subject.</p>", 'tint')
     return page('org', 'contribute.html', 'Contribute · OspreyFlow', 'How to contribute to OspreyFlow: where to start, what a change needs and how it is reviewed.', b)
 
 def org_governance():
@@ -488,7 +499,7 @@ def net_services():
 
 def net_contact():
     b = hero('Contact', 'Talk to us', 'Tell us what you are investigating and what you use today. We will show you OspreyFlow on data like yours.', [], 'net', art=False)
-    b += sec('Get in touch', '<div class="cols2"><div><h3>Solirius Reply</h3><p><span class="fill">Contact email to add</span></p>'
+    b += sec('Get in touch', f'<div class="cols2"><div><h3>Solirius Reply</h3><p><a href="mailto:{MAILBOX}">{MAILBOX}</a></p>'
         '<p>It helps to know:</p>' + ul(['the kind of investigation or monitoring you do;', 'the sources you work from;', 'where it would need to run;', 'roughly how many analysts would use it.']) + '</div>'
         '<div><h3>See it first</h3><p><span class="soon">A demonstration at ospreyflow.app is coming.</span></p>'
         f'<p>Or install it yourself in a few minutes: <a href="{ORG}/get-started.html">get started on ospreyflow.org</a>.</p></div></div>')
@@ -565,8 +576,7 @@ caption{text-align:left;font-weight:600;padding:8px 0}th,td{text-align:left;padd
 @media print{.top,.foot,.actions{display:none}.band{padding:16px 0}}
 '''
 
-def build():
-    shutil.rmtree(OUT, ignore_errors=True)
+def build(out=OUT, shots=None):
     sites = {
      'org': {'index.html': org_index(), 'features.html': org_features(), 'public-sector.html': public_sector('org'), 'get-started.html': org_start(),
              'team.html': org_team(), 'contribute.html': org_contribute(), 'governance.html': org_governance()},
@@ -574,16 +584,24 @@ def build():
              'contact.html': net_contact()},
     }
     for s, pages in sites.items():
-        os.makedirs(f'{OUT}/{s}/assets', exist_ok=True)
+        os.makedirs(f'{out}/{s}/assets', exist_ok=True)
         used = set()
         for name, content in pages.items():
-            open(f'{OUT}/{s}/{name}', 'w').write(content)
+            with open(f'{out}/{s}/{name}', 'w', encoding='utf-8') as f:
+                f.write(content)
             used |= {k for k in SHOTS if f'assets/{k}.jpg' in content}
-        open(f'{OUT}/{s}/assets/site.css', 'w').write(CSS.strip() + '\n')
-        for k in sorted(used):
-            im = Image.open(f'shots/{SHOTS[k][0]}').convert('RGB'); im.thumbnail((1280, 800))
-            im.save(f'{OUT}/{s}/assets/{k}.jpg', quality=80, optimize=True)
-        print(s, len(pages), 'pages', len(used), 'images')
+        with open(f'{out}/{s}/assets/site.css', 'w', encoding='utf-8') as f:
+            f.write(CSS.strip() + '\n')
+        if shots is not None:
+            from PIL import Image  # only for --images: the captures are not in the repository
+            for k in sorted(used):
+                im = Image.open(f'{shots}/{SHOTS[k][0]}').convert('RGB'); im.thumbnail((1280, 800))
+                im.save(f'{out}/{s}/assets/{k}.jpg', quality=80, optimize=True)
+        print(s, len(pages), 'pages', len(used), 'images' + ('' if shots else ' (held, not remade)'))
 
 if __name__ == '__main__':
-    build()
+    parser = argparse.ArgumentParser(description='Build ospreyflow.org and ospreyflow.net.')
+    parser.add_argument('--out', type=Path, default=OUT)
+    parser.add_argument('--images', type=Path, default=None, metavar='SHOTS')
+    args = parser.parse_args()
+    build(args.out, args.images)
