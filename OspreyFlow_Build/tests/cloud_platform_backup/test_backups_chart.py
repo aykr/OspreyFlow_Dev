@@ -87,7 +87,7 @@ def test_the_restore_job_is_rendered_only_for_a_named_set_and_in_order() -> None
     assert pod is not None
     assert [c["name"] for c in pod["initContainers"]] == ["verify", "fetch-graph", "writers", "restore-graph"]
     env = {e["name"]: e.get("value") for e in pod["initContainers"][0]["env"]}
-    assert env["OSPREY_BACKUP_WRITERS"] == "arcadedb,api,worker,report-sync"
+    assert env["OSPREY_BACKUP_WRITERS"] == ",".join(values["backups"]["writers"])  # the render's own
     assert pod["containers"][0]["name"] == "restore-analytics"
     assert {"name": "arcadedb-databases", "persistentVolumeClaim": {"claimName": "databases-arcadedb-0"}} in pod["volumes"]
     assert _rules(docs) == AWAITED
@@ -244,12 +244,12 @@ def test_a_refused_run_is_never_retried() -> None:
         assert _exactly(docs, "CronJob", name)["spec"]["jobTemplate"]["spec"]["backoffLimit"] == 0
 
 
-def test_a_restore_beyond_one_copy_of_each_store_is_refused_naming_p9b() -> None:
+def test_a_restore_beyond_one_copy_of_each_store_is_refused_in_words() -> None:
     """The orchestrator's round 2, item 13: the restore is proven for one ArcadeDB and one ClickHouse
-    copy; the production shape's restore is refused by the render, in words naming P9b."""
+    copy; the production shape's restore is refused by the render, in the operator's words."""
     values = rendered.values("production")
     values["backups"]["restore"] = {"set": "20261111T021500Z"}
-    with pytest.raises(helm_chart.HelmFailed, match="P9b"):
+    with pytest.raises(helm_chart.HelmFailed, match="its restore is not supported yet"):
         _docs(values)
     assert _named(_docs(rendered.values("production")), "CronJob", "ospreyflow-backup"), "the backups still run"
 
@@ -286,3 +286,42 @@ def test_each_of_p9s_pods_runs_as_its_own_account_with_its_token() -> None:
         assert pod is not None
         assert pod["serviceAccountName"] == "ospreyflow-backup", doc["metadata"]["name"]
         assert pod["automountServiceAccountToken"] is True, doc["metadata"]["name"]
+
+
+@pytest.mark.parametrize("named", ["latest", "20261111", "20261111T021500", "x20261111T021500Z", "20261111T021500Z;"])
+def test_a_restore_names_one_set_or_is_refused(named: str) -> None:
+    """`latest`, resolved again by each step, could restore two sets if one finished between them:
+    the restore names its set once, as `sets` lists it (the orchestrator's review, item 6)."""
+    values = rendered.values()
+    values["backups"]["restore"] = {"set": named}
+    with pytest.raises(helm_chart.HelmFailed, match="is not a set's name"):
+        _docs(values)
+
+
+def test_the_schedules_are_utc() -> None:
+    docs = _docs(_with_claims(rendered.values()))
+    for name in ("ospreyflow-backup", "ospreyflow-backup-claims"):
+        assert _exactly(docs, "CronJob", name)["spec"]["timeZone"] == "Etc/UTC", name
+
+
+def test_arcadedbs_restore_step_runs_the_script_and_check_from_the_deployments_files() -> None:
+    """restore-graph runs `deploy/backups/restore-graph.sh` with its check, both given to the Job
+    from the deployment's own files (`ospreyflow-files`), the database the render's."""
+    from harness import cloud_platform_backups as backups
+
+    values = rendered.values()
+    values["backups"]["restore"] = {"set": "20261111T021500Z"}
+    docs = _docs(values)
+    pod = pod_spec(_named(docs, "Job", "ospreyflow-restore-20261111t021500z"))
+    assert pod is not None
+    step = next(c for c in pod["initContainers"] if c["name"] == "restore-graph")
+    database = values["backups"]["arcadedb"]["database"]
+    assert step["command"] == ["sh", "/restore-graph/restore-graph.sh", database, f"/restore/{database}.zip",
+                               "/home/arcadedb/databases", "/restore-graph/CheckDatabase.java"]  # fmt: skip
+    mounts = {m["mountPath"]: m for m in step["volumeMounts"]}
+    files = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "ospreyflow-files")
+    for key, source in backups.RESTORE_GRAPH_FILES.items():
+        path = f"/restore-graph/{source}"
+        assert mounts[path]["name"] == "files" and mounts[path]["subPath"] == key and mounts[path]["readOnly"]
+        assert files["data"][key] == (backups.RESTORE_GRAPH_SOURCES / source).read_text(encoding="utf-8")
+    assert {"name": "files", "configMap": {"name": "ospreyflow-files"}} in pod["volumes"]

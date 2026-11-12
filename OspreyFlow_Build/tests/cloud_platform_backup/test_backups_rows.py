@@ -122,9 +122,9 @@ def _what_the_pod_calls(
     for container in [*pod.get("initContainers", []), *pod["containers"]]:
         command = container["command"]
         if "services.api.platform_backup" not in command:
-            # ArcadeDB's own restore, from the zip on the pod's scratch into its databases claim:
-            # it calls nothing.
-            assert command[:2] == ["sh", "-c"] and "./bin/restore.sh -f file:///restore/" in command[2], command
+            # ArcadeDB's own restore (deploy/backups/restore-graph.sh), from the zip on the pod's
+            # scratch into its databases claim, checked and swapped there: it calls nothing.
+            assert command[:2] == ["sh", "/restore-graph/restore-graph.sh"], command
             continue
         name = command[command.index("services.api.platform_backup") + 1]
         assert name in commands, f"{name}: a command the module's main does not have"
@@ -222,3 +222,39 @@ def test_the_policy_check_refuses_our_key_to_another_of_p9_s_pods(name: str) -> 
             "name": values["secrets"]["name"], "key": "ARCADEDB_ROOT_PASSWORD"}}})  # fmt: skip
     where = f"{owner['kind']}/{owner['metadata']['name']}/{container['name']}"
     assert sorted(f for f in found() if f.startswith("whole-secret")) == sorted([*AWAITED, f"whole-secret: {where}"])
+
+
+# ---- each container's Secret keys, from its command (the orchestrator's review, item 2) ----------
+
+
+def _secret_keys(container: dict[str, Any]) -> set[tuple[str, str]]:
+    return {(e["valueFrom"]["secretKeyRef"]["name"], e["valueFrom"]["secretKeyRef"]["key"])
+            for e in container.get("env", []) if (e.get("valueFrom") or {}).get("secretKeyRef")}  # fmt: skip
+
+
+def test_each_container_holds_the_secret_keys_its_command_calls_for_and_no_more() -> None:
+    """As each pod's egress is held to what its commands call, each container's Secret keys are:
+    the bucket's and its key's (every runner's, to start); ArcadeDB's password where the command
+    calls ArcadeDB (the backup's alone); ClickHouse's backup user's where it calls ClickHouse (the
+    backup's and restore-analytics'); none in ArcadeDB's own restore step."""
+    docs, values = _docs()
+    commands = _commands()
+    ours = values["secrets"]["name"]
+    every = {(backups.OUTPUT_SECRET, backups.OUTPUT_KEYS["bucket"]),
+             (backups.OUTPUT_SECRET, backups.OUTPUT_KEYS["kms_key"])}  # fmt: skip
+    by_store = {"arcadedb": {(ours, "ARCADEDB_ROOT_PASSWORD")},
+                "clickhouse": {(backups.BACKUP_SECRET, backups.BACKUP_SECRET_KEY)}, KUBE_API: set()}  # fmt: skip
+    held = {}
+    for name, pod in _pods(docs).items():
+        for container in [*pod.get("initContainers", []), *pod["containers"]]:
+            command = container["command"]
+            if "services.api.platform_backup" in command:
+                verb = command[command.index("services.api.platform_backup") + 1]
+                expected = every.union(*(by_store[r] for r in commands[verb]))
+            else:
+                expected = set()
+            held[f"{name}/{container['name']}"] = _secret_keys(container)
+            assert held[f"{name}/{container['name']}"] == expected, (name, container["name"])
+    assert {k for k, v in held.items() if (ours, "ARCADEDB_ROOT_PASSWORD") in v} == {"backup/backup"}
+    assert {k for k, v in held.items() if (backups.BACKUP_SECRET, backups.BACKUP_SECRET_KEY) in v} == {
+        "backup/backup", "restore/restore-analytics"}
