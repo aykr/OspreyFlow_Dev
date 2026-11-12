@@ -646,7 +646,15 @@ async def test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_rec
             )
         assert left == 0
         (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
-        assert (row.edge_ids, row.alert_node_id, row.status) == (before.edge_ids, before.alert_node_id, "closing")
+        # As stored, then as served: a screening alert's proposal is held on each citation (the
+        # owner's ruling of 12 November 2026), the row's own status "claimed", and its proposer is
+        # shown it closing (the run after the rebase onto 4ecd322: the literal "closing" read the
+        # stored row as the alert was stored before citations were decided one by one).
+        assert (row.edge_ids, row.alert_node_id, row.status, row.citations) == (
+            before.edge_ids, before.alert_node_id, before.status, before.citations)  # fmt: skip
+        (shown,) = [q.alert for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)
+                    if q.alert.id == petrov.id]  # fmt: skip
+        assert shown.status == "closing"
 
 
 async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node(
@@ -671,14 +679,24 @@ async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_co
         proposed = await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
                                              disposition="true_positive", reason="Matches the list entry")  # fmt: skip
         assert proposed.status == "closing"
-        real = stores["alerts"].set_queue_triage
+        # Refused where the approval writes: a screening alert's close decides its citations
+        # (`triage_citations`, the owner's ruling of 12 November 2026); `set_queue_triage` is
+        # refused too, for an alert without them (the run after the rebase onto 4ecd322: refusing
+        # only `set_queue_triage` refused nothing, and the case could not fail for its reason).
+        real, real_cited = stores["alerts"].set_queue_triage, stores["alerts"].triage_citations
 
         async def taken(alert_id: str, *a: Any, **k: Any) -> Any:
             if k.get("status") == "closed":
                 raise AlertTriageConflict(alert_id)
             return await real(alert_id, *a, **k)
 
+        async def taken_cited(alert_id: str, *a: Any, **k: Any) -> Any:
+            if k.get("action") == "approve":
+                raise AlertTriageConflict(alert_id)
+            return await real_cited(alert_id, *a, **k)
+
         monkeypatch.setattr(stores["alerts"], "set_queue_triage", taken)
+        monkeypatch.setattr(stores["alerts"], "triage_citations", taken_cited)
         colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
         with pytest.raises(AlertTriageConflict):
             await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
