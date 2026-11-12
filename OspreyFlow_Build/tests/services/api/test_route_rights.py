@@ -718,9 +718,15 @@ def test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     """ADR-145 Amendment 10 (rule 4), through the real `get_principal` with a signed token, against
-    the stack: each guide's PDF for a role whose rights open its place, and 403 in words, without a
-    byte of it, for one whose rights do not, and for a person with no role at all."""
+    the stack: each guide's PDF for a role whose rights open its place, byte for byte the file the
+    image was built from (the checkout's `docs/pdf/`, which the stack's Conduit image copies), and
+    403 in words, without a byte of it, for one whose rights do not, and for a person with no
+    role."""
+    from tools.layout import REPO
+
     key, _ = keypair
+    carried = {g: (REPO / "docs" / "pdf" / f"{g}-guide.pdf").read_bytes()
+               for g in ("user", "developer", "administration")}  # fmt: skip
     expected = {
         "analyst": {"user": 200, "developer": 403, "administration": 403},
         "data_engineer": {"user": 200, "developer": 200, "administration": 200},
@@ -734,6 +740,8 @@ def test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real(
                 response = client.get(f"/v1/guides/{guide}", headers=headers)
                 assert response.status_code == wanted, (role, guide, response.status_code)
                 assert response.content.startswith(b"%PDF-") == (wanted == 200), (role, guide)
+                if wanted == 200:
+                    assert response.content == carried[guide], (role, guide, "not the file carried")
                 if wanted == 403:
                     assert response.json()["detail"]["error"] == "place_required"
         nobody = _token(key, "guide-nobody", [])

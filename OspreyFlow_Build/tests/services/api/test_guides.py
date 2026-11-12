@@ -134,15 +134,37 @@ def test_each_guide_answers_exactly_whom_its_place_opens(
             assert "Ask an administrator" in detail["message"], detail
 
 
-def test_a_custom_role_s_rights_count_as_single_grants(
-    as_who: tuple[TestClient, list[Principal]],
+def test_a_custom_role_s_current_rights_open_its_guide_through_the_real_get_principal(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`get_principal` adds a custom role's current rights as single grants (ADR-145 Amendment 5),
-    so a custom role holding only `edit_pipelines` reads the developer guide and nothing else."""
-    client, who = as_who
-    who.append(_principal("custom", ["role:studio-only", "right:edit_pipelines"]))
-    statuses = {g: client.get(f"/v1/guides/{g}").status_code for g in GUIDE_PLACE}
+    """A token carrying only a custom role (`role:studio-desk`, holding `edit_pipelines`) reads the
+    developer guide and nothing else, through the real `get_principal`, which adds the role's
+    current rights as single grants (ADR-145 Amendment 5, `custom_roles.expand`). With the role
+    changed to hold nothing, the same token is refused: its rights are read at each request."""
+    from services.api import custom_roles
+    from services.api.app import app
+
+    from schemas.domain import Principal as P
+
+    class Resolver:
+        async def resolve_principal(self, token: str) -> P:
+            return P(id="desk-1", clearance="SECRET", org_unit="unit-1", roles=["role:studio-desk"])
+
+    class Roles:
+        current: dict[str, list[Right]] = {"studio-desk": [Right.EDIT_PIPELINES]}
+
+        async def expand(self, principal: P) -> P:
+            return custom_roles.expand(principal, self.current)
+
+    roles = Roles()
+    monkeypatch.setattr(app.state, "principal_resolver", Resolver(), raising=False)
+    monkeypatch.setattr(app.state, "custom_roles", roles, raising=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    headers = {"Authorization": "Bearer desk"}
+    statuses = {g: client.get(f"/v1/guides/{g}", headers=headers).status_code for g in GUIDE_PLACE}
     assert statuses == {"user": 403, "developer": 200, "administration": 403}
+    roles.current = {"studio-desk": []}
+    assert client.get("/v1/guides/developer", headers=headers).status_code == 403
 
 
 def test_the_refusal_says_which_place_and_which_rights_open_it(
@@ -168,17 +190,38 @@ def test_without_a_token_nothing_is_answered() -> None:
     assert not response.content.startswith(b"%PDF-")
 
 
-@pytest.mark.parametrize("guide", ["architecture", "x", "user-guide", "..%2Fmanifest.json"])
+@pytest.mark.parametrize("guide", ["architecture", "x", "user-guide", "manifest.json"])
 def test_a_guide_that_is_not_one_of_the_three_is_not_found(
     guide: str, as_who: tuple[TestClient, list[Principal]]
 ) -> None:
-    """The architecture guide is not served (ADR-145 Amendment 10), and no path reaches another
-    file."""
+    """The architecture guide is not served (ADR-145 Amendment 10): any name but the three is the
+    route's own 404 `no_such_guide`, in words, even to a principal who opens every place."""
     client, who = as_who
     who.append(_principal("super", list(SUPER_USER_PRESET)))
     response = client.get(f"/v1/guides/{guide}")
     assert response.status_code == 404, (guide, response.status_code)
-    assert not response.content.startswith(b"%PDF-")
+    assert response.json()["detail"]["error"] == "no_such_guide", response.text
+    assert "There is no guide called" in response.json()["detail"]["message"]
+
+
+CLIMBING = [
+    "/v1/guides/..%2Fmanifest.json",
+    "/v1/guides/user/../manifest.json",
+    "/v1/guides/user.pdf/x",
+]
+
+
+@pytest.mark.parametrize("path", CLIMBING)
+def test_no_path_reaches_another_file(
+    path: str, as_who: tuple[TestClient, list[Principal]]
+) -> None:
+    """A path that would climb out of the guides is never matched to a file: the guide is a name
+    looked up in a table of three, never joined to a path from the request."""
+    client, who = as_who
+    who.append(_principal("super", list(SUPER_USER_PRESET)))
+    response = client.get(path)
+    assert response.status_code == 404, (path, response.status_code)
+    assert b"%PDF-" not in response.content and b"version" not in response.content
 
 
 # --- The file served is the deployment's own ------------------------------------------------------
@@ -247,6 +290,23 @@ def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None
         [f"docs/pdf/{name}.pdf" for name in GUIDE_FILE.values()] + ["docs/pdf/manifest.json"]
     )
     assert target in ("./docs/pdf/", "/app/docs/pdf/")
+    # `./docs/pdf/` is `/app/docs/pdf/` only under the final stage's `WORKDIR /app`.
+    workdirs = [line for line in _final_stage(REPO_ROOT / "services/api/Dockerfile")
+                if line.upper().startswith("WORKDIR ")]  # fmt: skip
+    assert workdirs and workdirs[-1].split()[1] == "/app", workdirs
     from services.api import guides
 
     assert guides._DEFAULT_DIR == REPO_ROOT / "docs" / "pdf"
+
+
+def test_the_glass_links_each_guide_under_the_place_the_conduit_serves_it_for() -> None:
+    """`apps/workspace/src/home/guides.ts`'s `GUIDE_FOR_PLACE` puts each guide under the card of the
+    place `guides.py` checks it against, so no link sits under a card whose holder is refused."""
+    import re
+
+    source = (REPO_ROOT / "apps/workspace/src/home/guides.ts").read_text(encoding="utf-8")
+    table = source[
+        source.index("GUIDE_FOR_PLACE") : source.index("};", source.index("GUIDE_FOR_PLACE"))
+    ]
+    linked = dict((guide, place) for place, guide in re.findall(r"(\w+): \{ id: \"(\w+)\"", table))
+    assert linked == GUIDE_PLACE
