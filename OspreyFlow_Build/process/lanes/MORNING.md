@@ -545,6 +545,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - **The load split (about 11:40):** measured at about 50/50 by session logs. You chose to keep the
           orchestrator on ayan. Every lane and the review relay are on sol, and the orchestrator keeps to merges,
           rulings and quick checks.
+      - **The demo rebuild (your word, about 11:50): osprey-small is rebuilt from main, with the guides,** once
+        rules-b's "guides" has landed. That is likely 19:00–21:00, after a backup of today's state is taken first.
+        This lifts v0.5.0's freeze for osprey-small for that rebuild alone; the demo then runs main as merged
+        today. Still yours to say at rebuild time: whether `local_only: false` and `sendable_handling_codes: [P]`
+        go into its osprey.yaml, for Gemini.
         - **The osprey-small rebuild waits** until "guides" has landed.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
