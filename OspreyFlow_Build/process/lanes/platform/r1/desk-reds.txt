@@ -1,0 +1,25 @@
+# R1 desk findings 1-4, red at main 1b317d4's runbooks.py with the new tests (2026-11-12T21:42:53Z)
+E           AssertionError: DECOMMISSION.md
+E           assert {'PREFIXbackups'} == set()
+E             
+E             Extra items in the left set:
+E             'PREFIXbackups'
+E             Use -v to get more diff
+E       AssertionError: the last backup: s3:///sets/20261112T214200Z/
+E         s3:///sets/20261112T214200Z/
+E         
+E       assert None
+E        +  where None = <function fullmatch at 0x101973e20>('s3://ospreyflow-poc-1a2b3c4d-backups/sets/\\d{8}T\\d{6}Z/', 's3:///sets/20261112T214200Z/')
+E        +    where <function fullmatch at 0x101973e20> = re.fullmatch
+E           AssertionError: 00000000-1111-4222-8333-444444444444
+E           assert '00000000-1111-4222-8333-444444444444' in "**What it needs.** The release's `OspreyFlow_Core` folder, at the release's tag: `ospreyflow images\npush` builds our...e bash shell, from\nthat folder. If a command fails, stop there: put right what it says, then run its block again.\n\n"
+E       assert ('OSPREY_CURL_OPTS' in "## 7. Check\n\nThe doors answer through the platform's ingress (ospreyflow-poc.apps.example.org).\n\n")
+E       assert False
+E        +  where False = <built-in method startswith of str object at 0x105cb2d30>('helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml"')
+E        +    where <built-in method startswith of str object at 0x105cb2d30> = 'kubectl -n "$NS" rollout restart deploy/api'.startswith
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_every_variable_a_runbook_reads_is_one_it_sets_or_asks_for
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_last_backup_is_named_in_the_backups_bucket
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_entra_registrations_are_asked_for_before_the_deployment
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_check_says_what_its_curl_options_are
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py::test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left
+5 failed, 24 passed in 3.06s

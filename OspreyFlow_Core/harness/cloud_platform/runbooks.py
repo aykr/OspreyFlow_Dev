@@ -101,6 +101,11 @@ own install of it), and the deployment's `osprey.yaml` (or `CONFIG` naming it). 
 pointed at the namespace, `helm` 3.16 or later, Docker with `buildx`, the AWS command line (v2)
 signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
 that folder. If a command fails, stop there: put right what it says, then run its block again.
+
+**Before step 5, from the client's Entra administrator** (ADR-148 Amendment 8; step 6 checks it):
+two app registrations in tenant `{claims.tenant_id}`, the Glass (application id `{claims.client_id}`)
+and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the Glass is
+granted), with the claims `cloud_platform.claims` names.
 {_bare_connector_hosts(cp.connector_hosts)}
 ## 1. The settings and the namespace
 
@@ -166,10 +171,8 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
 ## 6. Sign-in: Entra ID and the first administrators
 
 People sign in with the client's own Entra ID (ADR-148 Amendment 8): there is no sign-in service of
-ours to set up. Before step 5, the client's Entra administrator registers the Glass (application id
-`{claims.client_id}`) and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the
-Glass is granted), in tenant `{claims.tenant_id}`, with the claims `cloud_platform.claims` names. The
-first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
+ours to set up, only the two app registrations *What it needs* asks for, in tenant
+`{claims.tenant_id}`. The first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
 Conduit first started; they give everyone else their roles in Admin › People. Check the Conduit reads
 Entra's settings:
 
@@ -179,19 +182,23 @@ kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUE
 
 **If no administrator is left** (nobody enabled who has signed in can manage people): add the Entra
 object id of a person who is not disabled here to `cloud_platform.claims.first_administrators` in
-`osprey.yaml`, render again (step 3) and restart the Conduit. At start, and only when nobody can
+`osprey.yaml`, render again (step 4) and install the new values: the list is in the deployment's
+ConfigMap, so a restart alone would read the old one, and the install restarts the Conduit. At start, and only when nobody can
 manage people, the Conduit adds the Admin role to each one named there, and audits it
 (`grant_first_administrator`). While anyone can manage people, it changes nobody's roles.
 
 ```bash
 {RENDER}
-kubectl -n "$NS" rollout restart deploy/api
+helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --timeout 30m
 kubectl -n "$NS" rollout status deploy/api --timeout 10m
 ```
 
 ## 7. Check
 
-The doors answer through the platform's ingress ({", ".join(hosts)}).
+The doors answer through the platform's ingress ({", ".join(hosts)}): `/healthz` is the Conduit's,
+answered through the Glass. `OSPREY_CURL_OPTS` is curl's options for that door, if it needs any:
+where the ingress's certificate is signed by a CA your machine does not trust, export
+`OSPREY_CURL_OPTS="--cacert <that CA's file>"` first.
 
 ```bash
 curl -fsS ${{OSPREY_CURL_OPTS:-}} "https://{glass}/healthz" >/dev/null && echo "the Glass answers"
@@ -251,8 +258,8 @@ fi
 kubectl -n "$NS" wait --for=jsonpath='{{.status.conditions[0].status}}'=True "job/ospreyflow-backup-$S" --timeout=6h
 kubectl -n "$NS" get job "ospreyflow-backup-$S" -o jsonpath='{{.status.succeeded}}' | grep -qx 1 \\
   || {{ echo "the last backup did not finish: read its log (kubectl -n $NS logs job/ospreyflow-backup-$S)"; false; }}
-export LAST_BACKUP="s3://$PREFIX{BUCKET_SUFFIX}/sets/$("$PY" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]) * 60, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))' "$S")/"
-case "$LAST_BACKUP" in "s3://$PREFIX{BUCKET_SUFFIX}/sets/"*) echo "the last backup: $LAST_BACKUP";; *) false;; esac
+export LAST_BACKUP="s3://${{PREFIX}}{BUCKET_SUFFIX}/sets/$("$PY" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]) * 60, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"))' "$S")/"
+echo "the last backup: $LAST_BACKUP"
 ```
 
 ## 3. The workloads
@@ -353,14 +360,14 @@ platform's and stay.
 : "${{BACKUP_RETENTION_DAYS:?the retention you agree for the kept backups, in days}}"
 printf '{{"Rules": [{{"ID": "abort-unfinished-uploads", "Status": "Enabled", "Filter": {{"Prefix": ""}}, "AbortIncompleteMultipartUpload": {{"DaysAfterInitiation": 7}}}}, {{"ID": "retained-sets", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"Days": %d}}, "NoncurrentVersionExpiration": {{"NoncurrentDays": 7}}}}, {{"ID": "remove-expired-markers", "Status": "Enabled", "Filter": {{"Prefix": "sets/"}}, "Expiration": {{"ExpiredObjectDeleteMarker": true}}}}]}}' \\
   "$BACKUP_RETENTION_DAYS" > "$WORK/retention.json"
-aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}" \\
+aws s3api put-bucket-lifecycle-configuration --region "$REGION" --bucket "${{PREFIX}}{BUCKET_SUFFIX}" \\
   --lifecycle-configuration "file://$WORK/retention.json"
-aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "$PREFIX{BUCKET_SUFFIX}" | grep -q retained-sets
+aws s3api get-bucket-lifecycle-configuration --region "$REGION" --bucket "${{PREFIX}}{BUCKET_SUFFIX}" | grep -q retained-sets
 M="${{TF_MODULE:+$TF_MODULE.}}"   # the deployment's module in the environments repository, if any
 removed=0
 for kept in {" ".join(KEPT_AT_DECOMMISSION)}; do tofu state rm "$M$kept" >/dev/null 2>&1 && removed=$((removed + 1)); done
 test "$removed" -gt 0 || {{ echo "no kept resource was in the state (is TF_MODULE right?): stop"; false; }}
-tofu state list | grep -E '(^|\.)({"|".join(re.escape(k) for k in KEPT_AT_DECOMMISSION)})$' && {{ echo "a kept resource is still in the state: stop"; false; }}
+tofu state list | grep -E '(^|[.])({"|".join(re.escape(k) for k in KEPT_AT_DECOMMISSION)})$' && {{ echo "a kept resource is still in the state: stop"; false; }}
 echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
 ```
 
@@ -432,7 +439,7 @@ by one keeping the account's administration, and the deletion scheduled (thirty 
 A key deleted while the bucket still held a set would leave that set unreadable.
 
 ```bash platform
-B="$PREFIX{BUCKET_SUFFIX}"
+B="${{PREFIX}}{BUCKET_SUFFIX}"
 aws s3api delete-bucket-policy --region "$REGION" --bucket "$B"
 while :; do
   aws s3api list-object-versions --region "$REGION" --bucket "$B" --max-items 500 --output json \\
@@ -454,10 +461,10 @@ aws kms delete-alias --region "$REGION" --alias-name "alias/{cp.namespace}-backu
 A procedure of the platform team's and the account's administrators, who alone may change the kept
 bucket's and key's policies; not yet rehearsed, so rehearse it before relying on it. Its steps:
 
-1. **Into this namespace again:** the kept bucket (`$PREFIX{BUCKET_SUFFIX}`) and alias
+1. **Into this namespace again:** the kept bucket (`${{PREFIX}}{BUCKET_SUFFIX}`) and alias
    (`alias/{cp.namespace}-backups`) are taken, so the reinstall's Terraform must not make its own:
    before its first apply, the platform team imports them into its state
-   (`tofu import aws_s3_bucket.backups "$PREFIX{BUCKET_SUFFIX}"`, `tofu import aws_kms_key.backups <the key's ID>`,
+   (`tofu import aws_s3_bucket.backups "${{PREFIX}}{BUCKET_SUFFIX}"`, `tofu import aws_kms_key.backups <the key's ID>`,
    `tofu import aws_kms_alias.backups alias/{cp.namespace}-backups`, and the bucket's settings likewise); that
    apply then writes the new roles into the kept bucket's and key's policies itself.
 2. **Into another namespace:** the administrators replace the kept bucket's policy (`BackupRolesOnly`'s

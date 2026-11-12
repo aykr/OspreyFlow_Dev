@@ -215,6 +215,95 @@ def test_the_decommission_removes_every_claim_the_render_makes(
     )
 
 
+#: What the runbooks read from the operator's shell and never set themselves: each named in the
+#: runbook's own words as something to give (`STATE`, `DISKS`, ...), or bash's and the system's.
+_GIVEN = {
+    "BASH_VERSION", "TMPDIR", "OSPREY_CURL_OPTS", "STATE", "DISKS", "CLUSTER_ACCOUNT",
+    "BACKUP_RETENTION_DAYS", "TF_MODULE",
+}  # fmt: skip
+
+
+def test_every_variable_a_runbook_reads_is_one_it_sets_or_asks_for(
+    runbooks: dict[str, str],
+) -> None:
+    """R1's reading of P7b's decommission: `s3://$PREFIXbackups/` is read by bash as the variable
+    `PREFIXbackups`, which is empty, so the last backup was named `s3://backups/...` and the
+    bucket in steps 7 and 9 was `""`; the line after it repeated the same text, so its check could
+    not fail. Every `$NAME` in either runbook, as bash reads the name (the longest run of word
+    characters), is a variable the runbook sets, or one it asks the operator for; the text after
+    a variable is fenced off by `${NAME}` where a word character follows."""
+    for name, text in runbooks.items():
+        blocks = "".join(command_blocks(text, on_the_platform=True))
+        set_here = set(re.findall(r"(?:^|[\s;(]|export )([A-Za-z_]\w*)=", blocks, re.M))
+        set_here |= set(re.findall(r"\bfor ([A-Za-z_]\w*) in\b", blocks))
+        set_here |= set(re.findall(r"\bread -r ([A-Za-z_]\w*)", blocks))
+        read = set(re.findall(r"\$\{?([A-Za-z_]\w*)", text))
+        assert read - set_here - _GIVEN == set(), name
+
+
+def test_the_last_backup_is_named_in_the_backups_bucket(
+    runbooks: dict[str, str], tmp_path: Any
+) -> None:
+    """The decommission's step 2, run under bash as written, with a `kubectl` that answers as a
+    finished backup Job does: `LAST_BACKUP` names the set in `<prefix>backups`, the bucket the
+    decommission keeps (rule 12: the line's own `case` check could not see the empty name)."""
+    import subprocess
+    import sys
+
+    text = runbooks["DECOMMISSION.md"]
+    step = text[text.index("## 2.") : text.index("## 3.")]
+    (block,) = command_blocks(step, on_the_platform=False)
+    stub = tmp_path / "kubectl"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in *"get cronjob"*) exit 1;; *"-o jsonpath={.status.succeeded}"*) echo 1;; esac\n'
+    )
+    stub.chmod(0o755)
+    done = subprocess.run(
+        ["bash", "-c", f'set -e\n{block}\necho "$LAST_BACKUP"'],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": f"{tmp_path}:/usr/bin:/bin",
+            "NS": "ospreyflow-poc",
+            "PREFIX": "ospreyflow-poc-1a2b3c4d-",
+            "PY": sys.executable,
+        },
+    )
+    assert done.returncode == 0, done.stderr
+    assert re.fullmatch(
+        r"s3://ospreyflow-poc-1a2b3c4d-backups/sets/\d{8}T\d{6}Z/",
+        done.stdout.strip().splitlines()[-1],
+    ), done.stdout
+
+
+def test_the_entra_registrations_are_asked_for_before_the_deployment(
+    runbooks: dict[str, str],
+) -> None:
+    """R1's reading of the install: step 6 said "Before step 5, the client's Entra administrator
+    registers ...", read after step 5 by anyone running the blocks in order. The registrations,
+    with the tenant and both application ids, are asked for in what the install needs, before its
+    first block."""
+    text = runbooks["INSTALL.md"]
+    needs = text[text.index("**What it needs.**") : text.index("## 1.")]
+    for named in (
+        "00000000-1111-4222-8333-444444444444",
+        "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    ):
+        assert named in needs, named
+    assert "Before step 5" not in text[text.index("## 5.") :]
+
+
+def test_the_install_check_says_what_its_curl_options_are(runbooks: dict[str, str]) -> None:
+    """Step 7's `OSPREY_CURL_OPTS` was named nowhere: a team whose ingress certificate is not
+    publicly trusted had no way to know it is where curl's `--cacert` goes."""
+    text = runbooks["INSTALL.md"]
+    step = text[text.index("## 7.") :]
+    prose = step[: step.index("```")]
+    assert "OSPREY_CURL_OPTS" in prose and "--cacert" in prose
+
+
 def test_no_command_needs_more_than_a_namespace_s_rights(runbooks: dict[str, str]) -> None:
     """The client's team is the namespace's tenant: no block lists or changes anything cluster-wide
     (volumes, every kind there is), and the disks are read from the account, by the claims'
@@ -273,10 +362,10 @@ def test_the_install_runbook_signs_in_with_entra_and_runs_no_realm_step(
     Keycloak)."""
     text = runbooks["INSTALL.md"]
     step = text[text.index("## 6.") : text.index("## 7.")]
+    # The two registrations are asked for before step 5, in what the install needs (R1;
+    # `test_the_entra_registrations_are_asked_for_before_the_deployment`).
     named = (
         "00000000-1111-4222-8333-444444444444",  # the tenant
-        "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",  # the Glass's registration
-        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",  # the API's
         "50000000-0000-4000-8000-000000000001",  # the first administrator
     )
     assert [n for n in named if n not in step] == []
@@ -298,8 +387,15 @@ def test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left(
     assert "cloud_platform.claims.first_administrators" in recovery
     assert "only when nobody can manage people" in " ".join(recovery.split())
     assert "grant_first_administrator" in recovery
-    assert "harness.render" in recovery
-    assert 'kubectl -n "$NS" rollout restart deploy/api' in recovery
+    # R1: the list is in the ConfigMap, so a render and a restart alone read the old list; the
+    # recovery renders pinned, installs the values, then waits for the Conduit.
+    (block,) = command_blocks(recovery, on_the_platform=False)
+    lines = block.splitlines()
+    assert [i for i, x in enumerate(lines) if "harness.render" in x] == [0], block
+    assert "--allow-unpinned" not in block
+    assert lines[1].startswith('helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml"')
+    assert 'kubectl -n "$NS" rollout status deploy/api' in lines[-1]
+    assert "(step 4)" in recovery
 
 
 # ---- CPU limits (the orchestrator's D2c finding on LimitRanges) --------------------------------
