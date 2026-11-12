@@ -709,6 +709,20 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         **Started about 21:20:** your three A records are in and resolve publicly. With my recommendations taken
         (TXT by hand, tonight, your current network only), the demo lane is moving osprey-small to
         govuk.ospreyflow.app, beginning with a backup.
+      - **Done (about 21:45): osprey-small answers at https://govuk.ospreyflow.app**, in the GOV.UK look, with every
+        check passed. Details:
+        - the Let's Encrypt certificate covers govuk., id.govuk. and bi.govuk. and expires 10 Feb 2027;
+        - one apply, then repair-sign-in;
+        - the four sign-ins pass.
+
+        The firewall lets 145.40.135.31 and, at your word, 90.250.148.55 reach 443 (the copy before is
+        `/usr/local/sbin/ospreyflow-test-firewall.before-20261112-mac-address`). Everyone else is blocked, and IPv6
+        443 is closed. The way back is the osprey.yaml copy, one apply and repair-sign-in.
+
+        For later:
+        - delete the three `_acme-challenge` TXT records;
+        - install.yaml still names ospreyflow-poc.test (update it before any reinstall);
+        - renewal is manual before 10 Feb 2027 (Porkbun API keys would automate it).
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
