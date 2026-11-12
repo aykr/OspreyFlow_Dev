@@ -494,6 +494,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 38. **Overnight, 11–12 November (your word, about 21:10: carry on, the Mac stays on).** I'll fill this in as the
     night goes. For you in the morning:
     - the push (none since 10:20);
+    - **Main's make test has one failure until you apply `P12p2_CI.diff`:** `test_release_local_matrix` expects
+      Laurium's image in `release.yml`, and that line is in your patch. My merge check of P12 part 2 left that
+      test out; case-b's full run had the patch applied. Admin found it.
     - P12 part 2's two patches for you, from the repository root, both checked to apply on main:
       `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_CI.diff` (ci.yml and release.yml: Laurium's image), then
       `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_core_makefile.diff` (OspreyFlow_Core/Makefile: Laurium's
