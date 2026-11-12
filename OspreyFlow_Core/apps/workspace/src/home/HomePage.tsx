@@ -13,6 +13,7 @@ import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { PLACE_KEY, PLACE_NAME } from "../shell/places";
 import { startPlaces } from "../rights/visibility";
 import type { StartPlace } from "../rights/visibility";
+import { GUIDE_FOR_PLACE, type GuideId } from "./guides";
 import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
 import { TIPS, TipPicture } from "./tips";
 import "./home.css";
@@ -47,6 +48,10 @@ export interface HomePageProps {
   /** ADR-145 Amendment 4 decision 12 (L2.7): *What you can do, and what you answer for*, drawn by
    * App from the person's own reads (`home/AnswersForSection.tsx`). */
   answers?: ReactNode;
+  /** ADR-145 Amendment 10: opens a guide's PDF in a new tab, resolving to words when it could not.
+   * Each guide is linked under its place's card (`guides.ts`), so only with a card the person's
+   * rights open; without this, no guide is linked. */
+  onReadGuide?: (guide: GuideId) => Promise<string | null>;
 }
 
 // The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
@@ -190,11 +195,18 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
   );
 }
 
-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers }: HomePageProps) {
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide }: HomePageProps) {
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];
   const [tip, setTip] = useState(0);
+  // What opening a guide said when it could not open it, by guide.
+  const [guideSaid, setGuideSaid] = useState<Partial<Record<GuideId, string>>>({});
+  const readGuide = (guide: GuideId) => {
+    if (!onReadGuide) return;
+    setGuideSaid((said) => ({ ...said, [guide]: undefined }));
+    void onReadGuide(guide).then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -265,6 +277,7 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
           {panels.map((place) => {
             const p = PANELS[place];
             const shown = facts(place);
+            const guide = onReadGuide ? GUIDE_FOR_PLACE[place] : undefined;
             return (
               <section key={place} aria-label={p.title} className="home-panel">
                 <div className={`home-panel__picture${place === "glass" ? " network-canvas" : ""}`}>
@@ -279,6 +292,14 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                     <span className="home-panel__who">{p.who}</span>
                   </div>
                   <p className="home-panel__what">{p.what}</p>
+                  {guide && (
+                    <div className="home-panel__guide">
+                      <button type="button" className="home-panel__guide-link" onClick={() => readGuide(guide.id)}>
+                        {guide.words}
+                      </button>
+                      <p className="home-panel__guide-said" aria-live="polite">{guideSaid[guide.id] ?? ""}</p>
+                    </div>
+                  )}
                   {shown ? <Facts facts={shown} /> : <p className="home-panel__reading">Reading…</p>}
                   <span className="home-panel__spacer" />
                   <button type="button" className={`btn${place === primary ? " btn--primary" : ""} home-panel__open`}

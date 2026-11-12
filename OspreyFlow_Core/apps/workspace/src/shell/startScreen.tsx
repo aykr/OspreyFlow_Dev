@@ -6,6 +6,7 @@ import { CasePicker } from "../investigation/CasePicker";
 import { startFor, startPlaces, type Rights, type StartPlace } from "../rights/visibility";
 import { AdminWithoutCase } from "./AdminWithoutCase";
 import { HomePage, type AlertJourneyStart, type HomePerson } from "../home/HomePage";
+import { openGuide } from "../home/guides";
 import type { HomeSummary } from "../home/homeData";
 import { PlaceSwitcher } from "./PlaceSwitcher";
 import { StartBar } from "./StartPage";
@@ -91,6 +92,8 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         onAlertJourney={input.openAlertJourney}
         onChoose={choose}
         answers={input.answers}
+        // ADR-145 Amendment 10: a guide's PDF through the Conduit, with the person's token in a header.
+        onReadGuide={(guide) => openGuide(guide, { apiBaseUrl: input.apiBaseUrl, bearerToken: input.bearerToken })}
       />
     );
   }
