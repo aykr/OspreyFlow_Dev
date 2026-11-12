@@ -734,7 +734,7 @@ PLANTS = [
     Plant(
         "item 5: a promotions alert to someone whose access is a day old",
         "services/api/promotion_ageing.py",
-        [("        and access_current(person)\n", "")],
+        [("    return sorted(person.id for person in reviewers if access_current(person))\n", "    return sorted(person.id for person in reviewers)\n")],
         [f"{PEOPLE}::test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]"],
     ),
     Plant(
