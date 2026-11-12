@@ -26,19 +26,26 @@ def test_arcadedb_writes_its_backups_onto_a_claim_of_its_own(fixture: str) -> No
     assert rendered.values(fixture)["backups"]["arcadedb"]["backupsClaim"] == "backups-arcadedb-0"
 
 
+def _all_env(values: dict[str, Any]) -> list[dict[str, Any]]:
+    """The runner's settings in every group: every container's, ArcadeDB's and ClickHouse's."""
+    b = values["backups"]
+    return [*b["env"], *b["arcadedb"]["env"], *b["clickhouse"]["env"]]
+
+
 @pytest.mark.parametrize("fixture", rendered.fixtures())
 def test_every_setting_the_runner_needs_is_rendered(fixture: str) -> None:
     """The runner refuses without its bucket, key and region; each is in the CronJob's env."""
     values = rendered.values(fixture)
-    names = {e["name"] for e in values["backups"]["env"] + values["backups"]["arcadedb"]["env"]}
+    names = {e["name"] for e in _all_env(values)}
     with pytest.raises(Exception, match="not set"):
         Settings.from_env({})
     for needed in ("OSPREY_BACKUP_BUCKET", "OSPREY_BACKUP_KMS_KEY", "AWS_REGION",
                    "OSPREY_BACKUP_ARCADEDB_HOST", "ARCADEDB_ROOT_PASSWORD", "CLICKHOUSE_HOST",
-                   "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_CLUSTER"):  # fmt: skip
+                   "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_CLUSTER",
+                   "ARCADEDB_DATABASE", "CLICKHOUSE_DATABASE"):  # fmt: skip
         assert needed in names, needed
     # Each `config:` is a key of the ConfigMap; each `secret:` one of our Secret's keys.
-    for item in values["backups"]["env"] + values["backups"]["arcadedb"]["env"]:
+    for item in _all_env(values):
         if "config" in item:
             assert item["config"] in values["environment"], item
         if "secret" in item:
@@ -48,7 +55,7 @@ def test_every_setting_the_runner_needs_is_rendered(fixture: str) -> None:
 @pytest.mark.parametrize("fixture", rendered.fixtures())
 def test_each_secret_the_backup_reads_is_one_the_terraform_writes(fixture: str) -> None:
     text = rendered.terraform(fixture)
-    for item in rendered.values(fixture)["backups"]["env"]:
+    for item in _all_env(rendered.values(fixture)):
         ref = item.get("secretKeyRef")
         if ref:
             assert ref["name"] in (backups.OUTPUT_SECRET, backups.BACKUP_SECRET), ref
@@ -60,14 +67,18 @@ def test_each_secret_the_backup_reads_is_one_the_terraform_writes(fixture: str) 
 def test_the_backup_pod_is_given_no_other_secret() -> None:
     """Not the whole Secret (`envFrom`): the two passwords it uses, by name (Amendment 1 item 3):
     ArcadeDB's and ClickHouse's backup user's, never the deployment's own ClickHouse user's.
-    ArcadeDB's, a key of our Secret, to the backup's own container alone (`arcadedb.env`)."""
+    ArcadeDB's, a key of our Secret, to the backup's own container alone (`arcadedb.env`);
+    ClickHouse's backup user's in its own group (`clickhouse.env`); every container's, none."""
     values = rendered.values()
-    assert not [e for e in values["backups"]["env"] if "secret" in e]
-    secret_items = [e for e in values["backups"]["arcadedb"]["env"] if "secret" in e]
+    b = values["backups"]
+    assert not [e for e in b["env"] if "secret" in e or "secretKeyRef" in e and
+                e["secretKeyRef"]["name"] != backups.OUTPUT_SECRET]  # fmt: skip
+    assert not [e for e in b["clickhouse"]["env"] if "secret" in e]
+    secret_items = [e for e in b["arcadedb"]["env"] if "secret" in e]
     assert [e["secret"] for e in secret_items] == ["ARCADEDB_ROOT_PASSWORD"]
-    own = [e for e in values["backups"]["env"] if (e.get("secretKeyRef") or {}).get("name") == backups.BACKUP_SECRET]
+    own = [e for e in b["clickhouse"]["env"] if (e.get("secretKeyRef") or {}).get("name") == backups.BACKUP_SECRET]
     assert [e["name"] for e in own] == ["CLICKHOUSE_PASSWORD"]
-    env = {e["name"]: e.get("value") for e in values["backups"]["env"]}
+    env = {e["name"]: e.get("value") for e in b["clickhouse"]["env"]}
     assert env["CLICKHOUSE_USER"] == backups.CLICKHOUSE_BACKUP_USER != values["environment"]["CLICKHOUSE_USER"]
 
 
@@ -313,7 +324,7 @@ def test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_pa
                 or e.get("secret") == backups.CLICKHOUSE_BACKUP_PASSWORD}  # fmt: skip
 
     assert readers(values["workloads"] + values.get("jobs", [])) == {"clickhouse"}
-    assert {e["secretKeyRef"]["name"] for e in values["backups"]["env"]
+    assert {e["secretKeyRef"]["name"] for e in values["backups"]["clickhouse"]["env"]
             if e["name"] == "CLICKHOUSE_PASSWORD"} == {backups.BACKUP_SECRET}  # fmt: skip
     text = rendered.terraform(fixture)
     assert f'resource "kubernetes_secret" "{backups.BACKUP_SECRET.replace("-", "_")}"' in text
@@ -372,3 +383,66 @@ def test_an_irsa_account_named_as_a_backups_account_is_refused(field: str, taken
     found: dict[str, Any] = yaml.safe_load(rendered.artefacts("development")["values.yaml"])
     with pytest.raises(ValueError, match=f"names '{taken}', the backups' own account"):
         backups.add_backups(cfg, platform, found)
+
+
+# ---- the writers, from the render (the orchestrator's review of 7916044, item 5; rule 12) ---------
+
+
+def test_the_writers_are_the_rendered_workloads_that_write_the_stores_or_mount_the_sets_claims() -> None:
+    expected = {"development": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"],
+                "production": ["api", "arcadedb", "backup", "backup-claims", "report-sync", "worker", "workspace"]}  # fmt: skip
+    for fixture, writers in expected.items():
+        assert rendered.values(fixture)["backups"]["writers"] == writers, fixture
+    for fixture in rendered.fixtures():
+        found = rendered.values(fixture)["backups"]["writers"]
+        assert "clickhouse" not in found and "clickhouse-keeper" not in found, "they run through their restore"
+        assert {"arcadedb", "backup", "backup-claims"} <= set(found)
+
+
+@pytest.mark.parametrize(
+    ("workload", "paths"),
+    [
+        ({"name": "laurium"}, {"laurium": ["arcadedb"]}),
+        ({"name": "laurium"}, {"laurium": ["clickhouse"]}),
+        ({"name": "laurium"}, {"laurium": ["api"]}),
+        ({"name": "laurium", "shared": [{"subPath": "ingest", "mountPath": "/i", "readOnly": True, "claim": "ingest"}]}, {}),
+        ({"name": "laurium", "initContainers": [{"shared": [{"subPath": "i", "mountPath": "/i", "claim": "ingest"}]}]}, {}),
+    ],
+    ids=["calls ArcadeDB", "calls ClickHouse", "calls a writer", "mounts a set's claim", "an init container mounts one"],
+)
+def test_a_new_workload_that_writes_is_a_writer_without_naming_it(workload: dict[str, Any], paths: dict[str, list[str]]) -> None:
+    """A workload added to the render later (case-b's Laurium, say) is caught by the rule, not by a
+    list someone must remember to edit (rule 12): by its rows in profile.yaml or its mounts."""
+    from harness.cloud_platform.settings import load_profile
+
+    values = rendered.values()
+    rows = {**load_profile().egress.paths, **paths}
+    assert "laurium" in backups.writers([*values["workloads"], workload], rows)
+    assert "laurium" not in backups.writers([*values["workloads"], {"name": "laurium"}], load_profile().egress.paths)
+
+
+def test_the_databases_are_the_ones_the_render_gives_the_conduit() -> None:
+    """ArcadeDB's and ClickHouse's databases as the Conduit reads them (`ARCADEDB_DATABASE`,
+    `CLICKHOUSE_DATABASE`, else its default): the runner, the restore Job and the backup user's
+    grant all name them; a name that is not plain is refused, since each is written into a path,
+    a grant and a statement."""
+    from harness.cloud_platform.settings import load_platform
+
+    cfg = rendered.config()
+    assert cfg.cloud_platform is not None
+    platform = load_platform(cfg.cloud_platform.platform)
+    values = yaml.safe_load(rendered.artefacts()["values.yaml"])
+    values.pop("backups", None)
+    values["environment"].update(ARCADEDB_DATABASE="graph_a", CLICKHOUSE_DATABASE="facts_b")
+    backups.add_backups(cfg, platform, values)
+    b = values["backups"]
+    assert b["arcadedb"]["database"] == "graph_a"
+    assert {e["name"]: e.get("value") for e in b["arcadedb"]["env"]}["ARCADEDB_DATABASE"] == "graph_a"
+    assert {e["name"]: e.get("value") for e in b["clickhouse"]["env"]}["CLICKHOUSE_DATABASE"] == "facts_b"
+    assert "<query>GRANT ALL ON facts_b*.*</query>" in values["files"][backups.CLICKHOUSE_USERS_FILE]
+    for bad in ("Graph", "a/b", "x; DROP", ""):
+        broken = yaml.safe_load(rendered.artefacts()["values.yaml"])
+        broken.pop("backups", None)
+        broken["environment"]["ARCADEDB_DATABASE"] = bad or "1x"
+        with pytest.raises(ValueError, match="not a plain name"):
+            backups.add_backups(cfg, platform, broken)

@@ -27,10 +27,24 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+from pathlib import Path
 from typing import Any
 
 from harness.cloud_platform.settings import PlatformSettings
 from schemas.deployment import OspreyConfig
+
+#: The databases' names when the render's environment names none: the Conduit's own defaults
+#: (`ArcadeDBConfig.from_env`'s callers and `services.api.analytics_store.CLICKHOUSE_DATABASE`).
+DEFAULT_DATABASE = "ospreyflow"
+#: ArcadeDB's restore step, run by the restore Job in ArcadeDB's own image, and its check: given
+#: to the Job from the deployment's files (`ospreyflow-files`), mounted at `RESTORE_GRAPH_DIR`.
+RESTORE_GRAPH_SOURCES = Path(__file__).resolve().parents[1] / "deploy" / "backups"
+RESTORE_GRAPH_FILES = {
+    "restore-graph.sh": "restore-graph.sh",
+    "restore-graph-check.java": "CheckDatabase.java",
+}
+RESTORE_GRAPH_DIR = "/restore-graph"
 
 #: The runner's service account (IRSA), apart from the Conduit's: the Conduit's role is never given
 #: the backups and the runner's is never given the Conduit's buckets.
@@ -228,7 +242,7 @@ def give_arcadedb_its_backups_claim(arcadedb: dict[str, Any]) -> dict[str, Any]:
     return claim
 
 
-def clickhouse_users(deployment_user: str) -> str:
+def clickhouse_users(deployment_user: str, database: str = DEFAULT_DATABASE) -> str:
     """ClickHouse's users file: `backup` (the runner's: BACKUP, the S3 source, ON CLUSTER, and
     every right on `ospreyflow*`, a prefix grant, since the restore makes `ospreyflow_restoring_*`
     and swaps it with `ospreyflow_before_*`: refused on kind with `ospreyflow.*` alone, measured
@@ -251,7 +265,7 @@ def clickhouse_users(deployment_user: str) -> str:
       <quota>default</quota>
       <networks><ip>::/0</ip></networks>
       <grants>
-        <query>GRANT ALL ON ospreyflow*.*</query>
+        <query>GRANT ALL ON {database}*.*</query>
         <query>GRANT BACKUP, CLUSTER, S3 ON *.*</query>
       </grants>
     </{CLICKHOUSE_BACKUP_USER}>
@@ -292,6 +306,60 @@ def _env_from(environment: dict[str, Any], names: list[str]) -> list[dict[str, A
     return [{"name": n, "config": n} for n in names if n in environment]
 
 
+def database_names(environment: dict[str, Any]) -> tuple[str, str]:
+    """ArcadeDB's and ClickHouse's databases as the Conduit reads them: `ARCADEDB_DATABASE` and
+    `CLICKHOUSE_DATABASE` in the render's environment, else the Conduit's default. Refused unless
+    plain, since each is written into a path, a grant and a statement."""
+    names = tuple(
+        str(environment.get(variable) or DEFAULT_DATABASE)
+        for variable in ("ARCADEDB_DATABASE", "CLICKHOUSE_DATABASE")
+    )
+    for name in names:
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", name):
+            raise ValueError(f"the database {name!r} is not a plain name the backups can use")
+    return names[0], names[1]
+
+
+#: The stores the restore replaces with their pods stopped (ArcadeDB, from its claim); ClickHouse
+#: and its Keeper run through their restore (RESTORE, then a RENAME swap).
+STOPPED_STORES = ("arcadedb",)
+RUNNING_STORES = ("clickhouse", "clickhouse-keeper")
+#: P9's own runs, which a restore must not run beside: a backup reads what is being replaced.
+OWN_RUNS = ("backup", "backup-claims")
+
+
+def writers(
+    workloads: list[dict[str, Any]], paths: dict[str, list[str]] | None = None
+) -> list[str]:
+    """Every pod a restore refuses to run beside, from the render (rule 12: a workload added
+    later is caught by the same rule): the store replaced stopped (ArcadeDB); every workload that
+    mounts one of the set's claims (`storage.claims`, a `shared` mount naming its `claim`, in a
+    container or an init container); every workload that calls a store or a writer, by
+    profile.yaml's `egress.paths` (the rows its egress is rendered from), so one that writes
+    through the Conduit (the report sync, the Glass) is a writer too; and the backups' own runs.
+    ClickHouse and its Keeper run through their restore and are not."""
+    if paths is None:
+        from harness.cloud_platform.settings import load_profile
+
+        paths = load_profile().egress.paths
+    names = {str(w["name"]) for w in workloads}
+    found = set(STOPPED_STORES) & names
+    for workload in workloads:
+        mounts = [*(workload.get("shared") or [])]
+        for init in workload.get("initContainers", []):
+            mounts += init.get("shared") or []
+        if any(m.get("claim") for m in mounts):
+            found.add(str(workload["name"]))
+    targets = found | {"clickhouse"}
+    while True:
+        more = {n for n in names - found - set(RUNNING_STORES) if targets & set(paths.get(n, []))}
+        if not more:
+            break
+        found |= more
+        targets |= more
+    return sorted(found | set(OWN_RUNS))
+
+
 def backups_values(
     config: OspreyConfig,
     platform: PlatformSettings,
@@ -318,20 +386,32 @@ def backups_values(
         )
     claim = give_arcadedb_its_backups_claim(arcadedb)
     clickhouse_writes_as_its_backup_role(clickhouse, platform.aws_region)
+    graph_db, analytics_db = database_names(environment)
+    # Every container's: the region, the bucket and its key, which the runner needs to start.
     env: list[dict[str, Any]] = [
         {"name": "AWS_REGION", "value": platform.aws_region},
         {"name": "OSPREY_BACKUP_BUCKET",
          "secretKeyRef": {"name": OUTPUT_SECRET, "key": OUTPUT_KEYS["bucket"]}},
         {"name": "OSPREY_BACKUP_KMS_KEY",
          "secretKeyRef": {"name": OUTPUT_SECRET, "key": OUTPUT_KEYS["kms_key"]}},
-        # The pod whose claim the CronJob mounts, by name: the Service would hand the request to
-        # whichever copy answered, and its zip would be on another claim.
+    ]  # fmt: skip
+    # ArcadeDB's, to the container that calls it alone, the backup's: the pod whose claim the
+    # CronJob mounts, by name (the Service would hand the request to whichever copy answered, and
+    # its zip would be on another claim); its password, a key of our Secret (P7b's default-deny on
+    # our Secret's keys); the database the Conduit reads. The restore's ArcadeDB step calls nothing.
+    arcadedb_env: list[dict[str, Any]] = [
         {"name": "OSPREY_BACKUP_ARCADEDB_HOST", "value": "arcadedb-0.arcadedb-headless"},
+        {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
+        {"name": "ARCADEDB_DATABASE", "value": graph_db},
+    ]
+    # ClickHouse's, to the containers that call it alone, the backup's and restore-analytics':
+    # its address, and its backup user (the runner's alone; the deployment's own is refused BACKUP).
+    clickhouse_env: list[dict[str, Any]] = [
         *_env_from(environment, ["CLICKHOUSE_HOST", "CLICKHOUSE_HTTP_PORT", "CLICKHOUSE_CLUSTER"]),
-        # ClickHouse's backup user, the runner's alone (the deployment's own is refused BACKUP).
         {"name": "CLICKHOUSE_USER", "value": CLICKHOUSE_BACKUP_USER},
         {"name": "CLICKHOUSE_PASSWORD",
          "secretKeyRef": {"name": BACKUP_SECRET, "key": BACKUP_SECRET_KEY}},
+        {"name": "CLICKHOUSE_DATABASE", "value": analytics_db},
     ]  # fmt: skip
     return {
         "schedule": SCHEDULE,
@@ -340,8 +420,9 @@ def backups_values(
         "deadlineSeconds": DEADLINE_SECONDS,
         "resources": copy.deepcopy(api.get("resources") or {}),
         "env": env,
-        # The pods a restore refuses to run beside (the orchestrator's ruling 4): every writer.
-        "writers": ["arcadedb", "api", "worker", "report-sync"],
+        "clickhouse": {"env": clickhouse_env},
+        # The pods a restore refuses to run beside (the orchestrator's ruling 4), from the render.
+        "writers": writers(workloads),
         # The restore is proven for one copy of each store (Amendment 7); beyond it the render
         # refuses the restore's Jobs, in words naming P9b (the orchestrator's round 2, item 13).
         "restorable": int(arcadedb.get("replicas", 1)) == 1
@@ -350,13 +431,10 @@ def backups_values(
             "pod": "arcadedb-0",
             "backupsClaim": f"{claim['name']}-arcadedb-0",
             "databasesClaim": "databases-arcadedb-0",
-            "database": "ospreyflow",
+            "database": graph_db,
             "image": arcadedb["image"],
             "resources": copy.deepcopy(arcadedb.get("resources") or {}),
-            # ArcadeDB's password, a key of our Secret, to the backup's own container alone: the
-            # one that calls ArcadeDB (P7b's default-deny on our Secret's keys, cp-policy-check's
-            # `whole-secret`). The restore's ArcadeDB step is from the zip, with no call.
-            "env": [{"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"}],
+            "env": arcadedb_env,
         },
     }
 
@@ -384,7 +462,11 @@ def add_backups(
         )
     values["backups"] = found
     deployment_user = str(values["environment"].get("CLICKHOUSE_USER", "default"))
-    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(deployment_user)
+    values["files"][CLICKHOUSE_USERS_FILE] = clickhouse_users(
+        deployment_user, database_names(values["environment"])[1]
+    )
+    for key, source in RESTORE_GRAPH_FILES.items():
+        values["files"][key] = (RESTORE_GRAPH_SOURCES / source).read_text(encoding="utf-8")
     return {"terraform/backups.tf": backups_terraform(config, platform)}
 
 
