@@ -139,12 +139,13 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         [f"{STORE}::test_an_update_keeps_a_marked_lists_marking", REFRESH_MARKED],
     ),
     (
+        # The refresh now filters the changed entries once, before it screens or audits (the
+        # review's item 2): the plant is there (not applied at its old text, the run after the
+        # rebase onto 4ecd322, recorded).
         "L6 the re-screening screens every list (its own call site)",
         "OspreyFlow_Core/services/api/screening_refresh.py",
-        "                entries = lists_cleared_for(\n"
-        "                    [e for e in changed if e.entity_type == entity_type], deployer, self.scheme\n"
-        "                )",
-        "                entries = [e for e in changed if e.entity_type == entity_type]",
+        "        cleared = lists_cleared_for(changed, deployer, self.scheme)\n",
+        "        cleared = list(changed)\n",
         [REFRESH_MARKED],
     ),
     (
