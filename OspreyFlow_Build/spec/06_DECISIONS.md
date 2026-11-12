@@ -12558,7 +12558,7 @@ What B1 decides *(mine)*:
    (`tools/osprey_bundle.py`), run as `make bundle` from Build; the harness's dispatcher no longer
    names it.
 4. **The publish step copies a commit, never the working folder.** `tools/publish_user_repo.py
-   <commit> <out>` takes `OspreyFlow_Core` as it is at that commit (`git archive`), so nothing
+   r2 <out>` takes `OspreyFlow_Core` as it is at that commit (`git archive`), so nothing
    uncommitted — the owner's local `osprey.yaml`, which carries a machine path, or a gitignored data
    folder — can leave. It writes into an empty folder outside this repository and nothing at all if
    any check refuses. It refuses, naming each file: (a) any mention of `OspreyFlow_Build`; (b) an
@@ -33578,8 +33578,8 @@ The records are in `process/lanes/rules/l2.11/RED_RECORD.md`.
    `lanes_launch.sh merge-ok`, the trial merge onto current `main`, the lane's patches and owner-file diffs applied as
    the orchestrator applied them, lint on the merged diff, checking the server gate records, and the step's lines in
    `progress.tsv`, `estimates.tsv` and `CARRIES.md` inside the merge commit.
-2. **The orchestrator alone lands on `main`, fast-forward only.** The merger sends "land <commit> on <main it was
-   built on>". The orchestrator runs `git merge --ff-only <commit>` in its checkout. If `main` has moved, the merger
+2. **The orchestrator alone lands on `main`, fast-forward only.** The merger sends "land r2 on <main it was
+   built on>". The orchestrator runs `git merge --ff-only r2` in its checkout. If `main` has moved, the merger
    rebuilds the merge on the new `main`. It runs the gates again (one `make -k ci` on the server) only if the new
    commits on `main` touch code rather than `spec/` or `process/`. So rule 14's "only the orchestrator merges to
    `main`" still holds, and no two sessions ever write in one worktree.
@@ -33759,6 +33759,302 @@ passed, not skipped.
   so a staged file above the ceiling past them is told only at Load.
 - New: a backstop refusal after raw staging leaves that load's raw and resolved rows staged, on any load.
 - New: a staged run refused for a cause other than the ceiling keeps its step tables.
+
+### ADR-148, Amendment 7 (11 November 2026) — backups on the `cloud-platform` profile as built (P9, cut)
+
+Status: accepted. Written in the case lane at step P9 (cut to what a proof of concept needs), reserved 11 November.
+It records decision 13 as built: the scheduled, encrypted backup of ArcadeDB and ClickHouse (and, in the poc shape,
+Amendment 5's claim of its own) to S3 by the namespace's roles, with no stored key; one restore rehearsed and timed;
+and the orchestrator's rulings of 11 November on the claims part, the roles, the bucket, the key, the restore and the
+decommission, made after two reviews of the first build (one finding a blocker, below). Moved to P9b: the alerts, the
+PodDisruptionBudgets' drain test, the volume-expansion procedure, and the production shape's restore.
+
+**Context.** Decision 13 says what is backed up and that it is encrypted. It does not say how a pod reaches ArcadeDB's
+backup file on a ReadWriteOnce claim, how ClickHouse writes to S3 with no key, or what a set is. Rule 15 asks for a
+stand-in that refuses what S3, STS and KMS refuse, and for each refusal to be shown red. The first design passed every
+offline case and was refused by the real ClickHouse at its first kind run; the first build then let the deployment's
+own ClickHouse user read and overwrite every set, measured on kind (point 4).
+
+**Decision.**
+1. **A set** is `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by the schedule slot: ArcadeDB's zip
+   (`arcadedb/<database>.zip`), ClickHouse's own backup (`clickhouse/`), the claims part (`claims/<name>.tar.gz` and
+   its own `manifest.json`) in the poc shape, then the set's `manifest.json`, **written last**, holding every part's
+   size and SHA-256, and ClickHouse's part as each file's name, size and ETag. A set without it is unfinished, is
+   never restored from and is never the latest. A finished slot is never taken again.
+2. **ArcadeDB.** Its `backups` folder is a claim of its own (`backups-arcadedb-0`, the databases claim's size), not a
+   scratch folder. The CronJob's pod mounts it, on `arcadedb-0`'s node by a required pod affinity, asks that pod by
+   name for `BACKUP DATABASE`, uploads the zip under the bucket's key and removes it from the claim. One run at a time
+   (`Forbid`); a run missed by an hour is skipped; a refused run is never retried.
+3. **ClickHouse writes as its own role, by its own pod.** ClickHouse 25.8's `BACKUP … TO S3()` takes one argument or
+   three, never a session token: `S3(url, key, secret, token)` is refused, "Backup S3 requires 1 or 3 arguments"
+   (Code 42, measured on osprey-p9). The first design handed it the role's temporary credentials in the statement,
+   and an offline fake that took four arguments passed every case (rule 15's second example). So ClickHouse's pod
+   runs as its backup role's service account (IRSA), and the statement names only the regional address. Its pod is
+   given **`AWS_DEFAULT_REGION`**: without it, ClickHouse's web identity client asked `sts.us-east-1`, outside the
+   namespace's egress, got nothing, and wrote anonymously (403), measured both ways; `AWS_REGION`,
+   `AWS_ENDPOINT_URL_STS` and the regional S3 URL did not change it. An expired session is renewed (measured: with
+   every session ended, ClickHouse and the runner each took a new one, and the set was written). A role that cannot
+   be renewed is refused at the runner's STS call and at ClickHouse's own (the stand-in's log of ClickHouse's pod).
+4. **Who may reach the sets** (the orchestrator's ruling 1, after the blocker). As first built, ClickHouse held the
+   one backup role, and the deployment's own ClickHouse user (`osprey`, the Conduit's and the workers') could reach
+   the bucket through it. Measured on osprey-p9 as `osprey`: `s3()` read a set's manifest and ArcadeDB's whole zip
+   (87,479 bytes), `INSERT INTO FUNCTION s3()` wrote over a set, and `url()` reached another host. Now:
+   - ClickHouse's users file (`users.d`) refuses `osprey` the S3 and URL sources and BACKUP (`REVOKE S3, URL,
+     BACKUP`, and access management and named collections explicitly, though the entrypoint's own user holds
+     neither), and gives a user of its own, `backup`, BACKUP, ON CLUSTER, the S3 source and every right on
+     `ospreyflow*`, a prefix grant: the restore makes `ospreyflow_restoring_*` and swaps it with
+     `ospreyflow_before_*`, and with `ospreyflow.*` alone kind's restore was refused its own temporary database
+     (Code 497, round 3). Measured (`gates/p9_grants_probe3.log`): the prefix covers the live `ospreyflow` itself
+     and the restore's whole sequence, and refuses `backup` any other database, `x_ospreyflow` included; it also
+     covers any name that merely begins `ospreyflow` (none is made). **Its password is a Secret of its own** (`ospreyflow-clickhouse-backup`, made by
+     backups.tf), never a key of the shared Secret, which the Conduit, the workers, the report sync and the
+     workspace load whole: ClickHouse and the backup's own pods alone name it (the lane-reviewer's round-2
+     blocker). Measured on ClickHouse 25.8.33.6 in throwaway containers (`gates/p9_grants_probe.log`,
+     `p9_grants_probe2.log`): the narrowed `osprey` is the entrypoint's default less BACKUP and the S3 and URL
+     sources; the S3 table engine, `s3Cluster` and `icebergS3` are refused it; **`RESTORE … FROM S3` is not refused by
+     privilege** (it went to S3 and was refused there), and a dictionary's HTTP source is not gated by the URL grant
+     (its requests are unsigned, so the bucket refuses them, and ClickHouse's egress is denied).
+   - **A measured limit, ruled (the orchestrator's ruling A, 11 November; listed for the owner):** `osprey` may
+     `RESTORE … FROM S3` a set's ClickHouse part into a database of its own (the restore's own shape: a plain
+     database it creates, then `RESTORE … AS` it with `allow_different_database_def`; a bare `RESTORE … AS` is
+     refused whenever the set's Replicated database names the Keeper path the live one holds, Code 253, so it is
+     no bound). No ClickHouse privilege gates
+     RESTORE: it asks only CREATE and INSERT on what it makes, which the deployment's user needs, and with S3, URL
+     and BACKUP revoked it was accepted on kind (round 3) and in a container, `RESTORE TABLE` into `ospreyflow`
+     too (`p9_grants_probe3.log`). *What is readable:* ClickHouse's own rows as a set held them, those deleted
+     since included, for up to the retention (35 days). *To whom:* holders of `osprey`'s credentials, who already
+     read every live row unfiltered. *The bound:* RESTORE reads by ClickHouse's pod role, which reaches
+     `sets/*/clickhouse/*` alone, so ArcadeDB's part, the claims and the manifests stay out of reach, and BACKUP
+     (the only way to write a set through ClickHouse) stays refused. *The test that holds it:* kind's
+     `osprey_sources` accepts exactly that one statement shape (any other acceptance is red) and requires S3 to
+     refuse `osprey`'s RESTORE from ArcadeDB's and the claims' part *by access*; `osprey_bound_red` plants
+     ClickHouse's role reaching `sets/*` and shows that check red. A refused RESTORE and a missing backup read alike
+     to ClickHouse (`BACKUP_NOT_FOUND`), so the check copies a whole ClickHouse backup under ArcadeDB's and the
+     claims' prefixes first (removed after): with the role as rendered S3 refuses it ("Access Denied: while reading
+     key …/arcadedb/p9-bound/.backup"), and with the role planted wide all three are restored
+     (`gates/p9_kind_osprey_sources.r3.json`, `p9_kind_osprey_bound_red.r3.json`, `p9_kind_bound.r3.log`). *Rejected:* (B) taking ClickHouse's standing role away, since 25.8 takes
+     no session token in BACKUP (Code 42, measured) and the alternative is a stored IAM key, which this amendment
+     excludes; (C) a host filter (`remote_url_allow_hosts`) or an S3 endpoint credential section, which are
+     server-wide and refuse the backup user too; (D) revoking CREATE from `osprey`, which breaks the analytics
+     adapter's own schema set-up (`analytics_clickhouse/schema.py` creates its tables) and leaves table-level RESTORE, which needs CREATE TABLE and INSERT only.
+   - The `backup` user's networks stay `::/0`: ClickHouse matches a user by address or reverse name, and a pod's are
+     neither stable nor its own; the control is the password, now in the backup's pods alone, and P7b's per-workload
+     ingress rows (ClickHouse admitting the backup's and the restore's pods by name). Carried to P9b with the rest.
+   - **Two roles, each to its own prefix**: ClickHouse's (`<namespace>-backup-clickhouse`, its pod's service
+     account) get, put and list `sets/*/clickhouse/*` and delete its lock; the runner's (`<namespace>-backup`,
+     `ospreyflow-backup`) the zip, the claims and the manifest. Each is trusted for its own service account's token
+     issued for STS alone (`:sub` and `:aud`, StringEquals), and uses the key through S3 in the region alone
+     (`kms:ViaService`).
+   - After the fix, on kind, as `osprey`: each of the four is refused in ClickHouse's own words ("it's necessary to have the grant READ ON S3", twice;
+     "WRITE ON S3"; "READ ON URL"; `gates/p9_kind_osprey_sources.r2.json`).
+   - ClickHouse's pod egress: from ClickHouse's own pod, an outside address (1.1.1.1) is not reached: the
+     namespace's deny-egress holds for it (platform's policy, P7b's per-workload rows to come).
+5. **No set is erased by a role, and the retention is the total.** ClickHouse 25.8's BACKUP removes its own `.lock` at its end and fails without the
+   delete ("Access Denied … while removing object … .lock", measured on three slots); with that delete alone, BACKUP
+   and RESTORE both passed (measured). So ClickHouse's role may delete `sets/*/clickhouse/.lock` and nothing else, the
+   runner's role nothing, neither an object version (the orchestrator's grant). **The bucket is versioned**: a set's
+   object overwritten keeps its previous version for 7 days (a window to recover an overwrite, not a second
+   retention); a set's objects expire 35 days after they were written (`expire-sets`: a month of failed runs before
+   the last good set goes), and expired delete markers are removed (the orchestrator's ruling: the agreed retention
+   is the total). Object lock is P9b's.
+6. **Encryption.** A bucket of its own, `<prefix>backups`, SSE-KMS by a customer key of its own
+   (`alias/<namespace>-backups`, rotated) as its default. Its policy refuses plain HTTP, another encryption, another
+   key, `aws:kms` with no key named (S3's own `aws/s3`, the lane-reviewer's finding), and every principal but the two
+   roles every object action, its versions' included (reading, writing, removing). It does not refuse `ListBucket`,
+   which `HeadBucket` needs (the Terraform's own read of the bucket, the decommission's step 8): a listing names sets
+   and holds none. **The key's own policy**: the account's administrators administer it (its alias, rotation, tags and
+   policy; no use of it and no grant, so `kms:CreateAlias`, never `kms:Create*`); the two roles use it through S3
+   alone; its deletion is denied to all, **against accident**: an administrator who rewrites the policy can lift that,
+   as the decommission's section 9 does, the client's decision. **The key and the
+   bucket are kept from a destroy** (`prevent_destroy`, spec 05 §6.1). All of it is written once in
+   `harness/cloud_platform_backups.py` (`role_policies`, `trust_policy`, `bucket_policy`, `key_policy`); the Terraform
+   renders those documents, and the stand-in judges the same ones, built by the same functions with the ARNs they
+   stand for (never by reading the HCL back); a test holds each rendered statement to its document, every effect,
+   action, resource, principal and condition value.
+7. **The poc shape's claims** (Amendment 5's `ospreyflow-ingest`). A second CronJob, `ospreyflow-backup-claims`, on
+   the same schedule and beside the shared folders' pods (a required pod affinity: those may be on another node than
+   `arcadedb-0`, and both claims are ReadWriteOnce), streams each claim, read-only, its `lost+found` left out, into the
+   same set. Both runs name the set by their Job's name, the slot, never by looking for an open set, so a slow or
+   overlapping run never joins another's. The main run waits for the claims part at most three hours, then fails in
+   words and leaves the set unfinished. A file gone before it is read is left out and counted; one that shrinks while
+   read refuses the part (never padded into the set), and the set stays unfinished.
+8. **The restore refuses while anything writes, verifies, then replaces, never dropping first** (the orchestrator's
+   rulings 3, 4 and 5). It is rendered only for a set named by its own name (`YYYYMMDDTHHMMSSZ`; the render refuses
+   `latest` or anything else, which each step would resolve again) and applied by hand, never by `helm upgrade`, and
+   **only for one copy of each store**: beyond that the render refuses it, in words. Both of its Jobs (the stores',
+   the claims') begin with `verify`:
+   - **the writers**: the restore's own account lists the namespace's pods (a Role: get and list pods, nothing else)
+     and refuses while any writer runs. **The writers are the render's** (`backups.writers`, the orchestrator's
+     review of 7916044, item 5; rule 12): ArcadeDB, every rendered workload that mounts one of the set's claims or
+     calls ArcadeDB or ClickHouse by its profile.yaml rows, directly or through another writer (the report sync and
+     the Glass through the Conduit), and the backups' own runs; ClickHouse and its Keeper run through their restore.
+     **It fails closed**: with no writers named (the chart requires them), or the pods not listed, it refuses, "cannot
+     confirm the writers are stopped", with the API's own answer (a 403 is RBAC's), nothing touched. The restore's
+     pods reach the cluster's API by their profile.yaml rows (`kube-api`, both restores; `P9_rows.diff`). The writers
+     are checked again just before ArcadeDB's databases are replaced; the recovery runbook suspends both CronJobs
+     first and resumes them after;
+   - **every part**: the manifest the set's own (its `set` this set, every key it names under the set), the
+     deployment's claims each in it, ArcadeDB's zip and each claim by size and SHA-256, ClickHouse's files by name,
+     size and ETag. A part missing, expired, changed or another set's refuses the restore with nothing touched. Each
+     later step checks its own part again as it reads it.
+   Then **ArcadeDB restored beside the live database, never removing it first** (the orchestrator's review of
+   7916044, must-fix 1: 7916044's step removed the live graph, then ran `restore.sh`, so a truncated zip or an
+   out-of-memory part-way lost it): `deploy/backups/restore-graph.sh`, in ArcadeDB's own image, runs `restore.sh` into
+   `<database>.restoring` on the same claim; a check (`CheckDatabase.java`, by the image's own Java) holds it to the
+   set's zip (every entry there at the zip's size, every page file whole pages: ArcadeDB itself opens a short or
+   missing bucket, or an empty schema, with a warning, measured in `gates/p9_restore_graph_probe.log`) and opens it
+   read-only, every record and edge read; only then the live one is renamed to `<database>.before`, the restored one
+   into its place, and the old removed last. Any failure before the swap removes the restored copy and leaves the
+   live one untouched, refused in words; a `<database>.before` left by a restore stopped between its renames refuses
+   the next until an operator has looked (the runbook says how, decided by whether `<database>.restoring` is still
+   there). Its words say only what happened: "put back" only when the rename back succeeded, "not touched" only
+   before the live database moved, no live database said so, the old copy's removal checked (round 5). Shown in
+   ArcadeDB's image against real databases and a real set's zip (`test_restore_graph.py`), every case, a failed
+   put-in, a failed put-back and an old copy left, and each of the check's branches reached by a damage of its own
+   (a short or missing file, an empty schema, a stray file not whole pages, a zip holding no file). **ClickHouse restored into a database of its own** (its
+   own Keeper path), then the two swapped by rename and the old one dropped only after, so a refused restore leaves
+   the live database as it was (the live one set aside only if it is there: after its loss, the case the restore is
+   for, it is not, and kind's round-3 restore was refused renaming what was gone, Code 81); if the second rename is
+   refused, the live one is renamed back and the refusal names the restored copy kept (`<database>_restoring_<set>`),
+   or, if even that fails, where the live data is (`<database>_before_<set>`); ON CLUSTER, each attempt's Keeper path
+   is its own (a RENAME keeps the path, so the database swapped in still held `…_restoring_<set>`'s, and the same
+   set's next restore was refused making it again, Code 253: found on kind in round 4, the fake now keeping Keeper
+   paths as ClickHouse does). **Restored beside live databases on kind** (round 4, under the case lane's lease on
+   stack b, `gates/p9_kind_live_restore.r4.json`; every kind restore before ran after `destroy`): with the stores
+   and the claim changed since the set, both swaps ran and everything came back as the set, nothing left beside it;
+   a truncated zip its manifest matched failed in restore-graph ("ArcadeDB's restore of the set's zip failed; the
+   live database … was not touched"), ArcadeDB and ClickHouse as they were; ClickHouse's role refused its reads
+   failed at RESTORE ("Access Denied: while reading key …/.backup"), ClickHouse's live database kept, ArcadeDB's
+   swap finished; **a restore stopped part-way leaves the parts mixed** (round 5): the two Jobs run side by side
+   and the stores' replaces ArcadeDB, then ClickHouse, so a refusal in restore-graph can leave the claims at the
+   set and both stores as they were, and one in restore-analytics ArcadeDB at the set and ClickHouse as it was
+   (as kind showed, `p9_kind_live_restore.r4.json`). The runbook's *If it fails* says which parts are at the set
+   for each refusal; **running the same set's restore again is the way out**, every step replacing its part from
+   the set again (another set's restored ClickHouse copy, kept by a refused swap, is dropped and said; the
+   set-aside RENAME's refusal names the restored copy it leaves); each claim unpacked beside itself by tarfile's `data` filter before its contents are
+   replaced. **The restore is proven for the single-replica shapes (development, and the poc shape the client
+   installs).** The production shape (three ArcadeDB copies, ON CLUSTER with two ClickHouse replicas) is P9b's.
+9. **The decommission** (the orchestrator's ruling): the backups bucket and its key are its one named exception, kept,
+   and reported as "kept: the backups (retention)" by the decommission check, which still fails on anything else (the
+   roles, their service accounts and the Secret among it). Its last backup is written into that bucket by the
+   deployment's own two runs; the client's retention replaces the deployment's lifecycle rule before the kept
+   resources leave the Terraform state; section 9 removes the bucket's policy, every version, the bucket, then
+   replaces the key's policy before its scheduled deletion; section 10, restoring a kept set later, is the platform team's procedure, carried to P9b
+   with its steps written (the kept bucket and alias imported by a reinstall into the same namespace; the policies
+   rewritten for another's roles).
+   Sent to the platform lane as `process/lanes/case/P9_decommission.diff`.
+10. **The managed database restored with the stores** (the orchestrator's ruling 9, rule 11, listed for the owner).
+   A restore of the stores to a set while PostgreSQL (RDS) stays as it is would bring back, visible under today's
+   grants, rows withdrawn or deleted since the set. So a restore to a set first restores RDS point in time to the
+   set's finish time, before the stores: each manifest records when its set finished (`finished`, UTC), `sets`
+   prints it, and the recovery runbook's restore begins with the platform team's point-in-time restore and the
+   namespace pointed at it. Automating it is P9b's (a CARRIES row).
+11. **What the stand-in does not model.** Versioning: the bucket's versioning, its noncurrent-version expiry and
+   expired delete markers are held by the Terraform's text and `tofu validate` alone, never by the stand-in, which
+   keeps one version of each object; a live check on the client's platform is on CARRIES' live-checks row. Its
+   multipart completion refuses as S3 does, each a 400 with the upload kept: a part not uploaded or named by another
+   ETag (`InvalidPart`), parts out of order (`InvalidPartOrder`), a part under 5 MiB but the last
+   (`EntityTooSmall`).
+
+**The stand-in** (`tests/fixtures/cloud_platform/s3_standin.py`) refuses what S3, STS and KMS refuse: a wrong
+signature, an unknown key, a skewed clock, an expired or tokenless session; a web identity its role's trust document
+does not admit (HS256 by a shared secret, or the cluster's own RS256 keys and issuer on kind); a web identity of another issuer than the trust's federated
+provider's; a bucket policy's deny; an action the role is not given; and KMS as KMS judges it, by the key's own
+policy (an explicit deny wins; a grant naming the role is enough alone; the root's delegates to IAM), through S3 alone,
+naming the key and the action. Three of its faults were found on kind or in review: it ended every session at a policy change,
+which AWS does not; its listening backlog of 5 timed out ClickHouse's parallel uploads; it took `aws:kms` with no
+key named as the bucket's key, hiding the policy's gap; and it judged KMS by the role's IAM alone, so a refusal it gave
+was not one AWS would give once the key has its own policy. Each is fixed, red first.
+
+**Measured** (osprey-p9: kind v0.27, Calico 3.29, `gp2-expand` by local-path, two nodes at 4 GB each; ArcadeDB
+26.10.1, ClickHouse 25.8.33.6; the stand-in as a pod; a synthetic seed of 5,000 vertices, 1,000 edges, 200,000
+ClickHouse rows and 301 files on the Ingest claim). The server was shared with other lanes' work throughout (its load
+average 10 to 15), so each time is what that cluster did then, not a service level:
+
+- **The timed round trip, round 3, under the case lane's lease on test stack c** (taken for this run alone, no
+  stack started; another lane's live run held stack b on the same server meanwhile): backup 7.1 s; restore 70.8 s
+  end to end (stopping 31.3 s, the two restore Jobs 16.5 s, starting 23.0 s), counts, sums and the claim's tree
+  hash equal to the seed's, every object under the key (`gates/p9_kind_roundtrip_timed.r3.json`). Round 3's other
+  kind runs (`gates/p9_kind.r3.log`, `p9_kind_*.r3.json`): every red below, the fail-closed restore and osprey's
+  sources, after kind found two faults the fakes had hidden (the backup user's grant, and the swap renaming a lost
+  database; point 4 and point 8).
+- **The timed round trip, round 2, under the case lane's lease on test stack b** (taken for this run alone, no
+  stack started; the lease's own file is in the record): backup 7.4 s; restore 70.2 s end to end (stopping ArcadeDB
+  and the claims' pod 31.6 s, the two restore Jobs 14.9 s in parallel with `verify` first in each, starting 23.7 s).
+  Every count and sum, and the claim's tree hash, equal to the seed's; every object under the key
+  (`gates/p9_kind_roundtrip.r2.json`; the recovery runbook's table, which says what it leaves out). The first
+  build's, under lease c: 64.6 s.
+- **The refusals on kind, round 2** (`gates/p9_kind_reds.r2.{json,log}`): the bucket's policy for another role
+  (at the runner's first read of the set); the runner's role without `kms:GenerateDataKey`; every session expired,
+  renewed (measured, the set written); an unrenewable role refused at the runner's `AssumeRoleWithWebIdentity` ("STS
+  refused it") and at ClickHouse's BACKUP sent by the runner's own call, the stand-in's log showing STS's 403 to
+  ClickHouse's pod; a missing claims part leaving the set unfinished after the bounded wait, and its restore refused.
+- **The delete, both ways** (the outcome, not a time): with no delete, BACKUP refused on three slots; with the lock's
+  delete alone, BACKUP and RESTORE passed (set 20261111T161600Z).
+- **The deployment's own user, both ways** (point 4).
+- The red record: every plant red (`gates/p9_reds.r2.log`).
+
+**Consequences.**
+- `P9_render.diff` (platform's): one hook, `add_backups`, in `render_cloud_platform`, and `values.yaml`'s `backups: {}`;
+  platform's five conditions, checked, in its note. ArcadeDB's third claim template cannot change in place: an
+  existing StatefulSet is orphaned and `arcadedb-0` restarted once (the recovery runbook).
+- The restore's pods reach the cluster's API by their profile.yaml rows (`P9_rows.diff`); without them every
+  restore is refused, in words, touching nothing. ClickHouse's own egress is the platform's policy (measured: no
+  outside address reached).
+- **P7b's rows checked against P9's pods as built, after P7b landed (3673660)**
+  (`tests/cloud_platform_backup/test_backups_rows.py`): each pod's row is held to what its containers' commands call,
+  read from `platform_backup`'s own call graph, on the ports their environment names. Three differences, each
+  fixed in `P9_rows.diff` (platform's: `profile.yaml`, cp-policy-check's allowance, its two tests, Amendment 5
+  point 21's words). `restore-claims` runs the writers check and had no `kube-api`, so every claims restore would
+  be refused. `restore` had ArcadeDB, which none of its commands calls (ArcadeDB's restore is from the zip on the
+  Job's own claim), so the row is now ClickHouse and `kube-api`. cp-policy-check listed no key of our Secret for the
+  backup, which needs ArcadeDB's password: P9 now gives that key to the backup's own container alone
+  (`backups.arcadedb.env`), not to the claims' runs or the restores, and the diff lists it for `backup`. Until the
+  diff is applied, the two rows' cases are held red (strict) and every render with the backups is refused for that
+  one key and nothing else; the diff makes both unconditional. With `P9_render.diff` refreshed on P7b's render and
+  both applied, `make cp-policy-check` gives 0 violation(s) on every fixture (`gates/p9_cp_policy_merged.r1.txt`).
+  Two more found there: backups.tf wrote its Secret's key quoted, which platform's reader does not take (now bare);
+  and the hook runs after the render's token step, so P9 sets ClickHouse's `automountToken: false` itself (it calls
+  no Kubernetes API; IRSA's webhook gives its web identity by the account alone, not measured on EKS here), with
+  platform's token test given ClickHouse as its one exception in `P9_render.diff`. Ruled by the orchestrator
+  (11 November): kept so, `TOKEN_ALLOWED` unchanged (EKS's webhook injects its own projected token whatever
+  `automountServiceAccountToken` says); the measurement on EKS is on CARRIES' live-checks row.
+- **The orchestrator's review of 7916044** (12 November; `process/lanes/case/P9_ROUND4.md`), besides points 8, 10
+  and 11: each store's settings go to the containers that call it alone (ArcadeDB's to the backup; ClickHouse's
+  backup user to the backup and restore-analytics), held by a test reading each container's Secret keys from its
+  command, as its egress is; a zip a killed run left on the backups claim is removed before the next backup; a
+  manifest of the wrong shape is refused in words; the claims' old contents are set aside on the claim (never
+  deleted) before the set's are moved in, so a failure part-way keeps both and says where; the databases' names are
+  the render's (`ARCADEDB_DATABASE`, `CLICKHOUSE_DATABASE`, else the Conduit's default), in the runner, the Job and
+  the backup user's grant; the CronJobs run in UTC; the escape-path and outside-the-set plants each reach their own
+  check (rule 15's second paragraph). P9_rows.diff no longer edits Amendment 5 point 21 (ruling 10: accepted text is
+  not rewritten; this amendment's consequences record the correction).
+- **The orchestrator's second review of afc1a5f** (12 November; `P9_ROUND5.md`): the runbook's step 2 waited
+  for every pod named a writer's, the finished backup Jobs' kept pods among them, so it timed out on any
+  deployment that had run a backup; it waits for the stopped workloads' pods alone, and the runbook's restore
+  was walked as written on kind (`gates/p9_kind_runbook_walk.r5.json`; rule 15: the operator's procedure itself
+  had never run). The runbook also names the room a second copy needs, re-points the deployment at RDS only once
+  the writers are stopped, and warns that the Conduit and the workers make an empty ArcadeDB database where they
+  find none (`create_database_if_absent`). The render's Jobs are read for writers as its workloads are.
+- The parts are taken minutes apart with the Conduit running; a backup before an upgrade is taken with it stopped
+  (the recovery runbook says how in the poc shape, where the claims run needs the shared pods' node).
+- **Left, to P9b:** the alert on a failed or missing run; object lock or a write-only role; the drain test and the
+  volume expansion; the production shape's restore (every ArcadeDB copy, ON CLUSTER with two replicas; refused by
+  the render until then); the client's retention, which sets `EXPIRE_DAYS`; the kept bucket's policy matching roles by
+  ARN, so a role later made under the same name regains it; a large database's zip staged in the restore pod's own
+  scratch space; the `backup` ClickHouse user's networks (point 4); a service account of the restore's own, so the
+  nightly runner no longer holds the pods Role; restoring a kept set after a decommission (the platform team's
+  procedure, its steps written); `ospreyflow.backupPod` repeating the chart's pod security block, and the module's use
+  of platform's private `_file`, `_q` and `_secret` (asked to be made public); the managed database's point-in-time
+  restore automated (point 10); a writer started between the writers check and ArcadeDB's swap (the runbook's
+  suspended CronJobs and stopped workloads narrow it, nothing closes it); IAM's `*` matching `/` in the roles'
+  resource patterns; `harness/cloud_platform_backups.py` to the platform lane once P9 lands; whether ClickHouse
+  frees a Replicated database's Keeper path on `DROP … SYNC` (each attempt's path is its own meanwhile; CARRIES'
+  live-checks row); the check's time and memory on a real-sized graph (measured on the client's install).
+
+**Tests.** `tests/cloud_platform_backup/` (the stand-in, the runner, the claims, the render, the chart on the server's
+Helm); `process/lanes/case/gates/p9_reds.py` (the plants, each at its real call site, red); `gates/p9_kind.{sh,py}`
+(the round trip, the timed restore, the refusals and the deployment's user's refusals on kind).
 
 ### ADR-110, Amendment 20 (11 November 2026) — a fault acting as a schedule's owner: the ledger keeps refused with the notice kind failed; the error's text stays in the log alone, and Am 19 point 5's 'ledger' does not hold for this branch
 

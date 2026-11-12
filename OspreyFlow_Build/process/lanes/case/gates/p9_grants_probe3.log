@@ -1,0 +1,59 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261111T192737Z/log: bash -c cd ../OspreyFlow_Build/process/lanes/case/gates/p9_grants_probe3 && bash probe.sh
+=== the backup user's grants, with the wildcard
+-- [backup] SHOW GRANTS
+GRANT BACKUP, CLUSTER ON *.* TO backup
+GRANT S3 ON *.* TO backup
+GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE DATABASE, CREATE TABLE, CREATE VIEW, CREATE DICTIONARY, DROP DATABASE, DROP TABLE, DROP VIEW, DROP DICTIONARY, UNDROP TABLE, TRUNCATE, OPTIMIZE, CREATE ROW POLICY, ALTER ROW POLICY, DROP ROW POLICY, SHOW ROW POLICIES, SYSTEM MERGES, SYSTEM TTL MERGES, SYSTEM FETCHES, SYSTEM MOVES, SYSTEM PULLING REPLICATION LOG, SYSTEM CLEANUP, SYSTEM VIEWS, SYSTEM 
+-- [osprey] CREATE DATABASE ospreyflow
+-- [osprey] CREATE TABLE ospreyflow.t (x UInt8) ENGINE=MergeTree ORDER BY x
+-- [osprey] INSERT INTO ospreyflow.t VALUES (1),(2),(3)
+=== the restore's own sequence as backup (Disk standing for S3; the grants are the same)
+-- [backup] BACKUP DATABASE ospreyflow TO Disk('backups', 's1')
+ab1957c4-842b-45ae-9e36-5b74d22015ff	BACKUP_CREATED
+-- [osprey] INSERT INTO ospreyflow.t VALUES (4)
+-- [backup] DROP DATABASE IF EXISTS ospreyflow_restoring_s1 SYNC
+-- [backup] CREATE DATABASE ospreyflow_restoring_s1
+-- [backup] RESTORE DATABASE ospreyflow AS ospreyflow_restoring_s1 FROM Disk('backups', 's1') SETTINGS allow_different_database_def = true
+92b08ccd-111c-439b-a172-680ecb332e05	RESTORED
+-- [backup] RENAME DATABASE ospreyflow TO ospreyflow_before_s1
+-- [backup] RENAME DATABASE ospreyflow_restoring_s1 TO ospreyflow
+-- [backup] DROP DATABASE ospreyflow_before_s1 SYNC
+-- [osprey] SELECT count() FROM ospreyflow.t
+3
+=== the prefix grant on the live database itself (ospreyflow*: matches ospreyflow, as intended)
+-- [backup] CREATE TABLE ospreyflow.u (x UInt8) ENGINE=MergeTree ORDER BY x
+-- [backup] DROP TABLE ospreyflow.u SYNC
+=== the backup user outside its own (refused), a name merely containing the word included
+-- [backup] CREATE DATABASE x_ospreyflow
+Received exception from server (version 25.8.33):
+Code: 497. DB::Exception: DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant CREATE DATABASE ON x_ospreyflow.*. (ACCESS_DENIED)
+(query: CREATE DATABASE x_ospreyflow)
+-- [osprey] CREATE DATABASE x_ospreyflow
+-- [backup] DROP DATABASE x_ospreyflow
+Received exception from server (version 25.8.33):
+Code: 497. DB::Exception: DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant DROP DATABASE ON x_ospreyflow.*. (ACCESS_DENIED)
+(query: DROP DATABASE x_ospreyflow)
+-- [backup] CREATE TABLE x_ospreyflow.t (x UInt8) ENGINE=MergeTree ORDER BY x
+Received exception from server (version 25.8.33):
+Code: 497. DB::Exception: DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant CREATE TABLE ON x_ospreyflow.t. (ACCESS_DENIED)
+(query: CREATE TABLE x_ospreyflow.t (x UInt8) ENGINE=MergeTree ORDER BY x)
+-- [osprey] DROP DATABASE x_ospreyflow
+-- [backup] CREATE DATABASE elsewhere
+Received exception from server (version 25.8.33):
+Code: 497. DB::Exception: DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant CREATE DATABASE ON elsewhere.*. (ACCESS_DENIED)
+(query: CREATE DATABASE elsewhere)
+-- [osprey] CREATE DATABASE elsewhere
+-- [backup] DROP DATABASE elsewhere
+Received exception from server (version 25.8.33):
+Code: 497. DB::Exception: DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant DROP DATABASE ON elsewhere.*. (ACCESS_DENIED)
+(query: DROP DATABASE elsewhere)
+-- [osprey] DROP DATABASE elsewhere
+=== osprey's RESTORE (the kind finding), as the entrypoint's grants less S3, URL, BACKUP
+-- [osprey] RESTORE DATABASE ospreyflow AS stolen FROM Disk('backups', 's1')
+8857418a-d387-4235-9187-b88325876105	RESTORED
+-- [osprey] RESTORE TABLE ospreyflow.t AS ospreyflow.t_stolen FROM Disk('backups', 's1')
+171cd481-7329-4303-8f1d-abb3530c11a1	RESTORED
+-- [osprey] SELECT count() FROM ospreyflow.t_stolen
+3
+left: 0
+Wall time: 5 s, exit 0 (no stack, no lease; set-up before it 10 s)

@@ -1,0 +1,152 @@
+{
+  "live_restore": {
+    "set": "20261112T033600Z",
+    "seeded": {
+      "arcadedb_vertices": {
+        "c": 5000,
+        "s": 12497500
+      },
+      "arcadedb_edges": 1000,
+      "clickhouse_rows": [
+        200000,
+        "17805520021964338470"
+      ],
+      "claims": {
+        "files": 301,
+        "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+      }
+    },
+    "swap": {
+      "changed": {
+        "arcadedb_vertices": {
+          "c": 5100,
+          "s": 112502450
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200300,
+          "3678681070130931078"
+        ],
+        "claims": {
+          "files": 302,
+          "sha256": "2cd895072cc5e902a7e3548015671de3b08dbb5f88e963b0bed63a738886e96e"
+        }
+      },
+      "seconds": {
+        "stopped": 31.3,
+        "ospreyflow-restore-20261112t033600z": 13.6,
+        "ospreyflow-restore-claims-20261112t033600z": 13.7,
+        "started": 22.8,
+        "total": 67.9
+      },
+      "restored": {
+        "arcadedb_vertices": {
+          "c": 5000,
+          "s": 12497500
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200000,
+          "17805520021964338470"
+        ],
+        "claims": {
+          "files": 301,
+          "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+        }
+      },
+      "leftovers": {
+        "arcadedb": [],
+        "clickhouse": [],
+        "claims": []
+      },
+      "as_the_set": true
+    },
+    "arcadedb_planted": {
+      "changed": {
+        "arcadedb_vertices": {
+          "c": 5100,
+          "s": 212502450
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200300,
+          "15686279726526385630"
+        ],
+        "claims": {
+          "files": 302,
+          "sha256": "02a07cd4429347f72f70e1136b94b075a21984f22f1c9fd6452f6beea3c617ef"
+        }
+      },
+      "after": {
+        "arcadedb_vertices": {
+          "c": 5100,
+          "s": 212502450
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200300,
+          "15686279726526385630"
+        ],
+        "claims": {
+          "files": 301,
+          "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+        }
+      },
+      "said": "the restore Job ospreyflow-restore-20261112t033600z failed",
+      "restore_graph": "e-graph] \tat com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:68)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat com.arcadedb.integration.restore.Restore.main(Restore.java:54)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] Caused by: java.util.zip.ZipException: zip END header not found\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.findEND(ZipFile.java:1649)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.initCEN(ZipFile.java:1657)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.<init>(ZipFile.java:1495)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile$Source.get(ZipFile.java:1458)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile$CleanableResource.<init>(ZipFile.java:724)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile.<init>(ZipFile.java:251)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat java.base/java.util.zip.ZipFile.<init>(ZipFile.java:304)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat com.arcadedb.integration.restore.format.ParallelZipExtractor.extract(ParallelZipExtractor.java:135)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat com.arcadedb.integration.restore.format.FullRestoreFormat.restoreDatabase(FullRestoreFormat.java:116)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \tat com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:65)\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] \t... 1 more\n[pod/ospreyflow-restore-20261112t033600z-mm7lv/restore-graph] restore-graph refused: ArcadeDB's restore of the set's zip failed; the live database (/home/arcadedb/databases/ospreyflow) was not touched",
+      "leftovers": {
+        "arcadedb": [],
+        "clickhouse": [],
+        "claims": []
+      },
+      "stores_untouched": true
+    },
+    "clickhouse_planted": {
+      "changed": {
+        "arcadedb_vertices": {
+          "c": 5200,
+          "s": 512507400
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200600,
+          "9224570397247707806"
+        ],
+        "claims": {
+          "files": 302,
+          "sha256": "bafe844666d642a0cf9bb8939de15e4369b09b4b93910574a2538c4ba41934e3"
+        }
+      },
+      "after": {
+        "arcadedb_vertices": {
+          "c": 5000,
+          "s": 12497500
+        },
+        "arcadedb_edges": 1000,
+        "clickhouse_rows": [
+          200600,
+          "9224570397247707806"
+        ],
+        "claims": {
+          "files": 301,
+          "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+        }
+      },
+      "said": "the restore Job ospreyflow-restore-20261112t033600z failed",
+      "restore_analytics": "[pod/ospreyflow-restore-20261112t033600z-qvfhn/restore-analytics] restore-analytics refused: clickhouse: RESTORE \u2026 FROM S3: HTTP 500: Code: 499. DB::Exception: Access Denied: while reading key: sets/20261112T033600Z/clickhouse/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\n[pod/ospreyflow-restore-20261112t033600z-qvfhn/restore-analytics] ",
+      "leftovers": {
+        "arcadedb": [],
+        "clickhouse": [],
+        "claims": []
+      },
+      "clickhouse_untouched": true,
+      "arcadedb_restored": true
+    },
+    "pass": true
+  },
+  "at": "2026-11-12T03:40:10+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "stack-b.lease": "holder=case\nstack=b\npurpose=P9 round 5: the runbook's restore walked as written on osprey-p9 (kind), and the live restore again\nsince=2026-11-12T03:33:56Z\nworktree=/Users/ayankar/dev/osprey-wt/case"
+  }
+}

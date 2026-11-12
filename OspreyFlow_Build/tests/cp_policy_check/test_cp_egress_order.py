@@ -311,9 +311,9 @@ def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:
     """P9's pods by their own rows (the render's `egress_policy(..., others=...)`), evaluated in
-    Helm's own output: the backup and the restore reach ArcadeDB and ClickHouse, which admit them;
-    the claims' runs reach none of ours; a restore alone reaches the cluster's API; each reaches S3
-    and STS and nothing else outside; ClickHouse reaches S3."""
+    Helm's own output: the backup reaches ArcadeDB and ClickHouse, the restore ClickHouse alone,
+    each admitted; the claims' runs reach none of ours; the two restores alone reach the cluster's
+    API; each reaches S3 and STS and nothing else outside; ClickHouse reaches S3."""
     docs, values, registry = rendered
     pods_of_p9 = tuple(load_profile().egress.others)
     labels = {name: {"app.kubernetes.io/name": name, "app.kubernetes.io/part-of": "ospreyflow"}
@@ -326,11 +326,12 @@ def test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more(
         return allowed and (dest.get("labels") is None or _ingress(docs, pods[source], dest))
 
     api_server = {"service": ("default", "kubernetes"), "port": 443}
-    assert [p for p in pods if reaches(p, api_server)] == ["restore"]
-    stores = {"backup": True, "restore": True, "backup-claims": False, "restore-claims": False}
+    assert sorted(p for p in pods if reaches(p, api_server)) == ["restore", "restore-claims"]
+    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"clickhouse"},
+              "backup-claims": set(), "restore-claims": set()}  # fmt: skip
     for source, reached in stores.items():
-        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}) == reached, source
-        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}) == reached, source
+        assert reaches(source, {"labels": pods["arcadedb"], "port": 2480}) == ("arcadedb" in reached), source
+        assert reaches(source, {"labels": pods["clickhouse"], "port": 8123}) == ("clickhouse" in reached), source
         assert not reaches(source, {"labels": pods["api"], "port": 8000}), source
         assert not reaches(source, {"ip": _internet(values), "port": 443}), source
         for host in values["egress"]["hosts"]:

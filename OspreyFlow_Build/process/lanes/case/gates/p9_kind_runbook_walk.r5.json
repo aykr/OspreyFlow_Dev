@@ -1,0 +1,84 @@
+{
+  "runbook_walk": {
+    "set": "20261112T034000Z",
+    "seeded": {
+      "arcadedb_vertices": {
+        "c": 5000,
+        "s": 12497500
+      },
+      "arcadedb_edges": 1000,
+      "clickhouse_rows": [
+        200000,
+        "17805520021964338470"
+      ],
+      "claims": {
+        "files": 301,
+        "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+      }
+    },
+    "changed": {
+      "arcadedb_vertices": {
+        "c": 5100,
+        "s": 112502450
+      },
+      "arcadedb_edges": 1000,
+      "clickhouse_rows": [
+        200300,
+        "3678681070130931078"
+      ],
+      "claims": {
+        "files": 302,
+        "sha256": "2cd895072cc5e902a7e3548015671de3b08dbb5f88e963b0bed63a738886e96e"
+      }
+    },
+    "after": {
+      "arcadedb_vertices": {
+        "c": 5000,
+        "s": 12497500
+      },
+      "arcadedb_edges": 1000,
+      "clickhouse_rows": [
+        200000,
+        "17805520021964338470"
+      ],
+      "claims": {
+        "files": 301,
+        "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+      }
+    },
+    "leftovers": {
+      "arcadedb": [],
+      "clickhouse": [],
+      "claims": []
+    },
+    "kept_backup_pods": [
+      "pod/ospreyflow-backup-29907136-xwlfr",
+      "pod/ospreyflow-backup-29907138-mlqz9",
+      "pod/ospreyflow-backup-29907140-rlnns",
+      "pod/ospreyflow-backup-29907466-4ggwd",
+      "pod/ospreyflow-backup-29907495-rxzhg",
+      "pod/ospreyflow-backup-29907576-zzxgj",
+      "pod/ospreyflow-backup-29907580-hvq2s",
+      "pod/ospreyflow-backup-claims-29907466-tbq2t",
+      "pod/ospreyflow-backup-claims-29907495-tcwkc",
+      "pod/ospreyflow-backup-claims-29907576-dzjqn",
+      "pod/ospreyflow-backup-claims-29907580-29hzp",
+      "pod/p9-restore-refused-29907140-rczdp",
+      "pod/p9-unrenewable-29907139-5zxth"
+    ],
+    "cronjobs_suspended_after": [
+      "false",
+      "false"
+    ],
+    "seconds": 66.7,
+    "bash_exit": 0,
+    "script": "# 1. No backup during the restore: both CronJobs suspended, and any backup Job still running left to finish.\nfor c in ospreyflow-backup ospreyflow-backup-claims; do\n  kubectl -n ospreyflow-dev patch cronjob \"$c\" -p '{\"spec\":{\"suspend\":true}}' 2>/dev/null\ndone\nkubectl -n ospreyflow-dev get jobs -l 'app.kubernetes.io/name in (backup,backup-claims)'   # none still Running\n# 2. Note each copy count, then stop everything that writes and wait for its pods to be gone (a finished\n#    backup Job's pods are kept, and are not waited for: they run nothing).\nW=$(python3 -c 'import sys, yaml; print(\",\".join(yaml.safe_load(open(sys.argv[1]))[\"backups\"][\"writers\"]))' /root/osprey-runs/case.tools/render/values.yaml)\nkubectl -n ospreyflow-dev get deployment,statefulset -l \"app.kubernetes.io/name in ($W)\" \\\n  -o custom-columns=NAME:.metadata.name,COPIES:.spec.replicas\nkubectl -n ospreyflow-dev scale deployment,statefulset -l \"app.kubernetes.io/name in ($W)\" --replicas=0\nkubectl -n ospreyflow-dev wait --for=delete pod -l \"app.kubernetes.io/name in ($W),!job-name\" --timeout=10m\n#    Now the platform team points the namespace's database settings at the RDS instance restored above\n#    (its Terraform), and it is available, before step 3.\n# 3. The restore's Jobs, rendered for the set by its own name (never `latest`; never by `helm upgrade`,\n#    which would start ArcadeDB); a Job of the same name from an earlier attempt removed first.\nkubectl -n ospreyflow-dev delete job -l 'app.kubernetes.io/name in (restore,restore-claims)' --ignore-not-found --wait\nhelm template ospreyflow deploy/helm/ospreyflow -n ospreyflow-dev -f /root/osprey-runs/case.tools/render/values.yaml \\\n  --set backups.restore.set=20261112T034000Z --show-only templates/backups.yaml \\\n  | kubectl -n ospreyflow-dev apply -f - --selector='app.kubernetes.io/name in (restore,restore-claims)'\nfor j in $(kubectl -n ospreyflow-dev get jobs -l 'app.kubernetes.io/name in (restore,restore-claims)' -o name); do\n  kubectl -n ospreyflow-dev wait --for=jsonpath='{.status.conditions[0].status}'=True \"$j\" --timeout=6h\n  kubectl -n ospreyflow-dev logs \"$j\" --all-containers | tail -3     # each step says what it did, or why not\n  kubectl -n ospreyflow-dev get \"$j\" -o jsonpath='{.status.succeeded}' | grep -qx 1 \\\n    || { echo \"$j did not finish: start nothing; read its log (below, If it fails)\"; break; }\ndone\n# 4. Only when every Job finished: start each again at the copy count noted in step 2, ArcadeDB first,\n#    then the backups resumed.\nkubectl -n ospreyflow-dev scale statefulset/arcadedb --replicas=1\nkubectl -n ospreyflow-dev rollout status statefulset/arcadedb\nkubectl -n ospreyflow-dev scale deployment/api --replicas=1\nfor c in ospreyflow-backup ospreyflow-backup-claims; do\n  kubectl -n ospreyflow-dev patch cronjob \"$c\" -p '{\"spec\":{\"suspend\":false}}' 2>/dev/null\ndone\n",
+    "as_the_set": true,
+    "pass": true
+  },
+  "at": "2026-11-12T03:41:39+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "stack-b.lease": "holder=case\nstack=b\npurpose=P9 round 5: the runbook's restore walked as written on osprey-p9 (kind), and the live restore again\nsince=2026-11-12T03:33:56Z\nworktree=/Users/ayankar/dev/osprey-wt/case"
+  }
+}

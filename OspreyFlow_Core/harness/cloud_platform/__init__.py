@@ -1050,6 +1050,10 @@ def render_cloud_platform(
         "workloads": workloads,
         "jobs": jobs,
     }
+    # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
+    from harness.cloud_platform_backups import add_backups
+
+    backups_terraform = add_backups(config, platform, out)
     artefacts = {
         "values.yaml": _BANNER
         + _bare_connector_hosts_note(config)
@@ -1069,6 +1073,7 @@ def render_cloud_platform(
             for name, text in render_terraform(config, platform, out).items()
         }
     )
+    artefacts.update(backups_terraform)
     if poc:
         # Amendment 5: the runbooks, for the client's team, with the deployment's own names.
         from harness.cloud_platform.runbooks import render_decommission, render_install

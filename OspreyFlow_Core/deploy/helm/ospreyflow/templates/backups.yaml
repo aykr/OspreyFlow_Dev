@@ -1,0 +1,312 @@
+{{- /*
+ADR-148 decision 13, as built in Amendment 7 (P9): the scheduled, encrypted backup of ArcadeDB and
+ClickHouse to the deployment's backups bucket, by the backup role (IRSA: its own service account,
+no stored key), and the restore Job, rendered only when a set is named.
+
+Rendered from `backups` in the values (`profile: cloud-platform` alone writes it; empty, a
+cluster's render is unchanged):
+
+  schedule, image, serviceAccountName, resources, deadlineSeconds, env (each item as a workload's),
+  arcadedb: {pod, backupsClaim, databasesClaim, database, image, resources, env}
+            (its `env` to the backup's own container alone: ArcadeDB's password, of our Secret)
+  restore: {set}   # given only to run a restore, e.g.
+                   # helm template … --set backups.restore.set=<id> --show-only templates/backups.yaml
+
+The CronJob's pod mounts ArcadeDB's backups claim (ReadWriteOnce), so it runs on the node of the
+pod that holds it (a required affinity to that one pod), and asks that pod, by name, for its
+backup. One run at a time (`Forbid`): two would ask ArcadeDB for two backups into one claim.
+
+The poc shape's claims of their own (`storage.claims`, its Ingest root) are mounted by the shared
+folders' pods, on whichever node holds them, which may not be ArcadeDB's: a second CronJob,
+`ospreyflow-backup-claims`, on the same schedule and on the shared pods' node, streams each into the
+same set. Both name the set by their Job's name, which is the schedule slot (`set_of`), and the
+main run writes the manifest only once the claims part is there (bounded), so a set without it is
+unfinished and never restored from. Its restore is a Job of its own, with the shared pods stopped.
+*/ -}}
+{{- with .Values.backups }}
+{{- $root := $ }}
+{{- $b := . }}
+{{- $ctx := dict "name" "backup" "root" $root }}
+{{- $claims := list }}
+{{- range ($root.Values.storage | default dict).claims }}{{ $claims = append $claims .name }}{{ end }}
+{{- /* Each run names its set by its Job's name: the CronJob's schedule slot. */}}
+{{- $env := append ($b.env | default list) (dict "name" "OSPREY_BACKUP_JOB" "field" "metadata.labels['batch.kubernetes.io/job-name']") }}
+{{- if $claims }}
+{{- $env = append $env (dict "name" "OSPREY_BACKUP_CLAIMS" "value" (join "," $claims)) }}
+{{- end }}
+{{- /* A restore refuses while any of these runs (Amendment 7): it lists the pods by its own Role. */}}
+{{- $writers := required "backups.writers: the pods a restore refuses to run beside (ADR-148 Amendment 7)" $b.writers }}
+{{- $restoreEnv := append $env (dict "name" "OSPREY_BACKUP_WRITERS" "value" (join "," $writers)) }}
+{{- /* Each store's settings to the containers that call it alone: ArcadeDB's to the backup;
+       ClickHouse's to the backup and to restore-analytics (Amendment 7). */}}
+{{- $graphEnv := ($b.arcadedb.env | default list) }}
+{{- $analyticsEnv := (($b.clickhouse | default dict).env | default list) }}
+---
+# A restore's own right (Amendment 7): to see whether anything that writes still runs, and nothing
+# more. The backup's service account may get and list the namespace's pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ospreyflow-backup-pods
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ospreyflow-backup-pods
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ospreyflow-backup-pods
+subjects:
+  - kind: ServiceAccount
+    name: {{ $b.serviceAccountName }}
+    namespace: {{ $root.Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ospreyflow-backup
+  labels:
+    {{- include "ospreyflow.labels" $ctx | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  # The schedule in UTC, whatever the cluster's own zone: a set is named by its UTC slot.
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  # A run missed by more than an hour (the cluster down, say) is skipped, not run late beside the next.
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" $ctx | nindent 8 }}
+    spec:
+      # A refused backup is reported, never retried: a run of the same slot again would meet its
+      # own half-written set (the runner refuses a finished one).
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
+      template:
+        metadata:
+          labels:
+            {{- include "ospreyflow.labels" $ctx | nindent 12 }}
+            ospreyflow.io/egress: "true"
+        spec:
+          restartPolicy: Never
+          {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 10 }}
+          containers:
+            {{- include "ospreyflow.container" (dict "w" (dict "name" "backup" "image" $b.image
+                  "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "backup")
+                  "env" (concat $env $graphEnv $analyticsEnv) "resources" $b.resources
+                  "claims" (list (dict "name" "arcadedb-backups" "mountPath" "/arcadedb-backups")))
+                "root" $root) | nindent 12 }}
+          volumes:
+            - name: arcadedb-backups
+              persistentVolumeClaim:
+                claimName: {{ $b.arcadedb.backupsClaim }}
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      statefulset.kubernetes.io/pod-name: {{ $b.arcadedb.pod }}
+                  topologyKey: kubernetes.io/hostname
+{{- if $claims }}
+---
+# The claims part of each set (the poc shape's Ingest root), on the node of the pods that mount the
+# claims (ReadWriteOnce), read-only: it never writes to what it backs up.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ospreyflow-backup-claims
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "backup-claims" "root" $root) | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  # The schedule in UTC, whatever the cluster's own zone: a set is named by its UTC slot.
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" (dict "name" "backup-claims" "root" $root) | nindent 8 }}
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
+      template:
+        metadata:
+          labels:
+            {{- include "ospreyflow.labels" (dict "name" "backup-claims" "root" $root) | nindent 12 }}
+            ospreyflow.io/egress: "true"
+        spec:
+          restartPolicy: Never
+          {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 10 }}
+          containers:
+            {{- $mounts := list }}
+            {{- range $claims }}{{ $mounts = append $mounts (dict "name" (printf "claim-%s" .) "mountPath" (printf "/claims/%s" .)) }}{{ end }}
+            {{- include "ospreyflow.container" (dict "w" (dict "name" "backup-claims" "image" $b.image
+                  "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "backup-claims")
+                  "env" $env "resources" $b.resources "claims" $mounts)
+                "root" $root) | nindent 12 }}
+          volumes:
+            {{- range $claims }}
+            - name: {{ printf "claim-%s" . }}
+              persistentVolumeClaim:
+                claimName: {{ printf "ospreyflow-%s" . }}
+                readOnly: true
+            {{- end }}
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      ospreyflow.io/shared: "true"
+                  topologyKey: kubernetes.io/hostname
+{{- end }}
+{{- with $b.restore }}
+{{- if .set }}
+{{- /* One set, named once: `latest` (or anything else) would be resolved again at each step, and
+       the steps could restore from two sets if one finished between them. */}}
+{{- if not (regexMatch "^[0-9]{8}T[0-9]{6}Z$" (toString .set)) }}
+{{- fail (printf "backups.restore.set: %q is not a set's name (YYYYMMDDTHHMMSSZ, as `sets` lists them): name the set to restore" (toString .set)) }}
+{{- end }}
+{{- if not $b.restorable }}
+{{- fail "backups.restore: the restore is supported for one ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is not supported yet (ADR-148 Amendment 7)" }}
+{{- end }}
+---
+# The restore of set {{ .set }} (Amendment 7): applied by hand with ArcadeDB stopped (its StatefulSet
+# at no copies), never by `helm upgrade`, which would start it again under the restore. The zip
+# is fetched and checked against its manifest; ArcadeDB's own restore writes it into the
+# database's claim; ClickHouse restores from the set while it runs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "ospreyflow-restore-%s" (.set | lower) | trunc 63 }}
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "restore" "root" $root) | nindent 4 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" (dict "name" "restore" "root" $root) | nindent 8 }}
+        ospreyflow.io/egress: "true"
+    spec:
+      restartPolicy: Never
+      {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 6 }}
+      # First, before anything is replaced: nothing writing, and every part of the set checked.
+      initContainers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "verify" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "verify" "--set" .set)
+              "env" $restoreEnv "resources" $b.resources)
+            "root" $root) | nindent 8 }}
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "fetch-graph" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "fetch-graph" "--set" .set "--to" "/restore")
+              "env" $restoreEnv "resources" $b.resources
+              "scratch" (list (dict "mountPath" "/restore")))
+            "root" $root) | nindent 8 }}
+        {{- /* Again just before ArcadeDB's databases are replaced: nothing started since the verify. */}}
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "writers" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "writers")
+              "env" $restoreEnv "resources" $b.resources)
+            "root" $root) | nindent 8 }}
+        {{- /* ArcadeDB's restore beside the live database, checked, then swapped in by rename; the
+               live one kept until then, and untouched on any failure (deploy/backups/restore-graph.sh). */}}
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-graph" "image" $b.arcadedb.image
+              "command" (list "sh" "/restore-graph/restore-graph.sh" $b.arcadedb.database (printf "/restore/%s.zip" $b.arcadedb.database) "/home/arcadedb/databases" "/restore-graph/CheckDatabase.java")
+              "resources" $b.arcadedb.resources
+              "files" (list (dict "key" "restore-graph.sh" "mountPath" "/restore-graph/restore-graph.sh") (dict "key" "restore-graph-check.java" "mountPath" "/restore-graph/CheckDatabase.java"))
+              "scratch" (list (dict "mountPath" "/restore"))
+              "claims" (list (dict "name" "arcadedb-databases" "mountPath" "/home/arcadedb/databases")))
+            "root" $root) | nindent 8 }}
+      containers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-analytics" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-analytics" "--set" .set)
+              "env" (concat $restoreEnv $analyticsEnv) "resources" $b.resources)
+            "root" $root) | nindent 8 }}
+      volumes:
+        - name: scratch-0
+          emptyDir: {}
+        - name: files
+          configMap:
+            name: ospreyflow-files
+        - name: arcadedb-databases
+          persistentVolumeClaim:
+            claimName: {{ $b.arcadedb.databasesClaim }}
+{{- if $claims }}
+---
+# The set's claims put back (Amendment 7), applied by hand with every pod that mounts them stopped
+# (the Conduit, the workers and the report sync at no copies): nothing may write to a claim while
+# it is replaced, and a ReadWriteOnce claim is free to mount only then.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "ospreyflow-restore-claims-%s" (.set | lower) | trunc 63 }}
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "restore-claims" "root" $root) | nindent 4 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ $b.deadlineSeconds | default 21600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ospreyflow.labels" (dict "name" "restore-claims" "root" $root) | nindent 8 }}
+        ospreyflow.io/egress: "true"
+    spec:
+      restartPolicy: Never
+      {{- include "ospreyflow.backupPod" (dict "b" $b "root" $root) | nindent 6 }}
+      initContainers:
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "verify" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "verify" "--set" .set)
+              "env" $restoreEnv "resources" $b.resources)
+            "root" $root) | nindent 8 }}
+      containers:
+        {{- $mounts := list }}
+        {{- range $claims }}{{ $mounts = append $mounts (dict "name" (printf "claim-%s" .) "mountPath" (printf "/claims/%s" .)) }}{{ end }}
+        {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-claims" "image" $b.image
+              "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-claims" "--set" .set)
+              "env" $restoreEnv "resources" $b.resources "claims" $mounts)
+            "root" $root) | nindent 8 }}
+      volumes:
+        {{- range $claims }}
+        - name: {{ printf "claim-%s" . }}
+          persistentVolumeClaim:
+            claimName: {{ printf "ospreyflow-%s" . }}
+        {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/* The backup's and the restore's pod: who it runs as, and its service account. */}}
+{{- define "ospreyflow.backupPod" -}}
+serviceAccountName: {{ .b.serviceAccountName }}
+# Its own account's token, for its own role (IRSA) and the restore's writers check (P7b's `token` rule).
+automountServiceAccountToken: true
+{{- with .root.Values.imagePullSecrets }}
+imagePullSecrets: {{ toJson . }}
+{{- end }}
+{{- with .root.Values.podSecurity }}
+# ADR-148 decision 3: one numeric non-root user, and the claims given to its group.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: {{ .user }}
+  runAsGroup: {{ .group }}
+  fsGroup: {{ .group }}
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+{{- end }}
+{{- end -}}

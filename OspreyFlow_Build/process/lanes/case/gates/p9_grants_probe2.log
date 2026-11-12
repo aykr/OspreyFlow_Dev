@@ -1,0 +1,39 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261111T180638Z/log: bash -c cd ../OspreyFlow_Build/process/lanes/case/gates/p9_grants_probe2 && bash probe.sh
+=== A: the entrypoint's own osprey (no users.d of ours)
+-- SHOW GRANTS
+GRANT SOURCES ON *.* TO osprey
+GRANT TABLE ENGINE ON * TO osprey
+GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE, DROP, UNDROP TABLE, TRUNCATE, OPTIMIZE, BACKUP, KILL QUERY, KILL TRANSACTION, MOVE PARTITION BETWEEN SHARDS, SYSTEM, dictGet, displaySecretsInShowAndSelect, INTROSPECTION, CLUSTER, FILE, URL, REMOTE, MONGO, REDIS, MYSQL, POSTGRES, SQLITE, ODBC, JDBC, HDFS, S3, HIVE, AZURE, KAFKA, NATS, RABBITMQ, SOURCES ON *.* TO osprey
+GRANT SET DEFINER ON * TO osprey
+=== B: narrowed
+-- SHOW GRANTS
+GRANT SOURCES ON *.* TO osprey
+GRANT TABLE ENGINE ON * TO osprey
+GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE, DROP, UNDROP TABLE, TRUNCATE, OPTIMIZE, KILL QUERY, KILL TRANSACTION, MOVE PARTITION BETWEEN SHARDS, SYSTEM, dictGet, displaySecretsInShowAndSelect, INTROSPECTION, CLUSTER, FILE, URL, REMOTE, MONGO, REDIS, MYSQL, POSTGRES, SQLITE, ODBC, JDBC, HDFS, S3, HIVE, AZURE, KAFKA, NATS, RABBITMQ, SOURCES ON *.* TO osprey
+GRANT SET DEFINER ON * TO osprey
+-- CREATE DATABASE IF NOT EXISTS ospreyflow
+-- CREATE TABLE ospreyflow.t (x UInt8) ENGINE=MergeTree ORDER BY x
+-- RESTORE DATABASE ospreyflow AS restored FROM S3('https://s3.eu-west-2.amazonaws.com/ospreybucket/sets/x/clickhouse/')
+Code: 499. DB::Exception: DB::Exception: Access Denied. (S3_ERROR)
+(query: RESTORE DATABASE ospreyflow AS restored FROM S3('https://s3.eu-west-2.amazonaws.com/ospreybucket/sets/x/clickhouse/'))
+-- CREATE TABLE ospreyflow.s3t (x String) ENGINE=S3('https://s3.eu-west-2.amazonaws.com/ospreybucket/k', 'RawBLOB')
+Code: 497. DB::Exception: DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant TABLE ENGINE ON S3. (Missing permissions: USAGE ON *.*). (ACCESS_DENIED)
+(query: CREATE TABLE ospreyflow.s3t (x String) ENGINE=S3('https://s3.eu-west-2.amazonaws.com/ospreybucket/k', 'RawBLOB'))
+-- SELECT * FROM s3Cluster('default', 'https://s3.eu-west-2.amazonaws.com/ospreybucket/k', 'RawBLOB')
+Code: 497. DB::Exception: DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED)
+(query: SELECT * FROM s3Cluster('default', 'https://s3.eu-west-2.amazonaws.com/ospreybucket/k', 'RawBLOB'))
+-- SELECT * FROM icebergS3('https://s3.eu-west-2.amazonaws.com/ospreybucket/k/')
+Code: 497. DB::Exception: DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED)
+(query: SELECT * FROM icebergS3('https://s3.eu-west-2.amazonaws.com/ospreybucket/k/'))
+-- CREATE DICTIONARY ospreyflow.d (k UInt64, v String) PRIMARY KEY k SOURCE(HTTP(URL 'https://s3.eu-west-2.amazonaws.com/ospreybucket/k' FORMAT 'TSV')) LIFETIME(0) LAYOUT(FLAT())
+-- SELECT dictGet('ospreyflow.d', 'v', toUInt64(1))
+Code: 1000. DB::Exception: DB::Exception: Not found: Location. (POCO_EXCEPTION)
+(query: SELECT dictGet('ospreyflow.d', 'v', toUInt64(1)))
+-- CREATE USER someone IDENTIFIED BY 'x'
+Code: 497. DB::Exception: DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant CREATE USER ON someone. (ACCESS_DENIED)
+(query: CREATE USER someone IDENTIFIED BY 'x')
+-- CREATE NAMED COLLECTION nc AS url = 'https://example.org/'
+Code: 497. DB::Exception: DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant CREATE NAMED COLLECTION ON nc. (ACCESS_DENIED)
+(query: CREATE NAMED COLLECTION nc AS url = 'https://example.org/')
+left: 0
+Wall time: 45 s, exit 0 (no stack, no lease; set-up before it 16 s)

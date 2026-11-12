@@ -1,0 +1,15 @@
+Running on ospreyflow-test (stack offline, osprey-runs/merge/OspreyFlow_Build/), logged at osprey-runs/merge.meta/runs/20261112T044220Z/log: bash -c mkdir -p ~/osprey-runs/merge-out; cd ../OspreyFlow_Build; make -k test > ~/osprey-runs/merge-out/p9-test.txt 2>&1; echo test-rc=$? >> ~/osprey-runs/merge-out/p9-test.txt; make live-collect > ~/osprey-runs/merge-out/p9-lc.txt 2>&1; echo lc-rc=$?; OSPREY_PORTS_SLOT=14 make -k ci > ~/osprey-runs/merge-out/p9-ci.txt 2>&1; echo ci-rc=$? >> ~/osprey-runs/merge-out/p9-ci.txt; tail -3 ~/osprey-runs/merge-out/p9-test.txt; grep -E "^FAILED" ~/osprey-runs/merge-out/p9-test.txt | head; grep -E "^make.*Error|ci-rc" ~/osprey-runs/merge-out/p9-ci.txt | tail -8; grep -E "manifests, [0-9]+ violation" ~/osprey-runs/merge-out/p9-ci.txt
+lc-rc=0
+==== 1 failed, 12478 passed, 33 skipped, 133 warnings in 449.61s (0:07:29) =====
+make: *** [Makefile:166: test] Error 1
+test-rc=2
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+ci-rc=0
+development-sources.yaml: 60 manifests, 0 violation(s)
+development.yaml: 60 manifests, 0 violation(s)
+poc.yaml: 53 manifests, 0 violation(s)
+production-bedrock.yaml: 67 manifests, 0 violation(s)
+production.yaml: 67 manifests, 0 violation(s)
+Wall time: 1202 s, exit 0 (no stack, no lease; set-up before it 11 s)
+
+# Orchestrator's note: osprey-p9 (kind) was taken down by case under lease b after REPORT.md was written, and the server's Friday timer stopped; REPORT.md's 'Running' line predates that.

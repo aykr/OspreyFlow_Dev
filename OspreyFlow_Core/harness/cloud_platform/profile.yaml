@@ -84,13 +84,15 @@ egress:
     arcadedb: [arcadedb]
     clickhouse: [clickhouse, clickhouse-keeper]
     clickhouse-keeper: [clickhouse-keeper]
-    # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names: ArcadeDB's
-    # backup and ClickHouse's BACKUP and RESTORE; a restore also asks the cluster's API whether the
-    # writers have stopped (`kube-api`, the `kubernetes` Service), as no other workload may. The
-    # claims' runs (`backup-claims`, `restore-claims`) call none of ours: a claim is a mount, and
-    # they reach S3 and STS alone (`reach.always`).
+    # P9's backup and restore pods (ADR-148 Amendment 7), by their own pods' names, each reaching
+    # what its commands call: the backup ArcadeDB's backup and ClickHouse's BACKUP; the restore
+    # ClickHouse's RESTORE alone (ArcadeDB's is from the zip on the Job's own claim, no call). Both
+    # restores ask the cluster's API whether the writers have stopped (`kube-api`, the `kubernetes`
+    # Service), as no other workload may. The claims' runs call none of ours (a claim is a mount);
+    # the backup's reaches S3 and STS alone (`reach.always`).
     backup: [arcadedb, clickhouse]
-    restore: [kube-api, arcadedb, clickhouse]
+    restore: [kube-api, clickhouse]
+    restore-claims: [kube-api]
 
 # Decision 5 and the platform's quotas: what each container asks for and may use. A namespace on a
 # shared platform may carry a LimitRange, whose defaults are given to exactly the containers that

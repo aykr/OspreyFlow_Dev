@@ -287,9 +287,15 @@ def test_only_the_readers_are_given_the_managed_stores_details(fixture: str) -> 
     values = _values(_config(fixture))
     variables = set(managed_variables(_config(fixture)))
     cluster = _on_the_cluster(fixture)
+    from harness.cloud_platform_backups import BACKUP_SECRET
+
     for pod in _pods(values):
         for container in [pod, *pod.get("initContainers", [])]:
-            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e}
+            # A store's details: ClickHouse's own pod alone is also given P9's Secret of its own
+            # (its backup user's password), which is not a store's detail.
+            own = BACKUP_SECRET if pod["name"] == "clickhouse" else None
+            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e
+                     and e["secretKeyRef"]["name"] != own}  # fmt: skip
             if pod["name"] in READERS and container.get("envFrom"):
                 assert given == variables, (container["name"], variables - given)
                 continue
@@ -329,8 +335,13 @@ def test_the_conduit_ingest_and_workers_run_as_the_bucket_s_service_account(
     values: dict[str, Any],
 ) -> None:
     account = load_platform("client").secrets.irsa.service_account
+    # ClickHouse writes its backups as its own backup role, by its own pod (ADR-148 Amendment 7).
+    from harness.cloud_platform_backups import CLICKHOUSE_SERVICE_ACCOUNT
+
     for pod in _pods(values):
         expected = account if pod["name"] in ("api", "worker", "report-sync") else None
+        if pod["name"] == "clickhouse":
+            expected = CLICKHOUSE_SERVICE_ACCOUNT
         assert pod.get("serviceAccountName") == expected, pod["name"]
 
 
@@ -344,7 +355,11 @@ def test_with_bedrock_enabled_the_gateway_runs_as_its_own_account() -> None:
     namespace_pods = ("api", "worker", "report-sync")
     for pod in _pods(_values(_engines(BEDROCK))):
         default = irsa.service_account if pod["name"] in namespace_pods else None
-        expected = {"litellm": irsa.gateway_service_account}.get(pod["name"], default)
+        # ClickHouse as its backup role's account (ADR-148 Amendment 7), as without Bedrock.
+        from harness.cloud_platform_backups import CLICKHOUSE_SERVICE_ACCOUNT
+
+        expected = {"litellm": irsa.gateway_service_account,
+                    "clickhouse": CLICKHOUSE_SERVICE_ACCOUNT}.get(pod["name"], default)  # fmt: skip
         assert pod.get("serviceAccountName") == expected, pod["name"]
 
 

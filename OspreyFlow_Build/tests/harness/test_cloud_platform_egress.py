@@ -131,25 +131,25 @@ def test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api(
 ) -> None:
     """P9's backup and restore pods render beside the workloads (`values.backups`), so the render
     gives `egress_policy` their names (`egress.others`): each has its row and admits nothing. The
-    backup and the restore reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
-    cluster's API (`kube-api`); the claims' runs reach none of ours (a claim is a mount). All four
-    reach S3 and STS, and nothing reaches KMS: S3 calls it on their behalf (SSE-KMS)."""
+    backup reaches ArcadeDB and ClickHouse, the restore ClickHouse alone (ArcadeDB's restore calls
+    nothing), each admitted; the two restores alone the cluster's API (`kube-api`, the writers
+    check); the claims' runs none of ours (a claim is a mount). All four reach S3 and STS, and
+    nothing reaches KMS: S3 calls it on their behalf (SSE-KMS)."""
     rows = _rows(values)
     hosts = {h["host"] for h in values["egress"]["hosts"]}
     assert not [h for h in hosts if h.startswith("kms.")]
     s3_sts = {h for h in hosts if h.startswith(("s3.", "sts."))}
-    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"arcadedb", "clickhouse"},
+    stores = {"backup": {"arcadedb", "clickhouse"}, "restore": {"clickhouse"},
               "backup-claims": set(), "restore-claims": set()}  # fmt: skip
     for name, reached in stores.items():
         assert set(rows[name]["hosts"]) == s3_sts, name
         assert {t["name"] for t in rows[name].get("toPods", [])} == reached, name
         assert "fromPods" not in rows[name] and "ports" not in rows[name], name
         assert not rows[name].get("managed"), name
-        assert rows[name].get("toKubeApi", False) == (name == "restore"), name
-    for store in ("arcadedb", "clickhouse"):
-        callers = set(rows[store]["fromPods"]) & set(stores)
-        assert callers == {"backup", "restore"}, store
-    assert [n for n, r in rows.items() if r.get("toKubeApi")] == ["restore"]
+        assert rows[name].get("toKubeApi", False) == name.startswith("restore"), name
+    for store, callers in {"arcadedb": {"backup"}, "clickhouse": {"backup", "restore"}}.items():
+        assert set(rows[store]["fromPods"]) & set(stores) == callers, store
+    assert sorted(n for n, r in rows.items() if r.get("toKubeApi")) == ["restore", "restore-claims"]
 
 
 # ---- the service account's token (Amendment 5 point 24, case-b's P12 part 2) --------------------
@@ -163,6 +163,11 @@ def test_only_a_pod_with_an_account_of_its_own_mounts_its_token(name: str) -> No
     values = _values(name)
     pods = [*values["workloads"], *values["jobs"]]
     for pod in pods:
+        if pod["name"] == "clickhouse":
+            # Its backup role's account (ADR-148 Amendment 7), its web identity by the account
+            # alone (IRSA's webhook); it calls no Kubernetes API, so no token (P9_render.diff).
+            assert pod["serviceAccountName"] and pod["automountToken"] is False
+            continue
         assert pod["automountToken"] is bool(pod.get("serviceAccountName")), pod["name"]
     mounted = {p["name"] for p in pods if p["automountToken"]}
     gateway = {"litellm"} if name == "production-bedrock" else set()

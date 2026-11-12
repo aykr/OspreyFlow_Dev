@@ -1,0 +1,113 @@
+# restore-graph's check, measured on the test server in ArcadeDB 26.10.1's own image (stack_lease.sh offline case), 12 November.
+# Run 20261112T010635Z: a database made, backed up by ArcadeDB's own Backup, restored by restore.sh (exit 0); restore.sh refuses an existing folder and a truncated zip (exit 1).
+== make
+== check good
+opens: 2 types, 3999 records read
+check exit 0
+== backup
+- Snapshot at txId=2 shadowed 0 page(s), 0b (0b spilled to disk)
+Full backup completed in 0 seconds 640.78KB -> 60.29KB (90% compressed)
+-rw-r--r-- 1 arcadedb arcadedb 61742 Nov 12 01:06 /tmp/b.zip
+== restore good
+- File 'Person_0_out_edges.2.65536.v0.bucket'... 14.40KB -> 192.00KB (92% compression)
+- File 'Person_0.1.65536.v0.bucket'... 17.45KB -> 128.00KB (86% compression)
+Full restore completed in 0 seconds 60.29KB -> 640.78KB (90% compression)
+restore exit 0
+opens: 2 types, 3999 records read
+== restore into an existing dir
+	at com.arcadedb.integration.restore.format.FullRestoreFormat.restoreDatabase(FullRestoreFormat.java:93)
+	at com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:65)
+	... 1 more
+restore exit 1
+== restore truncated zip
+	at com.arcadedb.integration.restore.format.FullRestoreFormat.restoreDatabase(FullRestoreFormat.java:116)
+	at com.arcadedb.integration.restore.Restore.restoreDatabase(Restore.java:65)
+	... 1 more
+restore exit 1
+no database at /tmp/dbs/half
+check exit (sh) 0
+== check damaged (Person_0_in_edges.3.65536.v0.bucket)
+check exit 0
+opens: 2 types, 3999 records read
+total 664
+drwxr-xr-x 2 arcadedb arcadedb   4096 Nov 12 01:06 .
+drwxr-xr-x 6 arcadedb arcadedb   4096 Nov 12 01:06 ..
+-rw-r--r-- 1 arcadedb arcadedb  65536 Nov 12 01:06 Knows_0.4.65536.v0.bucket
+-rw-r--r-- 1 arcadedb arcadedb 131072 Nov 12 01:06 Person_0.1.65536.v0.bucket
+-rw-r--r-- 1 arcadedb arcadedb 196608 Nov 12 01:06 Person_0_in_edges.3.65536.v0.bucket
+-rw-r--r-- 1 arcadedb arcadedb 196608 Nov 12 01:06 Person_0_out_edges.2.65536.v0.bucket
+-rw-r--r-- 1 arcadedb arcadedb     20 Nov 12 01:06 configuration.json
+-rw-r--r-- 1 arcadedb arcadedb  65536 Nov 12 01:06 dictionary.0.65536.v1.dict
+-rw-r--r-- 1 arcadedb arcadedb    501 Nov 12 01:06 schema.json
+-rw-r--r-- 1 arcadedb arcadedb    280 Nov 12 01:06 schema.prev.json
+-rw-r--r-- 1 arcadedb arcadedb    146 Nov 12 01:06 statistics.json
+Wall time: 9 s, exit 0 (no stack, no lease; set-up before it 11 s)
+
+# Run 20261112T010714Z: ArcadeDB opens a damaged database with a warning (a short bucket, an empty schema, a missing bucket), so opening alone proves nothing (check exit 0 on most):
+== good
+opens: 2 types, 3999 records and 3998 edge ends read
+check exit 0
+== Knows_0.4.65536.v0.bucket cut to 1000 bytes
+
+2026-11-12 01:07:19.047 WARNI [LocalBucket] Component 'Knows_0' file '/tmp/dbs/d/Knows_0.4.65536.v0.bucket' has a length (1000 bytes) that is not a multiple of its page size (65536 bytes): 1000 traili
+check exit 1
+== Person_0.1.65536.v0.bucket cut to 1000 bytes
+
+2026-11-12 01:07:20.115 WARNI [LocalBucket] Component 'Person_0' file '/tmp/dbs/d/Person_0.1.65536.v0.bucket' has a length (1000 bytes) that is not a multiple of its page size (65536 bytes): 1000 trai
+check exit 0
+== Person_0_in_edges.3.65536.v0.bucket cut to 1000 bytes
+
+2026-11-12 01:07:21.203 WARNI [LocalBucket] Component 'Person_0_in_edges' file '/tmp/dbs/d/Person_0_in_edges.3.65536.v0.bucket' has a length (1000 bytes) that is not a multiple of its page size (65536
+check exit 0
+== Person_0_out_edges.2.65536.v0.bucket cut to 1000 bytes
+
+2026-11-12 01:07:22.569 WARNI [LocalBucket] Component 'Person_0_out_edges' file '/tmp/dbs/d/Person_0_out_edges.2.65536.v0.bucket' has a length (1000 bytes) that is not a multiple of its page size (655
+check exit 0
+== schema.json empty
+
+2026-11-12 01:07:23.941 WARNI [LocalSchema] Could not find schema file, loading the previous version savedopens: 0 types, 0 records and 0 edge ends read
+check exit 0
+== a bucket missing
+
+2026-11-12 01:07:24.995 WARNI [LocalSchema] Cannot find bucket 'Person_0' for type 'Person', removing it from type configuration
+check exit 0
+Wall time: 10 s, exit 0 (no stack, no lease; set-up before it 11 s)
+
+# Run 20261112T010807Z: the check held to the zip's own index (deploy/backups/CheckDatabase.java): every damage refused in words.
+== restored
+opens: 2 types, 3999 records and 3998 edge ends read
+check exit 0
+== Knows_0.4.65536.v0.bucket cut to 1000 bytes
+does not open: Knows_0.4.65536.v0.bucket is 1000 bytes, the zip's 65536
+check exit 1
+== Knows_0.4.65536.v0.bucket cut to one page
+opens: 2 types, 3999 records and 3998 edge ends read
+check exit 0
+== Person_0.1.65536.v0.bucket cut to 1000 bytes
+does not open: Person_0.1.65536.v0.bucket is 1000 bytes, the zip's 131072
+check exit 1
+== Person_0.1.65536.v0.bucket cut to one page
+does not open: Person_0.1.65536.v0.bucket is 65536 bytes, the zip's 131072
+check exit 1
+== Person_0_in_edges.3.65536.v0.bucket cut to 1000 bytes
+does not open: Person_0_in_edges.3.65536.v0.bucket is 1000 bytes, the zip's 196608
+check exit 1
+== Person_0_in_edges.3.65536.v0.bucket cut to one page
+does not open: Person_0_in_edges.3.65536.v0.bucket is 65536 bytes, the zip's 196608
+check exit 1
+== Person_0_out_edges.2.65536.v0.bucket cut to 1000 bytes
+does not open: Person_0_out_edges.2.65536.v0.bucket is 1000 bytes, the zip's 196608
+check exit 1
+== Person_0_out_edges.2.65536.v0.bucket cut to one page
+does not open: Person_0_out_edges.2.65536.v0.bucket is 65536 bytes, the zip's 196608
+check exit 1
+== schema.json empty
+does not open: schema.json is 0 bytes, the zip's 501
+check exit 1
+== a bucket missing
+does not open: Person_0.1.65536.v0.bucket is in the set's zip and not restored
+check exit 1
+== no database
+does not open: configuration.json is in the set's zip and not restored
+check exit 1
+Wall time: 15 s, exit 0 (no stack, no lease; set-up before it 10 s)

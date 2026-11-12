@@ -1,0 +1,15 @@
+{
+  "osprey_bound_red": {
+    "red": true,
+    "said": "FAIL: the deployment's user, or ClickHouse's egress, reaches what it must not: accepted [\"RESTORE a set's ClickHouse part\", \"RESTORE from ArcadeDB's part\", \"RESTORE from the claims' part\"] (only [\"RESTORE a set's ClickHouse part\"] is ruled), RESTORE not refused from [\"RESTORE from ArcadeDB's part\", \"RESTORE from the claims' part\"], egress REFUSED",
+    "bound": {
+      "RESTORE from ArcadeDB's part": "",
+      "RESTORE from the claims' part": ""
+    }
+  },
+  "at": "2026-11-11T20:21:06+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}

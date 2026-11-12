@@ -1,0 +1,100 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261111T201242Z/log: bash -c bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh osprey_sources && bash ../OspreyFlow_Build/process/lanes/case/gates/p9_kind.sh osprey_bound_red
+== record (/root/osprey-runs/case.tools/p9_osprey_sources.json)
+{
+  "osprey_sources": [
+    "user: osprey",
+    "REFUSED read a set's manifest -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED read ArcadeDB's zip -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED write over a set -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant WRITE ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED url() to another host -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON URL. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "ACCEPTED RESTORE a set's ClickHouse part -> 7a2e6bad-301f-4a00-a474-70516033255f\tRESTORED",
+    "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T201700Z/arcadedb/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'",
+    "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T201700Z/claims/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'",
+    "REFUSED the S3 table engine -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant TABLE ENGINE ON S3. (Missing permissions: USAGE ON *.*). (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED s3Cluster -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED icebergS3 -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED deltaLake -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED remote() to another server -> ClickHouse: 500 b'Code: 519. DB::NetException: All attempts to get table structure failed. Log: \\n\\nCode: 279. DB::NetException: All connection tries failed. Log: \\n\\nTimeout exceeded while connecting to socket (s3-standin.platform-managed.svc.cluster.local:90"
+  ],
+  "clickhouse_egress_to_1.1.1.1": "REFUSED",
+  "osprey_accepted": [
+    "RESTORE a set's ClickHouse part"
+  ],
+  "osprey_restore_bound": {
+    "RESTORE from ArcadeDB's part": "REFUSED RESTORE from ArcadeDB's part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T201700Z/arcadedb/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'",
+    "RESTORE from the claims' part": "REFUSED RESTORE from the claims' part -> ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied: while reading key: sets/20261111T201700Z/claims/p9-bound/.backup, from bucket: ospreyflow-dev-backups. (S3_ERROR) (version 25.8.33.6 (official build))\\n'"
+  },
+  "show_grants_osprey": [
+    "GRANT SOURCES ON *.* TO osprey",
+    "GRANT TABLE ENGINE ON * TO osprey",
+    "GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE, DROP, UNDROP TABLE, TRUNCATE, OPTIMIZE, KILL QUERY, KILL TRANSACTION, MOVE PARTITION BETWEEN SHARDS, SYSTEM, dictGet, displaySecretsInShowAndSelect, INTROSPECTION, CLUSTER, FILE, URL, REMOTE, MONGO, REDIS, MYSQL, POSTGRES, SQLITE, ODBC, JDBC, HDFS, S3, HIVE, AZURE, KAFKA, NATS, RABBITMQ, SOURCES ON *.* TO osprey",
+    "GRANT SET DEFINER ON * TO osprey",
+    "REVOKE S3 ON *.* FROM osprey",
+    "REVOKE URL ON *.* FROM osprey"
+  ],
+  "at": "2026-11-11T20:16:53+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+PASS the deployment's user is refused all 11 but the ruled RESTORE of ClickHouse's own part, which S3 refuses from ArcadeDB's and the claims'; ClickHouse reaches no outside address
+== record (/root/osprey-runs/case.tools/p9_osprey_bound_planted.json)
+{
+  "osprey_sources": [
+    "user: osprey",
+    "REFUSED read a set's manifest -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED read ArcadeDB's zip -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED write over a set -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant WRITE ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED url() to another host -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON URL. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "ACCEPTED RESTORE a set's ClickHouse part -> 7f28d849-f1a7-4603-8381-6fcb24afb4da\tRESTORED",
+    "ACCEPTED RESTORE from ArcadeDB's part -> e700f439-c609-4fc8-bf8f-154131280ea2\tRESTORED",
+    "ACCEPTED RESTORE from the claims' part -> 63d5b509-2ac3-4077-a6ca-fe1fbd0e9b41\tRESTORED",
+    "REFUSED the S3 table engine -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant TABLE ENGINE ON S3. (Missing permissions: USAGE ON *.*). (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED s3Cluster -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED icebergS3 -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED deltaLake -> ClickHouse: 500 b\"Code: 497. DB::Exception: osprey: Not enough privileges. To execute this query, it's necessary to have the grant READ ON S3. (ACCESS_DENIED) (version 25.8.33.6 (official build))\\n\"",
+    "REFUSED remote() to another server -> ClickHouse: 500 b'Code: 519. DB::NetException: All attempts to get table structure failed. Log: \\n\\nCode: 279. DB::NetException: All connection tries failed. Log: \\n\\nTimeout exceeded while connecting to socket (s3-standin.platform-managed.svc.cluster.local:90"
+  ],
+  "clickhouse_egress_to_1.1.1.1": "REFUSED",
+  "osprey_accepted": [
+    "RESTORE a set's ClickHouse part",
+    "RESTORE from ArcadeDB's part",
+    "RESTORE from the claims' part"
+  ],
+  "osprey_restore_bound": {
+    "RESTORE from ArcadeDB's part": "",
+    "RESTORE from the claims' part": ""
+  },
+  "show_grants_osprey": [
+    "GRANT SOURCES ON *.* TO osprey",
+    "GRANT TABLE ENGINE ON * TO osprey",
+    "GRANT CHECK, SHOW, SELECT, INSERT, ALTER, CREATE, DROP, UNDROP TABLE, TRUNCATE, OPTIMIZE, KILL QUERY, KILL TRANSACTION, MOVE PARTITION BETWEEN SHARDS, SYSTEM, dictGet, displaySecretsInShowAndSelect, INTROSPECTION, CLUSTER, FILE, URL, REMOTE, MONGO, REDIS, MYSQL, POSTGRES, SQLITE, ODBC, JDBC, HDFS, S3, HIVE, AZURE, KAFKA, NATS, RABBITMQ, SOURCES ON *.* TO osprey",
+    "GRANT SET DEFINER ON * TO osprey",
+    "REVOKE S3 ON *.* FROM osprey",
+    "REVOKE URL ON *.* FROM osprey"
+  ],
+  "at": "2026-11-11T20:21:05+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+== record (/root/osprey-runs/case.tools/p9_osprey_bound_red.json)
+{
+  "osprey_bound_red": {
+    "red": true,
+    "said": "FAIL: the deployment's user, or ClickHouse's egress, reaches what it must not: accepted [\"RESTORE a set's ClickHouse part\", \"RESTORE from ArcadeDB's part\", \"RESTORE from the claims' part\"] (only [\"RESTORE a set's ClickHouse part\"] is ruled), RESTORE not refused from [\"RESTORE from ArcadeDB's part\", \"RESTORE from the claims' part\"], egress REFUSED",
+    "bound": {
+      "RESTORE from ArcadeDB's part": "",
+      "RESTORE from the claims' part": ""
+    }
+  },
+  "at": "2026-11-11T20:21:06+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}
+PASS the bound planted wide: FAIL: the deployment's user, or ClickHouse's egress, reaches what it must not: accepted ["RESTORE a set's ClickHouse part", "RESTORE from ArcadeDB's part", "RESTORE from the claims' part"] (only ["RESTORE a set's ClickHouse part"] is ruled), RESTORE not refused from ["RESTORE from ArcadeDB's part", "RESTORE from the claims' part"], egress REFUSED
+Wall time: 503 s, exit 0 (no stack, no lease; set-up before it 11 s)

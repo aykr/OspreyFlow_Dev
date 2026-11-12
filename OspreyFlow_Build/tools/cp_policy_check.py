@@ -277,6 +277,9 @@ WHOLE_SECRET_ALLOWED = frozenset({"api", "worker", "report-sync"})
 NAMED_SECRET_ALLOWED: dict[str, frozenset[str]] = {
     "arcadedb": frozenset({"OSPREY_ARCADEDB_CLUSTER_TOKEN", "OSPREY_ARCADEDB_PASSWORD"}),
     "clickhouse": frozenset({"OSPREY_CLICKHOUSE_PASSWORD"}),
+    # P9's backup (ADR-148 Amendment 7): ArcadeDB's password, to ask ArcadeDB for its backup. Its
+    # other pods (the claims' runs, the restores) call ArcadeDB never and hold no key of ours.
+    "backup": frozenset({"ARCADEDB_ROOT_PASSWORD"}),
     "keycloak": frozenset({"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD",
                            "OSPREY_KEYCLOAK_DB_PASSWORD"}),
     # The engines' keys are not listed: this deployment's keyed engines' alone (`_engine_keys`),

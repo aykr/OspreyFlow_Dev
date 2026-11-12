@@ -1,0 +1,68 @@
+{
+  "backup": {
+    "set": "20261111T195400Z",
+    "seconds": 12.8,
+    "objects": 17,
+    "bytes": 9599686,
+    "not_under_the_key": [],
+    "claims_part": [
+      "sets/20261111T195400Z/claims/ingest.tar.gz",
+      "sets/20261111T195400Z/claims/manifest.json"
+    ],
+    "log": [
+      "[pod/ospreyflow-backup-29907114-tv2j7/backup] backup: set 20261111T195400Z written in 1.2 s (ArcadeDB 87478 bytes; ClickHouse 7f3f76cc-917c-4e43-af42-4cb2651336f1)",
+      "[pod/ospreyflow-backup-claims-29907114-dt6rh/backup-claims] backup-claims: set 20261111T195400Z's claims part written: ingest 7694460 bytes"
+    ]
+  },
+  "destroyed": {
+    "arcadedb": "ArcadeDB /api/v1/command/ospreyflow: 404 b'{\"error\":\"Database not found\",\"requestId\":\"b07611d9b3dd7b89-400\",\"exception\":\"com.arcadedb.exception.DatabaseNotAvail",
+    "clickhouse": "ClickHouse: 404 b'{\\n\\t\"meta\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"data\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"rows\": 0,\\n\\n\\t\"exception\": \"Code: 81. DB::Exception: Database ospreyflow does not e",
+    "claims": {
+      "files": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "seeded": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restored": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restore_seconds": {
+    "stopped": 31.2,
+    "ospreyflow-restore-20261111t195400z": 11.8,
+    "ospreyflow-restore-claims-20261111t195400z": 11.9,
+    "started": 22.8,
+    "total": 65.9
+  },
+  "match": true,
+  "at": "2026-11-11T19:55:43+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none (/root/osprey-runs/case.meta/lease holds no lease): not a timing run"
+  }
+}

@@ -1,0 +1,150 @@
+P9 (case) for the platform lane (ADR-142 Amendment 8 decision 3; ADR-148 Amendment 7). Apply with `git apply` from the
+repository root, after P9 merges, then `P9_rows.diff`. Four files: `render_cloud_platform`'s one hook,
+`values.yaml`'s `backups: {}`, and platform's own render and egress tests, which must now expect ClickHouse's pod to
+run as its backup role's service account. Lands with P9 in this order (the orchestrator's): this diff, `P9_rows.diff`, then
+`P9_decommission.diff`. Refreshed on main after P7b landed (3673660): the hook's context moved, and three of
+platform's tests now written after P9 follow it (below).
+
+**Platform's five conditions (the orchestrator's message of 11 November), checked with this diff applied:**
+1. One hook: `render_cloud_platform` calls `harness.cloud_platform_backups.add_backups` once, with the values it is
+   about to write; it adds to them and returns `terraform/backups.tf`, which the hook adds to the artefacts. No other
+   line of `__init__.py` changes; `terraform.py` is untouched. (This diff.)
+2. Imports: `harness/cloud_platform_backups.py` imports `harness.cloud_platform.settings`, and, inside
+   `backups_terraform`, `harness.cloud_platform.terraform`'s private `_file`, `_q` and `_secret` (asked of platform:
+   make those three public, or P9 copies them). Platform imports the module at this hook, in the decommission
+   check's kept rule and in `runbooks.py` (P9_decommission.diff).
+3. `make cp-policy-check` on the merged render, this diff and `P9_rows.diff` applied on lane/case-p9 after P7b
+   landed: every fixture 0 violation(s), its tests green (`gates/p9_cp_policy_merged.r1.txt`, unfiltered, with
+   platform's cloud-platform and P9's suites beside it). P9 renders
+   no Calico policy of its own (the orchestrator's ruling: every path is a row of profile.yaml's `egress`); P7b's
+   rows for P9's pods (61f782d), checked against the pods as built, needed the three changes `P9_rows.diff` makes.
+4. Renders unchanged: `p7_renders_unchanged.py --helm` against this branch's base (afcaa39): every local-lite, small
+   and cluster artefact the same; the two cluster Helm templates differ as text only in the checksum annotations that
+   follow the image's commit, their parsed manifests the same (`gates/p9_platform_conditions.r2.log`, before P7b).
+5. Not kept at decommission: the two backup roles (`<namespace>-backup`, `<namespace>-backup-clickhouse`), their service
+   accounts and the Secret are declared by backups.tf and named ours, so the check fails if they stay
+   (`KEPT_AT_DECOMMISSION` holds the bucket, its settings and the key alone; tested both sides).
+
+**Platform's tests that follow the hook** (each failed with the hook in and passes with these hunks):
+- `test_with_bedrock_enabled_the_gateway_runs_as_its_own_account` (P11): ClickHouse as its backup role's account, as
+  the older test's hunk already says.
+- `test_only_the_readers_are_given_the_managed_stores_details`: a store's details, and ClickHouse's own pod alone
+  excepted for P9's Secret of its own (its backup user's password, `ospreyflow-clickhouse-backup`).
+- `test_only_a_pod_with_an_account_of_its_own_mounts_its_token` (Amendment 5 point 24): ClickHouse the one stated
+  exception, an account of its own and its token not mounted. **Ruled by the orchestrator (11 November):** keep
+  `automountToken: false` and `TOKEN_ALLOWED` as it is. ClickHouse calls no Kubernetes API, and EKS's pod identity
+  webhook injects its own projected token, `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` whatever
+  `automountServiceAccountToken` says. P9 sets the value itself (no longer left to where the hook runs, which is
+  after the render's token step). Not measured on EKS by this lane (kind's patch projects the token by hand): the
+  measurement is on CARRIES' live-checks row (`P9_carries.diff`).
+A fourth, `test_every_secret_the_values_read_is_one_the_terraform_writes`, failed on P9's side (backups.tf wrote its
+Secret's key quoted, which platform's reader does not take): fixed on the branch, the key bare.
+
+**An upgrade that brings the backups in:** the render gives ArcadeDB's StatefulSet a third claim template, which
+Kubernetes refuses to change in place; the recovery runbook's cloud-platform section has the steps (orphan the
+StatefulSet, upgrade, restart each ArcadeDB pod once). DECOMMISSION's last backup and the kept bucket and key are in
+P9_decommission.diff.
+
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py
+index 0ef233a..b2e6125 100644
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py
+@@ -163,6 +163,11 @@ def test_only_a_pod_with_an_account_of_its_own_mounts_its_token(name: str) -> No
+     values = _values(name)
+     pods = [*values["workloads"], *values["jobs"]]
+     for pod in pods:
++        if pod["name"] == "clickhouse":
++            # Its backup role's account (ADR-148 Amendment 7), its web identity by the account
++            # alone (IRSA's webhook); it calls no Kubernetes API, so no token (P9_render.diff).
++            assert pod["serviceAccountName"] and pod["automountToken"] is False
++            continue
+         assert pod["automountToken"] is bool(pod.get("serviceAccountName")), pod["name"]
+     mounted = {p["name"] for p in pods if p["automountToken"]}
+     gateway = {"litellm"} if name == "production-bedrock" else set()
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+index d2df5e3..02c9b45 100644
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+@@ -287,9 +287,15 @@ def test_only_the_readers_are_given_the_managed_stores_details(fixture: str) ->
+     values = _values(_config(fixture))
+     variables = set(managed_variables(_config(fixture)))
+     cluster = _on_the_cluster(fixture)
++    from harness.cloud_platform_backups import BACKUP_SECRET
++
+     for pod in _pods(values):
+         for container in [pod, *pod.get("initContainers", [])]:
+-            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e}
++            # A store's details: ClickHouse's own pod alone is also given P9's Secret of its own
++            # (its backup user's password), which is not a store's detail.
++            own = BACKUP_SECRET if pod["name"] == "clickhouse" else None
++            given = {e["name"] for e in container.get("env", []) if "secretKeyRef" in e
++                     and e["secretKeyRef"]["name"] != own}  # fmt: skip
+             if pod["name"] in READERS and container.get("envFrom"):
+                 assert given == variables, (container["name"], variables - given)
+                 continue
+@@ -329,8 +335,13 @@ def test_the_conduit_ingest_and_workers_run_as_the_bucket_s_service_account(
+     values: dict[str, Any],
+ ) -> None:
+     account = load_platform("client").secrets.irsa.service_account
++    # ClickHouse writes its backups as its own backup role, by its own pod (ADR-148 Amendment 7).
++    from harness.cloud_platform_backups import CLICKHOUSE_SERVICE_ACCOUNT
++
+     for pod in _pods(values):
+         expected = account if pod["name"] in ("api", "worker", "report-sync") else None
++        if pod["name"] == "clickhouse":
++            expected = CLICKHOUSE_SERVICE_ACCOUNT
+         assert pod.get("serviceAccountName") == expected, pod["name"]
+ 
+ 
+@@ -344,7 +355,11 @@ def test_with_bedrock_enabled_the_gateway_runs_as_its_own_account() -> None:
+     namespace_pods = ("api", "worker", "report-sync")
+     for pod in _pods(_values(_engines(BEDROCK))):
+         default = irsa.service_account if pod["name"] in namespace_pods else None
+-        expected = {"litellm": irsa.gateway_service_account}.get(pod["name"], default)
++        # ClickHouse as its backup role's account (ADR-148 Amendment 7), as without Bedrock.
++        from harness.cloud_platform_backups import CLICKHOUSE_SERVICE_ACCOUNT
++
++        expected = {"litellm": irsa.gateway_service_account,
++                    "clickhouse": CLICKHOUSE_SERVICE_ACCOUNT}.get(pod["name"], default)  # fmt: skip
+         assert pod.get("serviceAccountName") == expected, pod["name"]
+ 
+ 
+diff --git a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
+index 5213e4d..12d7f98 100644
+--- a/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
++++ b/OspreyFlow_Core/deploy/helm/ospreyflow/values.yaml
+@@ -51,6 +51,11 @@ networkPolicy:
+ # nets}`) before the deny; empty: neither is rendered.
+ egress: {}
+ 
++# ADR-148 decision 13 (Amendment 7): the scheduled backups of ArcadeDB and ClickHouse (and the
++# claims of their own) to the backups bucket by their own roles, and a restore when `restore.set`
++# names a set (templates/backups.yaml has the shape). Empty: none of it is rendered.
++backups: {}
++
+ # The platform's Ingress in place of Caddy: `className`, `annotations`, `rules` (each `{host,
+ # service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
+ ingress:
+diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+index 7d0d7f6..9c4545d 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
++++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+@@ -1050,6 +1050,10 @@ def render_cloud_platform(
+         "workloads": workloads,
+         "jobs": jobs,
+     }
++    # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
++    from harness.cloud_platform_backups import add_backups
++
++    backups_terraform = add_backups(config, platform, out)
+     artefacts = {
+         "values.yaml": _BANNER
+         + _bare_connector_hosts_note(config)
+@@ -1069,6 +1073,7 @@ def render_cloud_platform(
+             for name, text in render_terraform(config, platform, out).items()
+         }
+     )
++    artefacts.update(backups_terraform)
+     if poc:
+         # Amendment 5: the runbooks, for the client's team, with the deployment's own names.
+         from harness.cloud_platform.runbooks import render_decommission, render_install

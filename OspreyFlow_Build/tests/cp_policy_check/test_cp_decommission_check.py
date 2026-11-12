@@ -26,6 +26,7 @@ from harness.cloud_platform.decommission_check import (
     declared_resources,
     main,
 )
+from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
 from harness.render import render
 from tools.cp_policy_check import FIXTURES, _resolver
 
@@ -372,3 +373,54 @@ def test_a_left_bucket_s_removal_names_its_region_and_step_6(
     [item] = _check(values, terraform, given).items
     assert "step 6" in item.why
     assert f"aws s3api delete-bucket --region {REGION} --bucket {PREFIX}media" in item.why
+
+
+@pytest.mark.parametrize("address", list(KEPT_AT_DECOMMISSION))
+def test_the_backups_bucket_and_its_key_are_kept_never_left_behind(
+    values: dict[str, Any], terraform: dict[str, str], address: str
+) -> None:
+    """ADR-148 Amendment 7: the decommission's one named exception. Each, in the state or among the
+    buckets, is reported as kept and the check still passes; anything else of ours still fails it."""
+    with_backups = {**terraform, "backups.tf": _backups_tf()}
+    given = _clean()
+    given["state"] += f"{address}\n"
+    given["buckets"] += f"{PREFIX}{BUCKET_SUFFIX}\n"
+    found = _check(values, with_backups, given)
+    assert found.items == []
+    assert f"terraform/{address}" in found.kept and f"bucket/{PREFIX}{BUCKET_SUFFIX}" in found.kept
+    given["state"] += "aws_iam_role.backup\naws_iam_role.backup_clickhouse\n"
+    given["buckets"] += f"{PREFIX}media\n"
+    found = _check(values, with_backups, given)
+    assert [i.what for i in found.items] == ["terraform/aws_iam_role.backup",
+                                             "terraform/aws_iam_role.backup_clickhouse", f"bucket/{PREFIX}media"]
+
+
+def test_the_runbook_keeps_the_backups_and_says_how_to_remove_them(rendered: dict[str, str]) -> None:
+    text = rendered["DECOMMISSION.md"] if "DECOMMISSION.md" in rendered else next(
+        v for k, v in rendered.items() if k.endswith("DECOMMISSION.md"))
+    assert f"s3://$PREFIX{BUCKET_SUFFIX}/sets/" in text
+    for kept in KEPT_AT_DECOMMISSION:
+        assert kept in text
+    removal = text.split("## 9.", 1)[1].split("## 10.", 1)[0]
+    order = ["delete-bucket-policy", "delete-objects", "delete-bucket ", "describe-key", "put-key-policy",
+             "schedule-key-deletion"]  # fmt: skip
+    assert [removal.index(step) for step in order] == sorted(removal.index(step) for step in order)
+    # The key by its ARN, never the alias, where KMS takes only an ID or ARN.
+    assert '--key-id "$KEY"' in removal and "put-key-policy --region \"$REGION\" --key-id \"alias/" not in removal
+    step7 = text.split("## 7.", 1)[1].split("## 8.", 1)[0]
+    assert 'tofu state rm "$M$kept"' in step7 and 'test "$removed" -gt 0' in step7, "module-aware, and a guard"
+    assert '"NoncurrentDays": 7' in step7 and "ExpiredObjectDeleteMarker" in step7
+    retention = text.split("## 7.", 1)[1].split("## 8.", 1)[0]
+    assert retention.index("put-bucket-lifecycle-configuration") < retention.index("tofu state rm")
+    assert "## 10. Restoring a kept set" in text and "BackupRolesOnly" in text and "tofu import" in text
+
+
+def _backups_tf() -> str:
+    """backups.tf as `harness.cloud_platform_backups.backups_terraform` writes it for the poc fixture,
+    so a resource it gains is checked here too."""
+    from harness.cloud_platform.settings import load_platform
+    from harness.cloud_platform_backups import backups_terraform
+
+    config = OspreyConfig.model_validate(yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8")))
+    assert config.cloud_platform is not None
+    return backups_terraform(config, load_platform(config.cloud_platform.platform))

@@ -34,6 +34,8 @@ from typing import Any
 
 import yaml
 
+from harness.cloud_platform_backups import BUCKET_SUFFIX, KEPT_AT_DECOMMISSION
+
 RELEASE = "ospreyflow"
 PART_OF = "app.kubernetes.io/part-of"
 #: The EBS CSI driver's tag on each volume it makes for a claim: the claim's namespace.
@@ -65,6 +67,9 @@ class ListingRefused(ValueError):
 class Leftovers:
     items: list[Leftover] = field(default_factory=list)
     not_ours: list[str] = field(default_factory=list)
+    #: The decommission's one named exception (ADR-148 Amendment 7): the backups bucket and its key,
+    #: kept so no decommission makes a retained set unreadable. Reported, never a leftover.
+    kept: list[str] = field(default_factory=list)
 
 
 def _claim_patterns(values: dict[str, Any]) -> list[re.Pattern[str]]:
@@ -246,12 +251,16 @@ def check(
         if not address:
             continue
         resource = _ours_in_state(address, ours, module)
-        if resource is not None:
+        if resource in KEPT_AT_DECOMMISSION:
+            found.kept.append(f"terraform/{address}")
+        elif resource is not None:
             found.items.append(Leftover(f"terraform/{address}", _state_why(resource)))
         else:
             found.not_ours.append(f"terraform/{address}")
     for bucket in (line.strip() for line in buckets.splitlines()):
-        if bucket and bucket.startswith(bucket_prefix):
+        if bucket == bucket_prefix + BUCKET_SUFFIX:
+            found.kept.append(f"bucket/{bucket}")
+        elif bucket and bucket.startswith(bucket_prefix):
             found.items.append(
                 Leftover(
                     f"bucket/{bucket}",
@@ -286,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for name in sorted(found.not_ours):
         print(f"left alone (not the deployment's): {name}")
+    for name in found.kept:
+        print(f"kept: the backups (retention): {name}")
     for item in found.items:
         print(f"LEFT BEHIND  {item.what}: {item.why}")
     print(f"decommission check: {len(found.items)} thing(s) left behind")

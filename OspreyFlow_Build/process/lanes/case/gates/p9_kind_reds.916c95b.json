@@ -1,0 +1,64 @@
+{
+  "reds": [
+    {
+      "red": "bucket-policy",
+      "slot": 29906911,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29906911-wgw78/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T163100Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: Access Denied)"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "red": "kms-generate",
+      "slot": 29906912,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29906912-pmmqs/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T163200Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: User: arn:aws:sts::123456789012:assumed-role/ospreyflow-dev-backup/botocore-session-1794414049 is not authorized to perform: kms:GenerateDataKey on resource: arn:aws:kms:eu-west-2:123456789012:key/0f9e8d7c-0009-4000-8000-000000000009 because no identity-based policy allows the kms:GenerateDataKey action)"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "measured": "expired-sessions-renewed",
+      "slot": 29906913,
+      "set_written": true,
+      "as_expected": true
+    },
+    {
+      "red": "unrenewable-role",
+      "slot": 29906914,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29906914-6hk7c/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T163400Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity)"
+      ],
+      "no_new_set": true,
+      "as_expected": true,
+      "clickhouse_said": "REFUSED ClickHouse: 500 b'Code: 499. DB::Exception: Access Denied. (S3_ERROR) (version 25.8.33.6 (official build))\\n'"
+    },
+    {
+      "red": "missing-claims",
+      "slot": 29906915,
+      "refused": true,
+      "words": [
+        "[pod/ospreyflow-backup-29906915-zkhzc/backup] backup refused: claims: wait for set 20261111T163500Z's claims part: none after 45 s: the claims run (ospreyflow-backup-claims) for this slot failed or never ran, so the set is left unfinished and is never restored from"
+      ],
+      "no_new_set": true,
+      "as_expected": true
+    },
+    {
+      "red": "restore-of-the-unfinished-set",
+      "refused": true,
+      "words": [
+        "[pod/p9-restore-refused-29906915-v52dg/backup] fetch-graph refused: restore: read set 20261111T163500Z: no finished set by that name (S3 refused it (NoSuchKey: The specified key does not exist.))"
+      ],
+      "as_expected": true
+    }
+  ],
+  "at": "2026-11-11T16:22:26+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "lease": "none: not a timing run"
+  }
+}

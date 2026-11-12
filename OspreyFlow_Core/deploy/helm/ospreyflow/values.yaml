@@ -51,6 +51,11 @@ networkPolicy:
 # nets}`) before the deny; empty: neither is rendered.
 egress: {}
 
+# ADR-148 decision 13 (Amendment 7): the scheduled backups of ArcadeDB and ClickHouse (and the
+# claims of their own) to the backups bucket by their own roles, and a restore when `restore.set`
+# names a set (templates/backups.yaml has the shape). Empty: none of it is rendered.
+backups: {}
+
 # The platform's Ingress in place of Caddy: `className`, `annotations`, `rules` (each `{host,
 # service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
 ingress:

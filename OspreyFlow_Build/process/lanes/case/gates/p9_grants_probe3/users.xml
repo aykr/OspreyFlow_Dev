@@ -1,0 +1,21 @@
+<clickhouse>
+  <users>
+    <osprey>
+      <grants>
+        <query>GRANT ALL ON *.*</query>
+        <query>REVOKE ACCESS MANAGEMENT, NAMED COLLECTION ADMIN ON *.*</query>
+        <query>REVOKE S3, URL, BACKUP ON *.*</query>
+      </grants>
+    </osprey>
+    <backup>
+      <password>bpw</password>
+      <profile>default</profile>
+      <quota>default</quota>
+      <networks><ip>::/0</ip></networks>
+      <grants>
+        <query>GRANT ALL ON ospreyflow*.*</query>
+        <query>GRANT BACKUP, CLUSTER, S3 ON *.*</query>
+      </grants>
+    </backup>
+  </users>
+</clickhouse>

@@ -1,0 +1,25 @@
+backup 29906951: succeeded
+PASS round trip: set 20261111T171100Z restored in 65.1 s, counts and the claim equal
+PASS the deployment's user is refused all four; ClickHouse reaches no outside address
+PASS bucket-policy: ['[pod/ospreyflow-backup-29906968-qc88l/backup] backup refused: backup: read set 20261111T172800Z: S3 refused it (AccessDenied: Access Denied)']
+PASS kms-generate: ['[pod/ospreyflow-backup-29906969-f2ht5/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T172900Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: User: arn:aws:sts::123456789012:assumed-role/ospreyflow-dev-backup/botocore-session-1794417449 is not authorized to perform: kms:GenerateDataKey on resource: arn:aws:kms:eu-west-2:123456789012:key/0f9e8d7c-0009-4000-8000-000000000009 because no identity-based policy allows the kms:GenerateDataKey action)']
+backup 29906970: succeeded
+PASS expired sessions renewed: set 20261111T173000Z
+PASS unrenewable-role: ['[pod/ospreyflow-backup-29906971-kvlkh/backup] backup refused: backup: read set 20261111T173100Z: STS refused it (AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity)']
+PASS unrenewable-role-clickhouse: ['[pod/p9-unrenewable-29906972-v2zs7/backup] clickhouse refused: clickhouse: BACKUP … TO S3: HTTP 500: Code: 499. DB::Exception: Access Denied. (S3_ERROR) (version 25.8.33.6 (official build))']
+PASS ClickHouse refused by STS: ['192.168.249.2 - - [11/Nov/2026 17:17:50] "POST / HTTP/1.1" 403 -', '192.168.249.2 - - [11/Nov/2026 17:17:50] "POST / HTTP/1.1" 403 -']
+PASS missing-claims: ["[pod/ospreyflow-backup-29906973-gxqfx/backup] backup refused: claims: wait for set 20261111T173300Z's claims part: none after 45 s: the claims run (ospreyflow-backup-claims) for this slot failed or never ran, so the set is left unfinished and is never restored from"]
+PASS restore of 20261111T173300Z: ['[pod/p9-restore-refused-29906973-tspp7/backup] fetch-graph refused: restore: read set 20261111T173300Z: no finished set by that name (S3 refused it (NoSuchKey: The specified key does not exist.))']
+      "refused": true,
+        "[pod/ospreyflow-backup-29906968-qc88l/backup] backup refused: backup: read set 20261111T172800Z: S3 refused it (AccessDenied: Access Denied)"
+      "refused": true,
+        "[pod/ospreyflow-backup-29906969-f2ht5/backup] backup refused: arcadedb: upload to s3://ospreyflow-dev-backups/sets/20261111T172900Z/arcadedb/ospreyflow.zip: S3 refused it (AccessDenied: User: arn:aws:sts::123456789012:assumed-role/ospreyflow-dev-backup/botocore-session-1794417449 is not authorized to perform: kms:GenerateDataKey on resource: arn:aws:kms:eu-west-2:123456789012:key/0f9e8d7c-0009-4000-8000-000000000009 because no identity-based policy allows the kms:GenerateDataKey action)"
+      "refused": true,
+        "[pod/ospreyflow-backup-29906971-kvlkh/backup] backup refused: backup: read set 20261111T173100Z: STS refused it (AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity)"
+      "refused": true,
+        "[pod/p9-unrenewable-29906972-v2zs7/backup] clickhouse refused: clickhouse: BACKUP \u2026 TO S3: HTTP 500: Code: 499. DB::Exception: Access Denied. (S3_ERROR) (version 25.8.33.6 (official build))"
+      "refused": true,
+        "[pod/ospreyflow-backup-29906973-gxqfx/backup] backup refused: claims: wait for set 20261111T173300Z's claims part: none after 45 s: the claims run (ospreyflow-backup-claims) for this slot failed or never ran, so the set is left unfinished and is never restored from"
+      "refused": true,
+        "[pod/p9-restore-refused-29906973-tspp7/backup] fetch-graph refused: restore: read set 20261111T173300Z: no finished set by that name (S3 refused it (NoSuchKey: The specified key does not exist.))"
+Wall time: 583 s, exit 0 (no stack, no lease; set-up before it 9 s)

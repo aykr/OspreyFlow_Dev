@@ -1,0 +1,68 @@
+{
+  "backup": {
+    "set": "20261111T203100Z",
+    "seconds": 7.1,
+    "objects": 17,
+    "bytes": 9599745,
+    "not_under_the_key": [],
+    "claims_part": [
+      "sets/20261111T203100Z/claims/ingest.tar.gz",
+      "sets/20261111T203100Z/claims/manifest.json"
+    ],
+    "log": [
+      "[pod/ospreyflow-backup-29907151-xx2mc/backup] backup: set 20261111T203100Z written in 1.1 s (ArcadeDB 87479 bytes; ClickHouse aaf754bd-8da2-4a03-8f94-ad550f795207)",
+      "[pod/ospreyflow-backup-claims-29907151-4nbhp/backup-claims] backup-claims: set 20261111T203100Z's claims part written: ingest 7694518 bytes"
+    ]
+  },
+  "destroyed": {
+    "arcadedb": "ArcadeDB /api/v1/command/ospreyflow: 404 b'{\"error\":\"Database not found\",\"requestId\":\"a8e15d143a4c967a-493\",\"exception\":\"com.arcadedb.exception.DatabaseNotAvail",
+    "clickhouse": "ClickHouse: 404 b'{\\n\\t\"meta\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"data\":\\n\\t[\\n\\n\\t],\\n\\n\\t\"rows\": 0,\\n\\n\\t\"exception\": \"Code: 81. DB::Exception: Database ospreyflow does not e",
+    "claims": {
+      "files": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "seeded": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restored": {
+    "arcadedb_vertices": {
+      "c": 5000,
+      "s": 12497500
+    },
+    "arcadedb_edges": 1000,
+    "clickhouse_rows": [
+      200000,
+      "17805520021964338470"
+    ],
+    "claims": {
+      "files": 301,
+      "sha256": "c65f52eb0941546d2315ada7fb50cc3df96f1ae36e895209dd9d2da63173d3f6"
+    }
+  },
+  "restore_seconds": {
+    "stopped": 31.3,
+    "ospreyflow-restore-20261111t203100z": 16.3,
+    "ospreyflow-restore-claims-20261111t203100z": 16.5,
+    "started": 23.0,
+    "total": 70.8
+  },
+  "match": true,
+  "at": "2026-11-11T20:33:06+00:00",
+  "host": "gpu-1",
+  "lease": {
+    "stack-c.lease": "holder=case\nstack=c\npurpose=P9 round 3 restore timing (kind osprey-p9)\nsince=2026-11-11T20:31:07Z\nworktree=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core"
+  }
+}

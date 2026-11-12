@@ -29,6 +29,7 @@ T_ID = "../OspreyFlow_Build/tests/harness/test_cloud_platform_identity.py::"
 T_AWS = "../OspreyFlow_Build/tests/harness/test_cloud_platform_decommission_aws.py::"
 T_EG = "../OspreyFlow_Build/tests/harness/test_cloud_platform_egress.py::"
 T_EO = "../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py::"
+T_P9 = "../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py::"
 CHECK = C + "harness/cloud_platform/decommission_check.py"
 INIT = C + "harness/cloud_platform/__init__.py"
 RUN = C + "harness/cloud_platform/runbooks.py"
@@ -433,7 +434,23 @@ runner.PLANTS = [
     ("images: the refusal names a render command missing the packages", C + "cli/ospreyflow/images.py",
      '"OspreyFlow_Core: PYTHONPATH=.:packages .venv/bin/python -m harness.render"',
      '"OspreyFlow_Core: PYTHONPATH=. .venv/bin/python -m harness.render"',
-     [T_IMG + "test_no_plan_is_refused_with_a_command_that_renders_it"])
+     [T_IMG + "test_no_plan_is_refused_with_a_command_that_renders_it"]),
+    # ---- P9's pods as built, checked after P7b landed (case's P9_rows.diff) ----------------------------
+    ("profile: the claims' restore not given the cluster's API (its writers check refused)",
+     C + "harness/cloud_platform/profile.yaml", "    restore-claims: [kube-api]\n", "",
+     [T_EG + "test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api",
+      T_EO + "test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more",
+      T_P9 + "test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore-claims]"]),
+    ("profile: the restore given ArcadeDB, which none of its commands calls (P7b's row as landed)",
+     C + "harness/cloud_platform/profile.yaml", "    restore: [kube-api, clickhouse]\n",
+     "    restore: [kube-api, arcadedb, clickhouse]\n",
+     [T_EG + "test_p9_s_pods_have_rows_by_their_own_names_and_a_restore_reaches_the_api",
+      T_EO + "test_p9_s_pods_reach_their_stores_and_a_restore_the_api_and_no_more",
+      T_P9 + "test_each_pod_s_row_reaches_what_its_commands_call_and_no_more[restore]"]),
+    ("cp-policy-check: the backup's key not listed (P7b as landed)", B + "tools/cp_policy_check.py",
+     '    "backup": frozenset({"ARCADEDB_ROOT_PASSWORD"}),\n', "",
+     ["../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::"
+      "test_the_render_with_its_backups_passes_the_policy_check"]),
 ]
 
 if __name__ == "__main__":

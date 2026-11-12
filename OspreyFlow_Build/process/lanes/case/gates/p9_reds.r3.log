@@ -1,0 +1,452 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/OspreyFlow_Core/), logged at osprey-runs/case.meta/runs/20261111T202201Z/log: .venv/bin/python ../OspreyFlow_Build/process/lanes/case/gates/p9_reds.py
+RED      ClickHouse handed the role's session in the statement (the shape sent until kind refused it, Code 42)  [OspreyFlow_Core/services/api/platform_backup.py]
+    2 failed in 1.78s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_backup_writes_a_set_encrypted_by_the_deployments_key_its_manifest_last
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set
+      E   services.api.platform_backup.BackupRefused: clickhouse: BACKUP … TO S3: HTTP 500: Code: 42. DB::Exception: Backup S3 requires 1 or 3 arguments: url, [access_key_id, secret_access_key]. (NUMBER_OF_ARGUMENTS_DOESNT_MATCH)
+      E   services.api.platform_backup.BackupRefused: clickhouse: BACKUP … TO S3: HTTP 500: Code: 42. DB::Exception: Backup S3 requires 1 or 3 arguments: url, [access_key_id, secret_access_key]. (NUMBER_OF_ARGUMENTS_DOESNT_MATCH)
+RED      ClickHouse's pod not the backup role's  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.26s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod
+      E   KeyError: 'serviceAccountName'
+RED      ClickHouse's STS region not given (it asked sts.us-east-1 on kind)  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.24s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_clickhouse_writes_its_backup_as_the_backup_role_by_its_own_pod
+      E   KeyError: 'AWS_DEFAULT_REGION'
+RED      a second delete in the role (a set's data)  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    6 failed in 3.87s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_backup_roles_only_delete_is_clickhouses_own_lock_file
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-sets/a/arcadedb/x]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-sets/a/manifest.json]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-sets/a/claims/ingest.tar.gz]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/clickhouse/data.bin]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/clickhouse/.lock.old]
+      E   AssertionError: assert [('s3:DeleteO...ouse/.lock'])] == [('s3:DeleteO...ouse/.lock'])]
+      E     
+      E     At index 0 diff: ('s3:DeleteObject', ['arn:aws:s3:::b/sets/*/clickhouse/*']) != ('s3:DeleteObject', ['arn:aws:s3:::b/sets/*/clickhouse/.lock'])
+      E     Left contains one more item: ('s3:DeleteObject', ['arn:aws:s3:::b/sets/*/clickhouse/.lock'])
+      E     Use -v to get more diff
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+RED      the lock's delete on a wider pattern  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    3 failed, 3 passed in 4.05s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_backup_roles_only_delete_is_clickhouses_own_lock_file
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/clickhouse/data.bin]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_backup_role_is_refused_every_delete_but_clickhouses_lock[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/clickhouse/.lock.old]
+      E   AssertionError: assert [('s3:DeleteO...::b/sets/*'])] == [('s3:DeleteO...ouse/.lock'])]
+      E     
+      E     At index 0 diff: ('s3:DeleteObject', ['arn:aws:s3:::b/sets/*']) != ('s3:DeleteObject', ['arn:aws:s3:::b/sets/*/clickhouse/.lock'])
+      E     Use -v to get more diff
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+RED      DeleteObjectVersion beside the lock's delete  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.74s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_backup_roles_only_delete_is_clickhouses_own_lock_file
+      E   AssertionError: assert [('s3:DeleteO...ouse/.lock'])] == [('s3:DeleteO...ouse/.lock'])]
+      E     
+      E     Left contains one more item: ('s3:DeleteObjectVersion', ['arn:aws:s3:::b/sets/*/clickhouse/.lock'])
+      E     Use -v to get more diff
+RED      the lock's delete taken away (ClickHouse's BACKUP then fails at its end, as on kind)  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    2 failed in 1.85s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_backup_writes_a_set_encrypted_by_the_deployments_key_its_manifest_last
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_clickhouses_role_may_remove_its_lock_and_nothing_else
+      E   services.api.platform_backup.BackupRefused: clickhouse: BACKUP … TO S3: HTTP 500: Code: 499. DB::Exception: AccessDenied: Access Denied. (S3_ERROR) (query: BACKUP DATABASE ospreyflow TO S3('https://s3.eu-west-2.amazonaws.com/ospreyflow-dev-0a1b2c3d-backups/sets/20261111T202224Z/clickhouse/'))
+      E   botocore.errorfactory.AccessDenied: An error occurred (AccessDenied) when calling the DeleteObject operation: Access Denied
+RED      no lifecycle rule expiring the sets  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.22s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_sets_expire_by_the_buckets_lifecycle_rule
+      E   assert None
+      E    +  where None = <function search at 0x7256cd5f4860>('expiration \\{\\s*days\\s*=\\s*35\\s*\\}', '\n    status = "Enabled"\n\n    filter {\n      prefix = "sets/"\n    }\n\n    noncurrent_version_expiration {\n      noncurrent_days = 7\n    }')
+      E    +    where <function search at 0x7256cd5f4860> = re.search
+      E    +    and   '\n    status = "Enabled"\n\n    filter {\n      prefix = "sets/"\n    }\n\n    noncurrent_version_expiration {\n      noncurrent_days = 7\n    }' = <built-in method group of re.Match object at 0x7256c9ba1fc0>(1)
+      E    +      where <built-in method group of re.Match object at 0x7256c9ba1fc0> = <re.Match object; span=(3090, 3251), match='id     = "expire-sets"\n    status = "Enabled"\n\>.group
+RED      the key and the bucket not kept from a destroy (spec 05 §6.1)  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.21s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_key_and_the_bucket_outlive_a_destroy_of_the_namespace
+      E   AssertionError: resource "aws_kms_key" "backups"
+      E   assert None
+      E    +  where None = <function search at 0x7825437f4860>('lifecycle\\s*\\{\\s*prevent_destroy\\s*=\\s*true\\s*\\}', ' {\n  description             = "${var.namespace} backups"\n  enable_key_rotation     = true\n  deletion_window_in_days = 30\n  policy                  = data.aws_iam_policy_document.backups_key.json\n}\n')
+      E    +    where <function search at 0x7825437f4860> = re.search
+RED      the claims run names its set by the clock, not the slot  [OspreyFlow_Core/services/api/platform_backup.py]
+    2 failed in 5.38s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_set_with_claims_holds_them_and_is_finished_only_with_them
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_an_overlapping_second_run_never_joins_the_first_runs_set
+      E   services.api.platform_backup.BackupRefused: claims: wait for set 20261111T021500Z's claims part: none after 600 s: the claims run (ospreyflow-backup-claims) for this slot failed or never ran, so the set is left unfinished and is never restored from
+      E   AssertionError: assert 'sets/20261112T021500Z/claims/ingest.tar.gz' in ['sets/20261111T021500Z/arcadedb/ospreyflow.zip', 'sets/20261111T021500Z/clickhouse/.backup', 'sets/20261111T021500Z/c...events/all_1_1_0/data.bin', 'sets/20261111T202235Z/claims/ingest.tar.gz', 'sets/20261111T202235Z/claims/manifest.json']
+RED      the claims run joins the newest open set (the design ruled out)  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.40s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_an_overlapping_second_run_never_joins_the_first_runs_set
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a missing claims part let through at the end of the wait  [OspreyFlow_Core/services/api/platform_backup.py]
+    2 failed in 4.70s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_missing_claims_part_leaves_the_set_unfinished_and_unrestorable
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_main_runs_each_part_and_fails_the_job_on_a_missing_claims_part
+      E   Failed: DID NOT RAISE BackupRefused
+      E   AssertionError: assert 0 == 1
+      E    +  where 0 = <function main at 0x7e8c31ca51c0>(['backup'])
+      E    +    where <function main at 0x7e8c31ca51c0> = pb.main
+RED      a claims part added to a finished set  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.38s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_claims_run_never_adds_to_a_finished_set
+      E   Failed: DID NOT RAISE BackupRefused
+RED      the file system's lost+found backed up  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.45s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_set_with_claims_holds_them_and_is_finished_only_with_them
+      E   AssertionError: the file system's folder is not ours
+      E   assert not True
+      E    +  where True = any(<generator object test_a_set_with_claims_holds_them_and_is_finished_only_with_them.<locals>.<genexpr> at 0x763734b65490>)
+RED      a part unpacked without tarfile's data filter  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.43s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_part_reaching_outside_its_claim_is_refused
+      E   Failed: DID NOT RAISE BackupRefused
+RED      files written after the set left in the claim by its restore  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.43s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_restore_puts_each_claim_back_as_it_was
+      E   OSError: [Errno 39] Directory not empty: '/tmp/pytest-of-root/pytest-4044/test_a_restore_puts_each_claim0/restored/ingest/.osprey-restore/ingest' -> '/tmp/pytest-of-root/pytest-4044/test_a_restore_puts_each_claim0/restored/ingest/ingest'
+RED      the stand-in ends a session at a policy change (AWS does not)  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    1 failed in 0.89s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_policy_changed_by_the_lever_judges_the_sessions_already_running
+      E   AssertionError: assert 'InvalidAccessKeyId' == 'AccessDenied'
+      E     
+      E     - AccessDenied
+      E     + InvalidAccessKeyId
+RED      the backup pod given the whole Secret (envFrom)  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 2.44s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_cronjob_runs_on_arcadedbs_node_with_its_claim_one_run_at_a_time
+      E   AssertionError: the pod reads the two passwords it uses, never the whole Secret
+      E   assert 'envFrom' not in {'name': 'backup', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:40b8896ad5ac4746dadaedc247b09...ackup'], 'envFrom': [{'configMapRef': {'name': 'ospreyflow-env'}}, {'secretRef': {'name': 'ospreyflow-secrets'}}], ...}
+RED      the claims mounted writable by the claims run  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 2.50s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only
+      E   AssertionError: assert [{'name': 'cl...low-ingest'}}] == [{'name': 'cl...Only': True}}]
+      E     
+      E     At index 0 diff: {'name': 'claim-ingest', 'persistentVolumeClaim': {'claimName': 'ospreyflow-ingest'}} != {'name': 'claim-ingest', 'persistentVolumeClaim': {'claimName': 'ospreyflow-ingest', 'readOnly': True}}
+      E     Use -v to get more diff
+RED      the claims run placed anywhere, not beside the shared pods  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 2.57s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only
+      E   AssertionError: assert {'labelSelect....io/hostname'} == {'labelSelect....io/hostname'}
+      E     
+      E     Omitting 1 identical items, use -vv to show
+      E     Differing items:
+      E     {'labelSelector': {'matchLabels': {'ospreyflow.io/shared': 'false'}}} != {'labelSelector': {'matchLabels': {'ospreyflow.io/shared': 'true'}}}
+      E     Use -v to get more diff
+RED      each run's set named by its pod's name (a random suffix), not its Job's  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 2.68s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_standard_shape_has_no_claims_run
+      E   assert {'fieldRef': ...tadata.name'}} == {'fieldRef': .../job-name']"}}
+      E     
+      E     Differing items:
+      E     {'fieldRef': {'fieldPath': 'metadata.name'}} != {'fieldRef': {'fieldPath': "metadata.labels['batch.kubernetes.io/job-name']"}}
+      E     Use -v to get more diff
+RED      the deployment's ClickHouse user keeps the S3 and URL sources and BACKUP  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.20s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_clickhouses_own_user_is_refused_the_buckets_and_the_backup_user_holds_them
+      E   AssertionError: assert (<re.Match object; span=(27, 199), match='<osprey>\n      <grants>\n        <query>GRANT AL> is not None and '<query>REVOKE S3, URL, BACKUP ON *.*</query>' in '\n      <grants>\n        <query>GRANT ALL ON *.*</query>\n        <query>REVOKE ACCESS MANAGEMENT, NAMED COLLECTION ADMIN ON *.*</query>\n      </grants>\n    ')
+      E    +  where '\n      <grants>\n        <query>GRANT ALL ON *.*</query>\n        <query>REVOKE ACCESS MANAGEMENT, NAMED COLLECTION ADMIN ON *.*</query>\n      </grants>\n    ' = <built-in method group of re.Match object at 0x747e4b512d40>(1)
+      E    +    where <built-in method group of re.Match object at 0x747e4b512d40> = <re.Match object; span=(27, 199), match='<osprey>\n      <grants>\n        <query>GRANT AL>.group
+RED      ClickHouse's role reaches the whole set, not its own prefix  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    4 failed, 1 passed in 3.64s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_each_role_reaches_its_own_prefix_alone
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_role_is_refused_the_other_roles_prefix[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/arcadedb/ospreyflow.zip]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_role_is_refused_the_other_roles_prefix[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/manifest.json]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_each_role_is_refused_the_other_roles_prefix[arn:aws:iam::123456789012:role/ospreyflow-dev-backup-clickhouse-sets/a/claims/ingest.tar.gz]
+      E   AssertionError: assert {'arn:aws:s3:::b/sets/*'} == {'arn:aws:s3:...clickhouse/*'}
+      E     
+      E     Extra items in the left set:
+      E     'arn:aws:s3:::b/sets/*'
+      E     Extra items in the right set:
+      E     'arn:aws:s3:::b/sets/*/clickhouse/*'
+      E     Use -v to get more diff
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+RED      the key used by any service, not through S3 alone  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    2 failed in 0.72s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_each_role_reaches_its_own_prefix_alone
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_keys_own_policy_lets_the_account_administer_the_roles_use_and_nobody_delete
+      E   AssertionError: assert {'StringEqual...zonaws.com']}} == {'StringEqual...azonaws.com'}}
+      E     
+      E     Differing items:
+      E     {'StringEquals': {'kms:ViaService': ['s3.eu-west-2.amazonaws.com', 'ec2.amazonaws.com']}} != {'StringEquals': {'kms:ViaService': 's3.eu-west-2.amazonaws.com'}}
+      E     Use -v to get more diff
+      E   AssertionError: assert ({'AWS': ['arn...::1:role/r2']} == {'AWS': ['arn...::1:role/r2']}
+      E     
+      E     Omitting 1 identical items, use -vv to show
+      E     Use -v to get more diff and ['s3.eu-west-2.amazonaws.com', 'ec2.amazonaws.com'] == 's3.eu-west-2.amazonaws.com')
+RED      the key's deletion allowed  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.63s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_keys_own_policy_lets_the_account_administer_the_roles_use_and_nobody_delete
+      E   AssertionError: assert ('Allow', '*'...KeyDeletion']) == ('Deny', '*',...KeyDeletion'])
+      E     
+      E     At index 0 diff: 'Allow' != 'Deny'
+      E     Use -v to get more diff
+RED      the bucket not versioned  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.15s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_bucket_is_versioned_so_an_overwrite_erases_nothing
+      E   assert (<re.Match object; span=(2046, 2190), match='resource "aws_s3_bucket_versioning" "backups" {\n> is not None and None)
+      E    +  where None = <function search at 0x7a496c3f8860>('status\\s*=\\s*"Enabled"', '\n  bucket = aws_s3_bucket.backups.id\n\n  versioning_configuration {\n    status = "Suspended"\n  }')
+      E    +    where <function search at 0x7a496c3f8860> = re.search
+      E    +    and   '\n  bucket = aws_s3_bucket.backups.id\n\n  versioning_configuration {\n    status = "Suspended"\n  }' = <built-in method group of re.Match object at 0x7a49689c1fc0>(1)
+      E    +      where <built-in method group of re.Match object at 0x7a49689c1fc0> = <re.Match object; span=(2046, 2190), match='resource "aws_s3_bucket_versioning" "backups" {\n>.group
+RED      TLSOnly no longer a deny  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.84s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_plain_http_is_refused_by_the_bucket_policy
+      E   Failed: DID NOT RAISE ClientError
+RED      KMSOnly no longer a deny  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.85s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_another_encryption_or_another_key_is_refused_by_the_bucket_policy
+      E   Failed: DID NOT RAISE ClientError
+RED      ItsOwnKey no longer a deny  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.84s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_another_key_the_role_may_use_is_refused_by_the_bucket_policy_alone
+      E   Failed: DID NOT RAISE ClientError
+RED      NoKeyNamed no longer a deny  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.85s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_aws_kms_named_without_a_key_is_refused_by_the_bucket_policy
+      E   Failed: DID NOT RAISE ClientError
+RED      BackupRolesOnly no longer a deny  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 1.13s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_the_conduits_role_is_refused_the_backups_bucket
+      E   Failed: DID NOT RAISE ClientError
+RED      the trust without its :sub  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.88s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_token_for_another_service_account_is_refused_by_sts
+      E   Failed: DID NOT RAISE ClientError
+RED      the trust without its :aud  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.83s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_token_for_another_audience_is_refused_by_sts
+      E   Failed: DID NOT RAISE ClientError
+RED      the stand-in takes any signature  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    1 failed in 0.95s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_wrong_secret_is_refused_by_its_signature
+      E   Failed: DID NOT RAISE ClientError
+RED      the stand-in takes plain HTTP as TLS  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    1 failed in 0.86s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_plain_http_is_refused_by_the_bucket_policy
+      E   Failed: DID NOT RAISE ClientError
+RED      the stand-in's KMS allows what the key's own policy does not  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    2 failed in 1.62s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_role_the_keys_own_policy_leaves_out_is_refused_whatever_its_iam_says
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_without_kms_generate_data_key_a_write_is_refused_naming_the_key
+      E   Failed: DID NOT RAISE ClientError
+      E   Failed: DID NOT RAISE ClientError
+RED      the stand-in takes a signature for any region  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    1 failed in 0.84s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_request_signed_for_another_region_is_refused
+      E   Failed: DID NOT RAISE ClientError
+RED      the writers check passing when it cannot list the pods  [OspreyFlow_Core/services/api/platform_backup.py]
+    2 failed in 1.77s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_pods_it_cannot_list_refuse_the_restore
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_whose_writers_cannot_be_seen_touches_nothing
+      E   Failed: DID NOT RAISE BackupRefused
+      E   Failed: DID NOT RAISE BackupRefused
+RED      the restore runs beside a writer  [OspreyFlow_Core/services/api/platform_backup.py]
+    2 failed in 2.00s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_refuses_while_a_writer_runs_and_touches_nothing[Running]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_refuses_while_a_writer_runs_and_touches_nothing[Pending]
+      E   Failed: DID NOT RAISE BackupRefused
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a ClickHouse file missing from the set let through (passed over, not mis-read)  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.18s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_missing_clickhouse_part_leaves_arcadedb_and_clickhouse_untouched
+      E   Failed: DID NOT RAISE BackupRefused
+RED      the graph's zip fetched unchecked  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.24s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_zip_that_does_not_match_its_manifest_is_never_restored
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a backup file's name reaching outside the claim taken  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 0.82s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_arcadedb_reporting_no_file_is_refused_in_words
+      E   AssertionError: Regex pattern did not match.
+      E     Expected regex: 'an unexpected backup file name'
+      E     Actual message: "arcadedb: read the zip: /tmp/pytest-of-root/pytest-4077/test_arcadedb_reporting_no_fil0/arcadedb-backups/ospreyflow/../escape.zip is not in the mounted backups folder (is this pod on arcadedb-0's claim?)"
+RED      an unfinished set counted as finished  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 0.85s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_an_unfinished_set_is_never_restored
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a slot run again over its finished set  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.20s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_finished_slot_is_never_taken_again
+      E   Failed: DID NOT RAISE BackupRefused
+RED      the backups' Role given more than get and list  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 2.64s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_backups_account_may_see_pods_and_nothing_else
+      E   AssertionError: assert [{'apiGroups'...', 'delete']}] == [{'apiGroups'...et', 'list']}]
+      E     
+      E     At index 0 diff: {'apiGroups': [''], 'resources': ['pods'], 'verbs': ['get', 'list', 'delete']} != {'apiGroups': [''], 'resources': ['pods'], 'verbs': ['get', 'list']}
+      E     Use -v to get more diff
+RED      the backup user's password back in the shared Secret  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    6 failed in 3.45s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password[development]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password[production]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_no_workload_but_clickhouse_and_the_backups_can_read_the_backup_users_password[production-bedrock]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_shared_secrets_terraform_never_makes_the_backup_users_password[development]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_shared_secrets_terraform_never_makes_the_backup_users_password[production]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_shared_secrets_terraform_never_makes_the_backup_users_password[production-bedrock]
+      E   AssertionError: assert 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' not in ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHANGE_CLIENT_SECRET', 'OSPREY_ARCADEDB_CLUSTER_TOKEN', 'OSPREY_ARCADEDB_PASSWORD', 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD', ...]
+      E    +  where 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' = backups.CLICKHOUSE_BACKUP_PASSWORD
+      E   AssertionError: assert 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' not in ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHANGE_CLIENT_SECRET', 'OSPREY_ARCADEDB_CLUSTER_TOKEN', 'OSPREY_ARCADEDB_PASSWORD', 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD', ...]
+      E    +  where 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' = backups.CLICKHOUSE_BACKUP_PASSWORD
+      E   AssertionError: assert 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' not in ['ARCADEDB_ROOT_PASSWORD', 'CLICKHOUSE_PASSWORD', 'OIDC_TOKEN_EXCHANGE_CLIENT_SECRET', 'OSPREY_ARCADEDB_CLUSTER_TOKEN', 'OSPREY_ARCADEDB_PASSWORD', 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD', ...]
+      E    +  where 'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' = backups.CLICKHOUSE_BACKUP_PASSWORD
+      E   assert 'OSPREY_CLIC...KUP_PASSWORD' not in '# Our own s...lt\n  }\n}\n'
+      E     
+      E     'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' is contained here:
+      E       esult
+      E           OSPREY_CLICKHOUSE_BACKUP_PASSWORD = random_password.osprey_clickhouse_backup_password.result
+      E     ?     +++++++++++++++++++++++++++++++++
+      E           OSPREY_CLICKHOUSE_PASSWORD        = random_password.osprey_clickhouse_password.result
+      E           OSPREY_KEYCLOAK_ADMIN             = "admin"...
+      E     
+      E     ...Full output truncated (8 lines hidden), use '-vv' to show
+      E   assert 'OSPREY_CLIC...KUP_PASSWORD' not in '# Our own s...lt\n  }\n}\n'
+      E     
+      E     'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' is contained here:
+      E       esult
+      E           OSPREY_CLICKHOUSE_BACKUP_PASSWORD = random_password.osprey_clickhouse_backup_password.result
+      E     ?     +++++++++++++++++++++++++++++++++
+      E           OSPREY_CLICKHOUSE_PASSWORD        = random_password.osprey_clickhouse_password.result
+      E           OSPREY_KEYCLOAK_ADMIN             = "admin"...
+      E     
+      E     ...Full output truncated (15 lines hidden), use '-vv' to show
+      E   assert 'OSPREY_CLIC...KUP_PASSWORD' not in '# Our own s...lt\n  }\n}\n'
+      E     
+      E     'OSPREY_CLICKHOUSE_BACKUP_PASSWORD' is contained here:
+      E       esult
+      E           OSPREY_CLICKHOUSE_BACKUP_PASSWORD = random_password.osprey_clickhouse_backup_password.result
+      E     ?     +++++++++++++++++++++++++++++++++
+      E           OSPREY_CLICKHOUSE_PASSWORD        = random_password.osprey_clickhouse_password.result
+      E           OSPREY_KEYCLOAK_ADMIN             = "admin"...
+      E     
+      E     ...Full output truncated (15 lines hidden), use '-vv' to show
+RED      a manifest of another set taken as this one's  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.19s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_manifest_that_is_another_sets_is_refused
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a manifest naming objects outside its set taken  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.17s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_manifest_naming_another_sets_objects_is_refused
+      E   AssertionError: Regex pattern did not match.
+      E     Expected regex: 'outside the set'
+      E     Actual message: "restore: verify set 20261111T202425Z: ArcadeDB's zip (sets/20201231T000000Z/arcadedb/ospreyflow.zip): S3 refused it (NoSuchKey: The specified key does not exist.); nothing was touched"
+RED      a set without the deployment's claims let through  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.19s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_set_without_the_deployments_claims_is_refused
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a ClickHouse file of another size or ETag let through  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.20s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_changed_clickhouse_file_is_never_restored
+      E   Failed: DID NOT RAISE BackupRefused
+RED      a claim's part not checked by the set's verify  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.46s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_the_sets_verify_refuses_a_changed_claim_before_anything
+      E   Failed: DID NOT RAISE BackupRefused
+RED      no writers named let through  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.19s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_no_writers_named_refuses_the_restore
+      E   Failed: DID NOT RAISE BackupRefused
+RED      main's verify without its writers check  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.35s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_mains_restore_steps_fail_closed_when_the_pods_cannot_be_listed[verify]
+      E   AssertionError: assert 0 == 1
+      E    +  where 0 = <function main at 0x7451aefa51c0>(['verify', '--set', '20261111T202438Z'])
+      E    +    where <function main at 0x7451aefa51c0> = pb.main
+RED      main's restore-claims without its writers check  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 1.39s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_mains_restore_steps_fail_closed_when_the_pods_cannot_be_listed[restore-claims]
+      E   AssertionError: assert 'cannot confirm the writers are stopped' in 'restore-claims refused: claims: restore set 20261111T202441Z: the set holds no claims part\n'
+      E    +  where 'restore-claims refused: claims: restore set 20261111T202441Z: the set holds no claims part\n' = CaptureResult(out='', err='restore-claims refused: claims: restore set 20261111T202441Z: the set holds no claims part\n').err
+      E    +    where CaptureResult(out='', err='restore-claims refused: claims: restore set 20261111T202441Z: the set holds no claims part\n') = readouterr()
+      E    +      where readouterr = <_pytest.capture.CaptureFixture object at 0x702383c646e0>.readouterr
+RED      ClickHouse's live database set aside before its restore is proven  [OspreyFlow_Core/services/api/platform_backup.py]
+    2 failed in 2.13s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_clickhouse_refused_its_restore_leaves_the_live_database_as_it_was
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set
+      E   AssertionError: assert not ['RENAME DATABASE ospreyflow TO ospreyflow_before_20261111t202444z']
+      E   assert ['DROP DATABA...202445z SYNC'] == ['DROP DATABA...reyflow', ...]
+      E     
+      E     At index 2 diff: 'RENAME DATABASE ospreyflow TO ospreyflow_before_20261111t202445z' != "RESTORE DATABASE ospreyflow AS ospreyflow_restoring_20261111t202445z FROM S3('https://s3.eu-west-2.amazonaws.com/ospreyflow-dev-0a1b2c3d-backups/sets/20261111T202445Z/clickhouse/') SETTINGS allow_different_database_def = true"
+      E     Right contains one more item: 'DROP DATABASE IF EXISTS ospreyflow_before_20261111t202445z SYNC'
+      E     Use -v to get more diff
+RED      a file that shrank while read padded into the part  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 0.20s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_file_that_shrinks_while_read_refuses_the_part_never_padded
+      E   Failed: DID NOT RAISE FileShrank
+RED      a file gone before it is read failing the part  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 0.99s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup_claims.py::test_a_file_gone_before_it_is_read_is_left_out_and_counted
+      E   FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-root/pytest-4102/test_a_file_gone_before_it_is_0/claims/ingest/ingest/drop/nightly/people.csv'
+      E   services.api.platform_backup.BackupRefused: claims: upload ingest to s3://ospreyflow-dev-0a1b2c3d-backups/sets/20261111T021500Z/claims/ingest.tar.gz: FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-root/pytest-4102/test_a_file_gone_before_it_is_0/claims/ingest/ingest/drop/nightly/people.csv'
+RED      the stand-in's trust taking its issuer from the trust, not the token (round 2's shape)  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    1 failed in 0.77s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_token_of_another_issuer_is_refused_by_the_trust_though_signed_by_a_trusted_key
+      E   Failed: DID NOT RAISE ClientError
+RED      the stand-in reading any audience as STS's  [OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py]
+    1 failed in 0.76s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_s3_standin.py::test_a_token_for_another_audience_is_refused_by_sts
+      E   Failed: DID NOT RAISE ClientError
+RED      a policy's condition values not written into the Terraform  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    6 failed in 2.40s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_terraform_writes_the_policies_the_stand_in_holds[backups_bucket]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_terraform_writes_the_policies_the_stand_in_holds[backups_key]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_terraform_writes_the_policies_the_stand_in_holds[backup_policy]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_terraform_writes_the_policies_the_stand_in_holds[backup_clickhouse_policy]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_terraform_writes_the_policies_the_stand_in_holds[backup_trust]
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_terraform_writes_the_policies_the_stand_in_holds[backup_clickhouse_trust]
+      E   AssertionError: ('backups_bucket', 'Bool', 'aws:SecureTransport')
+      E   assert 'test     = "Bool"\n      variable = "aws:SecureTransport"\n      values   = ["false"]' in '\n    sid       = "TLSOnly"\n    effect    = "Deny"\n    actions   = ["s3:*"]\n    resources = ["${aws_s3_bucket.back...n\n    condition {\n      test     = "Bool"\n      variable = "aws:SecureTransport"\n      values   = []\n    }\n  }\n'
+      E   AssertionError: ('backups_key', 'StringEquals', 'kms:ViaService')
+      E   assert 'test     = "StringEquals"\n      variable = "kms:ViaService"\n      values   = ["s3.eu-west-2.amazonaws.com"]' in '\n    sid       = "UseThroughS3"\n    effect    = "Allow"\n    actions   = ["kms:GenerateDataKey", "kms:Decrypt", "km...    condition {\n      test     = "StringEquals"\n      variable = "kms:ViaService"\n      values   = []\n    }\n  }\n'
+      E   AssertionError: ('backup_policy', 'StringEquals', 'kms:ViaService')
+      E   assert 'test     = "StringEquals"\n      variable = "kms:ViaService"\n      values   = ["s3.eu-west-2.amazonaws.com"]' in '\n    effect    = "Allow"\n    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]\n    resources = ["${aws_kms_key.ba...\n    condition {\n      test     = "StringEquals"\n      variable = "kms:ViaService"\n      values   = []\n    }\n  }'
+      E   AssertionError: ('backup_clickhouse_policy', 'StringEquals', 'kms:ViaService')
+      E   assert 'test     = "StringEquals"\n      variable = "kms:ViaService"\n      values   = ["s3.eu-west-2.amazonaws.com"]' in '\n    effect    = "Allow"\n    actions   = ["kms:GenerateDataKey", "kms:Decrypt"]\n    resources = ["${aws_kms_key.ba...    condition {\n      test     = "StringEquals"\n      variable = "kms:ViaService"\n      values   = []\n    }\n  }\n'
+      E   AssertionError: ('backup_trust', 'StringEquals', '${var.eks_oidc_issuer}:sub')
+      E   assert 'test     = "StringEquals"\n      variable = "${var.eks_oidc_issuer}:sub"\n      values   = ["system:serviceaccount:${var.namespace}:ospreyflow-backup"]' in '\n    effect  = "Allow"\n    actions = ["sts:AssumeRoleWithWebIdentity"]\n\n    principals {\n      type        = "Fe...ion {\n      test     = "StringEquals"\n      variable = "${var.eks_oidc_issuer}:aud"\n      values   = []\n    }\n  }'
+      E   AssertionError: ('backup_clickhouse_trust', 'StringEquals', '${var.eks_oidc_issuer}:sub')
+      E   assert 'test     = "StringEquals"\n      variable = "${var.eks_oidc_issuer}:sub"\n      values   = ["system:serviceaccount:${var.namespace}:ospreyflow-backup-clickhouse"]' in '\n    effect  = "Allow"\n    actions = ["sts:AssumeRoleWithWebIdentity"]\n\n    principals {\n      type        = "Fe...ion {\n      test     = "StringEquals"\n      variable = "${var.eks_oidc_issuer}:aud"\n      values   = []\n    }\n  }'
+RED      the key's administrators given Create* (CreateGrant is use)  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.46s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_keys_own_policy_lets_the_account_administer_the_roles_use_and_nobody_delete
+      E   AssertionError: assert not ['kms:Create*']
+RED      an overwritten version kept a second retention  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.77s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py::test_the_sets_expire_by_the_buckets_lifecycle_rule
+      E   assert 35 < 35
+      E    +  where 35 = backups.NONCURRENT_DAYS
+      E    +  and   35 = backups.EXPIRE_DAYS
+RED      the restore rendered beyond one copy  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 2.65s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_a_restore_beyond_one_copy_of_each_store_is_refused_naming_p9b
+      E   Failed: DID NOT RAISE HelmFailed
+RED      a backup pod without its account's token mounted  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 2.49s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_each_of_p9s_pods_runs_as_its_own_account_with_its_token
+      E   AssertionError: ospreyflow-restore-20261111t021500z
+      E   assert False is True
+RED      the writers not checked again before ArcadeDB's databases are replaced  [OspreyFlow_Core/deploy/helm/ospreyflow/templates/backups.yaml]
+    1 failed in 1.74s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py::test_the_writers_are_checked_again_just_before_arcadedbs_databases_are_replaced
+      E   AssertionError: assert 'writers-unused' == 'writers'
+      E     
+      E     - writers
+      E     + writers-unused
+RED      the backup user's grant back to `ospreyflow.*` (kind, round 3: the restore refused its own temporary database)  [OspreyFlow_Core/harness/cloud_platform_backups.py]
+    1 failed in 0.91s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set
+      E   services.api.platform_backup.BackupRefused: clickhouse: clear the restore's own: HTTP 500: Code: 497. DB::Exception: backup: Not enough privileges. To execute this query, it's necessary to have the grant DROP DATABASE ON ospreyflow_restoring_20261111t202510z.*. (ACCESS_DENIED)
+RED      the live ClickHouse database set aside though it is gone (kind, round 3: the disaster restore refused)  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 0.91s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_into_a_deployment_whose_clickhouse_database_is_gone_puts_the_sets_in
+      E   services.api.platform_backup.BackupRefused: clickhouse: set the live one aside: HTTP 404: Code: 81. DB::Exception: Database ospreyflow does not exist. (UNKNOWN_DATABASE). (version 25.8.33.6 (official build))
+RED      the live ClickHouse database never set aside  [OspreyFlow_Core/services/api/platform_backup.py]
+    1 failed in 0.95s
+    FAILED ../OspreyFlow_Build/tests/cloud_platform_backup/test_platform_backup.py::test_a_restore_beside_the_live_clickhouse_database_swaps_it_and_drops_the_old
+      E   services.api.platform_backup.BackupRefused: clickhouse: put the restored one in: HTTP 500: Code: 82. DB::Exception: Database ospreyflow already exists. (DATABASE_ALREADY_EXISTS). (version 25.8.33.6 (official build))
+
+68 plants, 68 red, 0 not red
+Wall time: 193 s, exit 0 (no stack, no lease; set-up before it 16 s)
