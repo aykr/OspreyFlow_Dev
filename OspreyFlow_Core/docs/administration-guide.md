@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.87** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
+**Version 1.88** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.88 | 2026-11-12 | New §6a.9, the model route on a shared platform: the model gateway (LiteLLM), always rendered; an engine as your organisation's own AI gateway (by a token) or Amazon Bedrock in London (by the gateway's own IAM role, no key stored anywhere), with `kind`, `auth` and `region`, London alone and a model's own id; what is refused, in words; `gateway.tf`'s role, policy and service account, and what the platform team applies; the gateway's own way out, its engines' hosts and STS; what *Admin › Models* allows and refuses, in its own words; for a newly declared Bedrock engine, the Terraform before the new values, since only it makes the gateway's service account (also in §10.1); Laurium's key cross-referenced; what is not yet tried against AWS or your own gateway (ADR-135 Amendments 4, 7 and 8). §6a.5: an engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it. *Coming* and the questions for the platform's team renumbered 6a.10 and 6a.11; nothing of the model route was listed as coming. PDF made by the orchestrator at merge. |
 | 1.87 | 2026-11-12 | §9.1: the guides from Home. Home links this guide under Admin's card, the user guide under the Glass's and the developer guide under the Ingest Studio's, each only for someone whose roles open that place, and the Conduit refuses anyone else (ADR-145 Amendment 10). A new guide comes with a new image: on Small and `cloud-platform` with a release's images, on Lite with `ospreyflow start --build`. PDF made by the orchestrator at merge. |
 | 1.86 | 2026-11-12 | §6a, the shared Kubernetes platform, brought up to date. §6a.1: the example `osprey.yaml` with Entra ID's settings and networks; the OFFICIAL-SENSITIVE ceiling set by the profile; the proof-of-concept shape; the render making its own folders; the install and decommission runbooks and the decommission check, not yet run on a cluster; reporting not available on this profile; Laurium, the extraction engine, as its own pod, image and repository, called by the Conduit alone and reached by no screen yet (ADR-148 Amendments 5 and 8; ADR-135 Amendments 6 and 9; ADR-142 Amendment 8 decision 9). §6a.2: the proof-of-concept shape's CPU limits, the backup and restore Jobs' sizes, and the totals from renders. §6a.3: the Terraform for declared S3 and Athena sources and for the backups; what each pod reads, and which service account it runs as. §6a.4: third-party images copied by their digest. §6a.5: each pod's own way out and way in, on single ports; S3 buckets and Athena workgroups declared for connections (ADR-140 Amendment 21). §6a.6: what the policy check refuses. §6a.7: the access tokens' version, the API's id URI and a claims-mapping policy, from which the issuer, audience and signing keys follow; the guest check; the way back in with the new values installed. New §6a.8: backups and restore (ADR-148 Amendment 7), with the shared volume not backed up. §6a.9, what is coming, and §6a.10, the questions for the platform's team, renumbered and extended. §10.1: the extraction engine shown in *Admin › Models*, and how to change it; one order for a change needing new values and Terraform. |
 | 1.85 | 2026-11-12 | Sign-in on `cloud-platform` through Entra ID, as built (ADR-148 Amendment 8, P10 part 2). §6a.7: `cloud_platform.claims` in `osprey.yaml`, `groups_claim` described; RS256 alone, 60 seconds' leeway, the signing keys kept, fetched by one request at a time and again at most once in five minutes for an unknown key, held an hour through an outage, Entra unable to give keys a 503 in words; roles in the deployment's Postgres by tenant and `oid`, a person added by object id, *Disable*; the first administrators, and the way back in when nobody can manage people (audited); locking everyone out refused, counting only people who have signed in; a clearance or unit read over a day ago not trusted for a transfer or an alert; the Glass's words when the account cannot be read; a service identity's app-only token. §6a.8: sign-in struck, what is still to come on Entra kept. Keycloak struck from §6a (its pod, group 0, resources, secrets, image, egress and `id.` door; reporting's `bi.` door refused); Entra's sign-in host in the egress list; §6a.9's group 0 question struck. Appendix A: `cloud_platform.claims`, from the schema; `tls_secret` names the Glass's name alone. |
@@ -1106,7 +1107,8 @@ for ArcadeDB to close its databases. Postgres is RDS PostgreSQL 16 and Valkey is
 address yet, so it is unused. Caddy is not rendered: the platform's NGINX ingress is the front door,
 with ModSecurity on and the IP allow-list from `allow_from`. Local models and Whisper are not
 rendered, since the platform has no GPU. The model gateway (LiteLLM) is rendered always, with or
-without an engine (section 6a.3 says which identity it runs as). **Reporting is not rendered**:
+without an engine (section 6a.3 says which identity it runs as; section 6a.9 is the model
+route). **Reporting is not rendered**:
 Superset and the report sync signed in through Keycloak, and a render setting `reporting.sync` or
 `reporting.superset` is refused ("report sync and Superset are not on this profile yet: they signed
 in through Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting on
@@ -1145,7 +1147,7 @@ Each container asks for its CPU and memory and has a memory limit. **In the stan
 names a CPU limit**, on purpose: a CPU limit throttles a store's compaction and the Conduit's
 bursts. So a LimitRange in the namespace with a default CPU limit puts that limit on every
 container, and a ResourceQuota counting `limits.cpu` refuses every pod that names none: both are
-questions for the platform's team (section 6a.10). **The poc shape names a CPU limit on every
+questions for the platform's team (section 6a.11). **The poc shape names a CPU limit on every
 container** (0.5 by default; the Glass 0.5, the Conduit 2, the workers 2, named-entity extraction 1,
 ArcadeDB 2, ClickHouse 2), for a namespace whose quota counts them. ArcadeDB's Java heap is three
 quarters of its memory limit. **These sizes are proposals, not measurements**: no load has yet run
@@ -1204,7 +1206,7 @@ leaves it unchanged and `tofu validate` accepts it.
 **The platform's Terraform state holds every secret here**: the passwords it makes, and each key a
 person holds, which is a sensitive variable with no default written into the Secret's data. How the
 environments repository's pipeline is given those variables is a question for the platform's team
-(section 6a.10).
+(section 6a.11).
 
 **Each pod reads only what it needs, by name.** Only the Conduit and the workers take our Secret
 whole (with keys they must not see set blank in their own environment); every other pod is given the
@@ -1291,7 +1293,7 @@ single ports, never a range:
 | Named-entity extraction | Nothing beyond DNS |
 
 **An engine's way out is made at render.** With no engine declared, no engine's host is allowed. An
-engine disabled in *Admin › Models* keeps its host open until the next render is installed, and one
+engine removed in *Admin › Models* keeps its host open while `osprey.yaml` declares it, and one
 first added there is refused until it is declared, rendered again, the new values installed and
 the Terraform applied (section 10.1). No pod reaches a mail server: Keycloak, which sent sign-in mail, is
 not rendered. A `mail:` section therefore does nothing here, yet whenever it is present the render
@@ -1352,7 +1354,7 @@ platform's controller, on its own port. The Ingress serves the Glass alone, at
 `network.public_origin`'s name: there is no `id.` (sign-in is Entra's) and no `bi.` (reporting is not
 rendered). Its read and send timeouts are an hour, for the Glass's live updates, and its body-size
 limit is the Conduit's upload cap, 512 MiB; ModSecurity may refuse an upload long before that (the
-first question in section 6a.10).
+first question in section 6a.11).
 
 ### 6a.6 The policy check
 
@@ -1592,7 +1594,7 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
 
 1. **Room for a second copy.** Each store's restored copy is written beside the live one, so
    ArcadeDB's and ClickHouse's claims need free space for a second copy of their database; grow a
-   claim first if not (the volume-expansion procedure is *coming*, section 6a.9).
+   claim first if not (the volume-expansion procedure is *coming*, section 6a.10).
 2. **The managed database with the stores.** PostgreSQL must agree with the stores, or anything
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
@@ -1628,7 +1630,146 @@ and timed again on the organisation's development namespace before production ho
 ArcadeDB's StatefulSet before the `helm upgrade`, since its new backups claim cannot be added in
 place; the runbook gives the commands.
 
-### 6a.9 Coming
+### 6a.9 The model route
+
+Every call to a hosted model goes through **the model gateway (LiteLLM)**, its own pod, `litellm`,
+rendered on this profile always, with or without an engine (section 6a.1). The Conduit and Laurium
+call it; nothing else does. Local models are not rendered here (the platform has no GPU). On this
+profile an engine is one of three kinds (ADR-135 Amendments 4 and 7):
+
+- **Your organisation's own AI gateway** (`kind: gateway`), an OpenAI-compatible endpoint at its
+  address (`api_base`, required), reached through LiteLLM's OpenAI-compatible route and signed in to
+  by a token (`auth: key`, the default for this kind).
+- **Amazon Bedrock in London** (`kind: bedrock`), reached at Bedrock's own runtime in `eu-west-2` and
+  signed in to by **the gateway's own IAM role** (`auth: iam_role`, the default for this kind). No
+  key is stored for it anywhere: not in `osprey.yaml`, our Secret, the Terraform, the models file or
+  the gateway's entries, which name only its region.
+- A hosted provider LiteLLM knows by its name (`kind: provider`, the default), by its key, as on every
+  other profile.
+
+The first two kinds are this profile's alone; on every other profile they are refused in words naming
+the profile. Each engine is declared under `models.providers` (or the single `models.provider`), with
+the settings Appendix A lists:
+
+```yaml
+models:
+  local_only: false
+  sendable_handling_codes: [P]
+  providers:
+    - name: orggateway                       # your organisation's AI gateway
+      kind: gateway
+      api_base: https://ai-gateway.example.internal/v1
+      label: Organisation AI gateway
+      roles: {extraction: gpt-4o-mini}
+      privacy_contract: true
+      contract_reference: DPA 2026/07
+    - name: bedrock                          # Amazon Bedrock in London
+      kind: bedrock                          # auth: iam_role and region: eu-west-2 by default
+      # a model's own id: check your account is offered it on demand in London
+      roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}
+  defaults: {extraction: orggateway}
+cloud_platform:
+  egress_nets:                               # each engine's host, by its networks
+    ai-gateway.example.internal: ["198.18.4.0/24"]
+    bedrock-runtime.eu-west-2.amazonaws.com: ["198.18.5.0/24"]
+```
+
+**The region answer is London, and only London.** `region` is Bedrock's alone and takes only
+`eu-west-2`, its default. A Bedrock model is named by its own id (`anthropic.…`); a cross-region
+inference profile's id (`eu.…`, `us.…`, `apac.…`, `global.…`, or any other part before the
+provider's) and an ARN are refused, since either may send the call outside London. A model Bedrock
+offers in London only through an inference profile cannot therefore be used here.
+
+**Refused in words**, each naming the field and never its value, wherever an engine is read
+(`osprey.yaml` at render, the Conduit's start, the models file and *Admin › Models*): Bedrock by a
+key, with an address, or in any region but London; a region on any other kind; your gateway with no
+address, or by the IAM role (it signs in by a token for now, until its owners say how it accepts the
+namespace's identity); a provider by the IAM role; an engine named `bedrock` of any other kind; an
+address with anything before its host (`https://…@…`), a query or a fragment, key or not, or a path
+segment shaped like a key; and a label or contract reference shaped like a key, or holding one among
+its words. Write a reference with spaces: one long word mixing letters and digits is taken for a
+key.
+
+**What the render makes for Bedrock, and what the platform team applies.** Only while a Bedrock engine
+is declared, the namespace's Terraform includes `gateway.tf` (section 6a.3). It makes:
+
+| Resource | What it holds |
+| --- | --- |
+| `aws_iam_policy` `<namespace>-gateway-bedrock` | One statement: `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on `arn:aws:bedrock:eu-west-2::foundation-model/*`. No S3 action and no other service, so IAM itself holds the region |
+| `aws_iam_role` `<namespace>-gateway` | Trusted for `sts:AssumeRoleWithWebIdentity` by the cluster's OIDC provider alone, with `StringEquals` on its `:sub` (`system:serviceaccount:<namespace>:<the gateway's account>`) and its `:aud` (`sts.amazonaws.com`) |
+| The policy's attachment | The policy above, on that role |
+| `kubernetes_service_account` | The gateway's own account, annotated with the role (`eks.amazonaws.com/role-arn`) |
+
+The gateway's account is named in the platform's settings as `secrets.irsa.gateway_service_account`
+(`ospreyflow-gateway` on the client's platform). It must differ from the namespace's own account,
+whose role holds the buckets and is never the gateway's; a platform's settings naming no gateway
+account are refused at render, in words, when a Bedrock engine is declared. With no Bedrock engine
+declared, `gateway.tf` is not rendered and the gateway runs under no role, with no token mounted.
+The platform team applies `gateway.tf` with the rest of the namespace's Terraform, by pull request.
+IAM role names are account-wide, as `irsa.tf`'s are.
+
+**The way out.** The gateway's pod alone reaches each declared engine's host, on its port: your
+gateway's host from its address (its own port, or 443); Bedrock's runtime in London,
+`bedrock-runtime.eu-west-2.amazonaws.com`, on 443; or a provider's own host, which the profile knows
+only for `openai`, `anthropic` and `gemini` (any other provider names its `api_base`, or the render
+is refused: "names no api_base, so its traffic's host is not known and cannot be allowed"). The
+gateway also reaches STS in the platform's region, whatever engine is declared, and the managed
+stores' networks, for its database; never S3 (section 6a.5). These hosts are in the gateway's own
+egress policy, `default.ospreyflow-egress-litellm`, and no other pod's. Name each engine host's
+networks under `cloud_platform.egress_nets`, as for any host; a host without them is refused at
+render with section 6a.5's words. With no engine declared, no engine's host is allowed out.
+
+**What Admin › Models allows and refuses here** (section 10.1). It offers the three kinds. An engine
+is enabled only where the render made its way out (and, for Bedrock, the gateway's own role). Adding
+one the render did not make, or moving an engine to a host it did not make, is refused, the engine's
+name in brackets: "On this deployment an engine is reached only once the render has made its way out
+of the namespace, and it made none for this engine (bedrock). Declare it in osprey.yaml, re-render,
+and have the platform team apply the Terraform; then it can be enabled here." For a Bedrock engine
+without the gateway's role, "(and, for Bedrock, the gateway's own IAM role)" follows "namespace".
+Such an engine is also refused a key and limits, and one a restored models file names is marked *not
+made by the render*.
+
+**The order.** For your gateway or a provider it is section 10.1's: declare it in `osprey.yaml`,
+render again, install the new values (`helm upgrade`), have the platform team apply the Terraform,
+then add it in *Admin › Models*. **For a newly declared Bedrock engine the Terraform comes first**:
+the new values run the gateway as its own service account, which only `gateway.tf` makes, so the
+gateway's new pod cannot start until it is applied (as with `backups.tf`, section 6a.8). Render
+again, have the platform team apply the Terraform, install the new values, then add it. An engine
+removed in *Admin › Models* keeps its host open for as long as `osprey.yaml` declares it; the host
+closes once the engine is taken out there, the deployment rendered again and the new values
+installed.
+
+**Keys.** No key is asked for a Bedrock engine: its key state reads *IAM role: no key kept*, the
+screen offers no **Enter key** or **Remove key** for it, and the Conduit refuses setting or removing
+one. Your gateway's token is a key like any other: entered write-only with **Enter key**, or, for an
+engine declared in `osprey.yaml`, given to the Terraform as a sensitive variable (section 6a.3).
+**Test the connection** names what refused a call in words of its own for each kind: for Bedrock,
+the gateway's role (pointing at `terraform/gateway.tf`, not the bucket role), the model's access not
+enabled for the account, the role's credentials expired, or the model not offered on demand in
+London; for your gateway, its token or its own policy (the answer cannot tell them apart), a model
+not offered to the token, its rate limit, or a refusal in a form that is not OpenAI's (something in
+front of it).
+
+**Laurium's key.** Laurium's own key on the gateway, and what it does until the key is held, are
+section 6a.1's.
+
+**Not yet tried.** The route is checked as rendered, against a stand-in gateway, and not against AWS
+or your organisation's gateway: no account was reachable from the build. Still to be shown at the
+first install:
+
+- that the gateway's role signs a real Bedrock call in London;
+- whether the gateway's AWS client uses STS's regional endpoint: only `sts.eu-west-2` is allowed out,
+  and the gateway's account carries no regional-endpoint annotation;
+- whether a model's first use needs an administrator to enable it in Bedrock's *Model access*, or
+  AWS Marketplace actions, first; newer Claude models are offered in London only through inference
+  profiles, which are refused here;
+- Bedrock's own words for a model not enabled, an invalid id and a model not offered on demand, which
+  AWS does not document and *Test the connection* reads (none has been measured against Bedrock);
+- any call through your organisation's own gateway, by its token, and whatever stands in front of it;
+- your gateway signed in to by the namespace's identity, refused until its owners say how it accepts
+  one.
+
+### 6a.10 Coming
 
 - **On Entra ID**: a scheduled run acting as its owner (until then such a run is marked stopped),
   reporting (Superset and the report sync signing in through Entra ID), display names (a person is
@@ -1646,7 +1787,7 @@ place; the runbook gives the commands.
   shape's Ingest root is off it already).
 - **The standard shape's runbooks**, as the poc shape has.
 
-### 6a.10 Questions for the platform's team
+### 6a.11 Questions for the platform's team
 
 None stops the render; each is the team's to answer before the first install.
 
@@ -2373,7 +2514,9 @@ whose service account the platform's settings name as `secrets.irsa.gateway_serv
 one to an address, that the render did not make: declare it in `osprey.yaml`, render the deployment
 again, install the new values (`helm upgrade`, which restarts the pods that read them) and have the
 platform team apply the Terraform, then add it here: the order *Admin › Connections*' own refusal
-gives. This refusal's own words leave out installing the values (a known issue). An engine a restored models
+gives (section 6a.9 has the whole route). For a newly declared Bedrock engine the Terraform comes
+first, since only it makes the gateway's service account (section 6a.9). This refusal's own words
+leave out installing the values (a known issue). An engine a restored models
 file names but the render did not make is marked *not made by the render* and is neither offered to
 analysts nor given to the gateway.
 

@@ -1,3 +1,36 @@
+# docs lane · D2c part 4, the model route on the `cloud-platform` profile (administration guide §6a.9) · 12 November 2026
+
+Branch `lane/docs-d2c4` fresh from main 5bc60ba. No HANDOFF.md, no earlier commits: the brief was untouched. Head: see `git log`. Nothing running.
+
+| Item | State | Proof (OspreyFlow_Core unless named) |
+| --- | --- | --- |
+| The gateway, always rendered; the Conduit and Laurium call it | Done (§6a.9) | `harness/cloud_platform/profile.yaml` 70, 80–90 (`paths`); ADR-135 Am 8 d1 |
+| Three kinds; gateway by `openai/`, Bedrock by `bedrock/`; `auth` and `region` defaults; this profile's alone | Done | `packages/schemas/deployment.py` 303, 310, 457–459, 473–477, 480–484 |
+| London only; a model's own id; no inference profile, no ARN | Done | `deployment.py` 324, 587–596 |
+| The refusals in words | Done | `deployment.py` 487–507 (address), 542–622 (`engine_refusal`) |
+| `gateway.tf`: policy, role, trust, attachment, service account; only with a Bedrock engine | Done | `harness/cloud_platform/terraform.py` 550–553, 852–958; `__init__.py` 297–310, 1010–1013; `settings.py` 109–126; `platforms/client.yaml` 55 |
+| The egress: the gateway's own policy, engine hosts, STS always, a provider with no known host refused | Done | `profile.yaml` 38, 43–50, 59, 65, 70; `__init__.py` 497–525, 570, 610–616; `deploy/helm/ospreyflow/templates/networkpolicies.yaml` 93, 119–121, 205 |
+| Admin › Models: the refusal's exact words (name in brackets; the role clause for Bedrock alone), key and limits refused, *not made by the render* | Done | `services/api/model_admin.py` 188–236, 825–841, 1226–1234, 1264–1269, 1285 |
+| Bedrock: no key; key state "IAM role: no key kept"; no Enter or Remove key on screen; 409 from the API | Done | `apps/workspace/src/admin/sections/Models.tsx` 45, 424, 432; `model_admin.py` 1233, 1268 |
+| *Test the connection*'s words, per kind | Done (summarised) | `model_admin.py` 696–740 |
+| The order for a newly declared Bedrock engine: Terraform before the values | Done in §6a.9 and §10.1: the chart makes no gateway ServiceAccount (only `backups.yaml` 69 has one), so `helm upgrade` first leaves the gateway's pod unschedulable. **This departs from the brief's order: for the orchestrator's ruling** | `__init__.py` 1010–1013; `terraform.py` 944–958 |
+| An engine removed in Admin keeps its host while `osprey.yaml` declares it (§6a.5 and §6a.9 corrected) | Done | `__init__.py` 512–525 (`config.models.enabled_providers`) |
+| Laurium's key | Cross-referenced to §6a.1 | — |
+| Not yet tried | Said as such: no real Bedrock call, STS's regional endpoint, model access, Bedrock's undocumented words, the client's gateway, the gateway by the role | ADR-135 Am 7 d5, Am 8 "Not done" |
+| *Coming* | Held nothing of the model route; nothing struck | — |
+| Example `osprey.yaml` | Valid on cloud-platform, both engines refused on Small, through `ModelsConfig` and `engine_refusal` | run on the Mac, this session |
+| Review | One lane-reviewer round, 13 findings (five must-fix), all fixed | — |
+| Docs gates | `test_admin_guide` green; `test_docs_pdf` red for the admin PDF alone, made at merge | `gates/d2c4-docs-tests.txt` |
+
+**For the orchestrator (rule 11, spec gaps in the ADR, not docs' to amend):** ADR-135 Amendment 8 decision 3 says "the Calico policy
+selects every pod (`all()`), so the hosts are the namespace's, not the gateway's alone", stale since ADR-148 Amendment 5 point 21
+(the engine hosts are in `default.ospreyflow-egress-litellm` alone); and "an engine disabled in *Admin › Models* keeps its host open
+until the next render", whereas the next render opens it again while `osprey.yaml` declares it. The guide says what the code does.
+Separately: for a newly declared Bedrock engine, the refusal's own words ("Declare it in osprey.yaml, re-render, and have the
+platform team apply the Terraform") give the right order, but §10.1's general order (values before Terraform) does not hold for it.
+
+---
+
 # docs lane · D2c part 3, §6a as main holds it after P7b, L1.9 part 2, P9, P12 part 2 and P10 part 2 · 12 November 2026
 
 Branch `lane/docs-d2c` fresh from main e59da4f (the orchestrator named 33e402d; main had moved on, docs files unchanged). Head: see `git log`. Nothing running.
