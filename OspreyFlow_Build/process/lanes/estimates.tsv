@@ -1,5 +1,5 @@
-# as of 2026-11-12T01:10Z
-admin	P10	part 1 merged; part 2 ready at 3848c32, in orchestrator review (gates green, the live run targeted after L1.9 part 2)	12 Nov	B
+# as of 2026-11-12T05:00Z
+admin	P10	part 1 merged; part 2: second review found four must-fixes (the key cache untested, the re-grant, keyboard cases, the refresh untested) and a Keycloak regression; fixing	12 Nov, evening	B
 case	P9	orchestrator review: one must-fix (the ArcadeDB restore dropped the live graph first) and seven fixes; then a rebase onto L1.9 part 2 and a kind restore over a live database	12 Nov, afternoon	B
 case-b	P12	part 2 accepted after three rounds; after P9 lands, rebase and merge with Laurium's egress row and the owner's release.yml patch	12 Nov	B
 studio-b	L1.9	done: part 2 merged (184b798)	done	B

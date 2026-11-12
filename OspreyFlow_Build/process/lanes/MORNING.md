@@ -568,6 +568,19 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         passed, and a truncated set left both stores untouched. A second review found the operator's
         runbook still had a step that hangs for 10 minutes on any deployment that has run a backup. Case is
         fixing that, and will walk the runbook's commands exactly as written on kind, before it lands.
+      - **P10 part 2, second review (about 05:00): not yet.** Four must-fixes:
+        - the Entra key cache has no test that could fail;
+        - the hourly refresh of a person's access is untested;
+        - the re-grant could quietly undo an administrator's deliberate removal;
+        - two new buttons have no keyboard case.
+
+        It also found a regression for Keycloak profiles (all but cloud-platform): a key-fetch failure in a
+        scheduled run now raises instead of being refused. I confirmed that in the code; it is being fixed.
+
+        **My amended ruling, which you can overrule:** a `first_administrators` id gets Admin back only when
+        nobody at all can manage people, and an audit row is written each time. This replaces my 02:30 ruling.
+        Admin also chose to ignore a stale clearance in the markings check; I accepted it, because it fails
+        closed.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
