@@ -73,3 +73,6 @@ Claude outputs/
 
 # Generated bundle staging, now under the Build folder (ADR-054).
 /OspreyFlow_Build/dist/
+
+# make test's failure marker (OspreyFlow_Build/Makefile), left only by an interrupted run
+OspreyFlow_Build/.make-test-failed

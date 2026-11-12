@@ -1,0 +1,13 @@
+# make test as applied 12 November 2026: each part its own recipe line and a failure marker (the one-shell-line shape ran the suite under make -n). PYTEST forced to fail where shown, SKIP_JS=1.
+== make -n test (a dry run: nothing may run)
+0
+== the pytest line forced to fail
+PYTEST-RAN
+PYTEST-RAN
+make[1]: *** [live-collect] Error 1
+make test: a part above failed
+make: *** [test] Error 1
+exit=2
+== every part passing
+exit=0
+no marker left
