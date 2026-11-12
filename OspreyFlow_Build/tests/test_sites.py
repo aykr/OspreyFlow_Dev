@@ -5,7 +5,8 @@ and the owner's decisions of 12 November 2026. Every check has a case that plant
 - the product's statement on every page, and "Solirius Reply";
 - "designed to meet the GDS Service Standard", never a status only an assessment panel gives, and the three checks
   named as planned wherever the Standard is (the current site's own checks, `test_website_wording`);
-- no client named (by hash: `client_hashes.py`), no competitor named, i2 not until its ADR is accepted, and
+- no client named (by hash, from the owner's local, gitignored file: `client_hashes.py`; a synthetic name in a file of
+  the test's own shows the check red), no competitor named, i2 not until its ADR is accepted, and
   Laurium not named (the owner's decision 4);
 - no local path, no credential, no placeholder left, and only the one address the owner gave (decision 2);
 - no script and no request outside the site; every internal link and anchor resolves, across the two sites too;
@@ -65,7 +66,7 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 #: The drafts' highlighted gaps (`class="fill"`), build.py's own placeholder card (`class="person placeholder"`), and
 #: a gap written in words.
 PLACEHOLDER = re.compile(r'class="[^"]*\b(?:fill|placeholder)\b|\bto (?:be )?add(?:ed)?\b', re.IGNORECASE)
-#: Planted in the client check's cases: synthetic, its hash the first line of `client_names.sha256`.
+#: Planted in the client check's cases: synthetic, hashed into a file in the test's own temporary folder.
 SYNTHETIC_CLIENT = "Example Shire Constabulary"
 
 
@@ -120,10 +121,20 @@ def _readable(page: Path) -> str:
     return page_text(page) + " . " + " . ".join(html.unescape(v) for v in values)
 
 
-def clients(root: Path) -> list[str]:
-    """Each page carrying a name in `client_names.sha256`, by its hash alone, so a failure names no client."""
-    held = client_hashes.known()
+def clients(root: Path, hashes: Path) -> list[str] | str:
+    """Each page carrying a name held in `hashes`, by its hash alone, so a failure names no client; or, where the file
+    is absent, the words saying the pages were not checked (never an empty list, which would read as a pass)."""
+    held = client_hashes.known(hashes)
+    if held is None:
+        return client_hashes.ABSENT
     return [f"{_id(p)}: {h[:12]}…" for p in pages(root) for h in sorted(client_hashes.named(_readable(p), held))]
+
+
+@pytest.fixture
+def synthetic_hashes(tmp_path: Path) -> Path:
+    path = tmp_path / "client_names.local.sha256"
+    path.write_text(f"# synthetic\n{client_hashes.digest(SYNTHETIC_CLIENT)}\n")
+    return path
 
 
 def in_source(root: Path, pattern: re.Pattern[str]) -> list[str]:
@@ -233,7 +244,6 @@ CHECKS = {
     "standard": standard_wording,
     "competitor": lambda root: names(root, COMPETITORS),
     "laurium": lambda root: names(root, LAURIUM) + in_source(root, LAURIUM),
-    "client": clients,
     "local path": lambda root: in_source(root, LOCAL_PATH),
     "credential": lambda root: in_source(root, CREDENTIAL),
     "placeholder": lambda root: in_source(root, PLACEHOLDER),
@@ -311,16 +321,45 @@ def test_the_laurium_check_flags_the_drafts_own_words(sites: Path) -> None:
     assert _red("laurium", sites)
 
 
-def test_the_client_check_flags_the_synthetic_name_by_its_hash_alone(sites: Path) -> None:
+def test_no_page_names_the_synthetic_client(synthetic_hashes: Path) -> None:
+    assert clients(SITES, synthetic_hashes) == []
+
+
+def test_no_page_names_a_client_held_on_this_machine() -> None:
+    """Against the owner's own file where it is present. Where it is absent this is skipped in words, never passed."""
+    found = clients(SITES, client_hashes.HASHES)
+    if isinstance(found, str):
+        pytest.skip(found)
+    assert found == []
+
+
+def test_an_absent_hash_file_is_said_in_words_never_an_empty_pass(tmp_path: Path) -> None:
+    assert clients(SITES, tmp_path / "client_names.local.sha256") == client_hashes.ABSENT
+
+
+def test_the_hash_file_is_local_and_never_tracked() -> None:
+    assert client_hashes.HASHES.name == "client_names.local.sha256"
+    assert not (MARKETING / "client_names.sha256").exists()
+    ignored = subprocess.run(["git", "check-ignore", "-q", str(client_hashes.HASHES)], cwd=MARKETING)
+    assert ignored.returncode == 0, "client_names.local.sha256 is not gitignored"
+
+
+def _client_red(root: Path, hashes: Path) -> list[str]:
+    found = clients(root, hashes)
+    assert isinstance(found, list) and found, "the client check did not report its planted name"
+    return found
+
+
+def test_the_client_check_flags_the_synthetic_name_by_its_hash_alone(sites: Path, synthetic_hashes: Path) -> None:
     _plant(sites / "net" / "sectors.html", f"<p class=\"who\">For the {SYNTHETIC_CLIENT}&#x27;s analysts.</p>")
-    found = _red("client", sites)
+    found = _client_red(sites, synthetic_hashes)
     assert found == [f"net/sectors.html: {client_hashes.digest(SYNTHETIC_CLIENT)[:12]}…"]
     assert all(SYNTHETIC_CLIENT.lower() not in v.lower() for v in found)
 
 
-def test_the_client_check_reads_a_name_split_by_markup_and_marks(sites: Path) -> None:
+def test_the_client_check_reads_a_name_split_by_markup_and_marks(sites: Path, synthetic_hashes: Path) -> None:
     _plant(sites / "net" / "index.html", "<p><strong>EXAMPLE</strong> shire-constabulary</p>")
-    assert _red("client", sites)
+    assert _client_red(sites, synthetic_hashes)
 
 
 @pytest.mark.parametrize(
@@ -332,9 +371,11 @@ def test_the_client_check_reads_a_name_split_by_markup_and_marks(sites: Path) ->
         '<p><a href="https://example-shire-constabulary.example/">A link</a></p>',
     ],
 )
-def test_the_client_check_reads_dots_accents_invisible_characters_and_addresses(sites: Path, fragment: str) -> None:
+def test_the_client_check_reads_dots_accents_invisible_characters_and_addresses(
+    sites: Path, synthetic_hashes: Path, fragment: str
+) -> None:
     _plant(sites / "net" / "index.html", fragment)
-    assert _red("client", sites)
+    assert _client_red(sites, synthetic_hashes)
 
 
 def test_the_local_path_check_flags_one_in_an_address(sites: Path) -> None:
@@ -442,11 +483,10 @@ def test_the_script_appends_hashes_and_prints_no_name(tmp_path: Path) -> None:
     run = subprocess.run([sys.executable, str(script)], input=names, capture_output=True, text=True)
     assert run.returncode == 0
     assert run.stdout == "2 added, 2 held.\n" and "example" not in (run.stdout + run.stderr).lower()
-    held = (tmp_path / "client_names.sha256").read_text().split()
+    assert not (tmp_path / "client_names.sha256").exists()
+    held = (tmp_path / "client_names.local.sha256").read_text().split()
     assert held == [client_hashes.digest("Example Shire Constabulary"), client_hashes.digest("Example Unit")]
     again = subprocess.run([sys.executable, str(script)], input="Example Unit\n", capture_output=True, text=True)
     assert again.stdout == "0 added, 2 held.\n"
 
 
-def test_the_hash_file_holds_the_synthetic_name() -> None:
-    assert client_hashes.digest(SYNTHETIC_CLIENT) in client_hashes.known()

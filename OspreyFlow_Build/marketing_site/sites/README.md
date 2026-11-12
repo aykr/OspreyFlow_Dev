@@ -28,12 +28,13 @@ demonstration after Friday 13 November (item 6). Captures use synthetic data onl
 - The product's statement, and "Solirius Reply".
 - "Designed to meet the GDS Service Standard", never a status only an assessment panel gives. The three checks are
   named as planned wherever the Standard is named.
-- No client named. The names are held only as SHA-256 hashes in `../client_names.sha256`, so the repository does not
-  spell them out. The owner adds them with `../client_hashes.py`, which prints a count and never a name. **A hash is
-  not a secret**: anyone who hashes a list of candidate names (UK police forces, departments) can tell which ones are
-  in the file. If that matters, the file can stay out of git, as `real_data_exceptions.yaml` does, or use a keyed hash
-  with the key held outside the repository. Either way the check then runs only where the file or key is present.
-  The owner decides before a real name is added.
+- No client named. The names are held as SHA-256 hashes in `../client_names.local.sha256`, which is gitignored and
+  stays on the machine that publishes: a hash of a short public name is not a secret, since anyone who hashes a list
+  of candidates can tell which are in it (the owner's ruling, 12 November 2026). The owner makes it with
+  `../client_hashes.py`, which prints a count and never a name. Where the file is present, the test checks every page
+  against it. Where it is absent, the test is skipped with words saying the pages were not checked, never passed. The
+  publish path refuses to publish without it (item 4's proposal). The test's own red cases use a synthetic name in a
+  file of their own.
 - The check reads what a page shows and every attribute's value (an address, a file name), with accents folded,
   invisible characters dropped and an abbreviation's full stops removed. It does not see a name broken by a tag in
   the middle of a word.
