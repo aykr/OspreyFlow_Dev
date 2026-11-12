@@ -472,7 +472,7 @@ async def open_people_store(
             await audit.record(
                 principal=FIRST_ADMINISTRATORS_PRINCIPAL,
                 action=GRANT_ACTION,
-                resolved_query={"person": oid, "roles": [ADMIN_ROLE]},
+                resolved_query={"user_id": oid, "roles": [ADMIN_ROLE]},
                 result_cardinality=1,
             )
     except BaseException:

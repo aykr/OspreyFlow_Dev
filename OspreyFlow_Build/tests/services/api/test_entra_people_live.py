@@ -256,7 +256,7 @@ async def test_each_admin_role_a_start_gives_is_audited(world, monkeypatch) -> N
             await conn.close()
     finally:
         await audit.close()
-    assert [(r["principal_id"], json.loads(r["resolved_query"])["person"]) for r in rows] == [
+    assert [(r["principal_id"], json.loads(r["resolved_query"])["user_id"]) for r in rows] == [
         ("first-administrators", OID),
         ("first-administrators", OID),
     ]
