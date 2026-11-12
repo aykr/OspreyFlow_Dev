@@ -31789,6 +31789,90 @@ file lives in a `.git` that does not exist yet.
 - **Decision 3:** `test_the_first_use_sweep_runs_under_the_in_process_lock`, probing the first sweep (the lock held,
   the `flock`'s file not yet there) and a later one (both); red with the in-process lock not taken.
 
+### ADR-140, Amendment 19 (12 November 2026) — a Join's guard on markings: an unmarked table stays unmarked and never joins a marked one unless its source declares a default marking, which its rows then carry before the join (studio carries)
+
+Status: accepted. Written as built in the studio lane's carries step (CARRIES row 123, from studio-b's L1.10b case of
+10 November; the number reserved for the studio lane on 10 November). It adds to the run-time guard of CARRIES row 48
+(`staging_catalogue.refuse_a_differing_marking`, L1.7) and changes none of it.
+
+**Context.** A Join, a fuzzy match and a Dedupe compare two rows' marking cells, the columns the pipeline binds a
+marking to (`recipe_rules.marked_columns`), and refuse to make one row of two whose cells differ. A table with no
+such column has no marking cells: `None` differs from `OFFICIAL`, so a lookup table that carries no marking of its
+own (an owners list, say) could never be joined to a marked table, however plainly its whole source is marked. That
+is the right default (fail closed), but nothing let a person say what such a table's rows are marked.
+
+**Decision.**
+1. **The guard stays fail closed.** A source table with none of the pipeline's marking columns is *unmarked*; its
+   rows are never joined to a marked table's rows. A table holding a marking column is *marked*, even where a cell
+   is empty.
+2. **A source may declare a default marking** (`SourceTable.default_marking`): one of the handling scheme's
+   classifications, or none. When its table is unmarked, its rows carry the default, in each column the pipeline
+   binds a classification from (`recipe_rules.classification_columns`), before any step runs
+   (`staging_catalogue.carry_declared_marking`). Its raw rows carry it too, so every judgement of a row's marking
+   (who may read it, a sample's markings) reads what the Join and Map read.
+3. **The default never lowers, or fills, a bound marking.** A marked table is left as it is, a `SECRET` cell
+   staying `SECRET` and an empty one staying empty. The default is refused below the source's own marking
+   (`handling.classification`).
+4. **Set in Studio › Sources by a source approver.** `PUT /v1/datasets/{dataset_id}/sources/{source_id}/default-marking`
+   needs Deploy pipelines (`publish_pipelines`, the source approver's right) and the dataset's own gate (404 to a
+   person none of whose cases loads into it), and is refused for a composite. It is refused in words (422
+   `default_marking_refused`) outside the scheme, above the approver's clearance (they would mark rows they could
+   not read) or above the deployment's highest marking (ADR-148 decision 10). Clearing it is always allowed: the
+   table is then unmarked again.
+5. **Audited, a new version.** Each change records who, when, from and to (`set_dataset_source_default_marking`),
+   is a new version of the source holding who set it and when, and flags each deployed pipeline reading the source
+   as needing attention, as a governance edit does (Amendment 4).
+6. **Read where the source is read.** The default travels on the source, so it is read only by those who may read
+   the source (Add ingest files and the dataset's own gate); no other route returns it.
+7. **Every path that runs the steps reads it**: the load (manual, scheduled and watched runs, through
+   `RecipeRunDeps.sources` and `run_published_pipeline(source_store=)`), Test and a step's preview, each from the
+   dataset's registered sources by the source node's own location (`studio_staging.declared_markings`). A path given
+   no source store carries no default, so the Join refuses (fail closed).
+8. **The refusal names the setting.** A Join refused because a row is unmarked says so, and that a source approver
+   can declare a default marking in Studio › Sources; a refusal of two marked rows does not point at it. Neither
+   names a row's value or marking.
+
+**What it costs.** An approver's declaration now marks rows that were unmarked, so a sample or Test once withheld
+for them may run; that is the declaration's purpose, and it can only raise a marking above the source's own. A
+preview or Test with no default declared is refused earlier than the Join, by the row-reading guard (an empty
+marking cell reads as one the person may not view), so its words are the withheld sample's, not the Join's.
+
+**Tests** (red first in `process/lanes/studio/carries_RED_RECORD.md`, each guard taken out at its own call site):
+- **Decision 1:** `tests/ingest/test_staging_marked_rows.py::test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting`
+  and `test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default`; at the load,
+  `tests/ingest/test_staged_pipeline_run.py::test_a_load_joining_an_unmarked_source_is_refused_naming_its_default_marking`
+  (no store, and a store declaring nothing).
+- **Decision 2:** `test_an_unmarked_table_carrying_its_sources_default_joins_rows_marked_alike`,
+  `test_an_unmarked_tables_rows_carry_the_default_in_the_classification_column`,
+  `test_a_default_marked_differently_from_the_other_table_is_still_refused`,
+  `test_a_pipeline_with_no_marking_column_is_left_as_it_is`; at the load,
+  `test_a_load_joins_an_unmarked_source_carrying_its_declared_default` and
+  `test_a_load_whose_unmarked_source_declares_another_marking_is_refused`; the raw rows,
+  `tests/services/api/test_studio_staging_routes.py::test_a_preview_joins_an_unmarked_source_carrying_its_declared_default`
+  (red with the raw rows not carried).
+- **Decision 3:** `test_the_default_never_touches_a_table_that_has_a_marking_column`,
+  `test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default`, and
+  `tests/services/api/test_dataset_sources.py::test_a_default_marking_is_refused_in_words_and_nothing_is_set[below-the-source]`.
+- **Decision 4:** `test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset` (rule 4 on the write: a
+  source author 403; another dataset's route, another unit, a case that only reads the dataset 404) and
+  `test_a_default_marking_is_refused_in_words_and_nothing_is_set` (`not-in-the-scheme`, `above-the-approver`,
+  `above-the-ceiling`); the composite refusal by `test_composite_schedules.py`'s route census; the right by
+  `test_route_rights.py`'s table.
+- **Decision 5:** `test_a_source_approver_declares_changes_and_clears_a_default_marking_audited` (who, when, from, to,
+  the version, the flagged pipelines; declared, changed and cleared).
+- **Decision 6:** `test_the_default_is_read_with_the_source_and_only_where_the_source_is_read` (rule 4 on the read).
+- **Decision 7:** at the load, the decision 2 cases (red with the run passing no declaration);
+  `tests/services/api/test_recipe_run_path.py::test_a_recipe_run_hands_the_pipeline_runner_its_source_store` and
+  `test_the_scheduler_reads_every_run_dependency_from_where_the_route_does`; `test_run_resources.py` (the builder
+  opens and closes the store); Test, `test_test_reads_the_sources_declared_default_as_the_run_does`; a step's
+  preview, `test_a_preview_joins_an_unmarked_source_carrying_its_declared_default` and
+  `test_a_preview_of_a_join_to_an_unmarked_source_without_a_default_is_refused`.
+- **Decision 8:** `test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting` and
+  `test_a_refusal_of_two_marked_rows_does_not_point_at_the_default`.
+- **The Glass:** `apps/workspace/src/ingest/sources/sources.test.tsx` ("the source page's default marking") and
+  `keyboard/ingest-studio.spec.ts`'s "a source's default marking is declared by keyboard, and says who declared it"
+  (rule 13; `declare-a-sources-default-marking-by-keyboard`).
+
 ### ADR-145, Amendment 8 (9 November 2026) — Disable and the items an administrator may not see (L3.8)
 
 **The owner's ruling of 9 November 2026** (case-b's L3.8 question, access): when a person being disabled owns
