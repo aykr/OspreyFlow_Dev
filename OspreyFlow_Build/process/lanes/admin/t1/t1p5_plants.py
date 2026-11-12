@@ -170,12 +170,7 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         ["test_two_runs_of_one_lane_in_one_second_never_share_a_folder"],
     ),
     (
-        "INT left untrapped (bash waits on the command, the EXIT trap never runs)",
-        [("    printf 'trap \"exit 130\" INT\\n'\n", "")],
-        ["test_a_run_ended_by_a_signal_still_reaps_its_server[INT]"],
-    ),
-    (
-        "the command in the foreground, so a trapped INT waits for it",
+        "the command in the foreground, so INT waits for it",
         [
             (
                 "    printf '%q ' \"$@\"; printf '&\\nwait $!\\n'; } > \"$list.cmd\"\n",
