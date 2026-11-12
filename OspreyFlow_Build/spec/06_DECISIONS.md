@@ -33858,8 +33858,9 @@ them hidden from a reader, would have been withheld from that reader whole. This
    is OFFICIAL with code P, as every list was before, so no stored list changes. **A reload never lowers a
    list's marking** (the review's item 8): `replace_list` refuses, in words and changing nothing, a file whose
    marking (none is OFFICIAL, P) is below the kept one or names another handling code at the same
-   classification (a code is not ranked; changing it is treated as lowering it, strict). Lowering a list is
-   removing it and loading it again. A re-marked entry is a changed entry, which a refresh re-screens. The
+   classification (a code is not ranked; changing it is treated as lowering it, strict). No product path lowers a
+   list's marking: no route, verb or script removes a list, so a marking once raised stays raised (the
+   orchestrator's verification of e911b90, item 4). A re-marked entry is a changed entry, which a refresh re-screens. The
    listed party the gate writes carries its list's marking (`kyc_rules.list_handling`), and so does the `SAME_AS`
    to it, which is marked by both its ends. **A reader is cleared for a list** when the adapters let them read a
    match on it: its listed party and its `SAME_AS`, each read as the reader. **In the store** (the review's items
@@ -33867,7 +33868,17 @@ them hidden from a reader, would have been withheld from that reader whole. This
    and the codes they may receive, which `handling_readable` over a list's marking answers the same
    (`test_a_list_clearance_admits_exactly_what_the_adapters_predicate_admits`). Every read of the store a
    person's work reaches takes it and filters in its `WHERE`: `entries`, `subscriptions`, `updates`,
-   `update_for` and `hidden`, so no caller can forget it. A refresh's file carries no marking, so an update
+   `update_for` and `hidden`, each with no default, so a caller must name whose clearance it reads with; each
+   caller's is named by a test (`test_screening_clearance.py`, `test_screening_list_store.py`,
+   `test_screening_list_routes.py`). *Deliberately unfiltered*, the operator's and the refresh's own reads: the
+   operator's `scripts/refresh_screening_list.py` (`subscriptions(cleared=None)`), and `subscription()`,
+   `use_of()` and `scheduled_lists()`, which a refresh reads of the one list it refreshes, after the route has
+   answered a hidden list as unsubscribed, or, scheduled, after the owner's clearance for the list is checked
+   (`ListRefreshExecutor`: an owner no longer cleared for it is refused in words, recorded with the list's
+   refreshes). A list's schedule in *Disable…*'s plan is read through the same filter (`admin_people`): one the
+   administrator is not cleared for is listed as "a list you can't see", under an id naming nothing, and goes
+   only to someone cleared for the list's classification and code (`markings_hold`;
+   `test_disable_list_schedules.py`; the orchestrator's verification of e911b90, item 2). A refresh's file carries no marking, so an update
    keeps the marking the list holds (`apply_update`), never dropping it to OFFICIAL.
    *Limit:* a subscription (ADR-133) cannot name a marking yet, so a list first loaded by subscription is
    OFFICIAL, P. Studio lists (ADR-140 Amendment 13) are not read by the gate and are unchanged.
@@ -33877,7 +33888,14 @@ them hidden from a reader, would have been withheld from that reader whole. This
    referents and links as stored. A match reuses its own entry's listed party (the review's item 9), found by
    its indexed name and every other property the party is written with (`find_node`'s `also`: its list,
    listing, given names and date of birth, or an organisation's country), so two entries sharing a family
-   name, on one list or two, are two parties. Past the lookup's bound (more people sharing the name in reach
+   name, on one list or two, are two parties. A party is reused only where its marking holds the list's now
+   (its classification at least the list's, the same code): **a party written before its list was raised
+   keeps its old marking** (nothing re-marks it), and a match on the raised list is cited to a party of its
+   own at the list's marking, never the old one, which a reader cleared only for the old marking would be
+   shown with the match (the orchestrator's verification of e911b90, item 1;
+   `test_a_party_held_below_its_lists_marking_now_is_not_reused`). The lookup returns the first party
+   carrying the name, so after a raise a new party may be written at each match while the old one is
+   found first: more nodes for one entry, never a leak, which resolution may later link. Past the lookup's bound (more people sharing the name in reach
    than it reads, none of them this entry's), a party of its own is written, never a failed rule: a second
    node for one entry, which resolution may later link (rule 6). Two entries of one list with the same name
    and date of birth share a party. *Keyed by the entry's own id* (the review's ask) it would need that id
