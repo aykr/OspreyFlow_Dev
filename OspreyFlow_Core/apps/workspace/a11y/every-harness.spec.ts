@@ -47,7 +47,8 @@ const EXTRA_STATES: Record<string, string[]> = {
                           // ADR-135 Amendment 9: the extraction engine Laurium, shown read-only.
                           "cloud=1&engine=laurium"],  // prettier-ignore
   // ADR-146 decisions 2 and 6: Home with Rules and Monitoring's card and an alert's row.
-  "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue"],
+  // ADR-145 Amendment 10: the administration guide refused, its words under its link.
+  "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue", "guide=refused"],
   // ADR-147: Admin › Maps with a provider being added, a key being entered and an area being added
   // (platform lane P3), and with the basemap built, the glyphs installed and an area run.
   "maps-harness.html": ["open=add", "open=key", "open=area", "built=1"],

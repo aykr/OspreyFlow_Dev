@@ -1,0 +1,14 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index d29fdb9..733ec2f 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -1115,6 +1115,9 @@ export const START_ACTIONS = defineActionRegistry("START_ACTIONS", [
+   "return-to-start-from-the-mark-by-keyboard",
+   // ADR-115 E3: Home's G, I and A.
+   "open-a-place-from-home-with-its-key",
++  // ADR-145 Amendment 10: the guide under each card, opened in a new tab, and a refusal said in words.
++  "read-a-place-s-guide-from-home-by-keyboard",
++  "read-why-a-guide-was-refused-on-home-by-keyboard",
+ ] as const);
+ 
+ // ADR-115 E6: the workspace's welcome panel.

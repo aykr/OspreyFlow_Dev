@@ -513,6 +513,10 @@ ROUTE_RIGHTS = {
     "pause_recipe_schedule": "schedule_pipelines",
     "resume_recipe_schedule": "schedule_pipelines",
     "recipe_runs_route": "run_pipelines",  # ADR-145 Amendment 1: the Studio's alone
+    # ADR-145 Amendment 10: a guide's PDF, to whoever's rights open its place; a place opens on any
+    # one of several rights, so no single right is named and the place's check is the route's
+    # (`guides.py`; `test_guides.py`, and the live case below).
+    "read_guide_route": None,
 }
 
 
@@ -708,3 +712,53 @@ def _holds_nothing(body: object) -> bool:
     if isinstance(body, dict):
         return all(_holds_nothing(v) for v in body.values() if isinstance(v, (list, dict)))
     return True
+
+
+def test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-145 Amendment 10 (rule 4), through the real `get_principal` with a signed token, against
+    the stack: each guide's PDF for a role whose rights open its place, byte for byte the file the
+    image was built from (the checkout's `docs/pdf/`, which the stack's Conduit image copies), and
+    403 in words, without a byte of it, for one whose rights do not, and for a person with no
+    role."""
+    from tools.layout import REPO
+
+    key, _ = keypair
+    carried = {g: (REPO / "docs" / "pdf" / f"{g}-guide.pdf").read_bytes()
+               for g in ("user", "developer", "administration")}  # fmt: skip
+    expected = {
+        "analyst": {"user": 200, "developer": 403, "administration": 403},
+        "data_engineer": {"user": 200, "developer": 200, "administration": 200},
+        "osprey-admin": {"user": 200, "developer": 403, "administration": 200},
+        "reports_viewer": {"user": 200, "developer": 403, "administration": 403},
+    }
+    with TestClient(__import__("services.api.app", fromlist=["app"]).app) as client:
+        for role, statuses in expected.items():
+            headers = _token(key, f"guide-{role}", [role])
+            for guide, wanted in statuses.items():
+                response = client.get(f"/v1/guides/{guide}", headers=headers)
+                assert response.status_code == wanted, (role, guide, response.status_code)
+                assert response.content.startswith(b"%PDF-") == (wanted == 200), (role, guide)
+                if wanted == 200:
+                    assert response.content == carried[guide], (role, guide, "not the file carried")
+                if wanted == 403:
+                    assert response.json()["detail"]["error"] == "place_required"
+        nobody = _token(key, "guide-nobody", [])
+        # And a person arriving from the organisation's identity provider, with no roles claim at
+        # all (ADR-114 Amendment 33 decision 4), as the no-role sweep above signs in.
+        from harness.realm import ORGANISATION_ARRIVAL_ATTRIBUTES
+
+        claims = default_claims(
+            sub="guide-from-the-organisation",
+            roles=[],
+            receivable_handling_codes=[],
+            **ORGANISATION_ARRIVAL_ATTRIBUTES,
+        )
+        claims.pop("roles")
+        arrived = {"Authorization": f"Bearer {sign_token(key, claims)}"}
+        for guide in ("user", "developer", "administration"):
+            for who in (nobody, arrived):
+                response = client.get(f"/v1/guides/{guide}", headers=who)
+                assert response.status_code == 403, guide
+                assert response.json()["detail"]["error"] == "place_required", guide

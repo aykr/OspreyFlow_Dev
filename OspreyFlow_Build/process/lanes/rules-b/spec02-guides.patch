@@ -1,0 +1,17 @@
+diff --git a/OspreyFlow_Build/spec/02_GLASS_FRONTEND.md b/OspreyFlow_Build/spec/02_GLASS_FRONTEND.md
+index 290b176..f381734 100644
+--- a/OspreyFlow_Build/spec/02_GLASS_FRONTEND.md
++++ b/OspreyFlow_Build/spec/02_GLASS_FRONTEND.md
+@@ -1456,6 +1456,12 @@ clearance and roles; a card for each place the person's rights open — *The Gla
+ an *Open* button with its key (G, I, A, page-wide, never while typing). A place the rights do not open
+ has no card (this replaces ADR-115 decision 7's dimmed panel naming the role it needs); a person whose
+ rights open none is told "Your account opens no place yet. Ask an administrator to give you a role."
++Under the Glass's, the Ingest Studio's and Admin's cards' words sits that place's guide (ADR-145
++Amendment 10): *Read the user guide (PDF)*, *Read the developer guide (PDF)*, *Read the administration
++guide (PDF)*, a link to the route whose activation is handled: the deployment's own PDF, read through
++`GET /v1/guides/{guide}` with the person's token in a header, is shown in a new tab from a blob URL,
++or saved as `ospreyflow-<guide>-guide.pdf` where the browser shows no PDFs (never a token in a URL);
++any failure is said under it in words. No card, no guide; Rules and Monitoring has none.
+ Only the first card's button is brass. *Needs your attention* lists
+ open and own-claimed alerts, rows still held and failing dashboard pulls, newest first, only for
+ usable places; *Recent cases* the person's cases with their level and what each holds as they see

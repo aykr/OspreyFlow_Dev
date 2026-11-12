@@ -128,6 +128,20 @@ RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model
 RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings \
     && chmod 700 /run/osprey/map-settings
 
+# ADR-145 Amendment 10: the guides Home links, served by `GET /v1/guides/{guide}` (`guides.py`) to
+# whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+# built with, and the manifest that records it. Not the architecture guide, which is not served.
+# After the `chown -R` above, so the files are not written twice into the image's layers (about
+# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
+# read them).
+# `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+# reads.
+# The folder is made first (755): `COPY --chmod` gives a folder it creates the files' mode too, and a
+# 0444 folder cannot be entered by the Conduit's user, so the route would answer 503 (found by the guides'
+# image check on the test server, 12 November 2026: `ls: cannot access '/app/docs/pdf': Permission denied`).
+RUN mkdir -p /app/docs/pdf
+COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+
 USER 10001:10001
 EXPOSE 8000
 

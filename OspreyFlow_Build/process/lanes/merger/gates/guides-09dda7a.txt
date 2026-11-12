@@ -1,0 +1,5 @@
+# The guides merge's own checks on the merged tree (branch at 69ef543, gated at 09dda7a; with registry-, every-harness-, spec03- and spec02-guides.patch), 12 Nov 2026
+offline: test_guides, reservations, lanes heartbeat and groups: 132 passed
+offline: route-coverage-check 420 routes no drift; test-file-coverage-check 1016 files no drift; schemas-check 601 types match; adr-reservations-check clean
+leased live on stack e (lease merge, 13:02:40Z), run from OspreyFlow_Core as make test runs: test_route_rights.py and test_guides.py, 86 passed
+docs-guides.patch is docs': a follow-up step (the user and admin guides' own lines, their PDFs)

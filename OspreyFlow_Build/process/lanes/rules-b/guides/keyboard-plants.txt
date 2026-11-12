@@ -1,0 +1,1699 @@
+# Keyboard plants for the guides step, rerun after both reviews' fixes, 2026-11-12T11:21:37Z, local Playwright, OSPREY_PORTS_SLOT=9 (the Mac's slot, granted by the orchestrator), registry-guides.patch applied in the worktree.
+
+=================== PLANT: 1. the guide link's click handler removed (the browser follows the bare route)
+--- diff:
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx b/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
+index b739fb1..805faa9 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
+@@ -237,15 +237,15 @@ describe("Home under the GOV.UK brand", () => {
+ // ADR-145 Amendment 10: the guides, each under the card of its place, only with a card the rights open.
+ describe("Home's guides", () => {
+   const GUIDE_LINK = /^Read the (user|developer|administration) guide \(PDF\)$/;
+-  const guideLinks = () => screen.queryAllByRole("button", { name: GUIDE_LINK }).map((b) => b.textContent);
++  const guideLinks = () => screen.queryAllByRole("link", { name: GUIDE_LINK }).map((b) => b.textContent);
+ 
+   it("links each guide under its own place's card: the user guide under the Glass, the developer guide under the Studio, the administration guide under Admin", () => {
+     home(["investigate", "edit_pipelines", "manage_people", "triage_alerts", "read_alert_queue"], { onReadGuide: vi.fn() });
+-    expect(panel("The Glass").getByRole("button", { name: "Read the user guide (PDF)" })).toBeTruthy();
+-    expect(panel("Ingest Studio").getByRole("button", { name: "Read the developer guide (PDF)" })).toBeTruthy();
+-    expect(panel("Admin").getByRole("button", { name: "Read the administration guide (PDF)" })).toBeTruthy();
++    expect(panel("The Glass").getByRole("link", { name: "Read the user guide (PDF)" })).toBeTruthy();
++    expect(panel("Ingest Studio").getByRole("link", { name: "Read the developer guide (PDF)" })).toBeTruthy();
++    expect(panel("Admin").getByRole("link", { name: "Read the administration guide (PDF)" })).toBeTruthy();
+     // Rules and Monitoring has no guide of its own; the architecture guide is linked nowhere.
+-    expect(panel("Rules and Monitoring").queryAllByRole("button", { name: GUIDE_LINK })).toHaveLength(0);
++    expect(panel("Rules and Monitoring").queryAllByRole("link", { name: GUIDE_LINK })).toHaveLength(0);
+     expect(screen.queryByText(/architecture guide/i)).toBeNull();
+     expect(guideLinks()).toHaveLength(3);
+   });
+@@ -267,12 +267,28 @@ describe("Home's guides", () => {
+     expect(guideLinks()).toEqual([]);
+   });
+ 
++  it("is a link to the guide's route, its activation handled so no token goes in a URL", () => {
++    const onReadGuide = vi.fn(async () => null);
++    home(["investigate"], { onReadGuide, apiBaseUrl: "https://conduit.example" });
++    const link = screen.getByRole("link", { name: "Read the user guide (PDF)" });
++    expect(link.getAttribute("href")).toBe("https://conduit.example/v1/guides/user");
++    // The click is handled (its default prevented): the browser never follows the bare route.
++    expect(fireEvent.click(link)).toBe(false);
++    expect(onReadGuide).toHaveBeenCalledWith("user");
++  });
++
++  it("says the guide could not be read when opening it throws", async () => {
++    home(["investigate"], { onReadGuide: vi.fn().mockRejectedValue(new Error("boom")) });
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
++    await waitFor(() => expect(panel("The Glass").getByText("The guide could not be read just now. Try again shortly.")).toBeTruthy());
++  });
++
+   it("asks for the card's own guide when its link is activated", () => {
+     const onReadGuide = vi.fn(async () => null);
+     home(["investigate", "edit_pipelines", "manage_people"], { onReadGuide });
+-    fireEvent.click(screen.getByRole("button", { name: "Read the developer guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the developer guide (PDF)" }));
+     expect(onReadGuide).toHaveBeenCalledWith("developer");
+-    fireEvent.click(screen.getByRole("button", { name: "Read the administration guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the administration guide (PDF)" }));
+     expect(onReadGuide).toHaveBeenLastCalledWith("administration");
+     expect(onReadGuide).toHaveBeenCalledTimes(2);
+   });
+@@ -281,9 +297,9 @@ describe("Home's guides", () => {
+     const onReadGuide = vi.fn().mockResolvedValueOnce("The user guide opens with the Glass, which your roles do not open.")
+                                .mockResolvedValueOnce(null); // prettier-ignore
+     home(["investigate"], { onReadGuide });
+-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+     await waitFor(() => expect(panel("The Glass").getByText(/which your roles do not open/)).toBeTruthy());
+-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+     await waitFor(() => expect(panel("The Glass").queryByText(/which your roles do not open/)).toBeNull());
+   });
+ });
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx b/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
+index 1cf4062..6b85b8e 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
+@@ -13,7 +13,7 @@ import { ClassificationStrip } from "../shell/ClassificationStrip";
+ import { PLACE_KEY, PLACE_NAME } from "../shell/places";
+ import { startPlaces } from "../rights/visibility";
+ import type { StartPlace } from "../rights/visibility";
+-import { GUIDE_FOR_PLACE, type GuideId } from "./guides";
++import { GUIDE_FOR_PLACE, WORDS as GUIDE_WORDS, guideUrl, type GuideId } from "./guides";
+ import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
+ import { TIPS, TipPicture } from "./tips";
+ import "./home.css";
+@@ -52,6 +52,9 @@ export interface HomePageProps {
+    * Each guide is linked under its place's card (`guides.ts`), so only with a card the person's
+    * rights open; without this, no guide is linked. */
+   onReadGuide?: (guide: GuideId) => Promise<string | null>;
++  /** The Conduit's address, for each guide link's `href` (the route itself, which asks for a token:
++   * the activation is handled, so the token goes in a header, never in the link). */
++  apiBaseUrl?: string;
+ }
+ 
+ // The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
+@@ -195,7 +198,7 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
+   );
+ }
+ 
+-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide }: HomePageProps) {
++export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide, apiBaseUrl = "" }: HomePageProps) {
+   const panels = useMemo(() => startPlaces(rights), [rights]);
+   const allowed = useMemo(() => new Set(panels), [panels]);
+   const primary = panels[0];
+@@ -205,7 +208,9 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
+   const readGuide = (guide: GuideId) => {
+     if (!onReadGuide) return;
+     setGuideSaid((said) => ({ ...said, [guide]: undefined }));
+-    void onReadGuide(guide).then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
++    void onReadGuide(guide)
++      .catch(() => GUIDE_WORDS.unreachable)
++      .then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
+   };
+ 
+   useEffect(() => {
+@@ -294,9 +299,12 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
+                   <p className="home-panel__what">{p.what}</p>
+                   {guide && (
+                     <div className="home-panel__guide">
+-                      <button type="button" className="home-panel__guide-link" onClick={() => readGuide(guide.id)}>
++                      {/* A link (the brief: a plain link), its activation handled: a middle click is too,
++                          since the route without the token would only refuse. */}
++                      <a className="home-panel__guide-link" href={guideUrl(apiBaseUrl, guide.id)} target="_blank" rel="noopener"
++                         onAuxClick={(event) => { event.preventDefault(); readGuide(guide.id); }}>
+                         {guide.words}
+-                      </button>
++                      </a>
+                       <p className="home-panel__guide-said" aria-live="polite">{guideSaid[guide.id] ?? ""}</p>
+                     </div>
+                   )}
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts b/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
+index 1e63a3d..26bc8df 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
++++ b/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
+@@ -1,70 +1,129 @@
+ // @vitest-environment jsdom
+-// ADR-145 Amendment 10: a guide is fetched with the person's token in a header, never in a URL, and opened
+-// in a tab from a blob URL; a refusal is said in the Conduit's own words and its tab closed.
++// ADR-145 Amendment 10: a guide is fetched with the person's token in a header, never in a URL, and shown
++// in a tab from a blob URL (or saved under its own name where the browser shows no PDFs); every failure
++// is said in words and its tab closed; the promise never rejects.
+ import { describe, expect, it, vi } from "vitest";
+ 
+-import { BLOB_KEPT_MS, GUIDE_FOR_PLACE, openGuide } from "./guides";
++import { GUIDE_FOR_PLACE, SAVED_KEPT_MS, TAB_CHECK_MS, WORDS, openGuide, type OpenGuideDeps } from "./guides";
+ 
+-function fakeTab() {
+-  return { opener: {} as unknown, location: { href: "" }, close: vi.fn() } as unknown as Window & { close: ReturnType<typeof vi.fn> };
++type FakeTab = Window & { close: ReturnType<typeof vi.fn>; closed: boolean };
++function fakeTab(): FakeTab {
++  const tab = { opener: {} as unknown, location: { href: "" }, closed: false } as unknown as FakeTab;
++  tab.close = vi.fn(() => {
++    tab.closed = true;
++  });
++  return tab;
+ }
+ 
+-const pdf = () => new Response(new Blob(["%PDF-1.7 synthetic"], { type: "application/pdf" }), { status: 200, headers: { "Content-Type": "application/pdf" } });
++const PDF = "%PDF-1.7 synthetic";
++const pdf = (type = "application/pdf", body = PDF) => new Response(body, { status: 200, headers: { "Content-Type": type } });
++const deps = (over: Partial<OpenGuideDeps> = {}): OpenGuideDeps => ({
++  apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", showsPdf: true,
++  createUrl: () => "blob:https://glass.example/1", revokeUrl: vi.fn(), later: vi.fn(), every: vi.fn(() => vi.fn()), ...over,
++}); // prettier-ignore
+ 
+-describe("openGuide", () => {
+-  it("fetches the guide with the token in the Authorization header and opens its blob URL in the tab", async () => {
+-    const fetcher = vi.fn(async () => pdf());
++describe("openGuide where the browser shows PDFs", () => {
++  it("opens the tab first, fetches with the token in the Authorization header, and shows the PDF from a blob", async () => {
++    const order: string[] = [];
+     const tab = fakeTab();
+-    const later = vi.fn();
+-    const revokeUrl = vi.fn();
+-    const said = await openGuide("user", {
+-      apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", fetcher, openTab: () => tab,
+-      createUrl: () => "blob:https://glass.example/1", revokeUrl, later,
+-    });
++    const fetcher = vi.fn(async () => (order.push("fetch"), pdf()));
++    let blob: Blob | null = null;
++    const said = await openGuide("user", deps({ fetcher, openTab: () => (order.push("tab"), tab), createUrl: (b) => ((blob = b), "blob:x") }));
+     expect(said).toBeNull();
++    expect(order).toEqual(["tab", "fetch"]);
+     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+     expect(url).toBe("https://conduit.example/v1/guides/user");
+     expect(url).not.toContain("secret-token");
+     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret-token");
+-    expect(tab.location.href).toBe("blob:https://glass.example/1");
++    expect(blob!.type).toBe("application/pdf");
++    expect(tab.location.href).toBe("blob:x");
+     expect(tab.opener).toBeNull();
+-    expect(tab.close).not.toHaveBeenCalled();
+-    // The blob is let go once the tab has had time to load it, not before.
++  });
++
++  it("keeps the blob while the tab is open and lets it go once the tab is closed", async () => {
++    const tab = fakeTab();
++    const revokeUrl = vi.fn();
++    let check = () => {};
++    const stop = vi.fn();
++    const every = vi.fn((run: () => void) => ((check = run), stop));
++    await openGuide("user", deps({ fetcher: async () => pdf(), openTab: () => tab, revokeUrl, every }));
++    expect(every).toHaveBeenCalledWith(expect.any(Function), TAB_CHECK_MS);
++    check();
+     expect(revokeUrl).not.toHaveBeenCalled();
+-    expect(later).toHaveBeenCalledWith(expect.any(Function), BLOB_KEPT_MS);
+-    (later.mock.calls[0]![0] as () => void)();
++    tab.closed = true;
++    check();
+     expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
++    expect(stop).toHaveBeenCalled();
++  });
++
++  it("says a blocked pop-up at once, before anything is fetched", async () => {
++    const fetcher = vi.fn();
++    expect(await openGuide("user", deps({ fetcher, openTab: () => null }))).toBe(WORDS.blocked);
++    expect(fetcher).not.toHaveBeenCalled();
+   });
+ 
+   it("says the Conduit's words for a refusal, and closes the tab it opened", async () => {
+     const words = "The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.";
+-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ detail: { error: "place_required", message: words } }), { status: 403 }));
+     const tab = fakeTab();
+     const createUrl = vi.fn();
+-    const said = await openGuide("administration", { apiBaseUrl: "", bearerToken: "t", fetcher, openTab: () => tab, createUrl });
+-    expect(said).toBe(words);
++    const fetcher = async () => new Response(JSON.stringify({ detail: { error: "place_required", message: words } }), { status: 403 });
++    expect(await openGuide("administration", deps({ fetcher, openTab: () => tab, createUrl }))).toBe(words);
+     expect(tab.close).toHaveBeenCalled();
+     expect(createUrl).not.toHaveBeenCalled();
+     expect(tab.location.href).toBe("");
+   });
+ 
+-  it("says the status when the answer carries no words, and when the Conduit cannot be reached", async () => {
++  it("words an ended sign-in plainly, and an answer without words by its status", async () => {
++    const tab = fakeTab();
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher: async () => new Response("{}", { status: 401 }) }))).toBe(WORDS.signedOut);
++    expect(await openGuide("user", deps({ openTab: () => fakeTab(), fetcher: async () => new Response("<html>", { status: 502 }) })))
++      .toBe("The guide could not be read (the server answered 502).");
++    expect(tab.close).toHaveBeenCalled();
++  }); // prettier-ignore
++
++  it("says so when the Conduit cannot be reached, or its body cannot be read, and closes the tab", async () => {
++    const reached = fakeTab();
++    expect(await openGuide("developer", deps({ openTab: () => reached, fetcher: async () => { throw new TypeError("network"); } }))).toBe(WORDS.unreachable);
++    expect(reached.close).toHaveBeenCalled();
++    const broken = fakeTab();
++    const body = { ok: true, status: 200, headers: new Headers({ "Content-Type": "application/pdf" }), arrayBuffer: async () => { throw new TypeError("aborted"); } } as unknown as Response;
++    expect(await openGuide("developer", deps({ openTab: () => broken, fetcher: async () => body }))).toBe(WORDS.unreachable);
++    expect(broken.close).toHaveBeenCalled();
++  }); // prettier-ignore
++
++  it("refuses an answer that is not a PDF, in words", async () => {
+     const tab = fakeTab();
+-    expect(await openGuide("developer", { apiBaseUrl: "", bearerToken: "t", openTab: () => tab,
+-      fetcher: async () => new Response("<html>bad gateway</html>", { status: 502 }) })).toBe("The guide could not be read (the server answered 502).");
+-    expect(await openGuide("developer", { apiBaseUrl: "", bearerToken: "t", openTab: () => tab,
+-      fetcher: async () => { throw new TypeError("network"); } })).toBe("The guide could not be read just now. Try again shortly.");
+-    expect(tab.close).toHaveBeenCalledTimes(2);
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher: async () => pdf("text/html", "<html>sign in</html>") }))).toBe(WORDS.notPdf);
++    expect(tab.close).toHaveBeenCalled();
++    // A PDF's bytes under a wrong type are still a PDF.
++    expect(await openGuide("user", deps({ openTab: () => fakeTab(), fetcher: async () => pdf("application/octet-stream") }))).toBeNull();
+   }); // prettier-ignore
+ 
+-  it("says so when the browser opened no tab, and keeps no blob", async () => {
++  it("says so when the tab was closed while the guide loaded, and keeps no blob", async () => {
++    const tab = fakeTab();
++    const revokeUrl = vi.fn();
++    const fetcher = async () => ((tab.closed = true), pdf());
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher, revokeUrl }))).toBe(WORDS.closed);
++    expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
++  });
++});
++
++describe("openGuide where the browser shows no PDFs", () => {
++  it("opens no tab and saves the PDF under the guide's own name", async () => {
++    const openTab = vi.fn();
++    const save = vi.fn();
++    const later = vi.fn();
+     const revokeUrl = vi.fn();
+-    const said = await openGuide("user", { apiBaseUrl: "", bearerToken: "t", fetcher: async () => pdf(), openTab: () => null,
+-                                          createUrl: () => "blob:x", revokeUrl }); // prettier-ignore
+-    expect(said).toMatch(/did not open a new tab/);
+-    expect(revokeUrl).toHaveBeenCalledWith("blob:x");
++    expect(await openGuide("developer", deps({ showsPdf: false, openTab, save, later, revokeUrl, fetcher: async () => pdf() }))).toBeNull();
++    expect(openTab).not.toHaveBeenCalled();
++    expect(save).toHaveBeenCalledWith("blob:https://glass.example/1", "ospreyflow-developer-guide.pdf");
++    expect(later).toHaveBeenCalledWith(expect.any(Function), SAVED_KEPT_MS);
++    (later.mock.calls[0]![0] as () => void)();
++    expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
+   });
++});
+ 
++describe("the guides' places", () => {
+   it("gives the Glass, the Studio and Admin a guide each, and Rules and Monitoring none", () => {
+     expect(Object.fromEntries(Object.entries(GUIDE_FOR_PLACE).map(([p, g]) => [p, g!.id]))).toEqual({
+       glass: "user", ingest: "developer", admin: "administration",
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/guides.ts b/OspreyFlow_Core/apps/workspace/src/home/guides.ts
+index 2998058..5d1298c 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/guides.ts
++++ b/OspreyFlow_Core/apps/workspace/src/home/guides.ts
+@@ -4,9 +4,12 @@
+ // not linked. The PDF is the deployment's own, read through `GET /v1/guides/{guide}`, which checks the
+ // place's rights itself: the link is a convenience, never the gate.
+ //
+-// The token goes in a header, never in a URL: the PDF is fetched, then opened in a new tab from a blob
+-// URL. The tab is opened before the fetch, while the activation still counts as the person's own, so a
+-// browser's pop-up blocker lets it through, and is closed again if the guide cannot be read.
++// The token goes in a header, never in a URL: the PDF is fetched, then shown from a blob URL. Where the
++// browser shows PDFs, a tab is opened before the fetch, while the activation still counts as the
++// person's own (so a pop-up blocker lets it through), and is sent to the blob once it is read; the blob
++// is kept while that tab is open. Where it does not (`navigator.pdfViewerEnabled` false: headless
++// Chromium, or a browser set to download PDFs), no tab is opened and the PDF is saved under its own name
++// (`ospreyflow-user-guide.pdf`), since a tab sent to a blob would only download it under a random one.
+ import type { PlaceId } from "../shell/places";
+ 
+ export type GuideId = "user" | "developer" | "administration";
+@@ -17,56 +20,128 @@ export const GUIDE_FOR_PLACE: Partial<Record<PlaceId, { id: GuideId; words: stri
+   admin: { id: "administration", words: "Read the administration guide (PDF)" },
+ };
+ 
+-/** How long a guide's blob URL is kept once its tab has it: long enough for the tab to load the PDF. */
+-export const BLOB_KEPT_MS = 60_000;
++export const GUIDE_FILE: Record<GuideId, string> = {
++  user: "ospreyflow-user-guide.pdf",
++  developer: "ospreyflow-developer-guide.pdf",
++  administration: "ospreyflow-administration-guide.pdf",
++};
++
++/** How often a shown guide's tab is checked, to let its blob go once the tab is closed. */
++export const TAB_CHECK_MS = 5_000;
++/** How long a saved guide's blob is kept: the download has its bytes by then. */
++export const SAVED_KEPT_MS = 60_000;
++
++export const WORDS = {
++  blocked: "Your browser did not open a new tab for the guide. Allow pop-ups for this site, then try again.",
++  unreachable: "The guide could not be read just now. Try again shortly.",
++  signedOut: "Your sign-in has ended. Sign in again to read the guide.",
++  notPdf: "The guide could not be read: the deployment did not answer with a PDF.",
++  closed: "The guide's tab was closed before the guide had loaded.",
++} as const;
++
++export function guideUrl(apiBaseUrl: string, guide: GuideId): string {
++  return `${apiBaseUrl}/v1/guides/${guide}`;
++}
+ 
+ export interface OpenGuideDeps {
+   apiBaseUrl: string;
+   bearerToken: string;
+   fetcher?: typeof fetch;
++  /** Whether the browser shows PDFs itself (`navigator.pdfViewerEnabled`). */
++  showsPdf?: boolean;
+   /** `window.open`, given so a test can stand a tab in for it. */
+   openTab?: () => Window | null;
++  /** Saves a blob under a name (an `<a download>` clicked), given so a test can stand in for it. */
++  save?: (url: string, name: string) => void;
+   createUrl?: (blob: Blob) => string;
+   revokeUrl?: (url: string) => void;
+   later?: (run: () => void, ms: number) => void;
++  every?: (run: () => void, ms: number) => () => void;
++}
++
++function saveAs(url: string, name: string): void {
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = name;
++  link.rel = "noopener";
++  link.style.display = "none";
++  document.body.append(link);
++  link.click();
++  link.remove();
++}
++
++async function refusalWords(response: Response): Promise<string> {
++  if (response.status === 401) return WORDS.signedOut;
++  try {
++    const body = (await response.json()) as { detail?: { message?: unknown } };
++    if (typeof body.detail?.message === "string") return body.detail.message;
++  } catch {
++    // Not the Conduit's words: said below.
++  }
++  return `The guide could not be read (the server answered ${response.status}).`;
+ }
+ 
+-/** Opens a guide in a new tab. Resolves to `null` when it opened, or to words saying why it did not. */
++/** Opens a guide. Resolves to `null` when it was shown or saved, or to words saying why it was not;
++ * never rejects. */
+ export async function openGuide(guide: GuideId, deps: OpenGuideDeps): Promise<string | null> {
+   const fetcher = deps.fetcher ?? ((input, init) => fetch(input, init));
+-  const tab = (deps.openTab ?? (() => window.open("", "_blank")))();
++  const showsPdf = deps.showsPdf ?? navigator.pdfViewerEnabled !== false;
+   const createUrl = deps.createUrl ?? ((blob) => URL.createObjectURL(blob));
+   const revokeUrl = deps.revokeUrl ?? ((url) => URL.revokeObjectURL(url));
+   const later = deps.later ?? ((run, ms) => void setTimeout(run, ms));
++  const every =
++    deps.every ??
++    ((run, ms) => {
++      const id = setInterval(run, ms);
++      return () => clearInterval(id);
++    });
++  // The tab first, while the activation still counts as the person's; a blocked one is said at once.
++  const tab = showsPdf ? (deps.openTab ?? (() => window.open("", "_blank")))() : null;
++  if (showsPdf && !tab) return WORDS.blocked;
+   const fail = (words: string) => {
+-    tab?.close();
++    if (tab && !tab.closed) tab.close();
+     return words;
+   };
+-  let response: Response;
++  let url: string | null = null;
+   try {
+-    response = await fetcher(`${deps.apiBaseUrl}/v1/guides/${guide}`, {
+-      headers: { Authorization: `Bearer ${deps.bearerToken}`, Accept: "application/pdf" },
+-    });
+-  } catch {
+-    return fail("The guide could not be read just now. Try again shortly.");
+-  }
+-  if (!response.ok) {
+-    let said: string | null = null;
++    let response: Response;
+     try {
+-      const body = (await response.json()) as { detail?: { message?: unknown } };
+-      if (typeof body.detail?.message === "string") said = body.detail.message;
++      response = await fetcher(guideUrl(deps.apiBaseUrl, guide), {
++        headers: { Authorization: `Bearer ${deps.bearerToken}`, Accept: "application/pdf" },
++      });
+     } catch {
+-      // Not the Conduit's words: said below.
++      return fail(WORDS.unreachable);
+     }
+-    return fail(said ?? `The guide could not be read (the server answered ${response.status}).`);
+-  }
+-  const url = createUrl(await response.blob());
+-  if (!tab) {
+-    revokeUrl(url);
+-    return "Your browser did not open a new tab for the guide. Allow pop-ups for this site, then try again.";
++    if (!response.ok) return fail(await refusalWords(response));
++    const bytes = await response.arrayBuffer();
++    const head = new TextDecoder().decode(bytes.slice(0, 5));
++    const type = (response.headers.get("Content-Type") ?? "").split(";")[0]!.trim();
++    if (type !== "application/pdf" && head !== "%PDF-") return fail(WORDS.notPdf);
++    url = createUrl(new Blob([bytes], { type: "application/pdf" }));
++    if (!tab) {
++      (deps.save ?? saveAs)(url, GUIDE_FILE[guide]);
++      const saved = url;
++      later(() => revokeUrl(saved), SAVED_KEPT_MS);
++      return null;
++    }
++    if (tab.closed) {
++      revokeUrl(url);
++      return WORDS.closed;
++    }
++    tab.opener = null;
++    tab.location.href = url;
++    tab.opener = null;
++    // Kept while the tab is open, so its reload or its own save still find the PDF.
++    const shown = url;
++    const stop = every(() => {
++      if (tab.closed) {
++        stop();
++        revokeUrl(shown);
++      }
++    }, TAB_CHECK_MS);
++    return null;
++  } catch {
++    if (url) revokeUrl(url);
++    return fail(WORDS.unreachable);
+   }
+-  tab.opener = null;
+-  tab.location.href = url;
+-  later(() => revokeUrl(url), BLOB_KEPT_MS);
+-  return null;
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/home.css b/OspreyFlow_Core/apps/workspace/src/home/home.css
+index 626d6f6..ec057a0 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/home.css
++++ b/OspreyFlow_Core/apps/workspace/src/home/home.css
+@@ -43,8 +43,8 @@
+ /* ADR-145 Amendment 10: the card's guide, a plain link under its words (drawn as Recent cases' names are). */
+ .home-panel__guide { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); }
+ .home-panel__guide-link {
+-  min-height: var(--h-control-24); padding: 0; font: inherit; font-size: var(--fs-13); color: var(--text-primary);
+-  background: none; border: 0; border-bottom: 1px solid var(--border-strong); cursor: pointer; text-align: left;
++  display: inline-flex; align-items: center; min-height: var(--h-control-24); font-size: var(--fs-13);
++  color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--border-strong);
+ }
+ .home-panel__guide-link:hover { border-bottom-color: var(--brass); }
+ .home-panel__guide-said { margin: 0; font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary); }
+--- playwright keyboard/start.spec.ts (raw, the [n/m] progress lines dropped):
+
+Running 10 tests using 1 worker
+
+  1) keyboard/start.spec.ts:115:1 › each card's guide is reached and opened by keyboard, with the token in a header 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: page.waitForEvent: Test timeout of 60000ms exceeded.
+    =========================== logs ===========================
+    waiting for event "download"
+    ============================================================
+
+      130 |     await page.keyboard.press("Shift+Tab");
+      131 |     await expect(link).toBeFocused();
+    > 132 |     const saved = page.waitForEvent("download");
+          |                        ^
+      133 |     await page.keyboard.press("Enter");
+      134 |     const download = await saved;
+      135 |     expect(download.url()).toMatch(/^blob:/);
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:132:24
+
+    Error Context: test-results/start-each-card-s-guide-is-0c543--with-the-token-in-a-header/error-context.md
+
+
+  2) keyboard/start.spec.ts:148:1 › a guide the Conduit refuses is said in words under its link, by keyboard 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.') with timeout 5000ms
+      - waiting for getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+
+
+      152 |   await link.focus();
+      153 |   await page.keyboard.press("Enter");
+    > 154 |   await expect(page.getByRole("region", { name: "Admin" }).getByText(ADMINISTRATION_REFUSED)).toBeVisible();
+          |                                                                                               ^
+      155 |   expect(context.pages()).toHaveLength(1);
+      156 |   await expect(link).toBeFocused();
+      157 |   registerCovered(REGISTRY, "read-why-a-guide-was-refused-on-home-by-keyboard");
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:154:95
+
+    Error Context: test-results/start-a-guide-the-Conduit--a0264--under-its-link-by-keyboard/error-context.md
+
+
+  3) keyboard/start.spec.ts:169:1 › the harness's refused state, which every-harness scans, shows the refusal under its link 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.') with timeout 5000ms
+      - waiting for getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+
+
+      170 |   await serve(page);
+      171 |   await page.goto("/keyboard/start-harness.html?guide=refused");
+    > 172 |   await expect(page.getByRole("region", { name: "Admin" }).getByText(ADMINISTRATION_REFUSED)).toBeVisible();
+          |                                                                                               ^
+      173 | });
+      174 |
+      175 | test("every registered Start action has its own proving test case above", () => {
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:172:95
+
+    Error Context: test-results/start-the-harness-s-refuse-d72aa--the-refusal-under-its-link/error-context.md
+
+
+  4) keyboard/start.spec.ts:175:1 › every registered Start action has its own proving test case above 
+
+    Error: START_ACTIONS: keyboard action(s) registered with no proving test case: choose-the-glass-from-start-by-keyboard, choose-the-ingest-studio-from-start-by-keyboard, choose-admin-from-start-by-keyboard, return-to-start-from-the-mark-by-keyboard, open-a-place-from-home-with-its-key, read-a-place-s-guide-from-home-by-keyboard, read-why-a-guide-was-refused-on-home-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:176:3
+
+    Error Context: test-results/start-every-registered-Sta-5a58c-own-proving-test-case-above/error-context.md
+
+
+  4 failed
+    keyboard/start.spec.ts:115:1 › each card's guide is reached and opened by keyboard, with the token in a header 
+    keyboard/start.spec.ts:148:1 › a guide the Conduit refuses is said in words under its link, by keyboard 
+    keyboard/start.spec.ts:169:1 › the harness's refused state, which every-harness scans, shows the refusal under its link 
+    keyboard/start.spec.ts:175:1 › every registered Start action has its own proving test case above 
+  6 passed (1.2m)
+
+=================== PLANT: 2. the developer guide saved under another name
+--- diff:
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx b/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
+index b739fb1..805faa9 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
+@@ -237,15 +237,15 @@ describe("Home under the GOV.UK brand", () => {
+ // ADR-145 Amendment 10: the guides, each under the card of its place, only with a card the rights open.
+ describe("Home's guides", () => {
+   const GUIDE_LINK = /^Read the (user|developer|administration) guide \(PDF\)$/;
+-  const guideLinks = () => screen.queryAllByRole("button", { name: GUIDE_LINK }).map((b) => b.textContent);
++  const guideLinks = () => screen.queryAllByRole("link", { name: GUIDE_LINK }).map((b) => b.textContent);
+ 
+   it("links each guide under its own place's card: the user guide under the Glass, the developer guide under the Studio, the administration guide under Admin", () => {
+     home(["investigate", "edit_pipelines", "manage_people", "triage_alerts", "read_alert_queue"], { onReadGuide: vi.fn() });
+-    expect(panel("The Glass").getByRole("button", { name: "Read the user guide (PDF)" })).toBeTruthy();
+-    expect(panel("Ingest Studio").getByRole("button", { name: "Read the developer guide (PDF)" })).toBeTruthy();
+-    expect(panel("Admin").getByRole("button", { name: "Read the administration guide (PDF)" })).toBeTruthy();
++    expect(panel("The Glass").getByRole("link", { name: "Read the user guide (PDF)" })).toBeTruthy();
++    expect(panel("Ingest Studio").getByRole("link", { name: "Read the developer guide (PDF)" })).toBeTruthy();
++    expect(panel("Admin").getByRole("link", { name: "Read the administration guide (PDF)" })).toBeTruthy();
+     // Rules and Monitoring has no guide of its own; the architecture guide is linked nowhere.
+-    expect(panel("Rules and Monitoring").queryAllByRole("button", { name: GUIDE_LINK })).toHaveLength(0);
++    expect(panel("Rules and Monitoring").queryAllByRole("link", { name: GUIDE_LINK })).toHaveLength(0);
+     expect(screen.queryByText(/architecture guide/i)).toBeNull();
+     expect(guideLinks()).toHaveLength(3);
+   });
+@@ -267,12 +267,28 @@ describe("Home's guides", () => {
+     expect(guideLinks()).toEqual([]);
+   });
+ 
++  it("is a link to the guide's route, its activation handled so no token goes in a URL", () => {
++    const onReadGuide = vi.fn(async () => null);
++    home(["investigate"], { onReadGuide, apiBaseUrl: "https://conduit.example" });
++    const link = screen.getByRole("link", { name: "Read the user guide (PDF)" });
++    expect(link.getAttribute("href")).toBe("https://conduit.example/v1/guides/user");
++    // The click is handled (its default prevented): the browser never follows the bare route.
++    expect(fireEvent.click(link)).toBe(false);
++    expect(onReadGuide).toHaveBeenCalledWith("user");
++  });
++
++  it("says the guide could not be read when opening it throws", async () => {
++    home(["investigate"], { onReadGuide: vi.fn().mockRejectedValue(new Error("boom")) });
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
++    await waitFor(() => expect(panel("The Glass").getByText("The guide could not be read just now. Try again shortly.")).toBeTruthy());
++  });
++
+   it("asks for the card's own guide when its link is activated", () => {
+     const onReadGuide = vi.fn(async () => null);
+     home(["investigate", "edit_pipelines", "manage_people"], { onReadGuide });
+-    fireEvent.click(screen.getByRole("button", { name: "Read the developer guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the developer guide (PDF)" }));
+     expect(onReadGuide).toHaveBeenCalledWith("developer");
+-    fireEvent.click(screen.getByRole("button", { name: "Read the administration guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the administration guide (PDF)" }));
+     expect(onReadGuide).toHaveBeenLastCalledWith("administration");
+     expect(onReadGuide).toHaveBeenCalledTimes(2);
+   });
+@@ -281,9 +297,9 @@ describe("Home's guides", () => {
+     const onReadGuide = vi.fn().mockResolvedValueOnce("The user guide opens with the Glass, which your roles do not open.")
+                                .mockResolvedValueOnce(null); // prettier-ignore
+     home(["investigate"], { onReadGuide });
+-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+     await waitFor(() => expect(panel("The Glass").getByText(/which your roles do not open/)).toBeTruthy());
+-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+     await waitFor(() => expect(panel("The Glass").queryByText(/which your roles do not open/)).toBeNull());
+   });
+ });
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx b/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
+index 1cf4062..732a504 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
+@@ -13,7 +13,7 @@ import { ClassificationStrip } from "../shell/ClassificationStrip";
+ import { PLACE_KEY, PLACE_NAME } from "../shell/places";
+ import { startPlaces } from "../rights/visibility";
+ import type { StartPlace } from "../rights/visibility";
+-import { GUIDE_FOR_PLACE, type GuideId } from "./guides";
++import { GUIDE_FOR_PLACE, WORDS as GUIDE_WORDS, guideUrl, type GuideId } from "./guides";
+ import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
+ import { TIPS, TipPicture } from "./tips";
+ import "./home.css";
+@@ -52,6 +52,9 @@ export interface HomePageProps {
+    * Each guide is linked under its place's card (`guides.ts`), so only with a card the person's
+    * rights open; without this, no guide is linked. */
+   onReadGuide?: (guide: GuideId) => Promise<string | null>;
++  /** The Conduit's address, for each guide link's `href` (the route itself, which asks for a token:
++   * the activation is handled, so the token goes in a header, never in the link). */
++  apiBaseUrl?: string;
+ }
+ 
+ // The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
+@@ -195,7 +198,7 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
+   );
+ }
+ 
+-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide }: HomePageProps) {
++export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide, apiBaseUrl = "" }: HomePageProps) {
+   const panels = useMemo(() => startPlaces(rights), [rights]);
+   const allowed = useMemo(() => new Set(panels), [panels]);
+   const primary = panels[0];
+@@ -205,7 +208,9 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
+   const readGuide = (guide: GuideId) => {
+     if (!onReadGuide) return;
+     setGuideSaid((said) => ({ ...said, [guide]: undefined }));
+-    void onReadGuide(guide).then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
++    void onReadGuide(guide)
++      .catch(() => GUIDE_WORDS.unreachable)
++      .then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
+   };
+ 
+   useEffect(() => {
+@@ -294,9 +299,13 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
+                   <p className="home-panel__what">{p.what}</p>
+                   {guide && (
+                     <div className="home-panel__guide">
+-                      <button type="button" className="home-panel__guide-link" onClick={() => readGuide(guide.id)}>
++                      {/* A link (the brief: a plain link), its activation handled: a middle click is too,
++                          since the route without the token would only refuse. */}
++                      <a className="home-panel__guide-link" href={guideUrl(apiBaseUrl, guide.id)} target="_blank" rel="noopener"
++                         onClick={(event) => { event.preventDefault(); readGuide(guide.id); }}
++                         onAuxClick={(event) => { event.preventDefault(); readGuide(guide.id); }}>
+                         {guide.words}
+-                      </button>
++                      </a>
+                       <p className="home-panel__guide-said" aria-live="polite">{guideSaid[guide.id] ?? ""}</p>
+                     </div>
+                   )}
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts b/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
+index 1e63a3d..26bc8df 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
++++ b/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
+@@ -1,70 +1,129 @@
+ // @vitest-environment jsdom
+-// ADR-145 Amendment 10: a guide is fetched with the person's token in a header, never in a URL, and opened
+-// in a tab from a blob URL; a refusal is said in the Conduit's own words and its tab closed.
++// ADR-145 Amendment 10: a guide is fetched with the person's token in a header, never in a URL, and shown
++// in a tab from a blob URL (or saved under its own name where the browser shows no PDFs); every failure
++// is said in words and its tab closed; the promise never rejects.
+ import { describe, expect, it, vi } from "vitest";
+ 
+-import { BLOB_KEPT_MS, GUIDE_FOR_PLACE, openGuide } from "./guides";
++import { GUIDE_FOR_PLACE, SAVED_KEPT_MS, TAB_CHECK_MS, WORDS, openGuide, type OpenGuideDeps } from "./guides";
+ 
+-function fakeTab() {
+-  return { opener: {} as unknown, location: { href: "" }, close: vi.fn() } as unknown as Window & { close: ReturnType<typeof vi.fn> };
++type FakeTab = Window & { close: ReturnType<typeof vi.fn>; closed: boolean };
++function fakeTab(): FakeTab {
++  const tab = { opener: {} as unknown, location: { href: "" }, closed: false } as unknown as FakeTab;
++  tab.close = vi.fn(() => {
++    tab.closed = true;
++  });
++  return tab;
+ }
+ 
+-const pdf = () => new Response(new Blob(["%PDF-1.7 synthetic"], { type: "application/pdf" }), { status: 200, headers: { "Content-Type": "application/pdf" } });
++const PDF = "%PDF-1.7 synthetic";
++const pdf = (type = "application/pdf", body = PDF) => new Response(body, { status: 200, headers: { "Content-Type": type } });
++const deps = (over: Partial<OpenGuideDeps> = {}): OpenGuideDeps => ({
++  apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", showsPdf: true,
++  createUrl: () => "blob:https://glass.example/1", revokeUrl: vi.fn(), later: vi.fn(), every: vi.fn(() => vi.fn()), ...over,
++}); // prettier-ignore
+ 
+-describe("openGuide", () => {
+-  it("fetches the guide with the token in the Authorization header and opens its blob URL in the tab", async () => {
+-    const fetcher = vi.fn(async () => pdf());
++describe("openGuide where the browser shows PDFs", () => {
++  it("opens the tab first, fetches with the token in the Authorization header, and shows the PDF from a blob", async () => {
++    const order: string[] = [];
+     const tab = fakeTab();
+-    const later = vi.fn();
+-    const revokeUrl = vi.fn();
+-    const said = await openGuide("user", {
+-      apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", fetcher, openTab: () => tab,
+-      createUrl: () => "blob:https://glass.example/1", revokeUrl, later,
+-    });
++    const fetcher = vi.fn(async () => (order.push("fetch"), pdf()));
++    let blob: Blob | null = null;
++    const said = await openGuide("user", deps({ fetcher, openTab: () => (order.push("tab"), tab), createUrl: (b) => ((blob = b), "blob:x") }));
+     expect(said).toBeNull();
++    expect(order).toEqual(["tab", "fetch"]);
+     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+     expect(url).toBe("https://conduit.example/v1/guides/user");
+     expect(url).not.toContain("secret-token");
+     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret-token");
+-    expect(tab.location.href).toBe("blob:https://glass.example/1");
++    expect(blob!.type).toBe("application/pdf");
++    expect(tab.location.href).toBe("blob:x");
+     expect(tab.opener).toBeNull();
+-    expect(tab.close).not.toHaveBeenCalled();
+-    // The blob is let go once the tab has had time to load it, not before.
++  });
++
++  it("keeps the blob while the tab is open and lets it go once the tab is closed", async () => {
++    const tab = fakeTab();
++    const revokeUrl = vi.fn();
++    let check = () => {};
++    const stop = vi.fn();
++    const every = vi.fn((run: () => void) => ((check = run), stop));
++    await openGuide("user", deps({ fetcher: async () => pdf(), openTab: () => tab, revokeUrl, every }));
++    expect(every).toHaveBeenCalledWith(expect.any(Function), TAB_CHECK_MS);
++    check();
+     expect(revokeUrl).not.toHaveBeenCalled();
+-    expect(later).toHaveBeenCalledWith(expect.any(Function), BLOB_KEPT_MS);
+-    (later.mock.calls[0]![0] as () => void)();
++    tab.closed = true;
++    check();
+     expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
++    expect(stop).toHaveBeenCalled();
++  });
++
++  it("says a blocked pop-up at once, before anything is fetched", async () => {
++    const fetcher = vi.fn();
++    expect(await openGuide("user", deps({ fetcher, openTab: () => null }))).toBe(WORDS.blocked);
++    expect(fetcher).not.toHaveBeenCalled();
+   });
+ 
+   it("says the Conduit's words for a refusal, and closes the tab it opened", async () => {
+     const words = "The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.";
+-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ detail: { error: "place_required", message: words } }), { status: 403 }));
+     const tab = fakeTab();
+     const createUrl = vi.fn();
+-    const said = await openGuide("administration", { apiBaseUrl: "", bearerToken: "t", fetcher, openTab: () => tab, createUrl });
+-    expect(said).toBe(words);
++    const fetcher = async () => new Response(JSON.stringify({ detail: { error: "place_required", message: words } }), { status: 403 });
++    expect(await openGuide("administration", deps({ fetcher, openTab: () => tab, createUrl }))).toBe(words);
+     expect(tab.close).toHaveBeenCalled();
+     expect(createUrl).not.toHaveBeenCalled();
+     expect(tab.location.href).toBe("");
+   });
+ 
+-  it("says the status when the answer carries no words, and when the Conduit cannot be reached", async () => {
++  it("words an ended sign-in plainly, and an answer without words by its status", async () => {
++    const tab = fakeTab();
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher: async () => new Response("{}", { status: 401 }) }))).toBe(WORDS.signedOut);
++    expect(await openGuide("user", deps({ openTab: () => fakeTab(), fetcher: async () => new Response("<html>", { status: 502 }) })))
++      .toBe("The guide could not be read (the server answered 502).");
++    expect(tab.close).toHaveBeenCalled();
++  }); // prettier-ignore
++
++  it("says so when the Conduit cannot be reached, or its body cannot be read, and closes the tab", async () => {
++    const reached = fakeTab();
++    expect(await openGuide("developer", deps({ openTab: () => reached, fetcher: async () => { throw new TypeError("network"); } }))).toBe(WORDS.unreachable);
++    expect(reached.close).toHaveBeenCalled();
++    const broken = fakeTab();
++    const body = { ok: true, status: 200, headers: new Headers({ "Content-Type": "application/pdf" }), arrayBuffer: async () => { throw new TypeError("aborted"); } } as unknown as Response;
++    expect(await openGuide("developer", deps({ openTab: () => broken, fetcher: async () => body }))).toBe(WORDS.unreachable);
++    expect(broken.close).toHaveBeenCalled();
++  }); // prettier-ignore
++
++  it("refuses an answer that is not a PDF, in words", async () => {
+     const tab = fakeTab();
+-    expect(await openGuide("developer", { apiBaseUrl: "", bearerToken: "t", openTab: () => tab,
+-      fetcher: async () => new Response("<html>bad gateway</html>", { status: 502 }) })).toBe("The guide could not be read (the server answered 502).");
+-    expect(await openGuide("developer", { apiBaseUrl: "", bearerToken: "t", openTab: () => tab,
+-      fetcher: async () => { throw new TypeError("network"); } })).toBe("The guide could not be read just now. Try again shortly.");
+-    expect(tab.close).toHaveBeenCalledTimes(2);
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher: async () => pdf("text/html", "<html>sign in</html>") }))).toBe(WORDS.notPdf);
++    expect(tab.close).toHaveBeenCalled();
++    // A PDF's bytes under a wrong type are still a PDF.
++    expect(await openGuide("user", deps({ openTab: () => fakeTab(), fetcher: async () => pdf("application/octet-stream") }))).toBeNull();
+   }); // prettier-ignore
+ 
+-  it("says so when the browser opened no tab, and keeps no blob", async () => {
++  it("says so when the tab was closed while the guide loaded, and keeps no blob", async () => {
++    const tab = fakeTab();
++    const revokeUrl = vi.fn();
++    const fetcher = async () => ((tab.closed = true), pdf());
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher, revokeUrl }))).toBe(WORDS.closed);
++    expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
++  });
++});
++
++describe("openGuide where the browser shows no PDFs", () => {
++  it("opens no tab and saves the PDF under the guide's own name", async () => {
++    const openTab = vi.fn();
++    const save = vi.fn();
++    const later = vi.fn();
+     const revokeUrl = vi.fn();
+-    const said = await openGuide("user", { apiBaseUrl: "", bearerToken: "t", fetcher: async () => pdf(), openTab: () => null,
+-                                          createUrl: () => "blob:x", revokeUrl }); // prettier-ignore
+-    expect(said).toMatch(/did not open a new tab/);
+-    expect(revokeUrl).toHaveBeenCalledWith("blob:x");
++    expect(await openGuide("developer", deps({ showsPdf: false, openTab, save, later, revokeUrl, fetcher: async () => pdf() }))).toBeNull();
++    expect(openTab).not.toHaveBeenCalled();
++    expect(save).toHaveBeenCalledWith("blob:https://glass.example/1", "ospreyflow-developer-guide.pdf");
++    expect(later).toHaveBeenCalledWith(expect.any(Function), SAVED_KEPT_MS);
++    (later.mock.calls[0]![0] as () => void)();
++    expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
+   });
++});
+ 
++describe("the guides' places", () => {
+   it("gives the Glass, the Studio and Admin a guide each, and Rules and Monitoring none", () => {
+     expect(Object.fromEntries(Object.entries(GUIDE_FOR_PLACE).map(([p, g]) => [p, g!.id]))).toEqual({
+       glass: "user", ingest: "developer", admin: "administration",
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/guides.ts b/OspreyFlow_Core/apps/workspace/src/home/guides.ts
+index 2998058..9f90a21 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/guides.ts
++++ b/OspreyFlow_Core/apps/workspace/src/home/guides.ts
+@@ -4,9 +4,12 @@
+ // not linked. The PDF is the deployment's own, read through `GET /v1/guides/{guide}`, which checks the
+ // place's rights itself: the link is a convenience, never the gate.
+ //
+-// The token goes in a header, never in a URL: the PDF is fetched, then opened in a new tab from a blob
+-// URL. The tab is opened before the fetch, while the activation still counts as the person's own, so a
+-// browser's pop-up blocker lets it through, and is closed again if the guide cannot be read.
++// The token goes in a header, never in a URL: the PDF is fetched, then shown from a blob URL. Where the
++// browser shows PDFs, a tab is opened before the fetch, while the activation still counts as the
++// person's own (so a pop-up blocker lets it through), and is sent to the blob once it is read; the blob
++// is kept while that tab is open. Where it does not (`navigator.pdfViewerEnabled` false: headless
++// Chromium, or a browser set to download PDFs), no tab is opened and the PDF is saved under its own name
++// (`ospreyflow-user-guide.pdf`), since a tab sent to a blob would only download it under a random one.
+ import type { PlaceId } from "../shell/places";
+ 
+ export type GuideId = "user" | "developer" | "administration";
+@@ -17,56 +20,128 @@ export const GUIDE_FOR_PLACE: Partial<Record<PlaceId, { id: GuideId; words: stri
+   admin: { id: "administration", words: "Read the administration guide (PDF)" },
+ };
+ 
+-/** How long a guide's blob URL is kept once its tab has it: long enough for the tab to load the PDF. */
+-export const BLOB_KEPT_MS = 60_000;
++export const GUIDE_FILE: Record<GuideId, string> = {
++  user: "ospreyflow-user-guide.pdf",
++  developer: "guide.pdf",
++  administration: "ospreyflow-administration-guide.pdf",
++};
++
++/** How often a shown guide's tab is checked, to let its blob go once the tab is closed. */
++export const TAB_CHECK_MS = 5_000;
++/** How long a saved guide's blob is kept: the download has its bytes by then. */
++export const SAVED_KEPT_MS = 60_000;
++
++export const WORDS = {
++  blocked: "Your browser did not open a new tab for the guide. Allow pop-ups for this site, then try again.",
++  unreachable: "The guide could not be read just now. Try again shortly.",
++  signedOut: "Your sign-in has ended. Sign in again to read the guide.",
++  notPdf: "The guide could not be read: the deployment did not answer with a PDF.",
++  closed: "The guide's tab was closed before the guide had loaded.",
++} as const;
++
++export function guideUrl(apiBaseUrl: string, guide: GuideId): string {
++  return `${apiBaseUrl}/v1/guides/${guide}`;
++}
+ 
+ export interface OpenGuideDeps {
+   apiBaseUrl: string;
+   bearerToken: string;
+   fetcher?: typeof fetch;
++  /** Whether the browser shows PDFs itself (`navigator.pdfViewerEnabled`). */
++  showsPdf?: boolean;
+   /** `window.open`, given so a test can stand a tab in for it. */
+   openTab?: () => Window | null;
++  /** Saves a blob under a name (an `<a download>` clicked), given so a test can stand in for it. */
++  save?: (url: string, name: string) => void;
+   createUrl?: (blob: Blob) => string;
+   revokeUrl?: (url: string) => void;
+   later?: (run: () => void, ms: number) => void;
++  every?: (run: () => void, ms: number) => () => void;
++}
++
++function saveAs(url: string, name: string): void {
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = name;
++  link.rel = "noopener";
++  link.style.display = "none";
++  document.body.append(link);
++  link.click();
++  link.remove();
++}
++
++async function refusalWords(response: Response): Promise<string> {
++  if (response.status === 401) return WORDS.signedOut;
++  try {
++    const body = (await response.json()) as { detail?: { message?: unknown } };
++    if (typeof body.detail?.message === "string") return body.detail.message;
++  } catch {
++    // Not the Conduit's words: said below.
++  }
++  return `The guide could not be read (the server answered ${response.status}).`;
+ }
+ 
+-/** Opens a guide in a new tab. Resolves to `null` when it opened, or to words saying why it did not. */
++/** Opens a guide. Resolves to `null` when it was shown or saved, or to words saying why it was not;
++ * never rejects. */
+ export async function openGuide(guide: GuideId, deps: OpenGuideDeps): Promise<string | null> {
+   const fetcher = deps.fetcher ?? ((input, init) => fetch(input, init));
+-  const tab = (deps.openTab ?? (() => window.open("", "_blank")))();
++  const showsPdf = deps.showsPdf ?? navigator.pdfViewerEnabled !== false;
+   const createUrl = deps.createUrl ?? ((blob) => URL.createObjectURL(blob));
+   const revokeUrl = deps.revokeUrl ?? ((url) => URL.revokeObjectURL(url));
+   const later = deps.later ?? ((run, ms) => void setTimeout(run, ms));
++  const every =
++    deps.every ??
++    ((run, ms) => {
++      const id = setInterval(run, ms);
++      return () => clearInterval(id);
++    });
++  // The tab first, while the activation still counts as the person's; a blocked one is said at once.
++  const tab = showsPdf ? (deps.openTab ?? (() => window.open("", "_blank")))() : null;
++  if (showsPdf && !tab) return WORDS.blocked;
+   const fail = (words: string) => {
+-    tab?.close();
++    if (tab && !tab.closed) tab.close();
+     return words;
+   };
+-  let response: Response;
++  let url: string | null = null;
+   try {
+-    response = await fetcher(`${deps.apiBaseUrl}/v1/guides/${guide}`, {
+-      headers: { Authorization: `Bearer ${deps.bearerToken}`, Accept: "application/pdf" },
+-    });
+-  } catch {
+-    return fail("The guide could not be read just now. Try again shortly.");
+-  }
+-  if (!response.ok) {
+-    let said: string | null = null;
++    let response: Response;
+     try {
+-      const body = (await response.json()) as { detail?: { message?: unknown } };
+-      if (typeof body.detail?.message === "string") said = body.detail.message;
++      response = await fetcher(guideUrl(deps.apiBaseUrl, guide), {
++        headers: { Authorization: `Bearer ${deps.bearerToken}`, Accept: "application/pdf" },
++      });
+     } catch {
+-      // Not the Conduit's words: said below.
++      return fail(WORDS.unreachable);
+     }
+-    return fail(said ?? `The guide could not be read (the server answered ${response.status}).`);
+-  }
+-  const url = createUrl(await response.blob());
+-  if (!tab) {
+-    revokeUrl(url);
+-    return "Your browser did not open a new tab for the guide. Allow pop-ups for this site, then try again.";
++    if (!response.ok) return fail(await refusalWords(response));
++    const bytes = await response.arrayBuffer();
++    const head = new TextDecoder().decode(bytes.slice(0, 5));
++    const type = (response.headers.get("Content-Type") ?? "").split(";")[0]!.trim();
++    if (type !== "application/pdf" && head !== "%PDF-") return fail(WORDS.notPdf);
++    url = createUrl(new Blob([bytes], { type: "application/pdf" }));
++    if (!tab) {
++      (deps.save ?? saveAs)(url, GUIDE_FILE[guide]);
++      const saved = url;
++      later(() => revokeUrl(saved), SAVED_KEPT_MS);
++      return null;
++    }
++    if (tab.closed) {
++      revokeUrl(url);
++      return WORDS.closed;
++    }
++    tab.opener = null;
++    tab.location.href = url;
++    tab.opener = null;
++    // Kept while the tab is open, so its reload or its own save still find the PDF.
++    const shown = url;
++    const stop = every(() => {
++      if (tab.closed) {
++        stop();
++        revokeUrl(shown);
++      }
++    }, TAB_CHECK_MS);
++    return null;
++  } catch {
++    if (url) revokeUrl(url);
++    return fail(WORDS.unreachable);
+   }
+-  tab.opener = null;
+-  tab.location.href = url;
+-  later(() => revokeUrl(url), BLOB_KEPT_MS);
+-  return null;
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/home.css b/OspreyFlow_Core/apps/workspace/src/home/home.css
+index 626d6f6..ec057a0 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/home.css
++++ b/OspreyFlow_Core/apps/workspace/src/home/home.css
+@@ -43,8 +43,8 @@
+ /* ADR-145 Amendment 10: the card's guide, a plain link under its words (drawn as Recent cases' names are). */
+ .home-panel__guide { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); }
+ .home-panel__guide-link {
+-  min-height: var(--h-control-24); padding: 0; font: inherit; font-size: var(--fs-13); color: var(--text-primary);
+-  background: none; border: 0; border-bottom: 1px solid var(--border-strong); cursor: pointer; text-align: left;
++  display: inline-flex; align-items: center; min-height: var(--h-control-24); font-size: var(--fs-13);
++  color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--border-strong);
+ }
+ .home-panel__guide-link:hover { border-bottom-color: var(--brass); }
+ .home-panel__guide-said { margin: 0; font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary); }
+--- playwright keyboard/start.spec.ts (raw, the [n/m] progress lines dropped):
+
+Running 10 tests using 1 worker
+
+  1) keyboard/start.spec.ts:115:1 › each card's guide is reached and opened by keyboard, with the token in a header 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "ospreyflow-developer-guide.pdf"
+    Received: "guide.pdf"
+
+      134 |     const download = await saved;
+      135 |     expect(download.url()).toMatch(/^blob:/);
+    > 136 |     expect(download.suggestedFilename()).toBe(`ospreyflow-${guide}-guide.pdf`);
+          |                                          ^
+      137 |     expect(await readFile(await download.path(), "utf8")).toBe(GUIDE_PDF);
+      138 |     expect(asked).toContain(`${guide}: Bearer unused`);
+      139 |     // Opening the guide leaves Home where it was, in this one tab.
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:136:42
+
+    Error Context: test-results/start-each-card-s-guide-is-0c543--with-the-token-in-a-header/error-context.md
+
+
+  2) keyboard/start.spec.ts:175:1 › every registered Start action has its own proving test case above 
+
+    Error: START_ACTIONS: keyboard action(s) registered with no proving test case: choose-the-glass-from-start-by-keyboard, choose-the-ingest-studio-from-start-by-keyboard, choose-admin-from-start-by-keyboard, return-to-start-from-the-mark-by-keyboard, open-a-place-from-home-with-its-key, read-a-place-s-guide-from-home-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:176:3
+
+    Error Context: test-results/start-every-registered-Sta-5a58c-own-proving-test-case-above/error-context.md
+
+
+  2 failed
+    keyboard/start.spec.ts:115:1 › each card's guide is reached and opened by keyboard, with the token in a header 
+    keyboard/start.spec.ts:175:1 › every registered Start action has its own proving test case above 
+  8 passed (3.0s)
+
+=================== PLANT: 3. a refusal's words dropped
+--- diff:
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx b/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
+index b739fb1..805faa9 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/home/HomePage.test.tsx
+@@ -237,15 +237,15 @@ describe("Home under the GOV.UK brand", () => {
+ // ADR-145 Amendment 10: the guides, each under the card of its place, only with a card the rights open.
+ describe("Home's guides", () => {
+   const GUIDE_LINK = /^Read the (user|developer|administration) guide \(PDF\)$/;
+-  const guideLinks = () => screen.queryAllByRole("button", { name: GUIDE_LINK }).map((b) => b.textContent);
++  const guideLinks = () => screen.queryAllByRole("link", { name: GUIDE_LINK }).map((b) => b.textContent);
+ 
+   it("links each guide under its own place's card: the user guide under the Glass, the developer guide under the Studio, the administration guide under Admin", () => {
+     home(["investigate", "edit_pipelines", "manage_people", "triage_alerts", "read_alert_queue"], { onReadGuide: vi.fn() });
+-    expect(panel("The Glass").getByRole("button", { name: "Read the user guide (PDF)" })).toBeTruthy();
+-    expect(panel("Ingest Studio").getByRole("button", { name: "Read the developer guide (PDF)" })).toBeTruthy();
+-    expect(panel("Admin").getByRole("button", { name: "Read the administration guide (PDF)" })).toBeTruthy();
++    expect(panel("The Glass").getByRole("link", { name: "Read the user guide (PDF)" })).toBeTruthy();
++    expect(panel("Ingest Studio").getByRole("link", { name: "Read the developer guide (PDF)" })).toBeTruthy();
++    expect(panel("Admin").getByRole("link", { name: "Read the administration guide (PDF)" })).toBeTruthy();
+     // Rules and Monitoring has no guide of its own; the architecture guide is linked nowhere.
+-    expect(panel("Rules and Monitoring").queryAllByRole("button", { name: GUIDE_LINK })).toHaveLength(0);
++    expect(panel("Rules and Monitoring").queryAllByRole("link", { name: GUIDE_LINK })).toHaveLength(0);
+     expect(screen.queryByText(/architecture guide/i)).toBeNull();
+     expect(guideLinks()).toHaveLength(3);
+   });
+@@ -267,12 +267,28 @@ describe("Home's guides", () => {
+     expect(guideLinks()).toEqual([]);
+   });
+ 
++  it("is a link to the guide's route, its activation handled so no token goes in a URL", () => {
++    const onReadGuide = vi.fn(async () => null);
++    home(["investigate"], { onReadGuide, apiBaseUrl: "https://conduit.example" });
++    const link = screen.getByRole("link", { name: "Read the user guide (PDF)" });
++    expect(link.getAttribute("href")).toBe("https://conduit.example/v1/guides/user");
++    // The click is handled (its default prevented): the browser never follows the bare route.
++    expect(fireEvent.click(link)).toBe(false);
++    expect(onReadGuide).toHaveBeenCalledWith("user");
++  });
++
++  it("says the guide could not be read when opening it throws", async () => {
++    home(["investigate"], { onReadGuide: vi.fn().mockRejectedValue(new Error("boom")) });
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
++    await waitFor(() => expect(panel("The Glass").getByText("The guide could not be read just now. Try again shortly.")).toBeTruthy());
++  });
++
+   it("asks for the card's own guide when its link is activated", () => {
+     const onReadGuide = vi.fn(async () => null);
+     home(["investigate", "edit_pipelines", "manage_people"], { onReadGuide });
+-    fireEvent.click(screen.getByRole("button", { name: "Read the developer guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the developer guide (PDF)" }));
+     expect(onReadGuide).toHaveBeenCalledWith("developer");
+-    fireEvent.click(screen.getByRole("button", { name: "Read the administration guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the administration guide (PDF)" }));
+     expect(onReadGuide).toHaveBeenLastCalledWith("administration");
+     expect(onReadGuide).toHaveBeenCalledTimes(2);
+   });
+@@ -281,9 +297,9 @@ describe("Home's guides", () => {
+     const onReadGuide = vi.fn().mockResolvedValueOnce("The user guide opens with the Glass, which your roles do not open.")
+                                .mockResolvedValueOnce(null); // prettier-ignore
+     home(["investigate"], { onReadGuide });
+-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+     await waitFor(() => expect(panel("The Glass").getByText(/which your roles do not open/)).toBeTruthy());
+-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
++    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+     await waitFor(() => expect(panel("The Glass").queryByText(/which your roles do not open/)).toBeNull());
+   });
+ });
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx b/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
+index 1cf4062..732a504 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx
+@@ -13,7 +13,7 @@ import { ClassificationStrip } from "../shell/ClassificationStrip";
+ import { PLACE_KEY, PLACE_NAME } from "../shell/places";
+ import { startPlaces } from "../rights/visibility";
+ import type { StartPlace } from "../rights/visibility";
+-import { GUIDE_FOR_PLACE, type GuideId } from "./guides";
++import { GUIDE_FOR_PLACE, WORDS as GUIDE_WORDS, guideUrl, type GuideId } from "./guides";
+ import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
+ import { TIPS, TipPicture } from "./tips";
+ import "./home.css";
+@@ -52,6 +52,9 @@ export interface HomePageProps {
+    * Each guide is linked under its place's card (`guides.ts`), so only with a card the person's
+    * rights open; without this, no guide is linked. */
+   onReadGuide?: (guide: GuideId) => Promise<string | null>;
++  /** The Conduit's address, for each guide link's `href` (the route itself, which asks for a token:
++   * the activation is handled, so the token goes in a header, never in the link). */
++  apiBaseUrl?: string;
+ }
+ 
+ // The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
+@@ -195,7 +198,7 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
+   );
+ }
+ 
+-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide }: HomePageProps) {
++export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide, apiBaseUrl = "" }: HomePageProps) {
+   const panels = useMemo(() => startPlaces(rights), [rights]);
+   const allowed = useMemo(() => new Set(panels), [panels]);
+   const primary = panels[0];
+@@ -205,7 +208,9 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
+   const readGuide = (guide: GuideId) => {
+     if (!onReadGuide) return;
+     setGuideSaid((said) => ({ ...said, [guide]: undefined }));
+-    void onReadGuide(guide).then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
++    void onReadGuide(guide)
++      .catch(() => GUIDE_WORDS.unreachable)
++      .then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
+   };
+ 
+   useEffect(() => {
+@@ -294,9 +299,13 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
+                   <p className="home-panel__what">{p.what}</p>
+                   {guide && (
+                     <div className="home-panel__guide">
+-                      <button type="button" className="home-panel__guide-link" onClick={() => readGuide(guide.id)}>
++                      {/* A link (the brief: a plain link), its activation handled: a middle click is too,
++                          since the route without the token would only refuse. */}
++                      <a className="home-panel__guide-link" href={guideUrl(apiBaseUrl, guide.id)} target="_blank" rel="noopener"
++                         onClick={(event) => { event.preventDefault(); readGuide(guide.id); }}
++                         onAuxClick={(event) => { event.preventDefault(); readGuide(guide.id); }}>
+                         {guide.words}
+-                      </button>
++                      </a>
+                       <p className="home-panel__guide-said" aria-live="polite">{guideSaid[guide.id] ?? ""}</p>
+                     </div>
+                   )}
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts b/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
+index 1e63a3d..26bc8df 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
++++ b/OspreyFlow_Core/apps/workspace/src/home/guides.test.ts
+@@ -1,70 +1,129 @@
+ // @vitest-environment jsdom
+-// ADR-145 Amendment 10: a guide is fetched with the person's token in a header, never in a URL, and opened
+-// in a tab from a blob URL; a refusal is said in the Conduit's own words and its tab closed.
++// ADR-145 Amendment 10: a guide is fetched with the person's token in a header, never in a URL, and shown
++// in a tab from a blob URL (or saved under its own name where the browser shows no PDFs); every failure
++// is said in words and its tab closed; the promise never rejects.
+ import { describe, expect, it, vi } from "vitest";
+ 
+-import { BLOB_KEPT_MS, GUIDE_FOR_PLACE, openGuide } from "./guides";
++import { GUIDE_FOR_PLACE, SAVED_KEPT_MS, TAB_CHECK_MS, WORDS, openGuide, type OpenGuideDeps } from "./guides";
+ 
+-function fakeTab() {
+-  return { opener: {} as unknown, location: { href: "" }, close: vi.fn() } as unknown as Window & { close: ReturnType<typeof vi.fn> };
++type FakeTab = Window & { close: ReturnType<typeof vi.fn>; closed: boolean };
++function fakeTab(): FakeTab {
++  const tab = { opener: {} as unknown, location: { href: "" }, closed: false } as unknown as FakeTab;
++  tab.close = vi.fn(() => {
++    tab.closed = true;
++  });
++  return tab;
+ }
+ 
+-const pdf = () => new Response(new Blob(["%PDF-1.7 synthetic"], { type: "application/pdf" }), { status: 200, headers: { "Content-Type": "application/pdf" } });
++const PDF = "%PDF-1.7 synthetic";
++const pdf = (type = "application/pdf", body = PDF) => new Response(body, { status: 200, headers: { "Content-Type": type } });
++const deps = (over: Partial<OpenGuideDeps> = {}): OpenGuideDeps => ({
++  apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", showsPdf: true,
++  createUrl: () => "blob:https://glass.example/1", revokeUrl: vi.fn(), later: vi.fn(), every: vi.fn(() => vi.fn()), ...over,
++}); // prettier-ignore
+ 
+-describe("openGuide", () => {
+-  it("fetches the guide with the token in the Authorization header and opens its blob URL in the tab", async () => {
+-    const fetcher = vi.fn(async () => pdf());
++describe("openGuide where the browser shows PDFs", () => {
++  it("opens the tab first, fetches with the token in the Authorization header, and shows the PDF from a blob", async () => {
++    const order: string[] = [];
+     const tab = fakeTab();
+-    const later = vi.fn();
+-    const revokeUrl = vi.fn();
+-    const said = await openGuide("user", {
+-      apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", fetcher, openTab: () => tab,
+-      createUrl: () => "blob:https://glass.example/1", revokeUrl, later,
+-    });
++    const fetcher = vi.fn(async () => (order.push("fetch"), pdf()));
++    let blob: Blob | null = null;
++    const said = await openGuide("user", deps({ fetcher, openTab: () => (order.push("tab"), tab), createUrl: (b) => ((blob = b), "blob:x") }));
+     expect(said).toBeNull();
++    expect(order).toEqual(["tab", "fetch"]);
+     const [url, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+     expect(url).toBe("https://conduit.example/v1/guides/user");
+     expect(url).not.toContain("secret-token");
+     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret-token");
+-    expect(tab.location.href).toBe("blob:https://glass.example/1");
++    expect(blob!.type).toBe("application/pdf");
++    expect(tab.location.href).toBe("blob:x");
+     expect(tab.opener).toBeNull();
+-    expect(tab.close).not.toHaveBeenCalled();
+-    // The blob is let go once the tab has had time to load it, not before.
++  });
++
++  it("keeps the blob while the tab is open and lets it go once the tab is closed", async () => {
++    const tab = fakeTab();
++    const revokeUrl = vi.fn();
++    let check = () => {};
++    const stop = vi.fn();
++    const every = vi.fn((run: () => void) => ((check = run), stop));
++    await openGuide("user", deps({ fetcher: async () => pdf(), openTab: () => tab, revokeUrl, every }));
++    expect(every).toHaveBeenCalledWith(expect.any(Function), TAB_CHECK_MS);
++    check();
+     expect(revokeUrl).not.toHaveBeenCalled();
+-    expect(later).toHaveBeenCalledWith(expect.any(Function), BLOB_KEPT_MS);
+-    (later.mock.calls[0]![0] as () => void)();
++    tab.closed = true;
++    check();
+     expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
++    expect(stop).toHaveBeenCalled();
++  });
++
++  it("says a blocked pop-up at once, before anything is fetched", async () => {
++    const fetcher = vi.fn();
++    expect(await openGuide("user", deps({ fetcher, openTab: () => null }))).toBe(WORDS.blocked);
++    expect(fetcher).not.toHaveBeenCalled();
+   });
+ 
+   it("says the Conduit's words for a refusal, and closes the tab it opened", async () => {
+     const words = "The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.";
+-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ detail: { error: "place_required", message: words } }), { status: 403 }));
+     const tab = fakeTab();
+     const createUrl = vi.fn();
+-    const said = await openGuide("administration", { apiBaseUrl: "", bearerToken: "t", fetcher, openTab: () => tab, createUrl });
+-    expect(said).toBe(words);
++    const fetcher = async () => new Response(JSON.stringify({ detail: { error: "place_required", message: words } }), { status: 403 });
++    expect(await openGuide("administration", deps({ fetcher, openTab: () => tab, createUrl }))).toBe(words);
+     expect(tab.close).toHaveBeenCalled();
+     expect(createUrl).not.toHaveBeenCalled();
+     expect(tab.location.href).toBe("");
+   });
+ 
+-  it("says the status when the answer carries no words, and when the Conduit cannot be reached", async () => {
++  it("words an ended sign-in plainly, and an answer without words by its status", async () => {
++    const tab = fakeTab();
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher: async () => new Response("{}", { status: 401 }) }))).toBe(WORDS.signedOut);
++    expect(await openGuide("user", deps({ openTab: () => fakeTab(), fetcher: async () => new Response("<html>", { status: 502 }) })))
++      .toBe("The guide could not be read (the server answered 502).");
++    expect(tab.close).toHaveBeenCalled();
++  }); // prettier-ignore
++
++  it("says so when the Conduit cannot be reached, or its body cannot be read, and closes the tab", async () => {
++    const reached = fakeTab();
++    expect(await openGuide("developer", deps({ openTab: () => reached, fetcher: async () => { throw new TypeError("network"); } }))).toBe(WORDS.unreachable);
++    expect(reached.close).toHaveBeenCalled();
++    const broken = fakeTab();
++    const body = { ok: true, status: 200, headers: new Headers({ "Content-Type": "application/pdf" }), arrayBuffer: async () => { throw new TypeError("aborted"); } } as unknown as Response;
++    expect(await openGuide("developer", deps({ openTab: () => broken, fetcher: async () => body }))).toBe(WORDS.unreachable);
++    expect(broken.close).toHaveBeenCalled();
++  }); // prettier-ignore
++
++  it("refuses an answer that is not a PDF, in words", async () => {
+     const tab = fakeTab();
+-    expect(await openGuide("developer", { apiBaseUrl: "", bearerToken: "t", openTab: () => tab,
+-      fetcher: async () => new Response("<html>bad gateway</html>", { status: 502 }) })).toBe("The guide could not be read (the server answered 502).");
+-    expect(await openGuide("developer", { apiBaseUrl: "", bearerToken: "t", openTab: () => tab,
+-      fetcher: async () => { throw new TypeError("network"); } })).toBe("The guide could not be read just now. Try again shortly.");
+-    expect(tab.close).toHaveBeenCalledTimes(2);
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher: async () => pdf("text/html", "<html>sign in</html>") }))).toBe(WORDS.notPdf);
++    expect(tab.close).toHaveBeenCalled();
++    // A PDF's bytes under a wrong type are still a PDF.
++    expect(await openGuide("user", deps({ openTab: () => fakeTab(), fetcher: async () => pdf("application/octet-stream") }))).toBeNull();
+   }); // prettier-ignore
+ 
+-  it("says so when the browser opened no tab, and keeps no blob", async () => {
++  it("says so when the tab was closed while the guide loaded, and keeps no blob", async () => {
++    const tab = fakeTab();
++    const revokeUrl = vi.fn();
++    const fetcher = async () => ((tab.closed = true), pdf());
++    expect(await openGuide("user", deps({ openTab: () => tab, fetcher, revokeUrl }))).toBe(WORDS.closed);
++    expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
++  });
++});
++
++describe("openGuide where the browser shows no PDFs", () => {
++  it("opens no tab and saves the PDF under the guide's own name", async () => {
++    const openTab = vi.fn();
++    const save = vi.fn();
++    const later = vi.fn();
+     const revokeUrl = vi.fn();
+-    const said = await openGuide("user", { apiBaseUrl: "", bearerToken: "t", fetcher: async () => pdf(), openTab: () => null,
+-                                          createUrl: () => "blob:x", revokeUrl }); // prettier-ignore
+-    expect(said).toMatch(/did not open a new tab/);
+-    expect(revokeUrl).toHaveBeenCalledWith("blob:x");
++    expect(await openGuide("developer", deps({ showsPdf: false, openTab, save, later, revokeUrl, fetcher: async () => pdf() }))).toBeNull();
++    expect(openTab).not.toHaveBeenCalled();
++    expect(save).toHaveBeenCalledWith("blob:https://glass.example/1", "ospreyflow-developer-guide.pdf");
++    expect(later).toHaveBeenCalledWith(expect.any(Function), SAVED_KEPT_MS);
++    (later.mock.calls[0]![0] as () => void)();
++    expect(revokeUrl).toHaveBeenCalledWith("blob:https://glass.example/1");
+   });
++});
+ 
++describe("the guides' places", () => {
+   it("gives the Glass, the Studio and Admin a guide each, and Rules and Monitoring none", () => {
+     expect(Object.fromEntries(Object.entries(GUIDE_FOR_PLACE).map(([p, g]) => [p, g!.id]))).toEqual({
+       glass: "user", ingest: "developer", admin: "administration",
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/guides.ts b/OspreyFlow_Core/apps/workspace/src/home/guides.ts
+index 2998058..0d9b065 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/guides.ts
++++ b/OspreyFlow_Core/apps/workspace/src/home/guides.ts
+@@ -4,9 +4,12 @@
+ // not linked. The PDF is the deployment's own, read through `GET /v1/guides/{guide}`, which checks the
+ // place's rights itself: the link is a convenience, never the gate.
+ //
+-// The token goes in a header, never in a URL: the PDF is fetched, then opened in a new tab from a blob
+-// URL. The tab is opened before the fetch, while the activation still counts as the person's own, so a
+-// browser's pop-up blocker lets it through, and is closed again if the guide cannot be read.
++// The token goes in a header, never in a URL: the PDF is fetched, then shown from a blob URL. Where the
++// browser shows PDFs, a tab is opened before the fetch, while the activation still counts as the
++// person's own (so a pop-up blocker lets it through), and is sent to the blob once it is read; the blob
++// is kept while that tab is open. Where it does not (`navigator.pdfViewerEnabled` false: headless
++// Chromium, or a browser set to download PDFs), no tab is opened and the PDF is saved under its own name
++// (`ospreyflow-user-guide.pdf`), since a tab sent to a blob would only download it under a random one.
+ import type { PlaceId } from "../shell/places";
+ 
+ export type GuideId = "user" | "developer" | "administration";
+@@ -17,56 +20,129 @@ export const GUIDE_FOR_PLACE: Partial<Record<PlaceId, { id: GuideId; words: stri
+   admin: { id: "administration", words: "Read the administration guide (PDF)" },
+ };
+ 
+-/** How long a guide's blob URL is kept once its tab has it: long enough for the tab to load the PDF. */
+-export const BLOB_KEPT_MS = 60_000;
++export const GUIDE_FILE: Record<GuideId, string> = {
++  user: "ospreyflow-user-guide.pdf",
++  developer: "ospreyflow-developer-guide.pdf",
++  administration: "ospreyflow-administration-guide.pdf",
++};
++
++/** How often a shown guide's tab is checked, to let its blob go once the tab is closed. */
++export const TAB_CHECK_MS = 5_000;
++/** How long a saved guide's blob is kept: the download has its bytes by then. */
++export const SAVED_KEPT_MS = 60_000;
++
++export const WORDS = {
++  blocked: "Your browser did not open a new tab for the guide. Allow pop-ups for this site, then try again.",
++  unreachable: "The guide could not be read just now. Try again shortly.",
++  signedOut: "Your sign-in has ended. Sign in again to read the guide.",
++  notPdf: "The guide could not be read: the deployment did not answer with a PDF.",
++  closed: "The guide's tab was closed before the guide had loaded.",
++} as const;
++
++export function guideUrl(apiBaseUrl: string, guide: GuideId): string {
++  return `${apiBaseUrl}/v1/guides/${guide}`;
++}
+ 
+ export interface OpenGuideDeps {
+   apiBaseUrl: string;
+   bearerToken: string;
+   fetcher?: typeof fetch;
++  /** Whether the browser shows PDFs itself (`navigator.pdfViewerEnabled`). */
++  showsPdf?: boolean;
+   /** `window.open`, given so a test can stand a tab in for it. */
+   openTab?: () => Window | null;
++  /** Saves a blob under a name (an `<a download>` clicked), given so a test can stand in for it. */
++  save?: (url: string, name: string) => void;
+   createUrl?: (blob: Blob) => string;
+   revokeUrl?: (url: string) => void;
+   later?: (run: () => void, ms: number) => void;
++  every?: (run: () => void, ms: number) => () => void;
++}
++
++function saveAs(url: string, name: string): void {
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = name;
++  link.rel = "noopener";
++  link.style.display = "none";
++  document.body.append(link);
++  link.click();
++  link.remove();
++}
++
++async function refusalWords(response: Response): Promise<string> {
++  return "";
++  if (response.status === 401) return WORDS.signedOut;
++  try {
++    const body = (await response.json()) as { detail?: { message?: unknown } };
++    if (typeof body.detail?.message === "string") return body.detail.message;
++  } catch {
++    // Not the Conduit's words: said below.
++  }
++  return `The guide could not be read (the server answered ${response.status}).`;
+ }
+ 
+-/** Opens a guide in a new tab. Resolves to `null` when it opened, or to words saying why it did not. */
++/** Opens a guide. Resolves to `null` when it was shown or saved, or to words saying why it was not;
++ * never rejects. */
+ export async function openGuide(guide: GuideId, deps: OpenGuideDeps): Promise<string | null> {
+   const fetcher = deps.fetcher ?? ((input, init) => fetch(input, init));
+-  const tab = (deps.openTab ?? (() => window.open("", "_blank")))();
++  const showsPdf = deps.showsPdf ?? navigator.pdfViewerEnabled !== false;
+   const createUrl = deps.createUrl ?? ((blob) => URL.createObjectURL(blob));
+   const revokeUrl = deps.revokeUrl ?? ((url) => URL.revokeObjectURL(url));
+   const later = deps.later ?? ((run, ms) => void setTimeout(run, ms));
++  const every =
++    deps.every ??
++    ((run, ms) => {
++      const id = setInterval(run, ms);
++      return () => clearInterval(id);
++    });
++  // The tab first, while the activation still counts as the person's; a blocked one is said at once.
++  const tab = showsPdf ? (deps.openTab ?? (() => window.open("", "_blank")))() : null;
++  if (showsPdf && !tab) return WORDS.blocked;
+   const fail = (words: string) => {
+-    tab?.close();
++    if (tab && !tab.closed) tab.close();
+     return words;
+   };
+-  let response: Response;
++  let url: string | null = null;
+   try {
+-    response = await fetcher(`${deps.apiBaseUrl}/v1/guides/${guide}`, {
+-      headers: { Authorization: `Bearer ${deps.bearerToken}`, Accept: "application/pdf" },
+-    });
+-  } catch {
+-    return fail("The guide could not be read just now. Try again shortly.");
+-  }
+-  if (!response.ok) {
+-    let said: string | null = null;
++    let response: Response;
+     try {
+-      const body = (await response.json()) as { detail?: { message?: unknown } };
+-      if (typeof body.detail?.message === "string") said = body.detail.message;
++      response = await fetcher(guideUrl(deps.apiBaseUrl, guide), {
++        headers: { Authorization: `Bearer ${deps.bearerToken}`, Accept: "application/pdf" },
++      });
+     } catch {
+-      // Not the Conduit's words: said below.
++      return fail(WORDS.unreachable);
+     }
+-    return fail(said ?? `The guide could not be read (the server answered ${response.status}).`);
+-  }
+-  const url = createUrl(await response.blob());
+-  if (!tab) {
+-    revokeUrl(url);
+-    return "Your browser did not open a new tab for the guide. Allow pop-ups for this site, then try again.";
++    if (!response.ok) return fail(await refusalWords(response));
++    const bytes = await response.arrayBuffer();
++    const head = new TextDecoder().decode(bytes.slice(0, 5));
++    const type = (response.headers.get("Content-Type") ?? "").split(";")[0]!.trim();
++    if (type !== "application/pdf" && head !== "%PDF-") return fail(WORDS.notPdf);
++    url = createUrl(new Blob([bytes], { type: "application/pdf" }));
++    if (!tab) {
++      (deps.save ?? saveAs)(url, GUIDE_FILE[guide]);
++      const saved = url;
++      later(() => revokeUrl(saved), SAVED_KEPT_MS);
++      return null;
++    }
++    if (tab.closed) {
++      revokeUrl(url);
++      return WORDS.closed;
++    }
++    tab.opener = null;
++    tab.location.href = url;
++    tab.opener = null;
++    // Kept while the tab is open, so its reload or its own save still find the PDF.
++    const shown = url;
++    const stop = every(() => {
++      if (tab.closed) {
++        stop();
++        revokeUrl(shown);
++      }
++    }, TAB_CHECK_MS);
++    return null;
++  } catch {
++    if (url) revokeUrl(url);
++    return fail(WORDS.unreachable);
+   }
+-  tab.opener = null;
+-  tab.location.href = url;
+-  later(() => revokeUrl(url), BLOB_KEPT_MS);
+-  return null;
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/src/home/home.css b/OspreyFlow_Core/apps/workspace/src/home/home.css
+index 626d6f6..ec057a0 100644
+--- a/OspreyFlow_Core/apps/workspace/src/home/home.css
++++ b/OspreyFlow_Core/apps/workspace/src/home/home.css
+@@ -43,8 +43,8 @@
+ /* ADR-145 Amendment 10: the card's guide, a plain link under its words (drawn as Recent cases' names are). */
+ .home-panel__guide { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); }
+ .home-panel__guide-link {
+-  min-height: var(--h-control-24); padding: 0; font: inherit; font-size: var(--fs-13); color: var(--text-primary);
+-  background: none; border: 0; border-bottom: 1px solid var(--border-strong); cursor: pointer; text-align: left;
++  display: inline-flex; align-items: center; min-height: var(--h-control-24); font-size: var(--fs-13);
++  color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--border-strong);
+ }
+ .home-panel__guide-link:hover { border-bottom-color: var(--brass); }
+ .home-panel__guide-said { margin: 0; font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary); }
+--- playwright keyboard/start.spec.ts (raw, the [n/m] progress lines dropped):
+
+Running 10 tests using 1 worker
+
+  1) keyboard/start.spec.ts:148:1 › a guide the Conduit refuses is said in words under its link, by keyboard 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.') with timeout 5000ms
+      - waiting for getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+
+
+      152 |   await link.focus();
+      153 |   await page.keyboard.press("Enter");
+    > 154 |   await expect(page.getByRole("region", { name: "Admin" }).getByText(ADMINISTRATION_REFUSED)).toBeVisible();
+          |                                                                                               ^
+      155 |   expect(context.pages()).toHaveLength(1);
+      156 |   await expect(link).toBeFocused();
+      157 |   registerCovered(REGISTRY, "read-why-a-guide-was-refused-on-home-by-keyboard");
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:154:95
+
+    Error Context: test-results/start-a-guide-the-Conduit--a0264--under-its-link-by-keyboard/error-context.md
+
+
+  2) keyboard/start.spec.ts:169:1 › the harness's refused state, which every-harness scans, shows the refusal under its link 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.') with timeout 5000ms
+      - waiting for getByRole('region', { name: 'Admin' }).getByText('The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin.')
+
+
+      170 |   await serve(page);
+      171 |   await page.goto("/keyboard/start-harness.html?guide=refused");
+    > 172 |   await expect(page.getByRole("region", { name: "Admin" }).getByText(ADMINISTRATION_REFUSED)).toBeVisible();
+          |                                                                                               ^
+      173 | });
+      174 |
+      175 | test("every registered Start action has its own proving test case above", () => {
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:172:95
+
+    Error Context: test-results/start-the-harness-s-refuse-d72aa--the-refusal-under-its-link/error-context.md
+
+
+  3) keyboard/start.spec.ts:175:1 › every registered Start action has its own proving test case above 
+
+    Error: START_ACTIONS: keyboard action(s) registered with no proving test case: choose-the-glass-from-start-by-keyboard, choose-the-ingest-studio-from-start-by-keyboard, choose-admin-from-start-by-keyboard, return-to-start-from-the-mark-by-keyboard, open-a-place-from-home-with-its-key, read-a-place-s-guide-from-home-by-keyboard, read-why-a-guide-was-refused-on-home-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace/keyboard/start.spec.ts:176:3
+
+    Error Context: test-results/start-every-registered-Sta-5a58c-own-proving-test-case-above/error-context.md
+
+
+  3 failed
+    keyboard/start.spec.ts:148:1 › a guide the Conduit refuses is said in words under its link, by keyboard 
+    keyboard/start.spec.ts:169:1 › the harness's refused state, which every-harness scans, shows the refusal under its link 
+    keyboard/start.spec.ts:175:1 › every registered Start action has its own proving test case above 
+  7 passed (13.3s)
+
+=================== NONE (restored)
+  10 passed (2.5s)

@@ -645,6 +645,8 @@ NON_JSON_ROUTES: dict[str, str] = {
     # L2.11a (ADR-146 decision 3, Amendment 5): a rule's own file, its sentence and limits as the
     # author wrote them; it reads no record and states no figure of any case.
     "GET /v1/investigations/{investigation_id}/rules/{rule_id}/export.{kind}": "a rule's .bpmn or .dmn file",
+    # ADR-145 Amendment 10: a guide's PDF, the product's own documentation; no record of any case.
+    "GET /v1/guides/{guide}": "a guide's PDF, the deployment's own documentation",
 }
 
 

@@ -283,6 +283,13 @@ OPEN_TO_ANY_SIGNED_IN = {
     # (ADR-112: refused every write); `test_promotions.py`'s
     # `test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer`.
     "removed_case_layers", "read_layer_merge",
+} | {
+    # ADR-145 Amendment 10 (rules-b's guides step), weighed at its build on 12 November: a guide's
+    # PDF, the product's own documentation, no record of any case. It names no single right because
+    # a place opens on any one of several; its own check is the guide's place (`guides.py`). A
+    # Reports Viewer, whose rights open the Glass alone, reads the user guide and is refused the
+    # developer and administration guides (`test_guides.py`'s matrix, `reports_viewer`).
+    "read_guide_route",
 }  # fmt: skip
 
 #: L1.7 (ADR-141 decision 10), weighed at its rebase on 10 November: the run API names no right

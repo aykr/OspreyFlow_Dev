@@ -1,94 +1,67 @@
-# rules-b lane · report · T3b, the contrast probe's limits, its server round and the review fixes (10–11 November 2026)
+# rules-b lane · report · guides, the guides from Home by the places a person may open (12 November 2026)
 
-(T3's report is in git history, at ea3ba26 and before. T3b's first gating, at d41df45, is at 8eb8c95; its gating at
-be4052a, sent back by the orchestrator's review of 9697ad3, is at 9697ad3.)
+(T3b's report is in git history, at 2102d21 and before.) Branch `lane/rules-b-guides`, rebased on main a536c34.
+Gated head: **09dda7a**. ADR-145 Amendment 10 is written; the orchestrator flips its reservation at merge.
 
-1. **CARRIES rows 110 and 121: met at d41df45.** Show as BPMN's task box is measured, and the probe's limits are
-   closed (`t3b/RED_RECORD.md`).
-2. **The server round (be4052a)** judges the probe alike on every platform:
-   - a shadow is measured by what Chromium paints at each point;
-   - hidden points are not judged, and words hidden at every point are unmeasurable;
-   - every scroll is restored.
-3. **The orchestrator's review of 9697ad3, item by item** (`t3b/REVIEW_FIXES.md`), then my lane-reviewer's pass on
-   d677105. Its records findings are answered by this report, the gates and the commits below.
-   - **Item 1** (d677105, f5a4b4c): the guard plants are committed in `a11y/plants/`, run by
-     `node a11y/plants/run.mjs`.
-     - The runner writes 16 guard-removed variants of the probe outside the repository.
-     - Every covering plant is a real failure read in pixels: under 4.5:1 under the cover, 14.74:1 beside it.
-     - Each guard passes the words silently without it: the opacity walk, the background clip, filter, blend, mask,
-       mask border, the walk up from the cover, and the SVG exclusion.
-     - Recorded unreachable, with why: clip-path, the slack, both corner cases, a nested `<svg>` (Chromium neither
-       paints nor hit-tests its CSS background), and the clip narrowings. The flow and inline narrowings have no plant
-       that reaches them.
-   - **Item 2** (7befa52, 1d4b441): only the outermost `<svg>` may paint a CSS background, and a cover under a mask
-     border hides nothing. Both are planted red.
-   - **Item 3** (664ea74, 1d4b441): words hidden at every point are pinned to their own surfaces, and the findings file
-     refuses a listing of them without a floor. Places' two GOV.UK listings are pinned at 19.59.
-   - **Item 4: my earlier retake sentence was wrong.**
-     - At be4052a, the canvas pair (`a11y.spec.ts`'s dark-theme canvas and `canvas-focus.spec.ts`) failed the first
-       retake too, 20261111T141740Z, on load timeouts.
-     - They passed only on the second, 20261111T142957Z (load average 37), with both files whole: 13 passed.
-     - The three others passed on the first retake.
-   - **Minor 1** (110c368, 1d4b441): a shadow's alpha is bracketed between what Chromium may paint at the least and
-     the most, over the pixel round each point.
-     - The least is the Gaussian less 0.0175 (0.0148 measured), and nothing near a rounded corner.
-     - A lightness swap inside the bracket is 1:1.
-     - It is measured in 12 geometries, including the tokens' negative spreads and sharp shadows at fractional edges.
-     - The plant is red three ways.
-   - The other minors: RED_RECORD's line 3, and the friction fragment as one row.
-4. **Carried, for the orchestrator:**
-   - (a) The bracket's worse-end rule rests on a search, not a proof. A coloured shadow can dip inside the bracket in
-     one placement, but no case was found worse than every placement's ends; sampling inside could not be shown red,
-     so it was not added.
-   - (b) A pin for words hidden at every point reads no SVG shapes or shadows at those points.
-   - (c) The flow and inline narrowings have no plant that reaches them.
-   - (d) **CARRIES row, for the merge (owner: rules-b):** "every-harness's GOV.UK looks wait 5s for `data-brand`
-     before the probe runs, and on the test server under load that wait timed out in every full run: 8, then 7
-     looks at f5a4b4c, each time in different looks (4, 1, 4, 1 at T3b's earlier heads). It is an environment wait, not a contrast finding: raise or replace it with a wait on the brand's own
-     stylesheet."
-   - (e) **CARRIES row, for the merge (owner: rules-b):** "every-harness's map-view looks scan before the map's
-     attribution ('Harness tiles ©') is drawn when the server is loaded, so its listed finding is reported gone (once in
-     each of two full runs, in different looks). Wait for the attribution before the scan."
-   - (f) The corner test reads each corner as a circle of its larger radius, so a percentage or a radius over half
-     the box (a 999px pill) makes it stricter than the browser: a false positive (flagged), never a silent pass.
-   - (g) A cover with an inline `pointer-events: none !important` beats the probe's lifting style sheet, so
-     `elementsFromPoint` never finds it, and the words are judged as if it were not there.
-   - (h) The scratch spec behind (e)'s diagnosis was never committed. Its shape is in `gates/f5a4b4c.browser.txt`'s
-     last section.
-   - (i) `tsconfig.json` does not include `apps/workspace/a11y/` (a disclosed gap since Round 12d), so the probe and
-     the plants are not type-checked; only `src/color/` is.
-5. **Findings:** nothing new listed.
-6. **Gates**, all on the test server, slot 13 (`gates/f5a4b4c.browser.txt`, `gates/2515840.ci.txt`). 2515840 changes
-   only a type guard after f5a4b4c.
-   - **Browser set at f5a4b4c, two full runs.**
-     - 20261111T154955Z, load average up to 17: 968 + 32 passed, 13 failed.
-     - 20261111T161902Z (a `--last-failed` retake that found no record, so the whole set ran again, with
-       `reflow.spec.ts`'s 5 tests too, as no files were named): 976 + 34 passed, 8 failed. The canvas pair and both
-       harness screens passed there. Playwright's own status was not captured; the record gives the command and tree.
-     - No new contrast finding in either run. Every failure was one of three things:
-       - GOV.UK's 5s `data-brand` wait (8, then 7, in different looks: carry (d));
-       - load timeouts (the canvas pair and two harness install screens in the first run);
-       - map-view's listed "Harness tiles ©" not found, once in each run, in different looks: carry (e).
-     - Diagnosed for (e), 20261111T164630Z at load 30, each look 5 times: the first repeat found no node at all,
-       because the map's attribution was not yet drawn when axe ran. The other 14 measured as listed.
-   - **`make -k ci` at 2515840:** exit 2, on `trivy-image-workspace` alone. That is libxslt 1.1.43-r3, the server's
-     stale layer as at be4052a; this branch touches no image.
-   - My own typecheck error at f5a4b4c (an `unknown` read) was red in the first run and fixed in 2515840.
-   - **`make test`:** not re-run. The branch changes only the workspace's a11y probe, its judgement, their unit cases
-     and the plants.
-7. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-probe.md`, one row. **Still running:** nothing.
+## Reconciliation at the start
+There was no HANDOFF.md and no wip commit, and the step was untouched. No route, link, test or amendment existed;
+`lane/rules-b-guides` did not exist. T3b (2102d21) was already in main.
 
-## Decisions taken (each the recommended option; the owner may overrule)
+## Exit criteria
+| Criterion (BRIEF.md) | Met | Proved by |
+| --- | --- | --- |
+| User guide under the Glass, developer under the Studio, administration under Admin; none under R&M; no architecture guide | yes | `HomePage.test.tsx` *links each guide under its own place's card*; `test_guides.py` *the glass links each guide under the place the conduit serves it for* |
+| No card, no guide | yes | `HomePage.test.tsx`'s six rights sets and the rights-unread case (red 7 ways with links outside the cards); `start.spec.ts` *only the guides of the cards a person's rights open are linked* |
+| `GET /v1/guides/{…}` serves the deployment's PDF only to whom the place opens; 403 in words otherwise; the place's own check | yes | `test_guides.py` matrix (every role, preset, legacy role, single right, nobody; 64 red with the check removed); live `test_route_rights.py` *…signed in for real*, including a person with no roles claim (PASSED, `gates/02f3752.live-rights.txt`) |
+| `test_route_rights.py` rows | yes | `read_guide_route: None` (a place, not a right; its check is `require_guide_place`) |
+| Byte for byte the file in the image | yes | `test_guides.py` byte test; the live case against the checkout's file; `guides/image_check.sh`, green at 09dda7a and red with a stale PDF planted (`gates/09dda7a.image.txt`) |
+| Image carries `docs/pdf/` | yes, ratified | Dockerfile: the folder made 755, then the three PDFs and the manifest `--chmod=0444`; `test_guides.py` holds the line (red removed, with the architecture guide, without `--chmod`, without the folder made first) |
+| Glass: a link under each card's words, new tab, token never in a URL | yes | `guides.test.ts` (11 cases, red 5 ways); `HomePage.test.tsx` (link, handled click, words on failure, the catch) |
+| Keyboard (rule 13) | yes | `start.spec.ts`: `read-a-place-s-guide-from-home-by-keyboard`, `read-why-a-guide-was-refused-on-home-by-keyboard`; red 3 ways (`guides/keyboard-plants.txt`) |
+| Axe in dark, light and GOV.UK; tokens only; British English | yes | `every-harness` start-harness's default and new `guide=refused` states, 18 passed with reflow (`gates/02f3752.browser.txt`) |
+| ADR-145 Amendment 10, each sentence with its test | yes | `spec/06_DECISIONS.md` |
+| Docs lines | as a patch | `docs-guides.patch` |
 
-1. **SVG shapes under a label's words.** Q: always a cover, or a surface? **Chose:** a surface, through a fail-closed
-   allowlist.
-2. **The point cap.** **Chose:** fail closed past 600 points.
-3. **Decision 3's own reason under a cover.** **Chose:** record that axe changes its reason.
-4. **A shadow's placement.** **Chose:** every place in the words' chain.
-5. **Words hidden at every point.** **Chose:** unmeasurable, pinned to their own surfaces, with a floor required.
-6. **σ.** **Chose:** measured from Chromium's pixels, and the alpha bracketed at both ends over the pixel.
-7. **Where the plants' variants are written.** Q: a gitignored folder in the tree (which needs `.gitignore` and
-   `eslint.config.js`, outside this lane's files), or the system's temporary directory? **Chose:** the temporary
-   directory, so no file outside the lane changes.
-8. **Sampling inside the bracket.** Q: add it unproven, or carry the search's finding? **Chose:** carry it (rule 15:
-   code that cannot be shown red is an untested state).
+## Gates (raw, under `gates/`)
+- `make test` at 09dda7a: 12,847 passed, 2 failed in pytest and 1 in test-js; live-collect clean (`09dda7a.test.txt`). The same at 02f3752.
+- `make -k ci` at 09dda7a: red on `route-coverage-check` alone, with the trivy scans green (`09dda7a.ci.txt`). The same at 02f3752.
+- Failures, each explained:
+  - `route-coverage-check` and `test_route_coverage_check.py`: expected. `spec03-guides.patch` holds the row; green with it applied.
+  - `test_webapp_preflight.py::test_gpu_is_skipped…`: the GPU server's own; other lanes' gates fail it too.
+  - `MatrixView.budget` (3,995 ms against 2,500): load, recorded in MORNING.md. It passed alone on the Mac. Untouched here.
+- Live, leased on stack b, at 02f3752 (`02f3752.live.txt`): 410 passed and 11 failed.
+  - The 11 are in `test_apply_env.py` and `test_phase8_exit_criterion_end_to_end.py`, the harness's apply on the server. They fail the same way in rules', case's and studio's live gates.
+  - `test_route_rights.py` and `test_guides.py`, verbose: 86 passed at 02f3752 and again at 09dda7a (`09dda7a.live-rights.txt`).
+  - The broad live run was not repeated at 09dda7a. Only the Dockerfile, a static test and the check script changed, and no live file reaches them.
+- The image check found a real defect at 02f3752 (`02f3752.image-red.txt`): `--chmod` gave the folders 0444, so the Conduit's user could not enter them and the route would have answered 503. Fixed in 09dda7a, which is why the gates were run again.
+- Browser on the Mac, slot 9, at 02f3752: keyboard and hit targets 26 passed, axe and reflow 18, unit 185. The code those runs reach is unchanged since.
+
+## Decisions taken
+- **The place check is a dependency, not a static place or right.** `require_guide_place` follows the guide's name; `test_place_routes.py` reads static checks only. One route, as the orchestrator accepted; `test_guides.py` asks every principal.
+- **A name not among the three is 404 `no_such_guide`, before the place check.** Guide names are public, so nothing is learnt. A refused reader still gets 403 before any file is touched, so cannot tell whether the deployment carries the PDF.
+- **A missing PDF is 503 `guide_not_carried`, in words.** It is never an empty or another document.
+- **`OSPREY_GUIDES_DIR` overrides the folder for a test.** The default is `/app/docs/pdf` in the image and the checkout's folder in development.
+- **A real `<a href>` to the route, its click and middle click handled.** It is announced as a link; the token goes in a header.
+- **Where the browser shows no PDFs (`navigator.pdfViewerEnabled` false), the PDF is saved as `ospreyflow-<guide>-guide.pdf` and no tab is opened.** A tab sent to a blob would download it under a random name. Headless Chromium takes this path, so the keyboard case checks the saved file's name and bytes; `guides.test.ts` holds the tab's path.
+- **A shown guide's blob is kept while its tab is open** (checked every 5 s). A saved one is kept for 60 s.
+- **The folder is made before the `--chmod=0444` copy.** This is the image check's finding.
+
+## Out of the lane's map
+- Committed, ratified by the orchestrator: `services/api/Dockerfile`; `shell/startScreen.tsx` (rules'); `home/**` and `keyboard/start*.{ts,tsx}` (rules', named by the brief).
+- Committed: the tests `test_route_rights.py`, `test_no_corpus_counts_on_the_wire.py`, `test_reports_viewer_journey.py`.
+- As patches (`PATCHES.md`):
+  - `registry-guides.patch`: goes in at merge. `actionRegistry.ts` is not committed on the branch.
+  - `every-harness-guides.patch`: the refused state.
+  - `spec03-guides.patch`: route-coverage needs it.
+  - `spec02-guides.patch`.
+  - `docs-guides.patch`: for docs. The PDFs are re-rendered by docs.
+
+## Requests to the orchestrator
+- Apply the five patches at merge.
+- Flip ADR-145 Am 10 to written.
+
+## Questions for the owner
+None.
+
+## Still running
+Nothing. Stack b is down and released; no containers, check images or remote processes are left.

@@ -1,0 +1,41 @@
+# The guides' image check at 09dda7a, on the test server under the rules-b lease (stack b), 2026-11-12T12:27:29Z. Raw.
+
+== image_check.sh (plain)
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261112T122740Z/log: bash OspreyFlow_Build/process/lanes/rules-b/guides/image_check.sh
+building osprey-rules-b-guides-check:1019389 from /root/osprey-runs/rules-b/OspreyFlow_Core (services/api/Dockerfile)
+inside the image, /app/docs/pdf:
+the folders, as root, and what the Conduit's own user (the image's USER) can list:
+755 root /app/docs
+755 root /app/docs/pdf
+administration-guide.pdf
+developer-guide.pdf
+manifest.json
+user-guide.pdf
+6ceaf7bc5d104af4fd54f0eac1728f3a94520c6f7b38246edb3cefec715c4279 444 administration-guide.pdf
+aa76b72cb0a3d4fd427be17db5657d95be18510052adf46a78acb7aad5a92c72 444 developer-guide.pdf
+f60d777668e192080a0b4504d40f9239a3c3b714a8cd6b7db2b8de82fecaa52f 444 manifest.json
+b950ceea19191c249f3b048eefca26ed3d9785c4d2ecc0a9e87773af611db399 444 user-guide.pdf
+RESULT: every guide carried byte for byte as manifest.json records it, 0444
+Wall time: 113 s, exit 0 (stack b, the lease rules-b took at 2026-11-12T11:26:05Z; set-up before it 11 s)
+rc=0
+
+== image_check.sh --plant (a stale user guide in the build context: must fail)
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261112T122946Z/log: bash OspreyFlow_Build/process/lanes/rules-b/guides/image_check.sh --plant
+PLANT: one byte appended to docs/pdf/user-guide.pdf in the build context
+building osprey-rules-b-guides-check:1029968 from /root/osprey-runs/rules-b/OspreyFlow_Core (services/api/Dockerfile)
+inside the image, /app/docs/pdf:
+the folders, as root, and what the Conduit's own user (the image's USER) can list:
+755 root /app/docs
+755 root /app/docs/pdf
+administration-guide.pdf
+developer-guide.pdf
+manifest.json
+user-guide.pdf
+6ceaf7bc5d104af4fd54f0eac1728f3a94520c6f7b38246edb3cefec715c4279 444 administration-guide.pdf
+aa76b72cb0a3d4fd427be17db5657d95be18510052adf46a78acb7aad5a92c72 444 developer-guide.pdf
+f60d777668e192080a0b4504d40f9239a3c3b714a8cd6b7db2b8de82fecaa52f 444 manifest.json
+a1b130155bc98e3661a203f35157263950ca3e196e5f6233db9956e362f20859 444 user-guide.pdf
+RESULT: MISMATCH
+  user-guide.pdf: a1b130155bc98e3661a203f35157263950ca3e196e5f6233db9956e362f20859 in the image, b950ceea19191c249f3b048eefca26ed3d9785c4d2ecc0a9e87773af611db399 in manifest.json
+Wall time: 12 s, exit 1 (stack b, the lease rules-b took at 2026-11-12T11:26:05Z; set-up before it 12 s)
+rc=1
