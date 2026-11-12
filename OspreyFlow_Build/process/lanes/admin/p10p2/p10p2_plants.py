@@ -28,7 +28,7 @@ from pathlib import Path
 CORE = Path.cwd()
 ROOT = CORE.parent
 HERE = Path(__file__).resolve().parent
-DIFFS = [HERE / f"{name}.diff" for name in ("readers", "render", "glass-sign-in")]
+DIFFS = [HERE / f"{name}.diff" for name in ("readers", "render", "glass-sign-in", "runbook")]
 T = "../OspreyFlow_Build/tests/"
 ENTRA = T + "services/api/test_auth_entra_claims.py"
 PEOPLE = T + "services/api/test_entra_people.py"
@@ -37,7 +37,8 @@ SERVICE = T + "services/api/test_service_identity_entra.py"
 READERS = T + "harness/test_realm_readers_refuse_entra.py"
 RENDER = T + "harness/test_cloud_platform_entra.py"
 RENDER_ALL = T + "harness/test_cloud_platform_render.py"
-CONTROL = [ENTRA, T + "services/api/test_auth.py", PEOPLE, SERVICE, READERS, RENDER, RENDER_ALL,
+POC = T + "harness/test_cloud_platform_poc.py"
+CONTROL = [ENTRA, T + "services/api/test_auth.py", PEOPLE, SERVICE, READERS, RENDER, RENDER_ALL, POC,
            T + "services/api/test_service_identity_and_rollup.py"]  # fmt: skip
 GLASS_CONTROL = ["apps/workspace/src/auth", "apps/workspace/src/admin/PeopleEntra.test.tsx"]
 
@@ -330,8 +331,8 @@ PLANTS = [
         EP,
         [
             (
-                '"receivable_handling_codes FROM entra_people WHERE tenant_id = $1 AND oid = $2",',
-                '"receivable_handling_codes FROM entra_people WHERE ($1::text IS NOT NULL) AND oid = $2",',
+                '"receivable_handling_codes, access_read_at, now() AS at "\n                "FROM entra_people WHERE tenant_id = $1 AND oid = $2",',
+                '"receivable_handling_codes, access_read_at, now() AS at "\n                "FROM entra_people WHERE ($1::text IS NOT NULL) AND oid = $2",',
             )
         ],
         [f"{PEOPLE_LIVE}::test_another_tenants_row_for_the_same_oid_grants_nothing"],
@@ -342,8 +343,8 @@ PLANTS = [
         EP,
         [
             (
-                "\"VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO NOTHING\",",
-                "\"VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO UPDATE SET roles = EXCLUDED.roles\",",
+                '"SET roles = EXCLUDED.roles WHERE cardinality(entra_people.roles) = 0",',
+                '"SET roles = EXCLUDED.roles",',
             )
         ],
         [f"{PEOPLE_LIVE}::test_first_administrators_are_seeded_once_and_a_removal_stands"],
@@ -671,6 +672,163 @@ PLANTS = [
         [
             "vitest:apps/workspace/src/auth/resolvedPrincipal.test.ts::catches const c = user.profile; return c.roles;"
         ],
+    ),
+    # --- the orchestrator's review of 3848c32 (12 November 2026) ---
+    Plant(
+        "item 6: Admin › People lists every tenant's rows",
+        EP,
+        [('"SELECT * FROM entra_people WHERE tenant_id = $1", self.tenant_id', '"SELECT * FROM entra_people WHERE $1::text IS NOT NULL", self.tenant_id')],
+        [f"{PEOPLE_LIVE}::test_another_tenants_row_for_the_same_oid_grants_nothing",
+         f"{PEOPLE_LIVE}::test_the_sockets_read_is_this_tenants_and_records_nobody"],
+        live=True,
+    ),
+    Plant(
+        "item 6: one person read from any tenant",
+        EP,
+        [('"SELECT * FROM entra_people WHERE tenant_id = $1 AND oid = $2", self.tenant_id, oid', '"SELECT * FROM entra_people WHERE $1::text IS NOT NULL AND oid = $2", self.tenant_id, oid')],
+        [f"{PEOPLE_LIVE}::test_one_person_is_read_by_this_tenant_alone"],
+        live=True,
+    ),
+    Plant(
+        "item 6: a role or Disable written to every tenant's row",
+        EP,
+        [('f"UPDATE entra_people SET {column} = $3 WHERE tenant_id = $1 AND oid = $2 "', 'f"UPDATE entra_people SET {column} = $3 WHERE $1::text IS NOT NULL AND oid = $2 "')],
+        [f"{PEOPLE_LIVE}::test_another_tenants_row_for_the_same_oid_grants_nothing",
+         f"{PEOPLE_LIVE}::test_adding_by_object_id_once_and_the_refusals_the_fakes_model"],
+        live=True,
+    ),
+    Plant(
+        "item 4(a): a named first administrator holding no role never given Admin again",
+        EP,
+        [("\"VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO UPDATE \"\n                    \"SET roles = EXCLUDED.roles WHERE cardinality(entra_people.roles) = 0\",",
+          "\"VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO NOTHING\",")],
+        [f"{PEOPLE_LIVE}::test_a_named_first_administrator_holding_no_role_is_given_admin_again"],
+        live=True,
+    ),
+    Plant(
+        "item 5: a sign-in's access read never recorded as read",
+        EP,
+        [('"COALESCE(entra_people.first_seen, now()), access_read_at = now(), "', '"COALESCE(entra_people.first_seen, now()), "'),
+         ('"VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now()) "', '"VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), NULL) "')],
+        [f"{PEOPLE_LIVE}::test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in"],
+        live=True,
+    ),
+    Plant(
+        "item 4(b): a manager who never signed in counted as one who can administer",
+        "services/api/custom_roles.py",
+        [("        and p.signed_in\n", "")],
+        [f"{PEOPLE}::test_a_manager_who_never_signed_in_is_no_proof_anyone_can_administer"],
+    ),
+    Plant(
+        "item 5: a transfer to someone whose access is a day old",
+        "services/api/admin_people.py",
+        [off("        elif to in who.stale:\n")],
+        [f"{PEOPLE}::test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words[stale]"],
+    ),
+    Plant(
+        "item 5: nobody's access judged stale",
+        "services/api/admin_people.py",
+        [("        stale=frozenset(a for a, p in by_account.items() if not access_current(p, now)),\n", "")],
+        [f"{PEOPLE}::test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words[stale]"],
+    ),
+    Plant(
+        "item 5: a promotions alert to someone whose access is a day old",
+        "services/api/promotion_ageing.py",
+        [("        and access_current(person)\n", "")],
+        [f"{PEOPLE}::test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]"],
+    ),
+    Plant(
+        "item 5: a reviewer left out of an alert without words",
+        "services/api/promotion_ageing.py",
+        [off("    if stale:\n")],
+        [f"{PEOPLE}::test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]"],
+    ),
+    Plant(
+        "item 5: a day-old read taken as current",
+        EP,
+        [("    return (now or datetime.now(UTC)) - person.access_read_at <= ACCESS_FRESH\n", "    return True\n")],
+        [f"{PEOPLE}::test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words[stale]",
+         f"{PEOPLE}::test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]"],
+    ),
+    Plant(
+        "item 7: a bearer whose roles cannot be read left to the exception",
+        APP,
+        [("    except PrincipalLookupUnavailable:\n        await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)\n        return\n    # ADR-148 Amendment 8: a ticket minted", "    # ADR-148 Amendment 8: a ticket minted")],
+        [f"{PEOPLE}::test_a_bearer_whose_roles_cannot_be_read_is_closed_try_again_later[roles-unreadable]"],
+    ),
+    Plant(
+        "item 8: an unknown key id fetched again every time",
+        PA,
+        [("                UNKNOWN_KID_REFETCH_SECONDS\n            ):\n", "                0\n            ):\n")],
+        [f"{ENTRA}::test_an_unknown_kid_is_fetched_for_at_most_once_in_five_minutes"],
+    ),
+    Plant(
+        "item 8: the keys read on the event loop",
+        PA,
+        [("asyncio.to_thread(self._verified_claims, token), timeout=KEYS_TIMEOUT_SECONDS + 1", "asyncio.sleep(0, self._verified_claims(token)), timeout=KEYS_TIMEOUT_SECONDS + 1")],
+        [f"{ENTRA}::test_a_slow_identity_provider_never_holds_the_event_loop"],
+    ),
+    Plant(
+        "item 8: unreachable keys said as a rejected token",
+        PA,
+        [('            raise SigningKeysUnavailable(\n                "sign-in is unavailable: the identity provider\'s signing keys could not be read"\n            ) from exc\n',
+          '            raise PrincipalResolutionError("token rejected: no keys") from exc\n')],
+        [f"{ENTRA}::test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token"],
+    ),
+    Plant(
+        "item 8: the Conduit's 503 in words dropped",
+        APP,
+        [("    except SigningKeysUnavailable as exc:\n", "    except ZeroDivisionError as exc:\n")],
+        [f"{ENTRA}::test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token"],
+    ),
+    Plant(
+        "note: Entra's algorithms taken from OIDC_ALGORITHMS",
+        PA,
+        [("            list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)\n", "            list(config.oidc_algorithms)\n")],
+        [f"{ENTRA}::test_an_entra_mapping_takes_rs256_alone_whatever_oidc_algorithms_says"],
+    ),
+    Plant(
+        "note: no leeway on a token's expiry",
+        PA,
+        [("                leeway=LEEWAY_SECONDS,\n", "")],
+        [f"{ENTRA}::test_a_token_a_little_past_its_expiry_is_given_sixty_seconds[30s]"],
+    ),
+    Plant(
+        "note: a service identity's token without an expiry",
+        SI,
+        [('                    "require": ["sub", "exp"],\n', '                    "require": ["sub"],\n')],
+        [f"{SERVICE}::test_a_service_identitys_token_without_an_expiry_is_refused"],
+    ),
+    Plant(
+        "note: the Glass asks Entra without `profile`",
+        "harness/site.py",
+        [('"scope": f"openid profile {entra.id_uri}/{entra.scope}",', '"scope": f"openid {entra.id_uri}/{entra.scope}",')],
+        [f"{RENDER}::test_the_glass_is_told_entras_sign_in"],
+    ),
+    Plant(
+        "note: the set-up console rendered on the profile",
+        "harness/cloud_platform/__init__.py",
+        [('    jobs = [j for j in values["jobs"] if j["name"] not in NOT_RENDERED]\n',
+          '    jobs = [j for j in values["jobs"] if j["name"] not in NOT_RENDERED]\n    workloads.append({**workloads[0], "name": "console", "image": workloads[0]["image"].replace("/workspace:", "/harness:"), "command": ["python", "-m", "harness.webapp"]})\n')],
+        [f"{RENDER}::test_the_set_up_console_is_no_part_of_the_render[production]"],
+    ),
+    Plant(
+        "item 4(c): the runbook says nothing of the way back in",
+        "harness/cloud_platform/runbooks.py",
+        [("**If no administrator is left** (each has left, or lost the Admin role): add the Entra object id of\n", "(each has left, or lost the Admin role): add the Entra object id of\n")],
+        [f"{POC}::test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left"],
+    ),
+    Plant(
+        "item 3: a /v1/me that fails once strands the person",
+        "apps/workspace/src/App.tsx",
+        [("/> : accountUnread}", "/> : null}"), ("            {accountUnread}\n", "")],
+        ["vitest:apps/workspace/src/App.test.tsx::it says so, offers Try again and Sign out, and Try again reads it afresh"],
+    ),
+    Plant(
+        "item 3: Try again never asks /v1/me afresh",
+        "apps/workspace/src/App.tsx",
+        [("  }, [bearerToken, resolvedAttempt]);\n", "  }, [bearerToken]);\n")],
+        ["vitest:apps/workspace/src/App.test.tsx::it says so, offers Try again and Sign out, and Try again reads it afresh"],
     ),
 ]
 
