@@ -385,6 +385,21 @@ test("govuk: the header, the Glass and the footer are reached by Tab in that ord
   expect(cookies).toBeGreaterThan(accessibility);
 });
 
+// ADR-132 Amendment 7: the deployment's own banner words are text, not a control: the banner adds no
+// Tab stop, the skip link stays the first, and the words are read in the "Service phase" region.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: the deployment's banner words add no Tab stop and are read in their region`, async ({ page }) => {
+    await page.goto(`/keyboard/shell-harness.html?brand=${brand}&banner=1`);
+    // As the scans in `a11y/every-harness.spec.ts` choose a theme (GOV.UK holds the page light).
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const region = page.getByRole("region", { name: "Service phase" });
+    await expect(region).toContainText("Demonstration only: this is not a government service, and all data is synthetic.");
+    await expect(region.locator("a, button, input, [tabindex]")).toHaveCount(0);
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("Skip to main content");
+  });
+}
+
 test("every registered shell action has its own proving test case above", () => {
   assertAllCovered("SHELL_ACTIONS", SHELL_ACTIONS);
 });
