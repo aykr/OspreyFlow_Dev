@@ -576,6 +576,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 
         You said yes to its Makefile change at merge. It lands after rules-b's "guides" gates, because those gates
         run main's `stack_lease.sh`, which T1 part 5 changes.
+      - **Local-lite on the Mac: left, your word (about 13:30).** It would slow the lanes' Mac-side browser checks
+        (36 GB, about 12.5 GB free, seven sessions). Tonight's osprey-small rebuild from main shows every interface.
+        Next in order: guides lands, then T1 part 5 (with your Makefile change), then the rebuild.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
