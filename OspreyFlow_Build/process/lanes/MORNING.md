@@ -579,6 +579,24 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **Local-lite on the Mac: left, your word (about 13:30).** It would slow the lanes' Mac-side browser checks
         (36 GB, about 12.5 GB free, seven sessions). Tonight's osprey-small rebuild from main shows every interface.
         Next in order: guides lands, then T1 part 5 (with your Makefile change), then the rebuild.
+      - **Afternoon:** landed:
+        - rules-b guides (5675103);
+        - T1 part 5 (416c3f5), plus a fix (b4b570d) for a regression it brought (pytest refused every run on the
+          Mac);
+        - docs' guides text (cc8b675; user guide 1.47, admin guide 1.86 → 1.87).
+
+        The Mac's Python environment was re-synced. My first sync dropped the extraction extra; it is restored.
+        Admin, docs, case and rules-b are closed, at your request.
+
+        **Rules lists, independent review (about 15:30): not yet.** Four rule-3 leaks of a hidden list:
+        - sentence rules screen every list unfiltered;
+        - a refresh's audit names the list;
+        - the screening-lists route shows every list;
+        - the rule audit is an oracle.
+
+        **Your ruling:** closing disposes only the citations the closer can read, and the alert stays open for a
+        hidden list's readers. It lands tomorrow. Studio carries is due about 17:00. Your rebuild instructions
+        are awaited.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
