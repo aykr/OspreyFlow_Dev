@@ -7,7 +7,7 @@ Written by the orchestrator, 12 November 2026, at the owner's request, for a **f
 **Why:** P11 merged on 11 November, but §6a has no section on the model route: it shows only in Appendix A
 (1.77), §10.1 (1.78), the gateway's line in §6a.1 and 1.80's alignment. The owner wants it written now, so the
 Client install view shows only what is truly left. P8's section is a step of its own after the client's install
-(D2d), not part of this one.
+(D2e), not part of this one.
 
 **Write, in both copies (OspreyFlow_Core/docs/administration-guide.md §6a, and spec/10_ADMINISTRATION_GUIDE.md word
 for word):** a new §6a subsection, *The model route*, before *Coming*, as built and in an operator's words:

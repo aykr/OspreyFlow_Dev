@@ -14,4 +14,4 @@ rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on os
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
 demo	rebuild	the demo lane (sol) rebuilds osprey-small from main once studio carries lands: backup done and verified; then install, demo accounts, five packs, the owner's checks	12 Nov, checks reported by 20:00	A
 
-docs	D2d	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
+docs	D2e	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
