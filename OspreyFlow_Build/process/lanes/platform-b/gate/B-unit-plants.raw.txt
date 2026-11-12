@@ -1,0 +1,44 @@
+# gate-b B, the helper, preflight and the host pass against each planted defect, this Mac, at 4f6cf60 + the uncommitted change
+## the key file written readable by every account (644): RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_the_helper_writes_only_the_hash_and_a_pass_600
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_setting_gives_a_new_pass
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_a_newly_set_key_into_the_stage_600_and_settles_it_after
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_passes_the_helpers_file
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_host_tool_presents_the_pass_to_the_deployments_names_alone
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_every_tool_that_finds_the_deployment_by_its_settings_carries_the_pass
+  6 failed, 27 passed in 0.56s
+## the helper says the hash it wrote: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_the_helper_writes_only_the_hash_and_a_pass_600
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_the_helpers_own_words_never_hold_the_key_or_hash
+  2 failed, 31 passed in 0.47s
+## the two answers never compared: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_two_answers_that_differ_write_nothing
+  1 failed, 32 passed in 0.47s
+## a short key accepted: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_key_of_fewer_than_twelve_characters_is_refused[short]
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_key_of_fewer_than_twelve_characters_is_refused[   twelve    ]
+  2 failed, 31 passed in 0.45s
+## a file others may read accepted: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_refuses_a_key_file_others_may_read
+  1 failed, 32 passed in 0.43s
+## preflight quotes the file it refuses: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_refuses_a_file_not_written_by_the_helper_and_never_quotes_it
+  1 failed, 32 passed in 0.43s
+## the pass carried to every host: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_host_tool_presents_the_pass_to_the_deployments_names_alone
+  1 failed, 32 passed in 0.43s
+## the key allowed on any profile: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_the_key_is_for_a_small_alone
+  1 failed, 32 passed in 0.46s
+## a set key never carried into place: RED
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_each_setting_gives_a_new_pass
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_a_newly_set_key_into_the_stage_600_and_settles_it_after
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_apply_carries_the_key_in_place_when_none_is_newly_set
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_key_set_again_restarts_the_proxy
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_refuses_a_key_file_others_may_read
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_preflight_passes_the_helpers_file
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_a_host_tool_presents_the_pass_to_the_deployments_names_alone
+  FAILED ../OspreyFlow_Build/tests/harness/test_access_key.py::test_every_tool_that_finds_the_deployment_by_its_settings_carries_the_pass
+  8 failed, 25 passed in 0.49s
+## the code as it is
+33 passed in 0.42s

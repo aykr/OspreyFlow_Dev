@@ -1416,6 +1416,19 @@ class NetworkConfig(BaseModel):
             "the front proxy publishes on. Default: none — every interface."
         ),
     )
+    access_key: bool = Field(
+        default=False,
+        # Left out of every dump while false, so a deployment that does not ask renders byte for
+        # byte what it did (the cluster's and the cloud platform's values carry `osprey.yaml`).
+        exclude_if=lambda asks: asks is False,
+        description=(
+            "Small over https:// only: the front proxy asks every browser for a shared key (the "
+            "browser's own user name and key box) on all three names before anything loads, and "
+            "every answer says noindex. The key's bcrypt hash is set on the server by "
+            "`python -m harness.access_key set <the deployment's folder>`, never here. Default: "
+            "false (ADR-114 Amendment 41)."
+        ),
+    )
 
     @model_validator(mode="after")
     def _public_origin_is_a_bare_origin(self) -> NetworkConfig:
@@ -2127,6 +2140,18 @@ class OspreyConfig(BaseModel):
                 "HTTPS: install it as Small or Enterprise (profile: small or cluster) with an "
                 "https:// address, or give Lite a localhost address such as "
                 "http://ospreyflow.localhost"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _the_shared_key_is_for_a_small_over_tls(self) -> OspreyConfig:
+        """ADR-114 Amendment 41: the shared key is asked by the Small's own front proxy. Only over
+        TLS, since a browser sends it again with every request: a Small's address is always an
+        https:// one (`_the_address_suits_the_profile`), and nothing else may ask."""
+        if self.network.access_key and self.profile is not Profile.SMALL:
+            raise ValueError(
+                "network.access_key is for Small, whose front proxy asks for it (profile: small), "
+                f"not profile: {self.profile.value}"
             )
         return self
 
