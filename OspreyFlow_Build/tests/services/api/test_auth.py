@@ -44,9 +44,7 @@ from tests.conftest import (
 def _config(jwks_url: str, **overrides: object) -> ApiConfig:
     defaults: dict[str, object] = dict(
         valkey=ValkeyConfig(host="localhost", port=6379, db=0),
-        postgres=PostgresConfig(
-            host="localhost", port=5432, user="x", password="x", database="x"
-        ),
+        postgres=PostgresConfig(host="localhost", port=5432, user="x", password="x", database="x"),
         oidc_jwks_url=jwks_url,
         oidc_audience=None,
         oidc_issuer=None,
@@ -130,7 +128,7 @@ def test_an_unknown_kid_triggers_a_jwks_refresh_and_then_succeeds(
 ) -> None:
     """Key rotation: a token signed with a key not yet in the cached JWKS
     (because it rotated in *after* the resolver's last fetch) must still
-    resolve, via `PyJWKClient`'s built-in refresh-on-unknown-kid — proving
+    resolve, via `SigningKeys`' refresh on an unknown kid — proving
     the resolver doesn't cache the JWKS forever or require a restart on
     rotation."""
     directory, url = jwks_dir
@@ -141,12 +139,8 @@ def test_an_unknown_kid_triggers_a_jwks_refresh_and_then_succeeds(
     jwks_path.write_text(json.dumps({"keys": [old_jwk]}))
 
     resolver = PrincipalResolver(_config(url))
-    # `PyJWKClient`'s unknown-kid refresh has its own cooldown — a real,
-    # deliberate rate limit against a client hammering the endpoint with
-    # bad `kid`s — separate from this test's concern (that the refresh
-    # mechanism itself works). Disabling it here is a test-only knob, not
-    # a change to what `PrincipalResolver` configures in production.
-    resolver._jwk_client.cooldown_duration = 0
+    # The first unknown kid is fetched for at once; a second within five minutes is not
+    # (`principal_auth.SigningKeys`, ADR-148 Amendment 8: `test_auth_entra_claims.py`).
     # Prime the resolver's cache against the JWKS as it stood before rotation.
     resolver.resolve(sign_token(old_key, default_claims(), kid="old-key"))
 

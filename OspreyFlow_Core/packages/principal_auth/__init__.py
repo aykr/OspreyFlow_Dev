@@ -28,7 +28,9 @@ import asyncio
 import json
 import os
 import re
-from collections.abc import Mapping
+import threading
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote
@@ -462,6 +464,69 @@ class PrincipalLookupUnavailable(Exception):
     malformed): a 503, never a principal with no roles and never one from an earlier read."""
 
 
+class SigningKeysUnavailable(PrincipalLookupUnavailable):
+    """The identity provider's signing keys could not be read (unreachable, or no answer in time):
+    a 503 in its own words, never "token rejected", since nothing about the token is known."""
+
+
+#: How long a session waits for the identity provider's keys before it is a 503.
+KEYS_TIMEOUT_SECONDS = 5.0
+#: At most one fetch of the keys for a key id not held, per this long (ADR-148 Amendment 8): a
+#: token naming an unknown key cannot make every request fetch them again.
+UNKNOWN_KID_REFETCH_SECONDS = 300.0
+#: Leeway on a token's times, for clocks a little apart.
+LEEWAY_SECONDS = 60
+#: The one algorithm an Entra ID token is signed with, whatever `OIDC_ALGORITHMS` says.
+ENTRA_ALGORITHMS = ("RS256",)
+
+
+class SigningKeys:
+    """The identity provider's signing keys, as the resolver and the service identity's verifier
+    read them (ADR-148 Amendment 8): kept for the configured time, fetched again for a key id not
+    held at most once per `UNKNOWN_KID_REFETCH_SECONDS`, each fetch bounded by
+    `KEYS_TIMEOUT_SECONDS`. A fetch that fails is `SigningKeysUnavailable`; a token naming a key
+    not published is `PrincipalResolutionError`. Synchronous: the resolver calls it in a thread."""
+
+    def __init__(
+        self, url: str, ttl_seconds: float, *, clock: Callable[[], float] = time.monotonic
+    ) -> None:
+        self._client = PyJWKClient(
+            url, cache_jwk_set=True, lifespan=ttl_seconds, timeout=KEYS_TIMEOUT_SECONDS
+        )
+        self._clock = clock
+        self._last_unknown_fetch = float("-inf")
+        self._lock = threading.Lock()
+        self.fetches = 0
+
+    def _keys(self, refresh: bool) -> dict[str, Any]:
+        try:
+            jwk_set = self._client.get_jwk_set(refresh=refresh)
+        except jwt.PyJWKClientError as exc:
+            raise SigningKeysUnavailable(
+                "sign-in is unavailable: the identity provider's signing keys could not be read"
+            ) from exc
+        return {k.key_id: k for k in jwk_set.keys if k.key_id and k.public_key_use in ("sig", None)}
+
+    def key_for(self, token: str) -> Any:
+        try:
+            kid = jwt.get_unverified_header(token).get("kid")
+        except jwt.PyJWTError as exc:
+            raise PrincipalResolutionError(f"token rejected: {exc}") from exc
+        with self._lock:
+            keys = self._keys(refresh=False)
+            if kid not in keys and self._clock() - self._last_unknown_fetch >= (
+                UNKNOWN_KID_REFETCH_SECONDS
+            ):
+                self._last_unknown_fetch = self._clock()
+                self.fetches += 1
+                keys = self._keys(refresh=True)
+        if kid not in keys:
+            raise PrincipalResolutionError(
+                "token rejected: it names a signing key the identity provider does not publish"
+            )
+        return keys[kid].key
+
+
 @dataclass(frozen=True)
 class _Verified:
     """A verified token's principal parts, before roles: built only by `_verified_parts`."""
@@ -674,8 +739,10 @@ class PrincipalResolver:
         self._role_lookup_timeout = role_lookup_timeout_seconds
         self._config = config
         self._claim_mapping = mapping
-        self._jwk_client = PyJWKClient(
-            config.oidc_jwks_url, cache_keys=True, lifespan=config.oidc_jwks_ttl_seconds
+        self._keys = SigningKeys(config.oidc_jwks_url, config.oidc_jwks_ttl_seconds)
+        # An Entra mapping's tokens are RS256 alone, whatever OIDC_ALGORITHMS says.
+        self._algorithms = (
+            list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)
         )
         self._exchange_http = httpx.AsyncClient(timeout=10.0)
 
@@ -906,7 +973,16 @@ class PrincipalResolver:
         checked in full first (a refused token records nobody), then the person is read from the
         store, within the timeout: a failure or a slow answer is `PrincipalLookupUnavailable` (a
         503), never a principal with no roles. Nothing is kept between calls."""
-        claims = self._verified_claims(token)
+        # In a thread, bounded: a slow or unreachable identity provider never holds the event loop,
+        # and is a 503 in words, never "token rejected" (ADR-148 Amendment 8).
+        try:
+            claims = await asyncio.wait_for(
+                asyncio.to_thread(self._verified_claims, token), timeout=KEYS_TIMEOUT_SECONDS + 1
+            )
+        except TimeoutError as exc:
+            raise SigningKeysUnavailable(
+                "sign-in is unavailable: the identity provider's signing keys did not answer"
+            ) from exc
         if not self._claim_mapping.is_entra:
             return principal_from_claims(claims, self._claim_mapping)
         verified = _verified_parts(claims, self._claim_mapping)
@@ -934,11 +1010,12 @@ class PrincipalResolver:
 
     def _verified_claims(self, token: str) -> dict[str, Any]:
         try:
-            signing_key = self._jwk_client.get_signing_key_from_jwt(token)
+            signing_key = self._keys.key_for(token)
             claims = jwt.decode(
                 token,
-                signing_key.key,
-                algorithms=list(self._config.oidc_algorithms),
+                signing_key,
+                algorithms=self._algorithms,
+                leeway=LEEWAY_SECONDS,
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={

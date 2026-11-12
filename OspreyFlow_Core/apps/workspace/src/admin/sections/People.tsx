@@ -713,7 +713,7 @@ export const ENTRA_PEOPLE_WORDS =
   "People sign in with their organisation's Entra ID account; their clearance, unit and handling codes come " +
   "from Entra. Here you give them roles, add them by object id before they first sign in, and disable them.";
 
-/** A person added by their Entra object id (Graph gives it) ahead of their first sign-in, with no roles.
+/** A person added by their Entra object id (the Entra admin centre shows it) ahead of their first sign-in, with no roles.
  * The Conduit checks the id and refuses one already here. */
 function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: PersonAccount) => void }) {
   const [objectId, setObjectId] = useState("");
@@ -735,7 +735,7 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
     >
       <h4 className="value" style={{ margin: 0 }}>Add a person by object id</h4>
       <p className="label" style={{ margin: 0 }}>
-        Their Entra object id, from the Entra admin centre or Graph. They are added with no roles; give them roles below,
+        Their Entra object id, from the Entra admin centre. They are added with no roles; give them roles below,
         and they hold them from their first sign-in.
       </p>
       <Input aria-label="Entra object id" value={objectId} onChange={(event) => setObjectId(event.target.value)} />

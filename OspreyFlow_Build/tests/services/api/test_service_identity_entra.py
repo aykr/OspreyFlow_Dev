@@ -170,3 +170,10 @@ def test_on_v1_tokens_this_apis_own_registration_is_no_orchestrator(jwks_url, ke
         azp=_ABSENT, azpacr=_ABSENT, idtyp=_ABSENT, appid=AIRFLOW,
     )  # fmt: skip
     assert v1.client_of(other) == AIRFLOW
+
+
+def test_a_service_identitys_token_without_an_expiry_is_refused(jwks_url, keypair) -> None:
+    """The orchestrator's note: `exp` required on the service identity's path too."""
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier(jwks_url).client_of(_app_token(keypair, exp=_ABSENT))
+    assert refused.value.status == 401

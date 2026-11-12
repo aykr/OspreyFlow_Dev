@@ -139,7 +139,12 @@ from ports.graph import GraphPort
 from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
-from principal_auth import ROLE_LOOKUP_TIMEOUT_SECONDS, PrincipalLookupUnavailable, PrincipalRevoked
+from principal_auth import (
+    ROLE_LOOKUP_TIMEOUT_SECONDS,
+    PrincipalLookupUnavailable,
+    PrincipalRevoked,
+    SigningKeysUnavailable,
+)
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
     AccessInput,
@@ -2109,6 +2114,17 @@ async def get_principal(
         identity = await resolver.resolve_principal(credentials.credentials)
     except PrincipalResolutionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except SigningKeysUnavailable as exc:
+        # ADR-148 Amendment 8: the identity provider's keys could not be read; said so, never as a
+        # rejected token.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "identity_provider_unavailable",
+                "message": "sign-in is unavailable: the identity provider could not be reached. "
+                "Try again shortly.",
+            },
+        ) from exc
     except PrincipalLookupUnavailable as exc:
         # ADR-148 Amendment 8: the person's stored roles could not be read; never a principal
         # without them.

@@ -33,6 +33,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import asyncpg
@@ -61,6 +62,30 @@ from .identity_admin import (
 #: The role the first administrators are given (`schemas.rights.ROLE_RIGHTS`).
 ADMIN_ROLE = "osprey-admin"
 
+#: How long a clearance, unit and handling codes read from a token are trusted for anything sent to
+#: the person (a transfer, a promotion's alert): an Entra access token's longest life, plus a margin
+#: (ADR-148 Amendment 8; the orchestrator's ruling, 12 November 2026). Display is unchanged.
+ACCESS_FRESH = timedelta(hours=24)
+#: How often a session brings the stored access's time up to date when nothing in it changed.
+ACCESS_REFRESH = timedelta(hours=1)
+#: An Entra person whose access was never read (added by object id) or read before the column.
+_NEVER = datetime(1970, 1, 1, tzinfo=UTC)
+#: Two Conduits starting together create the table once (`pg_advisory_xact_lock`).
+BOOTSTRAP_LOCK = 0x0E7A_9E09
+
+
+def access_current(person: PersonAccount, now: datetime | None = None) -> bool:
+    """Whether a person's stored clearance and unit may be trusted to receive: always on Keycloak
+    (`access_read_at` None, the directory's own); on Entra ID, read from a token within a day."""
+    if person.access_read_at is None:
+        return True
+    return (now or datetime.now(UTC)) - person.access_read_at <= ACCESS_FRESH
+
+
+STALE_ACCESS_WORDS = (
+    "their clearance and unit were last read from Entra ID over a day ago: they sign in again first"
+)
+
 #: The install's first administrators, by object id, comma-separated.
 FIRST_ADMINISTRATORS_VARIABLE = "OSPREY_FIRST_ADMINISTRATORS"
 
@@ -78,6 +103,7 @@ CREATE TABLE IF NOT EXISTS entra_people (
     org_unit text,
     receivable_handling_codes text[] NOT NULL DEFAULT '{}',
     first_seen timestamptz,
+    access_read_at timestamptz,
     added_by text,
     PRIMARY KEY (tenant_id, oid)
 );
@@ -124,6 +150,8 @@ def _person(row: Mapping[str, Any]) -> PersonAccount:
         org_unit=row["org_unit"],
         email=row["email"],
         receivable_handling_codes=list(row["receivable_handling_codes"]),
+        signed_in=row["first_seen"] is not None,
+        access_read_at=row["access_read_at"] or _NEVER,
     )
 
 
@@ -139,8 +167,12 @@ class EntraPeopleStore:
         if not is_object_id(tenant_id):
             raise ValueError("the people store's tenant must be an Entra tenant id")
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn, conn.transaction():
+            await conn.execute("SELECT pg_advisory_xact_lock($1)", BOOTSTRAP_LOCK)
             await conn.execute(BOOTSTRAP_SQL)
+            await conn.execute(
+                "ALTER TABLE entra_people ADD COLUMN IF NOT EXISTS access_read_at timestamptz"
+            )
         return cls(pool, tenant_id)
 
     async def close(self) -> None:
@@ -169,17 +201,22 @@ class EntraPeopleStore:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT roles, disabled, name, username, email, clearance, org_unit, "
-                "receivable_handling_codes FROM entra_people WHERE tenant_id = $1 AND oid = $2",
+                "receivable_handling_codes, access_read_at, now() AS at "
+                "FROM entra_people WHERE tenant_id = $1 AND oid = $2",
                 tenant_id,
                 oid,
             )
             if row is None:
                 row = await conn.fetchrow(
                     "INSERT INTO entra_people (tenant_id, oid, name, username, email, clearance, "
-                    "org_unit, receivable_handling_codes, first_seen) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now()) "
+                    "org_unit, receivable_handling_codes, first_seen, access_read_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now()) "
                     "ON CONFLICT (tenant_id, oid) DO UPDATE SET first_seen = "
-                    "COALESCE(entra_people.first_seen, now()) RETURNING roles, disabled",
+                    "COALESCE(entra_people.first_seen, now()), access_read_at = now(), "
+                    "name = EXCLUDED.name, username = EXCLUDED.username, email = EXCLUDED.email, "
+                    "clearance = EXCLUDED.clearance, org_unit = EXCLUDED.org_unit, "
+                    "receivable_handling_codes = EXCLUDED.receivable_handling_codes "
+                    "RETURNING roles, disabled",
                     tenant_id,
                     oid,
                     *values,
@@ -191,11 +228,13 @@ class EntraPeopleStore:
                 row["clearance"],
                 row["org_unit"],
                 list(row["receivable_handling_codes"]),
-            ) != values:
+            ) != values or (
+                row["access_read_at"] is None or row["at"] - row["access_read_at"] > ACCESS_REFRESH
+            ):
                 await conn.execute(
                     "UPDATE entra_people SET name = $3, username = $4, email = $5, "
                     "clearance = $6, org_unit = $7, receivable_handling_codes = $8, "
-                    "first_seen = COALESCE(first_seen, now()) "
+                    "first_seen = COALESCE(first_seen, now()), access_read_at = now() "
                     "WHERE tenant_id = $1 AND oid = $2",
                     tenant_id,
                     oid,
@@ -220,15 +259,19 @@ class EntraPeopleStore:
     # --- the install's first administrators ---------------------------------------------------
 
     async def seed_first_administrators(self, oids: Iterable[str]) -> None:
-        """Each named object id given the Admin role, once: a person already recorded keeps what
-        Admin › People gave them, so taking the role away is not undone at the next start."""
+        """Each named object id given the Admin role: once for a person already recorded with roles
+        (taking the role away, for another, is not undone at the next start), and again for one
+        recorded with **no role at all**, so naming such a person and restarting the Conduit is the
+        way back in when nobody can administer (the orchestrator's ruling, 12 November 2026; the
+        install runbook's recovery step)."""
         async with self.pool.acquire() as conn:
             for oid in oids:
                 if not is_object_id(oid):
                     raise ValueError(f"not an Entra object id: {oid!r}")
                 await conn.execute(
                     "INSERT INTO entra_people (tenant_id, oid, roles, added_by) "
-                    "VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO NOTHING",
+                    "VALUES ($1, $2, $3, 'install') ON CONFLICT (tenant_id, oid) DO UPDATE "
+                    "SET roles = EXCLUDED.roles WHERE cardinality(entra_people.roles) = 0",
                     self.tenant_id,
                     oid,
                     [ADMIN_ROLE],

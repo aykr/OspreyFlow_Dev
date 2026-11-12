@@ -196,3 +196,47 @@ async def test_the_sockets_read_is_this_tenants_and_records_nobody(world) -> Non
     await EntraPeopleAdmin(world.store).set_enabled(OID, False)
     stored = await world.store.standing(OID)
     assert stored is not None and (stored.roles, stored.disabled) == ((ADMIN_ROLE,), True)
+
+
+async def test_a_named_first_administrator_holding_no_role_is_given_admin_again(world) -> None:
+    """The way back in when nobody can administer (the orchestrator's ruling, 12 November 2026; the
+    install runbook's recovery step): naming a person who holds no role and restarting the Conduit
+    gives them Admin again. A person who holds any role keeps it (the removal stands)."""
+    await world.store.seed_first_administrators([OID])
+    await world.store.update(OID, "roles", [])
+    await world.store.seed_first_administrators([OID])
+    assert (await world.store.one(OID)).roles == [ADMIN_ROLE]
+    await world.store.update(OID, "roles", ["analyst"])
+    await world.store.seed_first_administrators([OID])
+    assert (await world.store.one(OID)).roles == ["analyst"]
+
+
+async def test_one_person_is_read_by_this_tenant_alone(world) -> None:
+    """Rule 3 for `one`: another tenant's row for the same object id is not this tenant's person."""
+    await world.other.seed_first_administrators([OID])
+    with pytest.raises(IdentityAdminRefused):
+        await world.store.one(OID)
+
+
+async def test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in(
+    world,
+) -> None:
+    """What the lock-out and the stale-access rulings read: `signed_in` and `access_read_at`."""
+    await world.store.add(NEW, "adm-1")
+    added = await world.store.one(NEW)
+    assert added.signed_in is False and added.access_read_at is not None
+    await world.store.person(TENANT, OID, SEEN)
+    seen = await world.store.one(OID)
+    assert seen.signed_in is True and seen.access_read_at is not None
+    assert seen.access_read_at > added.access_read_at
+
+
+async def test_two_conduits_starting_together_make_the_table_once(world) -> None:
+    """`BOOTSTRAP_SQL` under a transaction-scoped advisory lock: two replicas' starts together."""
+    import asyncio
+
+    first, second = await asyncio.gather(
+        EntraPeopleStore.connect(world.dsn, TENANT), EntraPeopleStore.connect(world.dsn, TENANT)
+    )
+    await first.close()
+    await second.close()

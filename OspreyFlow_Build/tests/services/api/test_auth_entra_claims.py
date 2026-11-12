@@ -1096,3 +1096,145 @@ def test_a_mapping_in_the_environment_that_does_not_load_stops_the_start(monkeyp
     monkeypatch.setenv("OSPREY_CLAIM_MAPPING", raw)
     with pytest.raises(ValueError):
         ClaimMapping.from_env()
+
+
+# --- the orchestrator's review of P10 part 2, item 8 and its notes: the signing keys ---
+
+
+def _publish(directory: Path, *keys: tuple[object, str]) -> None:
+    import json
+
+    from jwt.algorithms import ECAlgorithm, RSAAlgorithm
+
+    jwks = []
+    for private, kid in keys:
+        public = private.public_key()  # type: ignore[attr-defined]
+        algorithm = RSAAlgorithm if isinstance(private, rsa.RSAPrivateKey) else ECAlgorithm
+        jwk = algorithm.to_jwk(public, as_dict=True)
+        jwk.update(kid=kid, use="sig")
+        jwks.append(jwk)
+    (directory / "jwks.json").write_text(json.dumps({"keys": jwks}))
+
+
+def test_an_unknown_kid_is_fetched_for_at_most_once_in_five_minutes(jwks_dir, keypair) -> None:
+    """A token naming a key not published cannot make every request fetch the keys again: one
+    fetch for an unknown kid, then none for five minutes, then one more."""
+    from principal_auth import PrincipalResolutionError as Refused
+    from principal_auth import SigningKeys
+
+    directory, url = jwks_dir
+    _publish(directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(url, 300.0, clock=lambda: now[0])
+    keys.key_for(sign_token(keypair[0], {"sub": "s"}, kid="k1"))
+    for _ in range(3):
+        with pytest.raises(Refused, match="does not publish"):
+            keys.key_for(sign_token(keypair[0], {"sub": "s"}, kid="unknown"))
+    assert keys.fetches == 1
+    now[0] += 301
+    with pytest.raises(Refused):
+        keys.key_for(sign_token(keypair[0], {"sub": "s"}, kid="unknown"))
+    assert keys.fetches == 2
+
+
+def test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token(
+    keypair,
+) -> None:
+    """Entra (or the realm) not answering is said so: `SigningKeysUnavailable`, and `GET /v1/me`
+    answers 503 `identity_provider_unavailable`, never 401 "token rejected"."""
+    from fastapi.testclient import TestClient
+    from services.api.app import app
+
+    from principal_auth import SigningKeysUnavailable
+
+    resolver = _EntraResolver.__new__(_EntraResolver)
+    resolver.people = FakePeople()
+    resolver.real = PrincipalResolver(
+        _config("http://127.0.0.1:9/jwks.json", oidc_issuer=ISSUER, oidc_audience=CLIENT_ID),
+        claim_mapping=BY_EXTENSION,
+        role_source=resolver.people,
+    )
+    token = sign_token(_key(keypair), entra_claims(**_GOOD))
+    with pytest.raises(SigningKeysUnavailable):
+        resolver.resolve(token)
+    held = getattr(app.state, "principal_resolver", None)
+    app.state.principal_resolver = resolver.real
+    try:
+        response = TestClient(app).get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+    finally:
+        app.state.principal_resolver = held
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "identity_provider_unavailable"
+    assert resolver.people.calls == []
+
+
+async def test_a_slow_identity_provider_never_holds_the_event_loop(
+    jwks_url, keypair, monkeypatch
+) -> None:
+    """The keys are read in a thread, bounded: while a fetch hangs, other requests go on, and the
+    hung one is a 503 (`SigningKeysUnavailable`) once the timeout passes."""
+    import principal_auth
+    from principal_auth import SigningKeysUnavailable
+
+    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 0.2)
+    resolver = PrincipalResolver(
+        _entra_config(jwks_url), claim_mapping=BY_EXTENSION, role_source=FakePeople()
+    )
+    monkeypatch.setattr(resolver._keys, "key_for", lambda token: time.sleep(3))
+    ticks = 0
+
+    async def other_requests() -> None:
+        nonlocal ticks
+        for _ in range(5):
+            await asyncio.sleep(0.05)
+            ticks += 1
+
+    started = time.monotonic()
+    results = await asyncio.gather(
+        resolver.resolve_principal(sign_token(_key(keypair), entra_claims(**_GOOD))),
+        other_requests(),
+        return_exceptions=True,
+    )
+    assert isinstance(results[0], SigningKeysUnavailable)
+    assert ticks == 5 and time.monotonic() - started < 2.5
+
+
+def test_an_entra_mapping_takes_rs256_alone_whatever_oidc_algorithms_says(jwks_dir) -> None:
+    """With ES256 allowed by OIDC_ALGORITHMS and an EC key published, an ES256 token is refused
+    under the Entra mapping (pinned to RS256) and accepted under the fixed names (the control)."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    directory, url = jwks_dir
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    _publish(directory, (ec_key, "ec"))
+    import jwt as pyjwt
+
+    token = pyjwt.encode(entra_claims(**_GOOD), ec_key, algorithm="ES256", headers={"kid": "ec"})
+    entra = PrincipalResolver(
+        _config(
+            url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID, oidc_algorithms=("RS256", "ES256")
+        ),
+        claim_mapping=BY_EXTENSION,
+        role_source=FakePeople(),
+    )
+    with pytest.raises(PrincipalResolutionError, match="alg value is not allowed"):
+        asyncio.run(entra.resolve_principal(token))
+    keycloak_token = pyjwt.encode(
+        default_claims(), ec_key, algorithm="ES256", headers={"kid": "ec"}
+    )
+    keycloak = PrincipalResolver(_config(url, oidc_algorithms=("RS256", "ES256")))
+    assert keycloak.resolve(keycloak_token).id == "analyst-1"
+
+
+@pytest.mark.parametrize(("ago", "resolves"), [(30, True), (120, False)], ids=["30s", "120s"])
+def test_a_token_a_little_past_its_expiry_is_given_sixty_seconds(keypair, jwks_url, ago, resolves):
+    """Clocks a little apart: 60 s of leeway on a token's times, and no more."""
+    now = int(time.time())
+    token = sign_token(
+        _key(keypair), entra_claims(**_GOOD, iat=now - 3600, nbf=now - 3600, exp=now - ago)
+    )
+    if resolves:
+        assert _resolver(jwks_url, BY_EXTENSION).resolve(token).id == OID
+    else:
+        with pytest.raises(PrincipalResolutionError, match="expired"):
+            _resolver(jwks_url, BY_EXTENSION).resolve(token)

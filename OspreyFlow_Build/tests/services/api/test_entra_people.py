@@ -494,3 +494,125 @@ async def test_the_rest_of_what_entra_holds_is_refused_in_words(call, words) -> 
         await call(EntraPeopleAdmin(store))  # type: ignore[arg-type]
     assert refused.value.error == "entra_holds_accounts" and words in refused.value.words
     assert store.people == before
+
+
+# --- the orchestrator's review of P10 part 2: lock-out and stale access (rulings, 12 November) ---
+
+
+def test_a_manager_who_never_signed_in_is_no_proof_anyone_can_administer(client: Any) -> None:
+    """Item 4 (b): a phantom object id added by hand, holding the Admin role but never signed in,
+    does not count: taking the role from the one administrator who has signed in is refused."""
+    _as(ADMIN)
+    phantom = _row(NEW, ["osprey-admin"]).model_copy(update={"signed_in": False})
+    client.store.people[(TENANT, NEW)] = phantom
+    response = client.put(f"/v1/admin/people/{OID}/roles", json={"roles": ["analyst"]})
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["error"] == "locks_out_administrators"
+    assert client.store.people[(TENANT, OID)].roles == ["osprey-admin"]
+
+
+def test_the_lock_out_counts_a_manager_who_has_signed_in(client: Any) -> None:
+    """The control: the second administrator has signed in, so the change is allowed."""
+    _as(ADMIN)
+    client.store.people[(TENANT, NEW)] = _row(NEW, ["osprey-admin"])
+    response = client.put(f"/v1/admin/people/{OID}/roles", json={"roles": ["analyst"]})
+    assert response.status_code == 200, response.text
+
+
+def _read(hours_ago: float) -> PersonAccount:
+    from datetime import UTC, datetime, timedelta
+
+    return _row(NEW, ["osprey-admin", "analyst"]).model_copy(
+        update={
+            "org_unit": "unit-1",
+            "access_read_at": datetime.now(UTC) - timedelta(hours=hours_ago),
+        }
+    )
+
+
+@pytest.mark.parametrize(("hours_ago", "stale"), [(25, True), (23, False)], ids=["stale", "fresh"])
+def test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words(
+    hours_ago: float, stale: bool
+) -> None:
+    """Item 5: a clearance or unit read from Entra ID over a day ago is not trusted to receive."""
+    from services.api.admin_people import DisableRefused, check_transfers, recipients
+
+    from schemas.admin import OwnedItem, OwnedTransfer
+
+    who = recipients([_read(hours_ago)], {}, {})
+    item = OwnedItem(kind="hotlist", id="h1", label="The hotlist Watch")
+    transfer = OwnedTransfer(kind="hotlist", id="h1", to=NEW)
+    if stale:
+        with pytest.raises(DisableRefused) as refused:
+            check_transfers(OID, [item], [transfer], who)
+        assert "over a day ago" in refused.value.words and NEW in refused.value.words
+    else:
+        assert check_transfers(OID, [item], [transfer], who) == {("hotlist", "h1"): NEW}
+
+
+@pytest.mark.parametrize(("hours_ago", "sent"), [(25, False), (23, True)], ids=["stale", "fresh"])
+def test_a_promotions_alert_skips_someone_whose_access_is_a_day_old(
+    hours_ago: float, sent: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Item 5 for promotions: `recipients_of` leaves out a unit administrator whose clearance and
+    unit were read from Entra ID over a day ago, and the log says why, in the transfer's words."""
+    import logging
+    from datetime import UTC, datetime
+
+    from services.api.entra_people import STALE_ACCESS_WORDS
+    from services.api.promotion_ageing import PendingPromotion, recipients_of
+
+    promotion = PendingPromotion(
+        items_marking=None, promotion_id="p1", load_id="l1", dataset_id="ds-a",
+        dataset_name="Records", dataset_unit="unit-1", proposed_by="someone-else",
+        proposed_at=datetime(2026, 11, 1, tzinfo=UTC),
+    )  # fmt: skip
+    with caplog.at_level(logging.INFO, logger="services.api.promotion_ageing"):
+        assert (recipients_of(promotion, [], [_read(hours_ago)]) == [NEW]) is sent
+    assert (STALE_ACCESS_WORDS in caplog.text) is not sent
+
+
+def test_keycloaks_people_are_always_current() -> None:
+    """The control: no `access_read_at` (Keycloak's directory attributes) is never stale."""
+    from services.api.entra_people import access_current
+
+    assert access_current(_row(OID, ["osprey-admin"]))
+
+
+class _Socket:
+    """Just enough of a `WebSocket` for `stream`'s authentication: a bearer header, the app's
+    resolver, and a record of how it was closed."""
+
+    def __init__(self, resolver: Any) -> None:
+        from types import SimpleNamespace
+
+        self.headers = {"authorization": "Bearer a-token"}
+        self.query_params: dict[str, str] = {}
+        self.app = SimpleNamespace(state=SimpleNamespace(principal_resolver=resolver))
+        self.closed: list[int] = []
+
+    async def close(self, code: int = 1000) -> None:
+        self.closed.append(code)
+
+
+@pytest.mark.parametrize(
+    ("raised", "code"),
+    [("lookup", 1013), ("refused", 1008)],
+    ids=["roles-unreadable", "token-refused"],
+)
+async def test_a_bearer_whose_roles_cannot_be_read_is_closed_try_again_later(raised, code) -> None:
+    """Item 7 (Amendment 8 point 1): at connect, a bearer header whose stored roles cannot be read
+    closes the socket with 1013, never 1008 and never a socket left open; a refused token 1008."""
+    from services.api.app import stream
+
+    from principal_auth import PrincipalLookupUnavailable, PrincipalResolutionError
+
+    class _Resolver:
+        async def resolve_principal(self, token: str) -> Principal:
+            if raised == "lookup":
+                raise PrincipalLookupUnavailable("store down")
+            raise PrincipalResolutionError("token rejected")
+
+    socket = _Socket(_Resolver())
+    await stream(socket, "case-1")  # type: ignore[arg-type]
+    assert socket.closed == [code]

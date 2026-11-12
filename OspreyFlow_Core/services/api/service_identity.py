@@ -19,7 +19,17 @@ from __future__ import annotations
 
 import jwt
 
-from principal_auth import DEFAULT_CLAIM_MAPPING, ClaimMapping, OidcSettings, is_object_id
+from principal_auth import (
+    DEFAULT_CLAIM_MAPPING,
+    ENTRA_ALGORITHMS,
+    LEEWAY_SECONDS,
+    ClaimMapping,
+    OidcSettings,
+    PrincipalResolutionError,
+    SigningKeys,
+    SigningKeysUnavailable,
+    is_object_id,
+)
 
 SERVICE_ACCOUNT_PREFIX = "service-account-"
 
@@ -72,27 +82,40 @@ class ServiceIdentityVerifier:
             )
         self._mapping = mapping
         self._config = config
-        self._jwk_client = jwt.PyJWKClient(
-            config.oidc_jwks_url, cache_keys=True, lifespan=int(config.oidc_jwks_ttl_seconds)
+        # The keys as `principal_auth` reads them: kept, an unknown key id fetched again at most
+        # once per five minutes, each fetch bounded (ADR-148 Amendment 8).
+        self._keys = SigningKeys(config.oidc_jwks_url, config.oidc_jwks_ttl_seconds)
+        self._algorithms = (
+            list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)
         )
 
     def client_of(self, token: str) -> str:
         """The client a service identity's token names; `ServiceIdentityRefused` otherwise."""
         try:
-            key = self._jwk_client.get_signing_key_from_jwt(token)
+            key = self._keys.key_for(token)
             claims = jwt.decode(
                 token,
-                key.key,
-                algorithms=list(self._config.oidc_algorithms),
+                key,
+                algorithms=self._algorithms,
+                leeway=LEEWAY_SECONDS,
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={
                     # `azp` is judged below: a person's verified token without one is 403, not 401.
-                    "require": ["sub"],
+                    # `exp` too: a client-credentials token always carries one.
+                    "require": ["sub", "exp"],
                     "verify_aud": self._config.oidc_audience is not None,
                     "verify_iss": self._config.oidc_issuer is not None,
                 },
             )
+        except SigningKeysUnavailable as error:
+            raise ServiceIdentityRefused(
+                "the sign-in could not be checked: the identity provider's signing keys could not "
+                "be read",
+                status=503,
+            ) from error
+        except PrincipalResolutionError as error:
+            raise ServiceIdentityRefused("the sign-in could not be verified", status=401) from error
         except jwt.PyJWTError as error:
             raise ServiceIdentityRefused("the sign-in could not be verified", status=401) from error
         if self._mapping.is_entra:
