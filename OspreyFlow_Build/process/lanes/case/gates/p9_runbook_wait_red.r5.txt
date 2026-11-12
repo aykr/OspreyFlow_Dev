@@ -1,0 +1,12 @@
+# Round 5, must-fix 1 red first (rule 15), on osprey-p9 after the runbook walk: with the writers stopped, step 2's wait as afc1a5f wrote it is held by the finished backup Jobs' kept pods alone and runs out its deadline (here 30 s; the 'exit 0' printed after it is the pipe's, tail's, not kubectl's: the line above it is kubectl's deadline error); round 5's (!job-name) returns at once. The Conduit and ArcadeDB started again after.
+# the writers stopped; pods still labelled a writer's: 13, every one a finished Job's
+# afc1a5f's step 2 wait (30 s here, 10 m in the runbook):
+client rate limiter Wait returned an error: context deadline exceeded
+exit 0
+# round 5's:
+exit 0
+
+real	0m0.049s
+user	0m0.060s
+sys	0m0.019s
+started again

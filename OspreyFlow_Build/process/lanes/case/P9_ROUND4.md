@@ -38,7 +38,8 @@ One pass, then rebase onto main (L1.9 part 2 at 184b798, records 6331d87), refre
 - [x] A malformed manifest refused in words, not a KeyError.
 - [x] `fetch_claims`' finally never removes restored entries once the old contents are gone.
 - [x] P9_decommission.diff re-cut as a git diff with index lines against current main.
-- [x] Every record at the final head with the three diffs and L1.9 applied: the merged cp-policy-check
+- [x] (corrected in round 5: the merged record ran at a06b145, not at the gated head afc1a5f; afc1a5f changed a
+      variable's name and the finish-time plant's anchor, re-run in round 5) Every record at the final head with the three diffs and L1.9 applied: the merged cp-policy-check
       (development-sources.yaml too), tests/cloud_platform_backup, the plants.
 - [x] Carries (no fix): a writer starting between the writers check and restore-graph; IAM `*` matching `/`;
       harness/cloud_platform_backups.py to platform afterwards.
