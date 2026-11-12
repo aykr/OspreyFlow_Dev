@@ -1,8 +1,8 @@
-# as of 2026-11-11T22:05Z
+# as of 2026-11-12T00:50Z
 admin	P10	part 1 merged (listed for you); part 2 building: roles in Postgres by tenant and oid (ruled, listed for you)	13 Nov	B
-case	P9	round 3 done short of built; rebasing onto P7b now, then cp-policy-check on the merged render, gates and merge	12 Nov	B
-case-b	P12	part 2 accepted after three rounds; after P9, rebase and merge with Laurium's egress row and the owner's release.yml patch	12 Nov	B
-studio-b	L1.9	part 1 merged; part 2 starting now P7b is in	13 Nov	B
+case	P9	built at 7916044; orchestrator review running, then a rebase onto L1.9 part 2 and its three diffs at merge	12 Nov	B
+case-b	P12	part 2 accepted after three rounds; after P9 lands, rebase and merge with Laurium's egress row and the owner's release.yml patch	12 Nov	B
+studio-b	L1.9	done: part 2 merged (184b798)	done	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
 docs	D2c	parts 1 and 2 merged (guide 1.81); backups after P9, the profile side after P10 part 2	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
