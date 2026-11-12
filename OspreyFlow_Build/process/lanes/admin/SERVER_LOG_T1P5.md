@@ -112,3 +112,48 @@ an unfiltered listing, a whole-table delete. 28 candidates:
   failed under the server's load (a known perf-budget item; passed in the Mac's full run) (`gates/t1p5_f11a865.test.txt`).
 - **The Mac:** live-collect exit 0; test-js 3,136 + 51 passed; a11y 1,019 passed and 1 failed, keyboard 768 passed and 2
   failed, those three main's own (`gates/t1p5_mac_f11a865.txt`).
+
+## The orchestrator's review of `2b1e26a` (12 November 2026), one pass, rebased onto main `9a4a0fb`
+
+1. **Must-fix 1, no `pkill` of other processes.** `test_the_start_call_returns_while_the_run_goes_on` ran
+   `pkill -f "sleep 6"`, ending any same-user process whose command line held it (a `sleep 60`, other lanes' runs).
+   The run's command now carries a sentinel of the case's own (its tmp path), the case ends that alone, and a
+   bystander `sleep 60` must outlive it. Red by hand on the Mac (`gates/t1p5_pkill_plant.txt`): the old pattern was
+   planted confined to the case's own process group, since this Mac runs another session's `lanes_heartbeat.sh watch
+   60`, whose `sleep 60` an unconfined plant would have ended; the bystander was ended, the case red for that reason.
+2. **Must-fix 2, the gates** at the final head on main, raw output kept (`gates/t1p5_<head>.*`).
+3. **Should-fix 3.** The reaper reads each environment whole with `grep -qzxF … "/proc/$1/environ"`: no redirection to
+   print its own error, and a value holding a newline then the tag no longer matches (a case; planted). A case also
+   asserts a run's log holds no "Permission denied" or "No such file"; as root on the server every environment is
+   readable, so that case guards the shape rather than proving the old one red there.
+4. **Should-fix 4.** The start is chained on the folder's being made new (`mkdir $run || exit 4`; the rest of its
+   set-up `|| exit 5`, each refused in its own words). With `date` and `od` pinned on PATH two runs get one name, and
+   the second is refused in words with nothing of it started (a case; planted).
+5. **Should-fix 5, `stop <lane>`** (the orchestrator's ruling): TERM to the run's process group (the wrapper is its
+   session's leader), up to 15 s for the session to end, KILL to the group and to the run's tag left, then the exit
+   file (143, or 137 when a KILL was needed), so the follow ends and the next run is allowed. Tested end to end
+   through the verb on the server: cmd.sh, its command and the detached server gone, exit 143, the follow ended, the
+   next run allowed. Planted three ways: TERM to the wrapper alone (a KILL then needed, 137), no wait before the KILL,
+   no exit written. The usage says Ctrl-C on the Mac ends only the follow, never the run, and `stop` is how a run is
+   ended. **The CARRIES row** (row 209's text, sent to the orchestrator rather than edited here): restoring INT on the
+   host would not change the Mac's Ctrl-C, which ends only the follow; `stop` is the way.
+6. **Should-fix 6, reap fails closed**: reaped only when the run's exit is written, or its recorded pid is non-empty
+   and dead with no process of its session alive (cmd.sh and its command outlive a killed wrapper in the wrapper's
+   session; a leftover server that made a session of its own does not). Otherwise refused in words, pointing to
+   `stop`. `test_reap_ends_what…` writes a dead pid; a new case kills a session's leader and keeps a member alive, and
+   reap refuses (planted).
+7. **Should-fix 7.** The environment is read again before TERM too. **Not shown red alone**: a pid that changes between
+   the scan and the TERM cannot be timed from a test; the KILL pass's re-read (the same function) is.
+8. **Should-fix 8.** A case runs pytest with the Makefile's own `-c` and pytest.ini, no `-p`, at `-n 2 --dist
+   loadgroup`, on one case under `tests/`, and asserts the controller prints `worker_isolation: 2 workers …`. Red with
+   the conftest diff taken back and `-p tests.worker_isolation` on the outer command line. The real gate record keeps
+   the header line.
+9. **Should-fix 9, `apply_diff.py`.** Atomic across files (each file backed up before the temporaries are renamed; a
+   failed rename puts back every file already renamed), CRLF kept, "\ No newline at end of file" honoured on either
+   side, the diff split on "\n" alone. A case each in `gates/t1p5_apply_diff.txt`, against the old applier, which lost
+   CRLF, reported a newline added while writing nothing, cut a form-feed line in two, and could not apply a diff of two
+   files at all.
+10. **Minor.** REPORT.md for this step. CARRIES.md is main's on the branch (the INT row's text went to the
+    orchestrator). The friction fragment's Makefile wording corrected. `osprey_reap` takes its argument alone: empty is
+    refused, never the caller's own tag (a case sets the caller's tag; planted). reap says "No process tagged for the
+    run … was found: nothing reaped" when that is so (a case; planted). The live-selection case uses monkeypatch.

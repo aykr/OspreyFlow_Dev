@@ -1,32 +1,61 @@
-t1/apply_diff.py against the old applier (9cbb457), each in a scratch folder shaped like the repository; then the real conftest-T1p4.diff taken back and applied again on lane/admin-t1p5 (git sees no change after taking it back).
+t1/apply_diff.py against the old applier (9cbb457), each case in a scratch folder shaped like the repository (file contents shown with repr), then the real conftest-T1p4.diff taken back and applied again on lane/admin-t1p5.
 --- the old applier (9cbb457):
   1. the only match inside a longer line (beta in xbeta):
     applied: x/a.txt
-    a.txt: xBETA|
-  2. two files, both writable:
-    refused: a hunk of ad.fQwR/two.diff matches 0 times in y/b.txt; nothing written
-    a.txt: alpha|  b.txt: one|
-  3. two files, the second's folder read-only:
-    refused: a hunk of ad.fQwR/two.diff matches 0 times in y/b.txt; nothing written
-    a.txt: alpha|  b.txt: one|
+    a.txt: 'xBETA\n'
+  2. two files:
+    refused: a hunk of ad.ydC9/two.diff matches 0 times in y/b.txt; nothing written
+    a.txt: 'alpha\n'  b.txt: 'one\n'
+  3. two files, the second's folder read-only (nothing can be staged there):
+    refused: a hunk of ad.ydC9/two.diff matches 0 times in y/b.txt; nothing written
+    a.txt: 'alpha\n'  b.txt: 'one\n'
   4. a removed line that itself begins -- :
-    refused: a hunk of ad.fQwR/dash.diff matches 0 times in x/q.sql; nothing written
-    q.sql: select 1;|-- old note|select 2;|
+    refused: a hunk of ad.ydC9/dash.diff matches 0 times in x/q.sql; nothing written
+    q.sql: 'select 1;\n-- old note\nselect 2;\n'
+  5. a CRLF file (the diff's lines carry the \r, as git writes them):
+    applied: x/c.txt
+    c.txt: 'one\nTWO\n'
+  6a. a newline added at the end (the old side marked No newline):
+    applied: x/n.txt
+    n.txt: 'last'
+  6b. and taken back (--reverse: the new side now the one with none):
+    took back: x/n.txt
+    n.txt: 'last'
+  7. a line holding a form feed (splitlines would cut it in two):
+    refused: a hunk of ad.ydC9/ff.diff matches 0 times in x/f.txt; nothing written
+    f.txt: 'page\x0cone\nkeep\n'
+  8. two files, the second rename failing (os.replace made to fail on its second call):
+    refused: a hunk of ad.ydC9/two.diff matches 0 times in y/b.txt; nothing written
+    a.txt: 'alpha\n'  b.txt: 'one\n'  left over: 0
 --- as built:
   1. the only match inside a longer line (beta in xbeta):
-    refused: a hunk of ad.r0a5/inside.diff matches 0 times in x/a.txt; nothing written
-    a.txt: xbeta|
-  2. two files, both writable:
+    refused: a hunk of ad.Ld1g/inside.diff matches 0 times in x/a.txt; nothing written
+    a.txt: 'xbeta\n'
+  2. two files:
     applied: x/a.txt
     applied: y/b.txt
-    a.txt: ALPHA|  b.txt: ONE|
-  3. two files, the second's folder read-only:
-    refused: [Errno 13] Permission denied: 'ad.r0a5/y/.b.txt.apply_diff'; nothing written
-    a.txt: alpha|  b.txt: one|
+    a.txt: 'ALPHA\n'  b.txt: 'ONE\n'
+  3. two files, the second's folder read-only (nothing can be staged there):
+    refused: [Errno 13] Permission denied: 'ad.Ld1g/y/.b.txt.apply_diff'; nothing written
+    a.txt: 'alpha\n'  b.txt: 'one\n'
   4. a removed line that itself begins -- :
     applied: x/q.sql
-    q.sql: select 1;|-- new note|select 2;|
---- as built, the real conftest-T1p4.diff there and back on this tree (git sees no change after):
+    q.sql: 'select 1;\n-- new note\nselect 2;\n'
+  5. a CRLF file (the diff's lines carry the \r, as git writes them):
+    applied: x/c.txt
+    c.txt: 'one\r\nTWO\r\n'
+  6a. a newline added at the end (the old side marked No newline):
+    applied: x/n.txt
+    n.txt: 'last\n'
+  6b. and taken back (--reverse: the new side now the one with none):
+    took back: x/n.txt
+    n.txt: 'last'
+  7. a line holding a form feed (splitlines would cut it in two):
+    applied: x/f.txt
+    f.txt: 'page\x0cone\nKEEP\n'
+  8. two files, the second rename failing (os.replace made to fail on its second call):
+    refused: the second rename failed (made to); every file put back as it was
+    a.txt: 'alpha\n'  b.txt: 'one\n'  left over: 0
+--- as built, the real conftest-T1p4.diff there and back:
     took back: OspreyFlow_Build/tests/conftest.py
     applied: OspreyFlow_Build/tests/conftest.py
-    after applying again:  1 file changed, 2 insertions(+), 1 deletion(-)
