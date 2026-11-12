@@ -694,6 +694,23 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - doctor's 2480 check reading the configured port;
         - a firewall rule per port;
         - the second model on the CPU or on Gemini.
+      - **Part 2 complete (f67f6fc; process/lanes/demo/PART2.md).** §9: a fresh Small has only `admin`. Retiring
+        demo accounts needs a verb, since restore and repair-sign-in recreate them. Keycloak's database is not backed
+        up, so a restore brings people back without passwords. Restore-keeping-identity is recommended for Part 3
+        (in CARRIES).
+
+        **Caution for tonight:** after restoring the clean backup, check you can still sign in as `admin`.
+
+        **Your new ask (about 21:00): demo B only, osprey-small at https://govuk.ospreyflow.app.** It needs:
+        - your 3 A records;
+        - Let's Encrypt by DNS-01 (TXT records by hand, or a token you enter);
+        - one address change and apply, then repair-sign-in and re-checks, about 1–1½ h.
+
+        Waiting for:
+        - the DNS records;
+        - TXT or token;
+        - the venue's address;
+        - tonight or Friday morning.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
