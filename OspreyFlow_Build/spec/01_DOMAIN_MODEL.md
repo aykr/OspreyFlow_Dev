@@ -2431,6 +2431,14 @@ class AlertCitation(BaseModel):     # ADR-146 Amendment 7: one thing an alert ci
     words: str                      # is cleared for or not, apart from the rest of it (a screening
     node_ids: list[NodeId]          # match on one list: the listed party and its SAME_AS); shown
     edge_ids: list[EdgeId]          # only to a reader who may read every node and link it names
+    # The owner's ruling of 12 November 2026 (~15:30): each citation is decided on its own, by a
+    # closer who may read it; the alert closes once every citation is closed.
+    status: Literal["open", "closing", "closed"] = "open"
+    disposition: AlertDisposition | None = None
+    disposition_reason: str | None = None
+    decided_by: str | None = None
+    decided_at: datetime | None = None
+    close_proposed_by: str | None = None
 
 class Alert(BaseModel):
     id: str
@@ -2466,7 +2474,9 @@ principal who could not see it anyway. An alert with `citations` (a screening ma
 ADR-146 Amendment 7) is shown to a reader who may read everything it rests on outside them and at least
 one of them. Each citation is shown only to a reader who may read every node and link it names. A hidden
 one is left out of what is served (its words, its ids, and how many there are), so the alert never says
-which lists, or how many, the reader cannot see (rule 3). The stored words name no list. `investigation_id` is a best-effort audit-shaped hint, not
+which lists, or how many, the reader cannot see (rule 3). The stored words name no list. A close decides
+only the citations its closer may read, and the alert is shown to each reader as their citations stand:
+closed when every one they may read is closed, open on one still open (`alerts.served_triage`). `investigation_id` is a best-effort audit-shaped hint, not
 an access-control scope, threaded from whichever producer route was investigation-scoped at the
 point the triggering write happened; `None` for a producer with no single investigation in scope
 (a corpus-wide resolution trigger, say). Jumping from an alert makes a case of its own, never one
