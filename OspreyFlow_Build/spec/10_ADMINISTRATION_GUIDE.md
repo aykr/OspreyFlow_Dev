@@ -751,14 +751,16 @@ decisions are ADR-148's.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the
 backups and, for the proof-of-concept shape, the install and decommission runbooks. Nothing here
-has run in the platform's own namespace. On a local kind cluster set to the platform's rules, two
-things were not yet shown working: the Conduit and the workers running as user 10001, and the
-egress policies enforced. They are to be shown at the first install on the platform. People sign in
+has run in the platform's own namespace. On a local kind cluster set to the platform's rules, the Conduit and the workers were not yet
+shown running as user 10001, and of the egress policies only the deny was shown holding, for
+ClickHouse's pod; each workload's own rows are not yet shown enforced. They are to be shown at the
+first install on the platform. People sign in
 through the organisation's own Entra ID (section 6a.7); Keycloak is not rendered on this profile.
 No token from a real tenant has yet been tried (section 6a.7 lists what one is to settle). The
 commands that need the platform, a cluster or Docker (`helm install`, `tofu`, the push itself, the
-policy check on your own settings) have not been run against the platform. The two renders and the
-push's dry run below have been run as written, from `OspreyFlow_Core`, on this example.
+policy check on your own settings) have not been run against the platform. The unpinned render and
+the push's dry run below have been run as written, from `OspreyFlow_Core`, on this example; the
+pinned render needs the images in the registry first.
 
 ### 6a.1 What is rendered
 
@@ -808,7 +810,7 @@ map:                             # required
 **The example's map is empty on this profile.** Its one provider is a local basemap file, and no
 basemap can be brought onto the platform yet (below), so copied as it is, the map shows no tiles.
 Name a remote provider instead for a map that shows; a provider the Conduit proxies names its
-host's networks in `egress_nets` (section 6a.5). Every `cloud_platform` setting is in appendix A.
+host's networks in `egress_nets` (section 6a.5). Every `cloud_platform` setting is in Appendix A.
 
 **The marking ceiling is OFFICIAL-SENSITIVE** on this profile unless `deployment.highest_marking`
 says otherwise: a platform that hosts data up to, but not including, SECRET needs no more.
@@ -853,8 +855,9 @@ nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.m
 last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, the
 backups kept for their retention, then `python -m harness.cloud_platform.decommission_check`, which
 names anything left behind and exits 1 while anything is. A block fenced `bash platform` runs only
-with the platform's access; the rest runs anywhere. Restoring a set kept after a decommission is in
-it and not yet rehearsed. The standard shape has no rendered runbook yet.
+with the platform's access; the rest runs anywhere. **Neither has yet run against a cluster or an
+account**: the tests check their blocks' syntax, order and rights only. The standard shape has no
+rendered runbook yet.
 
 **A platform is a settings file**, `harness/cloud_platform/platforms/<name>.yaml`: its ingress class
 and annotations, the controller's namespace, its storage class, its egress policy kind and the
@@ -886,12 +889,14 @@ unless `models.extraction_engine: deep_read` is named (ADR-135 Amendments 6 and 
 `services/laurium/`, pushed to its own repository in the namespace's registry), on port 8000. It is
 not inside the Conduit or the workers: the Conduit alone calls it, and it reaches nothing but the
 model gateway, with a key of its own scoped to its models; it takes no service account, no token and
-none of our Secret. It extracts for the review queue's documents alone; Questions, Ask, email and
-document content stay on Deep read. It has read a real model's answer (3 of 3 on the product's own
-extraction model, outside the rendered route) but has not yet been run on the organisation's own
-engine. Until its key is held on the gateway, its calls are refused in words ("Laurium's key is not
-yet held on the model gateway; the Conduit keeps trying. Try the extraction again shortly."), and the
-Conduit keeps trying. With `deep_read` named, no Laurium pod, image or repository is rendered.
+none of our Secret. It is for the review queue's document extraction alone, and **no screen reaches
+it yet**: the Glass's own extraction (a document's content, email) and Questions and Ask stay on Deep
+read, so with the preset Laurium is rendered and runs while no analyst action reaches it, until a
+screen calls the review queue's extraction (*coming*). It has read a real model's answer (3 of 3 on
+the product's own extraction model, outside the rendered route) but has not yet been run on the
+organisation's own engine. Until its key is held on the gateway, its calls are refused in words
+("Laurium's key is not yet held on the model gateway; the Conduit keeps trying. Try the extraction
+again shortly."). With `deep_read` named, no Laurium pod, image or repository is rendered.
 
 **Every pod runs as user and group 10001**, non-root, with no privilege escalation, every capability
 dropped and seccomp's runtime default; every Dockerfile of ours is `USER 10001:10001`. No pod takes
@@ -925,7 +930,9 @@ on the platform.
 | ClickHouse Keeper (standard shape) | 1 | 3 | 0.1 | 512 MiB | 512 MiB |
 | The model gateway (LiteLLM) | 1 | 1 | 0.25 | 512 MiB | 1 GiB |
 | Laurium, when it is the extraction engine | 1 | 1 | 0.25 | 1 GiB | 2 GiB |
-| Every init container and Job, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
+| The backups' and the restore's Jobs | — | — | 0.5 | 2 GiB | 4 GiB |
+| The restore's ArcadeDB step | — | — | 1 | 12 GiB | 12 GiB |
+| Every init container, and any container not named above | — | — | 0.1 | 256 MiB | 512 MiB |
 
 From renders of the repository's synthetic deployments, counting each running copy:
 
@@ -937,8 +944,8 @@ From renders of the repository's synthetic deployments, counting each running co
 | Production, Deep read | 8.5 | about 65 GiB | 77 GiB |
 | Production, Laurium and a Bedrock engine | about 8.8 (8.75) | about 66 GiB | 79 GiB |
 
-These count each running copy alone: a set-up job, the nightly backup's Jobs and the extra copy a
-rolling update starts need room above them, so a ResourceQuota on requests and memory limits must be
+These count each running copy alone: a set-up job, the nightly backup's and a restore's Jobs (above)
+and the extra copy a rolling update starts need room above them, so a ResourceQuota on requests and memory limits must be
 larger, or pods are left unscheduled; in the standard shape one on `limits.cpu` refuses them whatever
 its size.
 
@@ -978,11 +985,12 @@ mounts a service-account token without being allowed to (section 6a.6).
 | --- | --- | --- |
 | The Conduit | `rds-postgresql-instance-output` (`rds_instance_address`, `rds_instance_port`, `database_username`, `database_password`, `database_name`), `elasticache-redis` (`primary_endpoint_address`, `port`, `auth_token`) and `s3-bucket-output` (`bucket_prefix`); `ospreyflow-secrets` whole, with every model engine's key and the gateway's salt (`OSPREY_LITELLM_SALT_SECRET`) and database password (`OSPREY_LITELLM_DB_PASSWORD`) blank. It alone keeps the gateway's master key (`OSPREY_LITELLM_MASTER_SECRET`, for its admin API) and the connections' secrets | `ospreyflow`, its token mounted |
 | The workers | The same three managed secrets; `ospreyflow-secrets` whole with, besides the Conduit's blanks, the gateway's master key and the connections' secrets blank | `ospreyflow`, its token mounted |
-| The Glass, named-entity extraction, Laurium | The ConfigMap alone: no key of our Secret, no managed store's detail | None; no token |
+| The Glass, named-entity extraction | The ConfigMap alone: no key of our Secret, no managed store's detail | None; no token |
+| Laurium | Nothing: its one setting is the gateway's address | None; no token |
 | ArcadeDB | `OSPREY_ARCADEDB_PASSWORD`, `OSPREY_ARCADEDB_CLUSTER_TOKEN` | None; no token |
-| ClickHouse | `OSPREY_CLICKHOUSE_PASSWORD`, and its backup user's password from `ospreyflow-clickhouse-backup` | `ospreyflow-backup-clickhouse`, for its backups (section 6a.8) |
+| ClickHouse | `OSPREY_CLICKHOUSE_PASSWORD`, and its backup user's password from `ospreyflow-clickhouse-backup` | `ospreyflow-backup-clickhouse`, for its backups (section 6a.8); no token mounted |
 | The model gateway, and its database's set-up | `OSPREY_LITELLM_DB_PASSWORD`, `OSPREY_LITELLM_MASTER_SECRET`, `OSPREY_LITELLM_SALT_SECRET`, and each enabled engine's key (`OSPREY_MODEL_KEY_<NAME>`, or `OSPREY_MODEL_PROVIDER_KEY` for a single `models.provider`); `rds-postgresql-instance-output`'s address, user and password | `ospreyflow-gateway`, its token mounted, while a Bedrock engine is declared; otherwise none and no token |
-| The backups' runs and the restore | ArcadeDB's password; `ospreyflow-backup-output` | `ospreyflow-backup`, its token mounted |
+| The backups' runs and the restore | ArcadeDB's password; ClickHouse's backup user's password (`ospreyflow-clickhouse-backup`); `ospreyflow-backup-output` | `ospreyflow-backup`, its token mounted |
 | ClickHouse Keeper (standard shape) | Nothing | None; no token |
 
 The Conduit and the workers run as the service account `ospreyflow`, which reaches the buckets through
@@ -1054,7 +1062,8 @@ single ports, never a range:
 engine disabled in *Admin › Models* keeps its host open until the next render is installed, and one
 first added there is refused until it is declared, rendered again, the Terraform applied and the new
 values installed (section 10.1). No pod reaches a mail server: Keycloak, which sent sign-in mail, is
-not rendered.
+not rendered. A `mail:` section therefore does nothing here, yet the render still asks for its
+host's networks and the Terraform for its password (a known issue).
 
 Calico's open-source policy matches networks, not names, so each of those hosts names its networks
 in `cloud_platform.egress_nets`, and a host without them is refused at render ("egress is denied by
@@ -1260,7 +1269,9 @@ assigned in *Admin › People*, which keeps them in the deployment's own Postgre
   manage people** (no enabled person who has signed in holds the right), each one named is given
   Admin again, added to what they hold, and the audit log records it
   (`grant_first_administrator`). That is the way back in: name a person who is not disabled here,
-  render again and restart the Conduit (in the poc shape, `INSTALL.md`'s step 6 gives the commands).
+  render again, install the new values (`helm upgrade`: the list is in the ConfigMap, so a restart
+alone reads the old one) and restart the Conduit. In the poc shape `INSTALL.md`'s step 6 gives
+these commands but leaves out installing the values (a known issue).
 - **Locking everyone out is refused.** A change that would leave nobody who can manage people is
   refused; only an enabled person who has **signed in at least once** counts, so a person added by
   object id who has never signed in is no proof anyone can administer.
@@ -1302,7 +1313,10 @@ one real token from the organisation's development tenant is to settle each:
 
 The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning. **The deployment backs up what it runs itself**
-(ADR-148 Amendment 7): ArcadeDB, ClickHouse and, in the poc shape, the Ingest root's claim. The
+(ADR-148 Amendment 7): ArcadeDB, ClickHouse and, in the poc shape, the Ingest root's claim. **The
+shared volume, `ospreyflow-shared`, is not backed up**: it holds the settings files, the recipes
+repository and, in the standard shape, uploads and staging, so a restore brings the stores back and
+leaves it as it is, and the two can disagree. The
 recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole procedure under *The
 `cloud-platform` profile*, with every command; this section says what it does.
 
@@ -1311,7 +1325,9 @@ recovery runbook that ships with the product, `deploy/RUNBOOK.md`, has the whole
 (each claim, read-only). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by
 their slot, and `manifest.json` last, holding each part's size and checksum and the time the set
 finished. A set without its manifest is unfinished and is never restored from. Every object is
-encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`), which nobody may delete.
+encrypted by the backups bucket's own KMS key (`alias/<namespace>-backups`), whose deletion its
+policy denies against accident (an administrator who rewrites the policy can lift that, and the
+decommission does once the retention ends).
 Two roles write a set, ClickHouse's own and the runner's, each to its own prefix, by IRSA, so no key
 is stored anywhere; neither can erase a set. The bucket is versioned (an object overwritten keeps
 its previous version for 7 days), and a set's objects expire 35 days after they were written: the
@@ -1335,7 +1351,7 @@ ClickHouse copy; this deployment runs more, and its restore is not supported yet
 
 1. **Room for a second copy.** Each store's restored copy is written beside the live one, so
    ArcadeDB's and ClickHouse's claims need free space for a second copy of their database; grow a
-   claim first if not.
+   claim first if not (the volume-expansion procedure is *coming*, section 6a.9).
 2. **The managed database with the stores.** PostgreSQL must agree with the stores, or anything
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
@@ -1358,7 +1374,8 @@ is missing: the Conduit and the workers would create an empty one in its place. 
 fails* lists each refusal, where the data is, and what to do.
 
 **Measured, and not yet measured.** On a two-node test cluster with the platform's rules, against a
-simulation of S3, STS and KMS, with synthetic data (a 9.6 MB set): the backup took 7.1 s, the
+simulation of S3, STS and KMS, on a test server shared with other work, with synthetic data (a
+9.6 MB set): the backup took 7.1 s, the
 restore's Jobs 16.5 s, and destroyed-to-restored-and-compared 70.8 s, most of it the stores stopping
 and starting. These are not a service level: they leave out the Conduit's and the workers' own stop
 and start and RDS's restore, and a real restore grows with its set. **The restore is to be rehearsed
@@ -1380,7 +1397,8 @@ place; the runbook gives the commands.
   with it.
 - **The volume-expansion and upgrade runbooks** for ArcadeDB and ClickHouse, and the disruption
   budgets' drain test.
-- **Laurium on the organisation's own engine**: shown at the first install.
+- **Laurium reached from a screen** (the review queue's extraction), and run on the organisation's
+  own engine at the first install.
 - **A basemap on the platform**: the tiles bucket, and a basemap built elsewhere brought onto it.
 - **The shared folders, the settings files and the recipes repository** off the one volume (the poc
   shape's Ingest root is off it already).
@@ -1413,13 +1431,14 @@ None stops the render; each is the team's to answer before the first install.
    pod is allowed, also hold KMS's addresses. No row names KMS, but Calico matches networks, not
    names.
 
-Added in this guide, beyond ADR-148's own list:
-
-8. **The managed stores' subnets**, to narrow `172.20.0.0/16` (section 6a.5), and the networks of S3's
-   gateway endpoint and STS, for the platform's file.
-9. **The namespace's LimitRange**: its default CPU limit, if any, which every container here would
+8. **The namespace's LimitRange**: its default CPU limit, if any, which every container here would
    take, and whether the ResourceQuota counts `limits.cpu`, which would refuse every pod of the
    standard shape (section 6a.2).
+
+Added in this guide, beyond ADR-148's own list:
+
+9. **The managed stores' subnets**, to narrow `172.20.0.0/16` (section 6a.5), and the networks of S3's
+   gateway endpoint and STS, for the platform's file.
 10. **The sensitive variables**: how the environments repository's pipeline is given a key a person
     holds (a model engine's, a connection's, the mail server's password), since the Terraform takes
     each as a sensitive variable with no default, and its state then holds it (section 6a.3).
@@ -2105,11 +2124,13 @@ analysts nor given to the gateway.
 **The extraction engine, on a cloud platform.** Under **What the installer declared**, *Admin ›
 Models* shows the review queue's extraction engine, read-only: "Extraction engine: Laurium, chosen at
 set-up: change it in osprey.yaml, re-render, and have the platform team apply it." (or *OspreyFlow
-Deep read*). Laurium is a service the render makes (section 6a.1), so nothing in Admin changes it:
-set `models.extraction_engine` (`deep_read` or `laurium`; left unset, `laurium` on this profile),
-render again, push Laurium's image when it is newly chosen (section 6a.4), have the platform team
-apply the Terraform (its repository), and install the new values (`helm upgrade`). As with the
-engines' refusal, the row's words leave out installing the values.
+Deep read*); no screen reaches Laurium yet (section 6a.1). Laurium is a service the render makes,
+so nothing in Admin changes it: set `models.extraction_engine` (`deep_read` or `laurium`; left unset,
+`laurium` on this profile), then follow section 6a.4 in its order (the unpinned render, `ecr.tf`'s
+pull request applied for Laurium's repository when it is newly chosen, the push, the pinned
+render), and install the new values (`helm upgrade`). As with the engines' refusal, the row's words
+leave out installing the values. Switching back to `deep_read` leaves Laurium's repository holding
+its images, and the Terraform cannot remove a repository until it is emptied.
 
 ## 10a. Maps
 
