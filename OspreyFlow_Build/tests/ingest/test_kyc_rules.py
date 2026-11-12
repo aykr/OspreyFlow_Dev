@@ -958,3 +958,53 @@ async def test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_propos
         states = {listed.get(e.target): e.provenance.state for e in why.edges if e.type == "SAME_AS"}
         assert states == {stores["list_name"]: ProvenanceState.ASSERTED, SECOND_LIST: ProvenanceState.INFERRED}
         assert why.alert.status == "open"
+
+
+async def test_each_proposal_confirms_by_its_own_disposition(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The lane review of the second pass, defect 4: the OFFICIAL officer proposes list A's match a
+    false positive, the SECRET reader proposes list B's a true match, and a SECRET colleague approves
+    both. B's `SAME_AS` is confirmed and A's stays inferred. Red with the approval's confirm read
+    from the first proposal shown (A's false positive): the alert closed a true match with its
+    match left inferred (rule 5)."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alert_id = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert.id
+        args = (stores["alerts"], graph, gate.analytics, case, alert_id)
+        await dispose(*args, OFFICER, disposition="false_positive", reason="Not the listed Petrova")
+        await dispose(*args, SECRET_READER, disposition="true_positive", reason="The listed Petrova")
+        await approve_close(*args, SECRET_READER.model_copy(update={"id": "kyc-secret-colleague"}))
+        why = await explain(stores["alerts"], graph, gate.analytics, case, alert_id, SECRET_READER)
+        listed = {n.id: n.properties.get("list_name") for n in why.nodes}
+        states = {listed.get(e.target): e.provenance.state for e in why.edges if e.type == "SAME_AS"}
+        assert states == {stores["list_name"]: ProvenanceState.INFERRED, SECOND_LIST: ProvenanceState.ASSERTED}
+        assert why.alert.status == "closed"
+
+
+async def test_a_held_loads_note_counts_only_the_matches_its_loader_may_read(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The lane review of the second pass, defect 8: the pipeline makes the rule hold, and Elena
+    Petrov's match cites the SECRET list alone. The OFFICIAL loader is told nothing of a match
+    (the rows are held all the same); the SECRET loader is told the rows were held. Red with the
+    note said for every finding: the OFFICIAL loader told of a match on a list they may not read."""
+    await second_list("SECRET")
+    said = {}
+    for loader in (OFFICER, SECRET_LOADER):
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case, loader=loader)
+            gate.screening = cast(ScreeningListStore, _BothLists(stores["screening"], {SECOND_LIST}))
+            gate.on_hit = {rule.id: "hold"}
+            report = await _onboard(graph, gate, [_application("Halcyon Marine Ltd")], loader=loader)
+        said[loader.id] = [n for n in report.rule_notes if "held for review" in n]
+    assert said[OFFICER.id] == [], said
+    assert len(said[SECRET_LOADER.id]) == 1

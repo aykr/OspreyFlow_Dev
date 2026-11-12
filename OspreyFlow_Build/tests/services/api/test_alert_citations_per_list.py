@@ -352,3 +352,26 @@ def test_a_pack_item_asks_its_reader_for_the_matches_it_shows_and_no_other() -> 
     alone asks a later reader for A's match, and one showing both asks for both."""
     assert edges_shown_with(BOTH, ["n-a", "n-b", "l-a"]) == ["e-1", "s-a"]
     assert edges_shown_with(BOTH, ["n-a", "n-b", "l-a", "l-b"]) == ["e-1", "s-a", "s-b"]
+
+
+async def test_the_rule_audit_reads_a_lists_re_screening_by_its_marking_as_it_stands_now() -> None:
+    """The lane review of the second pass, defect 10: an entry written while the list was OFFICIAL
+    is not named to an OFFICIAL reader once the list is SECRET. Red with the recorded marking alone."""
+    from services.api.rule_holds import readable_rule_audit
+
+    from schemas.domain import Principal, RuleAuditEntry
+
+    class _Raised:
+        async def markings(self, names: Any) -> dict[str, tuple[str, str]]:
+            return {n: ("SECRET", "P") for n in names}
+
+    earlier = RuleAuditEntry(recorded_at=NOW, principal_id="admin", action="rule_evaluated", result_cardinality=0,
+                             detail={"rule_id": "kyc", "trigger": "list_update", "list_name": "Synthetic list B",
+                                     "entries": 3, "findings": 0, "list_classification": "OFFICIAL",
+                                     "list_handling_code": "P"})  # fmt: skip
+    _, graph, analytics, _ = _world(set(), [])
+    page = await readable_rule_audit(
+        _Audit([earlier]), graph, CASE, Principal(id="r", clearance="OFFICIAL", org_unit="unit-1"),  # type: ignore[arg-type]
+        analytics=analytics, alerts=_PackAlerts([]), lists=_Raised(),  # type: ignore[arg-type]
+    )  # fmt: skip
+    assert page.total == 0

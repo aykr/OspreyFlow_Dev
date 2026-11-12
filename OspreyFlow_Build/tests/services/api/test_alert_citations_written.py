@@ -19,6 +19,8 @@ from services.api.kyc_rules import KycContext, screening_finding
 from services.api.rule_evaluation import Finding, RuleGate
 from services.api.screening import ScreeningEntry, ScreeningHit
 
+from ontology.packs import load_deployment_ontology
+from ontology.validation import validate_properties
 from schemas.domain import Alert, AlertMode, Handling, NodeWrite
 from tests.services.api.test_alert_node_marking import (
     NOW,
@@ -30,6 +32,7 @@ from tests.services.api.test_alert_node_marking import (
     _sweep_gate,
 )
 
+ONTOLOGY_TYPES = {t.name: t for t in load_deployment_ontology().entity_types}
 ENTRY_A = ScreeningEntry(id="Synthetic list A:a-1", list_name="Synthetic list A", listing="sanction",
                          entity_type="Person", name="PETROVA, Elena")  # fmt: skip
 ENTRY_B = ScreeningEntry(id="Synthetic list B:b-1", list_name="Synthetic list B", listing="sanction",
@@ -58,6 +61,11 @@ class WritingGraph(TxGraph):
         return None
 
     async def upsert_nodes(self, nodes: Any, tx: str) -> list[str]:
+        # As ArcadeDB's `upsert_nodes`: a property the ontology does not declare is refused (the
+        # lane review of the second pass, defect 1: `list_entry_id` passed here and failed there).
+        for n in nodes:
+            if n.type in ONTOLOGY_TYPES:
+                validate_properties(ONTOLOGY_TYPES[n.type], dict(n.properties))
         self.writes.extend(nodes)
         ids = [self.merge.get(n.properties.get("list_name", ""), n.id) if n.type == "Person" else n.id
                for n in nodes]  # fmt: skip
@@ -221,9 +229,11 @@ def test_no_route_answers_the_ids_a_loads_rules_wrote() -> None:
 
 
 class HeldParties(WritingGraph):
-    """Listed parties already held, found as the port finds them (`find_node`): the visible nodes
-    sharing the value, read one past the adapter's bound (50), the first carrying every `also`
-    value, and `FindLimitExceeded` where none does and more than the bound share it (rule 2)."""
+    """Listed parties already held, found as ArcadeDB finds them (`find_node`): by an identifier or
+    an indexed property only (anything else is stored inside the node's properties, and `has()` finds
+    nothing, so it is refused here), the visible nodes sharing the value read one past the adapter's
+    bound (50), the first whose `also` values match as text, and `FindLimitExceeded` where none does
+    and more than the bound share it (rule 2)."""
 
     BOUND = 50
 
@@ -235,20 +245,25 @@ class HeldParties(WritingGraph):
                         *, also: Any = None) -> Any:  # fmt: skip
         from ports.graph import FindLimitExceeded
 
+        type_def = ONTOLOGY_TYPES[entity_type]
+        findable = {*type_def.identifiers, *(p.name for p in type_def.properties if p.indexed)}
+        assert field in findable, f"ArcadeDB finds no {entity_type} by {field!r}: not indexed"
         sharing = [n for n in self.held if n.type == entity_type and n.properties.get(field) == value]
         read = sharing[: self.BOUND + 1]
         for node in read:
-            if all(node.properties.get(k) == v for k, v in (also or {}).items()):
+            if all(str(node.properties.get(k)) == v for k, v in (also or {}).items()):
                 return node
         if len(sharing) > self.BOUND:
             raise FindLimitExceeded(entity_type, field, self.BOUND)
         return None
 
 
-def _party(node_id: str, entry: ScreeningEntry, family: str = "Petrova") -> Any:
+def _party(node_id: str, entry: ScreeningEntry) -> Any:
+    """The party a match on `entry` writes (`kyc_rules._listed_write`), as held."""
+    family, _, given = entry.name.partition(",")
     return SimpleNamespace(id=node_id, type="Person", handling=_handling(),
-                           properties={"family_name": family, "list_name": entry.list_name,
-                                       "list_entry_id": entry.id})  # fmt: skip
+                           properties={"family_name": family.strip().title(), "given_names": given.strip(),
+                                       "listing": entry.listing, "list_name": entry.list_name})  # fmt: skip
 
 
 async def _cited_party(graph: HeldParties, entry: ScreeningEntry) -> tuple[list[str], list[Any]]:
@@ -280,13 +295,23 @@ async def test_a_match_reuses_its_own_entrys_party_never_another_entry_of_the_sa
     assert ids == ["second"] and written == []
 
 
-async def test_a_match_on_a_name_many_parties_share_still_finds_its_own() -> None:
-    """Item 9: more people sharing the family name than the lookup's bound neither fails the rule
-    (`FindLimitExceeded`) nor hides the entry's own party. Red with the lookup by family name and
-    list: the bound was reached before the entry's own party, and the rule failed."""
+async def test_a_match_on_a_name_more_parties_share_than_the_lookup_reads_never_fails_the_rule() -> None:
+    """Item 9: more people sharing the family name than the lookup's bound, none of them in reach
+    this entry's: the rule does not fail (`FindLimitExceeded`), and the match is cited to a party
+    of its own, written with it. Red with the lookup's refusal raised: the rule failed, its alert
+    never raised."""
     others = [_party(f"other-{n}", ScreeningEntry(id=f"Synthetic list A:o-{n}",
               list_name="Synthetic list A", listing="sanction", entity_type="Person",
-              name="PETROVA, Other")) for n in range(60)]  # fmt: skip
+              name=f"PETROVA, Other{n}")) for n in range(60)]  # fmt: skip
     graph = HeldParties([*others, _party("own", ENTRY_A)])
     ids, written = await _cited_party(graph, ENTRY_A)
-    assert ids == ["own"] and written == []
+    assert len(written) == 1 and ids == [written[0].id]
+
+
+async def test_a_written_party_is_one_the_ontology_declares() -> None:
+    """The lane review of the second pass, defect 1: every property a listed party is written with is
+    one the ontology declares, as ArcadeDB's `upsert_nodes` requires (`validate_properties`); the
+    fake now refuses what the store refuses. Red with `list_entry_id` written: refused."""
+    graph, _, gate = _world()
+    await gate.raise_committed(await _finding(graph, gate))
+    assert [w for w in graph.writes if getattr(w, "type", None) == "Person"]

@@ -192,3 +192,23 @@ def test_a_reload_that_would_lower_a_lists_marking_is_refused(
     if new[1] not in SCHEME.handling_codes:
         pytest.skip(f"{new[1]} is not a code of this scheme")
     assert _lowers(SCHEME, kept, new) is lowers
+
+
+async def test_a_sentence_alert_resting_on_a_marked_list_is_marked_as_the_list_is() -> None:
+    """The lane review of the second pass, defect 6: a sentence's alert cites no list, so it was
+    shown to every reader of its subject, and "a 0.97 match to an entry on a screening list" told
+    a reader cleared only for OFFICIAL lists that a SECRET one had matched. Its node is now marked at
+    least as the list is, so such a reader is shown nothing of it (the queue reads the node). Red
+    with the node marked by its subject alone: OFFICIAL."""
+    from tests.services.api.test_rule_sentences import _node
+    from tests.services.api.test_sentence_rules import _gate, _Recorder, _rule, _write, _WritingGraph
+
+    author = SECRET.model_copy(update={"id": "author", "roles": ["analyst"]})
+    graph = _WritingGraph([_node("p1", "Person", family_name="Petrova", given_names="Elena")])
+    recorder = _Recorder()
+    gate = _gate(_rule(SENTENCE), graph, recorder, author=author)
+    gate.screening = _Lists([MARKED])  # type: ignore[assignment]
+    await gate.post_commit([], load_id="load-1", written=[_write("p1", family_name="Petrova", given_names="Elena")])
+    (alert,) = recorder.alerts
+    (node,) = [w for w in graph.written if getattr(w, "type", None) == "Alert"]
+    assert node.handling.classification == "SECRET" and "Marked list" not in (alert.words or "")

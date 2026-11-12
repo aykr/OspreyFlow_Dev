@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Literal
@@ -434,7 +434,28 @@ class ScreeningListStore:
         answers it as it answers a list no one subscribed, before it reads or changes anything."""
         async with self._pool.acquire() as conn:
             kept = await _kept_marking(conn, list_name)
+            if kept is None and await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM screening_lists WHERE list_name = $1) OR "
+                "EXISTS (SELECT 1 FROM screening_entries WHERE list_name = $1)",
+                list_name,
+            ):
+                # A list held with no marking is OFFICIAL, P, as every read of it takes it (the lane
+                # review of the second pass, defect 9: a reader below OFFICIAL could refresh it).
+                kept = (DEFAULT_CLASSIFICATION, DEFAULT_HANDLING_CODE)
         return kept is not None and not cleared.admits(*kept)
+
+    async def markings(self, list_names: Collection[str]) -> dict[str, tuple[str, str]]:
+        """Each named list's kept marking, as it stands now (a list with none kept is left out, and
+        is OFFICIAL, P): what an audit entry recorded at an older marking is read by too."""
+        if not list_names:
+            return {}
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT list_name, classification, handling_code FROM screening_list_markings "
+                "WHERE list_name = ANY($1::text[])",
+                sorted(list_names),
+            )
+        return {r["list_name"]: (r["classification"], r["handling_code"]) for r in rows}
 
     # --- a list as a managed source (ADR-133 decision 4, stage (c)) ------------------------------
 

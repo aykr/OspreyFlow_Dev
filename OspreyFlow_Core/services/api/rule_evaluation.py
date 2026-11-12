@@ -352,6 +352,10 @@ class Finding:
     #: for to be shown that citation, for a count told to the loader (the orchestrator's review,
     #: item 7; `counted_for`).
     citation_handlings: tuple[Handling, ...] = ()
+    #: Markings the alert rests on without citing (a sentence rule's screening list, the lane review
+    #: of the second pass, defect 6): its own node is marked at least so, and they are among the
+    #: handlings it is stored with, so a reader not cleared for them is shown nothing of it.
+    floor_handlings: tuple[Handling, ...] = ()
 
     @classmethod
     def from_hit(
@@ -669,7 +673,11 @@ async def write_alert_node(
     # a reader cleared for one list's match and not another's still reads it; the `ALERTED_ON` to
     # a citation's party is marked by that citation too (`_citation_markings`).
     marking = alert_handling(
-        scheme, await _referent_handlings(graph, scheme, core_of(finding), unseen, known or {})
+        scheme,
+        [
+            *await _referent_handlings(graph, scheme, core_of(finding), unseen, known or {}),
+            *finding.floor_handlings,
+        ],
     )
     if marking is None:
         return None, finding
@@ -1137,10 +1145,13 @@ class RuleGate:
                     rows = rows_of_finding(finding, events, written)
                     for row in rows:
                         verdict.hold.setdefault(row, (rule, held_because(rule)))
-                    verdict.notes.append(
-                        f"Rule “{rule.name}” matched {len(rows)} row(s); they are held for "
-                        "review, not loaded."
-                    )
+                    # Said only of a finding its loader may read (the lane review of the second
+                    # pass, defect 8, as item 7's count): the rows are held all the same.
+                    if counted_for(finding, self.loader, self.scheme):
+                        verdict.notes.append(
+                            f"Rule “{rule.name}” matched {len(rows)} row(s); they are held for "
+                            "review, not loaded."
+                        )
                 continue
             for finding in fresh:
                 node_id, why, stored = await self._alert_node_in_load(
@@ -1201,6 +1212,7 @@ class RuleGate:
             *(n.handling for n in nodes),
             *(e.handling for e in edges),
             *(e.handling for e in finding.events),
+            *finding.floor_handlings,
         ]
 
     async def _cited_handlings(

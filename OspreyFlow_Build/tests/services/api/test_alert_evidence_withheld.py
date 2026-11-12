@@ -429,9 +429,12 @@ class TriageStore(Store):
         if decision is None:
             raise AlertTriageConflict(alert_id)
         cites, status, assignee, (disposition, reason, decided_by) = decision
+        from services.api.alerts import last_proposer
+
         self.alerts[n] = stored.model_copy(update={
             "citations": cites, "status": status, "assignee": assignee, "disposition": disposition,
-            "disposition_reason": reason, "decided_by": decided_by, "close_proposed_by": None,
+            "disposition_reason": reason, "decided_by": decided_by,
+            "close_proposed_by": last_proposer(cites) if status == "closed" else None,
         })  # fmt: skip
         return self.alerts[n]
 

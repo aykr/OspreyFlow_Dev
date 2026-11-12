@@ -29,7 +29,7 @@ from datetime import UTC, date, datetime
 from conduit_common.identity import new_edge_id, new_node_id
 from ontology.handling import HandlingScheme, merge_handling
 from ports.compute import ComputePort
-from ports.graph import GraphPort
+from ports.graph import FindLimitExceeded, GraphPort
 from schemas.compute import OwnershipLink, OwnershipRequest, OwnershipTrace, StructureNode
 from schemas.domain import (
     AlertCitation,
@@ -203,11 +203,7 @@ def _listed_write(hit: ScreeningHit, deployer: Principal, now: datetime) -> Node
         properties = {"name": entry.name}
         if entry.country:
             properties["country"] = entry.country
-    # The orchestrator's review, item 9: the entry's own id (`<list>:<ref>`, one per entry of one
-    # list), which a later match on the same entry finds its party by, whatever its name.
-    properties.update(
-        {"listing": entry.listing, "list_name": entry.list_name, "list_entry_id": entry.id}
-    )
+    properties.update({"listing": entry.listing, "list_name": entry.list_name})
     return NodeWrite(
         id=new_node_id(),
         type=entry.entity_type,
@@ -229,14 +225,24 @@ async def _listed_party(
     hit: ScreeningHit, ctx: KycContext, deployer: Principal, now: datetime
 ) -> tuple[str, NodeWrite | None, Handling]:
     """The listed party's node: the one already written for this entry if the deployer can read
-    it, else a new one to write with the alert. Found by the entry's own id (the orchestrator's
-    review, item 9), never by a name: two entries sharing a family name, on one list or two, are
-    two parties, and no number of people sharing a name can reach the lookup's bound."""
+    it, else a new one to write with the alert (the orchestrator's review, item 9). Found by its
+    indexed name and every other property the party is written with (`also`: its list, listing,
+    given names and date of birth, or an organisation's country), so two entries sharing a family
+    name, on one list or two, are two parties. Past the lookup's bound (more visible people sharing
+    the name than it reads, none of them this entry's), a party of its own is written, never a
+    failed rule: a second node for one entry, which resolution may later link (rule 6). Keyed by
+    the entry's own id it would need that id declared and indexed in the ontology, which is not this
+    lane's to change (logged)."""
     candidate = _listed_write(hit, deployer, now)
-    found = await ctx.graph.find_node(
-        hit.entry.entity_type, "list_entry_id", hit.entry.id, deployer
-    )  # fmt: skip
-    if found is not None and found.properties.get("list_entry_id") == hit.entry.id:
+    key = "family_name" if hit.entry.entity_type == "Person" else "name"
+    also = {k: str(v) for k, v in candidate.properties.items() if k != key}
+    try:
+        found = await ctx.graph.find_node(
+            hit.entry.entity_type, key, str(candidate.properties[key]), deployer, also=also
+        )
+    except FindLimitExceeded:
+        found = None
+    if found is not None and all(str(found.properties.get(k)) == v for k, v in also.items()):
         return found.id, None, found.handling
     return candidate.id, candidate, candidate.handling
 

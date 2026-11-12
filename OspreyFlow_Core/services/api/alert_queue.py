@@ -469,7 +469,15 @@ async def dispose(
     row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
     alert = row.alert
     await _refuse_a_dataset_alert_closer(alert, closer)
-    if alert.status in ("closed", "closing"):
+    # An alert with citations is decided citation by citation (the owner's ruling of 12 November
+    # 2026): refused only where none the member was shown is open, so a proposal on one list's
+    # match never stops another's team deciding theirs.
+    open_to_them = (
+        any(c.status == "open" for c in alert.citations)
+        if alert.citations
+        else alert.status not in ("closed", "closing")
+    )
+    if not open_to_them:
         raise AlertTriageConflict(alert_id)
     if needs_second_person(row) and alert.citations:
         # The owner's ruling: the proposal is of the citations the member was shown, each.
@@ -506,7 +514,10 @@ async def approve_close(
     await _refuse_a_dataset_alert_closer(alert, closer)
     if alert.status != "closing" or alert.disposition is None or alert.close_proposed_by is None:
         raise AlertTriageConflict(alert_id)
-    if alert.close_proposed_by == member.id:
+    # ADR-133 decision 7, for an alert with citations: refused where every proposal the member
+    # was shown is their own (`decide_citations` approves none of their own beside another's).
+    own = [c.close_proposed_by == member.id for c in alert.citations if c.status == "closing"]
+    if (alert.close_proposed_by == member.id and not alert.citations) or (own and all(own)):
         raise CloseRefused(
             "You proposed closing this alert; a second person with the right must approve it."
         )
@@ -556,7 +567,19 @@ async def _close(
 ) -> Alert:
     alert_id = alert.id
     confirmed_node: str | None = None
-    if disposition == "true_positive":
+    # The owner's ruling of 12 November 2026: for an alert with citations, the matches this close
+    # decides, those of the citations the member was shown that are open (or, approving, proposed by
+    # someone else), and of those only the ones decided a true match, each by its own disposition
+    # (the lane review of the second pass, defect 4: a true match proposed beside a false positive
+    # was closed with its match left inferred).
+    deciding = {
+        i for c in alert.citations
+        if (c.status == "open" and proposed_by is None and disposition == "true_positive")
+        or (c.status == "closing" and proposed_by is not None and c.disposition == "true_positive"
+            and c.close_proposed_by != member.id)
+        for i in c.edge_ids
+    }  # fmt: skip
+    if (disposition == "true_positive" and not alert.citations) or deciding:
         node = nodes.get(alert.alert_node_id) if alert.alert_node_id is not None else None
         # ADR-109 Amendment 7 (owner ruling, 11 October 2026): a true positive on a screening alert
         # is the analyst's confirmation of the match it found — its inferred `SAME_AS` becomes
@@ -565,15 +588,6 @@ async def _close(
         # Amendment 2, "a read that is written back"); they are not sent to the Glass.
         with sources_in_full():
             cited_edges = await _cited_edges(alert, graph, member, list(nodes))
-        # The owner's ruling of 12 November 2026: only the matches this close decides, those of the
-        # citations the member was shown that are open (or, approving, proposed), and of those
-        # only the ones decided a true match.
-        deciding = {
-            i for c in alert.citations
-            if c.status == ("closing" if proposed_by is not None else "open")
-            and (proposed_by is None or c.disposition == "true_positive")
-            for i in c.edge_ids
-        }  # fmt: skip
         matches = [
             e for e in cited_edges
             if alert.typology == "kyc_screening" and e.type == "SAME_AS"

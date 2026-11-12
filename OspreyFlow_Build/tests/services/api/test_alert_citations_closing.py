@@ -232,6 +232,54 @@ async def test_a_proposal_is_sent_back_on_the_citations_its_member_was_shown() -
     assert [c.status for c in stored.citations] == ["open", "closing"]
 
 
+async def test_no_one_approves_a_proposal_of_their_own_beside_anothers() -> None:
+    """ADR-133 decision 7 (the lane review of the second pass, defect 3): B is proposed by the
+    reader cleared for both, then A by the reader cleared for A alone. The first approves: A is
+    closed, B, their own, still waits; asked again, with only their own proposal left, they are
+    refused. Red with the approval taking every proposal the approver was shown: B approved by
+    its own proposer."""
+    proposed_b = BOTH.model_copy(update={"status": "claimed", "assignee": BOTH_READER.id, "citations": [
+        BOTH.citations[0],
+        BOTH.citations[1].model_copy(update={"status": "closing", "disposition": "false_positive",
+                                             "close_proposed_by": BOTH_READER.id}),
+    ]})  # fmt: skip
+    desk, graph, analytics = Desk([proposed_b], severity="high"), Readers(HIDDEN), Analytics(Recorder())
+    await _close(desk, graph, analytics, A_ONLY, "false_positive", "Not her")
+    await alert_queue.approve_close(desk, graph, analytics, CASE, BOTH.id, BOTH_READER)  # type: ignore[arg-type]
+    (stored,) = desk.alerts
+    assert [(c.status, c.decided_by) for c in stored.citations] == [("closed", BOTH_READER.id), ("closing", None)]
+    with pytest.raises(alert_queue.CloseRefused):
+        await alert_queue.approve_close(desk, graph, analytics, CASE, BOTH.id, BOTH_READER)  # type: ignore[arg-type]
+
+
+async def test_a_proposal_on_one_list_leaves_the_other_list_to_its_team() -> None:
+    """The ruling: A's reader proposes closing A; the reader cleared for both, shown the alert
+    `closing`, still proposes B, which is open. Red with the close refused for an alert shown
+    `closing`: B could not be decided until A's proposal was."""
+    desk, graph, analytics = _world("high")
+    await _close(desk, graph, analytics, A_ONLY, "false_positive", "Not her")
+    assert (await _one(desk, graph, analytics, BOTH_READER)).status == "closing"
+    await _close(desk, graph, analytics, BOTH_READER, "true_positive", "The listed Petrova")
+    (stored,) = desk.alerts
+    assert [(c.status, c.close_proposed_by) for c in stored.citations] == [
+        ("closing", A_ONLY.id), ("closing", BOTH_READER.id)]  # fmt: skip
+
+
+async def test_a_close_on_one_list_leaves_a_claim_on_the_other_as_it_was() -> None:
+    """The lane review of the second pass, defect 5: B's reader has claimed the alert; A's reader
+    closes A. B's reader's claim stands, so nothing they are shown changes. Red with a partial
+    close handing the alert back unassigned: their claim vanished, the trace of a decision on a
+    list they may not read."""
+    desk, graph, analytics = _world()
+    claimed = BOTH.model_copy(update={"status": "claimed", "assignee": B_ONLY.id})
+    desk.alerts[0] = claimed
+    before = await _one(desk, graph, analytics, B_ONLY)
+    await _close(desk, graph, analytics, A_ONLY, "false_positive", "Not her")
+    after = await _one(desk, graph, analytics, B_ONLY)
+    assert (after.status, after.assignee) == (before.status, before.assignee) == ("claimed", B_ONLY.id)
+    assert (await _one(desk, graph, analytics, A_ONLY)).status == "closed"
+
+
 # --- each read path, as each reader is shown the alert (the review's item 10) --------------------
 
 

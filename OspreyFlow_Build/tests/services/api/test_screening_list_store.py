@@ -311,3 +311,15 @@ async def test_a_reload_that_would_lower_a_lists_marking_is_refused_and_changes_
     assert [(e.id, e.classification) for e in held] == [("Store test marked:1", "SECRET")]
     raised = [_marked("1", "Ann Secret")]
     assert await store.replace_list("Store test marked", raised, scheme=SCHEME) == 1
+
+
+async def test_a_list_held_with_no_marking_is_hidden_from_a_reader_below_official(
+    store: ScreeningListStore,
+) -> None:
+    """The lane review of the second pass, defect 9: a list with no kept marking is OFFICIAL, P, as
+    every read takes it, so a reader cleared only for PUBLIC is answered as for a list no one
+    subscribed. Red with `hidden` reading no marking as visible: they could refresh it."""
+    await _subscribe(store)
+    public = ListClearance.of(ADMIN.model_copy(update={"clearance": "PUBLIC"}), SCHEME)
+    assert await store.hidden("Store test", cleared=public)
+    assert not await store.hidden("Store test", cleared=OFFICIAL_READER)

@@ -1650,10 +1650,10 @@ class AlertStore:
                 "UPDATE alerts SET citations = $2, status = $3, assignee = $4, disposition = $5, "
                 "disposition_reason = $6, decided_by = $7, "
                 "decided_at = CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, "
-                "close_proposed_by = NULL, close_proposed_at = NULL "
+                "close_proposed_by = $8, close_proposed_at = NULL "
                 f"WHERE id = $1 RETURNING {_COLUMNS}",
                 alert_id, json.dumps([c.model_dump(mode="json") for c in cites]), status,
-                assignee, *decided,
+                assignee, *decided, last_proposer(cites) if status == "closed" else None,
             )  # fmt: skip
         assert row is not None
         await self.publish_facts([alert_id])
@@ -1923,7 +1923,9 @@ def decide_citations(
                 change = {"status": "closing", "disposition": disposition,
                           "disposition_reason": disposition_reason,
                           "close_proposed_by": member_id}  # fmt: skip
-            elif action == "approve" and c.status == "closing":
+            elif action == "approve" and c.status == "closing" and c.close_proposed_by != member_id:
+                # ADR-133 decision 7: never a proposal of the approver's own (the lane review of
+                # the second pass, defect 3: one citation's proposer approved it beside another's).
                 change = {"status": "closed", "decided_by": member_id, "decided_at": now}
             elif action == "send_back" and c.status == "closing":
                 change = {"status": "open", "disposition": None, "disposition_reason": None,
@@ -1941,16 +1943,30 @@ def decide_citations(
         chosen = next((c for c in cites if c.disposition == "true_positive"), None) or max(
             cites, key=lambda c: c.decided_at or _NEVER
         )
-        status, assignee = "closed", alert.assignee or member_id
+        # Given to its last decider, as `served_triage` shows a reader cleared for every citation.
+        status, assignee = "closed", member_id
         decided = (chosen.disposition, chosen.disposition_reason, member_id)
     elif action in ("close", "approve"):
-        # One still open: back to the queue, given to no one, for a reader cleared for it.
-        status, assignee = "open", None
+        # One still open, for a reader cleared for it. The member's own claim, or a proposer's whose
+        # proposals were decided, is let go; anyone else's stays, so a claim on a citation the
+        # member cannot read is never seen to change (the lane review of the second pass, defect 5).
+        letting_go = {member_id, *(c.close_proposed_by for c in moved if c.close_proposed_by)}
+        if alert.assignee is None or alert.assignee in letting_go:
+            status, assignee = "open", None
+        else:
+            status, assignee = "claimed", alert.assignee
     elif action == "propose":
         status, assignee = "claimed", alert.assignee or member_id
     else:
         status, assignee = "claimed", moved[0].close_proposed_by or alert.assignee
     return cites, status, assignee, decided
+
+
+def last_proposer(cites: Sequence[AlertCitation]) -> str | None:
+    """Who proposed the latest decision among closed citations (kept beside a closed alert, as
+    for one without citations): what `served_triage` shows a reader cleared for every one."""
+    closed = [c for c in cites if c.status == "closed"]
+    return max(closed, key=lambda c: c.decided_at or _NEVER).close_proposed_by if closed else None
 
 
 def served_triage(alert: Alert, shown: Sequence[AlertCitation]) -> dict[str, object]:

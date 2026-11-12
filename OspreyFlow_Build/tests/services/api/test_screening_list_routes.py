@@ -504,3 +504,16 @@ def test_a_list_a_reader_is_not_cleared_for_is_answered_as_one_never_subscribed(
     store = client.portal.call(w.screening)
     status = client.portal.call(partial(store.subscription, SECRET_LIST))
     assert status is not None and status.location == "lists/secret.json", "the hidden list is unchanged"
+
+
+def test_a_reader_cleared_for_a_list_refreshes_and_schedules_it(world: tuple[_World, TestClient]) -> None:
+    """Rule 4, the other way (the lane review of the second pass, defect 13): the SECRET administrator
+    reaches the SECRET list's refresh and schedule. Its file is not in the folder here, so the
+    refresh is recorded as failed, in words; it is answered, not refused."""
+    w, client = world
+    _with_a_secret_list(w, client)
+    w.as_ = SECRET_ADMIN
+    refreshed = client.post(f"/v1/admin/screening-lists/{SECRET_LIST}/refresh")
+    assert refreshed.status_code == 200 and refreshed.json()["list_name"] == SECRET_LIST, refreshed.text
+    scheduled = client.put(f"/v1/admin/screening-lists/{SECRET_LIST}/schedule", json={"schedule": None})
+    assert scheduled.status_code == 200, scheduled.text

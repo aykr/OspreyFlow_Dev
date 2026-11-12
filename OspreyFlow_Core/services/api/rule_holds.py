@@ -40,7 +40,7 @@ from .alerts import (
 from .audit import AuditWriter
 from .kyc_sweep import FAILED_WORDS_WITHOUT_COUNTS
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
-from .screening import ListClearance
+from .screening import ListClearance, ScreeningListStore
 from .studio_publish import LoadSink, load_with_rules, post_commit_notes
 
 
@@ -78,6 +78,7 @@ async def readable_rule_audit(
     *,
     analytics: AnalyticsPort,
     alerts: AlertStore,
+    lists: ScreeningListStore | None = None,
     offset: int = 0,
     limit: int = 100,
 ) -> RuleAuditPage:
@@ -122,6 +123,13 @@ async def readable_rule_audit(
         event_ids_by_scope={investigation_id: {n for c in named if c for n in c[2]}},
     )
     cleared = ListClearance.of(reader, alerts.scheme)
+    # A list's marking as it stands now as well as when the entry was written (the lane review of
+    # the second pass, defect 10): a list raised since is named to no reader below its new one.
+    now_marked = (
+        await lists.markings({str(e.detail.get("list_name")) for e in entries if _about_a_list(e)})
+        if lists is not None
+        else {}
+    )
 
     def shown_to_reader(entry: RuleAuditEntry, cited: tuple[list[str], ...] | None) -> bool:
         if cited is None:
@@ -132,7 +140,7 @@ async def readable_rule_audit(
             return cleared.admits(
                 str(entry.detail.get("list_classification") or "OFFICIAL"),
                 str(entry.detail.get("list_handling_code") or "P"),
-            )
+            ) and cleared.admits(*now_marked.get(str(entry.detail.get("list_name")), (None, None)))
         alert = _alert_of(entry)
         if alert is not None and alert.citations:
             # ADR-146 Amendment 7 (the orchestrator's review, item 4): a firing on an alert with
