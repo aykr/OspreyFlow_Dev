@@ -525,6 +525,18 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         last moves. Also missing: the run folder's start isn't chained on its creation, the reaper failed open on a
         missing pid file, and there was no way to stop a run. **My ruling, which you can overrule:** add a
         `stop <lane>` verb in this step. Ctrl-C on the Mac only ever ended the follow, never the run.
+      - **About 11:15, at your request:**
+        - **Started on sol:** studio "carries", rules "lists" and a new step, rules-b "guides": the user,
+          developer and administration guides linked from Home under the Glass, Ingest Studio and Admin cards.
+        - **Closed:** the five idle lanes (case-b, platform, studio-b, rules-b's old session and platform-b), each
+          clean, holding nothing and marked paused. rules-b was then reopened for "guides".
+        - **My rulings for "guides", which you can overrule:**
+          - only the guides for places a person's rights open;
+          - served by the Conduit behind each place's right, never as a static link;
+          - the architecture guide not linked.
+        - **ADR-146 (one owner on two lists): your ruling is pending.** My recommendation: one alert citing both
+          lists, each list's citation shown only to a reader cleared for it.
+        - **The osprey-small rebuild waits** until "guides" has landed.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
