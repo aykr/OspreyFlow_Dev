@@ -748,6 +748,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
           the step's helper (ADR-114 Am 41).
 
         The full disclaimer-page gate (4_gate_disclaimer.html) follows after Friday, with the public demos.
+      - **GitHub CI on 8d1abe1 (run 43291339552): 36 of 39 green.** The four GitHub-only fixes are proved. Of the three
+        red:
+        - two were mine (the demo lane's missing Playwright slot, and a not-yet-landed citation), fixed on main
+          (44447d2, then slot 15);
+        - conformance now names its cause, Postgres out of connections when a second Conduit starts on GitHub's
+          runner. That goes to platform-b after gate-b.
+
+        All three show at your next push.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
