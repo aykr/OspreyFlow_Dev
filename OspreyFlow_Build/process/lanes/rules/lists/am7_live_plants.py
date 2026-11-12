@@ -58,7 +58,10 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         '                                prefixes=["Synthetic list"])\n'
         "                    )  # fmt: skip\n",
         "",
-        [f"{B}/services/api/test_screening_list_routes.py", CROSS],
+        # The one case that refreshes and ends with the list held: a later case's set-up empties
+        # "Synthetic list" without refreshing it, so the whole file leaves no entry with or without
+        # its teardown (run 1: GREEN, recorded), and could not show this teardown red.
+        [f"{B}/services/api/test_screening_list_routes.py::test_a_list_is_subscribed_refreshed_and_shown", CROSS],
     ),
     (
         "L1 one finding per hit (an owner on two lists, two alerts)",
