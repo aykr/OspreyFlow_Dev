@@ -1,7 +1,7 @@
 # rules lane · report · rules-lists: CARRIES rows 113 and 114 (ADR-146 Amendment 7), 12 November 2026
 
 Resumed from HANDOFF.md (stale: removed, never committed; no `wip(rules)` commit was on the branch).
-Branch `lane/rules-lists`, 18 commits on main 5675103, the packages/schemas commit at the head. Not pushed.
+Branch `lane/rules-lists`, rebased on main b4b570d, the packages/schemas commit at the head. Not pushed.
 
 | Brief item | State | Proving test |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Branch `lane/rules-lists`, 18 commits on main 5675103, the packages/schemas comm
 | What is written names no list (node sources, words, ALERTED_ON per list, trends, re-mark) | done | `test_alert_citations_written.py` (9; P15–P20, P24) |
 | Point 8: a rule screens only lists its deployer is cleared for | done | `test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for` (P14); live (L4, and the refresh L6) |
 | Am 7 written as built, the rulings dated | done | `spec/06_DECISIONS.md` ADR-146 Amendment 7; reservation "written" |
-| Offline gates (`make test`, `make -k ci`, schemas-check) at the rebased head | **untouched: waiting for the orchestrator's word** | — |
+| Offline gates (`make test`, `make -k ci`, schemas-check) | done, on the server's heavy slot (the orchestrator's go). At 962d6e0, domain-model-coverage-check was red on AlertCitation (mine, fixed in the domain model). At 086ed55, ci exit 0; make test 12921 passed, with two failures outside the branch | `gates/086ed55.{test,ci,triage}.txt`, `gates/962d6e0.*` |
 
 Half-done: none.
 
@@ -38,7 +38,7 @@ Stack c is down and released.
 - The approver of a two-person close is the closer the ruling means.
 
 ## Requests / carries
-- Waiting for the go-ahead on `make test` and `make -k ci` with schemas-check, at the branch head (its code is the tree the plants ran at, 8d1997e).
+- Gates done (see the table). Branch rebased on main b4b570d. Main's later commits (to df2643b) are docs only and overlap no file of this branch.
 - Carry: in the broad run, test_worker, test_ws_ticket and resolve/test_trigger reach valkey on 6379 rather than the leased stack's port. Phase 8's exit criterion fails on stack c at main.
 
 # rules lane · report · rules-hyg, three hygiene carries, and the test_kyc_rules fix (10 November 2026, 20:30–23:30 UTC)
