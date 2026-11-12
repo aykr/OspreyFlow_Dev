@@ -616,6 +616,22 @@ class SourceTable(BaseModel):
     created_at: datetime
     updated_by: str | None = None
     updated_at: datetime | None = None
+    #: ADR-140 Amendment 19: the classification this source's rows carry before a join when its
+    #: table has no marking column of its own; `None` leaves such a table unmarked, never joined
+    #: to a marked one. Set by a source approver (`SourceDefaultMarkingInput`), audited.
+    default_marking: str | None = None
+    default_marking_set_by: str | None = None
+    default_marking_set_at: datetime | None = None
+
+
+class SourceDefaultMarkingInput(BaseModel):
+    """Declaring, changing or clearing (`None`) a source's default marking (ADR-140 Amendment 19):
+    one of the handling scheme's classifications, never above the declarer's clearance or the
+    deployment's highest marking, never below the source's own marking."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    default_marking: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class RegisterSourceInput(BaseModel):
@@ -675,5 +691,5 @@ ALL_MODELS: list[type[BaseModel]] = [
     S3ConnectionSettings, AthenaConnectionSettings,
     SqlRead, ApiRead, JsonRead, S3Read, AthenaRead, ConnectorRead,
     Connection, ConnectionInput, SourceRefresh, SourceTable, RegisterSourceInput,
-    SourceGovernanceInput, SourceLineage, GovernanceEdited,
+    SourceGovernanceInput, SourceLineage, GovernanceEdited, SourceDefaultMarkingInput,
 ]  # fmt: skip
