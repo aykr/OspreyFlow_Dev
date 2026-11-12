@@ -19126,13 +19126,13 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     return RightsResponse(rights=sorted(rights_for(principal.roles)))
 
 
-@app.get("/v1/guides/{guide}", response_class=FileResponse)
-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
-    the Ingest Studio, the administration guide with Admin. It names no single right because a
-    place opens on any one of several; the place's check is made here, before the file is touched,
-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
+async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
+    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
+    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
+    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
+    403 `place_required`, which names the place, its rights and its needs, in words. The place
+    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
+    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
     known = guide_files.GUIDES.get(guide)
     if known is None:
         raise HTTPException(
@@ -19142,6 +19142,17 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
         )
+    return known
+
+
+@app.get("/v1/guides/{guide}", response_class=FileResponse)
+async def read_guide_route(
+    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
+) -> Response:
+    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
+    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
+    because a place opens on any one of several. Home's link is a convenience, never the gate."""
     folder = guide_files.guides_dir()
     path = folder / known.pdf
     if not path.is_file():

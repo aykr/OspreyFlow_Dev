@@ -177,6 +177,7 @@ def test_the_refusal_says_which_place_and_which_rights_open_it(
         "error": "place_required",
         "place": "admin",
         "rights": sorted(_places()["admin"]["rights"]),
+        "needs": [],
         "message": "The administration guide opens with Admin, which your roles do not open. "
         "Ask an administrator for a role that opens Admin.",
     }
@@ -284,6 +285,8 @@ def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None
     ]  # fmt: skip
     carried = [line for line in copies if "docs/pdf" in line]
     assert len(carried) == 1, carried
+    # 0444 whatever the checkout's modes, so a 0600 file in a checkout cannot make the route fail.
+    assert "--chmod=0444" in carried[0].split(), carried[0]
     tokens = [t for t in carried[0].split()[1:] if not t.startswith("--")]
     sources, target = tokens[:-1], tokens[-1]
     assert sorted(sources) == sorted(

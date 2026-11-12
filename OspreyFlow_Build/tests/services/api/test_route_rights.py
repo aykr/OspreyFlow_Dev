@@ -745,5 +745,20 @@ def test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real(
                 if wanted == 403:
                     assert response.json()["detail"]["error"] == "place_required"
         nobody = _token(key, "guide-nobody", [])
+        # And a person arriving from the organisation's identity provider, with no roles claim at
+        # all (ADR-114 Amendment 33 decision 4), as the no-role sweep above signs in.
+        from harness.realm import ORGANISATION_ARRIVAL_ATTRIBUTES
+
+        claims = default_claims(
+            sub="guide-from-the-organisation",
+            roles=[],
+            receivable_handling_codes=[],
+            **ORGANISATION_ARRIVAL_ATTRIBUTES,
+        )
+        claims.pop("roles")
+        arrived = {"Authorization": f"Bearer {sign_token(key, claims)}"}
         for guide in ("user", "developer", "administration"):
-            assert client.get(f"/v1/guides/{guide}", headers=nobody).status_code == 403, guide
+            for who in (nobody, arrived):
+                response = client.get(f"/v1/guides/{guide}", headers=who)
+                assert response.status_code == 403, guide
+                assert response.json()["detail"]["error"] == "place_required", guide

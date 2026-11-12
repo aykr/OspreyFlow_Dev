@@ -132,10 +132,11 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
 # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
 # built with, and the manifest that records it. Not the architecture guide, which is not served.
 # After the `chown -R` above, so the files are not written twice into the image's layers (about
-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
+# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
+# read them).
 # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
 # reads.
-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
 
 USER 10001:10001
 EXPOSE 8000

@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
         "error": "place_required",
         "place": guide.place,
         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
+        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
         f"open. Ask an administrator for a role that opens {guide.place_name}.",
     }
