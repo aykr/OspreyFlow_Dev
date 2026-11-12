@@ -128,6 +128,15 @@ RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model
 RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings \
     && chmod 700 /run/osprey/map-settings
 
+# ADR-145 Amendment 10: the guides Home links, served by `GET /v1/guides/{guide}` (`guides.py`) to
+# whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+# built with, and the manifest that records it. Not the architecture guide, which is not served.
+# After the `chown -R` above, so the files are not written twice into the image's layers (about
+# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
+# `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+# reads.
+COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+
 USER 10001:10001
 EXPOSE 8000
 
