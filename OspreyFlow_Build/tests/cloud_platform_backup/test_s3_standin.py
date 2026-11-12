@@ -403,3 +403,43 @@ def test_a_token_of_another_issuer_is_refused_by_the_trust_though_signed_by_a_tr
     with pytest.raises(ClientError) as refused:
         aws.s3().list_objects_v2(Bucket=BUCKET)
     assert _code(refused) == "AccessDenied"
+
+
+def test_a_completion_naming_a_part_not_uploaded_or_by_another_etag_is_refused_as_s3_does(aws: Running) -> None:
+    """S3 answers a completion naming a part it does not hold, or by an ETag that is not the part's,
+    with 400 InvalidPart, and keeps the upload (it may be completed again, or aborted)."""
+    s3 = aws.s3()
+    key = "sets/a/arcadedb/big.zip"
+    upload = s3.create_multipart_upload(Bucket=BUCKET, Key=key)
+    first = s3.upload_part(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"], PartNumber=1,
+                           Body=b"x" * (5 * 1024 * 1024))  # fmt: skip
+    last = s3.upload_part(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"], PartNumber=2, Body=b"y")
+    for parts in ([{"PartNumber": 1, "ETag": first["ETag"]}, {"PartNumber": 3, "ETag": last["ETag"]}],
+                  [{"PartNumber": 1, "ETag": first["ETag"]}, {"PartNumber": 2, "ETag": '"0" * 32'}]):  # fmt: skip
+        with pytest.raises(ClientError) as refused:
+            s3.complete_multipart_upload(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"],
+                                         MultipartUpload={"Parts": parts})  # fmt: skip
+        assert _code(refused) == "InvalidPart"
+        assert refused.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
+    with pytest.raises(ClientError) as refused:
+        s3.complete_multipart_upload(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"], MultipartUpload={
+            "Parts": [{"PartNumber": 2, "ETag": last["ETag"]}, {"PartNumber": 1, "ETag": first["ETag"]}]})  # fmt: skip
+    assert _code(refused) == "InvalidPartOrder"
+    s3.complete_multipart_upload(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"], MultipartUpload={
+        "Parts": [{"PartNumber": 1, "ETag": first["ETag"]}, {"PartNumber": 2, "ETag": last["ETag"]}]})  # fmt: skip
+    assert s3.head_object(Bucket=BUCKET, Key=key)["ContentLength"] == 5 * 1024 * 1024 + 1
+
+
+def test_a_part_under_five_mib_but_the_last_is_refused_as_s3_does(aws: Running) -> None:
+    s3 = aws.s3()
+    key = "sets/a/arcadedb/small.zip"
+    upload = s3.create_multipart_upload(Bucket=BUCKET, Key=key)
+    parts = []
+    for number, body in ((1, b"x" * 1024), (2, b"y")):
+        part = s3.upload_part(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"], PartNumber=number, Body=body)
+        parts.append({"PartNumber": number, "ETag": part["ETag"]})
+    with pytest.raises(ClientError) as refused:
+        s3.complete_multipart_upload(Bucket=BUCKET, Key=key, UploadId=upload["UploadId"],
+                                     MultipartUpload={"Parts": parts})  # fmt: skip
+    assert _code(refused) == "EntityTooSmall"
+    assert refused.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400

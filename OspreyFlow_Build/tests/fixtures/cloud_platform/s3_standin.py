@@ -214,6 +214,10 @@ class Bucket:
     kms_key: str | None = None
 
 
+#: S3's smallest part, but for an upload's last (EntityTooSmall below it).
+MIN_PART = 5 * 1024 * 1024
+
+
 @dataclass
 class Upload:
     bucket: str
@@ -821,19 +825,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         if method == "POST" and "uploadId" in params:
             allow("s3:PutObject", object_arn)
-            upload = stand_in.uploads.pop(params["uploadId"], None)
+            upload = stand_in.uploads.get(params["uploadId"])
             if upload is None:
                 raise Refused(404, "NoSuchUpload", "The specified upload does not exist.")
             if upload.kms_key:
                 # Completing a multipart upload under SSE-KMS asks KMS to decrypt the data key.
-                try:
-                    stand_in.kms(principal, "kms:Decrypt", upload.kms_key)
-                except Refused:
-                    stand_in.uploads[params["uploadId"]] = upload
-                    raise
-            numbers = [int(n.text or 0) for n in ElementTree.fromstring(body).iter()
-                       if n.tag.endswith("PartNumber")]  # fmt: skip
-            data = b"".join(upload.parts[n] for n in sorted(numbers))
+                stand_in.kms(principal, "kms:Decrypt", upload.kms_key)
+            # S3's own refusals of a completion, each a 400 with the upload kept (it may be
+            # completed again, or aborted): the parts listed in ascending order, each uploaded and
+            # named by its own ETag, and every part but the last at least 5 MiB.
+            listed = []
+            for part in ElementTree.fromstring(body).iter():
+                if part.tag.endswith("Part"):
+                    number = next((n.text for n in part if n.tag.endswith("PartNumber")), "0")
+                    tag = next((n.text for n in part if n.tag.endswith("ETag")), "")
+                    listed.append((int(number or 0), (tag or "").strip('"')))
+            numbers = [n for n, _ in listed]
+            if not listed or numbers != sorted(set(numbers)):
+                raise Refused(400, "InvalidPartOrder",
+                              "The list of parts was not in ascending order. Parts must be ordered by part number.")  # fmt: skip
+            for number, tag in listed:
+                held = upload.parts.get(number)
+                if held is None or hashlib.md5(held, usedforsecurity=False).hexdigest() != tag:
+                    raise Refused(400, "InvalidPart",
+                                  "One or more of the specified parts could not be found. The part may not have "
+                                  "been uploaded, or the specified entity tag may not match the part's entity tag.")  # fmt: skip
+            if any(len(upload.parts[n]) < MIN_PART for n in numbers[:-1]):
+                raise Refused(400, "EntityTooSmall",
+                              "Your proposed upload is smaller than the minimum allowed object size.")  # fmt: skip
+            stand_in.uploads.pop(params["uploadId"], None)
+            data = b"".join(upload.parts[n] for n in numbers)
             etag = stand_in.put(bucket_name, key, data, upload.kms_key)
             self._send(200, _xml(
                 "CompleteMultipartUploadResult",
