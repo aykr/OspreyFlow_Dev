@@ -1,3 +1,46 @@
+# rules lane · report · rules-lists: CARRIES rows 113 and 114 (ADR-146 Amendment 7), 12 November 2026
+
+Resumed from HANDOFF.md (stale: removed, never committed; no `wip(rules)` commit was on the branch).
+Branch `lane/rules-lists`, 18 commits on main 5675103, the packages/schemas commit at the head. Not pushed.
+
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| Row 113: every live file loading a screening list removes its own, in teardown (after the `yield`, so on failure too) | done: `test_kyc_rules`, `test_screening_refresh`, `test_screening_list_store`, `test_screening_list_routes` (`world`, shared by `test_list_refresh_schedule`), `test_list_refresh_schedule` (its lists renamed "Scheduled test ") | `test_kyc_rules.py::test_no_other_file_leaves_a_list_naming_this_files_people`, red before the teardowns (live plants L0, L0b), green after |
+| Am 7, one owner on two lists: one alert citing both | done | `test_one_owner_on_two_lists_raises_one_alert_citing_both` (live, L1); `test_one_finding_cites_each_list_and_its_words_name_none` |
+| Each list's citation and `owner_listed` shown only to a reader cleared for that list, at each read path (queue, explain, canvas, claim/release/dispose/approve/send back/assign, suppress, packs), each with a leak plant | done | `test_alert_citations_per_list.py` (28; plants P1–P10, P3b); live `test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone` (L3) |
+| A list's marking (the rule-11 gap: lists carried none) | done: OFFICIAL/P by default; above the ceiling and unit-restricted codes refused; kept by an update and a refresh | `test_screening.py` (P11–P13, P22, P23); `test_an_update_keeps_a_marked_lists_marking` and the refresh's case (L5) |
+| A true positive confirms only the matches the closer can read (the owner's ruling, 12:05) | done | `test_a_true_positive_confirms_only_the_matches_the_closer_can_read` (live, L2); `test_a_repoint_and_a_rename_rewrite_each_citation_with_the_alerts_own_lists` (L7, L2b) |
+| What is written names no list (node sources, words, ALERTED_ON per list, trends, re-mark) | done | `test_alert_citations_written.py` (9; P15–P20, P24) |
+| Point 8: a rule screens only lists its deployer is cleared for | done | `test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for` (P14); live (L4, and the refresh L6) |
+| Am 7 written as built, the rulings dated | done | `spec/06_DECISIONS.md` ADR-146 Amendment 7; reservation "written" |
+| Offline gates (`make test`, `make -k ci`, schemas-check) at the rebased head | **untouched: waiting for the orchestrator's word** | — |
+
+Half-done: none.
+
+**Records.** Offline plants at 8d1997e's tree: 25 of 25 red, the three files green built and restored
+(`lists/AM7_RED_RECORD.txt`). Live plants on stack c at 0eae072: 10 of 10 red, built and restored green
+(`lists/AM7_LIVE_RECORD.txt`). The broad leased run at 0eae072 (the live files the change reaches against main,
+plus `test_route_rights.py`): 3419 passed, 36 failed, none of them in a file the change reaches. All 36 are triaged
+in `gates/0eae072.live.triage.txt`: valkey on stack a's port, no model or stanza service, the apply harness, no
+Azure blob settings, one case's residue that passes alone, and phase 8's exit, which fails at main the same way.
+The rebase onto 5675103 overlaps rules-b only in the two spec files, so no code under the live run changed.
+Stack c is down and released.
+
+**Lane review.** 16 items; each fixed with its test and plant, or answered in Am 7 (see the friction row,
+`process/friction/2026-11-12-rules-lists.md`).
+
+## Decisions taken
+- Point 8: a rule screens only lists its deployer is cleared for (the strict option; the orchestrator confirmed it stands).
+- Three files keep their setup-time wipes of their own names: a killed run leaves nothing for the next run of that file to trip on.
+- The rule audit stays strict: a firing that cites a hidden list is withheld whole.
+- The trends undercount rather than leak: an alert is counted only for a reader cleared for every handling it rests on.
+- A subscribed list takes its marking from its file, within the deployment's ceiling; a unit-restricted code is refused, since a list is read by every unit's rules.
+- The approver of a two-person close is the closer the ruling means.
+
+## Requests / carries
+- Waiting for the go-ahead on `make test` and `make -k ci` with schemas-check, at the branch head (its code is the tree the plants ran at, 8d1997e).
+- Carry: in the broad run, test_worker, test_ws_ticket and resolve/test_trigger reach valkey on 6379 rather than the leased stack's port. Phase 8's exit criterion fails on stack c at main.
+
 # rules lane · report · rules-hyg, three hygiene carries, and the test_kyc_rules fix (10 November 2026, 20:30–23:30 UTC)
 
 - **Item 1, Home's key cap: MET.** `.home-key` no longer dims itself; `homeKey.test.ts` reads the tokens and blends the key cap over the primary button's three faces in three themes: red on main (light 4.13, GOV.UK 3.91, and dark's pressed 3.59, which T3 cannot reach), green 9/9. T3's eight listings removed with it. Merger: no findings.
