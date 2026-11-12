@@ -723,6 +723,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - delete the three `_acme-challenge` TXT records;
         - install.yaml still names ospreyflow-poc.test (update it before any reinstall);
         - renewal is manual before 10 Feb 2027 (Porkbun API keys would automate it).
+      - **About 22:00:** you signed in and say all looks good. Next steps now running:
+        - rules' heavy gates;
+        - studio and docs closed.
+
+        **CI diagnosed (platform-b; process/lanes/platform-b/ci/DIAGNOSIS.md):**
+        - five jobs are test faults: port_guard's CI flag, statelessness hiding its own error, phase 6 missing its
+          fixture, the harness keyboard one Tab short, the harness image missing three new secrets;
+        - one is GitHub's environment: Chromium reads dates month-first; fixed with en-GB.
+
+        No product defect. The fixes are being applied now (none in .github/). They are proved at your next push.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
