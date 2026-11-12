@@ -1,37 +1,27 @@
-# Rules lane · brief UPG · rehearse the v0.4.12 → v0.5.0 upgrade on the test server, before the publish
+# Rules lane · brief lists · screening lists in live files, and one owner on two lists (S)
 
-Written by the orchestrator, 10 November 2026 evening, for the rules session, **from main** (075e240 or later).
-Docs found that `ospreyflow update` runs none of the six one-off migrations an existing v0.4.12 deployment needs, and
-nobody has run them on a real v0.4.12 deployment. Tonight's v0.5.0 publish waits for this rehearsal. Size S–M.
+Written by the orchestrator, 12 November 2026, for a **fresh rules session on `sol`**, from **main** (`git
+fetch`, branch `lane/rules-lists` from `main`). Read CARRIES.md rows 113 and 114, ADR-146 Amendment 3 and ADR-109
+Amendment 7 first. Opus, medium. Size S.
 
-**The rule for this step.** On ospreyflow-test only, a throwaway named deployment, **project and volumes prefixed
-`osprey-upg-`**, synthetic data only. Never touch `osprey-small`, `osprey-test-*`, `osprey-p7-*`, the leased stacks, or
-another lane's images; no `docker image prune`; every `down -v` guarded on the project name (P5b's driver,
-`process/lanes/platform-b/gates/p5b_live_update.py`, shows the guards: reuse them); before/after container and
-volume lists recorded, failing on what the run itself left. Tear it all down at the end. It counts as one live slot;
-tell the orchestrator when it is up and down.
+**The lane, the stacks, the merge rule.** Test stacks are on the owner's server only (b to g); Docker and stack a are off on this Mac, so never start Docker. Ask the orchestrator for a stack, then main's `stack_lease.sh` (acquire, up, `remote rules -- …`, down, release; `remote-log rules` reattaches). `make test` runs on the server: `stack_lease.sh offline rules -- make test` (it runs pytest, live-collect and test-js in turn; test-js also on the Mac, where Node is). Ask before `make -k ci` or any Playwright here (two heavy runs at most). Never call remote or offline while one of your runs is alive. Prompt L's rules: never stop on a question; build the recommended option (the strict one for access) and log it under "Decisions taken"; real data stops a piece. Your own lane-reviewer, then the gates at a commit rebased onto main, saved under `gates/`, raw, not filtered, with one leased live run including `test_route_rights.py`; re-gate after any code change. Report to the orchestrator **by message**.
 
-**Do:**
-1. Install **v0.4.12** (the commit tagged `v0.4.12` in the user repository, 964a2a9 on main's history) as the named
-   deployment `osprey-upg`, through its own `ospreyflow install`, and load a synthetic demo pack (fixture-corp or the
-   prison pack) so there are cases, boards and rules to migrate.
-2. Update it to **main's head** through `ospreyflow update` as a user would, then run the six one-off migrations in
-   the order docs' CHANGELOG v0.5.0 section states, **each with `--dry-run` first**, through
-   `docker exec osprey-upg-api-1 python -m scripts.<name>`: migrate_cases_to_one_dataset, migrate_branches_to_views,
-   seed_target_models, make_home_cases, migrate_sources, remark_alert_nodes.
-3. Check the result: sign-in, Home, a case opens with its views and boards, the alert queue, the Studio's pipelines
-   and Runs, Admin's System; and each migration re-run is a no-op.
-4. Record every command, its output (masked), the order that worked, and anything that failed, in
-   `process/lanes/rules/gates/upg-rehearsal.txt`; tell the orchestrator and docs the exact steps, so the CHANGELOG's
-   upgrade section says only what was proven.
+**Build, each red first (rule 15):**
+1. **Live files remove the screening lists they load** (CARRIES row 113): `test_screening_refresh.py` and every
+   live file that loads a screening list into the shared store removes it in teardown, including on failure.
+   The red: a second file's case that sees the first file's list (the synthetic people both name) goes green
+   once teardown removes it. Find every such file, not only the two named.
+2. **One owner on two screening lists** (CARRIES row 114; **ADR-146 Amendment 7, reserved for you**). **The
+   owner's ruling is pending.** The orchestrator's recommendation: one alert citing both lists, each list's
+   citation (and its `owner_listed` factor) shown only to a reader cleared for that list, so the alert never
+   reveals a list a reader cannot see (rule 3); a true positive confirms every cited match (ADR-109 Am 7).
+   **Build everything that does not depend on the ruling now:** the test that two lists naming one owner are
+   seen together; the per-list visibility of a citation (needed under either answer); the disposition across
+   both. Then build to the recommendation behind one switch point, and message the orchestrator when you
+   reach it: you are told the ruling before the pieces that differ are finished. Amendment 7 as built, with
+   the test for each sentence (rule 12).
 
-**From the previous rules session (L2.11):** there are **seven** one-off scripts, not six: `scripts.migrate_rules_to_datasets`
-(L2.11) also runs (its dry run only SELECTs; a dataset with no home case leaves its rule whole and reported; one
-transaction per rule; a second run changes nothing; L2.11's RED_RECORD §3 and §10). Settle its place in the order.
-And rules made before L2.11 keep running only while their owner holds `author_rules` or `deploy_rules` (ADR-146
-Amendment 6 decision 13): check the pack's seeded rule owners after the upgrade, and that their rules still raise
-alerts; if an upgrade would silently stop some, the notes must say what to do.
-
-**Not in this step:** making `ospreyflow update` run the migrations itself (code; a carry for tomorrow, recorded).
-
-**Exit.** The upgrade rehearsed end to end with every step recorded; the CHANGELOG's steps confirmed or corrected.
+**Never.** osprey-small (the owner's demo deployment, v0.5.0, frozen) and its containers are never touched, read
+or written by this step: throwaway lane stacks only. Nothing of this step runs on the server from **12:00 UK on
+Friday 13 November** until the owner says the demo is over. Not pushed; the orchestrator merges. It goes into
+v0.5.1 with the chain. D2c and the client-install chain keep priority for merges and reviews.
