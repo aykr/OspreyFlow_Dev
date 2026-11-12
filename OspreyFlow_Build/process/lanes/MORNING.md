@@ -494,25 +494,13 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 38. **Overnight, 11–12 November (your word, about 21:10: carry on, the Mac stays on).** I'll fill this in as the
     night goes. For you in the morning:
     - the push (none since 10:20);
-    - **Your five patches, in this order, from the repository root** (each checked to apply after the one before):
-      1. ~~`P12p2_CI.diff`~~ **applied at your request, about 08:45 (see the commit after e59da4f):**
-         test_release_local_matrix passes again.
-      2. `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_core_makefile.diff` — Core's Makefile: Laurium's scan.
-      3. `git apply OspreyFlow_Build/process/lanes/admin/p10p2/ci-yml.diff` — ci.yml: P10 part 2's live file.
-      4. `git apply OspreyFlow_Build/process/lanes/admin/p10p2/makefile.diff` — the Makefile: the same file ignored in make test.
-      5. `git apply OspreyFlow_Build/process/lanes/merger/owner-diffs/make-test-runs-every-part.diff` — make test runs
-         all three of its parts.
+    - **Your five patches are applied**, at your request, about 08:45–09:00:
+      - P12p2_CI is 30ab723;
+      - the other four are 44ec30d.
 
-      Until you apply them, main's make test fails test_release_local_matrix (fixed by 1),
-      test_entra_people_live's 19 errors and test-file-coverage-check (fixed by 3 and 4). I checked 3 and 4 on the
-      server: with them applied, both pass.
-    - **Main's make test has one failure until you apply `P12p2_CI.diff`:** `test_release_local_matrix` expects
-      Laurium's image in `release.yml`, and that line is in your patch. My merge check of P12 part 2 left that
-      test out; case-b's full run had the patch applied. Admin found it.
-    - P12 part 2's two patches for you, from the repository root, both checked to apply on main:
-      `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_CI.diff` (ci.yml and release.yml: Laurium's image), then
-      `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_core_makefile.diff` (OspreyFlow_Core/Makefile: Laurium's
-      image scanned in `make check`);
+      Patch 5 (make test runs all its parts) went in reshaped. As one shell line holding `$(MAKE)` it ran the suite
+      even under `make -n` (found when I checked it; it died on its arguments before any test ran). Each part is now
+      its own recipe line with a failure marker, and its record is beside it in `merger/owner-diffs/`.
     - the Makefile patch so `make test` runs all three of its parts (below, under P10 part 2's review);
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
     - **What happened overnight:**
