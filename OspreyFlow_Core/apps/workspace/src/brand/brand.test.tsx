@@ -96,6 +96,16 @@ describe("reading the deployment's appearance", () => {
     ).toEqual({ brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" });
   });
 
+  it("takes the deployment's banner text when it names one, and adds nothing when it does not (ADR-132 Amendment 7)", () => {
+    expect(readAppearance({ brand: "govuk", phase: "none", banner_text: "Demonstration only." })).toEqual({
+      ...PLAIN_APPEARANCE,
+      brand: "govuk",
+      bannerText: "Demonstration only.",
+    });
+    expect(readAppearance({ brand: "govuk", phase: "none", banner_text: "  " })).not.toHaveProperty("bannerText");
+    expect(readAppearance({ brand: "govuk", phase: "none" })).not.toHaveProperty("bannerText");
+  });
+
   it("falls back to the OspreyFlow brand for anything it does not recognise", () => {
     expect(readAppearance(undefined)).toEqual(PLAIN_APPEARANCE);
     expect(readAppearance({ brand: "gov.uk", phase: "gamma", service_name: "  " })).toEqual(PLAIN_APPEARANCE);

@@ -1,0 +1,14 @@
+# gate-b A2, the setting, glass.json and the sign-in page, red first: the tests before the code, at df6557f + the tests, this Mac
+FAILED ../OspreyFlow_Build/tests/harness/test_banner_text.py::test_the_banner_text_reaches_the_glass
+FAILED ../OspreyFlow_Build/tests/harness/test_banner_text.py::test_banner_text_must_be_one_line_of_words[]
+FAILED ../OspreyFlow_Build/tests/harness/test_banner_text.py::test_banner_text_must_be_one_line_of_words[   ]
+FAILED ../OspreyFlow_Build/tests/harness/test_banner_text.py::test_banner_text_must_be_one_line_of_words[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+FAILED ../OspreyFlow_Build/tests/harness/test_banner_text.py::test_banner_text_must_be_one_line_of_words[two\nlines]
+FAILED ../OspreyFlow_Build/tests/harness/test_banner_text.py::test_the_owners_wording_is_accepted
+FAILED ../OspreyFlow_Build/tests/harness/test_keycloak_theme_govuk.py::test_the_banner_text_reaches_the_sign_in_page_when_set
+7 failed, 11 passed in 0.33s
+ℹ fail 2
+✖ failing tests:
+ℹ pass 12
+✖ the deployment's banner text follows the phase's tag, in place of the default words (10.173583ms)
+✖ with no phase the banner text is shown alone, as text, never markup (4.678084ms)

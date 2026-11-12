@@ -1,5 +1,6 @@
 // The page frame around the Glass (ADR-132). Top to bottom: the skip link, the GOV.UK header (GOV.UK
-// brand only), the phase banner (either brand, when the deployment is in alpha or beta), the Glass
+// brand only), the phase banner (either brand, when the deployment is in alpha or beta or names its
+// own banner text, ADR-132 Amendment 7), the Glass
 // itself in `#main-content` (the skip link's target), and the GOV.UK footer (GOV.UK brand only).
 // Under the OspreyFlow brand with no phase only the skip link is added, and it is out of the page's
 // flow until it has focus, so the Glass is laid out exactly as before.
@@ -54,7 +55,7 @@ export function BrandFrame({ appearance, children }: { appearance: Appearance; c
       <div ref={above}>
         {/* ADR-145 decision 3: the place switcher stands inside the GOV.UK header. */}
         <GovukHeader withPlaces />
-        <PhaseBanner phase={appearance.phase} />
+        <PhaseBanner phase={appearance.phase} text={appearance.bannerText} />
       </div>
       {/* Focused by the skip link; not itself a control, so it is not in the Tab order. */}
       <div id={MAIN_CONTENT_ID} tabIndex={-1} className="main-content">

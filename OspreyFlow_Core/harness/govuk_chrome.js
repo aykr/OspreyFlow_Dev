@@ -53,20 +53,26 @@
     var header = fragment(HEADER);
     while (header.firstChild) top.appendChild(header.firstChild);
 
-    if (settings.phase === "alpha" || settings.phase === "beta") {
+    // ADR-132 Amendment 7: the deployment's own words replace the default ones, and with no phase
+    // they are shown alone. Set as text, never as markup.
+    var phased = settings.phase === "alpha" || settings.phase === "beta";
+    var own = typeof settings.bannerText === "string" && settings.bannerText.trim() ? settings.bannerText : null;
+    if (phased || own) {
       var banner = document.createElement("div");
       banner.className = "govuk-phase-banner govuk-width-container";
       banner.setAttribute("role", "region");
       banner.setAttribute("aria-label", "Service phase");
       var content = document.createElement("p");
       content.className = "govuk-phase-banner__content";
-      var tag = document.createElement("strong");
-      tag.className = "govuk-tag govuk-phase-banner__content__tag";
-      tag.textContent = settings.phase === "alpha" ? "Alpha" : "Beta";
+      if (phased) {
+        var tag = document.createElement("strong");
+        tag.className = "govuk-tag govuk-phase-banner__content__tag";
+        tag.textContent = settings.phase === "alpha" ? "Alpha" : "Beta";
+        content.appendChild(tag);
+      }
       var words = document.createElement("span");
       words.className = "govuk-phase-banner__text";
-      words.textContent = "This is a new service.";
-      content.appendChild(tag);
+      words.textContent = own || "This is a new service.";
       content.appendChild(words);
       banner.appendChild(content);
       top.appendChild(banner);

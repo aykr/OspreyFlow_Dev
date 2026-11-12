@@ -1,0 +1,5 @@
+# gate-b A, the banner, green: at df6557f + the change, this Mac
+      Tests  51 passed (51)
+21 passed in 0.33s
+ℹ pass 14
+ℹ fail 0

@@ -43,6 +43,14 @@ describe("under the OspreyFlow brand", () => {
     frame({ ...PLAIN_APPEARANCE, phase: "beta" });
     expect(screen.getByRole("region", { name: "Service phase" }).textContent).toContain("Beta");
   });
+
+  it("shows the deployment's banner text with no phase (ADR-132 Amendment 7)", () => {
+    applyBrand("ospreyflow");
+    frame({ ...PLAIN_APPEARANCE, bannerText: "Demonstration only: all data is synthetic." });
+    expect(screen.getByRole("region", { name: "Service phase" }).textContent).toBe(
+      "Demonstration only: all data is synthetic.",
+    );
+  });
 });
 
 describe("under the GOV.UK brand", () => {

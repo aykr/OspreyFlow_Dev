@@ -347,7 +347,7 @@ def render_glass_settings(config: OspreyConfig, *, entra: EntraSignInConfig | No
         "organisation_label": organisation_label(config),
         "welcome": {"about": welcome.about, "links": links},
         # ADR-132: the deployment's brand and what its page title, GOV.UK footer and banner name.
-        "appearance": config.appearance.model_dump(),
+        "appearance": config.appearance.told(),
         "version": deployment_version(),
     }
     if entra is not None:

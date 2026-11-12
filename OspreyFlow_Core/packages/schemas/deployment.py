@@ -1643,6 +1643,30 @@ class AppearanceConfig(BaseModel):
         default="none",
         description="Default: none. The phase banner shows at alpha or beta.",
     )
+    banner_text: str | None = Field(
+        default=None,
+        description=(
+            'Default: none. The banner\'s own words, in place of "This is a new service.", in '
+            "the Glass and on the sign-in page: after the phase's tag at alpha or beta, alone at "
+            "live or none. One line of at most 200 characters (ADR-132 Amendment 7)."
+        ),
+    )
+
+    @field_validator("banner_text")
+    @classmethod
+    def _one_line(cls, value: str | None) -> str | None:
+        one_line = "\n" not in value and "\r" not in value if value is not None else True
+        if value is not None and (not value.strip() or len(value) > 200 or not one_line):
+            raise ValueError("appearance.banner_text must be one line of at most 200 characters")
+        return value
+
+    def told(self) -> dict[str, object]:
+        """The section as the Glass and the sign-in page are told it: `banner_text` only when set,
+        so a deployment that names none renders byte for byte what it did (Amendment 7)."""
+        dumped = self.model_dump()
+        if self.banner_text is None:
+            del dumped["banner_text"]
+        return dumped
 
 
 class GradingConfig(BaseModel):

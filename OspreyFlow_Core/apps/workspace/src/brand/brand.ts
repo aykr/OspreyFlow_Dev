@@ -15,6 +15,9 @@ export interface Appearance {
   serviceName: string | null;
   organisation: string | null;
   phase: Phase;
+  /** ADR-132 Amendment 7: the deployment's own words for the banner, in place of "This is a new
+   * service."; with no phase, shown alone. Absent when the deployment names none. */
+  bannerText?: string;
 }
 
 export const PLAIN_APPEARANCE: Appearance = { brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" };
@@ -30,11 +33,13 @@ function text(value: unknown): string | null {
 export function readAppearance(section: unknown): Appearance {
   if (typeof section !== "object" || section === null) return PLAIN_APPEARANCE;
   const given = section as Record<string, unknown>;
+  const bannerText = text(given.banner_text);
   return {
     brand: given.brand === "govuk" ? "govuk" : "ospreyflow",
     serviceName: text(given.service_name),
     organisation: text(given.organisation),
     phase: PHASES.includes(given.phase as Phase) ? (given.phase as Phase) : "none",
+    ...(bannerText ? { bannerText } : {}),
   };
 }
 

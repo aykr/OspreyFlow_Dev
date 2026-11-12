@@ -140,3 +140,28 @@ test("a lang Keycloak wrote is kept", () => {
   dom.window.eval(THEME);
   assert.equal(dom.window.document.documentElement.getAttribute("lang"), "cy");
 });
+
+// ADR-132 Amendment 7: the deployment's own banner text on the sign-in page, as in the Glass.
+const DISCLAIMER = "Demonstration only: this is not a government service, and all data is synthetic.";
+
+test("the deployment's banner text follows the phase's tag, in place of the default words", () => {
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, bannerText: DISCLAIMER } });
+  const phase = win.document.querySelector('[aria-label="Service phase"]');
+  assert.ok(phase.textContent.includes("Beta"));
+  assert.ok(phase.textContent.includes(DISCLAIMER));
+  assert.ok(!phase.textContent.includes("This is a new service."));
+});
+
+test("with no phase the banner text is shown alone, as text, never markup", () => {
+  const hostile = "<b>Demonstration</b> only";
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, phase: "none", bannerText: hostile } });
+  const phase = win.document.querySelector('[aria-label="Service phase"]');
+  assert.equal(phase.textContent.trim(), hostile);
+  assert.equal(phase.querySelector("b"), null);
+  assert.equal(phase.querySelector(".govuk-tag"), null);
+});
+
+test("with no phase and no banner text there is no banner", () => {
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, phase: "none" } });
+  assert.equal(win.document.querySelector('[aria-label="Service phase"]'), null);
+});
