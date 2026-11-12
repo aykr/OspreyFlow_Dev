@@ -598,6 +598,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         848 tests passed, cp-policy-check found 0 violations on all five fixtures, and schemas, reservations,
         coverage and live-collect were green. `ci.yml`, `release.yml` and Core's Makefile are yours, by the
         two patches at the top of this item. Each was checked to apply on main.
+      - **About 06:30, you asked for 60% of the load on sol.** All remaining build work is on sol already:
+        admin's P10 part 2 and T1 part 5, and docs' next part. The orchestrator's independent reviews were the
+        bulk of ayan's load, so from now on they run in the case session on sol, as a relay: I send it the
+        brief, and it returns the reviewer's report unedited. On ayan I keep the merges, rulings and
+        spot-checks.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
