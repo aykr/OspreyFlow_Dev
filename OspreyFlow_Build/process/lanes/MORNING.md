@@ -507,6 +507,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - cp-policy-check: 0 violations on all five fixtures.
 
       Nothing else on main is red.
+      - **About 10:00, D2c part 3 landed** (admin guide 1.86): the Cloud Platform guide brought up to everything
+        built overnight. Its review ran on sol through the relay.
+      - **GitHub's CI had not run since 11 November.** The workflow file was invalid: the conformance job set
+        `OSPREY_TEST_ARCADEDB_CONTAINER` from the `job` context in the job's own env, which GitHub refuses. That
+        line came in with the case lane's drawn-layer work between 8 and 11 November. Fixed (62cfdbe), and
+        actionlint is clean; it reaches GitHub at the next push.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.

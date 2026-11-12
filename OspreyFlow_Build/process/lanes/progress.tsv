@@ -57,7 +57,7 @@ case-b	P12	L	done	Laurium as a second extraction engine: part 1 merged (5571caa7
 platform-b	P6	S	done	The case's gazetteer panel beside place search, by keyboard (merged fd171f7)
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	done	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed) (merged 99d927d)
-docs	D2c	M	building	The Cloud Platform deployment guide: parts 1 (fb6b02c, guide 1.76) and 2 (e1b7626, guide 1.81, Entra from P10 part 1) merged; part 3 (P7b, P9, L1.9 part 2, P12 part 2, P10 part 2) started 08:25, 12 Nov; P8 and P11 later
+docs	D2c	M	building	The Cloud Platform deployment guide: parts 1 (fb6b02c, 1.76), 2 (e1b7626, 1.81) and 3 (P7b, P9, L1.9 part 2, P12 part 2, P10 part 2; guide 1.86, 12 Nov) merged; P8 and P11 later
 platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-114 Am 37) (merged f8df603)
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
