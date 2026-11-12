@@ -40,3 +40,7 @@ apps/workspace/src/watches/AlertInbox.tsx
 # Removed by P10 part 2 (ADR-148 Amendment 8): P7b's Keycloak sign-in step for the install runbook, which
 # Entra ID's sign-in replaces. ADR-148 Amendment 5 records P7b as it was built and stays as written.
 tests/harness/test_cloud_platform_identity.py
+
+# Proposed by docs' sites step (process/lanes/docs/sites-proposal/README.md): the identifier check's tests land here
+# only when the owner accepts items 4 and 5; until then the file is in the proposal folder.
+tests/test_site_identifiers.py
