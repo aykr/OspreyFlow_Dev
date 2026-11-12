@@ -18,3 +18,12 @@ Post-seed backup: `/srv/ospreyflow/backups/small/20261112T173107Z-small-2be985aâ
 - Post-seed backup taken before the checks. Orchestrator approved.
 
 Commits: this report and the friction row only. Requests: none open. Nothing of mine is running; the server is frozen.
+
+## Later the same evening (owner's word, approved in this window): osprey-small moved to https://govuk.ospreyflow.app
+- Backup before the move: `/srv/ospreyflow/backups/small/20261112T180657Z-small-2be985aâ€¦`.
+- Let's Encrypt certificate by manual DNS-01 (certbot 2.9.0, installed by apt): three names, expires 10 Feb 2027.
+- Copied into `/etc/ospreyflow/tls/govuk.ospreyflow.app.{crt,key}` (osprey; the key mode 600).
+- `osprey.yaml`: `public_origin` and the TLS paths changed, `tls.ca` removed. Copy kept as `osprey.yaml.before-govuk-app-20261112T181854Z`.
+- One apply, then repair-sign-in. Every check passes at the new address: services, certificate, four sign-ins, a case, brand.
+- Switch scripts follow `public_origin`; not run.
+- Open: `install.yaml` still names the old address. Certificate renewal is manual.
