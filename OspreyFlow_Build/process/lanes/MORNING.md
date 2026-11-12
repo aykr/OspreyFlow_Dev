@@ -673,6 +673,21 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 
         That needs an ADR-114 amendment and code, so it is Part 3. The demo lane is checking how one deployment can
         show both looks.
+      - **Your choice (about 20:35), option 1:** one look switch during Friday's demo (GOV.UK ↔ OspreyFlow, one apply,
+        about 1–3 min with no sign-in; the Glass, proxy and Keycloak restart, no data touched), rehearsed once in your
+        walk-through tonight. The demo lane prepares two scripts on the server that check sign-in after each switch.
+
+        **Part 2's answers** are in `process/lanes/demo/PART2.md` (lane/demo). Summary:
+        - a bare domain works;
+        - two Smalls behind one 443 need an ADR-114 amendment and code;
+        - GOV.UK off gov.uk only warns, but the banner text is fixed;
+        - the gate is an edge proxy;
+        - Gemini's budget refuses the next call, in words;
+        - certificates by DNS-01, with a deploy hook;
+        - the nightly reset is by cron, about 5–10 min;
+        - both draft answers files are corrected.
+
+        Your question 9 (invited accounts) is being added.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
