@@ -736,6 +736,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **Your word (about 22:20): push the dev repository once platform-b's CI fixes have merged.** The product
         repository stays at v0.5.0 until v0.5.1, after R1, the rehearsed upgrade, the CHANGELOG and your word
         (aiming for Tuesday 17 Nov).
+      - **Pushed (about 23:00): origin is 8d1abe1**, 139 commits including the six CI fixes (3e779f8). Before it:
+        no osprey.yaml or data/ commit, no key, no ACME value, and one applied patch's author header redacted.
+        Every commit's author email is your git identity, as on origin already; GitHub's noreply address would stop
+        that for future commits (your call). GitHub CI is running on it.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
