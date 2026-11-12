@@ -603,6 +603,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         bulk of ayan's load, so from now on they run in the case session on sol, as a relay: I send it the
         brief, and it returns the reviewer's report unedited. On ayan I keep the merges, rulings and
         spot-checks.
+        You then asked for the idle lanes to move too. I added sol lines for case-b and platform-b in
+        `~/.ospreyflow/accounts.conf`; studio and platform already had them, and a copy of the file as it was
+        is kept. I asked case-b, platform and platform-b to pause and end their sessions; studio had none
+        running. Each resumes on sol, and none is reopened until it has a step: an idle session would only
+        spend tokens. Only the orchestrator stays on ayan.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
