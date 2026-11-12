@@ -18,9 +18,10 @@ from pathlib import Path
 
 CORE = Path(__file__).resolve().parents[5] / "OspreyFlow_Core"
 TESTS = "../OspreyFlow_Build/tests/services/api/test_alert_citations_per_list.py"
+SCREENING = "../OspreyFlow_Build/tests/services/api/test_screening.py"
 
-#: (name, file under Core, the text as built, the text planted, the tests that must go red)
-PLANTS: list[tuple[str, str, str, str, str]] = [
+#: (name, file under Core, the text as built, the text planted, the tests that must go red[, file])
+PLANTS: list[tuple[str, ...]] = [
     (
         "P1 the queue serves the alert as stored (no as_read)",
         "services/api/alert_queue.py",
@@ -95,13 +96,46 @@ PLANTS: list[tuple[str, str, str, str, str]] = [
         "    return [i for i in alert.edge_ids if i not in cited]",
         "test_a_pack_item_asks",
     ),
+    (
+        "P11 a list's marking not read from its file",
+        "scripts/load_screening_list.py",
+        "    classification, handling_code = _marking(raw, scheme or load_uk_le_scheme())",
+        "    classification, handling_code = None, None",
+        "test_a_lists_marking",
+        SCREENING,
+    ),
+    (
+        "P12 a classification the scheme does not define taken",
+        "scripts/load_screening_list.py",
+        "    if classification not in scheme.classification:\n",
+        "    if False:\n",
+        "test_a_marking_the_scheme",
+        SCREENING,
+    ),
+    (
+        "P13 a re-marked entry read as unchanged",
+        "services/api/screening.py",
+        "                self.date_of_birth, self.country, self.classification,\n"
+        "                self.handling_code)  # fmt: skip",
+        "                self.date_of_birth, self.country)  # fmt: skip",
+        "test_a_change_of_marking",
+        SCREENING,
+    ),
+    (
+        "P14 a rule screens against every list, its deployer cleared or not",
+        "services/api/kyc_rules.py",
+        "    return [e for e in entries if handling_readable(scheme, deployer, list_handling(e, deployer))]",
+        "    return list(entries)",
+        "test_a_rule_screens_only",
+        SCREENING,
+    ),
 ]
 
 
-def _run(selector: str) -> tuple[bool, str]:
+def _run(selector: str, tests: str = TESTS) -> tuple[bool, str]:
     done = subprocess.run(
         [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-p", "no:cacheprovider",
-         "-q", TESTS, "-k", selector],
+         "-q", tests, "-k", selector],
         cwd=CORE, capture_output=True, text=True, check=False,
     )  # fmt: skip
     lines = [line for line in done.stdout.splitlines() if line.strip()]
@@ -110,11 +144,13 @@ def _run(selector: str) -> tuple[bool, str]:
 
 def main() -> int:
     green_left = 0
-    base_red, base_line = _run("")
-    print(f"built: {'RED' if base_red else 'GREEN'} - {base_line}")
-    if base_red:
-        return 1
-    for name, rel, built, planted, selector in PLANTS:
+    for tests in (TESTS, SCREENING):
+        base_red, base_line = _run("", tests)
+        print(f"built, {tests.rsplit('/', 1)[-1]}: {'RED' if base_red else 'GREEN'} - {base_line}")
+        if base_red:
+            return 1
+    for name, rel, built, planted, selector, *rest in PLANTS:
+        tests = rest[0] if rest else TESTS
         path = CORE / rel
         source = path.read_text(encoding="utf-8")
         if source.count(built) != 1:
@@ -123,14 +159,15 @@ def main() -> int:
             continue
         try:
             path.write_text(source.replace(built, planted), encoding="utf-8")
-            red, line = _run(selector)
+            red, line = _run(selector, tests)
         finally:
             path.write_text(source, encoding="utf-8")
         print(f"{name} [{rel}; -k {selector}]: {'RED' if red else 'GREEN'} - {line}")
         green_left += 0 if red else 1
-    after_red, after_line = _run("")
-    print(f"restored: {'RED' if after_red else 'GREEN'} - {after_line}")
-    return 1 if green_left or after_red else 0
+    after = [_run("", tests) for tests in (TESTS, SCREENING)]
+    for (after_red, after_line), tests in zip(after, (TESTS, SCREENING), strict=True):
+        print(f"restored, {tests.rsplit('/', 1)[-1]}: {'RED' if after_red else 'GREEN'} - {after_line}")
+    return 1 if green_left or any(red for red, _ in after) else 0
 
 
 if __name__ == "__main__":
