@@ -16,6 +16,7 @@ Each is red with the `PartlyRaised` catch removed at its real call site (RED_REC
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -112,7 +113,9 @@ async def test_the_raise_loop_says_how_many_it_raised_before_failing(
 
     async def context(rule: Any, deployer: Any, gate: Any) -> Any:
         assert isinstance(rule.params, SentenceRuleParams)
-        return rule.params, None, None
+        # A context as the real `_context` always returns one: its subjects matched to a screening
+        # entry (`screened`, ADR-146 Amendment 7) read by the raise (none here).
+        return rule.params, None, SimpleNamespace(screened={})
 
     monkeypatch.setattr(sentence_rules, "_context", context)
 
@@ -120,7 +123,7 @@ async def test_the_raise_loop_says_how_many_it_raised_before_failing(
         return ["hit-1", "hit-2"]
 
     monkeypatch.setattr(sentence_rules, "judge_subjects", two_hits)
-    monkeypatch.setattr(sentence_rules, "_findings", lambda rule, d, hits, words: list(hits))
+    monkeypatch.setattr(sentence_rules, "_findings", lambda rule, d, hits, words, screened=None: list(hits))
     with pytest.raises(PartlyRaised) as failed:
         await sentence_rules.run_scheduled_rule(_scheduled_rule(), AUTHOR, _Gate(), now=NOW)  # type: ignore[arg-type]
     assert failed.value.raised == 1 and "the queue refused" in str(failed.value)
