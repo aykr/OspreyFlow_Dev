@@ -733,6 +733,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - one is GitHub's environment: Chromium reads dates month-first; fixed with en-GB.
 
         No product defect. The fixes are being applied now (none in .github/). They are proved at your next push.
+      - **Your word (about 22:20): push the dev repository once platform-b's CI fixes have merged.** The product
+        repository stays at v0.5.0 until v0.5.1, after R1, the rehearsed upgrade, the CHANGELOG and your word
+        (aiming for Tuesday 17 Nov).
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
