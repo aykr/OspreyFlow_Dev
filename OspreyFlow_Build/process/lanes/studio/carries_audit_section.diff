@@ -1,0 +1,26 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_audit_kinds.py b/OspreyFlow_Build/tests/services/api/test_audit_kinds.py
+index ea47515..e94b429 100644
+--- a/OspreyFlow_Build/tests/services/api/test_audit_kinds.py
++++ b/OspreyFlow_Build/tests/services/api/test_audit_kinds.py
+@@ -205,6 +205,8 @@ WORDS_SHOWN_ACTIONS = frozenset({
+     "create_dataset", "create_composite_dataset", "set_dataset_egress",
+     "set_dataset_promotion_policy", "change_dataset_owners", "set_dataset_owner_setting",
+     "register_dataset_source", "edit_dataset_source_governance", "make_home_case",
++    # ADR-140 Amendment 19 (studio carries): a source's declared default marking.
++    "set_dataset_source_default_marking",
+     "make_drawn_dataset", "set_case_datasets",
+     # Platform's P5: a gazetteer added to a dataset and removed (only `dataset_id` shown).
+     "add_dataset_gazetteer", "remove_dataset_gazetteer",
+diff --git a/OspreyFlow_Core/services/api/audit_section.py b/OspreyFlow_Core/services/api/audit_section.py
+index 2736fa0..a4b4c35 100644
+--- a/OspreyFlow_Core/services/api/audit_section.py
++++ b/OspreyFlow_Core/services/api/audit_section.py
+@@ -192,6 +192,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
+         "set_dataset_owner_setting",
+         "register_dataset_source",
+         "edit_dataset_source_governance",
++        # ADR-140 Amendment 19 (studio carries): a source's declared default marking, from and to.
++        "set_dataset_source_default_marking",
+         "make_home_case",
+         "make_drawn_dataset",
+         "set_case_datasets",
