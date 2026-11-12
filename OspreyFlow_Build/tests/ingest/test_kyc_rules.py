@@ -32,12 +32,12 @@ import duckdb
 import pytest
 import yaml
 from scripts.load_screening_list import parse_list
-from services.api.alerts import AlertStore
+from services.api.alerts import AlertStore, as_read
 from services.api.audit import AuditWriter
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.held_rows import HeldRowStore
 from services.api.rule_evaluation import RuleGate
-from services.api.screening import ScreeningListStore, normalised
+from services.api.screening import ScreeningEntry, ScreeningListStore, normalised
 from services.api.studio_publish import load_with_rules
 from services.api.typology_rules import TypologyRuleStore
 from services.ingest.recipe_loader import load_recipe
@@ -165,7 +165,11 @@ async def _onboard(graph: Any, gate: RuleGate, rows: list[dict[str, str]], *, lo
 
 
 async def _alerts(stores: dict[str, Any], case: str, who: Principal = OFFICER) -> list[Any]:
-    return [a for a in await stores["alerts"].list_authorized(who) if a.investigation_id == case]
+    """The case's alerts as stored, each served as to a reader cleared for every list it cites
+    (`as_read`, ADR-146 Amendment 7): the words with every match in them. A reader's own view is
+    read through the queue (`_queue`)."""
+    return [as_read(a, range(len(a.citations))) for a in await stores["alerts"].list_authorized(who)
+            if a.investigation_id == case]  # fmt: skip
 
 
 def _rule(params: Any, trigger: str = "pre_commit") -> TypologyRuleInput:
@@ -679,3 +683,161 @@ async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_co
         assert row.alert_node_id != petrov.alert_node_id, "the alert names its confirmed node"
         listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
         assert petrov.id in listed
+
+
+# --- ADR-146 Amendment 7: one owner named on two screening lists ---------------------------------
+
+SECOND_LIST = "Synthetic second list (kyc test)"
+SECRET_READER = Principal(id="kyc-secret-reader", clearance="SECRET", org_unit="verify", roles=["analyst"])
+
+
+@pytest.fixture
+async def second_list(stores: dict[str, Any]) -> AsyncIterator[Any]:
+    """A second list naming Elena Petrova (and no one else this file onboards), loaded as
+    `marking` says, and removed in teardown, on a failure too (CARRIES row 113)."""
+    loaded: list[str] = []
+
+    async def load(marking: str | None) -> None:
+        entry = ScreeningEntry(
+            id=f"{SECOND_LIST}:2-001", list_name=SECOND_LIST, listing="sanction",
+            entity_type="Person", name="Elena PETROVA", country="XA",
+            classification=marking, handling_code="P" if marking else None,
+        )  # fmt: skip
+        await stores["screening"].replace_list(SECOND_LIST, [entry])
+        loaded.append(SECOND_LIST)
+
+    try:
+        yield load
+    finally:
+        if loaded:
+            await remove_screening_lists(PostgresConfig.from_env().dsn, names=[SECOND_LIST])
+
+
+class _BothLists:
+    """The real store, read for this file's list and the second one alone (as `_OwnList`)."""
+
+    def __init__(self, store: ScreeningListStore, names: set[str]) -> None:
+        self._store, self._names = store, names
+
+    async def entries(self, entity_type: str) -> list[Any]:
+        return [e for e in await self._store.entries(entity_type) if e.list_name in self._names]
+
+
+def _gate_both(stores: dict[str, Any], graph: Any, rules: list[Any], case: str) -> RuleGate:
+    gate = _gate(stores, graph, rules, case)
+    gate.screening = cast(ScreeningListStore, _BothLists(stores["screening"], {stores["list_name"], SECOND_LIST}))
+    return gate
+
+
+async def _queue(stores: dict[str, Any], graph: Any, gate: RuleGate, case: str, reader: Principal) -> list[Any]:
+    from services.api.alert_queue import monitoring_queue
+
+    return await monitoring_queue(stores["alerts"], graph, gate.analytics, case, reader)
+
+
+def _petrov(queued: list[Any]) -> Any:
+    (one,) = [q for q in queued if "Elena Petrov" in q.summary]
+    return one
+
+
+async def _owner_listed(graph: Any, reader: Principal) -> list[str]:
+    halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+    assert halcyon is not None
+    seen = await assess(graph, ComputeRustworkxAdapter(), halcyon.id, reader, today=date(2026, 11, 12))
+    return sorted(f.words for f in seen.factors if f.factor == "owner_listed" and "Petrov" in f.words)
+
+
+async def test_one_owner_on_two_lists_raises_one_alert_citing_both(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """Amendment 7, the owner's ruling of 12 November 2026: Elena Petrov, on both lists, raises one
+    alert citing both, not two (CARRIES row 114). Red before it: two Petrov alerts. Due diligence
+    keeps one `owner_listed` factor per list, each read as the reader."""
+    await second_list(None)
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        stored = await stores["alerts"].list_authorized(OFFICER)
+        petrov = [a for a in stored if a.investigation_id == case and "Elena Petrov" in (a.words or "")]
+        assert len(petrov) == 1, [a.words for a in petrov]
+        assert len(petrov[0].citations) == 2
+        assert "Synthetic" not in (petrov[0].words or ""), "the stored words name no list"
+        shown = _petrov(await _queue(stores, graph, gate, case, OFFICER))
+        assert stores["list_name"] in shown.summary and SECOND_LIST in shown.summary
+        assert len(await _owner_listed(graph, OFFICER)) == 2
+
+
+async def test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The second list is SECRET; the rule's deployer is cleared for it. The OFFICIAL reader is
+    shown the one alert citing the first list alone, in the queue and its explanation, with nothing
+    of the second (its name, its match, a second citation), and one `owner_listed` factor; the
+    SECRET reader is shown both. Red with the queue's check all or nothing: the OFFICIAL reader was
+    shown no Petrov alert at all; red with the alert served as stored: the second list named."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        low = _petrov(await _queue(stores, graph, gate, case, OFFICER))
+        assert SECOND_LIST not in low.summary and stores["list_name"] in low.summary
+        assert SECOND_LIST not in low.alert.model_dump_json() and len(low.alert.citations) == 1
+        why = await explain(stores["alerts"], graph, gate.analytics, case, low.alert.id, OFFICER)
+        assert SECOND_LIST not in why.model_dump_json()
+        assert len([e for e in why.edges if e.type == "SAME_AS"]) == 1
+        high = _petrov(await _queue(stores, graph, gate, case, SECRET_READER))
+        assert high.alert.id == low.alert.id and len(high.alert.citations) == 2
+        assert SECOND_LIST in high.summary
+        assert len(await _owner_listed(graph, OFFICER)) == 1
+        assert len(await _owner_listed(graph, SECRET_READER)) == 2
+
+
+async def test_a_true_positive_confirms_only_the_matches_the_closer_can_read(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """The owner's ruling of 12 November 2026 on ADR-109 Amendment 7 as it meets rules 3 and 5: an
+    OFFICIAL closer's true positive confirms the first list's match, and the SECRET list's, which
+    the closer cannot see, stays inferred. The SECRET reader still opens the closed alert with both
+    matches (the confirmed one repointed in its citation too). Red with the citations' links not
+    repointed: the SECRET reader's alert was withheld, its first match citing the superseded link."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(SECRET_LOADER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        alert_id = _petrov(await _queue(stores, graph, gate, case, OFFICER)).alert.id
+        await dispose(stores["alerts"], graph, gate.analytics, case, alert_id, OFFICER,
+                      disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        closed = await approve_close(stores["alerts"], graph, gate.analytics, case, alert_id, colleague)
+        assert closed.status == "closed" and SECOND_LIST not in closed.model_dump_json()
+        why = await explain(stores["alerts"], graph, gate.analytics, case, alert_id, SECRET_READER)
+        listed = {n.id: n.properties.get("list_name") for n in why.nodes}
+        states = {listed.get(e.target): e.provenance.state for e in why.edges if e.type == "SAME_AS"}
+        assert states == {stores["list_name"]: ProvenanceState.ASSERTED, SECOND_LIST: ProvenanceState.INFERRED}
+
+
+async def test_a_rule_screens_only_against_lists_its_deployer_is_cleared_for(
+    stores: dict[str, Any], second_list: Any
+) -> None:
+    """Amendment 7 (rule 3): a rule runs as its deployer, who is OFFICIAL here, so the SECRET list
+    is not screened against at all: the alert cites the first list alone, even to a SECRET reader,
+    and no match on the SECRET list is written. Red with every list screened: two citations."""
+    await second_list("SECRET")
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate_both(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        high = _petrov(await _queue(stores, graph, gate, case, SECRET_READER))
+        assert len(high.alert.citations) == 1 and SECOND_LIST not in high.summary
+        assert len(await _owner_listed(graph, SECRET_READER)) == 1
