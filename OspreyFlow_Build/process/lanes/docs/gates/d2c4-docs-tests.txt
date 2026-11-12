@@ -1,7 +1,8 @@
-# D2c part 4, the model route (ADR-135 Am 4, 7, 8): admin guide 1.88, new §6a.9 mirrored into spec 10 word for word. On the Mac on closed ports (no stack, no lease), 2026-11-12T16:31:23Z. test_docs_pdf's one failure is the administration PDF alone, made by the orchestrator at merge.
+# D2c part 4, the model route (ADR-135 Am 4, 7, 8): admin guide 1.88, new §6a.9 mirrored into spec 10 word for word, after the lane-reviewer's fixes. On the Mac on closed ports (no stack, no lease), 2026-11-12T16:39:48Z, from OspreyFlow_Build. test_docs_pdf's one failure is the administration PDF alone, made by the orchestrator at merge.
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_admin_guide.py tests/test_docs_pdf.py
 E       AssertionError: administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`
-E         Left contains one more item: 'administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`'
 FAILED tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step - A...
-1 failed, 79 passed in 0.45s
+1 failed, 79 passed in 0.37s
+# mirrors: diff of the section ranges '/^## 6a\./,/^## 7\./' and '/^### 10.1 /,/^## 10a/' between the two files
 spec 10 §6a mirror: identical
 spec 10 §10.1 mirror: identical
