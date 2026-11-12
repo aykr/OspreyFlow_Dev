@@ -446,3 +446,38 @@ def test_the_databases_are_the_ones_the_render_gives_the_conduit() -> None:
         broken["environment"]["ARCADEDB_DATABASE"] = bad or "1x"
         with pytest.raises(ValueError, match="not a plain name"):
             backups.add_backups(cfg, platform, broken)
+
+
+@pytest.mark.parametrize(
+    ("job", "rows"),
+    [({"name": "laurium-load", "shared": [{"subPath": "i", "mountPath": "/i", "readOnly": False, "claim": "ingest"}]}, {}),
+     ({"name": "migrate"}, {"migrate": ["clickhouse"]})],
+    ids=["mounts a set's claim", "calls ClickHouse"],
+)
+def test_a_rendered_job_that_writes_is_a_writer(
+    job: dict[str, Any], rows: dict[str, list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The render's Jobs (`values["jobs"]`) are read as its workloads are: one that mounts a set's
+    claim or calls a store by its profile.yaml row is a writer (the orchestrator's second review)."""
+    from harness.cloud_platform import settings as cp_settings
+
+    real = cp_settings.load_profile
+
+    def with_rows() -> Any:
+        profile = real().model_copy(deep=True)
+        profile.egress.paths.update(rows)
+        return profile
+
+    monkeypatch.setattr(cp_settings, "load_profile", with_rows)
+    cfg = rendered.config()
+    assert cfg.cloud_platform is not None
+    values = yaml.safe_load(rendered.artefacts()["values.yaml"])
+    values.pop("backups", None)
+    values["jobs"] = [*(values.get("jobs") or []), job]
+    backups.add_backups(cfg, cp_settings.load_platform(cfg.cloud_platform.platform), values)
+    assert job["name"] in values["backups"]["writers"]
+    values["jobs"] = [{"name": job["name"]}]  # the same Job neither mounting nor calling: not one
+    values.pop("backups")
+    monkeypatch.setattr(cp_settings, "load_profile", real)
+    backups.add_backups(cfg, cp_settings.load_platform(cfg.cloud_platform.platform), values)
+    assert job["name"] not in values["backups"]["writers"]

@@ -511,6 +511,20 @@ class Stores:
         # again is refused (Code 253, kind round 4).
         attempt = uuid.uuid4().hex[:12]
         on = self._on_cluster()
+        # Another set's restored copy, kept by a swap refused part-way: the set it holds is still in
+        # the bucket, so it is dropped here and said, never left to pile up beside the live one.
+        stale = self.clickhouse(
+            f"SHOW DATABASES LIKE '{database}\\_restoring\\_%'", "find restored copies left"
+        )
+        for name in stale.split():
+            if name != restoring and name.startswith(f"{database}_restoring_"):
+                print(
+                    f"restore: dropping {name}, a restored copy an earlier restore left",
+                    file=sys.stderr,
+                )
+                self.clickhouse(
+                    f"DROP DATABASE IF EXISTS {_identifier(name)}{on} SYNC", "drop a copy left"
+                )
         self.clickhouse(f"DROP DATABASE IF EXISTS {restoring}{on} SYNC", "clear the restore's own")
         self.clickhouse(
             f"CREATE DATABASE {restoring}{on} ENGINE = Replicated("
@@ -544,7 +558,17 @@ class Stores:
         live = self.clickhouse(f"EXISTS DATABASE {database}", "see whether the live one is there")
         aside = live.strip() == "1"
         if aside:
-            self.clickhouse(f"RENAME DATABASE {database} TO {old}{on}", "set the live one aside")
+            try:
+                self.clickhouse(
+                    f"RENAME DATABASE {database} TO {old}{on}", "set the live one aside"
+                )
+            except BackupRefused as refusal:
+                raise BackupRefused(
+                    refusal.store,
+                    refusal.step,
+                    f"{refusal.reason}; the live database is as it was; the set's restored copy "
+                    f"is kept as {restoring}",
+                ) from refusal
         try:
             self.clickhouse(
                 f"RENAME DATABASE {restoring} TO {database}{on}", "put the restored one in"

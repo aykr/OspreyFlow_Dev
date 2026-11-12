@@ -332,9 +332,10 @@ def writers(
     workloads: list[dict[str, Any]], paths: dict[str, list[str]] | None = None
 ) -> list[str]:
     """Every pod a restore refuses to run beside, from the render (rule 12: a workload added
-    later is caught by the same rule): the store replaced stopped (ArcadeDB); every workload that
-    mounts one of the set's claims (`storage.claims`, a `shared` mount naming its `claim`, in a
-    container or an init container); every workload that calls a store or a writer, by
+    later is caught by the same rule): the store replaced stopped (ArcadeDB); every workload or
+    Job (`values["jobs"]`) that mounts one of the set's claims (`storage.claims`, a `shared` mount
+    naming its `claim`, in a container or an init container); every one that calls a store or a
+    writer, by
     profile.yaml's `egress.paths` (the rows its egress is rendered from), so one that writes
     through the Conduit (the report sync, the Glass) is a writer too; and the backups' own runs.
     ClickHouse and its Keeper run through their restore and are not."""
@@ -365,6 +366,7 @@ def backups_values(
     platform: PlatformSettings,
     workloads: list[dict[str, Any]],
     environment: dict[str, Any],
+    jobs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """The chart's `backups` (and ArcadeDB's claim and ClickHouse's role, given in `workloads`), or
     `None` when the deployment runs neither ArcadeDB nor ClickHouse. A deployment with one store and
@@ -422,7 +424,7 @@ def backups_values(
         "env": env,
         "clickhouse": {"env": clickhouse_env},
         # The pods a restore refuses to run beside (the orchestrator's ruling 4), from the render.
-        "writers": writers(workloads),
+        "writers": writers([*workloads, *(jobs or [])]),
         # The restore is proven for one copy of each store (Amendment 7); beyond it the render
         # refuses the restore's Jobs, in words naming P9b (the orchestrator's round 2, item 13).
         "restorable": int(arcadedb.get("replicas", 1)) == 1
@@ -446,7 +448,9 @@ def add_backups(
     the backups added to `values` (the chart's `backups`, ArcadeDB's claim, ClickHouse's role, users
     file and backup user's password); returns the Terraform files it adds, `terraform/backups.tf`.
     A render without ArcadeDB and ClickHouse is returned unchanged."""
-    found = backups_values(config, platform, values["workloads"], values["environment"])
+    found = backups_values(
+        config, platform, values["workloads"], values["environment"], values.get("jobs") or []
+    )
     if found is None:
         return {}
     irsa = platform.secrets.irsa

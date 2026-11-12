@@ -303,6 +303,15 @@ class FakeStores:
                 text = (f"Code: 497. DB::Exception: backup: Not enough privileges. To execute this query, "
                         f"it's necessary to have the grant DROP DATABASE ON {database}.*. (ACCESS_DENIED)").encode()  # fmt: skip
                 raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        if body.startswith("SHOW DATABASES LIKE"):
+            like, pattern, i = body.split("'")[1], "", 0
+            while i < len(like):  # LIKE as ClickHouse reads it: `\_` a literal, `_` one, `%` any
+                if like[i] == "\\" and i + 1 < len(like):
+                    pattern, i = pattern + re.escape(like[i + 1]), i + 2
+                    continue
+                pattern += {"%": ".*", "_": "."}.get(like[i], re.escape(like[i]))
+                i += 1
+            return "".join(f"{d}\n" for d in sorted(self.databases) if re.fullmatch(pattern, d)).encode()
         if body.startswith("EXISTS DATABASE"):
             return b"1\n" if body.split()[2] in self.databases else b"0\n"
         if body.startswith(("DROP DATABASE", "CREATE DATABASE", "RENAME DATABASE")):

@@ -377,6 +377,17 @@ runner.PLANTS = [
     ("the check taking a zip that holds no file", CHECK,
      'if (entries == 0) refuse("the set\'s zip holds no file");', "if (false) refuse(\"\");",
      [TG + "test_the_check_refuses_every_damage_arcadedb_itself_opens_with_a_warning"]),
+    ("another set's restored copy left beside the live database", RUN,
+     '            if name != restoring and name.startswith(f"{database}_restoring_"):',
+     "            if False:",
+     [TP + "test_another_sets_restored_copy_left_by_a_failed_swap_is_dropped_and_said"]),
+    ("the set-aside's refusal naming no restored copy", RUN,
+     "the live database is as it was; the set's restored copy \"\n                    f\"is kept as {restoring}\"",
+     "the live database is as it was\"",
+     [TP + "test_a_refused_set_aside_leaves_the_live_database_and_names_the_restored_copy"]),
+    ("the render's Jobs not read for writers", RENDER,
+     '        "writers": writers([*workloads, *(jobs or [])]),', '        "writers": writers(workloads),',
+     [TR + "test_a_rendered_job_that_writes_is_a_writer"]),
 ]
 
 if __name__ == "__main__":

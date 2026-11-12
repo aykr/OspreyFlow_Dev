@@ -199,6 +199,7 @@ def test_a_restore_fetches_the_zip_checked_and_restores_clickhouse_from_the_set(
     restoring, before = f"ospreyflow_restoring_{stamp}", f"ospreyflow_before_{stamp}"
     # Restored beside the live database, then swapped, and the old dropped only after.
     assert fake.statements[sent:] == [
+        "SHOW DATABASES LIKE 'ospreyflow\\_restoring\\_%'",
         f"DROP DATABASE IF EXISTS {restoring} SYNC",
         f"CREATE DATABASE {restoring}",
         f"RESTORE DATABASE ospreyflow AS {restoring} FROM S3('{REGIONAL}/{BUCKET}/sets/{manifest['set']}/clickhouse/') "
@@ -652,3 +653,41 @@ def test_the_same_set_restored_twice_on_a_cluster_is_never_refused_by_its_own_ke
     for _ in range(2):
         pb.restore_analytics(clustered, bucket, on_cluster, manifest["set"])
     assert fake.databases == {"ospreyflow"}
+
+
+def test_another_sets_restored_copy_left_by_a_failed_swap_is_dropped_and_said(
+    run: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A swap refused part-way keeps that set's restored copy (`…_restoring_<set>`); the next
+    restore, of another set, drops it (the set it holds is still in the bucket) and says so,
+    never leaving restored copies to pile up beside the live database."""
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    stale = "ospreyflow_restoring_20201231t000000z"
+    fake.databases.add(stale)
+    pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    assert fake.databases == {"ospreyflow"}
+    assert f"DROP DATABASE IF EXISTS {stale} SYNC" in fake.statements
+    assert stale in capsys.readouterr().err
+
+
+def test_a_refused_set_aside_leaves_the_live_database_and_names_the_restored_copy(
+    run: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    ddl = fake._ddl
+
+    def refusing(request: Any, body: str) -> bytes:
+        if body.startswith("RENAME DATABASE ospreyflow TO ospreyflow_before_"):
+            text = b"Code: 999. DB::Exception: Keeper session expired. (KEEPER_EXCEPTION)"
+            raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        return ddl(request, body)
+
+    monkeypatch.setattr(fake, "_ddl", refusing)
+    with pytest.raises(pb.BackupRefused) as refused:
+        pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    restored = f"ospreyflow_restoring_{manifest['set'].lower()}"
+    assert fake.databases == {"ospreyflow", restored}
+    words = str(refused.value)
+    assert "Keeper session expired" in words and restored in words and "live database is as it was" in words
