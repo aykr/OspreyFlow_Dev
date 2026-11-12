@@ -597,6 +597,13 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         **Your ruling:** closing disposes only the citations the closer can read, and the alert stays open for a
         hidden list's readers. It lands tomorrow. Studio carries is due about 17:00. Your rebuild instructions
         are awaited.
+      - **Your rebuild prompt (about 16:30; `Claude outputs/ospreyflow_demo_sites_2026-11-12/`).** Part 1 is
+        installed **from main** with the guides (your answer), run by the orchestrator. Review notes:
+        - Small's install never makes demo accounts, so `repair-sign-in` runs after the install and before the packs;
+        - `osprey-demo-admin` can deploy rules but not write them (it needs Rule author; not added);
+        - the restore's default is a dry run.
+
+        Schedule: the backup now, the install after studio's gates (about 17:15), the checks by about 20:00.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
