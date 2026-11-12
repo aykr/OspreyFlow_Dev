@@ -1,6 +1,6 @@
 # Admin lane · T1 part 5 · the up-check and the reaper, after the orchestrator's review (12 November 2026)
 
-`lane/admin-t1p5`, recut from main `e59da4f`. Part 5 was first built on the server's worktree
+`lane/admin-t1p5`, recut from main `e59da4f` and rebased onto `bb1c897` (the owner's five patches applied). Part 5 was first built on the server's worktree
 (`srv-wt/lane/admin-t1p5`, `9cbb457`, on T1 part 4's head `75cbc9b`, now in main) and reviewed there in two
 independent rounds (`T1P5_FINDINGS.md`). Its up-check and reaper are ported here file by file, since main's
 `stack_lease.sh`, its test, the root conftest and the Makefile have moved since. The wip commit `56cf4f6` and its
@@ -12,7 +12,7 @@ that step's list. Its code (`af66134`) and plants stay on `srv-wt/lane/admin-t1p
 
 **Ownership** (the orchestrator's rulings, 12 November 2026). `stack_lease.sh` and `tests/test_stack_lease.py` are
 the orchestrator's, sent as `stack-lease-T1p5.diff`; the root conftest as `conftest-T1p4.diff`; the Makefile is the
-owner's, `makefile-T1p4.diff`, cut to apply after the owner's five patches already queued (MORNING item 38).
+owner's, `makefile-T1p4.diff`, cut against main with the owner's five patches applied.
 
 ## What is merged
 
@@ -32,12 +32,12 @@ reaper for the run `last` points at, when a run's own reaper never ran.
 ## The review's findings, each with its red
 
 1. **The wip commit and HANDOFF.md** are gone: the branch is recut from main.
-2. **`makefile-T1p4.diff`** is regenerated: its one change drops `-p tests.worker_isolation ` from `make test`'s
-   pytest line, cut on top of the owner's five (`P12p2_CI`, `P12p2_core_makefile`, `p10p2/ci-yml`,
-   `p10p2/makefile`, `make-test-runs-every-part`), and checked in a scratch worktree to apply sixth, in that order,
-   and not alone on main (`gates/t1p5_makefile_order.txt`). `ci-yml-T1p4.diff` is removed (main has it). **The
-   earlier log's "all three diffs still apply" was wrong** (the Makefile diff did not apply to main: main already
-   had `TEST_WORKERS`).
+2. **`makefile-T1p4.diff`** is regenerated against main `bb1c897`, where the owner's five patches are applied
+   (`44ec30d`; the orchestrator's simpler ruling 2): its one change drops `-p tests.worker_isolation ` from `make
+   test`'s pytest part, `( $(IN_CORE) $(PYTEST) … ) || touch $(TEST_FAILED)`, and applies to main as it stands. (Cut
+   first on top of the five as diffs, it was checked to apply sixth in a scratch worktree: `gates/t1p5_makefile_order.txt`,
+   kept for the record and now moot.) `ci-yml-T1p4.diff` is removed (main has it). **The earlier log's "all three
+   diffs still apply" was wrong** (the Makefile diff did not apply to main: main already had `TEST_WORKERS`).
 3. **`test_worker_isolation_wired.py` reads the root conftest's own `pytest_plugins`**, which no flag changes: red on
    main's conftest **with `-p tests.worker_isolation` on the command line**, as `make test` passes it; green with the
    conftest diff (`gates/t1p5_wired_red.txt`).
