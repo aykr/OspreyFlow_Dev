@@ -630,6 +630,17 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - the client's names for the hashed "no client named" check, added by running `client_hashes.py` yourself,
           never in a chat;
         - rules' 422 (subscribing under a hidden list's name reveals only that the name is taken).
+      - **The demo rebuild:** installed from main b380d45 at 16:57 UTC; 16 containers, all healthy; the GOV.UK look
+        confirmed. Small never gets demo accounts (ADR-114 Am 33), so **your choice (A), for this demo only:** a
+        fresh demo-admin password in deployment.env, then `repair-sign-in`, which makes the four. They are to be
+        removed before anything goes public.
+
+        Findings so far:
+        - glass.json's version reads 2be985a, the server's .git, not main's commit;
+        - 9 old backup sets lie loose in /srv/ospreyflow/backups.
+      - **R1's memory (about 18:10):** osprey-small's ArcadeDB heap may grow to 24 GB, so kind would have only about
+        25 GiB. Recommended: stop osprey-small for R1, from Friday evening after your demo (kind then gets 40–44 GiB),
+        or cap its heap (about 30–32 GiB). R1 is closest to the Small sizing, at about a third of it.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
