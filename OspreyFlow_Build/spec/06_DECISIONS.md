@@ -35524,6 +35524,27 @@ review rounds, listed for the owner.*
       (`account-unread-harness.html`), each shown red.
     - **The bootstrap's advisory lock** is shown deterministically: while another session holds it, `connect` waits.
 
+11. **The orchestrator's third review of e8d5874 (12 November 2026).**
+    - **The five-second bound is total**: `in_keys_thread`'s own wait (`KEYS_TIMEOUT_SECONDS`) bounds the whole fetch,
+      a name that does not resolve and a body that trickles in under each read's own timeout included. A fetch
+      still running past it is **abandoned**: who fetches is an owner with a deadline (not a lock held across I/O),
+      so the next caller takes the fetch, and the abandoned one's late answer is dropped. Point 10's "each fetch
+      bounded by five seconds" meant each read; it now means the whole.
+    - **The unknown-kid window** opens only on a fetch that succeeded: an unreachable identity provider is a 503
+      every time, never a 401.
+    - **A rotated-out key** stays valid for up to the keys' time (`OIDC_JWKS_TTL_SECONDS`) plus the grace hour while
+      Entra cannot be reached, since the last good set is what is held.
+    - **Concurrent sign-ins** finding the keys out of date fetch once: each reads the set's age once, before
+      anything else. Measured: twelve at once with nothing held, against a slow identity provider, make one
+      request, and twelve once the keys' time is up make one more.
+    - **A set with no key a token can be checked by** (every key for encryption, or none with a key id) is a 503,
+      with the other failure classes.
+    - **The run API's sign-in** (`get_service_identity`) is async and reads its keys in the keys' own threads,
+      never anyio's shared pool.
+    - **The start's grant and its audit row** are one transaction on one connection (`audit_log` is in the same
+      database): an audit write that fails takes the grant back. The custom roles' rights are read on that
+      connection inside `PEOPLE_LOCK`, and the lock is planted.
+
 **Still to measure against the client's development tenant**, unchanged from Amendment 6's list (rule 15): the token
 version, the extension names, the claims-mapping policy's keys, guests and federated members, and the Glass's access
 token. Also the `aud` of a v1.0 token, which this amendment takes as the `api://` URI.
