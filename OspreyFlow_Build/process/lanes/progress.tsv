@@ -86,3 +86,4 @@ docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape
 platform	P7b	M	done	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks written and checked as text (ADR-148 Am 5: no block yet run against a cluster or an account); their run on kind is the client install's acceptance, still to come (merged, 11 Nov)
 platform	P9b	S	todo	After the client's install: alerts, the PodDisruptionBudgets' drain test, the volume-expansion procedure
+demo	rebuild	M	building	osprey-small rebuilt from main for the owner's Friday demo (Part 1 of the demo-sites prompt): fresh stores, the four demo accounts, five synthetic packs, Gemini allowed; the owner's checks by 20:00

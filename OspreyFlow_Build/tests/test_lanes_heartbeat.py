@@ -367,8 +367,8 @@ def test_the_default_view_fits_one_screen_and_names_each_lanes_current_step(hb, 
         hb("beat", lane, "working", "x" * 300)
     out = hb("show", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
     lines = out.splitlines()
-    # Two lines per lane at most, for every lane the default view lists (ten with Amendment 4's sisters and platform-b).
-    assert len(lines) <= 10 * 2 + 14, out  # ten lanes with platform-b; one line per test stack, seven with d to g (9 November 2026)
+    # Two lines per lane at most, for every lane the default view lists (eleven: Amendment 4's sisters, platform-b and demo).
+    assert len(lines) <= 11 * 2 + 14, out  # eleven lanes (the demo lane, 12 November 2026); one line per test stack, seven with d to g
     at = next(i for i, line in enumerate(lines) if line.startswith("STUDIO:"))
     studio = lines[at]
     assert "2 of 8 done" in studio and lines[at + 1].strip().startswith("now ST3 Step 3")
