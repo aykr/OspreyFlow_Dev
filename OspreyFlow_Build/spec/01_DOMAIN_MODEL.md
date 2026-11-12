@@ -2427,6 +2427,11 @@ class AlertMode(StrEnum):
     NOTIFY_STUB = "notify_stub"   # the triggering referent was outside the recipient's access
                                    # at write time; carries no referent of any kind
 
+class AlertCitation(BaseModel):     # ADR-146 Amendment 7: one thing an alert cites that a reader
+    words: str                      # is cleared for or not, apart from the rest of it (a screening
+    node_ids: list[NodeId]          # match on one list: the listed party and its SAME_AS); shown
+    edge_ids: list[EdgeId]          # only to a reader who may read every node and link it names
+
 class Alert(BaseModel):
     id: str
     rule_id: str                    # the Hotlist or Monitor that fired
@@ -2450,13 +2455,18 @@ class Alert(BaseModel):
     disposition_reason: str | None = None
     decided_by: str | None = None
     decided_at: datetime | None = None
+    citations: list[AlertCitation] = []   # ADR-146 Amendment 7; empty for every alert but a screening match
 ```
 
 An `Alert` stores references to evidence, never copies — access is re-checked at read time against
 `referent_node_ids`, not trusted from whatever was true when the row was written. A `NOTIFY_STUB`
 row never carries a referent at all: the triggering match was outside the recipient's own access
 when it fired, so nothing about it — not even the identifier that matched — is disclosed to a
-principal who could not see it anyway. `investigation_id` is a best-effort audit-shaped hint, not
+principal who could not see it anyway. An alert with `citations` (a screening match on more than one list,
+ADR-146 Amendment 7) is shown to a reader who may read everything it rests on outside them and at least
+one of them. Each citation is shown only to a reader who may read every node and link it names. A hidden
+one is left out of what is served (its words, its ids, and how many there are), so the alert never says
+which lists, or how many, the reader cannot see (rule 3). The stored words name no list. `investigation_id` is a best-effort audit-shaped hint, not
 an access-control scope, threaded from whichever producer route was investigation-scoped at the
 point the triggering write happened; `None` for a producer with no single investigation in scope
 (a corpus-wide resolution trigger, say). Jumping from an alert makes a case of its own, never one
