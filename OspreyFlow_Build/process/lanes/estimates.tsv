@@ -1,12 +1,12 @@
-# as of 2026-11-12T06:00Z
-admin	P10	part 1 merged; part 2: second review found four must-fixes (the key cache untested, the re-grant, keyboard cases, the refresh untested) and a Keycloak regression; fixing	12 Nov, evening	B
+# as of 2026-11-12T08:20Z
+admin	P10	done: part 2 merged (e5e81bd); two patches for you	done	B
 case	P9	done: merged	done	B
 case-b	P12	done: part 2 merged (1a063a8); two patches for you	done	B
 studio-b	L1.9	done: part 2 merged (184b798)	done	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B
-docs	D2c	parts 1 and 2 merged; the next part (P7b, P9, L1.9 part 2, P12 part 2) after P10 part 2 lands	13 Nov	B
+docs	D2c	the next part (P7b, P9, L1.9 part 2, P12 part 2, P10 part 2) starts now on sol	13 Nov	B
 platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
-admin	T1	part 5 reviewed twice, not ready: fixes queued behind P10 part 2 (T1P5_FINDINGS.md); reset split to its own step	14 Nov	A
+admin	T1	part 5: the fixes (T1P5_FINDINGS.md) start now P10 part 2 is in	12 Nov, evening	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
 orchestrator	demo	osprey-demo, v0.5.0 in the GOV.UK look with the synthetic demo packs, beside osprey-small: built and backed up today; frozen until you say; checked Thursday 12 Nov by 12:00 UK; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 12:00 (the check)	A

@@ -494,6 +494,17 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 38. **Overnight, 11–12 November (your word, about 21:10: carry on, the Mac stays on).** I'll fill this in as the
     night goes. For you in the morning:
     - the push (none since 10:20);
+    - **Your five patches, in this order, from the repository root** (each checked to apply after the one before):
+      1. `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_CI.diff` — ci.yml and release.yml: Laurium's image.
+      2. `git apply OspreyFlow_Build/process/lanes/case-b/P12p2_core_makefile.diff` — Core's Makefile: Laurium's scan.
+      3. `git apply OspreyFlow_Build/process/lanes/admin/p10p2/ci-yml.diff` — ci.yml: P10 part 2's live file.
+      4. `git apply OspreyFlow_Build/process/lanes/admin/p10p2/makefile.diff` — the Makefile: the same file ignored in make test.
+      5. `git apply OspreyFlow_Build/process/lanes/merger/owner-diffs/make-test-runs-every-part.diff` — make test runs
+         all three of its parts.
+
+      Until you apply them, main's make test fails test_release_local_matrix (fixed by 1),
+      test_entra_people_live's 19 errors and test-file-coverage-check (fixed by 3 and 4). I checked 3 and 4 on the
+      server: with them applied, both pass.
     - **Main's make test has one failure until you apply `P12p2_CI.diff`:** `test_release_local_matrix` expects
       Laurium's image in `release.yml`, and that line is in your patch. My merge check of P12 part 2 left that
       test out; case-b's full run had the patch applied. Admin found it.
@@ -620,6 +631,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - the re-grant's lock had no plant.
 
         I confirmed the main ones in the code. Admin is doing one more pass, which I'll check myself.
+      - **About 08:20, P10 part 2 landed** (e5e81bd): Entra ID sign-in on the cloud-platform profile, admin guide 1.85.
+        I checked its third round myself, in the code and in its red records. On the merged tree, cp-policy-check
+        found 0 violations on all five fixtures and live-collect was green; what else is red waits on your patches
+        (above). Admin now starts T1 part 5's fixes, and docs its next part, both on sol.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
