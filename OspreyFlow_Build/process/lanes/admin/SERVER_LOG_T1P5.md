@@ -26,8 +26,8 @@ container down and the `up` command; a docker that cannot answer refuses the run
 
 **Item 3, the reaper.** Each remote, live or offline run's `cmd.sh` exports `OSPREY_RUN_TAG=$HOME/<run folder>` and
 traps EXIT with a reaper that ends every process whose environment holds exactly that tag (TERM, then KILL two
-seconds later), on INT and TERM too. HUP is not claimed: the run is started under nohup. `reap <lane>` sends the same
-reaper for the run `last` points at, when a run's own reaper never ran.
+seconds later), on TERM too. `reap <lane>` sends the same reaper for the run `last` points at, when a run's own reaper
+never ran. **INT and HUP are not claimed** (below).
 
 ## The review's findings, each with its red
 
@@ -59,7 +59,14 @@ reaper for the run `last` points at, when a run's own reaper never ran.
 - **The fake routes on the real command**: the reap call is `bash -s -- <meta>`, with no comment for the fake to
   route on.
 - **The header's usage block** documents `reap`.
-- **INT is tested** beside TERM (exit 130 and 143), and HUP is no longer claimed.
+- **"INT, TERM and HUP": INT tested, and the claim dropped with HUP's.** Testing INT found that a run on a host
+  starts with INT and QUIT ignored, inherited from the start call, which backgrounds the run from a non-interactive
+  shell (main's own start call; HUP likewise, under nohup); a shell cannot take back a signal ignored when it
+  started. Measured: the run's command reads SIGINT as SIG_IGN. So INT to a run does nothing, and stopping one is
+  TERM, which is tested. On the way, one attempt here backgrounded the command inside cmd.sh to make INT interrupt a
+  waiting bash; it passed the INT case alone (the race was in the test's favour) and failed it in the gates, where the
+  whole gate run, started so, could not be interrupted. It was taken out. Making INT work needs the run started with
+  INT restored: a CARRIES row for the orchestrator's file.
 - **The reads audit's counts, corrected**: "not a read" is **10** (the fake client, `test_sql_transform.py`'s **8**
   DuckDB hits, and a docstring), not 6. Today's scan: 28 candidates in 308 live files (`gates/t1p5_reads_audit.txt`).
   The judgement of each is as part 5 gave it (below).

@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/scripts/stack_lease.sh b/OspreyFlow_Build/scripts/stack_lease.sh
-index f98173e..931d385 100755
+index f98173e..ada4b7a 100755
 --- a/OspreyFlow_Build/scripts/stack_lease.sh
 +++ b/OspreyFlow_Build/scripts/stack_lease.sh
 @@ -11,24 +11,28 @@
@@ -63,18 +63,17 @@ index f98173e..931d385 100755
      # OSPREY_PORTS_LANE and OSPREY_PORTS_SLOT: the lane and its own Playwright ports (OspreyFlow_Core/apps/lanePorts.ts),
      # as lanes' copies run side by side here; not OSPREY_LANE, which an offline run must not name (the port guard's).
      printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease OSPREY_PORTS_LANE=%s OSPREY_PORTS_SLOT=%s PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta" "$who" "$(ports_slot "$who")"
--    printf '%q ' "$@"; echo; } > "$list.cmd"
 +    # The run's tag (T1 part 5): every process the run starts inherits it, through setsid and double forks, which a
 +    # process group is not (platform-b, 10 November 2026: harness-a11y's vite and harness.webapp outlived a stopped
-+    # run and held the lane's slot ports). When cmd.sh exits, every process still carrying it is ended. TERM ends bash
-+    # at once and runs the EXIT trap. INT does not while bash waits on a foreground command (it defers INT until the
-+    # command ends), so the command runs in the background and is waited on: INT then ends bash at once, its EXIT trap
-+    # runs, and the run's code is 130 (shown on the server: in the foreground, INT left the run's server alive; an INT
-+    # trap added nothing and is not kept). HUP is not one: the run is started under nohup.
++    # run and held the lane's slot ports). When cmd.sh exits, every process still carrying it is ended, and on TERM
++    # too (bash ends at once and runs the EXIT trap). INT and HUP are not claimed: the start call below backgrounds the
++    # run from a non-interactive shell, which starts it with INT and QUIT ignored (as nohup ignores HUP), and a shell
++    # cannot take back a signal ignored when it started (T1 part 5's review, measured: the run's command sees INT
++    # ignored). Stopping a run is TERM; making INT work would need the run started with INT restored (CARRIES).
 +    printf 'export OSPREY_RUN_TAG=$HOME/%s\n' "$run"
 +    printf '%s\n' "$REAPER"
 +    printf 'trap osprey_reap EXIT\n'
-+    printf '%q ' "$@"; printf '&\nwait $!\n'; } > "$list.cmd"
+     printf '%q ' "$@"; echo; } > "$list.cmd"
    rc=0
    setup=$(( $(date +%s) - t_setup ))
    keep=""; [ -n "$lockname" ] && keep="cp $rmeta/lease/$lockname/info $run/lease &&"
@@ -277,7 +276,7 @@ index f98173e..931d385 100755
      ;;
  esac
 diff --git a/OspreyFlow_Build/tests/test_stack_lease.py b/OspreyFlow_Build/tests/test_stack_lease.py
-index 0ed1f03..c306afa 100644
+index 0ed1f03..5bf53a0 100644
 --- a/OspreyFlow_Build/tests/test_stack_lease.py
 +++ b/OspreyFlow_Build/tests/test_stack_lease.py
 @@ -1,67 +1,84 @@
@@ -397,8 +396,7 @@ index 0ed1f03..c306afa 100644
      assert ran.returncode == 0, ran.stderr
      sent = {l[len("sent "):] for l in log.read_text().splitlines() if l.startswith("sent ")}
      assert "OspreyFlow_Build/tests/test_x.py" in sent and "OspreyFlow_Build/tests/test_new.py" in sent
-@@ -442,25 +459,27 @@ def test_remote_sends_only_what_git_tracks_and_never_the_local_osprey_yaml(lease
- def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(lease, tmp_path: Path) -> None:
+@@ -443,24 +460,25 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
      lease("acquire", "studio", "a run")
      lease("acquire", "case", "a run")
      log = _remote_tools(tmp_path)
@@ -410,9 +408,7 @@ index 0ed1f03..c306afa 100644
      export = next(l for l in script if l.startswith("export "))
      assert "ARCADEDB_HTTP_PORT=2492" in export and "POSTGRES_PORT=55434" in export and "OSPREY_LANE=case" in export
      assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case.meta/lease" in export
--    assert "pytest -q tests " in script
-+    # Run in the background and waited on, so a trapped INT ends the run at once (T1 part 5).
-+    assert "pytest -q tests &" in script and "wait $!" in script
+     assert "pytest -q tests " in script
 +    assert any(l.startswith("export OSPREY_RUN_TAG=$HOME/osprey-runs/case.meta/runs/") for l in script), script
      # A call's command spans lines in the log; the start is the one call holding nohup setsid.
      assert text.count("nohup setsid") == 1, text
@@ -426,7 +422,7 @@ index 0ed1f03..c306afa 100644
      none = _remote(lease, tmp_path, wt, "case", "--", "true")
      assert none.returncode == 1 and "holds no stack" in none.stderr
      lease("acquire", "studio", "a run")  # stack a: local
-@@ -535,45 +554,45 @@ def test_a_second_remote_run_is_refused_while_the_last_is_alive(lease, tmp_path:
+@@ -535,45 +553,45 @@ def test_a_second_remote_run_is_refused_while_the_last_is_alive(lease, tmp_path:
      # refused before the copy that run is reading is touched (rules' finding, 9 November 2026)
      text = log.read_text()
      assert "rsync" not in text and "uv sync" not in text and "npm ci" not in text and "git add -A" not in text, text
@@ -474,7 +470,7 @@ index 0ed1f03..c306afa 100644
      assert "OSPREY_PORTS_SLOT=2" in export, export  # case's row in scripts/lane_ports.tsv
      assert "mkdir -p osprey-runs/case.meta/lease" in text and "/info" not in text  # an empty lease directory
      assert "stdin make -k test SKIP_JS=1 " in text
-@@ -581,37 +600,37 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
+@@ -581,37 +599,37 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
  
  @pytest.mark.parametrize("lane", ["admin-ddl", "admin-b"])
  def test_a_lane_with_no_row_of_its_own_gets_no_slot_but_a_refusal(lease, tmp_path: Path, lane: str) -> None:
@@ -514,7 +510,7 @@ index 0ed1f03..c306afa 100644
      def dry(*extra: str) -> str:
          return subprocess.run(["make", "-n", "-C", str(BUILD), "test", *extra],
                                capture_output=True, text=True, env=env).stdout
-@@ -622,25 +641,25 @@ def test_make_test_leaves_out_test_js_only_when_asked() -> None:
+@@ -622,25 +640,25 @@ def test_make_test_leaves_out_test_js_only_when_asked() -> None:
  
  
  # --- The server copy behaves as a checkout (9 November 2026: the first offline run failed 66 cases for want of git,
@@ -541,7 +537,7 @@ index 0ed1f03..c306afa 100644
  
  
  
-@@ -682,25 +701,25 @@ def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its
+@@ -682,25 +700,25 @@ def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its
      assert "Wall time:" in start and "stack b, the lease case took at 20" in start, start
      assert "/wall" in start and "set-up before it" in start, start  # the seconds kept beside the log, for a table
      assert "cp osprey-runs/case.meta/lease/stack-b.lease/info osprey-runs/case.meta/runs/" in text, text  # kept with the run
@@ -568,7 +564,7 @@ index 0ed1f03..c306afa 100644
  _RUNNER = {
      "as ps prints it": 'echo "runner $(ps -o ppid= -p $PPID)"',
      "padded, as on the server": 'printf "runner %10s\\n" "$(ps -o ppid= -p $PPID)"',
-@@ -744,57 +763,405 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
+@@ -744,57 +762,405 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
      assert (run / "wall").read_text().strip().isdigit()
      lines = (run / "log").read_text().splitlines()
      # The pid file holds the host's own shell, the one running cmd.sh (what follow's tail --pid waits on).
@@ -585,8 +581,8 @@ index 0ed1f03..c306afa 100644
 +# A stopped server run left harness-a11y's vite (5893/5894) and harness.webapp (7919) alive: they leave the run's
 +# process group, so the lane's own slot ports stayed held and its next harness-a11y failed "already used". Each run
 +# is tagged in its environment (OSPREY_RUN_TAG, inherited through setsid and double forks, which a process group is
-+# not), and every process still carrying the tag is ended when the run ends, on INT and TERM too (HUP never reaches
-+# it: the run is started under nohup). `reap <lane>` ends what a run whose wrapper was itself killed left behind.
++# not), and every process still carrying the tag is ended when the run ends, on TERM too (a run starts with INT and
++# HUP ignored, so neither is claimed). `reap <lane>` ends what a run whose wrapper was itself killed left behind.
 +# The leftover here is a real double-forked, setsid'd process (a vite's shape), not a child of the run's shell.
 +
 +#: The reaper reads /proc and the run is started with setsid, as on the hosts (Linux). Where either is missing (macOS)
@@ -721,9 +717,9 @@ index 0ed1f03..c306afa 100644
 +
 +
 +@_REAPS
-+@pytest.mark.parametrize(("signal", "code"), [(15, "143"), (2, "130")], ids=["TERM", "INT"])
-+def test_a_run_ended_by_a_signal_still_reaps_its_server(lease, tmp_path: Path, signal: int, code: str) -> None:
-+    """The run stopped with TERM, as a lane stopping it would, or INT (a ^C): its server is ended too."""
++def test_a_run_ended_by_a_signal_still_reaps_its_server(lease, tmp_path: Path) -> None:
++    """The run stopped with TERM, as a lane stopping it would: its server is ended too. (INT is not claimed: a run
++    starts with INT ignored, inherited from the start call's backgrounded list; CARRIES.)"""
 +    lease("acquire", "studio", "a run")
 +    lease("acquire", "case", "a run")
 +    home = _host(tmp_path)
@@ -746,9 +742,9 @@ index 0ed1f03..c306afa 100644
 +        # The shell running cmd.sh: the child of the wrapper whose pid the run recorded.
 +        wrapper = _pid_from(run / "pid")
 +        children = Path(f"/proc/{wrapper}/task/{wrapper}/children").read_text().split()
-+        os.kill(int(children[0]), signal)
++        os.kill(int(children[0]), 15)
 +        assert _gone_within(server), f"the detached server {server} outlived its stopped run"
-+        assert (_finished_run(home) / "exit").read_text().strip() == code
++        assert (_finished_run(home) / "exit").read_text().strip() == "143"
 +    finally:
 +        _end(server)
 +        _end_tagged(home)
@@ -977,7 +973,7 @@ index 0ed1f03..c306afa 100644
          if path.exists():
              return
          time.sleep(0.05)
-@@ -839,24 +1206,104 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
+@@ -839,24 +1205,104 @@ def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(le
      none = _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case")
      assert none.returncode == 1 and "holds no stack" in none.stderr
      lease("acquire", "studio", "a run")

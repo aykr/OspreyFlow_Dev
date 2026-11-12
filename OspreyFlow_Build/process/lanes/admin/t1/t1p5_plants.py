@@ -86,7 +86,7 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         [("    printf 'export OSPREY_RUN_TAG=$HOME/%s\\n' \"$run\"\n", "")],
         [
             "test_a_run_reaps_a_server_that_left_its_process_group",
-            "test_a_run_ended_by_a_signal_still_reaps_its_server[TERM]",
+            "test_a_run_ended_by_a_signal_still_reaps_its_server",
             "test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease",
         ],
     ),
@@ -95,8 +95,7 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
         [("    printf 'trap osprey_reap EXIT\\n'\n", "")],
         [
             "test_a_run_reaps_a_server_that_left_its_process_group",
-            "test_a_run_ended_by_a_signal_still_reaps_its_server[TERM]",
-            "test_a_run_ended_by_a_signal_still_reaps_its_server[INT]",
+            "test_a_run_ended_by_a_signal_still_reaps_its_server",
         ],
     ),
     (
@@ -168,16 +167,6 @@ PLANTS: list[tuple[str, list[tuple[str, str]], list[str]]] = [
             ("mkdir -p $rmeta/runs && mkdir $run && cat", "mkdir -p $run && cat"),
         ],
         ["test_two_runs_of_one_lane_in_one_second_never_share_a_folder"],
-    ),
-    (
-        "the command in the foreground, so INT waits for it",
-        [
-            (
-                "    printf '%q ' \"$@\"; printf '&\\nwait $!\\n'; } > \"$list.cmd\"\n",
-                '    printf \'%q \' "$@"; echo; } > "$list.cmd"\n',
-            )
-        ],
-        ["test_a_run_ended_by_a_signal_still_reaps_its_server[INT]"],
     ),
     (
         "the start call's backgrounded list holding ssh's output open",
