@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.86** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
+**Version 1.87** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.87 | 2026-11-12 | §9.1: the guides from Home. Home links this guide under Admin's card, the user guide under the Glass's and the developer guide under the Ingest Studio's, each only for someone whose roles open that place, and the Conduit refuses anyone else (ADR-145 Amendment 10). A new guide comes with a new image: on Small and `cloud-platform` with a release's images, on Lite with `ospreyflow start --build`. PDF made by the orchestrator at merge. |
 | 1.86 | 2026-11-12 | §6a, the shared Kubernetes platform, brought up to date. §6a.1: the example `osprey.yaml` with Entra ID's settings and networks; the OFFICIAL-SENSITIVE ceiling set by the profile; the proof-of-concept shape; the render making its own folders; the install and decommission runbooks and the decommission check, not yet run on a cluster; reporting not available on this profile; Laurium, the extraction engine, as its own pod, image and repository, called by the Conduit alone and reached by no screen yet (ADR-148 Amendments 5 and 8; ADR-135 Amendments 6 and 9; ADR-142 Amendment 8 decision 9). §6a.2: the proof-of-concept shape's CPU limits, the backup and restore Jobs' sizes, and the totals from renders. §6a.3: the Terraform for declared S3 and Athena sources and for the backups; what each pod reads, and which service account it runs as. §6a.4: third-party images copied by their digest. §6a.5: each pod's own way out and way in, on single ports; S3 buckets and Athena workgroups declared for connections (ADR-140 Amendment 21). §6a.6: what the policy check refuses. §6a.7: the access tokens' version, the API's id URI and a claims-mapping policy, from which the issuer, audience and signing keys follow; the guest check; the way back in with the new values installed. New §6a.8: backups and restore (ADR-148 Amendment 7), with the shared volume not backed up. §6a.9, what is coming, and §6a.10, the questions for the platform's team, renumbered and extended. §10.1: the extraction engine shown in *Admin › Models*, and how to change it; one order for a change needing new values and Terraform. |
 | 1.85 | 2026-11-12 | Sign-in on `cloud-platform` through Entra ID, as built (ADR-148 Amendment 8, P10 part 2). §6a.7: `cloud_platform.claims` in `osprey.yaml`, `groups_claim` described; RS256 alone, 60 seconds' leeway, the signing keys kept, fetched by one request at a time and again at most once in five minutes for an unknown key, held an hour through an outage, Entra unable to give keys a 503 in words; roles in the deployment's Postgres by tenant and `oid`, a person added by object id, *Disable*; the first administrators, and the way back in when nobody can manage people (audited); locking everyone out refused, counting only people who have signed in; a clearance or unit read over a day ago not trusted for a transfer or an alert; the Glass's words when the account cannot be read; a service identity's app-only token. §6a.8: sign-in struck, what is still to come on Entra kept. Keycloak struck from §6a (its pod, group 0, resources, secrets, image, egress and `id.` door; reporting's `bi.` door refused); Entra's sign-in host in the egress list; §6a.9's group 0 question struck. Appendix A: `cloud_platform.claims`, from the schema; `tls_secret` names the Glass's name alone. |
 | 1.84 | 2026-11-12 | Appendix A: `models.extraction_engine`, Deep read or Laurium, Laurium on the `cloud-platform` profile alone and its preset there when left unset (P12 part 2, ADR-135 Amendment 9). §6a.2: Laurium's own service, rendered with that preset, and the totals said to be Deep read's. |
@@ -1844,6 +1845,13 @@ Under the GOV.UK theme the list is a GOV.UK side navigation.
 | Policies | **Uploads** (coming) | `administer_system` | The largest picture an analyst may add, and the formats accepted |
 | Audit | **Audit** | `read_audit` | The audit log, filtered by who, what and when (section 9.11) |
 | Demo packs | **Demo packs** | `administer_system` | Which packs are loaded, and the command that adds one |
+
+**The guides from Home.** Home links this guide under Admin's card (**Read the administration guide
+(PDF)**), the user guide under the Glass's and the developer guide under the Ingest Studio's, each only
+for someone whose roles open that place. The Conduit sends a guide only to such a person and refuses
+anyone else in words (`GET /v1/guides/{user|developer|administration}`). Home shows the guides the
+Conduit's image was built with, so a new guide comes with a new image: on Small and `cloud-platform`,
+when a release's new images are installed; on Lite, with `ospreyflow start --build`.
 
 **System → Acting for people** says "The Conduit cannot act for people: run `ospreyflow
 repair-sign-in`" when the identity provider refuses the Conduit's own credential.

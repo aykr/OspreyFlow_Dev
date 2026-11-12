@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.46** · 2026-11-11 · For OspreyFlow v0.5.0 · Issued
+**Version 1.47** · 2026-11-12 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.47 | 2026-11-12 | §3: Home's guides. *Read the user guide (PDF)* under the Glass's card, the developer guide under the Ingest Studio's and the administration guide under Admin's, each with its place's card alone, opened in a new tab or saved, as the version this deployment was built with (ADR-145 Amendment 10). PDF made by the orchestrator at merge. |
 | 1.46 | 2026-11-11 | The second look at 1.45. §7.10: lists are imported in the Ingest Studio by a data engineer, or anyone holding Load screening lists and Edit pipelines; who here sees a refresh's counts. Captions 23 and 26 say that their pictures still show the former Lists and Watches tabs, to be retaken |
 | 1.45 | 2026-11-11 | The review of 1.44, against the code. §7.6: *Make live*, *Approve* and *Reject* need Deploy rules and Rules and Monitoring itself, so an Analyst, not a Data Engineer; *Deploy the sentence* needs Deploy rules and Keep watches. §7.1, §7.2, §7.4, §7.9 and §7.10: a rule kept just for its author is listed as a *Watched pattern*, and a template or pattern rule kept so raises medium alerts whatever its template's severity, stated as a known issue. §7.4: *Retire*, *Use* and *Deploy* need Deploy rules. §7.10: the screening lists are shown read-only under *What raises alerts*, and imported, mapped and refreshed in the Ingest Studio's *2 Sources*. Captions 23, 24 and 26 recaptioned |
 | 1.44 | 2026-11-11 | Rules' L2.10 and L2.11 as built (ADR-146 Amendment 6). §7.1: the place's four tabs, the one queue's five kinds and its filters. §7.2: a rule's own severity; who sees an alert, *‹Team› only* among them. §7.3: What fired it, Open the board, the lead's Give to and Suppress until…. §7.4 and §7.5: what raises alerts, hotlists and watched patterns there, Save as a watch, Watch for this, drawn items' watches. §7.6: the rule editor: a dataset chosen once, the sentence, Preview, Save the draft, Test on the last 30 days, Make live (Deploy rules), the second person by the dataset's setting, Show as BPMN; no whole-deployment rule. §7.11 and §7.12 brought in line |
@@ -142,6 +143,12 @@ clearance and your roles, and then shows:
 - **a card for each place your roles open**, each with **Open ‹place›** and its key (`G`, `I`, `R`,
   `A`). An analyst sees the Glass and Rules and Monitoring. With no place at all it says "Your account
   opens no place yet. Ask an administrator to give you a role.";
+- **the guide for each of those places**, under its card's words: **Read the user guide (PDF)** under
+  the Glass, **Read the developer guide (PDF)** under the Ingest Studio and **Read the administration
+  guide (PDF)** under Admin. Each opens in a new tab (where your browser does not show PDFs, it is
+  saved instead, as `ospreyflow-user-guide.pdf` and so on), as the version this deployment was built with.
+  A guide appears only with its place's card, and the deployment checks your roles again before it
+  sends it;
 - **Needs your attention**: what is waiting for you, such as alerts on your cases ("Nothing needs you
   now." when there is none);
 - **Recent cases**: up to six, with your level on each, how many entities each holds and when it was

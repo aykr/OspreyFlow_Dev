@@ -1,0 +1,7 @@
+# The guides from Home (rules-b's docs-guides.patch, ADR-145 Am 10): user guide 1.47, admin guide 1.87, spec 10 §9.1 mirrored. On the Mac on closed ports (no stack, no lease), 2026-11-12T13:12:16Z. test_docs_pdf's one failure is the two PDFs (user, administration) out of step, made by the orchestrator at merge.
+FAILED tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step - A...
+1 failed, 79 passed in 0.41s
+administration-guide.md changed since administration-guide.pdf was made: 
+administration-guide.md changed since administration-guide.pdf was made: run `python -m tools.docs_pdf --write`
+user-guide.md changed since user-guide.pdf was made: run `python -m tools.docs_pdf --write`
+spec 10 §9.1 mirror: identical
