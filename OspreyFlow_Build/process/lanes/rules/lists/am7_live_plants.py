@@ -11,6 +11,10 @@ tests that claim to catch it, expects them red, and puts the file back (in a `fi
 - **L2**: the repoint not rewriting the citations: `test_a_true_positive_confirms_only_the_matches_the_closer_can_read`.
 - **L3**: the `Alert` node marked by its citations too: `test_a_reader_not_cleared_for_a_list_is_shown_…`.
 - **L4**: every list screened, the deployer cleared or not: `test_a_rule_screens_only_against_lists_…`.
+- **L5** (the lane review's item 10): an update dropping a marked list's marking, in the store and in
+  a refresh. **L6** (item 7): the re-screening screening every list, at its own call site.
+- **L7** (item 8): a rename leaving the citations' nodes; **L2b** the same for the repoint, by the
+  store's own case.
 
 Prints each plant's raw pytest summary line and RED or GREEN; exits 1 if any stayed green or the built
 tree is not green before and after.
@@ -26,6 +30,10 @@ CORE = Path(__file__).resolve().parents[5] / "OspreyFlow_Core"
 B = "../OspreyFlow_Build/tests"
 KYC = f"{B}/ingest/test_kyc_rules.py"
 CROSS = f"{KYC}::test_no_other_file_leaves_a_list_naming_this_files_people"
+REFRESH = f"{B}/services/api/test_screening_refresh.py"
+STORE = f"{B}/services/api/test_screening_list_store.py"
+ALERTS = f"{B}/services/api/test_alerts.py::test_a_repoint_and_a_rename_rewrite_each_citation_with_the_alerts_own_lists"
+REFRESH_MARKED = f"{REFRESH}::test_a_refresh_keeps_a_marked_lists_marking_and_screens_it_only_for_a_deployer_cleared_for_it"
 AM7 = [f"{KYC}::{n}" for n in (
     "test_one_owner_on_two_lists_raises_one_alert_citing_both",
     "test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone",
@@ -80,6 +88,36 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         "    return list(entries)",
         [AM7[3]],
     ),
+    (
+        "L5 an update drops a marked list's marking",
+        "OspreyFlow_Core/services/api/screening.py",
+        "            if marked is not None:\n",
+        "            if False:\n",
+        [f"{STORE}::test_an_update_keeps_a_marked_lists_marking", REFRESH_MARKED],
+    ),
+    (
+        "L6 the re-screening screens every list (its own call site)",
+        "OspreyFlow_Core/services/api/screening_refresh.py",
+        "                entries = lists_cleared_for(\n"
+        "                    [e for e in changed if e.entity_type == entity_type], deployer, self.scheme\n"
+        "                )",
+        "                entries = [e for e in changed if e.entity_type == entity_type]",
+        [REFRESH_MARKED],
+    ),
+    (
+        "L7 a rename leaves the citations' nodes",
+        "OspreyFlow_Core/services/api/alerts.py",
+        "f\"citations = {_renamed_in_citations_sql('node_ids', 1)} \"",
+        "\"citations = citations \"",
+        [ALERTS],
+    ),
+    (
+        "L2b a repoint leaves the citations' links (the store's own case)",
+        "OspreyFlow_Core/services/api/alerts.py",
+        "f\"WITH ORDINALITY AS t(e, n)), citations = {_renamed_in_citations_sql('edge_ids', 2)} \"",
+        "\"WITH ORDINALITY AS t(e, n)) \"",
+        [ALERTS],
+    ),
 ]
 
 
@@ -95,8 +133,8 @@ def _run(tests: list[str]) -> tuple[bool, str]:
 
 
 def main() -> int:
-    every = [CROSS, *AM7]
-    red, line = _run([f"{B}/services/api/test_screening_refresh.py", *every])
+    every = [CROSS, *AM7, STORE, ALERTS]
+    red, line = _run([REFRESH, *every])
     print(f"built: {'RED' if red else 'GREEN'} - {line}")
     if red:
         return 1
@@ -116,7 +154,7 @@ def main() -> int:
             path.write_text(source, encoding="utf-8")
         print(f"{name} [{rel}]: {'RED' if red else 'GREEN'} - {line}")
         green_left += 0 if red else 1
-    red, line = _run([f"{B}/services/api/test_screening_refresh.py", *every])
+    red, line = _run([REFRESH, *every])
     print(f"restored: {'RED' if red else 'GREEN'} - {line}")
     return 1 if green_left or red else 0
 

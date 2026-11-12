@@ -19,6 +19,7 @@ from pathlib import Path
 CORE = Path(__file__).resolve().parents[5] / "OspreyFlow_Core"
 TESTS = "../OspreyFlow_Build/tests/services/api/test_alert_citations_per_list.py"
 SCREENING = "../OspreyFlow_Build/tests/services/api/test_screening.py"
+WRITTEN = "../OspreyFlow_Build/tests/services/api/test_alert_citations_written.py"
 
 #: (name, file under Core, the text as built, the text planted, the tests that must go red[, file])
 PLANTS: list[tuple[str, ...]] = [
@@ -111,7 +112,7 @@ PLANTS: list[tuple[str, ...]] = [
     (
         "P11 a list's marking not read from its file",
         "scripts/load_screening_list.py",
-        "    classification, handling_code = _marking(raw, scheme or load_uk_le_scheme())",
+        "    classification, handling_code = _marking(raw, scheme or load_uk_le_scheme(), ceiling)",
         "    classification, handling_code = None, None",
         "test_a_lists_marking",
         SCREENING,
@@ -141,6 +142,88 @@ PLANTS: list[tuple[str, ...]] = [
         "test_a_rule_screens_only",
         SCREENING,
     ),
+    # --- after the lane review (items 1, 3, 5, 6, 8, 9, 11) ---
+    (
+        "P15 the Alert node's sources name every list's entry (review item 1)",
+        "services/api/rule_evaluation.py",
+        "    return [r for r in finding.refs if r not in set(finding.cited_refs)]",
+        "    return list(finding.refs)",
+        "test_the_alert_node_names_no_list",
+        WRITTEN,
+    ),
+    (
+        "P16 every pending write dropped once one merges (review item 5)",
+        "services/api/rule_evaluation.py",
+        "                pending=tuple(w for w in finding.pending if w.id not in renamed),",
+        "                pending=(),",
+        "test_a_match_merged_on_one_list",
+        WRITTEN,
+    ),
+    (
+        "P17 each ALERTED_ON marked as the node, not by its citation",
+        "services/api/rule_evaluation.py",
+        "    targets = [(t, by_target.get(t, marking)) for t in finding.node_ids]",
+        "    targets = [(t, marking) for t in finding.node_ids]",
+        "test_each_cited_partys_alerted_on",
+        WRITTEN,
+    ),
+    (
+        "P18 an ALERTED_ON written where no single marking joins",
+        "services/api/rule_evaluation.py",
+        "    targets = [(t, by_target.get(t, marking)) for t in finding.node_ids]",
+        "    targets = [(t, by_target.get(t) or marking) for t in finding.node_ids]",
+        "test_a_cited_party_no_single_marking",
+        WRITTEN,
+    ),
+    (
+        "P19 a re-mark reads the citations too",
+        "services/api/alerts.py",
+        "        core_nodes = sorted(set(alert.referent_node_ids) - cited_nodes)",
+        "        core_nodes = sorted(set(alert.referent_node_ids))",
+        "test_a_re_mark_reads_only",
+        WRITTEN,
+    ),
+    (
+        "P20 the trends' handlings read without the citations (counted for a reader not shown it)",
+        "services/api/rule_evaluation.py",
+        "        await self.alert_store.save(alert, handlings=await self._rests_on(finding, node_id))",
+        "        await self.alert_store.save(alert, handlings=await self._rests_on(core_of(finding), node_id))",
+        "test_what_the_trends_count",
+        WRITTEN,
+    ),
+    (
+        "P21 the rule audit reads a cited alert by what is outside its citations (review item 8)",
+        "services/api/rule_holds.py",
+        "            return evidence_node_ids(alert), list(alert.edge_ids), list(alert.event_ids)",
+        "            _n, _e = __import__('services.api.alerts', fromlist=['x']).citation_ids(alert)\n"
+        "            return ([i for i in evidence_node_ids(alert) if i not in _n],\n"
+        "                    [i for i in alert.edge_ids if i not in _e], list(alert.event_ids))",
+        "test_the_rule_audit_withholds",
+    ),
+    (
+        "P22 a unit-restricted code taken for a list (review item 11)",
+        "scripts/load_screening_list.py",
+        '    if scheme.handling_codes[code].dissemination == "restricted":\n',
+        "    if False:\n",
+        "test_a_marking_the_scheme",
+        SCREENING,
+    ),
+    (
+        "P23 a marking above the deployment's ceiling taken (review item 11)",
+        "scripts/load_screening_list.py",
+        "    if (ceiling or DeploymentCeiling.from_env(scheme)).above(classification):",
+        "    if False:",
+        "test_a_marking_above",
+        SCREENING,
+    ),
+    (
+        "P24 the listed party looked up by name alone (review item 6)",
+        "services/api/kyc_rules.py",
+        '        also={"list_name": hit.entry.list_name},\n',
+        "",
+        "test_a_match_reuses_its_own_lists_party",
+        WRITTEN,
+    ),
 ]
 
 
@@ -156,7 +239,7 @@ def _run(selector: str, tests: str = TESTS) -> tuple[bool, str]:
 
 def main() -> int:
     green_left = 0
-    for tests in (TESTS, SCREENING):
+    for tests in (TESTS, SCREENING, WRITTEN):
         base_red, base_line = _run("", tests)
         print(f"built, {tests.rsplit('/', 1)[-1]}: {'RED' if base_red else 'GREEN'} - {base_line}")
         if base_red:
@@ -176,8 +259,8 @@ def main() -> int:
             path.write_text(source, encoding="utf-8")
         print(f"{name} [{rel}; -k {selector}]: {'RED' if red else 'GREEN'} - {line}")
         green_left += 0 if red else 1
-    after = [_run("", tests) for tests in (TESTS, SCREENING)]
-    for (after_red, after_line), tests in zip(after, (TESTS, SCREENING), strict=True):
+    after = [_run("", tests) for tests in (TESTS, SCREENING, WRITTEN)]
+    for (after_red, after_line), tests in zip(after, (TESTS, SCREENING, WRITTEN), strict=True):
         print(f"restored, {tests.rsplit('/', 1)[-1]}: {'RED' if after_red else 'GREEN'} - {after_line}")
     return 1 if green_left or any(red for red, _ in after) else 0
 

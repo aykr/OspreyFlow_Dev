@@ -242,6 +242,37 @@ async def test_a_pack_item_is_read_by_the_matches_it_shows() -> None:
     assert await _pack_shows(both, set())
 
 
+class _Audit:
+    def __init__(self, entries: list[Any]) -> None:
+        self.entries = entries
+
+    async def list_for_case(self, investigation_id: str, actions: Any) -> list[Any]:
+        return list(self.entries)
+
+
+async def test_the_rule_audit_withholds_a_firing_citing_a_list_the_reader_may_not_read() -> None:
+    """Strict, and the spec's "Not changed": an entry about an alert is read by everything the
+    alert cites, its citations included, so its ids (which name every list's match) reach only a
+    reader cleared for every list; one cleared for A alone is given no entry about it, and no count
+    (`total`)."""
+    from services.api.rule_holds import readable_rule_audit
+
+    from schemas.domain import RuleAuditEntry
+
+    firing = RuleAuditEntry(recorded_at=NOW, principal_id="deployer", action="rule_fired", result_cardinality=1,
+                            detail={"rule_id": "kyc", "alert_id": BOTH.id, "words": BOTH.words,
+                                    "node_ids": BOTH.referent_node_ids, "edge_ids": BOTH.edge_ids})  # fmt: skip
+    pages = []
+    for hidden in (NOT_B, set()):
+        _, graph, analytics, _ = _world(hidden, [BOTH])
+        page = await readable_rule_audit(
+            _Audit([firing]), graph, CASE, READER, analytics=analytics,  # type: ignore[arg-type]
+            alerts=_PackAlerts([BOTH]),  # type: ignore[arg-type]
+        )  # fmt: skip
+        pages.append((len(page.entries), page.total))
+    assert pages == [(0, 0), (1, 1)]
+
+
 # --- the pieces each path is built from ------------------------------------------------------------
 
 

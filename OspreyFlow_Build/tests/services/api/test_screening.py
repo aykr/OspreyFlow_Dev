@@ -121,6 +121,9 @@ def test_a_lists_marking_is_carried_by_each_entry_and_an_unmarked_list_is_offici
         ({"classification": "SECRET"}, "names exactly"),
         ({"classification": "SECRET", "handling_code": "P", "caveat": "x"}, "names exactly"),
         ("SECRET", "names exactly"),
+        # The lane review's item 11: a code restricted to one unit, which a list's matches,
+        # written in the deployer's unit, cannot name.
+        ({"classification": "OFFICIAL", "handling_code": "R"}, "restricts a list to one unit"),
     ],
 )
 def test_a_marking_the_scheme_does_not_define_is_refused_in_words(marking: object, said: str) -> None:
@@ -148,3 +151,19 @@ def test_a_rule_screens_only_against_the_lists_its_deployer_is_cleared_for() -> 
     scheme = load_uk_le_scheme()
     assert [e.id for e in lists_cleared_for(entries, official, scheme)] == ["1"]
     assert [e.id for e in lists_cleared_for(entries, secret, scheme)] == ["1", "s"]
+
+
+def test_a_marking_above_the_deployments_highest_is_refused_in_words() -> None:
+    """The lane review's item 11: a deployment whose ceiling is OFFICIAL (ADR-148) never holds a
+    SECRET list's matches."""
+    from services.ingest.ceiling import DeploymentCeiling
+
+    from ontology.handling import load_uk_le_scheme
+
+    ceiling = DeploymentCeiling.of("OFFICIAL", load_uk_le_scheme())
+    with pytest.raises(ListRefused, match="above this deployment's highest marking"):
+        parse_list({**_MARKED, "marking": {"classification": "SECRET", "handling_code": "P"}},
+                   use="local_development", ceiling=ceiling)  # fmt: skip
+    _, entries = parse_list({**_MARKED, "marking": {"classification": "OFFICIAL", "handling_code": "P"}},
+                            use="local_development", ceiling=ceiling)  # fmt: skip
+    assert entries[0].classification == "OFFICIAL"

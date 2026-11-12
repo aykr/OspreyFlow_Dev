@@ -194,3 +194,19 @@ async def test_an_older_refresh_shows_what_the_list_did_and_no_count(
     assert read is not None and (read.rescreened, read.alerts) == (0, 0)
     assert read.words.startswith("Version v1: 3 added, 0 changed, 0 removed.")
     assert "12" not in read.words and "not counted by unit" in read.words
+
+
+async def test_an_update_keeps_a_marked_lists_marking(store: ScreeningListStore) -> None:
+    """ADR-146 Amendment 7 (the lane review's item 10): a refresh's file carries no marking, so an
+    update of a list loaded marked keeps the list's marking, and the same entries are no change.
+    Red with `apply_update` writing the file's entries as they come: every entry OFFICIAL again,
+    each one "changed" and re-screened."""
+    await _subscribe(store)
+    marked = [ScreeningEntry(id="Store test:1", list_name="Store test", listing="sanction",
+                             entity_type="Person", name="Ann Able", classification="SECRET",
+                             handling_code="P")]  # fmt: skip
+    await store.replace_list("Store test", marked)
+    diff = await store.apply_update("Store test", "v2", [_entry("1", "Ann Able")], synthetic=True)
+    assert (diff.added, diff.changed, diff.removed) == ((), (), ())
+    (entry,) = [e for e in await store.entries("Person") if e.list_name == "Store test"]
+    assert (entry.classification, entry.handling_code) == ("SECRET", "P")

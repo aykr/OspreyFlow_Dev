@@ -102,9 +102,13 @@ class _Graph:
         more = len(visible) > limit
         return ListNodesPage(nodes=page, next_cursor=page[-1].id if more and page else None)
 
-    async def find_node(self, entity_type: str, field: str, value: str, principal: Principal) -> Node | None:
+    async def find_node(self, entity_type: str, field: str, value: str, principal: Principal,
+                        *, also: dict[str, str] | None = None) -> Node | None:  # fmt: skip
+        """As the port: the first visible node with the value and every `also` property."""
         for node in self.nodes.values():
-            if node.type == entity_type and node.properties.get(field) == value and self._sees(principal, node):
+            if (node.type == entity_type and node.properties.get(field) == value
+                    and all(node.properties.get(k) == v for k, v in (also or {}).items())
+                    and self._sees(principal, node)):  # fmt: skip
                 return node
         return None
 
@@ -489,3 +493,56 @@ async def test_a_listed_party_already_in_the_graph_is_not_screened_as_a_customer
     await _subscribe(store, "lists/synthetic_opensanctions_v2.ftm.json")
     update = await _refresh(store, root, _rescreener(graph, queue, [_rule()]))
     assert queue.alerts == [] and update.rescreened == 0
+
+
+# --- ADR-146 Amendment 7: a marked list's refresh -------------------------------------------------
+
+SECRET_OFFICER = Principal(id="kyc-secret-officer", clearance="SECRET", org_unit="verify")
+
+
+async def _marked_v1(store: ScreeningListStore, root: Path, graph: _Graph, queue: _Queue) -> None:
+    """Version 1 refreshed with no rule watching, then marked SECRET as `load_screening_list`
+    marks a list (`marking:`), its entries carrying it."""
+    await _subscribe(store, "lists/synthetic_opensanctions_v1.ftm.json")
+    await _refresh(store, root, _rescreener(graph, queue, []))
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await conn.execute("UPDATE screening_entries SET classification = 'SECRET', handling_code = 'P' "
+                           "WHERE list_name = 'Synthetic list'")  # fmt: skip
+    finally:
+        await conn.close()
+    await _subscribe(store, "lists/synthetic_opensanctions_v2.ftm.json")
+
+
+async def test_a_refresh_keeps_a_marked_lists_marking_and_screens_it_only_for_a_deployer_cleared_for_it(
+    store: ScreeningListStore, root: Path
+) -> None:
+    """The lane review's items 7 and 10: a refresh's file carries no marking, so the store keeps
+    the list's own (red with `apply_update` writing the file's: every entry OFFICIAL again, and
+    "changed", and re-screened); and the re-screening asks the deployer's clearance at its own call
+    site (red with `Rescreener` screening every list: the OFFICIAL deployer's rule raised an alert
+    naming the SECRET list)."""
+    graph, queue = _Graph(LEDGER), _Queue()
+    await _marked_v1(store, root, graph, queue)
+    second = await _refresh(store, root, _rescreener(graph, queue, [_rule()]))
+    assert (second.outcome, second.added, second.changed, second.delisted) == ("updated", 1, 1, 1)
+    assert {(e.classification, e.handling_code) for e in await store.entries("Person")
+            if e.list_name == "Synthetic list"} == {("SECRET", "P")}  # fmt: skip
+    assert queue.alerts == [] and second.alerts == 0
+
+
+async def test_a_marked_lists_match_found_by_a_cleared_deployer_carries_the_lists_marking(
+    store: ScreeningListStore, root: Path
+) -> None:
+    """One alert for the one customer, citing the one changed entry it matches; its listed party
+    and its `SAME_AS` marked SECRET, as the list is."""
+    graph, queue = _Graph(LEDGER), _Queue()
+    await _marked_v1(store, root, graph, queue)
+    rescreen = _rescreener(graph, queue, [_rule(owner=SECRET_OFFICER.id)], known=(OFFICER, SECRET_OFFICER))
+    await _refresh(store, root, rescreen)
+    (alert,) = queue.alerts
+    (citation,) = alert.citations
+    assert "(Synthetic list)" in citation.words and "p-zelinsky" in alert.referent_node_ids
+    assert alert.words is not None and "Synthetic list" not in alert.words
+    (same_as,) = [e for e in graph.written_edges if e.type == "SAME_AS"]
+    assert same_as.handling.classification == "SECRET"
