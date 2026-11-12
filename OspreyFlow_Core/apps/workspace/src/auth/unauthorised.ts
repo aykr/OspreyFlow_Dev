@@ -23,9 +23,10 @@ export interface UnauthorisedWatch {
   getToken: () => string;
   /** The token to send now: the latest renewal's. Defaults to `getToken`. */
   currentToken?: () => string;
-  /** Called when the Conduit refuses a request that carried the page's token. Resolving `true`
-   * means a renewed token is now in place, and the request is made once more with it. */
-  onUnauthorised: () => void | boolean | Promise<boolean | void>;
+  /** Called when the Conduit refuses a request that carried the page's token, with a copy of the
+   * refusal (its words may say why, ADR-148 Amendment 8). Resolving `true` means a renewed token is
+   * now in place, and the request is made once more with it. */
+  onUnauthorised: (refusal: Response) => void | boolean | Promise<boolean | void>;
 }
 
 function authorisationOf(input: RequestInfo | URL, init?: RequestInit): string | null {
@@ -103,7 +104,7 @@ export function installUnauthorisedWatch(watch: UnauthorisedWatch): () => void {
     const replay = replayable(input, init);
     const response = await original(...withAuthorisation(input, init, `Bearer ${sending}`));
     if (response.status !== 401) return response;
-    const renewed = await watch.onUnauthorised();
+    const renewed = await watch.onUnauthorised(response.clone());
     const now = current();
     if (renewed !== true || !replay || now === sending) return response;
     return original(...withAuthorisation(input, init, `Bearer ${now}`));

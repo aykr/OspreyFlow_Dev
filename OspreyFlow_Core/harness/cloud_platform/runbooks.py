@@ -85,6 +85,8 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     hosts = [r["host"] for r in values["ingress"]["rules"]]
     glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
     host = cp.registry.split("/")[0]
+    claims = cp.claims
+    assert claims is not None  # the render refuses this profile without them
     return f"""# Install: OspreyFlow in `{cp.namespace}` ({cp.shape} shape)
 
 Rendered for this deployment, before its images are pushed, by `PYTHONPATH=.:packages
@@ -161,14 +163,30 @@ helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$FOLDER/values.yaml" --t
 {rollouts}
 ```
 
-## 6. Sign-in and the first administrator
+## 6. Sign-in: Entra ID and the first administrators
 
-Sets the Conduit's client secret on its clients, its service account's roles and the realm's
-sign-in settings, once Keycloak answers (P10 replaces this with the client's own sign-in), then makes
-the first administrator, `admin`, and prints the one-time code they sign in with once.
+People sign in with the client's own Entra ID (ADR-148 Amendment 8): there is no sign-in service of
+ours to set up. Before step 5, the client's Entra administrator registers the Glass (application id
+`{claims.client_id}`) and this API (`{claims.api_client_id}`, exposing the scope `{claims.scope}`, which the
+Glass is granted), in tenant `{claims.tenant_id}`, with the claims `cloud_platform.claims` names. The
+first administrators ({", ".join(claims.first_administrators)}) were given the Admin role when the
+Conduit first started; they give everyone else their roles in Admin › People. Check the Conduit reads
+Entra's settings:
 
 ```bash
-"$PY" -m harness.cloud_platform.identity "$FOLDER/values.yaml"
+kubectl -n "$NS" exec deploy/api -- printenv OSPREY_IDENTITY_PROVIDER OIDC_ISSUER
+```
+
+**If no administrator is left** (nobody enabled who has signed in can manage people): add the Entra
+object id of a person who is not disabled here to `cloud_platform.claims.first_administrators` in
+`osprey.yaml`, render again (step 3) and restart the Conduit. At start, and only when nobody can
+manage people, the Conduit adds the Admin role to each one named there, and audits it
+(`grant_first_administrator`). While anyone can manage people, it changes nobody's roles.
+
+```bash
+{RENDER}
+kubectl -n "$NS" rollout restart deploy/api
+kubectl -n "$NS" rollout status deploy/api --timeout 10m
 ```
 
 ## 7. Check

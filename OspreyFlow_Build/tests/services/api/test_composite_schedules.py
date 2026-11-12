@@ -388,7 +388,12 @@ async def _case_route(
     sites, held, recipes = _Sites(), _HeldRows(), _Recipes()
     saved = {k: getattr(app_module.app.state, k, None)
              for k in ("principal_resolver", "datasets", "investigations")}  # fmt: skip
-    app_module.app.state.principal_resolver = SimpleNamespace(resolve=lambda token: OWNER)
+    async def _owner(token: str) -> Principal:
+        return OWNER
+
+    app_module.app.state.principal_resolver = SimpleNamespace(
+        resolve=lambda token: OWNER, resolve_principal=_owner
+    )
     app_module.app.state.datasets = store
     app_module.app.state.investigations = investigations
     recipe = _recipe(case.id)

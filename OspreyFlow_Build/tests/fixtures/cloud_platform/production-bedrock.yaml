@@ -1,13 +1,15 @@
 # A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
-# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
+# a model engine enabled, so the gateway and its egress are rendered too.
 profile: cloud-platform
 components:
   analytics_engine: clickhouse
 network:
   public_origin: https://ospreyflow.apps.example.org
+# Reporting off: report sync and Superset are not on this profile until their step after P10
+# (ADR-148 Amendment 8; the orchestrator's ruling (a)).
 reporting:
-  sync: true
-  superset: true
+  sync: false
+  superset: false
 # P11 part 2: production with a Bedrock engine as well, so the gateway's own account and role
 # (terraform/gateway.tf) pass the policy check and OpenTofu's fmt, init and validate (the
 # orchestrator's round 1, item 4).
@@ -32,6 +34,17 @@ cloud_platform:
     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
     api.openai.com: ["203.0.113.0/24"]
     bedrock-runtime.eu-west-2.amazonaws.com: ["198.18.2.0/24"]
+    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
+    login.microsoftonline.com: ["198.18.3.0/24"]
+  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
+  claims:
+    tenant_id: 00000000-1111-4222-8333-444444444444
+    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
+    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
+    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
+    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
+    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
+    first_administrators: [50000000-0000-4000-8000-000000000001]
 # The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
 map:
   default: osm-local

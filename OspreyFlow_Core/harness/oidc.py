@@ -251,6 +251,11 @@ def verify_id_token(config: SignInConfig, id_token: str, *, nonce: str) -> Ident
 
     if claims.get("nonce") != nonce:
         raise SignInRefused("nonce_mismatch")
+    if "tid" in claims:
+        # ADR-148 Amendment 8: an Entra ID token's `roles` are app roles, never OspreyFlow's. This
+        # sign-in is the deployment's own realm's (the launcher and the Admin console), which the
+        # cloud-platform profile does not render.
+        raise SignInRefused("entra_token")
     roles = claims.get("roles", [])
     if not isinstance(roles, list) or not all(isinstance(r, str) for r in roles):
         raise SignInRefused("roles_claim_malformed")

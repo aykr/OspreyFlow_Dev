@@ -33,6 +33,7 @@ groups is a directory error for the operator to see, not one to guess past.
 from __future__ import annotations
 
 import ast
+import asyncio
 import re
 import time
 from pathlib import Path
@@ -40,10 +41,21 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
-from services.api.auth import PrincipalResolutionError, PrincipalResolver
+from services.api.auth import (
+    PrincipalExchangeUnavailable,
+    PrincipalResolutionError,
+    PrincipalResolver,
+)
 from services.api.config import ApiConfig
 
-from principal_auth import ClaimMapping, CodesSource, ValueSource
+from principal_auth import (
+    ClaimMapping,
+    CodesSource,
+    PrincipalLookupUnavailable,
+    SeenPerson,
+    StoredPerson,
+    ValueSource,
+)
 from tests.conftest import (
     TOKEN_EXCHANGE_CLIENT_ID,
     TOKEN_EXCHANGE_CLIENT_SECRET,
@@ -130,8 +142,46 @@ def _entra_config(jwks_url: str) -> ApiConfig:
     return _config(jwks_url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID)
 
 
-def _resolver(jwks_url: str, mapping: ClaimMapping) -> PrincipalResolver:
-    return PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping)
+class FakePeople:
+    """Stands in for `services/api/entra_people.py`'s store, and refuses as it does (rule 15): keyed
+    by tenant **and** object id, a person not yet seen recorded with no roles, and a failure raised,
+    never answered as "no roles". `test_entra_people_live.py` holds the real store to the same."""
+
+    def __init__(self) -> None:
+        self.rows: dict[tuple[str, str], StoredPerson] = {}
+        self.calls: list[tuple[str, str]] = []
+        self.fail: Exception | None = None
+        self.delay = 0.0
+
+    async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson:
+        self.calls.append((tenant_id, oid))
+        self.seen = seen
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.fail is not None:
+            raise self.fail
+        return self.rows.setdefault((tenant_id, oid), StoredPerson(roles=(), disabled=False))
+
+
+class _EntraResolver:
+    """The resolver as the Conduit calls it on Entra (`resolve_principal`, its stored person read
+    from `people`), driven from a plain test."""
+
+    def __init__(self, jwks_url: str, mapping: ClaimMapping, people: FakePeople | None = None):
+        self.people = people or FakePeople()
+        self.real = PrincipalResolver(
+            _entra_config(jwks_url),
+            claim_mapping=mapping,
+            role_source=self.people,
+            role_lookup_timeout_seconds=0.2,
+        )
+
+    def resolve(self, token: str):  # type: ignore[no-untyped-def]
+        return asyncio.run(self.real.resolve_principal(token))
+
+
+def _resolver(jwks_url: str, mapping: ClaimMapping) -> _EntraResolver:
+    return _EntraResolver(jwks_url, mapping)
 
 
 def _key(keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]) -> rsa.RSAPrivateKey:
@@ -530,7 +580,7 @@ def test_a_mapping_that_skipped_its_validators_is_validated_by_the_resolver(jwks
             tenant_id=None,
         )
     with pytest.raises(ValidationError, match="tenant_id"):
-        PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping)
+        PrincipalResolver(_entra_config(jwks_url), claim_mapping=mapping, role_source=FakePeople())
 
 
 def test_the_settings_refuse_an_unknown_key() -> None:
@@ -624,18 +674,16 @@ def test_the_default_mapping_does_not_read_entra_attributes(keypair, jwks_url) -
         PrincipalResolver(_config(jwks_url)).resolve(sign_token(_key(keypair), claims))
 
 
-async def test_the_owner_exchange_maps_claims_through_the_same_path(
+async def test_owner_resolution_is_unavailable_on_entra_even_with_an_exchange_configured(
     keypair, jwks_url, token_exchange_url: str, token_exchange_registry: TokenExchangeRegistry
 ) -> None:
-    """ADR-043's one claims-construction path: a token got by exchange is mapped by the
-    deployment's mapping, as a session's is (owner-ok's clearance and unit come from its groups),
-    and two clearances are refused there too. It proves the path, not Entra's behaviour: Entra has
-    no impersonation exchange, and how owners resolve on Entra is P10 part 2's question."""
+    """Entra has no impersonation exchange, so a scheduled run cannot act as its owner (the
+    orchestrator's ruling, 11 November 2026): `resolve_for_owner` answers None (ADR-044's
+    unreachable path, the run marked stopped) and the detailed form says why, even where an
+    exchange endpoint is configured and would grant. Red with the Entra refusal removed: the
+    exchange's token resolves. The one-path proof for owners stays `test_auth.py`'s (Keycloak)."""
     token_exchange_registry.register(
         "owner-ok", entra_claims(sub="owner-ok", groups=[G_OFFICIAL, G_UNIT_1, G_CODE_R])
-    )
-    token_exchange_registry.register(
-        "owner-two", entra_claims(sub="owner-two", groups=[G_OFFICIAL, G_SENSITIVE, G_UNIT_1])
     )
     config = _config(
         jwks_url,
@@ -645,16 +693,11 @@ async def test_the_owner_exchange_maps_claims_through_the_same_path(
         oidc_token_exchange_client_id=TOKEN_EXCHANGE_CLIENT_ID,
         oidc_token_exchange_client_secret=TOKEN_EXCHANGE_CLIENT_SECRET,
     )
-    resolver = PrincipalResolver(config, claim_mapping=BY_GROUPS)
+    resolver = PrincipalResolver(config, claim_mapping=BY_GROUPS, role_source=FakePeople())
     try:
-        ok = await resolver.resolve_for_owner("owner-ok")
-        assert ok is not None
-        assert (ok.clearance, ok.org_unit, ok.receivable_handling_codes) == (
-            "OFFICIAL",
-            "unit-1",
-            ["R"],
-        )
-        assert await resolver.resolve_for_owner("owner-two") is None
+        assert await resolver.resolve_for_owner("owner-ok") is None
+        with pytest.raises(PrincipalExchangeUnavailable, match="unavailable with Entra ID"):
+            await resolver.resolve_for_owner_detailed("owner-ok")
     finally:
         await resolver.aclose()
 
@@ -707,7 +750,8 @@ def test_the_construction_check_sees_each_other_way_to_build_one(plant) -> None:
 def test_an_entra_principal_is_keyed_by_oid_not_its_pairwise_sub(keypair, jwks_url) -> None:
     """Entra's `sub` is pairwise per application: keyed by it, one person signing in through a
     second client id would be two principals, and Admin › People could never name a person before
-    their first sign-in (Graph gives `oid`). Two `sub`s, one `oid`: one principal, keyed by `oid`."""
+    their first sign-in (Graph gives `oid`). Two `sub`s, one `oid`: one principal, keyed by
+    `oid`."""
     resolver = _resolver(jwks_url, BY_EXTENSION)
     first = resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, sub="pairwise-app-1")))
     second = resolver.resolve(
@@ -841,3 +885,668 @@ def test_one_group_cannot_grant_two_clearances_or_units(field) -> None:
         ValueSource.model_validate(two)
     with pytest.raises(ValidationError):
         ClaimMapping.model_validate({"tenant_id": TENANT, "client_id": GLASS, field: two})
+
+
+# --- P10 part 2: the guest check by tenant (CARRIES, P10 round 2) ---
+
+V1_ISSUER = f"https://sts.windows.net/{TENANT}/"
+
+
+@pytest.mark.parametrize("idp", [ISSUER, V1_ISSUER], ids=["member-v2-form", "member-v1-form"])
+def test_a_member_whose_idp_names_our_tenant_in_either_form_resolves(
+    keypair, jwks_url, idp
+) -> None:
+    """Entra may send `idp` in the v1.0 form on a v2.0 token, or the reverse: a member's `idp` names
+    our tenant whichever form it takes. Red against the string comparison with `iss`: the v1 form
+    on a v2.0 token was refused as a guest."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, idp=idp))
+    assert _resolver(jwks_url, BY_EXTENSION).resolve(token).id == OID
+
+
+@pytest.mark.parametrize(
+    "idp",
+    [
+        f"https://login.microsoftonline.com/{OTHER_TENANT}/v2.0",
+        f"https://sts.windows.net/{OTHER_TENANT}/",
+        "live.com",
+        "https://adfs.example.test/adfs/services/trust",
+        f"https://sts.windows.net/{TENANT}/extra",
+        f"https://login.microsoftonline.com/{TENANT}/",
+        ["https://sts.windows.net/" + TENANT + "/"],
+    ],
+    ids=[
+        "other-v2",
+        "other-v1",
+        "msa",
+        "federated",
+        "trailing-path",
+        "v2-without-version",
+        "not-text",
+    ],
+)
+def test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest(keypair, jwks_url, idp) -> None:
+    """Strict: an `idp` that names another tenant, a Microsoft account, a federation's own issuer
+    (a federated member, should Entra send one; unmeasured, Amendment 6's assumption list) or
+    anything malformed is refused as a guest's. Admitting a federated member is a later setting."""
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, idp=idp))
+    with pytest.raises(PrincipalResolutionError, match="guest"):
+        _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+# --- P10 part 2: a client or scope with no tenant (CARRIES, P10 round 2) ---
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"client_id": GLASS}, {"api_client_id": CLIENT_ID}, {"scope": "other_scope"}],
+    ids=["client", "api-client", "scope"],
+)
+def test_a_client_or_scope_without_a_tenant_is_refused(kwargs) -> None:
+    """Checked only for an Entra mapping, so set without a tenant they would be ignored."""
+    with pytest.raises(ValidationError, match="tenant_id"):
+        ClaimMapping(**kwargs)
+
+
+def test_the_default_mapping_still_loads_after_a_dump() -> None:
+    """The control: the default scope, dumped and re-read by the resolver, is not taken as set."""
+    assert ClaimMapping.model_validate(ClaimMapping().model_dump()) == ClaimMapping()
+
+
+# --- P10 part 2: the stored person (the orchestrator's ruling, 11 November 2026) ---
+
+
+def test_an_entra_principals_roles_are_the_stored_ones_never_the_tokens(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(TENANT, OID)] = StoredPerson(roles=("osprey-admin",), disabled=False)
+    token = sign_token(_key(keypair), entra_claims(**_GOOD, roles=["analyst", "role:x"]))
+    assert resolver.resolve(token).roles == ["osprey-admin"]
+    assert resolver.people.calls == [(TENANT, OID)]
+
+
+def test_the_store_is_given_the_resolved_access_never_the_tokens_roles(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, email=["not", "text"])))
+    assert resolver.people.seen == SeenPerson(
+        name="Synthetic Analyst",
+        username="synthetic.analyst@example.test",
+        email=None,
+        clearance="OFFICIAL",
+        org_unit="unit-1",
+        receivable_handling_codes=(),
+    )
+
+
+def test_a_first_sign_in_records_the_person_with_no_roles(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    assert resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD))).roles == []
+    assert (TENANT, OID) in resolver.people.rows
+
+
+def test_another_tenants_row_for_the_same_oid_grants_nothing(keypair, jwks_url) -> None:
+    """Rule 3 at the resolver: the store is read by our tenant and the oid together."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(OTHER_TENANT, OID)] = StoredPerson(
+        roles=("osprey-admin",), disabled=False
+    )
+    assert resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD))).roles == []
+
+
+def test_a_person_disabled_here_is_refused(keypair, jwks_url) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(TENANT, OID)] = StoredPerson(roles=("osprey-admin",), disabled=True)
+    with pytest.raises(PrincipalResolutionError, match="disabled"):
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+@pytest.mark.parametrize("how", ["raises", "slow"])
+def test_a_failed_or_slow_lookup_is_unavailable_never_a_principal(keypair, jwks_url, how) -> None:
+    """A 503, never a principal with no roles (the ruling's words)."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    resolver.people.rows[(TENANT, OID)] = StoredPerson(roles=("osprey-admin",), disabled=False)
+    if how == "raises":
+        resolver.people.fail = ConnectionError("store down")
+    else:
+        resolver.people.delay = 1.0
+    with pytest.raises(PrincipalLookupUnavailable):
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [StoredPerson(roles=("",), disabled=False), StoredPerson(roles=["x"], disabled=False), None],  # type: ignore[arg-type]
+    ids=["empty-role", "a-list", "not-a-person"],
+)
+def test_a_malformed_stored_person_is_unavailable(keypair, jwks_url, stored) -> None:
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+
+    async def answer(tenant_id: str, oid: str, seen: object) -> object:
+        return stored
+
+    resolver.people.person = answer  # type: ignore[method-assign]
+    with pytest.raises(PrincipalLookupUnavailable):
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+def test_a_refused_token_records_nobody(keypair, jwks_url) -> None:
+    """Every token refusal comes before the store is touched."""
+    resolver = _resolver(jwks_url, BY_EXTENSION)
+    for overrides in ({"azp": OTHER_APP}, {"scp": "User.Read"}, {"acct": 1}):
+        with pytest.raises(PrincipalResolutionError):
+            resolver.resolve(sign_token(_key(keypair), entra_claims(**_GOOD, **overrides)))
+    with pytest.raises(PrincipalResolutionError):
+        # no clearance: refused by the mapping, before the store
+        resolver.resolve(sign_token(_key(keypair), entra_claims(**{f"{EXT}_orgUnit": "unit-1"})))
+    assert resolver.people.calls == []
+
+
+def test_the_synchronous_path_refuses_an_entra_mapping(keypair, jwks_url) -> None:
+    """Only `resolve_principal` reads the stored roles; `resolve` would build one without them."""
+    real = _resolver(jwks_url, BY_EXTENSION).real
+    with pytest.raises(PrincipalLookupUnavailable):
+        real.resolve(sign_token(_key(keypair), entra_claims(**_GOOD)))
+
+
+def test_the_construction_path_refuses_an_entra_principal_without_its_stored_person() -> None:
+    """The second guard behind `resolve`'s: built from claims alone, an Entra principal would have
+    no roles read for it; refused, never built with none (rule 15: `resolve`'s case alone passes
+    with either guard removed)."""
+    from principal_auth import principal_from_claims
+
+    claims = {**entra_claims(**_GOOD), "sub": "s"}
+    with pytest.raises(PrincipalLookupUnavailable):
+        principal_from_claims(claims, BY_EXTENSION)
+
+
+def test_an_entra_mapping_needs_a_people_store_and_keycloak_refuses_one(jwks_url) -> None:
+    with pytest.raises(ValueError, match="people store"):
+        PrincipalResolver(_entra_config(jwks_url), claim_mapping=BY_EXTENSION)
+    with pytest.raises(ValueError, match="only for an Entra"):
+        PrincipalResolver(_config(jwks_url), role_source=FakePeople())
+
+
+async def test_the_keycloak_path_is_unchanged_through_resolve_principal(keypair, jwks_url) -> None:
+    principal = await PrincipalResolver(_config(jwks_url)).resolve_principal(
+        sign_token(_key(keypair), default_claims(roles=["osprey-admin"]))
+    )
+    assert principal.roles == ["osprey-admin"]
+
+
+# --- P10 part 2: the mapping from the environment the profile renders ---
+
+
+def test_the_mapping_is_read_from_the_environment(monkeypatch) -> None:
+    import json
+
+    monkeypatch.setenv(
+        "OSPREY_CLAIM_MAPPING",
+        json.dumps({"tenant_id": TENANT, "client_id": GLASS, "clearance": {"claim": "c"}}),
+    )
+    assert ClaimMapping.from_env().tenant_id == TENANT
+    monkeypatch.delenv("OSPREY_CLAIM_MAPPING")
+    assert ClaimMapping.from_env() == ClaimMapping()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["{not json", '{"clearence": {"claim": "c"}}', f'{{"tenant_id": "{TENANT}"}}'],
+    ids=["not-json", "unknown-key", "no-client"],
+)
+def test_a_mapping_in_the_environment_that_does_not_load_stops_the_start(monkeypatch, raw) -> None:
+    """Never a silent fall back to the fixed names, which would be Keycloak-handled."""
+    monkeypatch.setenv("OSPREY_CLAIM_MAPPING", raw)
+    with pytest.raises(ValueError):
+        ClaimMapping.from_env()
+
+
+# --- the orchestrator's review of P10 part 2, item 8 and its notes: the signing keys ---
+
+
+def _publish(directory: Path, *keys: tuple[object, str]) -> None:
+    import json
+
+    from jwt.algorithms import ECAlgorithm, RSAAlgorithm
+
+    jwks = []
+    for private, kid in keys:
+        public = private.public_key()  # type: ignore[attr-defined]
+        algorithm = RSAAlgorithm if isinstance(private, rsa.RSAPrivateKey) else ECAlgorithm
+        jwk = algorithm.to_jwk(public, as_dict=True)
+        jwk.update(kid=kid, use="sig")
+        jwks.append(jwk)
+    (directory / "jwks.json").write_text(json.dumps({"keys": jwks}))
+
+
+def test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token(
+    keypair,
+) -> None:
+    """Entra (or the realm) not answering is said so: `SigningKeysUnavailable`, and `GET /v1/me`
+    answers 503 `identity_provider_unavailable`, never 401 "token rejected"."""
+    from fastapi.testclient import TestClient
+    from services.api.app import app
+
+    from principal_auth import SigningKeysUnavailable
+
+    resolver = _EntraResolver.__new__(_EntraResolver)
+    resolver.people = FakePeople()
+    resolver.real = PrincipalResolver(
+        _config("http://127.0.0.1:9/jwks.json", oidc_issuer=ISSUER, oidc_audience=CLIENT_ID),
+        claim_mapping=BY_EXTENSION,
+        role_source=resolver.people,
+    )
+    token = sign_token(_key(keypair), entra_claims(**_GOOD))
+    with pytest.raises(SigningKeysUnavailable):
+        resolver.resolve(token)
+    held = getattr(app.state, "principal_resolver", None)
+    app.state.principal_resolver = resolver.real
+    try:
+        response = TestClient(app).get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+    finally:
+        app.state.principal_resolver = held
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "identity_provider_unavailable"
+    assert resolver.people.calls == []
+
+
+def test_an_entra_mapping_takes_rs256_alone_whatever_oidc_algorithms_says(jwks_dir) -> None:
+    """With ES256 allowed by OIDC_ALGORITHMS and an EC key published, an ES256 token is refused
+    under the Entra mapping (pinned to RS256) and accepted under the fixed names (the control)."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    directory, url = jwks_dir
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    _publish(directory, (ec_key, "ec"))
+    import jwt as pyjwt
+
+    token = pyjwt.encode(entra_claims(**_GOOD), ec_key, algorithm="ES256", headers={"kid": "ec"})
+    entra = PrincipalResolver(
+        _config(
+            url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID, oidc_algorithms=("RS256", "ES256")
+        ),
+        claim_mapping=BY_EXTENSION,
+        role_source=FakePeople(),
+    )
+    with pytest.raises(PrincipalResolutionError, match="alg value is not allowed"):
+        asyncio.run(entra.resolve_principal(token))
+    keycloak_token = pyjwt.encode(
+        default_claims(), ec_key, algorithm="ES256", headers={"kid": "ec"}
+    )
+    keycloak = PrincipalResolver(_config(url, oidc_algorithms=("RS256", "ES256")))
+    assert keycloak.resolve(keycloak_token).id == "analyst-1"
+
+
+@pytest.mark.parametrize(("ago", "resolves"), [(30, True), (120, False)], ids=["30s", "120s"])
+def test_a_token_a_little_past_its_expiry_is_given_sixty_seconds(keypair, jwks_url, ago, resolves):
+    """Clocks a little apart: 60 s of leeway on a token's times, and no more."""
+    now = int(time.time())
+    token = sign_token(
+        _key(keypair), entra_claims(**_GOOD, iat=now - 3600, nbf=now - 3600, exp=now - ago)
+    )
+    if resolves:
+        assert _resolver(jwks_url, BY_EXTENSION).resolve(token).id == OID
+    else:
+        with pytest.raises(PrincipalResolutionError, match="expired"):
+            _resolver(jwks_url, BY_EXTENSION).resolve(token)
+
+
+# --- the orchestrator's second review of P10 part 2: the keys' cache, measured at the server ---
+
+
+class _CountingKeys:
+    """A JWKS endpoint that counts the GETs it answers (what the identity provider sees), serving
+    `jwks.json` from its folder afresh each time, as the shared `jwks_dir` does, and able to answer
+    slowly (`delay`, before anything), trickling (`trickle`: the body a few bytes at a time, each
+    read well inside a read's own timeout, the whole past it) or with any body (`body`)."""
+
+    def __init__(self, directory: Path) -> None:
+        import threading
+        from functools import partial
+        from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+        owner = self
+        self.gets = 0
+        self.delay = 0.0
+        self.trickle = 0.0
+        self.directory = directory
+
+        class Handler(SimpleHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - http.server's own name
+                owner.gets += 1
+                if owner.delay:
+                    time.sleep(owner.delay)
+                if owner.trickle:
+                    pause = owner.trickle  # this request's own pace, whatever later ones are given
+                    body = (owner.directory / "jwks.json").read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    for i in range(0, len(body), 64):
+                        time.sleep(pause)
+                        try:
+                            self.wfile.write(body[i : i + 64])
+                            self.wfile.flush()
+                        except OSError:
+                            return
+                    return
+                super().do_GET()
+
+            def log_message(self, *args: object) -> None:
+                return None
+
+        self.server = ThreadingHTTPServer(
+            ("127.0.0.1", 0), partial(Handler, directory=str(directory))
+        )
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        host, port = self.server.server_address[0], self.server.server_address[1]
+        self.url = f"http://{host}:{port}/jwks.json"
+
+    def body(self, text: str) -> None:
+        (self.directory / "jwks.json").write_text(text)
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.thread.join()
+
+
+@pytest.fixture
+def counting(tmp_path: Path):  # type: ignore[no-untyped-def]
+    keys = _CountingKeys(tmp_path)
+    try:
+        yield keys
+    finally:
+        keys.close()
+
+
+def _token(keypair, kid: str = "k1") -> str:  # type: ignore[no-untyped-def]
+    return sign_token(keypair[0], {"sub": "s"}, kid=kid)
+
+
+def test_many_sign_ins_fetch_the_keys_once_and_an_unknown_kid_once_per_window(
+    counting, keypair
+) -> None:
+    """Must-fix 1: counted at the server, ten sign-ins with a held key are one fetch; tokens
+    naming a key not published add one more fetch per five minutes, however many there are."""
+    from principal_auth import PrincipalResolutionError as Refused
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 3600.0, clock=lambda: now[0])
+    for _ in range(10):
+        keys.key_for(_token(keypair))
+    assert counting.gets == 1
+    for _ in range(5):
+        with pytest.raises(Refused, match="does not publish"):
+            keys.key_for(_token(keypair, "unknown"))
+    assert counting.gets == 2
+    now[0] += 299
+    with pytest.raises(Refused):
+        keys.key_for(_token(keypair, "unknown"))
+    assert counting.gets == 2
+    now[0] += 2
+    with pytest.raises(Refused):
+        keys.key_for(_token(keypair, "unknown"))
+    assert counting.gets == 3
+
+
+def test_the_keys_are_fetched_again_once_their_time_is_up(counting, keypair) -> None:
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    now[0] += 599
+    keys.key_for(_token(keypair))
+    assert counting.gets == 1
+    now[0] += 2
+    keys.key_for(_token(keypair))
+    assert counting.gets == 2
+
+
+def test_a_key_published_inside_the_window_is_refused_until_the_next_fetch(
+    counting, keypair
+) -> None:
+    """The documented edge (Amendment 8 point 9): a key the identity provider publishes within five
+    minutes of a fetch for an unknown key is refused (401) until the next fetch is due."""
+    from principal_auth import PrincipalResolutionError as Refused
+    from principal_auth import SigningKeys
+
+    rotated = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 3600.0, clock=lambda: now[0])
+    with pytest.raises(Refused):
+        keys.key_for(_token((rotated,), "k2"))
+    _publish(counting.directory, (keypair[0], "k1"), (rotated, "k2"))
+    now[0] += 100
+    with pytest.raises(Refused, match="does not publish"):
+        keys.key_for(_token((rotated,), "k2"))
+    assert counting.gets == 1
+    now[0] += 201
+    assert keys.key_for(_token((rotated,), "k2")) is not None
+    assert counting.gets == 2
+
+
+def test_a_failed_fetch_keeps_the_last_good_set_for_an_hour_then_is_a_503(
+    counting, keypair
+) -> None:
+    """Should-fix 5: past the keys' time, the identity provider not answering leaves the last good
+    set in use for an hour (nobody signed out by a short outage); after that, a 503."""
+    from principal_auth import KEYS_GRACE_SECONDS, SigningKeys, SigningKeysUnavailable
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    (counting.directory / "jwks.json").unlink()
+    now[0] += 601
+    assert keys.key_for(_token(keypair)) is not None
+    assert counting.gets == 2
+    now[0] += KEYS_GRACE_SECONDS
+    with pytest.raises(SigningKeysUnavailable):
+        keys.key_for(_token(keypair))
+
+
+def test_while_one_thread_fetches_the_others_use_the_last_good_set(counting, keypair) -> None:
+    """Should-fix 5: the fetch is one thread's; the rest go on with the set they have rather than
+    wait for a slow identity provider."""
+    import threading
+
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    now[0] += 601
+    counting.delay = 1.5
+    fetcher = threading.Thread(target=keys.key_for, args=(_token(keypair),))
+    fetcher.start()
+    time.sleep(0.3)
+    started = time.monotonic()
+    assert keys.key_for(_token(keypair)) is not None
+    assert time.monotonic() - started < 0.5
+    fetcher.join()
+    assert counting.gets == 2
+
+
+async def test_a_slow_identity_provider_holds_only_the_keys_own_threads(
+    counting, keypair, monkeypatch
+) -> None:
+    """Item 8 and the third review's must-fix 1, with the real `SigningKeys`: the fetch itself is
+    seen running in the keys' own threads (its thread's name, read inside the fetch, so threads an
+    earlier case left alive cannot satisfy it), and while it hangs the event loop never stalls (the
+    largest gap between ticks stays under 0.2 s); the hung sign-in is a 503 once the bound passes."""
+    import threading
+
+    import principal_auth
+    from principal_auth import SigningKeys, SigningKeysUnavailable
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    counting.delay = 2.0
+    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 0.6)
+    fetched_in: list[str] = []
+    real_fetch = SigningKeys._fetch
+
+    def watched(self):  # type: ignore[no-untyped-def]
+        fetched_in.append(threading.current_thread().name)
+        return real_fetch(self)
+
+    monkeypatch.setattr(SigningKeys, "_fetch", watched)
+    resolver = PrincipalResolver(
+        _entra_config(counting.url), claim_mapping=BY_EXTENSION, role_source=FakePeople()
+    )
+    gaps: list[float] = []
+
+    async def ticks() -> None:
+        last = time.monotonic()
+        for _ in range(12):
+            await asyncio.sleep(0.05)
+            now = time.monotonic()
+            gaps.append(now - last)
+            last = now
+
+    started = time.monotonic()
+    results = await asyncio.gather(
+        resolver.resolve_principal(sign_token(_key(keypair), entra_claims(**_GOOD))),
+        ticks(),
+        return_exceptions=True,
+    )
+    assert isinstance(results[0], SigningKeysUnavailable)
+    assert fetched_in and all(name.startswith("signing-keys") for name in fetched_in), fetched_in
+    assert max(gaps) < 0.2, max(gaps)
+    assert time.monotonic() - started < 1.5
+
+
+async def test_a_body_that_trickles_is_bounded_in_total_and_the_next_caller_fetches_again(
+    counting, keypair, monkeypatch
+) -> None:
+    """The third review's should-fix 4: a body arriving a few bytes at a time, each read inside a
+    read's own timeout and the whole past the bound, is a 503 once `KEYS_TIMEOUT_SECONDS` pass in
+    total (`in_keys_thread`'s own wait), and the stuck fetch is abandoned: the next caller fetches
+    at once from an identity provider that now answers, rather than waiting on it."""
+    import principal_auth
+    from principal_auth import SigningKeys, SigningKeysUnavailable, in_keys_thread
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    counting.trickle = 0.3  # ~2 KB in 64-byte pieces: some 10 s in all
+    monkeypatch.setattr(principal_auth, "KEYS_TIMEOUT_SECONDS", 1.0)
+    keys = SigningKeys(counting.url, 3600.0)
+    started = time.monotonic()
+    with pytest.raises(SigningKeysUnavailable, match="did not answer"):
+        await in_keys_thread(keys.key_for, _token(keypair))
+    assert time.monotonic() - started < 1.5
+    counting.trickle = 0.0
+    started = time.monotonic()
+    assert await in_keys_thread(keys.key_for, _token(keypair)) is not None
+    assert time.monotonic() - started < 0.8, "the next caller waited on the abandoned fetch"
+
+
+def test_an_unreachable_identity_provider_stays_a_503_for_an_unknown_key(counting, keypair) -> None:
+    """The third review's should-fix 5: with keys held and the identity provider gone, a token
+    naming a key not held is a 503 every time (the five-minute window opens only on a fetch that
+    succeeded), never a 401 that would sign the person out."""
+    from principal_auth import SigningKeys, SigningKeysUnavailable
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 3600.0, clock=lambda: now[0])
+    keys.key_for(_token(keypair))
+    (counting.directory / "jwks.json").unlink()
+    for _ in range(3):
+        with pytest.raises(SigningKeysUnavailable):
+            keys.key_for(_token(keypair, "rotated-in"))
+        now[0] += 1
+
+
+def test_concurrent_sign_ins_finding_the_keys_out_of_date_fetch_once(counting, keypair) -> None:
+    """The third review's note 10, measured: twelve sign-ins at once with nothing held, against an
+    identity provider slow enough that they overlap, make one request; so do twelve at once once
+    the keys' time is up."""
+    import threading
+
+    from principal_auth import SigningKeys
+
+    _publish(counting.directory, (keypair[0], "k1"))
+    counting.delay = 0.4
+    now = [1000.0]
+    keys = SigningKeys(counting.url, 600.0, clock=lambda: now[0])
+
+    def together() -> None:
+        go = threading.Barrier(12)
+
+        def one() -> None:
+            go.wait()
+            keys.key_for(_token(keypair))
+
+        threads = [threading.Thread(target=one) for _ in range(12)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    together()
+    assert counting.gets == 1
+    now[0] += 601
+    together()
+    assert counting.gets == 2
+
+
+@pytest.mark.parametrize(
+    "answer",
+    ["unreachable", "refused", "not-json", "no-keys", "no-usable-key", "encryption-only", "no-kid"],
+)
+def test_every_way_the_identity_provider_fails_to_give_keys_is_a_503(
+    counting, keypair, answer
+) -> None:
+    """Should-fix 7 (rule 15: the fake refuses as the real one can): unreachable, a refusal (404), a
+    200 whose body is not JSON, a set with no keys and one with no key this code can use are each
+    `identity_provider_unavailable`, a 503, never a 500 or a 401 that signs people out."""
+    from fastapi.testclient import TestClient
+    from services.api.app import app
+
+    url = counting.url
+    if answer == "unreachable":
+        url = "http://127.0.0.1:9/jwks.json"
+    elif answer == "not-json":
+        counting.body("<html>Service Unavailable</html>")
+    elif answer == "no-keys":
+        counting.body('{"keys": []}')
+    elif answer == "no-usable-key":
+        counting.body('{"keys": [{"kty": "unknown-kind", "kid": "k1"}]}')
+    elif answer in ("encryption-only", "no-kid"):
+        # A set PyJWT reads, but with no key a token can be checked by (the third review's note 8).
+        _publish(counting.directory, (keypair[0], "k1"))
+        import json
+
+        published = json.loads((counting.directory / "jwks.json").read_text())
+        jwk = published["keys"][0]
+        if answer == "encryption-only":
+            jwk["use"] = "enc"
+        else:
+            del jwk["kid"]
+        counting.body(json.dumps(published))
+    resolver = PrincipalResolver(
+        _config(url, oidc_issuer=ISSUER, oidc_audience=CLIENT_ID),
+        claim_mapping=BY_EXTENSION,
+        role_source=FakePeople(),
+    )
+    token = sign_token(_key(keypair), entra_claims(**_GOOD))
+    held = getattr(app.state, "principal_resolver", None)
+    app.state.principal_resolver = resolver
+    try:
+        response = TestClient(app).get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+    finally:
+        app.state.principal_resolver = held
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"]["error"] == "identity_provider_unavailable"
+
+
+def test_the_keys_url_must_be_http_or_https() -> None:
+    from principal_auth import SigningKeys
+
+    with pytest.raises(ValueError, match="http or https"):
+        SigningKeys("file:///etc/passwd", 60.0)

@@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
 
 #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
 #: reached only by the workloads `egress.reach` names for it.
-HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors", "sources")
+HOST_KINDS = ("always", "identity", "sign_in", "engines", "maps", "mail", "connectors", "sources")
 #: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
 KUBE_API = "kube-api"
 
@@ -201,6 +201,9 @@ class EgressHosts(_Strict):
     #: STS alone (a subset of `always`), for a workload that signs in by a role of its own and
     #: never reaches the buckets: the gateway's, for Bedrock (P11 part 2).
     identity: list[str] = Field(default_factory=list)
+    #: Entra ID's sign-in host, whose keys the Conduit reads to verify every token (ADR-148
+    #: Amendment 8, P10 part 2).
+    sign_in: list[str] = Field(default_factory=list)
     #: The pods rendered outside the workloads that have rows by their own pods' names (P9's
     #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
     others: list[str] = Field(default_factory=list)

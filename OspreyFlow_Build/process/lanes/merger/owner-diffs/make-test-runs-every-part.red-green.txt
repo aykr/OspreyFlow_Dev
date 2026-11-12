@@ -1,3 +1,4 @@
+# Rebased 12 November 2026 to apply after admin's P10 part 2 makefile.diff (apply that first); the shape and its red-then-green are unchanged.
 # make test with the pytest line forced to fail (PYTEST="sh -c ... exit 1", SKIP_JS=1), 12 November 2026
 == main's Makefile, the pytest line forced to fail
 (the pytest line, echoed)

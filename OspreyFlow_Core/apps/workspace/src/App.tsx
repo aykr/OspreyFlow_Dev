@@ -17,18 +17,22 @@ import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
 import {
   clearRedirectCallbackParams,
   completeSignInFromRedirect,
-  displayPrincipalFromUser,
+  displayPrincipal,
+  fetchResolvedPrincipal,
   isSignInRedirectCallback,
   renewSilently,
   signIn,
   signInAgainInPlace,
+  sessionFromUser,
   signOut,
-  type DisplayPrincipal,
+  type ResolvedPrincipal,
+  type SignedInSession,
 } from "./auth/userManager";
 import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SessionPrompt } from "./auth/SessionPrompt";
 import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
+import { DISABLED_ACCOUNT_WORDS, isDisabledRefusal } from "./auth/disabledAccount";
 import { SignInScreen } from "./auth/SignInScreen";
 import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
@@ -57,6 +61,7 @@ import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
+import { AccountUnread } from "./auth/AccountUnread";
 import { Toast } from "./design/primitives/Toast";
 import { Dossier } from "./dossier/Dossier";
 import { ExportPanel } from "./export/ExportPanel";
@@ -254,7 +259,13 @@ export function App() {
   const [rights, setRights] = useState<ReadonlySet<string> | null>(null);
   // Start waits for the rights, so a tile does not appear late or a single place go unnoticed.
   const [rightsSettled, setRightsSettled] = useState(false);
-  const [principal, setPrincipal] = useState<DisplayPrincipal | null>(null);
+  // ADR-148 Amendment 8: who signed in (names only, from the ID token), and what the Conduit resolved
+  // them to (`GET /v1/me`). The principal the Glass shows and gates on exists only once the Conduit
+  // has answered: while it is asked, or when it does not answer, there is none, so no role-gated
+  // control is offered. No role or clearance is ever read from a token.
+  const [session, setSession] = useState<SignedInSession | null>(null);
+  const [resolved, setResolved] = useState<ResolvedPrincipal | null>(null);
+  const principal = useMemo(() => (resolved ? displayPrincipal(session, resolved) : null), [session, resolved]);
   // `null` until the very first bootstrap effect below has run once — distinguishes "still
   // checking whether this load is a redirect callback" from "checked, and there is no session",
   // which is the difference between showing nothing for one frame and showing the sign-in screen
@@ -308,7 +319,7 @@ export function App() {
           clearRedirectCallbackParams();
           if (cancelled) return;
           setBearerToken(user.access_token);
-          setPrincipal(displayPrincipalFromUser(user));
+          setSession(sessionFromUser(user));
           scheduleRenewal(user.expires_at);
           restoreViewStateAfterReauth();
           const noted = takeNotedAddress();
@@ -363,6 +374,25 @@ export function App() {
   }
 
   const unauthenticatedHandledRef = useRef(false);
+  // ADR-148 Amendment 8: the principal as the Conduit resolved it, asked afresh for every token.
+  // Asked again on *Try again* (`resolvedAttempt`); when it does not answer the person is told so, and
+  // can try again or sign out (the orchestrator's review of P10 part 2, item 3).
+  const [resolvedAttempt, setResolvedAttempt] = useState(0);
+  const [resolvedFailed, setResolvedFailed] = useState(false);
+  useEffect(() => {
+    setResolved(null);
+    setResolvedFailed(false);
+    if (!bearerToken) return;
+    let cancelled = false;
+    void fetchResolvedPrincipal(API_BASE_URL, bearerToken).then((found) => {
+      if (cancelled) return;
+      setResolved(found);
+      setResolvedFailed(found === null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bearerToken, resolvedAttempt]);
   useEffect(() => {
     if (!bearerToken) {
       setRights(null);
@@ -403,8 +433,8 @@ export function App() {
   const sessionPromptRef = useRef<"ended" | "unreachable" | null>(null);
   const [sessionPromptBusy, setSessionPromptBusy] = useState(false);
   const [sessionPromptProblem, setSessionPromptProblem] = useState<string | null>(null);
-  const principalRef = useRef(principal);
-  principalRef.current = principal;
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const askToSignInAgain = useCallback((why: "ended" | "unreachable" | null) => {
     sessionPromptRef.current = why;
     setSessionPrompt(why);
@@ -412,12 +442,12 @@ export function App() {
   }, []);
   const adoptRenewedUser = useCallback(
     (user: RenewedUser) => {
-      const signedIn = principalRef.current;
+      const signedIn = sessionRef.current;
       if (signedIn && user.profile.sub && user.profile.sub !== signedIn.sub) {
         // Somebody else signed in, in the sign-in window: a new sign-in, not a renewal.
         renewedRef.current = null;
         setBearerToken(user.access_token);
-        setPrincipal(displayPrincipalFromUser(user as never));
+        setSession(sessionFromUser(user as never));
       } else {
         renewedRef.current = { for: bearerTokenRef.current, token: user.access_token };
       }
@@ -459,14 +489,23 @@ export function App() {
    * `true` when a renewed token is in place, so the refused call can be made once more. The two need
    * different reactions, and a bare 401 cannot tell them apart on its own — only "has this session
    * ever produced a usable token" can. */
-  const renewAfterRefusal = useCallback(async (): Promise<boolean> => {
+  const renewAfterRefusal = useCallback(async (refusal?: Response): Promise<boolean> => {
     if (isDevBypass) return false;
+    // ADR-148 Amendment 8: disabled in this deployment, said only when the Conduit says so; no
+    // renewal is tried, since Entra would sign them in again to the same refusal.
+    if (refusal && (await isDisabledRefusal(refusal))) {
+      unauthenticatedHandledRef.current = true;
+      setBearerToken("");
+      setSession(null);
+      setSignInReason(DISABLED_ACCOUNT_WORDS);
+      return false;
+    }
     if (!hasResolvedAPrincipalOnceRef.current) {
       // Once per sign-in: several calls refused together say it once.
       if (unauthenticatedHandledRef.current) return false;
       unauthenticatedHandledRef.current = true;
       setBearerToken("");
-      setPrincipal(null);
+      setSession(null);
       setSignInReason(
         "Your sign-in could not be used to reach the workspace. Check with your " +
           "administrator that this deployment's identity provider is configured correctly.",
@@ -1494,10 +1533,16 @@ export function App() {
       onOpenOperations={rights?.has("operate_schedules") ? openOperations : undefined}
     />
   ) : null;
+  // ADR-148 Amendment 8: without a resolved principal nothing is offered, but the person is never
+  // left without words or a way out.
+  const accountUnread =
+    !isDevBypass && !principal && resolvedFailed ? (
+      <AccountUnread onTryAgain={() => setResolvedAttempt((n) => n + 1)} onSignOut={() => void signOut()} />
+    ) : null;
   const account = (
     <>
       {needsYou}
-      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null}
+      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : accountUnread}
     </>
   );
   const startScreenShown =
@@ -1682,6 +1727,7 @@ export function App() {
               // button that keeps the clearance in view. The Glass derives nothing from any of it.
               <AccountMenu principal={principal} onSignOut={() => void signOut()} />
             )}
+            {accountUnread}
           </>
         }
       />

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from schemas.deployment import OspreyConfig, Profile, self_contained_small
+from schemas.deployment import EntraSignInConfig, OspreyConfig, Profile, self_contained_small
 
 #: Caddy 2.11.4 (Apache-2.0), released 3 June 2026.
 PROXY_IMAGE = "caddy:2.11.4-alpine"
@@ -318,10 +318,15 @@ def organisation_label(config: OspreyConfig) -> str | None:
     return governance.organisation_provider.label.strip() or None
 
 
-def render_glass_settings(config: OspreyConfig) -> str:
+def render_glass_settings(config: OspreyConfig, *, entra: EntraSignInConfig | None = None) -> str:
     """What the Glass reads at start (`/deployment.json`): where its identity provider is, the
     marking it shows before any case data is on screen, the welcome page's settings and the
-    deployment's appearance (ADR-132)."""
+    deployment's appearance (ADR-132).
+
+    **On Entra ID sign-in** (`entra`, the cloud-platform profile's `claims`; ADR-148 Amendment 8)
+    the realm's address is replaced by `sign_in`: Entra's authority, the Glass's own app
+    registration and the scope it asks the API for. Without it the file is byte for byte what it
+    was."""
     welcome = config.welcome
     links = {
         name: address
@@ -345,6 +350,15 @@ def render_glass_settings(config: OspreyConfig) -> str:
         "appearance": config.appearance.model_dump(),
         "version": deployment_version(),
     }
+    if entra is not None:
+        del settings["identity_provider"], settings["realm"]
+        settings["sign_in"] = {
+            "kind": "entra",
+            "authority": f"https://login.microsoftonline.com/{entra.tenant_id}/v2.0",
+            "client_id": entra.client_id,
+            # `profile` for the names the Glass shows (`preferred_username`, `given_name`).
+            "scope": f"openid profile {entra.id_uri}/{entra.scope}",
+        }
     return json.dumps(settings, indent=2) + "\n"
 
 

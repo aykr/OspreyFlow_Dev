@@ -1236,7 +1236,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
     _gateway_database(config, services)
     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
         services["keycloak-db"] = _keycloak_database_step(config)
-    if config.external.postgres is not None:
+    if config.external.postgres is not None and "keycloak" in services:
+        # Not rendered on the cloud-platform profile, whose people sign in with Entra ID.
         services["keycloak"]["environment"]["KC_DB_URL"] = _keycloak_jdbc_url(config)
     _drop_absent_dependencies(services)
     _place_on_networks(config, services)

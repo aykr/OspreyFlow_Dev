@@ -1,0 +1,975 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_disabled_words_match_the_glass.py b/OspreyFlow_Build/tests/services/api/test_disabled_words_match_the_glass.py
+new file mode 100644
+index 0000000..ed00a11
+--- /dev/null
++++ b/OspreyFlow_Build/tests/services/api/test_disabled_words_match_the_glass.py
+@@ -0,0 +1,30 @@
++"""The Glass tells a person disabled in this deployment so only when the Conduit's 401 carries
++`principal_auth`'s own words, compared exactly (`apps/workspace/src/auth/disabledAccount.ts`;
++ADR-148 Amendment 8). The two are in two languages: this holds them equal, so a change of words
++on either side turns it red rather than quietly sending a disabled person to the misconfiguration
++message."""
++
++from __future__ import annotations
++
++import re
++from pathlib import Path
++
++import pytest
++
++from principal_auth import PrincipalResolutionError, StoredPerson, principal_from_claims
++from tests.services.api.test_auth_entra_claims import _GOOD, BY_EXTENSION, entra_claims
++
++GLASS = (
++    Path(__file__).resolve().parents[4]
++    / "OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts"
++)
++
++
++def test_the_glass_names_the_conduits_disabled_words_exactly() -> None:
++    found = re.search(r'CONDUIT_DISABLED_DETAIL = "([^"]+)"', GLASS.read_text(encoding="utf-8"))
++    assert found
++    with pytest.raises(PrincipalResolutionError) as refused:
++        principal_from_claims(
++            {**entra_claims(**_GOOD)}, BY_EXTENSION, StoredPerson(roles=(), disabled=True)
++        )
++    assert str(refused.value) == found.group(1)
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.html b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.html
+new file mode 100644
+index 0000000..f0b6d97
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.html
+@@ -0,0 +1,11 @@
++<!doctype html>
++<html lang="en" data-theme="dark">
++  <head>
++    <meta charset="UTF-8" />
++    <title>Account unread harness</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/keyboard/account-unread-harness.tsx"></script>
++  </body>
++</html>
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.tsx
+new file mode 100644
+index 0000000..38833d7
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/account-unread-harness.tsx
+@@ -0,0 +1,42 @@
++// The top bar when the Conduit cannot say who the person is (ADR-148 Amendment 8): the words, *Try
++// again* and *Sign out*, on their own, for `account-unread.spec.ts` (rule 13) and the every-harness axe
++// scan in both themes and under GOV.UK (`?brand=govuk`). What each button did is recorded on
++// `window.__acted`.
++import { createRoot } from "react-dom/client";
++
++import "../src/design/tokens.css";
++import "../src/design/primitives.css";
++import "../src/shell/chrome.css";
++import { AccountUnread } from "../src/auth/AccountUnread";
++import { applyHarnessBrand } from "./brandHarness";
++
++await applyHarnessBrand();
++
++const acted: string[] = [];
++(window as unknown as { __acted: string[] }).__acted = acted;
++
++function Harness() {
++  return (
++    <header className="app-header top-bar" data-app="glass">
++      <h1 className="label" style={{ margin: 0 }}>
++        Account unread harness
++      </h1>
++      <div
++        className="app-header__account"
++        style={{
++          display: "flex",
++          alignItems: "center",
++          gap: "var(--sp-8)",
++          marginLeft: "auto",
++        }}
++      >
++        <AccountUnread
++          onTryAgain={() => acted.push("try-again")}
++          onSignOut={() => acted.push("sign-out")}
++        />
++      </div>
++    </header>
++  );
++}
++
++createRoot(document.getElementById("root")!).render(<Harness />);
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/account-unread.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/account-unread.spec.ts
+new file mode 100644
+index 0000000..359dcdf
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/account-unread.spec.ts
+@@ -0,0 +1,49 @@
++// The account-unread notice by keyboard alone (ADR-148 Amendment 8; `CLAUDE.md` rule 13): when the
++// Conduit cannot say who the person is, *Try again* and *Sign out* are each reached by Tab and pressed
++// with the keyboard. No `page.mouse`, no `.click()`.
++import { expect, test, type Page } from "@playwright/test";
++
++import {
++  ACCOUNT_UNREAD_ACTIONS,
++  assertAllCovered,
++  registerCovered,
++} from "./actionRegistry";
++
++const REGISTRY = "ACCOUNT_UNREAD_ACTIONS";
++const HARNESS = "/keyboard/account-unread-harness.html";
++
++function acted(page: Page): Promise<string[]> {
++  return page.evaluate(
++    () => (window as unknown as { __acted: string[] }).__acted,
++  );
++}
++
++test("the account is asked for again by keyboard when it could not be read", async ({
++  page,
++}) => {
++  await page.goto(HARNESS);
++  await expect(page.getByRole("alert")).toContainText(
++    "Your account could not be read just now",
++  );
++  await page.keyboard.press("Tab");
++  await expect(page.getByRole("button", { name: "Try again" })).toBeFocused();
++  await page.keyboard.press("Enter");
++  expect(await acted(page)).toEqual(["try-again"]);
++  registerCovered(REGISTRY, "try-reading-the-account-again-by-keyboard");
++});
++
++test("Sign out is reached by keyboard with no account read", async ({
++  page,
++}) => {
++  await page.goto(HARNESS);
++  await page.keyboard.press("Tab");
++  await page.keyboard.press("Tab");
++  await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
++  await page.keyboard.press("Space");
++  expect(await acted(page)).toEqual(["sign-out"]);
++  registerCovered(REGISTRY, "sign-out-with-no-account-read-by-keyboard");
++});
++
++test("every registered account-unread action has its own proving test case above", () => {
++  assertAllCovered("ACCOUNT_UNREAD_ACTIONS", ACCOUNT_UNREAD_ACTIONS);
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
+index 4059b22..be4c19b 100644
+--- a/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
+@@ -86,6 +86,8 @@ beforeEach(() => {
+   // throw while the count is taken.
+   const answers: [RegExp, unknown][] = [
+     [/\/v1\/me\/rights$/, { rights: RIGHTS }],
++    // ADR-148 Amendment 8: the account menu shows the Conduit's resolved principal, never the token's.
++    [/\/v1\/me$/, { id: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] }],
+     [/\/v1\/ontology$/, { entity_types: [], edge_types: [] }],
+     [/\/v1\/handling-scheme$/, { name: "test", classification: ["OFFICIAL"], handling_codes: {} }],
+     [/\/v1\/investigations$/, [{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" }]],
+diff --git a/OspreyFlow_Core/apps/workspace/src/App.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
+index 4ed79b8..20664d9 100644
+--- a/OspreyFlow_Core/apps/workspace/src/App.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
+@@ -931,3 +931,123 @@ describe("windows stay signed in: the token is renewed silently before it expire
+     expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
+   });
+ });
++
++// ADR-148 Amendment 8: the principal the Glass shows and gates on is the Conduit's (`GET /v1/me`), never the
++// token's claims. While it is asked, or when it does not answer, the Glass shows no clearance or role and
++// offers nothing a role gates; the token below claims an administrator with SECRET clearance, and is never
++// believed.
++describe("the principal shown is the Conduit's resolved one (ADR-148 Amendment 8)", () => {
++  const tokenClaimingAdmin = {
++    access_token: "a-token",
++    profile: { sub: "pairwise-sub", preferred_username: "ana", given_name: "Ana", clearance: "SECRET",
++               org_unit: "unit-9", roles: ["osprey-admin"], receivable_handling_codes: ["X"] },  // prettier-ignore
++  } as never;
++  const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
++  const serve = (me: () => Promise<Response>) =>
++    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
++      const url = String(input).split("?")[0]!;
++      if (url.endsWith("/v1/me")) return me();
++      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate"] });
++      return new Promise<Response>(() => undefined);
++    });
++
++  beforeEach(() => {
++    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
++    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue(tokenClaimingAdmin);
++    sessionStorage.removeItem("ospreyflow.investigationId");
++  });
++
++  const greeting = async () => (await screen.findByText(/^Signed in as/)).closest("p")!.textContent ?? "";
++
++  test("while /v1/me is asked: no clearance, no role and no account menu, whatever the token claims", async () => {
++    serve(() => new Promise<Response>(() => undefined));
++    render(<App />);
++    const said = await greeting();
++    expect(said).not.toContain("SECRET");
++    expect(said).toContain("clearance none");
++    expect(screen.queryByRole("button", { name: /^ana/ })).toBeNull();
++  });
++
++  test("when /v1/me does not answer: the same, never the token's", async () => {
++    serve(() => json({}, 503));
++    render(<App />);
++    await vi.waitFor(async () => expect(await greeting()).toContain("clearance none"));
++    expect(await greeting()).not.toContain("SECRET");
++    expect(screen.queryByRole("button", { name: /^ana/ })).toBeNull();
++  });
++
++  test("once /v1/me answers: its clearance and roles, the token's names", async () => {
++    serve(() => json({ id: "oid-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] }));
++    render(<App />);
++    await vi.waitFor(async () => expect(await greeting()).toContain("clearance OFFICIAL"));
++    expect(await greeting()).not.toContain("SECRET");
++    expect(screen.getByRole("button", { name: /^ana/ }).textContent).toContain("OFFICIAL");
++  });
++});
++
++// ADR-148 Amendment 8 (the orchestrator's ruling 4): a person disabled in this deployment is told so, only
++// when the Conduit's 401 says so; any other refusal keeps the words it had.
++describe("a person disabled in this deployment is told so (ADR-148 Amendment 8)", () => {
++  beforeEach(() => {
++    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
++    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
++      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
++    } as never);
++  });
++
++  test("the Conduit's disabled refusal is shown in its own words, not as a misconfiguration", async () => {
++    vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ detail: "this account is disabled in this deployment: ask an administrator" }), { status: 401 }),
++    );
++    render(<App />);
++    expect(await screen.findByText(/Your account is disabled in this deployment\. Ask an administrator\./)).toBeTruthy();
++    expect(screen.queryByText(/configured correctly/)).toBeNull();
++  });
++
++  test("any other refusal is never taken for a disabled account", async () => {
++    vi.spyOn(globalThis, "fetch").mockResolvedValue(
++      new Response(JSON.stringify({ detail: "token rejected: Invalid audience" }), { status: 401 }),
++    );
++    render(<App />);
++    expect(await screen.findByText(/could not be used to reach the workspace/i)).toBeTruthy();
++    expect(screen.queryByText(/disabled in this deployment/)).toBeNull();
++  });
++});
++
++// The orchestrator's review of P10 part 2, item 3: a /v1/me that does not answer once never strands the
++// person: words, Try again (which reads it afresh) and Sign out, with nothing role-gated offered meanwhile.
++describe("when the Conduit cannot say who you are (ADR-148 Amendment 8)", () => {
++  beforeEach(() => {
++    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
++    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
++      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
++    } as never);
++    vi.mocked(userManager.signOut).mockReset().mockResolvedValue(undefined);
++    sessionStorage.removeItem("ospreyflow.investigationId");
++  });
++
++  test("it says so, offers Try again and Sign out, and Try again reads it afresh", async () => {
++    let answers = 0;
++    const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
++    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
++      const url = String(input).split("?")[0]!;
++      if (url.endsWith("/v1/me")) {
++        answers += 1;
++        return answers === 1
++          ? json({}, 503)
++          : json({ id: "oid-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] });
++      }
++      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate"] });
++      return new Promise<Response>(() => undefined);
++    });
++    render(<App />);
++    const notice = await screen.findByRole("alert");
++    expect(notice.textContent).toContain("Your account could not be read just now");
++    fireEvent.click(within(notice).getByRole("button", { name: "Sign out" }));
++    expect(vi.mocked(userManager.signOut)).toHaveBeenCalledTimes(1);
++    fireEvent.click(within(notice).getByRole("button", { name: "Try again" }));
++    expect((await screen.findByRole("button", { name: /^ana/ })).textContent).toContain("OFFICIAL");
++    expect(answers).toBe(2);
++    expect(screen.queryByText("Your account could not be read just now, so nothing is offered.")).toBeNull();
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
+index 460c470..9c8d18f 100644
+--- a/OspreyFlow_Core/apps/workspace/src/App.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
+@@ -17,18 +17,22 @@ import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
+ import {
+   clearRedirectCallbackParams,
+   completeSignInFromRedirect,
+-  displayPrincipalFromUser,
++  displayPrincipal,
++  fetchResolvedPrincipal,
+   isSignInRedirectCallback,
+   renewSilently,
+   signIn,
+   signInAgainInPlace,
++  sessionFromUser,
+   signOut,
+-  type DisplayPrincipal,
++  type ResolvedPrincipal,
++  type SignedInSession,
+ } from "./auth/userManager";
+ import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
+ import { installUnauthorisedWatch } from "./auth/unauthorised";
+ import { SessionPrompt } from "./auth/SessionPrompt";
+ import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
++import { DISABLED_ACCOUNT_WORDS, isDisabledRefusal } from "./auth/disabledAccount";
+ import { SignInScreen } from "./auth/SignInScreen";
+ import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
+ import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
+@@ -57,6 +61,7 @@ import { PlaceSwitcher } from "./shell/PlaceSwitcher";
+ import { useLastGlassView } from "./shell/placeMemory";
+ import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
+ import { Button } from "./design/primitives/Button";
++import { AccountUnread } from "./auth/AccountUnread";
+ import { Toast } from "./design/primitives/Toast";
+ import { Dossier } from "./dossier/Dossier";
+ import { ExportPanel } from "./export/ExportPanel";
+@@ -254,7 +259,13 @@ export function App() {
+   const [rights, setRights] = useState<ReadonlySet<string> | null>(null);
+   // Start waits for the rights, so a tile does not appear late or a single place go unnoticed.
+   const [rightsSettled, setRightsSettled] = useState(false);
+-  const [principal, setPrincipal] = useState<DisplayPrincipal | null>(null);
++  // ADR-148 Amendment 8: who signed in (names only, from the ID token), and what the Conduit resolved
++  // them to (`GET /v1/me`). The principal the Glass shows and gates on exists only once the Conduit
++  // has answered: while it is asked, or when it does not answer, there is none, so no role-gated
++  // control is offered. No role or clearance is ever read from a token.
++  const [session, setSession] = useState<SignedInSession | null>(null);
++  const [resolved, setResolved] = useState<ResolvedPrincipal | null>(null);
++  const principal = useMemo(() => (resolved ? displayPrincipal(session, resolved) : null), [session, resolved]);
+   // `null` until the very first bootstrap effect below has run once — distinguishes "still
+   // checking whether this load is a redirect callback" from "checked, and there is no session",
+   // which is the difference between showing nothing for one frame and showing the sign-in screen
+@@ -308,7 +319,7 @@ export function App() {
+           clearRedirectCallbackParams();
+           if (cancelled) return;
+           setBearerToken(user.access_token);
+-          setPrincipal(displayPrincipalFromUser(user));
++          setSession(sessionFromUser(user));
+           scheduleRenewal(user.expires_at);
+           restoreViewStateAfterReauth();
+           const noted = takeNotedAddress();
+@@ -363,6 +374,25 @@ export function App() {
+   }
+ 
+   const unauthenticatedHandledRef = useRef(false);
++  // ADR-148 Amendment 8: the principal as the Conduit resolved it, asked afresh for every token.
++  // Asked again on *Try again* (`resolvedAttempt`); when it does not answer the person is told so, and
++  // can try again or sign out (the orchestrator's review of P10 part 2, item 3).
++  const [resolvedAttempt, setResolvedAttempt] = useState(0);
++  const [resolvedFailed, setResolvedFailed] = useState(false);
++  useEffect(() => {
++    setResolved(null);
++    setResolvedFailed(false);
++    if (!bearerToken) return;
++    let cancelled = false;
++    void fetchResolvedPrincipal(API_BASE_URL, bearerToken).then((found) => {
++      if (cancelled) return;
++      setResolved(found);
++      setResolvedFailed(found === null);
++    });
++    return () => {
++      cancelled = true;
++    };
++  }, [bearerToken, resolvedAttempt]);
+   useEffect(() => {
+     if (!bearerToken) {
+       setRights(null);
+@@ -403,8 +433,8 @@ export function App() {
+   const sessionPromptRef = useRef<"ended" | "unreachable" | null>(null);
+   const [sessionPromptBusy, setSessionPromptBusy] = useState(false);
+   const [sessionPromptProblem, setSessionPromptProblem] = useState<string | null>(null);
+-  const principalRef = useRef(principal);
+-  principalRef.current = principal;
++  const sessionRef = useRef(session);
++  sessionRef.current = session;
+   const askToSignInAgain = useCallback((why: "ended" | "unreachable" | null) => {
+     sessionPromptRef.current = why;
+     setSessionPrompt(why);
+@@ -412,12 +442,12 @@ export function App() {
+   }, []);
+   const adoptRenewedUser = useCallback(
+     (user: RenewedUser) => {
+-      const signedIn = principalRef.current;
++      const signedIn = sessionRef.current;
+       if (signedIn && user.profile.sub && user.profile.sub !== signedIn.sub) {
+         // Somebody else signed in, in the sign-in window: a new sign-in, not a renewal.
+         renewedRef.current = null;
+         setBearerToken(user.access_token);
+-        setPrincipal(displayPrincipalFromUser(user as never));
++        setSession(sessionFromUser(user as never));
+       } else {
+         renewedRef.current = { for: bearerTokenRef.current, token: user.access_token };
+       }
+@@ -459,14 +489,23 @@ export function App() {
+    * `true` when a renewed token is in place, so the refused call can be made once more. The two need
+    * different reactions, and a bare 401 cannot tell them apart on its own — only "has this session
+    * ever produced a usable token" can. */
+-  const renewAfterRefusal = useCallback(async (): Promise<boolean> => {
++  const renewAfterRefusal = useCallback(async (refusal?: Response): Promise<boolean> => {
+     if (isDevBypass) return false;
++    // ADR-148 Amendment 8: disabled in this deployment, said only when the Conduit says so; no
++    // renewal is tried, since Entra would sign them in again to the same refusal.
++    if (refusal && (await isDisabledRefusal(refusal))) {
++      unauthenticatedHandledRef.current = true;
++      setBearerToken("");
++      setSession(null);
++      setSignInReason(DISABLED_ACCOUNT_WORDS);
++      return false;
++    }
+     if (!hasResolvedAPrincipalOnceRef.current) {
+       // Once per sign-in: several calls refused together say it once.
+       if (unauthenticatedHandledRef.current) return false;
+       unauthenticatedHandledRef.current = true;
+       setBearerToken("");
+-      setPrincipal(null);
++      setSession(null);
+       setSignInReason(
+         "Your sign-in could not be used to reach the workspace. Check with your " +
+           "administrator that this deployment's identity provider is configured correctly.",
+@@ -1494,10 +1533,16 @@ export function App() {
+       onOpenOperations={rights?.has("operate_schedules") ? openOperations : undefined}
+     />
+   ) : null;
++  // ADR-148 Amendment 8: without a resolved principal nothing is offered, but the person is never
++  // left without words or a way out.
++  const accountUnread =
++    !isDevBypass && !principal && resolvedFailed ? (
++      <AccountUnread onTryAgain={() => setResolvedAttempt((n) => n + 1)} onSignOut={() => void signOut()} />
++    ) : null;
+   const account = (
+     <>
+       {needsYou}
+-      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null}
++      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : accountUnread}
+     </>
+   );
+   const startScreenShown =
+@@ -1682,6 +1727,7 @@ export function App() {
+               // button that keeps the clearance in view. The Glass derives nothing from any of it.
+               <AccountMenu principal={principal} onSignOut={() => void signOut()} />
+             )}
++            {accountUnread}
+           </>
+         }
+       />
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx b/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx
+index 8e18f37..e524bfa 100644
+--- a/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx
+@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+ import { afterEach, describe, expect, it, vi } from "vitest";
+ 
+ import { AccountMenu } from "./AccountMenu";
+-import { displayPrincipalFromUser } from "./userManager";
++import { sessionFromUser } from "./userManager";
+ 
+ afterEach(cleanup);
+ 
+@@ -51,17 +51,17 @@ describe("AccountMenu", () => {
+   });
+ });
+ 
+-describe("displayPrincipalFromUser", () => {
++describe("sessionFromUser", () => {
+   it("reads the user name from the token's preferred_username", () => {
+-    const principal = displayPrincipalFromUser({
++    const session = sessionFromUser({
+       profile: { sub: "s1", preferred_username: "analyst-1", clearance: "OFFICIAL" },
+     } as never);
+-    expect(principal.username).toBe("analyst-1");
++    expect(session.username).toBe("analyst-1");
+   });
+ 
+   it("leaves the user name empty when the token has none", () => {
+-    const principal = displayPrincipalFromUser({ profile: { sub: "s1" } } as never);
+-    expect(principal.username).toBe("");
++    const session = sessionFromUser({ profile: { sub: "s1" } } as never);
++    expect(session.username).toBe("");
+   });
+ });
+ 
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/AccountUnread.tsx b/OspreyFlow_Core/apps/workspace/src/auth/AccountUnread.tsx
+new file mode 100644
+index 0000000..e28a7f8
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/AccountUnread.tsx
+@@ -0,0 +1,27 @@
++// ADR-148 Amendment 8 (the orchestrator's reviews of P10 part 2): when the Conduit cannot say who the
++// person is (`GET /v1/me` did not answer), nothing it gates is offered, and the person is told so in
++// words, with *Try again* (which asks again) and *Sign out* within reach. Its own component so the
++// keyboard walkthrough and the axe scan reach it on a harness (`account-unread-harness.html`; rule 13).
++import { Button } from "../design/primitives/Button";
++
++export const ACCOUNT_UNREAD_WORDS =
++  "Your account could not be read just now, so nothing is offered.";
++
++export function AccountUnread({
++  onTryAgain,
++  onSignOut,
++}: {
++  onTryAgain: () => void;
++  onSignOut: () => void;
++}) {
++  return (
++    <div
++      role="alert"
++      style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}
++    >
++      <span>{ACCOUNT_UNREAD_WORDS}</span>
++      <Button onClick={onTryAgain}>Try again</Button>
++      <Button onClick={onSignOut}>Sign out</Button>
++    </div>
++  );
++}
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts
+new file mode 100644
+index 0000000..fb98f2b
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.test.ts
+@@ -0,0 +1,22 @@
++// ADR-148 Amendment 8: the disabled-account words only when the Conduit's 401 says exactly that.
++import { describe, expect, it } from "vitest";
++
++import { CONDUIT_DISABLED_DETAIL, isDisabledRefusal } from "./disabledAccount";
++
++const answer = (status: number, body: string) => new Response(body, { status });
++
++describe("a refusal is a disabled account's", () => {
++  it("only on a 401 whose detail is the Conduit's words exactly", async () => {
++    expect(await isDisabledRefusal(answer(401, JSON.stringify({ detail: CONDUIT_DISABLED_DETAIL })))).toBe(true);
++  });
++
++  it.each([
++    ["another 401", answer(401, JSON.stringify({ detail: "token rejected: Signature has expired" }))],
++    ["the words on a 403", answer(403, JSON.stringify({ detail: CONDUIT_DISABLED_DETAIL }))],
++    ["the words inside other words", answer(401, JSON.stringify({ detail: `x ${CONDUIT_DISABLED_DETAIL}` }))],
++    ["a body that is not JSON", answer(401, "<html>")],
++    ["no body", answer(401, "")],
++  ])("never from %s", async (_why, refusal) => {
++    expect(await isDisabledRefusal(refusal)).toBe(false);
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts
+new file mode 100644
+index 0000000..698f310
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/disabledAccount.ts
+@@ -0,0 +1,21 @@
++// ADR-148 Amendment 8: a person an administrator disabled in this deployment (Entra ID sign-in, where
++// Entra still signs them in) is told so, and only when the Conduit says exactly that: its 401 carries
++// `principal_auth`'s own words. Any other refusal keeps its own handling; none is read as this one.
++
++/** `principal_auth`'s words for a person disabled in this deployment (`principal_from_claims`). */
++export const CONDUIT_DISABLED_DETAIL = "this account is disabled in this deployment: ask an administrator";
++
++/** What the sign-in screen says to them. */
++export const DISABLED_ACCOUNT_WORDS = "Your account is disabled in this deployment. Ask an administrator.";
++
++/** Whether a refusal is the Conduit saying this person is disabled here: a 401 whose `detail` is those
++ * words exactly, never a guess from any other status, body or failure to read one. */
++export async function isDisabledRefusal(refusal: Response): Promise<boolean> {
++  if (refusal.status !== 401) return false;
++  try {
++    const body = (await refusal.json()) as { detail?: unknown };
++    return body.detail === CONDUIT_DISABLED_DETAIL;
++  } catch {
++    return false;
++  }
++}
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
+index 48e6e7e..f4f18db 100644
+--- a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
++++ b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
+@@ -11,6 +11,8 @@ import {
+   deploymentWelcome,
+   loadDeploymentSettings,
+   oidcAuthority,
++  oidcClientId,
++  oidcScope,
+   resetDeploymentSettings,
+ } from "./oidcConfig";
+ 
+@@ -160,3 +162,41 @@ describe("the deployment's appearance", () => {
+     expect(deploymentAppearance()).toEqual({ brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" });
+   });
+ });
++
++// ADR-148 Amendment 8: Entra ID's authority, the Glass's app registration and this API's scope, read from the
++// deployment's file only when it names Entra; Keycloak's sign-in is exactly as it was.
++describe("the sign-in on Entra ID", () => {
++  afterEach(() => resetDeploymentSettings());
++  const TENANT = "00000000-1111-4222-8333-444444444444";
++  const ENTRA = {
++    kind: "entra",
++    authority: `https://login.microsoftonline.com/${TENANT}/v2.0`,
++    client_id: "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
++    scope: "openid profile api://aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/access_as_user",
++  };
++
++  it("is Entra's authority, the Glass's registration and this API's scope", async () => {
++    await loadDeploymentSettings(answering(200, JSON.stringify({ sign_in: ENTRA, marking: "OFFICIAL" })));
++    expect([oidcAuthority(), oidcClientId(), oidcScope()]).toEqual([ENTRA.authority, ENTRA.client_id, ENTRA.scope]);
++    expect(deploymentMarking()).toBe("OFFICIAL");
++  });
++
++  it("is Keycloak's, exactly as before, when the file names no Entra sign-in", async () => {
++    await loadDeploymentSettings(
++      answering(200, JSON.stringify({ identity_provider: "https://id.osprey.test", realm: "osprey" })),
++    );
++    expect([oidcAuthority(), oidcClientId(), oidcScope()]).toEqual(["https://id.osprey.test/realms/osprey", "osprey-glass", "openid"]);
++  });
++
++  it.each([
++    ["another kind", { ...ENTRA, kind: "keycloak" }],
++    ["an authority that is not Entra's", { ...ENTRA, authority: "https://login.example.test/x/v2.0" }],
++    ["no client", { ...ENTRA, client_id: "" }],
++    ["no scope", { ...ENTRA, scope: undefined }],
++  ])("is not taken from %s", async (_why, signIn) => {
++    await loadDeploymentSettings(
++      answering(200, JSON.stringify({ identity_provider: "https://id.osprey.test", realm: "osprey", sign_in: signIn })),
++    );
++    expect([oidcAuthority(), oidcClientId(), oidcScope()]).toEqual(["https://id.osprey.test/realms/osprey", "osprey-glass", "openid"]);
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.ts b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.ts
+index b82124b..a2a5ea2 100644
+--- a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.ts
++++ b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.ts
+@@ -32,9 +32,18 @@ import { PLAIN_APPEARANCE, readAppearance, type Appearance } from "../brand/bran
+ 
+ const DEFAULT_KEYCLOAK_PORT = 8081;
+ 
++/** ADR-148 Amendment 8: a deployment whose people sign in with Entra ID names its authority, the Glass's
++ * own app registration and the one scope it asks this API for; `harness/site.py` writes them only then. */
++interface EntraSignIn {
++  authority: string;
++  clientId: string;
++  scope: string;
++}
++
+ interface DeploymentSettings {
+   identityProvider: string;
+   realm: string;
++  entra: EntraSignIn | null;
+   /** The marking a surface with no case data shows (ADR-115 decision 2). */
+   marking: string | null;
+   welcome: WelcomeSettingsRead;
+@@ -87,6 +96,18 @@ function readWelcome(body: Record<string, unknown>): WelcomeSettingsRead {
+   };
+ }
+ 
++/** Entra's settings, only when all three are given and the authority is Entra's own address: anything
++ * else is no Entra sign-in, and the Glass signs in as it always has. */
++function readEntraSignIn(raw: unknown): EntraSignIn | null {
++  if (typeof raw !== "object" || !raw) return null;
++  const given = raw as { kind?: unknown; authority?: unknown; client_id?: unknown; scope?: unknown };
++  if (given.kind !== "entra") return null;
++  const { authority, client_id: clientId, scope } = given;
++  if (typeof authority !== "string" || !/^https:\/\/login\.microsoftonline\.com\/[0-9a-f-]{36}\/v2\.0$/.test(authority)) return null;
++  if (typeof clientId !== "string" || !clientId || typeof scope !== "string" || !scope) return null;
++  return { authority, clientId, scope };
++}
++
+ let deployment: DeploymentSettings | null = null;
+ 
+ /** Reads `/deployment.json` once. A missing or unreadable file (the development server, which
+@@ -106,10 +127,13 @@ export async function loadDeploymentSettings(
+       welcome?: unknown;
+       appearance?: unknown;
+       version?: unknown;
++      sign_in?: unknown;
+     };
+-    if (typeof body.identity_provider === "string" && body.identity_provider) {
++    const entra = readEntraSignIn(body.sign_in);
++    if ((typeof body.identity_provider === "string" && body.identity_provider) || entra) {
+       deployment = {
+-        identityProvider: body.identity_provider.replace(/\/+$/, ""),
++        entra,
++        identityProvider: typeof body.identity_provider === "string" ? body.identity_provider.replace(/\/+$/, "") : "",
+         realm:
+           typeof body.realm === "string" && body.realm ? body.realm : "osprey",
+         marking: typeof body.marking === "string" && body.marking ? body.marking : null,
+@@ -163,9 +187,21 @@ export function oidcRealm(): string {
+ export const GLASS_CLIENT_ID = "osprey-glass";
+ 
+ export function oidcAuthority(): string {
++  if (deployment?.entra) return deployment.entra.authority;
+   return `${identityProviderOrigin()}/realms/${oidcRealm()}`;
+ }
+ 
++/** The Glass's own client: `osprey-glass` in the deployment's realm, or its Entra app registration. */
++export function oidcClientId(): string {
++  return deployment?.entra?.clientId ?? GLASS_CLIENT_ID;
++}
++
++/** What the Glass asks for: `openid` from the realm, or, on Entra ID, this API's delegated scope too, without
++ * which its token carries no `scp` and the Conduit refuses it as no person's (ADR-148 Amendment 6 point 7). */
++export function oidcScope(): string {
++  return deployment?.entra?.scope ?? "openid";
++}
++
+ /** The Glass's own origin — the redirect and post-logout URI both derive from this, matching
+  * exactly what `harness/realm.py`'s `_glass_client` renders from `network.public_origin`. A
+  * trailing slash on the redirect URI only, never on the origin itself, mirrors that renderer's own
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/resolvedPrincipal.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/resolvedPrincipal.test.ts
+new file mode 100644
+index 0000000..b4d3bae
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/auth/resolvedPrincipal.test.ts
+@@ -0,0 +1,98 @@
++// ADR-148 Amendment 8: what the Glass shows and gates on is the Conduit's resolved principal (`GET /v1/me`),
++// never a claim of a token. On Entra ID a token's `roles` are app roles an Entra administrator assigns, and
++// its subject is not the principal's id. The source check below fails if a token's role or access claim is
++// read anywhere in the Glass again; it is shown to catch each shape it looks for.
++import { readdirSync, readFileSync, statSync } from "node:fs";
++import { join, relative } from "node:path";
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++import { displayPrincipal, fetchResolvedPrincipal, sessionFromUser } from "./userManager";
++
++afterEach(() => vi.unstubAllGlobals());
++
++const ME = { id: "50000000-0000-4000-8000-000000000001", clearance: "OFFICIAL", org_unit: "unit-1", roles: ["analyst"],
++             receivable_handling_codes: ["R"] };  // prettier-ignore
++
++describe("the session from the ID token", () => {
++  it("carries the subject and the names, and no role or access claim", () => {
++    const session = sessionFromUser({
++      profile: { sub: "pairwise", preferred_username: "ana", given_name: "Ana", roles: ["osprey-admin"],
++                 clearance: "SECRET", org_unit: "u", receivable_handling_codes: ["X"] },  // prettier-ignore
++    } as never);
++    expect(session).toEqual({ sub: "pairwise", username: "ana", givenName: "Ana" });
++  });
++});
++
++describe("the principal shown", () => {
++  it("takes its id, clearance, unit, roles and codes from the Conduit and only the names from the session", () => {
++    const shown = displayPrincipal({ sub: "pairwise", username: "ana", givenName: "Ana" }, ME);
++    expect(shown).toEqual({ sub: ME.id, username: "ana", givenName: "Ana", clearance: "OFFICIAL", orgUnit: "unit-1",
++                            roles: ["analyst"], receivableHandlingCodes: ["R"] });  // prettier-ignore
++  });
++});
++
++describe("GET /v1/me", () => {
++  it.each([
++    ["a refusal", () => new Response("{}", { status: 503 })],
++    ["a body that is not a principal", () => new Response(JSON.stringify({ roles: ["osprey-admin"] }))],
++    ["no answer", () => Promise.reject(new TypeError("network"))],
++  ])("is none after %s, never a guess", async (_why, answer) => {
++    vi.stubGlobal("fetch", vi.fn(async () => answer()));
++    expect(await fetchResolvedPrincipal("http://x", "t")).toBeNull();
++  });
++
++  it("asks with the bearer and reads the answer", async () => {
++    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(ME)));
++    vi.stubGlobal("fetch", fetchSpy);
++    expect(await fetchResolvedPrincipal("http://x", "t")).toEqual(ME);
++    expect(fetchSpy).toHaveBeenCalledWith("http://x/v1/me", { headers: { Authorization: "Bearer t" } });
++  });
++});
++
++// --- no token claim of role or access is read in the Glass ---
++
++const CLAIMS = "roles|clearance|org_unit|receivable_handling_codes";
++const READ = new RegExp(String.raw`profile\??\.(${CLAIMS})\b|profile\??\[\s*["'\x60](${CLAIMS})["'\x60]\s*\]|\{[^}]*\b(${CLAIMS})\b[^}]*\}\s*=\s*[\w.?]*profile\b`);
++const SRC = join(__dirname, "..");
++
++/** A claim read through a name the profile was given (`const c = user.profile; c.roles`), as well as
++ * through `profile` itself (the lane-reviewer's finding 14). */
++function readsAClaim(source: string): boolean {
++  if (READ.test(source)) return true;
++  const aliases = [...source.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*[\w.?]*\bprofile\b/g)].map((m) => m[1]);
++  return aliases.some((alias) => new RegExp(String.raw`\b${alias}\??\.(${CLAIMS})\b|\b${alias}\??\[\s*["'\x60](${CLAIMS})`).test(source));
++}
++
++function sources(dir: string): string[] {
++  return readdirSync(dir).flatMap((name) => {
++    const path = join(dir, name);
++    if (statSync(path).isDirectory()) return sources(path);
++    return /\.(ts|tsx)$/.test(name) && !/\.test\.(ts|tsx)$/.test(name) ? [path] : [];
++  });
++}
++
++describe("no token claim of role or access is read in the Glass", () => {
++  it("is read nowhere in apps/workspace/src", () => {
++    const found = sources(SRC)
++      .filter((path) => readsAClaim(readFileSync(path, "utf8")))
++      .map((path) => relative(SRC, path));
++    expect(found).toEqual([]);
++  });
++
++  it.each([
++    "String(profile.roles ?? '')",
++    "user.profile?.clearance",
++    'profile["org_unit"]',
++    "profile[`receivable_handling_codes`]",
++    "const { roles } = user.profile;",
++    "const c = user.profile; return c.roles;",
++    "let p = session?.profile;\nconst level = p?.clearance;",
++  ])("catches %s", (planted) => {
++    expect(readsAClaim(planted)).toBe(true);
++  });
++
++  it("does not catch the names", () => {
++    expect(readsAClaim("String(profile.preferred_username ?? '')")).toBe(false);
++    expect(readsAClaim("const c = user.profile; return c.preferred_username;")).toBe(false);
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts b/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts
+index de25c41..43ded02 100644
+--- a/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts
++++ b/OspreyFlow_Core/apps/workspace/src/auth/unauthorised.ts
+@@ -23,9 +23,10 @@ export interface UnauthorisedWatch {
+   getToken: () => string;
+   /** The token to send now: the latest renewal's. Defaults to `getToken`. */
+   currentToken?: () => string;
+-  /** Called when the Conduit refuses a request that carried the page's token. Resolving `true`
+-   * means a renewed token is now in place, and the request is made once more with it. */
+-  onUnauthorised: () => void | boolean | Promise<boolean | void>;
++  /** Called when the Conduit refuses a request that carried the page's token, with a copy of the
++   * refusal (its words may say why, ADR-148 Amendment 8). Resolving `true` means a renewed token is
++   * now in place, and the request is made once more with it. */
++  onUnauthorised: (refusal: Response) => void | boolean | Promise<boolean | void>;
+ }
+ 
+ function authorisationOf(input: RequestInfo | URL, init?: RequestInit): string | null {
+@@ -103,7 +104,7 @@ export function installUnauthorisedWatch(watch: UnauthorisedWatch): () => void {
+     const replay = replayable(input, init);
+     const response = await original(...withAuthorisation(input, init, `Bearer ${sending}`));
+     if (response.status !== 401) return response;
+-    const renewed = await watch.onUnauthorised();
++    const renewed = await watch.onUnauthorised(response.clone());
+     const now = current();
+     if (renewed !== true || !replay || now === sending) return response;
+     return original(...withAuthorisation(input, init, `Bearer ${now}`));
+diff --git a/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts b/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts
+index 58e3d6a..9bbaa14 100644
+--- a/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts
++++ b/OspreyFlow_Core/apps/workspace/src/auth/userManager.ts
+@@ -4,19 +4,45 @@
+ import { User, UserManager, WebStorageStateStore } from "oidc-client-ts";
+ 
+ import { SIGN_IN_WINDOW_NAME } from "./callbackFrame";
+-import { GLASS_CLIENT_ID, oidcAuthority, postLogoutRedirectUri, redirectUri } from "./oidcConfig";
+-
+-/** The four custom claims `services/api/auth.py` builds a `Principal` from, plus `sub` — exactly
+- * `00_ARCHITECTURE.md` §1.3's own list: "a signed access token carrying the principal's subject,
+- * clearance, organisational unit, roles and receivable handling codes." Read from the **ID**
+- * token's claims (`User.profile`), which the realm's own protocol mappers carry
+- * (`harness/realm.py`'s `_claim_mappers`, `id.token.claim: true`) — not re-derived from the access
+- * token, which the Glass never decodes; it only ever sends that one to the Conduit as a bearer. */
+-export interface DisplayPrincipal {
++import { oidcAuthority, oidcClientId, oidcScope, postLogoutRedirectUri, redirectUri } from "./oidcConfig";
++
++/** Who signed in, as the ID token names them: the token's subject and their names, nothing more.
++ * What they may see and do is the Conduit's resolved principal (`GET /v1/me`), **never a claim of
++ * the token** (ADR-148 Amendment 8): on Entra ID a token's `roles` are app roles an Entra
++ * administrator assigns, not OspreyFlow's, and its subject is not the principal's id (the object id
++ * is). The Glass never decodes the access token; it only sends it to the Conduit as a bearer. */
++export interface SignedInSession {
++  /** The ID token's subject: whether a renewal is the same sign-in, and nothing else. */
+   sub: string;
+   /** The identity provider's user name (`preferred_username`); empty when the token has none. */
+   username: string;
+   /** The person's given name, for Home's greeting (ADR-115 E3); empty when the token has none. */
++  givenName: string;
++}
++
++export function sessionFromUser(user: User): SignedInSession {
++  const profile = user.profile as Record<string, unknown>;
++  return {
++    sub: String(profile.sub ?? ""),
++    username: String(profile.preferred_username ?? ""),
++    givenName: String(profile.given_name ?? ""),
++  };
++}
++
++/** `GET /v1/me`'s answer (`schemas.rights.MeResponse`). */
++export interface ResolvedPrincipal {
++  id: string;
++  clearance: string;
++  org_unit: string;
++  roles: string[];
++  receivable_handling_codes: string[];
++}
++
++/** What the Glass shows and gates on: the names from the sign-in, everything else the Conduit's.
++ * `sub` is the principal's id as the Conduit knows it (an Entra object id, or Keycloak's subject). */
++export interface DisplayPrincipal {
++  sub: string;
++  username: string;
+   givenName?: string;
+   clearance: string;
+   orgUnit: string;
+@@ -24,21 +50,38 @@ export interface DisplayPrincipal {
+   receivableHandlingCodes: string[];
+ }
+ 
+-export function displayPrincipalFromUser(user: User): DisplayPrincipal {
+-  const profile = user.profile as Record<string, unknown>;
+-  const asStringArray = (value: unknown): string[] =>
+-    Array.isArray(value) ? value.map(String) : value != null ? [String(value)] : [];
++export function displayPrincipal(session: SignedInSession | null, me: ResolvedPrincipal): DisplayPrincipal {
+   return {
+-    sub: String(profile.sub ?? ""),
+-    username: String(profile.preferred_username ?? ""),
+-    givenName: String(profile.given_name ?? ""),
+-    clearance: String(profile.clearance ?? ""),
+-    orgUnit: String(profile.org_unit ?? ""),
+-    roles: asStringArray(profile.roles),
+-    receivableHandlingCodes: asStringArray(profile.receivable_handling_codes),
++    sub: me.id,
++    username: session?.username ?? "",
++    givenName: session?.givenName ?? "",
++    clearance: me.clearance,
++    orgUnit: me.org_unit,
++    roles: [...me.roles],
++    receivableHandlingCodes: [...me.receivable_handling_codes],
+   };
+ }
+ 
++/** `GET /v1/me`, or `null` when it does not answer: the Glass then shows no role or clearance and
++ * offers nothing a role gates (it fails closed; the Conduit refuses every call regardless). */
++export async function fetchResolvedPrincipal(apiBaseUrl: string, bearerToken: string): Promise<ResolvedPrincipal | null> {
++  try {
++    const response = await fetch(`${apiBaseUrl}/v1/me`, { headers: { Authorization: `Bearer ${bearerToken}` } });
++    if (!response.ok) return null;
++    const body = (await response.json()) as Partial<ResolvedPrincipal>;
++    if (typeof body.id !== "string" || typeof body.clearance !== "string" || !Array.isArray(body.roles)) return null;
++    return {
++      id: body.id,
++      clearance: body.clearance,
++      org_unit: typeof body.org_unit === "string" ? body.org_unit : "",
++      roles: body.roles.map(String),
++      receivable_handling_codes: Array.isArray(body.receivable_handling_codes) ? body.receivable_handling_codes.map(String) : [],
++    };
++  } catch {
++    return null;
++  }
++}
++
+ /** A `Storage` that never touches the disk or `sessionStorage` — `06_DECISIONS.md` ADR-050's own
+  * "No refresh token is stored anywhere… held in memory only," extended to the whole signed-in
+  * `User` object rather than parsed apart: this deployment never requests `offline_access`
+@@ -84,11 +127,11 @@ export function getUserManager(): UserManager {
+   if (!manager) {
+     manager = new UserManager({
+       authority: oidcAuthority(),
+-      client_id: GLASS_CLIENT_ID,
++      client_id: oidcClientId(),
+       redirect_uri: redirectUri(),
+       post_logout_redirect_uri: postLogoutRedirectUri(),
+       response_type: "code",
+-      scope: "openid",
++      scope: oidcScope(),
+       // The library's own timer stays off. The Glass renews in the background itself
+       // (`tokenRenewal.ts`, ADR-050 Amendment 1), ahead of expiry and after a refused call alike,
+       // through one renewal at a time — so no automatic renewal can fire in the middle of another.

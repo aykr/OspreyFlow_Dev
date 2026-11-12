@@ -60,8 +60,26 @@ from schemas.deployment import (
 #: ADR-148 decision 3: the one numeric user every pod runs as.
 UID = 10001
 
-#: What a cluster runs that this profile does not: Caddy (decision 2), the local models (11).
-NOT_RENDERED = frozenset({"proxy", "ollama", "ollama-models", "whisper", "whisper-models"})
+#: What a cluster runs that this profile does not: Caddy (decision 2), the local models (11), and
+#: Keycloak: people sign in with Entra ID directly (decision 9; Amendment 8).
+NOT_RENDERED = frozenset(
+    {"proxy", "ollama", "ollama-models", "whisper", "whisper-models", "keycloak"}
+)
+
+#: The realm's settings a cluster's Conduit reads, which Entra ID sign-in has no use for: the token
+#: exchange and the realm's users (owner resolution is unavailable on Entra; Admin › People keeps
+#: roles in the deployment's own store) and the realm's public address (Amendment 8).
+REALM_SETTINGS = frozenset(
+    {"OIDC_TOKEN_EXCHANGE_URL", "OIDC_TOKEN_EXCHANGE_CLIENT_ID", "OIDC_ADMIN_USERS_URL",
+     "OSPREY_IDENTITY_ORIGIN"}
+)  # fmt: skip
+#: Our Secret's keys only the realm, or the Conduit's exchange with it, reads.
+REALM_SECRETS = frozenset(
+    {"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD", "OSPREY_KEYCLOAK_DB_PASSWORD",
+     "OIDC_TOKEN_EXCHANGE_CLIENT_SECRET"}
+)  # fmt: skip
+#: The realm's own files (its export and its login theme), which only Keycloak mounts.
+REALM_FILES = ("realm.json", "theme--")
 
 #: What reads the managed stores' details: only these are given them (a pod that reads the whole
 #: env, as the workspace's nginx does, is not handed the database's password for that).
@@ -69,7 +87,7 @@ READERS = frozenset({"api", "worker", "report-sync", "superset"})
 
 #: Decision 5: one of each in development.
 DEVELOPMENT_REPLICAS = {
-    "workspace": 1, "api": 1, "report-sync": 1, "superset": 1, "worker": 1, "keycloak": 1,
+    "workspace": 1, "api": 1, "report-sync": 1, "superset": 1, "worker": 1,
     "arcadedb": 1, "clickhouse": 1, "clickhouse-keeper": 1,
 }  # fmt: skip
 
@@ -152,6 +170,46 @@ def _refuse(config: OspreyConfig) -> None:
         )
     if not config.network.public_origin.startswith("https://"):
         raise CloudPlatformNotRenderable("a cloud platform is reached over HTTPS")
+    if config.reporting.sync or config.reporting.superset:
+        # The orchestrator's ruling (a), P10 part 2: both signed in through Keycloak, which this
+        # profile does not render; each gets Entra ID's sign-in in its own later step (CARRIES).
+        raise CloudPlatformNotRenderable(
+            "report sync and Superset are not on this profile yet: they signed in through "
+            "Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting "
+            "on Entra ID) brings them. Set reporting.sync and reporting.superset to false"
+        )
+    claims = _cp(config).claims
+    if claims is None:
+        raise CloudPlatformNotRenderable(
+            "people sign in with Entra ID on this profile (ADR-148 decision 9): declare "
+            "cloud_platform.claims (the tenant, the Glass's and the API's app registrations, where "
+            "each claim comes from and the first administrators)"
+        )
+    from principal_auth import ClaimMapping
+
+    try:
+        ClaimMapping.model_validate(claims.claim_mapping())
+    except ValueError as error:
+        raise CloudPlatformNotRenderable(
+            f"cloud_platform.claims cannot be read as a claim mapping: {error}"
+        ) from None
+
+
+def entra_settings(config: OspreyConfig) -> dict[str, str]:
+    """What the Conduit, the workers and Superset read to sign people in with Entra ID (ADR-148
+    Amendment 8): the issuer, audience and keys of the API's tokens, the claim mapping
+    (`OSPREY_CLAIM_MAPPING`, `principal_auth.ClaimMapping`) and the first administrators."""
+    claims = _cp(config).claims
+    assert claims is not None  # `_refuse`
+    return {
+        "OSPREY_IDENTITY_PROVIDER": "entra",
+        "OIDC_ISSUER": claims.issuer,
+        "OIDC_AUDIENCE": claims.audience,
+        "OIDC_JWKS_URL": claims.jwks_url,
+        "OSPREY_CLAIM_MAPPING": json.dumps(claims.claim_mapping(), sort_keys=True),
+        "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
+        "SUPERSET_SIGN_IN": "entra",
+    }
 
 
 #: Each variable a workload reads that a managed store's secret gives: (store, the secret's key).
@@ -503,14 +561,14 @@ def _egress_addresses_by_kind(
     IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
     (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
-    mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
-    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)
+    mail server; Entra ID's sign-in host (`egress.sign_in`, P10 part 2); and each connector host.
     Each with its port (Amendment 5 point 21): an AWS service's 443, an address's own or its
     scheme's, the mail server's `mail.port`, a connector host's `host:port` or 443."""
     region = platform.aws_region
     kinds: dict[str, list[tuple[str, int]]] = {
         "always": [(host.format(region=region), 443) for host in profile.egress.always],
         "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
+        "sign_in": [(host, 443) for host in profile.egress.sign_in],
         "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
         # ADR-140 Amendment 21: each declared S3 bucket and Athena workgroup by its own host, on
         # 443. Never a results or table location's bucket: Athena reaches those itself.
@@ -890,7 +948,7 @@ def render_cloud_platform(
     from harness.cloud_platform.terraform import render_terraform
     from harness.cluster import render_cluster
     from harness.render import service_images
-    from harness.site import highest_marking
+    from harness.site import highest_marking, render_glass_settings
 
     _refuse(config)
     platform = load_platform(_cp(config).platform)
@@ -971,7 +1029,11 @@ def render_cloud_platform(
 
         raise UnpinnedImagesError(copies.unresolved)
 
-    environment = {k: v for k, v in values["environment"].items() if k not in variables}
+    environment = {
+        k: v
+        for k, v in values["environment"].items()
+        if k not in variables and k not in REALM_SETTINGS
+    }
     # ArcadeDB's heap is its own container's, from its limit (above), never the cluster's
     # machine-sized setting, which nothing else reads.
     environment.pop("OSPREY_ARCADEDB_HEAP", None)
@@ -996,7 +1058,9 @@ def render_cloud_platform(
     environment["OSPREY_HIGHEST_MARKING"] = highest_marking(config)
     # What the cluster's install writes into our Secret, and this profile has no install to write.
     install = _what_the_install_writes(config, as_cluster, set(variables))
-    environment.update(install.settings)
+    environment.update({k: v for k, v in install.settings.items() if k not in REALM_SETTINGS})
+    # Entra ID's, last, so nothing the cluster's realm wrote stands (ADR-148 Amendment 8).
+    environment.update(entra_settings(config))
     sources = _cp(config).connector_sources
     if _cp(config).connector_hosts or sources.declared():
         # The Conduit's own allow-list, from the lists the egress policy allows (one list, both).
@@ -1010,16 +1074,28 @@ def render_cloud_platform(
             sources.model_dump(mode="json"), sort_keys=True
         )
     secrets = values["secrets"]
-    secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
+    secrets["keys"] = sorted(
+        ({k for k in secrets["keys"] if k not in variables} | set(install.keys)) - REALM_SECRETS
+    )
     secrets["defaults"] = {
-        **{k: v for k, v in secrets["defaults"].items() if k not in variables},
-        **install.defaults,
+        k: v
+        for k, v in {
+            **{k: v for k, v in secrets["defaults"].items() if k not in variables},
+            **install.defaults,
+        }.items()
+        if k not in REALM_SECRETS
     }
-    secrets["copies"] = dict(sorted(install.copies.items()))
+    secrets["copies"] = {
+        k: v for k, v in sorted(install.copies.items()) if REALM_SECRETS.isdisjoint((k, v))
+    }
     # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
     # master key (found on the kind cluster, where its pod could not start without it).
 
-    files = {k: v for k, v in values["files"].items() if k != "Caddyfile"}
+    files = {
+        k: v
+        for k, v in values["files"].items()
+        if k != "Caddyfile" and not k.startswith(REALM_FILES)
+    }
     storage: dict[str, Any] = {
         "className": platform.storage.class_name,
         "sharedClassName": platform.storage.class_name,
@@ -1044,6 +1120,8 @@ def render_cloud_platform(
         "environment": environment,
         "files": {
             **files,
+            # The Glass signs in with Entra ID (Amendment 8): its deployment file says where.
+            "glass.json": render_glass_settings(config, entra=_cp(config).claims),
             # The deployment's own configuration, as it was written, not the cluster's shape.
             "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
         },

@@ -1,0 +1,8 @@
+head 9bf0aa8 on main 510141b with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack), 2026-11-12; from 9bf0aa8.ci.txt (make -k ci's own cp-policy-check, unfiltered)
+cd ../OspreyFlow_Core && PYTHONPATH=.:packages:/root/osprey-runs/admin/OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check
+development-sources.yaml: 58 manifests, 0 violation(s)
+development.yaml: 54 manifests, 0 violation(s)
+poc.yaml: 52 manifests, 0 violation(s)
+production-bedrock.yaml: 58 manifests, 0 violation(s)
+production.yaml: 54 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)

@@ -4,19 +4,45 @@
 import { User, UserManager, WebStorageStateStore } from "oidc-client-ts";
 
 import { SIGN_IN_WINDOW_NAME } from "./callbackFrame";
-import { GLASS_CLIENT_ID, oidcAuthority, postLogoutRedirectUri, redirectUri } from "./oidcConfig";
+import { oidcAuthority, oidcClientId, oidcScope, postLogoutRedirectUri, redirectUri } from "./oidcConfig";
 
-/** The four custom claims `services/api/auth.py` builds a `Principal` from, plus `sub` — exactly
- * `00_ARCHITECTURE.md` §1.3's own list: "a signed access token carrying the principal's subject,
- * clearance, organisational unit, roles and receivable handling codes." Read from the **ID**
- * token's claims (`User.profile`), which the realm's own protocol mappers carry
- * (`harness/realm.py`'s `_claim_mappers`, `id.token.claim: true`) — not re-derived from the access
- * token, which the Glass never decodes; it only ever sends that one to the Conduit as a bearer. */
-export interface DisplayPrincipal {
+/** Who signed in, as the ID token names them: the token's subject and their names, nothing more.
+ * What they may see and do is the Conduit's resolved principal (`GET /v1/me`), **never a claim of
+ * the token** (ADR-148 Amendment 8): on Entra ID a token's `roles` are app roles an Entra
+ * administrator assigns, not OspreyFlow's, and its subject is not the principal's id (the object id
+ * is). The Glass never decodes the access token; it only sends it to the Conduit as a bearer. */
+export interface SignedInSession {
+  /** The ID token's subject: whether a renewal is the same sign-in, and nothing else. */
   sub: string;
   /** The identity provider's user name (`preferred_username`); empty when the token has none. */
   username: string;
   /** The person's given name, for Home's greeting (ADR-115 E3); empty when the token has none. */
+  givenName: string;
+}
+
+export function sessionFromUser(user: User): SignedInSession {
+  const profile = user.profile as Record<string, unknown>;
+  return {
+    sub: String(profile.sub ?? ""),
+    username: String(profile.preferred_username ?? ""),
+    givenName: String(profile.given_name ?? ""),
+  };
+}
+
+/** `GET /v1/me`'s answer (`schemas.rights.MeResponse`). */
+export interface ResolvedPrincipal {
+  id: string;
+  clearance: string;
+  org_unit: string;
+  roles: string[];
+  receivable_handling_codes: string[];
+}
+
+/** What the Glass shows and gates on: the names from the sign-in, everything else the Conduit's.
+ * `sub` is the principal's id as the Conduit knows it (an Entra object id, or Keycloak's subject). */
+export interface DisplayPrincipal {
+  sub: string;
+  username: string;
   givenName?: string;
   clearance: string;
   orgUnit: string;
@@ -24,19 +50,36 @@ export interface DisplayPrincipal {
   receivableHandlingCodes: string[];
 }
 
-export function displayPrincipalFromUser(user: User): DisplayPrincipal {
-  const profile = user.profile as Record<string, unknown>;
-  const asStringArray = (value: unknown): string[] =>
-    Array.isArray(value) ? value.map(String) : value != null ? [String(value)] : [];
+export function displayPrincipal(session: SignedInSession | null, me: ResolvedPrincipal): DisplayPrincipal {
   return {
-    sub: String(profile.sub ?? ""),
-    username: String(profile.preferred_username ?? ""),
-    givenName: String(profile.given_name ?? ""),
-    clearance: String(profile.clearance ?? ""),
-    orgUnit: String(profile.org_unit ?? ""),
-    roles: asStringArray(profile.roles),
-    receivableHandlingCodes: asStringArray(profile.receivable_handling_codes),
+    sub: me.id,
+    username: session?.username ?? "",
+    givenName: session?.givenName ?? "",
+    clearance: me.clearance,
+    orgUnit: me.org_unit,
+    roles: [...me.roles],
+    receivableHandlingCodes: [...me.receivable_handling_codes],
   };
+}
+
+/** `GET /v1/me`, or `null` when it does not answer: the Glass then shows no role or clearance and
+ * offers nothing a role gates (it fails closed; the Conduit refuses every call regardless). */
+export async function fetchResolvedPrincipal(apiBaseUrl: string, bearerToken: string): Promise<ResolvedPrincipal | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl}/v1/me`, { headers: { Authorization: `Bearer ${bearerToken}` } });
+    if (!response.ok) return null;
+    const body = (await response.json()) as Partial<ResolvedPrincipal>;
+    if (typeof body.id !== "string" || typeof body.clearance !== "string" || !Array.isArray(body.roles)) return null;
+    return {
+      id: body.id,
+      clearance: body.clearance,
+      org_unit: typeof body.org_unit === "string" ? body.org_unit : "",
+      roles: body.roles.map(String),
+      receivable_handling_codes: Array.isArray(body.receivable_handling_codes) ? body.receivable_handling_codes.map(String) : [],
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** A `Storage` that never touches the disk or `sessionStorage` — `06_DECISIONS.md` ADR-050's own
@@ -84,11 +127,11 @@ export function getUserManager(): UserManager {
   if (!manager) {
     manager = new UserManager({
       authority: oidcAuthority(),
-      client_id: GLASS_CLIENT_ID,
+      client_id: oidcClientId(),
       redirect_uri: redirectUri(),
       post_logout_redirect_uri: postLogoutRedirectUri(),
       response_type: "code",
-      scope: "openid",
+      scope: oidcScope(),
       // The library's own timer stays off. The Glass renews in the background itself
       // (`tokenRenewal.ts`, ADR-050 Amendment 1), ahead of expiry and after a refused call alike,
       // through one renewal at a time — so no automatic renewal can fire in the middle of another.

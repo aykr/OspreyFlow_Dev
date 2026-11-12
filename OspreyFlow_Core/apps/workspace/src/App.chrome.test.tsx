@@ -86,6 +86,8 @@ beforeEach(() => {
   // throw while the count is taken.
   const answers: [RegExp, unknown][] = [
     [/\/v1\/me\/rights$/, { rights: RIGHTS }],
+    // ADR-148 Amendment 8: the account menu shows the Conduit's resolved principal, never the token's.
+    [/\/v1\/me$/, { id: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] }],
     [/\/v1\/ontology$/, { entity_types: [], edge_types: [] }],
     [/\/v1\/handling-scheme$/, { name: "test", classification: ["OFFICIAL"], handling_codes: {} }],
     [/\/v1\/investigations$/, [{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" }]],

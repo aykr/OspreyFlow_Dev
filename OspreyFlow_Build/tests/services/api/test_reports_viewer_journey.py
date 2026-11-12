@@ -270,6 +270,8 @@ OPEN_TO_ANY_SIGNED_IN = {
     "openapi_document_route", "get_ontology_route", "get_map_providers_route", "get_map_tile_route",
     "get_map_local_source_route", "list_connectors", "list_domain_packs", "get_handling_scheme_route",
     "get_yardstick_route", "get_grading_scheme_route", "list_transforms", "my_rights_route", "my_needs_you_route",
+    # ADR-148 Amendment 8: the reader's own resolved principal, nothing of the deployment's.
+    "me_route",
     "model_engines_route", "case_model_engines_route", "issue_ws_ticket",
 } | {
     # L3.4 (ADR-143 Amendment 2 decision 1), weighed at its independent review on 9 November: a

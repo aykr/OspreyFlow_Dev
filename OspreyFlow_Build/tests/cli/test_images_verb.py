@@ -62,7 +62,10 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str, 
         c.argv[c.argv.index("-t") + 1].split(":")[0].rsplit("/", 1)[-1]: c
         for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]
     }  # fmt: skip
-    assert {"api", "workspace", "worker", "report-sync", "superset", "ner"} <= set(built)
+    # Report sync and Superset are not on the profile until their step after P10 (ADR-148
+    # Amendment 8), so their images are not built for it.
+    assert {"api", "workspace", "worker", "ner"} <= set(built)
+    assert not {"report-sync", "superset"} & set(built)
     api = built["api"].argv
     assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
     assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")

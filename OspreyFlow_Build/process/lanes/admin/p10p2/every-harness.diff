@@ -1,0 +1,13 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index 47d573c..2e632a1 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -271,6 +271,8 @@ const EXTRA_STATES: Record<string, string[]> = {
+     // transfers, and Roles: the lists, a role's form, a team with its lead and cover.
+     "rights=manage_people&serve=people",
+     "rights=manage_people&serve=people&show=disable",
++    // ADR-148 Amendment 8: People on Entra ID sign-in, its words and Add by object id.
++    "rights=manage_people&serve=people&show=entra",
+     "rights=manage_people&serve=people&open=Roles",
+     "rights=manage_people&serve=people&open=Roles&show=role-form",
+     "rights=manage_people&serve=people&open=Roles&show=team",

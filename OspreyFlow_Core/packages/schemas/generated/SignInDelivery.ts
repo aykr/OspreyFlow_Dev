@@ -12,6 +12,8 @@ export type ReceivableHandlingCodes = string[];
 export type MustSetPassword = boolean;
 export type SystemAccount = boolean;
 export type OrganisationLinked = boolean;
+export type SignedIn = boolean;
+export type AccessReadAt = string | null;
 export type Delivery = "email" | "one_time_code";
 export type OneTimeCode = string | null;
 
@@ -38,5 +40,7 @@ export interface PersonAccount {
   must_set_password?: MustSetPassword;
   system_account?: SystemAccount;
   organisation_linked?: OrganisationLinked;
+  signed_in?: SignedIn;
+  access_read_at?: AccessReadAt;
   [k: string]: unknown;
 }

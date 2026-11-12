@@ -202,9 +202,45 @@ export type Registry = string | null;
  */
 export type AllowFrom = string[];
 /**
- * Default: none — the platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them
+ * Default: none — the platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's name (the Glass's: the profile renders no sign-in or reporting name), where the platform's wildcard does not cover it
  */
 export type TlsSecret = string | null;
+/**
+ * The client's Entra tenant id
+ */
+export type TenantId = string;
+/**
+ * The Glass's own app registration (application id)
+ */
+export type ClientId1 = string;
+/**
+ * This API's app registration (application id): the token's audience
+ */
+export type ApiClientId = string;
+/**
+ * Default: api://<api_client_id>. The API's application id URI, which the Glass's scope names
+ */
+export type ApiIdUri = string | null;
+/**
+ * Default: 2.0. The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it
+ */
+export type TokenVersion = "2.0" | "1.0";
+/**
+ * Default: access_as_user. The delegated scope the Glass asks the API for
+ */
+export type Scope = string;
+/**
+ * Default: groups. The token claim listing the person's Entra group ids, which a {groups: ...} table above is read from
+ */
+export type GroupsClaim = string;
+/**
+ * The people given the Admin role at install, by Entra object id (at least one)
+ */
+export type FirstAdministrators = string[];
+/**
+ * Default: false. Whether a claims-mapping policy signs the API's tokens with its own key (the keys are then read with ?appid=<api_client_id>)
+ */
+export type ClaimsMappingPolicy = boolean;
 /**
  * The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both
  */
@@ -763,6 +799,10 @@ export interface CloudPlatformConfig {
   allow_from?: AllowFrom;
   egress_nets?: EgressNets;
   tls_secret?: TlsSecret;
+  /**
+   * How people sign in, with Entra ID (required at render): the tenant, the Glass's and the API's app registrations, where each claim comes from and the first administrators
+   */
+  claims?: EntraSignInConfig | null;
   connector_hosts?: ConnectorHosts;
   connector_sources?: ConnectorSources;
 }
@@ -771,6 +811,44 @@ export interface CloudPlatformConfig {
  */
 export interface EgressNets {
   [k: string]: string[];
+}
+/**
+ * ADR-148 decision 9 and Amendment 8: how this deployment's people sign in with Entra ID, and
+ * where `principal_auth` finds each of clearance, unit and handling codes in their token (a claim,
+ * or a table from Entra group to value; `principal_auth.ClaimMapping` checks the shape at render).
+ * Roles are not here: they are kept in Admin › People, the first administrators named below.
+ */
+export interface EntraSignInConfig {
+  tenant_id: TenantId;
+  client_id: ClientId1;
+  api_client_id: ApiClientId;
+  api_id_uri?: ApiIdUri;
+  token_version?: TokenVersion;
+  scope?: Scope;
+  clearance: Clearance;
+  org_unit: OrgUnit;
+  handling_codes: HandlingCodes;
+  groups_claim?: GroupsClaim;
+  first_administrators: FirstAdministrators;
+  claims_mapping_policy?: ClaimsMappingPolicy;
+}
+/**
+ * Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}}
+ */
+export interface Clearance {
+  [k: string]: unknown;
+}
+/**
+ * Where the organisational unit comes from: {claim: ...} or {groups: {...}}
+ */
+export interface OrgUnit {
+  [k: string]: unknown;
+}
+/**
+ * Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}}
+ */
+export interface HandlingCodes {
+  [k: string]: unknown;
 }
 /**
  * The S3 buckets and Athena workgroups an S3 or Athena connection may read (ADR-140 Amendment 21). Each becomes the Conduit's own egress row on 443 and an entry on its allow-list, and the namespace's IAM role gains read-only statements scoped to it. Admin › Connections refuses an S3 or Athena connection not declared here; declare it, re-render and run helm upgrade (and apply the Terraform)

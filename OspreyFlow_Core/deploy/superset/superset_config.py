@@ -71,6 +71,10 @@ OAUTH_PROVIDERS = [
 ]
 
 
+#: Rendered on the cloud-platform profile, whose people sign in with Entra ID (ADR-148 decision 9).
+_ENTRA = os.environ.get("SUPERSET_SIGN_IN", "").lower() == "entra"
+
+
 class OspreySecurityManager(SupersetSecurityManager):
     """Reads who signed in from the access token the provider returned over the back channel —
     never from anything the browser sent — including OspreyFlow's `roles` claim."""
@@ -86,7 +90,10 @@ class OspreySecurityManager(SupersetSecurityManager):
             "last_name": claims.get("family_name", ""),
             "email": claims.get("email")
             or f"{claims.get('preferred_username', 'user')}@ospreyflow.invalid",
-            "role_keys": claims.get("roles", []),
+            # ADR-148 Amendment 8: on Entra ID sign-in a token's `roles` are app roles an Entra
+            # administrator assigns, never OspreyFlow's; everyone is Gamma there until Superset's
+            # own step (CARRIES, P10 part 2).
+            "role_keys": [] if _ENTRA else claims.get("roles", []),
         }
 
 

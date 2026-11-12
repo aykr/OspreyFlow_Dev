@@ -931,3 +931,123 @@ describe("windows stay signed in: the token is renewed silently before it expire
     expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
   });
 });
+
+// ADR-148 Amendment 8: the principal the Glass shows and gates on is the Conduit's (`GET /v1/me`), never the
+// token's claims. While it is asked, or when it does not answer, the Glass shows no clearance or role and
+// offers nothing a role gates; the token below claims an administrator with SECRET clearance, and is never
+// believed.
+describe("the principal shown is the Conduit's resolved one (ADR-148 Amendment 8)", () => {
+  const tokenClaimingAdmin = {
+    access_token: "a-token",
+    profile: { sub: "pairwise-sub", preferred_username: "ana", given_name: "Ana", clearance: "SECRET",
+               org_unit: "unit-9", roles: ["osprey-admin"], receivable_handling_codes: ["X"] },  // prettier-ignore
+  } as never;
+  const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+  const serve = (me: () => Promise<Response>) =>
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input).split("?")[0]!;
+      if (url.endsWith("/v1/me")) return me();
+      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate"] });
+      return new Promise<Response>(() => undefined);
+    });
+
+  beforeEach(() => {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue(tokenClaimingAdmin);
+    sessionStorage.removeItem("ospreyflow.investigationId");
+  });
+
+  const greeting = async () => (await screen.findByText(/^Signed in as/)).closest("p")!.textContent ?? "";
+
+  test("while /v1/me is asked: no clearance, no role and no account menu, whatever the token claims", async () => {
+    serve(() => new Promise<Response>(() => undefined));
+    render(<App />);
+    const said = await greeting();
+    expect(said).not.toContain("SECRET");
+    expect(said).toContain("clearance none");
+    expect(screen.queryByRole("button", { name: /^ana/ })).toBeNull();
+  });
+
+  test("when /v1/me does not answer: the same, never the token's", async () => {
+    serve(() => json({}, 503));
+    render(<App />);
+    await vi.waitFor(async () => expect(await greeting()).toContain("clearance none"));
+    expect(await greeting()).not.toContain("SECRET");
+    expect(screen.queryByRole("button", { name: /^ana/ })).toBeNull();
+  });
+
+  test("once /v1/me answers: its clearance and roles, the token's names", async () => {
+    serve(() => json({ id: "oid-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] }));
+    render(<App />);
+    await vi.waitFor(async () => expect(await greeting()).toContain("clearance OFFICIAL"));
+    expect(await greeting()).not.toContain("SECRET");
+    expect(screen.getByRole("button", { name: /^ana/ }).textContent).toContain("OFFICIAL");
+  });
+});
+
+// ADR-148 Amendment 8 (the orchestrator's ruling 4): a person disabled in this deployment is told so, only
+// when the Conduit's 401 says so; any other refusal keeps the words it had.
+describe("a person disabled in this deployment is told so (ADR-148 Amendment 8)", () => {
+  beforeEach(() => {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
+      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
+    } as never);
+  });
+
+  test("the Conduit's disabled refusal is shown in its own words, not as a misconfiguration", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "this account is disabled in this deployment: ask an administrator" }), { status: 401 }),
+    );
+    render(<App />);
+    expect(await screen.findByText(/Your account is disabled in this deployment\. Ask an administrator\./)).toBeTruthy();
+    expect(screen.queryByText(/configured correctly/)).toBeNull();
+  });
+
+  test("any other refusal is never taken for a disabled account", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "token rejected: Invalid audience" }), { status: 401 }),
+    );
+    render(<App />);
+    expect(await screen.findByText(/could not be used to reach the workspace/i)).toBeTruthy();
+    expect(screen.queryByText(/disabled in this deployment/)).toBeNull();
+  });
+});
+
+// The orchestrator's review of P10 part 2, item 3: a /v1/me that does not answer once never strands the
+// person: words, Try again (which reads it afresh) and Sign out, with nothing role-gated offered meanwhile.
+describe("when the Conduit cannot say who you are (ADR-148 Amendment 8)", () => {
+  beforeEach(() => {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
+      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
+    } as never);
+    vi.mocked(userManager.signOut).mockReset().mockResolvedValue(undefined);
+    sessionStorage.removeItem("ospreyflow.investigationId");
+  });
+
+  test("it says so, offers Try again and Sign out, and Try again reads it afresh", async () => {
+    let answers = 0;
+    const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input).split("?")[0]!;
+      if (url.endsWith("/v1/me")) {
+        answers += 1;
+        return answers === 1
+          ? json({}, 503)
+          : json({ id: "oid-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] });
+      }
+      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate"] });
+      return new Promise<Response>(() => undefined);
+    });
+    render(<App />);
+    const notice = await screen.findByRole("alert");
+    expect(notice.textContent).toContain("Your account could not be read just now");
+    fireEvent.click(within(notice).getByRole("button", { name: "Sign out" }));
+    expect(vi.mocked(userManager.signOut)).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(notice).getByRole("button", { name: "Try again" }));
+    expect((await screen.findByRole("button", { name: /^ana/ })).textContent).toContain("OFFICIAL");
+    expect(answers).toBe(2);
+    expect(screen.queryByText("Your account could not be read just now, so nothing is offered.")).toBeNull();
+  });
+});

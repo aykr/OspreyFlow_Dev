@@ -139,10 +139,17 @@ from ports.graph import GraphPort
 from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
-from principal_auth import PrincipalRevoked
+from principal_auth import (
+    ROLE_LOOKUP_TIMEOUT_SECONDS,
+    PrincipalLookupUnavailable,
+    PrincipalRevoked,
+    SigningKeysUnavailable,
+    in_keys_thread,
+)
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
     AccessInput,
+    AddPersonInput,
     AdminDataset,
     AdminDatasetAuthors,
     AdminDatasetCases,
@@ -185,6 +192,7 @@ from schemas.admin import (
     RolesInput,
     ScheduleRunView,
     SignInDelivery,
+    SignInKind,
     SystemStatus,
     Team,
     TeamCoverInput,
@@ -452,6 +460,7 @@ from schemas.rights import (
     CUSTOM_ROLE_PREFIX,
     ROLE_RIGHTS,
     SUPER_USER_PRESET,
+    MeResponse,
     Right,
     RightsResponse,
     rights_for,
@@ -690,6 +699,7 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
+from .entra_people import STALE_ACCESS_WORDS, EntraPeopleAdmin, access_current
 from .event_scope import own_events_only
 from .explore import (
     ExploreService,
@@ -732,6 +742,7 @@ from .identity_admin import (
     DashboardExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    PeopleDirectory,
     PersonActionRefused,
     PersonExistsError,
     UnknownRoleError,
@@ -1326,7 +1337,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.recipe_runs = recipe_runs
     app.state.run_quotas = run_quotas
     # ADR-141 decision 10: a service identity's sign-in, for the run API alone.
-    app.state.service_identities = ServiceIdentityVerifier(config)
+    app.state.service_identities = ServiceIdentityVerifier(
+        config,
+        claim_mapping=resources.principal_resolver.claim_mapping,
+        # One set of keys for both paths: the same OIDC_JWKS_URL (ADR-148 Amendment 8).
+        # A resolver double without keys of its own leaves the verifier its own set.
+        signing_keys=getattr(resources.principal_resolver, "signing_keys", None),
+    )
     # The external runs going on in the background, held so none is collected mid-run.
     app.state.external_runs = set()
     app.state.judgements_store = judgements_store
@@ -1512,10 +1529,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-114 Amendment 5: invitations by the identity provider's own email when the deployment has
     # a mail server (rendered from the install answers), else by a one-time code.
     # ADR-112 Amendment 3 (b): the organisation's sign-in, whose refused arrivals can be joined.
-    app.state.identity_admin = IdentityAdmin(
-        config,
-        by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
-        organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
+    # ADR-148 Amendment 8: on Entra ID sign-in, Admin › People writes the deployment's own store,
+    # which an open delta socket also asks before each message (`_socket_standing`).
+    app.state.people_store = resources.people_store
+    app.state.identity_admin = (
+        EntraPeopleAdmin(resources.people_store)
+        if resources.people_store is not None
+        else IdentityAdmin(
+            config,
+            by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
+            organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
+        )
     )
     # ADR-111 Amendment 3: Superset dashboards inside the Glass; None when not configured.
     superset_settings = SupersetSettings.from_env()
@@ -2012,7 +2036,7 @@ def get_judgements_store(request: Request) -> JudgementStore:
     return request.app.state.judgements_store  # type: ignore[no-any-return]
 
 
-def get_identity_admin(request: Request) -> IdentityAdmin:
+def get_identity_admin(request: Request) -> PeopleDirectory:
     return request.app.state.identity_admin  # type: ignore[no-any-return]
 
 
@@ -2092,9 +2116,31 @@ async def get_principal(
     role checks included, so no request reads unlimited (`dataset_scope.py`)."""
     resolver: PrincipalResolver = request.app.state.principal_resolver
     try:
-        identity = resolver.resolve(credentials.credentials)
+        identity = await resolver.resolve_principal(credentials.credentials)
     except PrincipalResolutionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except SigningKeysUnavailable as exc:
+        # ADR-148 Amendment 8: the identity provider's keys could not be read; said so, never as a
+        # rejected token.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "identity_provider_unavailable",
+                "message": "sign-in is unavailable: the identity provider could not be reached. "
+                "Try again shortly.",
+            },
+        ) from exc
+    except PrincipalLookupUnavailable as exc:
+        # ADR-148 Amendment 8: the person's stored roles could not be read; never a principal
+        # without them.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "people_store_unavailable",
+                "message": "sign-in is unavailable: this deployment could not read your roles. "
+                "Try again shortly.",
+            },
+        ) from exc
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
@@ -2208,15 +2254,19 @@ def get_run_quotas(request: Request) -> QuotaStore | None:
 RunQuotasDep = Annotated[QuotaStore | None, Depends(get_run_quotas)]
 
 
-def get_service_identity(
+async def get_service_identity(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> str:
     """The run API's caller (ADR-141 decision 10): the client a service identity's token names,
-    or 401 in words. Never a `Principal`: a service identity reads nothing as itself."""
+    or 401 in words. Never a `Principal`: a service identity reads nothing as itself. Its keys are
+    read in the keys' own threads, bounded in total, as a person's are (ADR-148 Amendment 8; never
+    anyio's shared pool, with no bound of its own)."""
     verifier: ServiceIdentityVerifier = request.app.state.service_identities
     try:
-        return verifier.client_of(credentials.credentials)
+        return await in_keys_thread(verifier.client_of, credentials.credentials)
+    except SigningKeysUnavailable as unavailable:
+        raise HTTPException(status_code=503, detail=str(unavailable)) from unavailable
     except ServiceIdentityRefused as refused:
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
 
@@ -2227,7 +2277,7 @@ ServiceIdentityDep = Annotated[str, Depends(get_service_identity)]
 RecipeRunsDep = Annotated[RecipeRunStore, Depends(get_recipe_runs)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
-IdentityAdminDep = Annotated[IdentityAdmin, Depends(get_identity_admin)]
+IdentityAdminDep = Annotated[PeopleDirectory, Depends(get_identity_admin)]
 
 
 def get_custom_roles(request: Request) -> CustomRoleStore:
@@ -16420,7 +16470,9 @@ async def make_team_route(
     return team.model_copy(update={"members": [TeamMember(id=p.id, name=p.name) for p in holders]})
 
 
-async def _member_of(identity_admin: IdentityAdmin, role_id: str, account: str) -> PersonAccount:
+async def _member_of(
+    identity_admin: PeopleDirectory, role_id: str, account: str
+) -> PersonAccount:
     """`account` as one of the team's members, or a refusal in words: only a member, never a
     service account, may be lead or cover (ADR-112 Amendment 5 decisions 4 and 5)."""
     people = {p.id: p for p in await identity_admin.list_people()}
@@ -16587,6 +16639,16 @@ async def name_an_author_route(
     grantee = _grantee(account_id)
     await _may_hold_a_level(request, grantee, AccessLevel.AUTHOR, principal_names)
     named = people.get(grantee)
+    if named is not None and not access_current(named):
+        # ADR-148 Amendment 8: a unit read from Entra ID over a day ago is not trusted to place
+        # them in the case's unit (the orchestrator's second review, note 13; as a transfer).
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "access_out_of_date",
+                "message": f"{named.name}: {STALE_ACCESS_WORDS}",
+            },
+        )
     if named is not None and named.org_unit != case.owning_unit:
         raise HTTPException(
             status_code=409,
@@ -16747,6 +16809,39 @@ async def invite_person_route(
                                        "org_unit": body.org_unit, "delivery": made.delivery},
                        result_cardinality=1)  # fmt: skip
     return made
+
+
+@app.get("/v1/admin/sign-in", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
+async def sign_in_kind_route(identity_admin: IdentityAdminDep) -> SignInKind:
+    """ADR-148 Amendment 8: how people sign in here, so Admin › People offers invite (Keycloak) or
+    add by object id (Entra ID). Behind `manage_people`, as People is."""
+    return SignInKind(kind="entra" if isinstance(identity_admin, EntraPeopleAdmin) else "keycloak")
+
+
+@app.post(
+    "/v1/admin/people/by-object-id",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def add_person_by_object_id_route(
+    body: AddPersonInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> PersonAccount:
+    """ADR-148 Amendment 8: on Entra ID sign-in, a person added by their Entra object id ahead of
+    their first sign-in, with no roles, so roles can be given before they arrive. Elsewhere people
+    are invited, and this is refused (409)."""
+    if not isinstance(identity_admin, EntraPeopleAdmin):
+        raise PersonActionRefused(
+            "not_entra",
+            "People are invited on this deployment; adding by Entra object id is for Entra ID "
+            "sign-in only.",
+        )
+    person = await identity_admin.add_person(body.object_id, by=principal.id)
+    await audit.record(principal=principal, action="add_person_by_object_id",
+                       resolved_query={"user_id": person.id}, result_cardinality=1)  # fmt: skip
+    return person
 
 
 @app.put(
@@ -18891,7 +18986,7 @@ async def _pack_refused(request: Request, exc: PackItemRefused) -> JSONResponse:
 async def _openable_dashboards(
     principal: Principal,
     embedder: SupersetEmbedder | None,
-    identity_admin: IdentityAdmin,
+    identity_admin: PeopleDirectory,
     investigations: InvestigationStore,
     handling_scheme: HandlingScheme,
 ) -> list[EmbeddableDashboard]:
@@ -19006,6 +19101,20 @@ async def _person_exists(request: Request, exc: PersonExistsError) -> JSONRespon
 async def _dashboard_exists(request: Request, exc: DashboardExistsError) -> JSONResponse:
     return JSONResponse(
         status_code=409, content={"error": "dashboard_exists", "client_id": str(exc)}
+    )
+
+
+@app.get("/v1/me")
+async def me_route(principal: PrincipalDep) -> MeResponse:
+    """ADR-148 Amendment 8: the signed-in person's own principal, as `principal_auth` resolved it,
+    which the Glass shows and gates its places on, never a claim of the token (on Entra ID a token's
+    `roles` are app roles, not ours). Their own fields only: no other person's, and no count."""
+    return MeResponse(
+        id=principal.id,
+        clearance=principal.clearance,
+        org_unit=principal.org_unit,
+        roles=list(principal.roles),
+        receivable_handling_codes=list(principal.receivable_handling_codes),
     )
 
 
@@ -20061,7 +20170,7 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     if header.lower().startswith("bearer "):
         token = header[len("bearer ") :]
         resolver: PrincipalResolver = websocket.app.state.principal_resolver
-        return resolver.resolve(token)
+        return await resolver.resolve_principal(token)
 
     ticket = websocket.query_params.get("ticket", "")
     if not ticket:
@@ -20073,22 +20182,48 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     return principal
 
 
+async def _socket_standing(app_: Any, raw: Principal) -> int | None:
+    """ADR-148 Amendment 8: on Entra ID sign-in, whether the socket's principal still stands as
+    the people store has them now, since a socket (or a ticket minted before a change) outlives the
+    request that resolved it. `None` when it stands (or on Keycloak, with no store); the close code
+    otherwise: 1008 for a person disabled, gone or whose roles changed (they sign in again, and the
+    one construction path builds their principal afresh), 1013 when the store cannot answer, never
+    a socket left open on a read that failed."""
+    store = getattr(app_.state, "people_store", None)
+    if store is None:
+        return None
+    try:
+        stored = await asyncio.wait_for(store.standing(raw.id), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS)
+    except Exception:  # noqa: BLE001 - every failure of the read closes the socket
+        return status.WS_1013_TRY_AGAIN_LATER
+    if stored is None or stored.disabled:
+        return status.WS_1008_POLICY_VIOLATION
+    if list(dict.fromkeys(stored.roles)) != list(raw.roles):
+        return status.WS_1008_POLICY_VIOLATION
+    return None
+
+
 def _admission(
     app_: Any, raw: Principal, investigation_id: str
-) -> Callable[[], Awaitable[Principal | None]]:
+) -> Callable[[], Awaitable[Principal | int]]:
     """ADR-145 Amendment 5 ("never cached"): an open socket's principal, read afresh at each
     message: its custom roles' rights as they are now (`with_custom_roles`, the bearer and the
-    ticket alike), and its case level as it is now (a grant or a team's grant taken away). `None`
-    once the reader no longer holds a level, and the socket is closed."""
+    ticket alike), and its case level as it is now (a grant or a team's grant taken away). Once it
+    no longer stands, the code the socket is closed with: 1013 when the people store cannot answer
+    (try again later), 1008 otherwise (ADR-148 Amendment 8 point 1)."""
 
-    async def admitted() -> Principal | None:
+    async def admitted() -> Principal | int:
+        # ADR-148 Amendment 8: a person disabled, or whose roles changed, since the socket opened;
+        # or the store not answering, which is 1013, never 1008.
+        if (refused := await _socket_standing(app_, raw)) is not None:
+            return refused
         principal = await with_custom_roles(app_, raw)
         try:
             await app_.state.investigations.get_authorized(
                 investigation_id, principal, need=AccessLevel.VIEWER
             )
         except (InvestigationNotFoundError, InsufficientAccessError):
-            return None
+            return status.WS_1008_POLICY_VIOLATION
         return principal
 
     return admitted
@@ -20111,8 +20246,8 @@ class _SocketState:
     buffering: bool = False
     buffer: list[str] = field(default_factory=list)
     overflowed: bool = False
-    #: ADR-145 Amendment 5: asked before each message is acted on; `None` closes the socket.
-    admitted: Callable[[], Awaitable[Principal | None]] | None = None
+    #: ADR-145 Amendment 5: asked before each message is acted on; a close code closes the socket.
+    admitted: Callable[[], Awaitable[Principal | int]] | None = None
 
 
 async def _send_all(
@@ -20167,8 +20302,8 @@ async def _forward_notifications(
     async for message in pubsub.listen():
         if message["type"] != "message":
             continue
-        if state.admitted is not None and await state.admitted() is None:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        if state.admitted is not None and isinstance(refused := await state.admitted(), int):
+            await websocket.close(code=refused)
             return
         if state.stuck:
             # The reader was told their view is over the cap and is sent nothing more until a
@@ -20271,8 +20406,8 @@ async def _handle_resync_requests(
     state = state or _SocketState()
     while True:
         payload = await websocket.receive_json()
-        if state.admitted is not None and await state.admitted() is None:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        if state.admitted is not None and isinstance(refused := await state.admitted(), int):
+            await websocket.close(code=refused)
             return
         last_ack = payload.get("last_acknowledged_seq")
         if last_ack is None:
@@ -20300,6 +20435,13 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
         raw = await _authenticate_websocket(websocket)
     except PrincipalResolutionError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    except PrincipalLookupUnavailable:
+        await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
+        return
+    # ADR-148 Amendment 8: a ticket minted before a disable or a change of roles stands no longer.
+    if (refused := await _socket_standing(websocket.app, raw)) is not None:
+        await websocket.close(code=refused)
         return
     # One person, one principal: the bearer's and the ticket's alike have their custom roles' rights
     # read now, as `get_principal` does (ADR-145 Amendment 5).

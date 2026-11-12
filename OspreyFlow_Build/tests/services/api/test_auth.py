@@ -44,9 +44,7 @@ from tests.conftest import (
 def _config(jwks_url: str, **overrides: object) -> ApiConfig:
     defaults: dict[str, object] = dict(
         valkey=ValkeyConfig(host="localhost", port=6379, db=0),
-        postgres=PostgresConfig(
-            host="localhost", port=5432, user="x", password="x", database="x"
-        ),
+        postgres=PostgresConfig(host="localhost", port=5432, user="x", password="x", database="x"),
         oidc_jwks_url=jwks_url,
         oidc_audience=None,
         oidc_issuer=None,
@@ -130,7 +128,7 @@ def test_an_unknown_kid_triggers_a_jwks_refresh_and_then_succeeds(
 ) -> None:
     """Key rotation: a token signed with a key not yet in the cached JWKS
     (because it rotated in *after* the resolver's last fetch) must still
-    resolve, via `PyJWKClient`'s built-in refresh-on-unknown-kid — proving
+    resolve, via `SigningKeys`' refresh on an unknown kid — proving
     the resolver doesn't cache the JWKS forever or require a restart on
     rotation."""
     directory, url = jwks_dir
@@ -141,12 +139,8 @@ def test_an_unknown_kid_triggers_a_jwks_refresh_and_then_succeeds(
     jwks_path.write_text(json.dumps({"keys": [old_jwk]}))
 
     resolver = PrincipalResolver(_config(url))
-    # `PyJWKClient`'s unknown-kid refresh has its own cooldown — a real,
-    # deliberate rate limit against a client hammering the endpoint with
-    # bad `kid`s — separate from this test's concern (that the refresh
-    # mechanism itself works). Disabling it here is a test-only knob, not
-    # a change to what `PrincipalResolver` configures in production.
-    resolver._jwk_client.cooldown_duration = 0
+    # The first unknown kid is fetched for at once; a second within five minutes is not
+    # (`principal_auth.SigningKeys`, ADR-148 Amendment 8: `test_auth_entra_claims.py`).
     # Prime the resolver's cache against the JWKS as it stood before rotation.
     resolver.resolve(sign_token(old_key, default_claims(), kid="old-key"))
 
@@ -292,5 +286,23 @@ async def test_an_unconfigured_deployment_is_unavailable_not_refused(jwks_url: s
     resolver = PrincipalResolver(_config(jwks_url))
 
     with pytest.raises(PrincipalExchangeUnavailable):
+        await resolver.resolve_for_owner_detailed("analyst-narrow")
+    assert await resolver.resolve_for_owner("analyst-narrow") is None
+
+
+async def test_owner_resolution_with_the_keys_unreadable_is_unavailable_never_an_exception(
+    token_exchange_url: str,
+    token_exchange_registry: TokenExchangeRegistry,
+) -> None:
+    """The orchestrator's second review of P10 part 2, item 6, on the Keycloak mapping: the
+    exchange answers, but the realm's keys cannot be read to check the exchanged token. That is
+    `PrincipalExchangeUnavailable` (ADR-044's path: the run marked stopped), and the caller-facing
+    form is None, as on main, never a `SigningKeysUnavailable` the scheduler, a monitor, a
+    screening run or a recipe run does not expect."""
+    token_exchange_registry.register("analyst-narrow", default_claims(sub="analyst-narrow"))
+    resolver = PrincipalResolver(
+        _config_with_exchange("http://127.0.0.1:9/jwks.json", token_exchange_url)
+    )
+    with pytest.raises(PrincipalExchangeUnavailable, match="could not be checked"):
         await resolver.resolve_for_owner_detailed("analyst-narrow")
     assert await resolver.resolve_for_owner("analyst-narrow") is None

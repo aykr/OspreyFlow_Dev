@@ -19,7 +19,17 @@ from __future__ import annotations
 
 import jwt
 
-from principal_auth import OidcSettings
+from principal_auth import (
+    DEFAULT_CLAIM_MAPPING,
+    ENTRA_ALGORITHMS,
+    LEEWAY_SECONDS,
+    ClaimMapping,
+    OidcSettings,
+    PrincipalResolutionError,
+    SigningKeys,
+    SigningKeysUnavailable,
+    is_object_id,
+)
 
 SERVICE_ACCOUNT_PREFIX = "service-account-"
 
@@ -47,32 +57,79 @@ class ServiceIdentityRefused(Exception):
         self.status = status
 
 
+NOT_A_SERVICE_IDENTITY = (
+    "the sign-in is not a service identity's: sign in with the client-credentials "
+    "grant of the client the pipeline is owned externally by"
+)
+
+
 class ServiceIdentityVerifier:
-    def __init__(self, config: OidcSettings) -> None:
+    """**On Entra ID sign-in** (ADR-148 Amendment 8) a service identity's token is an app-only
+    token of the pinned tenant: the configured issuer and audience, `tid` the tenant, no delegated
+    `scp`, `idtyp` `app` where present, and its client (`azp`, or `appid` in v1.0; the same if both)
+    an application id that is neither the Glass's nor this API's own. Entra issues no
+    `preferred_username` for an application, so the Keycloak rule below cannot apply. **On
+    Keycloak**, a token carrying `tid` (Entra's) is refused, as `principal_auth` refuses one."""
+
+    def __init__(
+        self,
+        config: OidcSettings,
+        *,
+        claim_mapping: ClaimMapping = DEFAULT_CLAIM_MAPPING,
+        signing_keys: SigningKeys | None = None,
+    ) -> None:
+        mapping = ClaimMapping.model_validate(claim_mapping.model_dump(mode="python"))
+        if mapping.is_entra and not (config.oidc_issuer and config.oidc_audience):
+            raise ValueError(
+                "a service identity on Entra ID needs the token issuer and audience checked "
+                "(OIDC_ISSUER, OIDC_AUDIENCE)"
+            )
+        self._mapping = mapping
         self._config = config
-        self._jwk_client = jwt.PyJWKClient(
-            config.oidc_jwks_url, cache_keys=True, lifespan=int(config.oidc_jwks_ttl_seconds)
+        # The keys as `principal_auth` reads them: kept, an unknown key id fetched again at most
+        # once per five minutes, each fetch bounded (ADR-148 Amendment 8). The Conduit passes the
+        # person path's own set (the same URL), so the two share one cache and one fetch limit.
+        self._keys = signing_keys or SigningKeys(
+            config.oidc_jwks_url, config.oidc_jwks_ttl_seconds
+        )
+        self._algorithms = (
+            list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)
         )
 
     def client_of(self, token: str) -> str:
         """The client a service identity's token names; `ServiceIdentityRefused` otherwise."""
         try:
-            key = self._jwk_client.get_signing_key_from_jwt(token)
+            key = self._keys.key_for(token)
             claims = jwt.decode(
                 token,
-                key.key,
-                algorithms=list(self._config.oidc_algorithms),
+                key,
+                algorithms=self._algorithms,
+                leeway=LEEWAY_SECONDS,
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={
                     # `azp` is judged below: a person's verified token without one is 403, not 401.
-                    "require": ["sub"],
+                    # `exp` too: a client-credentials token always carries one.
+                    "require": ["sub", "exp"],
                     "verify_aud": self._config.oidc_audience is not None,
                     "verify_iss": self._config.oidc_issuer is not None,
                 },
             )
+        except SigningKeysUnavailable as error:
+            raise ServiceIdentityRefused(
+                "the sign-in could not be checked: the identity provider's signing keys could not "
+                "be read",
+                status=503,
+            ) from error
+        except PrincipalResolutionError as error:
+            raise ServiceIdentityRefused("the sign-in could not be verified", status=401) from error
         except jwt.PyJWTError as error:
             raise ServiceIdentityRefused("the sign-in could not be verified", status=401) from error
+        if self._mapping.is_entra:
+            return self._entra_client(claims)
+        if "tid" in claims:
+            # Keycloak never emits `tid`: an Entra token is no service identity here.
+            raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
         client = claims.get("azp")
         username = claims.get("preferred_username")
         if (
@@ -80,11 +137,28 @@ class ServiceIdentityVerifier:
             or not client
             or username != f"{SERVICE_ACCOUNT_PREFIX}{client.lower()}"
         ):
-            raise ServiceIdentityRefused(
-                "the sign-in is not a service identity's: sign in with the client-credentials "
-                "grant of the client the pipeline is owned externally by",
-                status=403,
-            )
+            raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
         if is_deployment_client(client):
+            raise ServiceIdentityRefused(DEPLOYMENT_CLIENT_WORDS, status=403)
+        return client
+
+    def _entra_client(self, claims: dict[str, object]) -> str:
+        if claims.get("tid") != self._mapping.tenant_id:
+            raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
+        if "scp" in claims or claims.get("idtyp", "app") != "app":
+            # A delegated token is a person's, whichever application asked for it.
+            raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
+        clients = {claims[c] for c in ("azp", "appid") if c in claims}
+        if len(clients) != 1:
+            raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
+        client = clients.pop()
+        if not isinstance(client, str) or not is_object_id(client):
+            raise ServiceIdentityRefused(NOT_A_SERVICE_IDENTITY, status=403)
+        if client in (
+            self._mapping.client_id,
+            self._mapping.api_client_id,
+            self._config.oidc_audience,
+        ):
+            # The Glass's own registration, or this API's: the deployment's, never an orchestrator.
             raise ServiceIdentityRefused(DEPLOYMENT_CLIENT_WORDS, status=403)
         return client

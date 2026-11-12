@@ -24,15 +24,24 @@ verbatim below, because they document decisions rather than location.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
+import os
 import re
-from collections.abc import Mapping
+import threading
+import time
+import urllib.request
+from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote
 
 import httpx
 import jwt
-from jwt import PyJWKClient
+from jwt import PyJWKSet
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from schemas.domain import Principal
@@ -94,21 +103,21 @@ class OidcResolverSettings:
 # codes the principal may receive."
 #
 # **The JWKS source is a config point, not a hardcoded key.** `ApiConfig.
-# oidc_jwks_url` names the endpoint `PyJWKClient` fetches and caches keys
-# from — a Keycloak realm's `.../protocol/openid-connect/certs` in a real
-# deployment, a loopback HTTP fixture in tests
-# (`tests/services/api/test_auth.py`) — `PyJWKClient` deliberately rejects
-# any scheme but `http`/`https` (closing exactly the local-file-read risk a
-# `jku` header or a misconfigured URL could otherwise open), so the fixture
-# is a real, if ephemeral, HTTP server rather than a `file://` URL. Key
-# rotation is the thing that breaks first in a real deployment, and
-# `PyJWKClient` already does the two things that matter for it: a
-# TTL-bounded cache (`cache_keys=True, lifespan=...`) and one refresh-and-
-# retry when a token's `kid` isn't in the cached set (`PyJWKClient.
-# get_signing_key`) — nothing here reimplements either, and nothing here
-# special-cases the fixture path, so the exact same code runs against the
-# test fixture's URL as against a real IdP later; only the config value
-# changes.
+# oidc_jwks_url` names the endpoint `SigningKeys` fetches and keeps keys
+# from — a Keycloak realm's `.../protocol/openid-connect/certs` or Entra ID's
+# `.../discovery/v2.0/keys` in a real deployment, a loopback HTTP fixture in
+# tests (`tests/services/api/test_auth.py`). `SigningKeys` refuses any scheme
+# but `http`/`https` (closing the local-file-read risk a misconfigured URL
+# could otherwise open), so the fixture is a real, if ephemeral, HTTP server
+# rather than a `file://` URL. Key rotation is the thing that breaks first in
+# a real deployment: `SigningKeys` keeps the set for its configured time,
+# fetches again for a key id it does not hold (at most once per five
+# minutes), and keeps the last good set through a short outage (ADR-148
+# Amendment 8; it replaced `PyJWKClient`, whose cache could not be told to
+# fetch in one thread while others go on, nor to tell an unreachable
+# identity provider from a body that is not JSON). Nothing here special-cases
+# the fixture path, so the same code runs against the fixture's URL as
+# against a real IdP; only the config value changes.
 #
 # **Claim names are this deployment's mapping, not a standard.** OIDC has no
 # standard claim for `clearance`, `org_unit` or `receivable_handling_codes`
@@ -159,8 +168,20 @@ CLAIM_ROLES = "roles"
 # group grants nothing.
 
 
-#: An Entra object id (a tenant, a group): lower-case, as Entra writes it in a token.
+#: The delegated scope the Glass asks this API for, unless the mapping names another.
+DEFAULT_SCOPE = "access_as_user"
+
+#: The claim mapping's environment variable: the profile renders `cloud_platform.claims` into it as
+#: JSON (ADR-148 Amendment 8); unset, the fixed names (Keycloak).
+CLAIM_MAPPING_VARIABLE = "OSPREY_CLAIM_MAPPING"
+
+#: An Entra object id (a tenant, a group, a person, an application): lower-case, as Entra writes it
+#: in a token. The one pattern: `entra_people` and `service_identity` use `is_object_id`.
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def is_object_id(value: object) -> bool:
+    return isinstance(value, str) and bool(_GUID.match(value))
 
 
 class _Source(BaseModel):
@@ -229,8 +250,11 @@ class ClaimMapping(BaseModel):
     #: The Glass's own app registration: an Entra token's `azp` (v2.0) or `appid` (v1.0) must name
     #: it, so a token another application obtained for this API is no session of ours.
     client_id: str | None = None
+    #: This API's own app registration (application id): never an orchestrator's service
+    #: identity, whichever form the audience takes (v1.0 tokens name the `api://` URI there).
+    api_client_id: str | None = None
     #: The delegated scope the Glass asks for; an Entra token's `scp` must include it.
-    scope: str = "access_as_user"
+    scope: str = DEFAULT_SCOPE
 
     @model_validator(mode="after")
     def _entra_needs_its_tenant(self) -> ClaimMapping:
@@ -244,6 +268,18 @@ class ClaimMapping(BaseModel):
             raise ValueError("an Entra ID mapping needs `client_id`, the Glass's application id")
         if not self.scope or " " in self.scope:
             raise ValueError("`scope` must name one delegated scope")
+        if self.api_client_id is not None and not _GUID.match(self.api_client_id):
+            raise ValueError("`api_client_id` must be the API's application id (a GUID)")
+        if self.tenant_id is None and (
+            self.client_id is not None
+            or self.api_client_id is not None
+            or self.scope != DEFAULT_SCOPE
+        ):
+            # Only an Entra mapping checks the client and the scope; accepted here they would be
+            # ignored, and a deployment that set them would believe they were checked.
+            raise ValueError(
+                "`client_id` and `scope` are checked only for an Entra ID mapping: set `tenant_id`"
+            )
         fixed = (
             self.clearance == ValueSource(claim=CLAIM_CLEARANCE)
             and self.org_unit == ValueSource(claim=CLAIM_ORG_UNIT)
@@ -261,6 +297,21 @@ class ClaimMapping(BaseModel):
     def is_entra(self) -> bool:
         return self.tenant_id is not None
 
+    @classmethod
+    def from_env(cls) -> ClaimMapping:
+        """The deployment's mapping from `OSPREY_CLAIM_MAPPING` (JSON), or the fixed names when it
+        is unset. A value that is not JSON or not a valid mapping stops the Conduit at start, in
+        words: a sign-in mapping that silently fell back to the fixed names would be Keycloak-
+        handled, with no tenant check."""
+        raw = os.environ.get(CLAIM_MAPPING_VARIABLE, "").strip()
+        if not raw:
+            return DEFAULT_CLAIM_MAPPING
+        try:
+            data = json.loads(raw)
+        except ValueError as exc:
+            raise ValueError(f"{CLAIM_MAPPING_VARIABLE} is not JSON: {exc}") from None
+        return cls.model_validate(data)
+
     def required_claims(self) -> list[str]:
         """The claims PyJWT must find before anything is mapped. `tid` and `oid` are checked once
         each, in `principal_from_claims` (an absent one fails there), and `sub`'s type is PyJWT's
@@ -269,6 +320,9 @@ class ClaimMapping(BaseModel):
 
 
 DEFAULT_CLAIM_MAPPING = ClaimMapping()
+
+#: How long a session waits for its stored roles before the request is a 503.
+ROLE_LOOKUP_TIMEOUT_SECONDS = 2.0
 
 #: Entra's own cap on the groups a JWT carries; past it the claim is replaced by an overage.
 MAX_TOKEN_GROUPS = 200
@@ -350,10 +404,319 @@ def _handling_codes(claims: Mapping[str, Any], source: CodesSource, groups: list
     return codes
 
 
-def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> Principal:
+#: Entra's two issuer forms, v1.0 and v2.0, each naming the tenant (Amendment 6's assumptions).
+_ENTRA_ISSUER = re.compile(
+    r"^https://(?:sts\.windows\.net/(?P<v1>[0-9a-f-]{36})/"
+    r"|login\.microsoftonline\.com/(?P<v2>[0-9a-f-]{36})/v2\.0)$"
+)
+
+
+def _tenant_of_entra_issuer(value: object) -> str | None:
+    """The tenant an Entra issuer URL names, in either form, or None for anything else (another
+    provider, a federation's own issuer, a malformed URL). Entra sends `idp` only for an account
+    homed elsewhere, and in either form whatever the token's own version, so a member's `idp` is
+    compared by its tenant, never as a string against `iss` (CARRIES, P10 round 2)."""
+    if not isinstance(value, str):
+        return None
+    found = _ENTRA_ISSUER.match(value)
+    if found is None:
+        return None
+    tenant = found.group("v1") or found.group("v2")
+    return tenant if _GUID.match(tenant) else None
+
+
+@dataclass(frozen=True)
+class StoredPerson:
+    """What the deployment keeps of an Entra person (ADR-148 Amendment 8): the roles Admin › People
+    gave them and whether an administrator disabled them here. Entra holds the account; these are
+    ours."""
+
+    roles: tuple[str, ...]
+    disabled: bool
+
+
+@dataclass(frozen=True)
+class SeenPerson:
+    """What a verified token says of the person, for Admin › People's list: their names as Entra
+    gives them (`name`, `preferred_username`, `email`, each text or none) and the clearance, unit
+    and codes the mapping resolved. Never their roles: those are only ever the store's."""
+
+    name: str | None
+    username: str | None
+    email: str | None
+    clearance: str
+    org_unit: str
+    receivable_handling_codes: tuple[str, ...]
+
+
+def _text_claim(claims: Mapping[str, Any], name: str) -> str | None:
+    value = claims.get(name)
+    return value[:200] if isinstance(value, str) and value else None
+
+
+class RoleSource(Protocol):
+    """Where an Entra principal's roles are read (ADR-148 Amendment 8, the orchestrator's ruling of
+    11 November 2026): the deployment's own store, keyed by tenant and object id. `person` records
+    a person on their first sign-in (with no roles) and answers what is stored; it raises on any
+    failure, which the resolver turns into `PrincipalLookupUnavailable`, never a principal."""
+
+    async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson: ...
+
+
+class PrincipalLookupUnavailable(Exception):
+    """The stored person could not be read in time (the store down, slow or answering something
+    malformed): a 503, never a principal with no roles and never one from an earlier read."""
+
+
+class SigningKeysUnavailable(PrincipalLookupUnavailable):
+    """The identity provider's signing keys could not be read (unreachable, or no answer in time):
+    a 503 in its own words, never "token rejected", since nothing about the token is known."""
+
+
+#: How long a session waits for the identity provider's keys before it is a 503.
+KEYS_TIMEOUT_SECONDS = 5.0
+#: At most one fetch of the keys for a key id not held, per this long (ADR-148 Amendment 8): a
+#: token naming an unknown key cannot make every request fetch them again. A key published within
+#: this long after such a fetch is refused until the next one (or the keys' own time is up).
+UNKNOWN_KID_REFETCH_SECONDS = 300.0
+#: Past the keys' own time, a fetch that fails leaves the last good set in use for this long
+#: (logged), so a short outage at the identity provider signs nobody out; after it, a 503.
+KEYS_GRACE_SECONDS = 3600.0
+#: Leeway on a token's times, for clocks a little apart.
+LEEWAY_SECONDS = 60
+#: The one algorithm an Entra ID token is signed with, whatever `OIDC_ALGORITHMS` says.
+ENTRA_ALGORITHMS = ("RS256",)
+#: The keys' own threads: a slow identity provider holds these, never `asyncio.to_thread`'s pool
+#: that the rest of the Conduit shares.
+KEYS_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="signing-keys")
+
+_log = logging.getLogger(__name__)
+
+
+async def in_keys_thread[T](call: Callable[..., T], *args: Any) -> T:
+    """`call(*args)` in the keys' own threads, bounded **in total** by `KEYS_TIMEOUT_SECONDS`: a
+    slow identity provider never holds the event loop, and however its answer is slow (a name that
+    does not resolve, a connection, a body that trickles in under each read's own timeout) the
+    caller has `SigningKeysUnavailable` by then. A fetch still running past it is abandoned
+    (`SigningKeys._take_fetch`), so the next caller may try again."""
+    loop = asyncio.get_running_loop()
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(KEYS_EXECUTOR, partial(call, *args)),
+            timeout=KEYS_TIMEOUT_SECONDS,
+        )
+    except TimeoutError as exc:
+        raise SigningKeysUnavailable(
+            "sign-in is unavailable: the identity provider's signing keys did not answer"
+        ) from exc
+
+
+_UNREADABLE = "sign-in is unavailable: the identity provider's signing keys could not be read"
+
+
+class SigningKeys:
+    """The identity provider's signing keys, as the resolver and the service identity's verifier
+    read them (ADR-148 Amendment 8; the orchestrator's second review of P10 part 2):
+
+    - **kept** for the configured time, and fetched by **one thread at a time**: while one fetches,
+      the others go on with the last good set rather than wait; concurrent sign-ins that find the
+      keys out of date fetch once (each reads the set's age once, before anything else);
+    - past their time, a fetch that fails leaves the last good set in use for
+      `KEYS_GRACE_SECONDS` (logged), then `SigningKeysUnavailable`. A key the identity provider has
+      rotated out therefore stays valid for up to the keys' time plus that hour while it cannot be
+      reached;
+    - for a key id not held, fetched again at most once per `UNKNOWN_KID_REFETCH_SECONDS`, counted
+      from the last fetch that succeeded (an unreachable identity provider is a 503 each time,
+      never a 401); a key not published is `PrincipalResolutionError` (401);
+    - each fetch bounded in total by `in_keys_thread`'s wait; a fetch held past
+      `KEYS_TIMEOUT_SECONDS` is abandoned, its answer dropped, and the next caller fetches. Every
+      way the identity provider can fail to give keys (unreachable, a refusal, a body that is not
+      JSON, a set with no usable key, a set whose keys are all for encryption or have no key id)
+      is `SigningKeysUnavailable`, a 503 in words, never "token rejected", which signs people out.
+
+    Synchronous: callers on the event loop use `in_keys_thread`."""
+
+    def __init__(
+        self, url: str, ttl_seconds: float, *, clock: Callable[[], float] = time.monotonic
+    ) -> None:
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError("the signing keys' URL (OIDC_JWKS_URL) must be http or https")
+        self._url = url
+        self._ttl = ttl_seconds
+        self._clock = clock
+        self._held: dict[str, Any] | None = None
+        self._fetched_at = float("-inf")
+        self._last_unknown_fetch = float("-inf")
+        # Who is fetching now, and until when (real time, whatever `clock` is): one at a time, a
+        # fetch past its deadline abandoned. Guarded by `_state`, which nothing holds across I/O.
+        self._state = threading.Condition()
+        self._fetch_owner: object | None = None
+        self._fetch_deadline = 0.0
+        self._stamp_lock = threading.Lock()
+        #: Fetches made (each a request to the identity provider), for the record.
+        self.fetches = 0
+
+    def _fetch(self) -> dict[str, Any]:
+        self.fetches += 1
+        try:
+            request = urllib.request.Request(self._url, headers={"User-Agent": "ospreyflow"})
+            with urllib.request.urlopen(request, timeout=KEYS_TIMEOUT_SECONDS) as response:  # noqa: S310 - the configured JWKS URL
+                data = json.load(response)
+            jwk_set = PyJWKSet.from_dict(data)
+        except (OSError, ValueError, TypeError, AttributeError, jwt.PyJWTError) as exc:
+            # OSError: unreachable, refused or timed out (URLError, HTTPError, TimeoutError);
+            # ValueError: not JSON; the rest: not a key set, or none of its keys usable.
+            raise SigningKeysUnavailable(_UNREADABLE) from exc
+        keys = {k.key_id: k for k in jwk_set.keys if k.key_id and k.public_key_use in ("sig", None)}
+        if not keys:
+            # Keys only for encryption, or none naming a key id: nothing a token can be checked by.
+            raise SigningKeysUnavailable(_UNREADABLE)
+        return keys
+
+    def _take_fetch(self, *, wait: bool) -> object | None:
+        """The right to fetch, one thread at a time. A fetch held past `KEYS_TIMEOUT_SECONDS` is
+        abandoned (its thread stuck on a slow identity provider, its caller already answered by
+        `in_keys_thread`), so it is taken from it. None when another thread fetches and `wait` is
+        false; with `wait`, None when none finished within `KEYS_TIMEOUT_SECONDS`."""
+        token = object()
+        until = time.monotonic() + KEYS_TIMEOUT_SECONDS
+        with self._state:
+            while True:
+                now = time.monotonic()
+                if self._fetch_owner is None or now >= self._fetch_deadline:
+                    self._fetch_owner = token
+                    self._fetch_deadline = now + KEYS_TIMEOUT_SECONDS
+                    return token
+                if not wait or now >= until:
+                    return None
+                self._state.wait(timeout=min(until, self._fetch_deadline) - now)
+
+    def _give_back(self, token: object, keys: dict[str, Any] | None) -> None:
+        """The fetch done: its keys kept, unless it was abandoned meanwhile (then dropped)."""
+        with self._state:
+            if self._fetch_owner is token:
+                if keys is not None:
+                    self._held, self._fetched_at = keys, self._clock()
+                self._fetch_owner = None
+                self._state.notify_all()
+
+    def _refresh(self, *, wait: bool, seen: float) -> None:
+        """Fetch, one thread at a time, unless another has fetched since `seen`. With `wait`, wait
+        for a fetch under way (bounded) and use what it got; without, go on with the last good set
+        while another thread fetches."""
+        token = self._take_fetch(wait=wait)
+        if token is None:
+            if wait:
+                raise SigningKeysUnavailable(_UNREADABLE)
+            return
+        keys: dict[str, Any] | None = None
+        try:
+            if self._fetched_at != seen and self._held is not None:
+                return  # another thread fetched while this one waited
+            keys = self._fetch()
+        finally:
+            self._give_back(token, keys)
+
+    def _current(self, seen: float) -> dict[str, Any]:
+        age = self._clock() - seen
+        if age >= self._ttl:
+            past_grace = self._held is None or age >= self._ttl + KEYS_GRACE_SECONDS
+            try:
+                self._refresh(wait=past_grace, seen=seen)
+            except SigningKeysUnavailable:
+                if past_grace:
+                    raise
+                _log.warning(
+                    "the identity provider's signing keys could not be read; the last good set, "
+                    "%.0f s old, is used for at most %.0f s more",
+                    age, self._ttl + KEYS_GRACE_SECONDS - age,
+                )  # fmt: skip
+        if self._held is None:
+            raise SigningKeysUnavailable(_UNREADABLE)
+        return self._held
+
+    def key_for(self, token: str) -> Any:
+        try:
+            kid = jwt.get_unverified_header(token).get("kid")
+        except jwt.PyJWTError as exc:
+            raise PrincipalResolutionError(f"token rejected: {exc}") from exc
+        seen = self._fetched_at
+        keys = self._current(seen)
+        if kid not in keys:
+            with self._stamp_lock:
+                now = self._clock()
+                fresh = self._fetched_at != seen  # fetched in this very call: it opens the window
+                due = not fresh and now - self._last_unknown_fetch >= UNKNOWN_KID_REFETCH_SECONDS
+                if fresh:
+                    self._last_unknown_fetch = now
+            if due:
+                self._refresh(wait=True, seen=self._fetched_at)
+                # Only once a fetch has succeeded: an unreachable identity provider stays a 503.
+                with self._stamp_lock:
+                    self._last_unknown_fetch = self._clock()
+                keys = self._held or {}
+        if kid not in keys:
+            raise PrincipalResolutionError(
+                "token rejected: it names a signing key the identity provider does not publish"
+            )
+        return keys[kid].key
+
+
+@dataclass(frozen=True)
+class _Verified:
+    """A verified token's principal parts, before roles: built only by `_verified_parts`."""
+
+    id: str
+    clearance: str
+    org_unit: str
+    codes: list[str]
+    token_roles: list[str]
+
+
+def _stored_roles(stored: StoredPerson) -> list[str]:
+    roles = stored.roles
+    if not isinstance(roles, tuple) or not all(isinstance(r, str) and r for r in roles):
+        raise PrincipalLookupUnavailable("the stored person's roles are not a list of role names")
+    return list(dict.fromkeys(roles))
+
+
+def principal_from_claims(
+    claims: Mapping[str, Any], mapping: ClaimMapping, stored: StoredPerson | None = None
+) -> Principal:
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
-    claims."""
+    claims. An Entra principal's roles are the stored person's (`stored`, read by the resolver
+    from its `RoleSource`), never the token's; one disabled here is refused (401)."""
+    verified = _verified_parts(claims, mapping)
+    if mapping.is_entra:
+        if stored is None:
+            raise PrincipalLookupUnavailable(
+                "an Entra principal's roles are read from the deployment's store, and none was read"
+            )
+        if stored.disabled:
+            raise PrincipalResolutionError(
+                "this account is disabled in this deployment: ask an administrator"
+            )
+        roles = _stored_roles(stored)
+    else:
+        if stored is not None:
+            raise PrincipalLookupUnavailable("a stored person is read only for an Entra mapping")
+        roles = verified.token_roles
+    return Principal(
+        # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
+        # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
+        # application. Keycloak: `sub`, required and refused unless a string by PyJWT's decode.
+        id=verified.id,
+        clearance=verified.clearance,
+        org_unit=verified.org_unit,
+        receivable_handling_codes=verified.codes,
+        roles=roles,
+    )
+
+
+def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verified:
+    """Every refusal a token's claims can earn, before anything is read about the person: a
+    refused token never records a person in the store."""
     if mapping.is_entra:
         if claims.get("tid") != mapping.tenant_id:
             raise PrincipalResolutionError("token's tid is missing or names another tenant")
@@ -364,7 +727,7 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
             raise PrincipalResolutionError(
                 "token is app-only (no delegated scp): a service principal is no person"
             )
-        if mapping.scope not in scope.split(" "):
+        if not isinstance(scope, str) or mapping.scope not in scope.split(" "):
             raise PrincipalResolutionError(
                 f"token's scp does not grant this API's scope ({mapping.scope!r})"
             )
@@ -374,7 +737,7 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
             raise PrincipalResolutionError("token was not issued to the Glass's client")
         # A guest (B2B) account is homed in another tenant: `acct` 1, or an `idp` other than the
         # issuer. Refused until the deployment decides to admit guests (ADR-148 Amendment 6).
-        guest_idp = "idp" in claims and claims["idp"] != claims.get("iss")
+        guest_idp = "idp" in claims and _tenant_of_entra_issuer(claims["idp"]) != mapping.tenant_id
         if claims.get("acct") in (1, "1") or guest_idp:
             raise PrincipalResolutionError("token is a guest account's: guests are not admitted")
     elif "tid" in claims:
@@ -389,16 +752,14 @@ def principal_from_claims(claims: Mapping[str, Any], mapping: ClaimMapping) -> P
     groups = _token_groups(claims, mapping) if uses_groups else []
     clearance = _single_value(claims, mapping.clearance, "clearance", groups)
     org_unit = _single_value(claims, mapping.org_unit, "organisational unit", groups)
-    return Principal(
-        # Entra: the object id, one per person in the (pinned) tenant, which Graph also gives, so
-        # Admin › People can assign roles before a first sign-in; Entra's `sub` is pairwise per
-        # application. Keycloak: `sub`, required and refused unless a string by PyJWT's decode.
+    return _Verified(
         id=str(claims["oid"]) if mapping.is_entra else str(claims["sub"]),
         clearance=clearance,
         org_unit=org_unit,
-        receivable_handling_codes=_handling_codes(claims, mapping.handling_codes, groups),
-        # Keycloak's `roles` come from Admin › People; an Entra token's are not ours to read.
-        roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
+        codes=_handling_codes(claims, mapping.handling_codes, groups),
+        # Keycloak's `roles` come from Admin › People through its attribute; an Entra token's are
+        # app roles an Entra administrator assigns, never read (Amendment 6 point 4).
+        token_roles=[] if mapping.is_entra else _string_list(claims, CLAIM_ROLES, "roles"),
     )
 
 
@@ -466,10 +827,10 @@ def _access_token_of(response: httpx.Response, what: str) -> str:
 
 
 class PrincipalResolver:
-    """One `PyJWKClient` per configured JWKS URL, built once at process
+    """One `SigningKeys` per configured JWKS URL, built once at process
     start and reused for the process lifetime — `resolve()` itself makes
-    no state-carrying assumption between calls beyond that client's own
-    internal TTL cache, so this class carries nothing that would break
+    no state-carrying assumption between calls beyond that set's own
+    TTL cache, so this class carries nothing that would break
     `services/api`'s statelessness if two instances of it exist behind a
     load balancer with different local caches: both ask the same JWKS URL
     and converge on the same keys. `resolve_for_owner`'s own `httpx.
@@ -477,7 +838,14 @@ class PrincipalResolver:
     process, `aclose()`d at lifespan shutdown alongside every other
     client this codebase already closes there."""
 
-    def __init__(self, config: OidcSettings, *, claim_mapping: ClaimMapping | None = None) -> None:
+    def __init__(
+        self,
+        config: OidcSettings,
+        *,
+        claim_mapping: ClaimMapping | None = None,
+        role_source: RoleSource | None = None,
+        role_lookup_timeout_seconds: float = ROLE_LOOKUP_TIMEOUT_SECONDS,
+    ) -> None:
         # Validated again from plain data: a copy or a `model_construct` skips the validators,
         # and they are what make an Entra mapping checked as one.
         mapping = ClaimMapping.model_validate(
@@ -494,12 +862,36 @@ class PrincipalResolver:
                 raise ValueError(
                     "an Entra ID claim mapping needs the token audience checked (OIDC_AUDIENCE)"
                 )
+            if role_source is None:
+                # Its roles live in the deployment's store (Amendment 8); a resolver that could not
+                # read them would build principals with none, or with the token's app roles.
+                raise ValueError("an Entra ID claim mapping needs the deployment's people store")
+        elif role_source is not None:
+            raise ValueError("a people store is read only for an Entra ID claim mapping")
+        if role_lookup_timeout_seconds <= 0:
+            raise ValueError("the role lookup's timeout must be positive")
+        self._role_source = role_source
+        self._role_lookup_timeout = role_lookup_timeout_seconds
         self._config = config
         self._claim_mapping = mapping
-        self._jwk_client = PyJWKClient(
-            config.oidc_jwks_url, cache_keys=True, lifespan=config.oidc_jwks_ttl_seconds
+        self._keys = SigningKeys(config.oidc_jwks_url, config.oidc_jwks_ttl_seconds)
+        # An Entra mapping's tokens are RS256 alone, whatever OIDC_ALGORITHMS says.
+        self._algorithms = (
+            list(ENTRA_ALGORITHMS) if mapping.is_entra else list(config.oidc_algorithms)
         )
         self._exchange_http = httpx.AsyncClient(timeout=10.0)
+
+    @property
+    def signing_keys(self) -> SigningKeys:
+        """The keys this resolver reads, which the run API's service identity verifier shares
+        (one cache, one fetch limit; the orchestrator's second review, item 8)."""
+        return self._keys
+
+    @property
+    def claim_mapping(self) -> ClaimMapping:
+        """The mapping this resolver was built with, validated: what the run API's service
+        identities are judged by too, so the two never disagree."""
+        return self._claim_mapping
 
     async def aclose(self) -> None:
         await self._exchange_http.aclose()
@@ -648,6 +1040,14 @@ class PrincipalResolver:
         requirement, and ADR-043's own freshness argument, both mean every call is a real,
         independent exchange against the IdP's own current state, not a lookup against anything
         this process remembers from a previous call."""
+        if self._claim_mapping.is_entra:
+            # Entra has no impersonation exchange: a person cannot be signed in as without them
+            # (the orchestrator's ruling, 11 November 2026). ADR-044's unreachable path marks the
+            # run stopped; a later step gives owners a way to resolve (CARRIES).
+            raise PrincipalExchangeUnavailable(
+                "owner resolution is unavailable with Entra ID sign-in: a scheduled run cannot act "
+                "as its owner on this deployment"
+            )
         if not self._config.oidc_token_exchange_url:
             raise PrincipalExchangeUnavailable(
                 "OIDC_TOKEN_EXCHANGE_URL is not set — this deployment has not configured "
@@ -694,19 +1094,69 @@ class PrincipalResolver:
             )
         exchanged_token = _access_token_of(response, f"the exchange for owner {owner_id!r}")
         try:
-            return self.resolve(exchanged_token)
+            # In the keys' own threads: a fetch of the keys never holds the event loop, and the
+            # keys unreadable is the exchange unavailable (ADR-044's path: the run marked stopped),
+            # never an exception the scheduler, a monitor or a screening run does not expect.
+            return await in_keys_thread(self.resolve, exchanged_token)
+        except SigningKeysUnavailable as exc:
+            raise PrincipalExchangeUnavailable(
+                f"the exchanged token for owner {owner_id!r} could not be checked: {exc}"
+            ) from exc
         except PrincipalResolutionError as exc:
             raise PrincipalExchangeRefused(
                 f"exchanged token for owner {owner_id!r} failed verification: {exc}"
             ) from exc
 
     def resolve(self, token: str) -> Principal:
+        """A Keycloak session's principal, from its token alone. An Entra principal's roles are
+        read from the store, which this synchronous path cannot do: `resolve_principal`."""
+        if self._claim_mapping.is_entra:
+            raise PrincipalLookupUnavailable(
+                "an Entra principal is resolved with its stored roles (resolve_principal)"
+            )
+        return principal_from_claims(self._verified_claims(token), self._claim_mapping)
+
+    async def resolve_principal(self, token: str) -> Principal:
+        """Every session's principal, as the Conduit asks for it. For an Entra mapping the token is
+        checked in full first (a refused token records nobody), then the person is read from the
+        store, within the timeout: a failure or a slow answer is `PrincipalLookupUnavailable` (a
+        503), never a principal with no roles. Nothing is kept between calls."""
+        # In a thread, bounded: a slow or unreachable identity provider never holds the event loop,
+        # and is a 503 in words, never "token rejected" (ADR-148 Amendment 8).
+        claims = await in_keys_thread(self._verified_claims, token)
+        if not self._claim_mapping.is_entra:
+            return principal_from_claims(claims, self._claim_mapping)
+        verified = _verified_parts(claims, self._claim_mapping)
+        assert self._role_source is not None and self._claim_mapping.tenant_id is not None
+        seen = SeenPerson(
+            name=_text_claim(claims, "name"),
+            username=_text_claim(claims, "preferred_username"),
+            email=_text_claim(claims, "email"),
+            clearance=verified.clearance,
+            org_unit=verified.org_unit,
+            receivable_handling_codes=tuple(verified.codes),
+        )
         try:
-            signing_key = self._jwk_client.get_signing_key_from_jwt(token)
+            stored = await asyncio.wait_for(
+                self._role_source.person(self._claim_mapping.tenant_id, verified.id, seen),
+                timeout=self._role_lookup_timeout,
+            )
+        except Exception as exc:  # noqa: BLE001 - every failure of the read is the one 503
+            raise PrincipalLookupUnavailable(
+                f"the person's stored roles could not be read: {type(exc).__name__}"
+            ) from exc
+        if not isinstance(stored, StoredPerson):
+            raise PrincipalLookupUnavailable("the people store answered something not a person")
+        return principal_from_claims(claims, self._claim_mapping, stored)
+
+    def _verified_claims(self, token: str) -> dict[str, Any]:
+        try:
+            signing_key = self._keys.key_for(token)
             claims = jwt.decode(
                 token,
-                signing_key.key,
-                algorithms=list(self._config.oidc_algorithms),
+                signing_key,
+                algorithms=self._algorithms,
+                leeway=LEEWAY_SECONDS,
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={
@@ -722,4 +1172,4 @@ class PrincipalResolver:
         # closed (`01_DOMAIN_MODEL.md` §2.2: an unrecognised clearance sees nothing) but silently,
         # as a principal who can never see anything rather than a rejected token — worse for
         # whoever has to debug an IdP misconfiguration than an explicit 401.
-        return principal_from_claims(claims, self._claim_mapping)
+        return dict(claims)

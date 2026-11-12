@@ -146,7 +146,7 @@ def fakes(monkeypatch: pytest.MonkeyPatch) -> _Graph:
         "recogniser_for_deployment": lambda recogniser: ("recogniser_for", recogniser),
         "online_geocode_from_env": lambda: "online-geocode",
         "JobQueue": lambda valkey: _Store(),
-        "PrincipalResolver": lambda config: _Store(),
+        "PrincipalResolver": lambda config, **_: _Store(),
     }
     for name in STORES:
         patched[name] = _Store

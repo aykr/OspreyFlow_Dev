@@ -1,0 +1,91 @@
+head 274b36d, stack b, admin's lease taken 2026-11-11T19:56Z
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-6e+27-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-9e+28-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-6e+27-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-9e+28-analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_a_trend_past_its_bounds_is_refused_not_cut[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_an_account_at_either_end_and_each_event_once[analytics_clickhouse]: ClickHouse on port 18124
+tests/conformance/analytics_port/test_suite.py::test_activity_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]: ClickHouse on port 18124
+… and 1846 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+883.98s setup    tests/services/api/test_pid_access_control.py::test_j1_the_principals_star_is_49_in_a_and_45_in_c_for_the_analyst_and_the_cleared
+445.26s setup    tests/services/api/test_pid_scale_seed_live.py::test_the_first_run_writes_the_whole_cohort
+228.16s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[asserted_link_written_again_with_inferred_writes-adapter]
+186.00s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[r6_in_seed_order-adapter]
+168.72s call     tests/ingest/test_pid_monitoring_storyline_live.py::test_chapter_nine_raises_exactly_these_alerts_on_the_real_store
+124.55s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[r5_slice-adapter]
+103.79s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[merge_into_an_earlier_load-adapter]
+98.58s call     tests/ingest/test_run_writes_each_link_once.py::test_the_run_sends_one_write_for_each_link_not_for_each_row[adapter]
+95.00s call     tests/services/api/test_pin_calls_refresh_live.py::test_the_pin_call_file_read_again_creates_nothing_and_holds_each_event_once
+92.20s call     tests/ingest/test_run_writes_each_link_once.py::test_each_events_edge_id_is_the_stored_link_between_its_own_ends[adapter]
+78.92s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[asserted_link_written_again_with_inferred_writes-stand_in]
+63.85s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[merge_into_an_earlier_load-stand_in]
+59.09s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_in_descending_order_across_a_chunk_comes_back_ascending[graph_arcadedb[gremlin]]
+51.66s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[r6_in_seed_order-stand_in]
+40.80s call     tests/conformance/graph_port/test_suite.py::test_get_edges_past_one_chunk_returns_exactly_the_readable_ones[graph_arcadedb[gremlin]]
+40.31s call     tests/conformance/graph_port/test_suite.py::test_get_edges_asked_for_an_id_in_the_first_and_the_last_chunk_returns_it_once[graph_arcadedb[gremlin]]
+35.97s call     tests/conformance/graph_port/test_suite.py::test_live_edges_touching_past_one_chunk_names_every_link[graph_arcadedb[gremlin]]
+35.77s call     tests/ingest/test_run_writes_each_link_once.py::test_the_run_sends_one_write_for_each_link_not_for_each_row[stand_in]
+34.72s call     tests/scenarios/test_hmp_graph.py::test_hmp_graph_side
+34.58s call     tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger
+33.77s call     tests/ingest/test_run_writes_each_link_once.py::test_each_events_edge_id_is_the_stored_link_between_its_own_ends[stand_in]
+33.15s call     tests/ingest/test_run_writes_each_link_once.py::test_a_combined_run_leaves_what_a_run_per_row_leaves[r5_slice-stand_in]
+30.24s call     tests/ingest/test_case_gazetteer_copies_live.py::test_a_region_is_copied_in_bounded_pages_and_timed
+27.96s call     tests/ingest/test_pid_seed_order.py::test_no_recipe_test_omits_an_earlier_file_that_writes_an_element_its_file_also_writes
+25.97s call     tests/ingest/test_sql_transform.py::test_a_hundred_million_rows_are_refused_at_the_limit_in_words
+23.48s setup    tests/ingest/test_pid_recipe_r5.py::test_the_slice_is_whole_links_and_its_size_is_the_plans
+22.28s call     tests/ingest/test_load_report_markings.py::test_r15s_report_names_every_marking_its_rows_were_written_at
+20.60s setup    tests/ingest/test_pid_recipe_r9.py::test_every_report_is_one_document_as_the_plan_holds_it_with_its_own_text
+20.55s call     tests/ingest/test_transaction_keepalive_live.py::test_a_transaction_idle_for_twenty_seconds_still_commits
+20.53s call     tests/ingest/test_transaction_keepalive_live.py::test_without_the_keepalive_the_same_transaction_expires
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_extract_returns_data_conforming_to_the_requested_schema[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_embed_returns_one_equal_length_vector_per_text_in_order[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite.py::test_transcribe_returns_correctly_shaped_segments_and_words[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/model_port/test_suite_vision.py::test_describe_image_returns_data_conforming_to_the_requested_schema[model_litellm]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_a_person_an_organisation_and_a_place_are_found_with_their_spans[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_spans_count_characters_not_bytes[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_an_empty_text_has_no_entities_and_the_recogniser_names_itself[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py::test_a_text_past_the_limit_is_refused_not_read_in_part[recognise_stanza]
+FAILED ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py::test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_routes
+FAILED ../OspreyFlow_Build/tests/golden/test_golden_set.py::test_golden_set_recall_has_not_regressed
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_ARCADEDB_PASSWORD-ARCADEDB_ROOT_PASSWORD]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_USER-POSTGRES_USER]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_POSTGRES_DB-POSTGRES_DB]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_USER-MINIO_ACCESS_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_both_names_of_a_split_credential_carry_the_same_value[OSPREY_MINIO_PASSWORD-MINIO_SECRET_KEY]
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_a_generated_secret_is_not_empty_and_is_not_a_placeholder
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_absent_without_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_demo_analyst_password_is_written_and_realm_carries_the_subject_with_the_flag
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_deployment_this_file_starts_is_a_real_one_and_the_teardown_removes_it
+FAILED ../OspreyFlow_Build/tests/harness/test_apply_env.py::test_the_demo_analyst_holds_the_studio_roles_the_ingest_flow_needs
+FAILED ../OspreyFlow_Build/tests/resolve/test_trigger.py::test_overlap_guard_skips_a_second_run_while_the_first_holds_the_lock
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py::test_phase6_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py::test_extract_returns_nonempty_persons_from_the_witness_statement
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_dispatches_a_submitted_job_to_its_registered_handler
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_run_once_with_nothing_pending_returns_zero
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker.py::test_a_failing_handler_rolls_back_and_marks_the_job_failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_minted_ticket_redeems_to_the_same_principal
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_reused_ticket_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_an_unknown_ticket_is_refused
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_two_mints_for_the_same_principal_produce_different_tickets
+FAILED ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py::test_a_ticket_carries_no_more_than_the_principals_own_resolved_claims
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_the_blob_adapter_is_in_the_media_store_suite_wherever_this_file_runs
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_wrong_key_is_refused_by_the_service_not_read_as_missing
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_blob_held_under_a_name_the_store_does_not_make_is_refused[other/a.png]
+FAILED ../OspreyFlow_Build/tests/test_media_blob.py::test_a_blob_held_under_a_name_the_store_does_not_make_is_refused[media/ABC.png]
+38 failed, 3389 passed, 91 skipped, 9 warnings in 5254.73s (1:27:34)
+Wall time: 5258 s, exit 1 (stack b, the lease admin took at 2026-11-11T19:56:40Z; set-up before it 21 s)
+live exit 1
+
+Read (admin, 11 November 2026, 21:40Z): 35 of the 38 are the stack-environment failures T1 part 4's live gate
+recorded (no model, recogniser, Whisper or blob service on a test stack; apply's Docker-started deployment; the
+worker's and the ws-ticket's Valkey db; the golden set). Three are not:
+- test_sql_connector_live and test_studio_run_now_stamps_its_case_dataset_live: their resolver doubles had no
+  `resolve_principal`, which `get_principal` now calls. Mine: every such double (23 files) is fixed in
+  `p10p2/resolver-doubles.diff`.
+- test_phase7_stage6c_watch_routes' hotlist-on-a-number case: run again at the final head to tell whether it is this
+  change's or the stack's.

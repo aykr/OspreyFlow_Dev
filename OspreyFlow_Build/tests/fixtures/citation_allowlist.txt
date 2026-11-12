@@ -36,3 +36,7 @@ apps/workspace/src/help/roles.ts
 # Removed by L2.10 (ADR-146 decision 1, Amendment 4): the Watches inbox merged into the one queue.
 # The alerts gap map records the code as it stood at 83ff99e and stays as written.
 apps/workspace/src/watches/AlertInbox.tsx
+
+# Removed by P10 part 2 (ADR-148 Amendment 8): P7b's Keycloak sign-in step for the install runbook, which
+# Entra ID's sign-in replaces. ADR-148 Amendment 5 records P7b as it was built and stays as written.
+tests/harness/test_cloud_platform_identity.py

@@ -1,0 +1,28 @@
+Running on ospreyflow-test (stack offline, osprey-runs/merge/OspreyFlow_Build/), logged at osprey-runs/merge.meta/runs/20261112T075502Z/log: bash -c mkdir -p ~/osprey-runs/merge-out; cd ../OspreyFlow_Build; make -k test > ~/osprey-runs/merge-out/p10-test.txt 2>&1; echo test-rc=$? >> ~/osprey-runs/merge-out/p10-test.txt; make live-collect > ~/osprey-runs/merge-out/p10-lc.txt 2>&1; echo lc-rc=$?; OSPREY_PORTS_SLOT=14 make -k ci > ~/osprey-runs/merge-out/p10-ci.txt 2>&1; echo ci-rc=$? >> ~/osprey-runs/merge-out/p10-ci.txt; grep -E "passed|failed" ~/osprey-runs/merge-out/p10-test.txt | tail -1; grep -E "^FAILED|^ERROR" ~/osprey-runs/merge-out/p10-test.txt | head -12; grep -E "^make.*Error|ci-rc" ~/osprey-runs/merge-out/p10-ci.txt | tail -8; grep -E "manifests, [0-9]+ violation|drift|allowlisted" ~/osprey-runs/merge-out/p10-ci.txt | head -8
+lc-rc=0
+= 3 failed, 12762 passed, 33 skipped, 131 warnings, 19 errors in 525.46s (0:08:45) =
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_release_local_builds_what_the_release_builds
+FAILED ../OspreyFlow_Build/tests/test_test_file_coverage_check.py::test_no_new_drift_beyond_the_allowlist
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_first_sign_in_is_recorded_with_no_roles_and_listed
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_another_tenants_row_for_the_same_oid_grants_nothing
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_a_store_that_cannot_answer_is_unavailable_never_no_roles
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_tokens_access_is_brought_up_to_date_but_never_its_roles
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_resolver_reads_the_stored_roles_with_a_real_token
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_adding_by_object_id_once_and_the_refusals_the_fakes_model
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_first_administrators_are_seeded_once_and_a_removal_stands
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_store_refuses_a_read_for_another_tenant
+ERROR ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py::test_the_sockets_read_is_this_tenants_and_records_nobody
+make: *** [Makefile:131: test-file-coverage-check] Error 1
+ci-rc=2
+cd ../OspreyFlow_Core && PYTHONPATH=/root/osprey-runs/merge/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+development-sources.yaml: 58 manifests, 0 violation(s)
+development.yaml: 54 manifests, 0 violation(s)
+poc.yaml: 52 manifests, 0 violation(s)
+production-bedrock.yaml: 58 manifests, 0 violation(s)
+production.yaml: 54 manifests, 0 violation(s)
+domain-model-coverage-check: 104 class(es), 0 allowlisted, no new drift.
+Wall time: 1196 s, exit 0 (no stack, no lease; set-up before it 16 s)
+
+# Orchestrator's note: merged with eight of the ten diffs; ci-yml.diff and makefile.diff are the owner's. Without them, test_entra_people_live's 19 errors (a live file make test does not yet ignore) and test-file-coverage-check are red; with both applied (checked on the server, then reverted), the coverage tests pass (21) and make test ignores the live file. The GPU case and test_release_local_matrix (the owner's P12p2_CI.diff) are as before. The owner's five patches were checked to apply in order: P12p2_CI, P12p2_core_makefile, admin ci-yml, admin makefile, make-test-runs-every-part.

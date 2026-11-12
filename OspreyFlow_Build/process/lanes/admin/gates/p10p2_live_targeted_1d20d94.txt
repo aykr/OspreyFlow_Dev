@@ -1,0 +1,34 @@
+head 1d20d94 on main 91a029c with the ten p10p2 diffs applied; stack b, admin's lease taken 2026-11-12T07:42:05Z, down and released after
+
+--- the targeted list (the orchestrator's set, the promotion files, the audit census, the roles routes and the external-run routes)
+Running on ospreyflow-test (stack b, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261112T074219Z/log: bash -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_entra_people_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_audit_kinds.py ../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py ../OspreyFlow_Build/tests/services/api/test_external_run_routes.py ../OspreyFlow_Build/tests/services/api/test_cloud_connector_access.py ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py ../OspreyFlow_Build/tests/connectors/test_athena_connector_live.py ../OspreyFlow_Build/tests/connectors/test_s3_connector_live.py ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py 2>&1 | grep -E '^FAILED|^ERROR|passed|failed'
+228 passed, 11 skipped, 31 warnings in 63.75s (0:01:03)
+Wall time: 65 s, exit 0 (stack b, the lease admin took at 2026-11-12T07:42:05Z; set-up before it 11 s)
+exit 0
+
+--- the live plants (p10p2_plants.py --only-live)
+Running on ospreyflow-test (stack b, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261112T074338Z/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/admin/p10p2/p10p2_plants.py --only-live
+control (diffs applied, no plant): green (exit 0) — 19 passed in 6.16s
+glass control: green (exit 0)
+[the store reads every tenant's row for an object id] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 1.51s
+[first administrators re-granted at every start (the second review's amended ruling)] test_first_administrators_are_seeded_once_and_a_removal_stands: red (exit 1) — 1 failed in 0.94s
+[first administrators re-granted at every start (the second review's amended ruling)] test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again: red (exit 1) — 1 failed in 0.89s
+[the socket's read takes any tenant's row for an object id] test_the_sockets_read_is_this_tenants_and_records_nobody: red (exit 1) — 1 failed in 0.89s
+[item 6: Admin › People lists every tenant's rows] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 1.45s
+[item 6: Admin › People lists every tenant's rows] test_the_sockets_read_is_this_tenants_and_records_nobody: red (exit 1) — 1 failed in 0.88s
+[item 6: one person read from any tenant] test_one_person_is_read_by_this_tenant_alone: red (exit 1) — 1 failed in 0.88s
+[item 6: a role or Disable written to every tenant's row] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 1.44s
+[item 6: a role or Disable written to every tenant's row] test_adding_by_object_id_once_and_the_refusals_the_fakes_model: red (exit 1) — 1 failed in 0.89s
+[item 4(a): nobody able to manage people, and the named first administrators not given Admin again] test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again: red (exit 1) — 1 failed in 0.89s
+[third review 6: the custom roles' rights not read (a custom role that manages people ignored)] test_a_custom_role_that_manages_people_counts_at_the_start: red (exit 1) — 1 failed in 0.95s
+[third review 6: the seed run without PEOPLE_LOCK] test_a_start_waits_for_the_people_lock: red (exit 1) — 1 failed in 1.94s
+[second and third reviews 3: a start's Admin grant not audited in its own transaction] test_each_admin_role_a_start_gives_is_audited: red (exit 1) — 1 failed in 0.99s
+[second and third reviews 3: a start's Admin grant not audited in its own transaction] test_a_grant_is_never_kept_without_its_audit_row: red (exit 1) — 1 failed in 0.89s
+[second review 2: access_read_at never refreshed once recorded] test_access_read_at_is_refreshed_at_most_hourly[2h]: red (exit 1) — 1 failed in 0.90s
+[second review 2: access_read_at written at every sign-in] test_access_read_at_is_refreshed_at_most_hourly[30min]: red (exit 1) — 1 failed in 0.89s
+[note 9: the bootstrap run without its advisory lock] test_a_conduit_starting_waits_for_the_bootstrap_lock: red (exit 1) — 1 failed in 1.93s
+[item 5: a sign-in's access read never recorded as read] test_a_sign_in_records_when_access_was_read_and_an_added_person_has_not_signed_in: red (exit 1) — 1 failed in 0.89s
+control (restored, branch alone): green (exit 0) — 238 passed, 1 warning in 94.32s (0:01:34)
+103 plants, 18 case runs: 18 red, 0 missed, 0 harness faults
+Wall time: 130 s, exit 0 (stack b, the lease admin took at 2026-11-12T07:42:05Z; set-up before it 13 s)
+exit 0

@@ -105,6 +105,8 @@ SECTIONS = {
     "cloud_platform.connector_sources.athena": "One workgroup, its region, its databases, its "
     "results location (the only place a declared source gives the role a write) and its tables' "
     "locations.",
+    "cloud_platform.claims": "How people sign in with Entra ID (ADR-148 Amendment 8): the tenant, the "
+    "Glass's and the API's app registrations, where each claim comes from and the first administrators.",
     "network": "The address the deployment answers at, and what it publishes.",
     "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
     "governance.organisation_provider": "Small on a server of your own: the organisation's identity "

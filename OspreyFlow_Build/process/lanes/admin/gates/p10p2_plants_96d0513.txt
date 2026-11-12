@@ -1,0 +1,58 @@
+control (diffs applied, no plant): green (exit 0) — 308 passed in 87.05s (0:01:27)
+glass control: green (exit 0)
+[a member's idp compared to iss as a string (the old guest check)] test_a_member_whose_idp_names_our_tenant_in_either_form_resolves[member-v1-form]: red (exit 1) — 1 failed in 0.98s
+[an idp naming no Entra issuer admitted (only another tenant's refused)] test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest[msa]: red (exit 1) — 1 failed in 1.01s
+[an idp naming no Entra issuer admitted (only another tenant's refused)] test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest[federated]: red (exit 1) — 1 failed in 0.98s
+[client_id or scope accepted and ignored without a tenant] test_a_client_or_scope_without_a_tenant_is_refused[client]: red (exit 1) — 1 failed in 0.51s
+[client_id or scope accepted and ignored without a tenant] test_a_client_or_scope_without_a_tenant_is_refused[scope]: red (exit 1) — 1 failed in 0.44s
+[the app-only check removed (its cases red by the app-only words, never an AttributeError)] test_an_app_only_token_is_no_person[app-token]: red (exit 1) — 1 failed in 0.96s
+[the app-only check removed (its cases red by the app-only words, never an AttributeError)] test_an_app_only_token_is_no_person[no-scp]: red (exit 1) — 1 failed in 0.97s
+[the app-only check removed (its cases red by the app-only words, never an AttributeError)] test_an_app_only_token_is_no_person[idtyp-app]: red (exit 1) — 1 failed in 1.00s
+[an Entra principal's roles read from its token] test_an_entra_principals_roles_are_the_stored_ones_never_the_tokens: red (exit 1) — 1 failed in 0.97s
+[an Entra principal's roles read from its token] test_an_entra_app_role_grants_no_ospreyflow_role: red (exit 1) — 1 failed in 0.93s
+[an Entra principal's roles read from its token] test_me_answers_the_resolved_principal_never_the_tokens_roles: red (exit 1) — 1 failed in 2.08s
+[a person disabled here admitted] test_a_person_disabled_here_is_refused: red (exit 1) — 1 failed in 1.05s
+[a person disabled here admitted] test_me_for_a_person_disabled_here_is_refused: red (exit 1) — 1 failed in 2.08s
+[a failed read answered as a person with no roles] test_a_failed_or_slow_lookup_is_unavailable_never_a_principal[raises]: red (exit 1) — 1 failed in 1.02s
+[a failed read answered as a person with no roles] test_a_failed_or_slow_lookup_is_unavailable_never_a_principal[slow]: red (exit 1) — 1 failed in 0.99s
+[a failed read answered as a person with no roles] test_a_session_whose_roles_cannot_be_read_is_a_503: red (exit 1) — 1 failed in 2.09s
+[the store read before the token's refusals] test_a_refused_token_records_nobody: red (exit 1) — 1 failed in 0.98s
+[the store read before the token's refusals] test_me_for_another_tenants_token_is_refused: red (exit 1) — 1 failed in 2.07s
+[the synchronous path builds an Entra principal without its stored roles (both guards)] test_the_synchronous_path_refuses_an_entra_mapping: red (exit 1) — 1 failed in 0.99s
+[the construction path builds an Entra principal with no stored person] test_the_construction_path_refuses_an_entra_principal_without_its_stored_person: red (exit 1) — 1 failed in 0.46s
+[an Entra resolver built with no people store] test_an_entra_mapping_needs_a_people_store_and_keycloak_refuses_one: red (exit 1) — 1 failed in 0.96s
+[owner resolution by exchange on Entra] test_owner_resolution_is_unavailable_on_entra_even_with_an_exchange_configured: red (exit 1) — 1 failed in 1.45s
+[a mapping in the environment that is not JSON falls back to the fixed names] test_a_mapping_in_the_environment_that_does_not_load_stops_the_start[not-json]: red (exit 1) — 1 failed in 0.44s
+[no first administrator named, and the start goes on] test_first_administrators_none_or_malformed_stop_the_start['']: red (exit 1) — 1 failed in 1.59s
+[no first administrator named, and the start goes on] test_an_entra_mapping_with_no_first_administrator_does_not_start: red (exit 1) — 1 failed in 1.61s
+[adding by object id without manage_people] test_adding_a_person_needs_manage_people: red (exit 1) — 1 failed in 1.59s
+[the sign-in kind without manage_people] test_the_sign_in_kind_needs_manage_people: red (exit 1) — 1 failed in 1.61s
+[adding by object id on Keycloak] test_adding_by_object_id_is_refused_on_keycloak: red (exit 1) — 1 failed in 1.86s
+[a session whose roles cannot be read let through as an error, not a 503] test_a_session_whose_roles_cannot_be_read_is_a_503: red (exit 1) — 1 failed in 2.13s
+[an invite on Entra answered as if made] test_what_entra_holds_is_refused_in_words[invite]: red (exit 1) — 1 failed in 1.86s
+[the store reads every tenant's row for an object id] live: run with --live under a lease
+[first administrators re-granted at every start] live: run with --live under a lease
+[a service identity's tenant not pinned] test_what_is_no_service_identity_on_entra_is_refused[other-tenant]: red (exit 1) — 1 failed in 0.79s
+[a service identity's tenant not pinned] test_what_is_no_service_identity_on_entra_is_refused[no-tid]: red (exit 1) — 1 failed in 0.82s
+[a person's delegated token taken for a service identity] test_what_is_no_service_identity_on_entra_is_refused[a-persons-delegated-token]: red (exit 1) — 1 failed in 0.81s
+[a person's delegated token taken for a service identity] test_what_is_no_service_identity_on_entra_is_refused[idtyp-user]: red (exit 1) — 1 failed in 0.78s
+[the Glass's or this API's own registration taken for an orchestrator] test_what_is_no_service_identity_on_entra_is_refused[the-glass]: red (exit 1) — 1 failed in 0.78s
+[the Glass's or this API's own registration taken for an orchestrator] test_what_is_no_service_identity_on_entra_is_refused[this-api-itself]: red (exit 1) — 1 failed in 0.79s
+[an Entra token under Keycloak's handling taken by its preferred_username] test_an_entra_token_under_keycloaks_handling_is_refused[our-tenant]: red (exit 1) — 1 failed in 0.77s
+[the console's /admin admits an Entra token's app role] test_the_consoles_admin_refuses_an_entra_token_with_the_admin_role[entra]: red (exit 1) — 1 failed in 0.88s
+[the realm's sign-in admits an Entra ID token] test_the_realms_sign_in_refuses_an_entra_id_token: red (exit 1) — 1 failed in 0.40s
+[Superset reads token roles on Entra] test_superset_reads_no_token_role_on_entra[entra]: red (exit 1) — 1 failed in 0.31s
+[the Glass's client left out of the rendered claim mapping] test_the_rendered_settings_sign_in_a_glass_token_through_the_one_construction_path: red (exit 1) — 1 failed in 0.96s
+[the realm's settings the cluster's install writes left in] test_the_realms_settings_are_gone_and_entras_are_rendered: red (exit 1) — 1 failed in 0.57s
+[Entra's settings written before the install's, which overwrite them] test_the_realms_settings_are_gone_and_entras_are_rendered: red (exit 1) — 1 failed in 0.58s
+[Entra's settings written before the install's, which overwrite them] test_v1_tokens_and_a_claims_mapping_policy_change_the_issuer_audience_and_keys: red (exit 1) — 1 failed in 0.58s
+[an empty list of first administrators accepted] test_no_first_administrator_is_refused_never_everyone: red (exit 1) — 1 failed in 0.44s
+[a render with no Entra sign-in let through] test_a_render_without_entra_sign_in_is_refused_in_words: red (exit 1) — 1 failed in 0.47s
+[Keycloak rendered] test_no_pod_takes_group_0_and_keycloak_is_not_rendered[development]: red (exit 1) — 1 failed in 0.47s
+[Keycloak's deployment.json given a sign_in] test_keycloaks_deployment_file_is_as_it_was: red (exit 1) — 1 failed in 0.44s
+[Entra's sign-in taken from an authority that is not Entra's] is not taken from an authority that is not Entra's: red (exit 1) — Tests  1 failed | 15 skipped (16)
+[the shown clearance read from the ID token again] is read nowhere in apps/workspace/src: red (exit 1) — Tests  1 failed | 12 skipped (13)
+[a guess when /v1/me does not answer] is none after a refusal, never a guess: red (exit 1) — Tests  1 failed | 12 skipped (13)
+[People on Entra offers Access] says Entra holds the accounts and offers add by object id, never invite, access, reset or remove: red (exit 1) — Tests  1 failed | 4 skipped (5)
+control (restored, branch alone): green (exit 0) — 183 passed in 73.87s (0:01:13)
+39 plants, 52 case runs: 52 red, 0 missed, 0 harness faults

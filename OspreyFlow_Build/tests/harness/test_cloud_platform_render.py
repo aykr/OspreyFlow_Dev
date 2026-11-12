@@ -24,8 +24,18 @@ from typing import Any
 
 import pytest
 import yaml
-from harness.cloud_platform import CloudPlatformNotRenderable, managed_variables
-from harness.cloud_platform.settings import FOLDERS_VARIABLE, PLATFORMS, load_platform
+from harness.cloud_platform import (
+    REALM_SECRETS,
+    REALM_SETTINGS,
+    CloudPlatformNotRenderable,
+    managed_variables,
+)
+from harness.cloud_platform.settings import (
+    FOLDERS_VARIABLE,
+    PLATFORMS,
+    load_platform,
+    load_profile,
+)
 from harness.render import UnpinnedImagesError, load_config, render
 from pydantic import ValidationError
 from tools.cp_policy_check import FIXTURES, _resolver
@@ -123,17 +133,17 @@ def test_every_pod_runs_as_10001_and_none_keeps_a_user_of_its_own(values: dict[s
     assert not [p["name"] for p in _pods(values) if "runAs" in p]
 
 
-def test_keycloak_alone_takes_its_image_s_group_as_a_supplementary_one(
-    values: dict[str, Any],
-) -> None:
-    """Keycloak's image is built for any user in group 0 (`/opt/keycloak` is `1000:0`,
-    group-writable) and writes its own build there at start; as 10001:10001 alone it cannot
-    (measured on the kind cluster, 10 November 2026). Its pod alone adds group 0 as a
-    supplementary group: the user stays 10001 and non-root. Entra ID replaces it in P10 (ADR-148
-    decision 9)."""
+def test_no_pod_takes_group_0_and_keycloak_is_not_rendered(values: dict[str, Any]) -> None:
+    """Keycloak alone took group 0 (its image builds itself into `/opt/keycloak`, `1000:0`). People
+    sign in with Entra ID on this profile (ADR-148 decision 9; Amendment 8, P10 part 2), so neither
+    Keycloak, its database step, its realm and theme files nor its secrets are rendered, and no pod
+    takes group 0."""
     groups = {p["name"]: p.get("supplementalGroups") for p in _pods(values)}
-    assert groups.pop("keycloak") == [0]
-    assert set(groups.values()) == {None}
+    assert "keycloak" not in groups and set(groups.values()) == {None}
+    containers = {c["name"] for c in _containers(values)}
+    assert not {"keycloak", "keycloak-db"} & containers
+    assert not [f for f in values["files"] if f == "realm.json" or f.startswith("theme--")]
+    assert not [k for k in values["secrets"]["keys"] if "KEYCLOAK" in k or "EXCHANGE" in k]
 
 
 def test_the_shared_folders_are_one_read_write_once_claim_its_mounters_on_one_node(
@@ -221,6 +231,9 @@ def test_every_key_a_cluster_s_install_writes_reaches_the_pods(fixture: str) -> 
     missing = sorted(
         k for k in written
         if k not in managed
+        # P10 part 2: the realm's, and Keycloak is not rendered (people sign in with Entra ID).
+        and k not in REALM_SECRETS
+        and k not in REALM_SETTINGS
         and k not in values["environment"]
         and k not in values["secrets"]["keys"]
     )  # fmt: skip
@@ -228,7 +241,8 @@ def test_every_key_a_cluster_s_install_writes_reaches_the_pods(fixture: str) -> 
     secret_looking = re.compile(r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY|TOKEN)$|_KEY_")
     in_the_configmap = [k for k in values["environment"] if secret_looking.search(k)]
     assert in_the_configmap == [], in_the_configmap
-    assert values["environment"]["OIDC_JWKS_URL"].endswith("/protocol/openid-connect/certs")
+    # Entra ID's keys since P10 part 2, never the realm's (`test_cloud_platform_entra.py`).
+    assert values["environment"]["OIDC_JWKS_URL"].startswith("https://login.microsoftonline.com/")
 
 
 @pytest.mark.parametrize("fixture", ["development", "production"])
@@ -319,9 +333,6 @@ def test_a_variable_a_command_names_is_defined_before_it(values: dict[str, Any])
             assert "$$(POSTGRES_HOST)" not in part, container["name"]
             for name in set(re.findall(r"(?<!\$)\$\(([A-Z_][A-Z0-9_]*)\)", part)):
                 assert name in {e["name"] for e in env}, (container["name"], name)
-    keycloak = _by_name(values)["keycloak"]
-    database = next(c for c in keycloak["initContainers"] if c["name"] == "keycloak-db")
-    assert "psql -h $(POSTGRES_HOST)" in database["args"][0]
 
 
 def test_the_conduit_knows_its_profile(values: dict[str, Any]) -> None:
@@ -393,10 +404,14 @@ def test_the_conduit_is_planned_without_java() -> None:
 
 #: The fixtures' networks for S3 and STS (synthetic; the platform's own are its settings file's
 #: or the deployment's `egress_nets`).
-AWS = {
+S3_AND_STS = {
     "s3.eu-west-2.amazonaws.com": ["198.18.0.0/24"],
     "sts.eu-west-2.amazonaws.com": ["198.18.1.0/24"],
 }
+#: Entra ID's sign-in host, on every render since P10 part 2 (the Conduit reads its keys).
+ENTRA = {"login.microsoftonline.com": ["198.18.2.0/24"]}
+#: The hosts every render reaches, by the fixtures' networks.
+AWS = {**S3_AND_STS, **ENTRA}
 
 
 def _hosts(values: dict[str, Any]) -> dict[str, list[str]]:
@@ -411,6 +426,23 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
     assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
 
 
+def test_entras_sign_in_host_is_the_one_host_p10_adds_and_the_conduit_alone_reaches_it() -> None:
+    """ADR-148 Amendment 8 (the docs lane's gap (a)): Entra ID's sign-in host is the one host P10
+    adds, a kind of its own (`egress.sign_in`) the Conduit alone reaches, since it alone verifies
+    tokens; `always` is unchanged; and a render without its networks is refused in words."""
+    egress = load_profile().egress
+    assert egress.always == ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
+    assert egress.sign_in == ["login.microsoftonline.com"]
+    assert egress.reach["sign_in"] == ["api"]
+    rows = {row["name"]: row for row in _values(_config("development"))["egress"]["workloads"]}
+    reaching = sorted(
+        n for n, r in rows.items() if "login.microsoftonline.com" in r.get("hosts", [])
+    )
+    assert reaching == ["api"]
+    with pytest.raises(CloudPlatformNotRenderable, match="login.microsoftonline.com"):
+        _artefacts(_config("development", cloud_platform={"egress_nets": S3_AND_STS}))
+
+
 def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -421,11 +453,12 @@ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
         _artefacts(_config("development", cloud_platform={"egress_nets": {}}))
     monkeypatch.setenv(FOLDERS_VARIABLE, str(FIXTURES / "platforms"))
     kind = load_platform("kind")
-    assert set(kind.egress.service_nets) == set(AWS)
+    assert set(kind.egress.service_nets) == set(S3_AND_STS)
     raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
-    raw["cloud_platform"] |= {"platform": "kind", "egress_nets": {}}
+    raw["cloud_platform"] |= {"platform": "kind", "egress_nets": ENTRA}
     assert _hosts(_values(OspreyConfig.model_validate(raw))) == {
-        h: list(n) for h, n in kind.egress.service_nets.items()
+        **{h: list(n) for h, n in kind.egress.service_nets.items()},
+        **ENTRA,
     }
 
 
@@ -488,32 +521,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
     assert ingress["className"] == platform.ingress.class_name
     assert ingress["annotations"][platform.ingress.allow_list_annotation] == "192.0.2.0/24"
     assert ingress["annotations"]["nginx.ingress.kubernetes.io/enable-modsecurity"] == "true"
+    # No identity door: people sign in at Entra ID (P10 part 2).
     assert {(r["host"], r["service"]) for r in ingress["rules"]} == {
         ("ospreyflow-dev.apps.example.org", "workspace"),
-        ("id.ospreyflow-dev.apps.example.org", "keycloak"),
     }
+    # No dashboards door either: Superset is not on this profile until its step (P10 part 2).
     prod = {r["service"] for r in _values(_config("production"))["ingress"]["rules"]}
-    assert prod == {"workspace", "keycloak", "superset"}
+    assert prod == {"workspace"}
     assert not [w for w in _values(_config()).get("workloads", []) if w.get("public")]
 
 
 # ---- the configuration ---------------------------------------------------------------------------
 
 
-def test_the_sign_in_page_s_govuk_assets_come_from_the_glass_on_its_own_host() -> None:
-    """Caddy sends `id.<host>/assets/govuk/*` to the workspace when the brand is GOV.UK (ADR-132
-    Amendment 2: same-origin on the sign-in page); the platform's ingress must route it too, or the
-    sign-in page loses its stylesheet and fonts."""
-    rules = {r["host"]: r for r in _values(_config("development"))["ingress"]["rules"]}
-    assert rules["id.ospreyflow-dev.apps.example.org"]["paths"] == [
-        {"path": "/", "service": "keycloak", "port": 8080}
-    ]
+def test_there_is_no_sign_in_page_of_ours_to_serve_even_for_govuk() -> None:
+    """Caddy sends `id.<host>/assets/govuk/*` to the workspace for Keycloak's GOV.UK sign-in page
+    (ADR-132 Amendment 2). With Entra ID's sign-in (P10 part 2) there is no page of ours there, so
+    no `id.` host is routed, whatever the brand."""
     govuk = _config("development", appearance={"brand": "govuk"})
     rules = {r["host"]: r for r in _values(govuk)["ingress"]["rules"]}
-    assert rules["id.ospreyflow-dev.apps.example.org"]["paths"] == [
-        {"path": "/assets/govuk", "service": "workspace", "port": 8080},
-        {"path": "/", "service": "keycloak", "port": 8080},
-    ]
+    assert "id.ospreyflow-dev.apps.example.org" not in rules
     assert rules["ospreyflow-dev.apps.example.org"]["paths"] == [
         {"path": "/", "service": "workspace", "port": 8080}
     ]
@@ -526,10 +553,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
 
 
 def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A platform's default certificate is a wildcard one label deep: `id.` and `bi.` below the
-    deployment's own name are two, so the browser refuses them unless a certificate is named."""
+    deployment's own name are two, so the browser refuses them unless a certificate is named. Since
+    P10 part 2 neither door is rendered (Entra ID signs people in; Superset waits for its step), so
+    the deployment's own name alone renders, and a `bi.` door is planted to show the refusal."""
     import harness.cloud_platform as cp
 
     platform = load_platform("client")
@@ -537,9 +566,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
         update={"ingress": platform.ingress.model_copy(update={"wildcard": "*.apps.example.org"})}
     )
     monkeypatch.setattr(cp, "load_platform", lambda _name: covering)
-    with pytest.raises(CloudPlatformNotRenderable, match="id.ospreyflow-dev.apps.example.org"):
-        _artefacts(_config("development"))
-    named = _config("development", cloud_platform={"tls_secret": "ospreyflow-tls"})
+    assert "tlsSecret" not in _values(_config("production"))["ingress"]
+    door = {"site": "dashboards", "workload": "workspace", "port": 8080}
+    _profile(tmp_path, monkeypatch, lambda raw: raw["doors"].append(door))
+    with pytest.raises(CloudPlatformNotRenderable, match="bi.ospreyflow.apps.example.org"):
+        _artefacts(_config("production"))
+    named = _config("production", cloud_platform={"tls_secret": "ospreyflow-tls"})
     assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
 
 
@@ -753,8 +785,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
     raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
     raw["cloud_platform"]["egress_nets"]["login.example.org"] = ["198.51.100.9/32"]
     values = _values(OspreyConfig.model_validate(raw))
-    assert {r["service"] for r in values["ingress"]["rules"]} == {"workspace", "keycloak"}
-    assert "supplementalGroups" not in _by_name(values)["keycloak"]
+    assert {r["service"] for r in values["ingress"]["rules"]} == {"workspace"}
     assert _hosts(values)["login.example.org"] == ["198.51.100.9/32"]
 
 
@@ -994,5 +1025,7 @@ def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_p
     assert not (out / "terraform" / "opensearch.tf").exists()
     assert (out / "notes.txt").is_file()  # not ours: never removed
     assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {
-        *poc.artefacts, RENDERED_MANIFEST, "notes.txt"
+        *poc.artefacts,
+        RENDERED_MANIFEST,
+        "notes.txt",
     }

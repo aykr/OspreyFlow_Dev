@@ -58,7 +58,7 @@ const AUDIT_ENTRY = { recorded_at: "2026-11-08T09:00:00Z", who: "Demo Analyst",
 const AGEING = { alert_after_days: 3, promotions_recorded: false, waiting: [],
                  rules: [{ what: "A promotion waiting for review", after_days: 3, then: "After 3 days it is flagged overdue." }] };  // prettier-ignore
 
-async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[]> {
+async function serve(page: Page, opts: { owns?: boolean; entra?: boolean } = {}): Promise<string[]> {
   const asked: string[] = [];
   let dashboards = [{ client_id: "osprey-dashboard-old", account_id: "sa-0", clearance: "OFFICIAL", org_unit: "verify" }];
   await page.route("**/*/v1/**", async (route) => {
@@ -78,6 +78,12 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
                          people: ["Demo Analyst", "Zed Reviewer"] });  // prettier-ignore
     }
     if (path === "operations/ageing") return json(200, AGEING);
+    // ADR-148 Amendment 8: how people sign in; Entra ID adds a person by object id.
+    if (path === "sign-in") return json(200, { kind: opts.entra ? "entra" : "keycloak" });
+    if (path === "people/by-object-id" && request.method() === "POST") {
+      const sent = request.postDataJSON() as { object_id: string };
+      return json(201, { ...PERSON, id: sent.object_id, username: sent.object_id, name: sent.object_id, roles: [] });
+    }
     if (path === "settings/promotion-alert-days" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "people" && request.method() === "POST") {
       const sent = request.postDataJSON() as { username: string };
@@ -384,6 +390,17 @@ test("a person is invited by keyboard and their one-time code is shown", async (
   await expect(page.getByText("ABCD-EFGH-JKLM-NPQR")).toBeVisible();
   expect(asked).toContain("POST people");
   registerCovered(REGISTRY, "invite-a-person-by-keyboard");
+});
+
+// ADR-148 Amendment 8: on Entra ID sign-in a person is added by object id, by keyboard alone.
+test("a person is added by Entra object id by keyboard", async ({ page }) => {
+  const asked = await serve(page, { entra: true });
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await page.getByLabel("Entra object id").fill("50000000-0000-4000-8000-000000000002");
+  await press(page, "Add");
+  await expect(page.getByText("50000000-0000-4000-8000-000000000002 was added with no roles.", { exact: false })).toBeVisible();
+  expect(asked).toContain("POST people/by-object-id");
+  registerCovered(REGISTRY, "add-a-person-by-object-id-by-keyboard");
 });
 
 test("a person's access is edited by keyboard", async ({ page }) => {

@@ -1,0 +1,7 @@
+  ✓  35 a11y/every-harness.spec.ts:366:7 › admin-harness.html rights=manage_people&serve=people&show=withheld (govuk) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓  36 a11y/every-harness.spec.ts:390:5 › admin-harness.html rights=manage_people&serve=people&show=withheld: every labelled field's name contains its visible label (2.5.3) (595ms)
+
+  36 passed (31.6s)
+  ✓  45 keyboard/admin.spec.ts:968:1 › every registered Admin action has its own proving test case above (0ms)
+
+  45 passed (10.7s)

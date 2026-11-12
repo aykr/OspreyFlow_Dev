@@ -1,0 +1,16 @@
+head 017350d on main dcaeef7 with every p10p2/*.diff applied (10); stack_lease.sh offline admin (no stack)
+56.58s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory@serial
+FAILED ../OspreyFlow_Build/tests/test_doc_citations_check.py::test_the_repository_itself_is_clean
+FAILED ../OspreyFlow_Build/tests/test_lanes_launch.py::test_open_refuses_when_a_session_is_running_in_the_worktree
+===== 4 failed, 12286 passed, 33 skipped, 90 warnings in 780.84s (0:13:00) =====
+make: *** [Makefile:166: test] Error 1
+
+Read (admin, 12 November 2026, 00:16Z): 12,286 passed, 4 failed.
+- The server's GPU and OpenSearch cases (as at bbd5721 and in other lanes' gates).
+- test_lanes_launch's open-refuses case: passes alone on the server (run 20261112T001454Z) and appears in case-b's
+  c16154fc and admin's own T1 part 4 gates: the server's concurrent sessions.
+- test_doc_citations_check: Amendment 8 named the identity module runbook.diff removes, and Amendment 5's citation of
+  its test is now dangling. Fixed (Amendment 8 reworded; Amendment 5's citation allowlisted in runbook.diff with its
+  reason); the check and its test pass on the server at the fixed tree (same run).

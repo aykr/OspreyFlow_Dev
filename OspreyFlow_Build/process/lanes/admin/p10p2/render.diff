@@ -1,0 +1,1428 @@
+diff --git a/OspreyFlow_Build/tests/cli/test_images_verb.py b/OspreyFlow_Build/tests/cli/test_images_verb.py
+index 27672f1..c666e1b 100644
+--- a/OspreyFlow_Build/tests/cli/test_images_verb.py
++++ b/OspreyFlow_Build/tests/cli/test_images_verb.py
+@@ -62,7 +62,10 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str,
+         c.argv[c.argv.index("-t") + 1].split(":")[0].rsplit("/", 1)[-1]: c
+         for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]
+     }  # fmt: skip
+-    assert {"api", "workspace", "worker", "report-sync", "superset", "ner"} <= set(built)
++    # Report sync and Superset are not on the profile until their step after P10 (ADR-148
++    # Amendment 8), so their images are not built for it.
++    assert {"api", "workspace", "worker", "ner"} <= set(built)
++    assert not {"report-sync", "superset"} & set(built)
+     api = built["api"].argv
+     assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
+     assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")
+diff --git a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py
+index 7f7db99..2836e18 100644
+--- a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py
++++ b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_render.py
+@@ -389,8 +389,10 @@ def test_an_irsa_account_named_as_a_backups_account_is_refused(field: str, taken
+ 
+ 
+ def test_the_writers_are_the_rendered_workloads_that_write_the_stores_or_mount_the_sets_claims() -> None:
++    # No report sync on the profile until it signs in through Entra ID (ADR-148 Amendment 8, the
++    # orchestrator's ruling (a)): the production fixture renders none, so it is no writer there.
+     expected = {"development": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"],
+-                "production": ["api", "arcadedb", "backup", "backup-claims", "report-sync", "worker", "workspace"]}  # fmt: skip
++                "production": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"]}  # fmt: skip
+     for fixture, writers in expected.items():
+         assert rendered.values(fixture)["backups"]["writers"] == writers, fixture
+     for fixture in rendered.fixtures():
+diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
+index 7e9a321..4ade33b 100644
+--- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
++++ b/OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py
+@@ -110,15 +110,14 @@ def test_the_ingress_routes_each_path_and_admits_each_path_s_service(tmp_path: P
+     ingress = next(d for d in docs if d["kind"] == "Ingress")
+     assert ingress["spec"]["tls"][0]["secretName"] == "ospreyflow-tls"
+     rules = {r["host"]: r["http"]["paths"] for r in ingress["spec"]["rules"]}
+-    identity = [(p["path"], p["backend"]["service"]["name"])
+-                for p in rules["id.ospreyflow-dev.apps.example.org"]]  # fmt: skip
+-    assert identity == [("/assets/govuk", "workspace"), ("/", "keycloak")]
++    # No identity door since P10 part 2: people sign in at Entra ID, whatever the brand.
++    assert "id.ospreyflow-dev.apps.example.org" not in rules
+     policy = next(
+         d for d in docs
+         if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "ospreyflow-from-ingress"
+     )  # fmt: skip
+     admitted = policy["spec"]["podSelector"]["matchExpressions"][0]["values"]
+-    assert set(admitted) == {"workspace", "keycloak"}
++    assert set(admitted) == {"workspace"}
+     assert {p["port"] for p in policy["spec"]["ingress"][0]["ports"]} == {8080}
+ 
+ 
+@@ -278,8 +277,8 @@ def test_run_as_non_root_false_with_a_numeric_user_is_refused(
+ 
+ def test_an_init_container_is_held_to_the_rules(development: tuple[dict[str, Any], str]) -> None:
+     docs, registry = _helm(development)
+-    keycloak = next(d for d in docs if d["metadata"]["name"] == "keycloak" and pod_spec(d))
+-    init = pod_spec(keycloak)["initContainers"][0]  # type: ignore[index]
++    gateway = next(d for d in docs if d["metadata"]["name"] == "litellm" and pod_spec(d))
++    init = pod_spec(gateway)["initContainers"][0]  # type: ignore[index]
+     init["securityContext"]["allowPrivilegeEscalation"] = True
+     found = check_manifests(docs, registry)
+     assert [(v.rule, v.where.endswith(init["name"])) for v in found] == [("privileged", True)]
+@@ -340,17 +339,18 @@ def test_a_container_s_own_group_alone_is_refused(development: tuple[dict[str, A
+ def test_a_supplementary_group_outside_its_allowance_is_refused(
+     development: tuple[dict[str, Any], str],
+ ) -> None:
+-    """Group 0 is Keycloak's alone (its image is built for group 0, until P10): the render gives
+-    it to Keycloak and passes; given to another workload, or another group to Keycloak, refused."""
++    """Group 0 was Keycloak's alone (its image built for group 0); since P10 part 2 Keycloak is not
++    rendered (people sign in with Entra ID) and no workload is allowed a group of its own: the
++    render gives none, and group 0, or any other, given to a workload is refused."""
+     values, registry = copy.deepcopy(development)
+-    assert _workload(values, "keycloak")["supplementalGroups"] == [0]
++    assert not [w["name"] for w in values["workloads"] if w.get("supplementalGroups")]
+     _workload(values, "api")["supplementalGroups"] = [0]
+     docs = helm_template(yaml.safe_dump(values))
+     assert [(v.rule, v.where, v.detail) for v in check_manifests(docs, registry)] == [
+         ("supplementary-group", "Deployment/api", "supplementalGroups [0]")
+     ]
+     values, _ = copy.deepcopy(development)
+-    _workload(values, "keycloak")["supplementalGroups"] = [0, 4]
++    _workload(values, "arcadedb")["supplementalGroups"] = [4]
+     docs = helm_template(yaml.safe_dump(values))
+     assert _found(docs, registry) == [("supplementary-group", "supplementalGroups [4]")]
+ 
+@@ -573,7 +573,7 @@ def test_a_dropped_internal_policy_leaves_pods_open_and_is_refused(
+     # The doors stay selected by the controller's policy; every other pod is left open.
+     assert ("ingress-isolation", "Deployment/api",
+             "no ingress policy selects its pods, so any address may reach them") in found  # fmt: skip
+-    assert not [w for _, w, _ in found if w in {"Deployment/workspace", "StatefulSet/keycloak"}]
++    assert not [w for _, w, _ in found if w in {"Deployment/workspace"}]
+ 
+ 
+ def test_a_widened_ingress_policy_is_refused(development: tuple[dict[str, Any], str]) -> None:
+@@ -692,14 +692,14 @@ def test_a_calico_ingress_allow_from_a_selector_alone_passes(
+ def test_a_container_without_resources_is_refused(development: tuple[dict[str, Any], str]) -> None:
+     values, registry = copy.deepcopy(development)
+     _workload(values, "arcadedb").pop("resources")
+-    keycloak = _workload(values, "keycloak")
+-    keycloak["initContainers"][0]["resources"] = {"requests": {"cpu": "100m"}}
++    gateway = _workload(values, "litellm")
++    gateway["initContainers"][0]["resources"] = {"requests": {"cpu": "100m"}}
+     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+-    assert [(v.rule, v.where, v.detail) for v in found] == [
++    assert sorted((v.rule, v.where, v.detail) for v in found) == [
++        ("no-resources", "Deployment/litellm container litellm-db",
++         "no requests.memory, limits.memory"),
+         ("no-resources", "StatefulSet/arcadedb container arcadedb",
+          "no requests.cpu, requests.memory, limits.memory"),
+-        ("no-resources", "StatefulSet/keycloak container keycloak-db",
+-         "no requests.memory, limits.memory"),
+     ]  # fmt: skip
+ 
+ 
+@@ -790,8 +790,8 @@ def test_a_poc_container_without_a_cpu_limit_is_refused(
+ # ---- the service account's token (Amendment 5 point 24) ----------------------------------------
+ 
+ 
+-@pytest.mark.parametrize("workload", ["workspace", "ner", "superset", "keycloak", "arcadedb",
+-                                      "clickhouse", "litellm"])  # fmt: skip
++# Superset and Keycloak are not rendered on this profile since P10 part 2 (ADR-148 Amendment 8).
++@pytest.mark.parametrize("workload", ["workspace", "ner", "arcadedb", "clickhouse", "litellm"])
+ def test_a_token_mounted_where_no_kubernetes_api_is_called_is_refused(
+     rendered: tuple[dict[str, Any], str], workload: str
+ ) -> None:
+@@ -1098,7 +1098,8 @@ def test_the_gateway_never_runs_as_the_bucket_role() -> None:
+         ("token", "Deployment/litellm"),
+     ]
+     values, registry = _bedrock()
+-    _workload(values, "superset")["serviceAccountName"] = irsa  # no token, the role all the same
++    # The workspace: Superset, which this planted on, is not rendered since P10 part 2.
++    _workload(values, "workspace")["serviceAccountName"] = irsa  # no token, the role all the same
+     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+     assert [(v.rule, v.detail) for v in found if v.rule == "token"] == [
+         ("token", f"runs as {irsa}, the bucket role's account")
+@@ -1173,24 +1174,26 @@ def test_a_keyless_single_provider_s_key_is_refused_to_the_gateway(tmp_path: Pat
+ 
+ 
+ def test_the_gateway_s_account_on_another_pod_is_refused() -> None:
+-    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on the dashboards,
+-    even with no token mounted, refused."""
++    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on another pod
++    (the workspace; the dashboards are not rendered since P10 part 2), even with no token mounted,
++    refused."""
+     values, registry = _bedrock()
+     gateway = _workload(values, "litellm")["serviceAccountName"]
+-    _workload(values, "superset")["serviceAccountName"] = gateway
++    _workload(values, "workspace")["serviceAccountName"] = gateway
+     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
+     assert [(v.rule, v.where, v.detail) for v in found if v.rule == "token"] == [
+-        ("token", "Deployment/superset", f"runs as {gateway}, the gateway's account")
++        ("token", "Deployment/workspace", f"runs as {gateway}, the gateway's account")
+     ]
+ 
+ 
+ def test_the_older_service_account_field_is_read() -> None:
+     """Item 5: Kubernetes still reads `serviceAccount` when `serviceAccountName` is unset, so the
+-    bucket role's account named there on the dashboards is refused as by the newer field."""
++    bucket role's account named there on the workspace (the dashboards are not rendered since P10
++    part 2) is refused as by the newer field."""
+     values, registry = _bedrock()
+     irsa = _workload(values, "api")["serviceAccountName"]
+     docs = helm_template(yaml.safe_dump(values))
+-    spec = pod_spec(_doc(docs, "Deployment", "superset"))
++    spec = pod_spec(_doc(docs, "Deployment", "workspace"))
+     assert spec is not None and "serviceAccountName" not in spec
+     spec["serviceAccount"] = irsa
+     assert [(v.rule, v.detail) for v in check_manifests(docs, registry) if v.rule == "token"] == [
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml
+index 56a71db..e15d023 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development-sources.yaml
+@@ -19,6 +19,17 @@ cloud_platform:
+     # The declared bucket and Athena, by their networks (synthetic): the Conduit's alone.
+     synthetic-exports.s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+     athena.eu-west-2.amazonaws.com: ["198.18.3.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.2.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+   # What S3 and Athena connections may read (synthetic names): Admin refuses any other.
+   connector_sources:
+     s3:
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
+index 031e18f..d342aa8 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/development.yaml
+@@ -19,6 +19,17 @@ cloud_platform:
+   egress_nets:
+     s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.2.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+ # The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+ map:
+   default: osm-local
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml
+index fada072..06274e3 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/poc.yaml
+@@ -19,6 +19,17 @@ cloud_platform:
+   egress_nets:
+     s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.2.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+ # The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+ map:
+   default: osm-local
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml
+index 1a5420c..fef7aee 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production-bedrock.yaml
+@@ -1,13 +1,15 @@
+ # A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
+-# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
++# a model engine enabled, so the gateway and its egress are rendered too.
+ profile: cloud-platform
+ components:
+   analytics_engine: clickhouse
+ network:
+   public_origin: https://ospreyflow.apps.example.org
++# Reporting off: report sync and Superset are not on this profile until their step after P10
++# (ADR-148 Amendment 8; the orchestrator's ruling (a)).
+ reporting:
+-  sync: true
+-  superset: true
++  sync: false
++  superset: false
+ # P11 part 2: production with a Bedrock engine as well, so the gateway's own account and role
+ # (terraform/gateway.tf) pass the policy check and OpenTofu's fmt, init and validate (the
+ # orchestrator's round 1, item 4).
+@@ -32,6 +34,17 @@ cloud_platform:
+     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
+     api.openai.com: ["203.0.113.0/24"]
+     bedrock-runtime.eu-west-2.amazonaws.com: ["198.18.2.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.3.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+ # The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+ map:
+   default: osm-local
+diff --git a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
+index b360edf..48f00c7 100644
+--- a/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
++++ b/OspreyFlow_Build/tests/fixtures/cloud_platform/production.yaml
+@@ -1,13 +1,15 @@
+ # A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
+-# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
++# a model engine enabled, so the gateway and its egress are rendered too.
+ profile: cloud-platform
+ components:
+   analytics_engine: clickhouse
+ network:
+   public_origin: https://ospreyflow.apps.example.org
++# Reporting off: report sync and Superset are not on this profile until their step after P10
++# (ADR-148 Amendment 8; the orchestrator's ruling (a)).
+ reporting:
+-  sync: true
+-  superset: true
++  sync: false
++  superset: false
+ models:
+   # ADR-135 Amendment 9: named; left unset, the profile presets Laurium.
+   extraction_engine: deep_read
+@@ -26,6 +28,17 @@ cloud_platform:
+     s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
+     sts.eu-west-2.amazonaws.com: ["198.18.1.0/24"]
+     api.openai.com: ["203.0.113.0/24"]
++    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
++    login.microsoftonline.com: ["198.18.2.0/24"]
++  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
++  claims:
++    tenant_id: 00000000-1111-4222-8333-444444444444
++    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
++    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
++    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
++    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
++    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
++    first_administrators: [50000000-0000-4000-8000-000000000001]
+ # The map the Conduit reads at start: tier 1, the local OpenStreetMap file (synthetic deployment).
+ map:
+   default: osm-local
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py
+new file mode 100644
+index 0000000..6fe5e6e
+--- /dev/null
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py
+@@ -0,0 +1,241 @@
++"""Entra ID sign-in on the cloud-platform profile (`spec/06_DECISIONS.md` ADR-148 decision 9;
++Amendment 8, P10 part 2).
++
++What a mistake would do, and the case that catches it (rule 12):
++- the render's claim settings not reaching the Conduit, or reaching it without the Glass's
++  client: `test_the_rendered_settings_sign_in_a_glass_token_through_the_one_construction_path`
++  (from the rendered environment, through `ClaimMapping.from_env`, to the resolver; red with
++  `client_id` left out of the rendered mapping, `process/lanes/admin/p10p2/plants`);
++- the realm's settings left in the Conduit's environment, pointing at a Keycloak that is not there:
++  `test_the_realms_settings_are_gone_and_entras_are_rendered`;
++- an Entra deployment rendered with nobody to administer it, or "nobody" read as everyone:
++  `test_no_first_administrator_is_refused_never_everyone`;
++- Keycloak's `deployment.json` changed by Entra's fields:
++  `test_keycloaks_deployment_file_is_as_it_was`.
++
++Synthetic ids (rule 9).
++"""
++
++from __future__ import annotations
++
++import asyncio
++import json
++import time
++from typing import Any
++
++import pytest
++import yaml
++from harness.cloud_platform import REALM_SETTINGS, CloudPlatformNotRenderable
++from harness.site import render_glass_settings
++from pydantic import ValidationError
++from services.api.auth import PrincipalResolutionError, PrincipalResolver
++from services.api.config import ApiConfig
++
++from principal_auth import ClaimMapping
++from schemas.deployment import OspreyConfig
++from tests.conftest import sign_token
++from tests.harness.test_cloud_platform_render import (
++    FIXTURES,
++    _artefacts,
++    _config,
++    _containers,
++    _values,
++)
++from tests.services.api.test_auth import _config as _api_config
++from tests.services.api.test_auth_entra_claims import FakePeople
++
++TENANT = "00000000-1111-4222-8333-444444444444"
++GLASS = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"
++API = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
++ADMIN = "50000000-0000-4000-8000-000000000001"
++EXT = "extension_0123456789abcdef0123456789abcdef"
++
++
++def _raw(name: str = "development") -> dict[str, Any]:
++    return yaml.safe_load((FIXTURES / f"{name}.yaml").read_text(encoding="utf-8"))
++
++
++def _with_claims(**changes: Any) -> OspreyConfig:
++    raw = _raw()
++    raw["cloud_platform"]["claims"] |= changes
++    return OspreyConfig.model_validate(raw)
++
++
++#: The realm's settings, named here and not read from the code under test (the lane-reviewer's
++#: finding 4): dropping one from `REALM_SETTINGS` must turn this red.
++REALM_NAMES = {"OIDC_TOKEN_EXCHANGE_URL", "OIDC_TOKEN_EXCHANGE_CLIENT_ID", "OIDC_ADMIN_USERS_URL",
++               "OSPREY_IDENTITY_ORIGIN"}  # fmt: skip
++
++
++def test_the_realms_settings_are_gone_and_entras_are_rendered() -> None:
++    environment = _values(_config())["environment"]
++    assert REALM_SETTINGS == REALM_NAMES
++    assert not REALM_NAMES & set(environment)
++    assert environment["OSPREY_IDENTITY_PROVIDER"] == "entra"
++    assert environment["OIDC_ISSUER"] == f"https://login.microsoftonline.com/{TENANT}/v2.0"
++    assert environment["OIDC_AUDIENCE"] == API
++    assert environment["OIDC_JWKS_URL"] == (
++        f"https://login.microsoftonline.com/{TENANT}/discovery/v2.0/keys"
++    )
++    assert environment["OSPREY_FIRST_ADMINISTRATORS"] == ADMIN
++    assert environment["SUPERSET_SIGN_IN"] == "entra"
++    mapping = json.loads(environment["OSPREY_CLAIM_MAPPING"])
++    assert (mapping["client_id"], mapping["api_client_id"]) == (GLASS, API)
++
++
++def test_v1_tokens_and_a_claims_mapping_policy_change_the_issuer_audience_and_keys() -> None:
++    environment = _values(_with_claims(token_version="1.0", claims_mapping_policy=True))[
++        "environment"
++    ]
++    assert environment["OIDC_ISSUER"] == f"https://sts.windows.net/{TENANT}/"
++    assert environment["OIDC_AUDIENCE"] == f"api://{API}"
++    assert environment["OIDC_JWKS_URL"] == (
++        f"https://login.microsoftonline.com/{TENANT}/discovery/keys?appid={API}"
++    )
++
++
++def test_the_rendered_settings_sign_in_a_glass_token_through_the_one_construction_path(
++    keypair, jwks_url, monkeypatch
++) -> None:
++    """The render's own environment, read as the Conduit reads it (`ClaimMapping.from_env`), signs
++    in a Glass token and refuses another application's, with the roles from the people store. Only
++    the keys' address is the test's (a loopback JWKS standing in for Entra's)."""
++    environment = _values(_config())["environment"]
++    monkeypatch.setenv("OSPREY_CLAIM_MAPPING", environment["OSPREY_CLAIM_MAPPING"])
++    config: ApiConfig = _api_config(
++        jwks_url,
++        oidc_issuer=environment["OIDC_ISSUER"],
++        oidc_audience=environment["OIDC_AUDIENCE"],
++    )
++    resolver = PrincipalResolver(
++        config, claim_mapping=ClaimMapping.from_env(), role_source=FakePeople()
++    )
++    now = int(time.time())
++    claims = {
++        "aud": API, "iss": environment["OIDC_ISSUER"], "iat": now, "exp": now + 3600,
++        "tid": TENANT, "oid": ADMIN, "azp": GLASS, "sub": "pairwise", "scp": "access_as_user",
++        f"{EXT}_clearance": "OFFICIAL", "groups": ["20000000-0000-4000-8000-000000000001"],
++    }  # fmt: skip
++    principal = asyncio.run(resolver.resolve_principal(sign_token(keypair[0], claims)))
++    assert (principal.id, principal.org_unit) == (ADMIN, "unit-1")
++    other = {**claims, "azp": "cccccccc-dddd-4eee-8fff-000000000000"}
++    with pytest.raises(PrincipalResolutionError, match="Glass's client"):
++        asyncio.run(resolver.resolve_principal(sign_token(keypair[0], other)))
++
++
++def test_no_first_administrator_is_refused_never_everyone() -> None:
++    with pytest.raises(ValidationError, match="first administrator"):
++        _with_claims(first_administrators=[])
++    with pytest.raises(ValidationError, match="object id"):
++        _with_claims(first_administrators=["Ana"])
++
++
++def test_a_render_without_entra_sign_in_is_refused_in_words() -> None:
++    raw = _raw()
++    del raw["cloud_platform"]["claims"]
++    with pytest.raises(CloudPlatformNotRenderable, match="cloud_platform.claims"):
++        _artefacts(OspreyConfig.model_validate(raw))
++
++
++def test_a_claim_setting_principal_auth_cannot_read_is_refused_at_render() -> None:
++    """Both sources for the clearance: `ClaimMapping` refuses it, so the render does, in words."""
++    config = _with_claims(clearance={"claim": "c", "groups": {ADMIN: "OFFICIAL"}})
++    with pytest.raises(CloudPlatformNotRenderable, match="claim mapping"):
++        _artefacts(config)
++
++
++def test_the_glass_is_told_entras_sign_in() -> None:
++    settings = json.loads(_values(_config())["files"]["glass.json"])
++    assert settings["sign_in"] == {
++        "kind": "entra",
++        "authority": f"https://login.microsoftonline.com/{TENANT}/v2.0",
++        "client_id": GLASS,
++        "scope": f"openid profile api://{API}/access_as_user",
++    }
++    assert "identity_provider" not in settings and "realm" not in settings
++
++
++#: Every other profile's `deployment.json` for the development fixture as a Small, byte for byte as
++#: main's `harness/site.py` rendered it before P10 part 2 (its version pinned): generated from
++#: main's own module, not from the code under test (the lane-reviewer's finding 9).
++KEYCLOAK_DEPLOYMENT_JSON = """{
++  "identity_provider": "http://id.ospreyflow.localhost",
++  "realm": "osprey",
++  "marking": "PUBLIC",
++  "organisation_sign_in": null,
++  "organisation_label": null,
++  "welcome": {
++    "about": true,
++    "links": {}
++  },
++  "appearance": {
++    "brand": "ospreyflow",
++    "service_name": null,
++    "organisation": null,
++    "phase": "none"
++  },
++  "version": "0000000"
++}
++"""
++
++
++def test_keycloaks_deployment_file_is_as_it_was(monkeypatch) -> None:
++    """Every other profile's `deployment.json`, byte for byte as before P10 part 2: never a
++    `sign_in`, no field moved."""
++    import harness.site as site
++
++    monkeypatch.setattr(site, "deployment_version", lambda: "0000000")
++    raw = _raw()
++    raw.pop("cloud_platform")
++    raw["profile"] = "local-lite"
++    for key in ("map", "models", "network"):
++        raw.pop(key, None)
++    assert render_glass_settings(OspreyConfig.model_validate(raw)) == KEYCLOAK_DEPLOYMENT_JSON
++
++
++def test_the_bare_profile_renders_with_reporting_at_its_defaults() -> None:
++    """The orchestrator's ruling (a): report sync and Superset are off by default, so the profile's
++    own defaults render; only an explicit `on` is refused."""
++    raw = _raw()
++    assert "reporting" not in raw
++    values = _values(OspreyConfig.model_validate(raw))
++    assert not {"report-sync", "superset"} & {w["name"] for w in values["workloads"]}
++
++
++@pytest.mark.parametrize("switch", ["sync", "superset"])
++def test_report_sync_or_superset_switched_on_is_refused_naming_its_step(switch: str) -> None:
++    raw = _raw()
++    raw["reporting"] = {switch: True}
++    with pytest.raises(CloudPlatformNotRenderable, match="their own step after P10"):
++        _artefacts(OspreyConfig.model_validate(raw))
++
++
++def test_no_rendered_value_names_keycloak_or_the_identity_host() -> None:
++    """Nothing the namespace is given points at the realm the profile no longer renders (the
++    lane-reviewer's finding 4): not a setting, a secret's name, a file or a workload."""
++    values = _values(_config("production"))
++    # The deployment's own `osprey.yaml`, mounted as it was written, keeps its settings' defaults
++    # (`governance.identity_provider`, read only at render); the Conduit is told `entra`.
++    del values["files"]["osprey.yaml"]
++    text = yaml.safe_dump(values).lower()
++    assert "keycloak" not in text
++    assert "id.ospreyflow.apps.example.org" not in text
++    assert values["environment"]["OSPREY_IDENTITY_PROVIDER"] == "entra"
++
++
++@pytest.mark.parametrize(
++    "fixture", ["development", "development-sources", "poc", "production", "production-bedrock"]
++)
++def test_the_set_up_console_is_no_part_of_the_render(fixture: str) -> None:
++    """The set-up console (`python -m harness.webapp`, its `/admin` behind `webapp_auth`'s Keycloak
++    role check) is the local install's: no pod, image, command or door of the cloud-platform render
++    is it, so its Keycloak-only role check is never what admits someone there (the orchestrator's
++    review of P10 part 2; `test_realm_readers_refuse_entra.py`'s docstring rests on this)."""
++    values = _values(_config(fixture))
++    for container in _containers(values):
++        image = container["image"].split("@", 1)[0].rsplit(":", 1)[0]
++        command = " ".join(map(str, [*container.get("command", []), *container.get("args", [])]))
++        assert not image.endswith("/harness"), container["name"]
++        assert "harness" not in command, container["name"]
++    served = {p["service"] for rule in values["ingress"]["rules"] for p in rule["paths"]}
++    assert served <= {w["name"] for w in values["workloads"]}
+diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+index 02c9b45..e88781b 100644
+--- a/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
++++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+@@ -24,8 +24,18 @@ from typing import Any
+ 
+ import pytest
+ import yaml
+-from harness.cloud_platform import CloudPlatformNotRenderable, managed_variables
+-from harness.cloud_platform.settings import FOLDERS_VARIABLE, PLATFORMS, load_platform
++from harness.cloud_platform import (
++    REALM_SECRETS,
++    REALM_SETTINGS,
++    CloudPlatformNotRenderable,
++    managed_variables,
++)
++from harness.cloud_platform.settings import (
++    FOLDERS_VARIABLE,
++    PLATFORMS,
++    load_platform,
++    load_profile,
++)
+ from harness.render import UnpinnedImagesError, load_config, render
+ from pydantic import ValidationError
+ from tools.cp_policy_check import FIXTURES, _resolver
+@@ -123,17 +133,17 @@ def test_every_pod_runs_as_10001_and_none_keeps_a_user_of_its_own(values: dict[s
+     assert not [p["name"] for p in _pods(values) if "runAs" in p]
+ 
+ 
+-def test_keycloak_alone_takes_its_image_s_group_as_a_supplementary_one(
+-    values: dict[str, Any],
+-) -> None:
+-    """Keycloak's image is built for any user in group 0 (`/opt/keycloak` is `1000:0`,
+-    group-writable) and writes its own build there at start; as 10001:10001 alone it cannot
+-    (measured on the kind cluster, 10 November 2026). Its pod alone adds group 0 as a
+-    supplementary group: the user stays 10001 and non-root. Entra ID replaces it in P10 (ADR-148
+-    decision 9)."""
++def test_no_pod_takes_group_0_and_keycloak_is_not_rendered(values: dict[str, Any]) -> None:
++    """Keycloak alone took group 0 (its image builds itself into `/opt/keycloak`, `1000:0`). People
++    sign in with Entra ID on this profile (ADR-148 decision 9; Amendment 8, P10 part 2), so neither
++    Keycloak, its database step, its realm and theme files nor its secrets are rendered, and no pod
++    takes group 0."""
+     groups = {p["name"]: p.get("supplementalGroups") for p in _pods(values)}
+-    assert groups.pop("keycloak") == [0]
+-    assert set(groups.values()) == {None}
++    assert "keycloak" not in groups and set(groups.values()) == {None}
++    containers = {c["name"] for c in _containers(values)}
++    assert not {"keycloak", "keycloak-db"} & containers
++    assert not [f for f in values["files"] if f == "realm.json" or f.startswith("theme--")]
++    assert not [k for k in values["secrets"]["keys"] if "KEYCLOAK" in k or "EXCHANGE" in k]
+ 
+ 
+ def test_the_shared_folders_are_one_read_write_once_claim_its_mounters_on_one_node(
+@@ -221,6 +231,9 @@ def test_every_key_a_cluster_s_install_writes_reaches_the_pods(fixture: str) ->
+     missing = sorted(
+         k for k in written
+         if k not in managed
++        # P10 part 2: the realm's, and Keycloak is not rendered (people sign in with Entra ID).
++        and k not in REALM_SECRETS
++        and k not in REALM_SETTINGS
+         and k not in values["environment"]
+         and k not in values["secrets"]["keys"]
+     )  # fmt: skip
+@@ -228,7 +241,8 @@ def test_every_key_a_cluster_s_install_writes_reaches_the_pods(fixture: str) ->
+     secret_looking = re.compile(r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY|TOKEN)$|_KEY_")
+     in_the_configmap = [k for k in values["environment"] if secret_looking.search(k)]
+     assert in_the_configmap == [], in_the_configmap
+-    assert values["environment"]["OIDC_JWKS_URL"].endswith("/protocol/openid-connect/certs")
++    # Entra ID's keys since P10 part 2, never the realm's (`test_cloud_platform_entra.py`).
++    assert values["environment"]["OIDC_JWKS_URL"].startswith("https://login.microsoftonline.com/")
+ 
+ 
+ @pytest.mark.parametrize("fixture", ["development", "production"])
+@@ -319,9 +333,6 @@ def test_a_variable_a_command_names_is_defined_before_it(values: dict[str, Any])
+             assert "$$(POSTGRES_HOST)" not in part, container["name"]
+             for name in set(re.findall(r"(?<!\$)\$\(([A-Z_][A-Z0-9_]*)\)", part)):
+                 assert name in {e["name"] for e in env}, (container["name"], name)
+-    keycloak = _by_name(values)["keycloak"]
+-    database = next(c for c in keycloak["initContainers"] if c["name"] == "keycloak-db")
+-    assert "psql -h $(POSTGRES_HOST)" in database["args"][0]
+ 
+ 
+ def test_the_conduit_knows_its_profile(values: dict[str, Any]) -> None:
+@@ -393,10 +404,14 @@ def test_the_conduit_is_planned_without_java() -> None:
+ 
+ #: The fixtures' networks for S3 and STS (synthetic; the platform's own are its settings file's
+ #: or the deployment's `egress_nets`).
+-AWS = {
++S3_AND_STS = {
+     "s3.eu-west-2.amazonaws.com": ["198.18.0.0/24"],
+     "sts.eu-west-2.amazonaws.com": ["198.18.1.0/24"],
+ }
++#: Entra ID's sign-in host, on every render since P10 part 2 (the Conduit reads its keys).
++ENTRA = {"login.microsoftonline.com": ["198.18.2.0/24"]}
++#: The hosts every render reaches, by the fixtures' networks.
++AWS = {**S3_AND_STS, **ENTRA}
+ 
+ 
+ def _hosts(values: dict[str, Any]) -> dict[str, list[str]]:
+@@ -411,6 +426,23 @@ def test_egress_allows_the_managed_stores_and_each_enabled_host_by_its_networks(
+     assert prod == {**AWS, "api.openai.com": ["203.0.113.0/24"]}
+ 
+ 
++def test_entras_sign_in_host_is_the_one_host_p10_adds_and_the_conduit_alone_reaches_it() -> None:
++    """ADR-148 Amendment 8 (the docs lane's gap (a)): Entra ID's sign-in host is the one host P10
++    adds, a kind of its own (`egress.sign_in`) the Conduit alone reaches, since it alone verifies
++    tokens; `always` is unchanged; and a render without its networks is refused in words."""
++    egress = load_profile().egress
++    assert egress.always == ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
++    assert egress.sign_in == ["login.microsoftonline.com"]
++    assert egress.reach["sign_in"] == ["api"]
++    rows = {row["name"]: row for row in _values(_config("development"))["egress"]["workloads"]}
++    reaching = sorted(
++        n for n, r in rows.items() if "login.microsoftonline.com" in r.get("hosts", [])
++    )
++    assert reaching == ["api"]
++    with pytest.raises(CloudPlatformNotRenderable, match="login.microsoftonline.com"):
++        _artefacts(_config("development", cloud_platform={"egress_nets": S3_AND_STS}))
++
++
+ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
+     monkeypatch: pytest.MonkeyPatch,
+ ) -> None:
+@@ -421,11 +453,12 @@ def test_s3_and_sts_are_reached_by_networks_named_never_by_the_vpc_s(
+         _artefacts(_config("development", cloud_platform={"egress_nets": {}}))
+     monkeypatch.setenv(FOLDERS_VARIABLE, str(FIXTURES / "platforms"))
+     kind = load_platform("kind")
+-    assert set(kind.egress.service_nets) == set(AWS)
++    assert set(kind.egress.service_nets) == set(S3_AND_STS)
+     raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+-    raw["cloud_platform"] |= {"platform": "kind", "egress_nets": {}}
++    raw["cloud_platform"] |= {"platform": "kind", "egress_nets": ENTRA}
+     assert _hosts(_values(OspreyConfig.model_validate(raw))) == {
+-        h: list(n) for h, n in kind.egress.service_nets.items()
++        **{h: list(n) for h, n in kind.egress.service_nets.items()},
++        **ENTRA,
+     }
+ 
+ 
+@@ -488,32 +521,26 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
+     assert ingress["className"] == platform.ingress.class_name
+     assert ingress["annotations"][platform.ingress.allow_list_annotation] == "192.0.2.0/24"
+     assert ingress["annotations"]["nginx.ingress.kubernetes.io/enable-modsecurity"] == "true"
++    # No identity door: people sign in at Entra ID (P10 part 2).
+     assert {(r["host"], r["service"]) for r in ingress["rules"]} == {
+         ("ospreyflow-dev.apps.example.org", "workspace"),
+-        ("id.ospreyflow-dev.apps.example.org", "keycloak"),
+     }
++    # No dashboards door either: Superset is not on this profile until its step (P10 part 2).
+     prod = {r["service"] for r in _values(_config("production"))["ingress"]["rules"]}
+-    assert prod == {"workspace", "keycloak", "superset"}
++    assert prod == {"workspace"}
+     assert not [w for w in _values(_config()).get("workloads", []) if w.get("public")]
+ 
+ 
+ # ---- the configuration ---------------------------------------------------------------------------
+ 
+ 
+-def test_the_sign_in_page_s_govuk_assets_come_from_the_glass_on_its_own_host() -> None:
+-    """Caddy sends `id.<host>/assets/govuk/*` to the workspace when the brand is GOV.UK (ADR-132
+-    Amendment 2: same-origin on the sign-in page); the platform's ingress must route it too, or the
+-    sign-in page loses its stylesheet and fonts."""
+-    rules = {r["host"]: r for r in _values(_config("development"))["ingress"]["rules"]}
+-    assert rules["id.ospreyflow-dev.apps.example.org"]["paths"] == [
+-        {"path": "/", "service": "keycloak", "port": 8080}
+-    ]
++def test_there_is_no_sign_in_page_of_ours_to_serve_even_for_govuk() -> None:
++    """Caddy sends `id.<host>/assets/govuk/*` to the workspace for Keycloak's GOV.UK sign-in page
++    (ADR-132 Amendment 2). With Entra ID's sign-in (P10 part 2) there is no page of ours there, so
++    no `id.` host is routed, whatever the brand."""
+     govuk = _config("development", appearance={"brand": "govuk"})
+     rules = {r["host"]: r for r in _values(govuk)["ingress"]["rules"]}
+-    assert rules["id.ospreyflow-dev.apps.example.org"]["paths"] == [
+-        {"path": "/assets/govuk", "service": "workspace", "port": 8080},
+-        {"path": "/", "service": "keycloak", "port": 8080},
+-    ]
++    assert "id.ospreyflow-dev.apps.example.org" not in rules
+     assert rules["ospreyflow-dev.apps.example.org"]["paths"] == [
+         {"path": "/", "service": "workspace", "port": 8080}
+     ]
+@@ -526,10 +553,12 @@ def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
+ 
+ 
+ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named(
+-    monkeypatch: pytest.MonkeyPatch,
++    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+ ) -> None:
+     """A platform's default certificate is a wildcard one label deep: `id.` and `bi.` below the
+-    deployment's own name are two, so the browser refuses them unless a certificate is named."""
++    deployment's own name are two, so the browser refuses them unless a certificate is named. Since
++    P10 part 2 neither door is rendered (Entra ID signs people in; Superset waits for its step), so
++    the deployment's own name alone renders, and a `bi.` door is planted to show the refusal."""
+     import harness.cloud_platform as cp
+ 
+     platform = load_platform("client")
+@@ -537,9 +566,12 @@ def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named
+         update={"ingress": platform.ingress.model_copy(update={"wildcard": "*.apps.example.org"})}
+     )
+     monkeypatch.setattr(cp, "load_platform", lambda _name: covering)
+-    with pytest.raises(CloudPlatformNotRenderable, match="id.ospreyflow-dev.apps.example.org"):
+-        _artefacts(_config("development"))
+-    named = _config("development", cloud_platform={"tls_secret": "ospreyflow-tls"})
++    assert "tlsSecret" not in _values(_config("production"))["ingress"]
++    door = {"site": "dashboards", "workload": "workspace", "port": 8080}
++    _profile(tmp_path, monkeypatch, lambda raw: raw["doors"].append(door))
++    with pytest.raises(CloudPlatformNotRenderable, match="bi.ospreyflow.apps.example.org"):
++        _artefacts(_config("production"))
++    named = _config("production", cloud_platform={"tls_secret": "ospreyflow-tls"})
+     assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
+ 
+ 
+@@ -753,8 +785,7 @@ def test_a_door_group_zero_and_an_always_host_are_rows(
+     raw = yaml.safe_load((FIXTURES / "production.yaml").read_text(encoding="utf-8"))
+     raw["cloud_platform"]["egress_nets"]["login.example.org"] = ["198.51.100.9/32"]
+     values = _values(OspreyConfig.model_validate(raw))
+-    assert {r["service"] for r in values["ingress"]["rules"]} == {"workspace", "keycloak"}
+-    assert "supplementalGroups" not in _by_name(values)["keycloak"]
++    assert {r["service"] for r in values["ingress"]["rules"]} == {"workspace"}
+     assert _hosts(values)["login.example.org"] == ["198.51.100.9/32"]
+ 
+ 
+@@ -994,5 +1025,7 @@ def test_a_render_removes_what_its_last_render_wrote_and_this_one_does_not(tmp_p
+     assert not (out / "terraform" / "opensearch.tf").exists()
+     assert (out / "notes.txt").is_file()  # not ours: never removed
+     assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {
+-        *poc.artefacts, RENDERED_MANIFEST, "notes.txt"
++        *poc.artefacts,
++        RENDERED_MANIFEST,
++        "notes.txt",
+     }
+diff --git a/OspreyFlow_Build/tools/cp_policy_check.py b/OspreyFlow_Build/tools/cp_policy_check.py
+index a8a7c43..254df35 100644
+--- a/OspreyFlow_Build/tools/cp_policy_check.py
++++ b/OspreyFlow_Build/tools/cp_policy_check.py
+@@ -74,9 +74,8 @@ CALICO_DESTINATIONS = {"nets", "selector", "namespaceSelector", "serviceAccounts
+ 
+ #: The workloads allowed group 0 as a supplementary group, and why. Held here on its own, not read
+ #: from the harness's `profile.yaml`, so a render that widens that list is refused here.
+-GROUP_ZERO_ALLOWED = {
+-    "keycloak": "its image is built for any user in group 0 and builds itself at start (until P10)"
+-}
++#: None since P10 part 2 (Keycloak, the one there was, is not rendered: ADR-148 Amendment 8).
++GROUP_ZERO_ALLOWED: dict[str, str] = {}
+ 
+ 
+ @dataclass(frozen=True)
+diff --git a/OspreyFlow_Core/harness/cloud_platform/__init__.py b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+index 9c4545d..e2dcb7a 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/__init__.py
++++ b/OspreyFlow_Core/harness/cloud_platform/__init__.py
+@@ -60,8 +60,26 @@ from schemas.deployment import (
+ #: ADR-148 decision 3: the one numeric user every pod runs as.
+ UID = 10001
+ 
+-#: What a cluster runs that this profile does not: Caddy (decision 2), the local models (11).
+-NOT_RENDERED = frozenset({"proxy", "ollama", "ollama-models", "whisper", "whisper-models"})
++#: What a cluster runs that this profile does not: Caddy (decision 2), the local models (11), and
++#: Keycloak: people sign in with Entra ID directly (decision 9; Amendment 8).
++NOT_RENDERED = frozenset(
++    {"proxy", "ollama", "ollama-models", "whisper", "whisper-models", "keycloak"}
++)
++
++#: The realm's settings a cluster's Conduit reads, which Entra ID sign-in has no use for: the token
++#: exchange and the realm's users (owner resolution is unavailable on Entra; Admin › People keeps
++#: roles in the deployment's own store) and the realm's public address (Amendment 8).
++REALM_SETTINGS = frozenset(
++    {"OIDC_TOKEN_EXCHANGE_URL", "OIDC_TOKEN_EXCHANGE_CLIENT_ID", "OIDC_ADMIN_USERS_URL",
++     "OSPREY_IDENTITY_ORIGIN"}
++)  # fmt: skip
++#: Our Secret's keys only the realm, or the Conduit's exchange with it, reads.
++REALM_SECRETS = frozenset(
++    {"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD", "OSPREY_KEYCLOAK_DB_PASSWORD",
++     "OIDC_TOKEN_EXCHANGE_CLIENT_SECRET"}
++)  # fmt: skip
++#: The realm's own files (its export and its login theme), which only Keycloak mounts.
++REALM_FILES = ("realm.json", "theme--")
+ 
+ #: What reads the managed stores' details: only these are given them (a pod that reads the whole
+ #: env, as the workspace's nginx does, is not handed the database's password for that).
+@@ -69,7 +87,7 @@ READERS = frozenset({"api", "worker", "report-sync", "superset"})
+ 
+ #: Decision 5: one of each in development.
+ DEVELOPMENT_REPLICAS = {
+-    "workspace": 1, "api": 1, "report-sync": 1, "superset": 1, "worker": 1, "keycloak": 1,
++    "workspace": 1, "api": 1, "report-sync": 1, "superset": 1, "worker": 1,
+     "arcadedb": 1, "clickhouse": 1, "clickhouse-keeper": 1,
+ }  # fmt: skip
+ 
+@@ -152,6 +170,46 @@ def _refuse(config: OspreyConfig) -> None:
+         )
+     if not config.network.public_origin.startswith("https://"):
+         raise CloudPlatformNotRenderable("a cloud platform is reached over HTTPS")
++    if config.reporting.sync or config.reporting.superset:
++        # The orchestrator's ruling (a), P10 part 2: both signed in through Keycloak, which this
++        # profile does not render; each gets Entra ID's sign-in in its own later step (CARRIES).
++        raise CloudPlatformNotRenderable(
++            "report sync and Superset are not on this profile yet: they signed in through "
++            "Keycloak, and people sign in with Entra ID here; their own step after P10 (reporting "
++            "on Entra ID) brings them. Set reporting.sync and reporting.superset to false"
++        )
++    claims = _cp(config).claims
++    if claims is None:
++        raise CloudPlatformNotRenderable(
++            "people sign in with Entra ID on this profile (ADR-148 decision 9): declare "
++            "cloud_platform.claims (the tenant, the Glass's and the API's app registrations, where "
++            "each claim comes from and the first administrators)"
++        )
++    from principal_auth import ClaimMapping
++
++    try:
++        ClaimMapping.model_validate(claims.claim_mapping())
++    except ValueError as error:
++        raise CloudPlatformNotRenderable(
++            f"cloud_platform.claims cannot be read as a claim mapping: {error}"
++        ) from None
++
++
++def entra_settings(config: OspreyConfig) -> dict[str, str]:
++    """What the Conduit, the workers and Superset read to sign people in with Entra ID (ADR-148
++    Amendment 8): the issuer, audience and keys of the API's tokens, the claim mapping
++    (`OSPREY_CLAIM_MAPPING`, `principal_auth.ClaimMapping`) and the first administrators."""
++    claims = _cp(config).claims
++    assert claims is not None  # `_refuse`
++    return {
++        "OSPREY_IDENTITY_PROVIDER": "entra",
++        "OIDC_ISSUER": claims.issuer,
++        "OIDC_AUDIENCE": claims.audience,
++        "OIDC_JWKS_URL": claims.jwks_url,
++        "OSPREY_CLAIM_MAPPING": json.dumps(claims.claim_mapping(), sort_keys=True),
++        "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
++        "SUPERSET_SIGN_IN": "entra",
++    }
+ 
+ 
+ #: Each variable a workload reads that a managed store's secret gives: (store, the secret's key).
+@@ -503,14 +561,14 @@ def _egress_addresses_by_kind(
+     IRSA's role); a model engine's address, or its kind's host from `egress.engine_kind_hosts`
+     (Bedrock's runtime in its region), or its provider's own host from `egress.engine_hosts`,
+     and a proxied map provider's source (the settings ADR-135 Amendment 2 and ADR-147 gate); the
+-    mail server, which Keycloak reaches; and each connector host. (The organisation's own sign-in
+-    is Small's alone, refused at this profile; P10's Entra ID adds its host to `egress.always`.)
++    mail server; Entra ID's sign-in host (`egress.sign_in`, P10 part 2); and each connector host.
+     Each with its port (Amendment 5 point 21): an AWS service's 443, an address's own or its
+     scheme's, the mail server's `mail.port`, a connector host's `host:port` or 443."""
+     region = platform.aws_region
+     kinds: dict[str, list[tuple[str, int]]] = {
+         "always": [(host.format(region=region), 443) for host in profile.egress.always],
+         "identity": [(host.format(region=region), 443) for host in profile.egress.identity],
++        "sign_in": [(host, 443) for host in profile.egress.sign_in],
+         "engines": _engine_addresses(config, profile), "maps": [], "mail": [], "connectors": [],
+         # ADR-140 Amendment 21: each declared S3 bucket and Athena workgroup by its own host, on
+         # 443. Never a results or table location's bucket: Athena reaches those itself.
+@@ -890,7 +948,7 @@ def render_cloud_platform(
+     from harness.cloud_platform.terraform import render_terraform
+     from harness.cluster import render_cluster
+     from harness.render import service_images
+-    from harness.site import highest_marking
++    from harness.site import highest_marking, render_glass_settings
+ 
+     _refuse(config)
+     platform = load_platform(_cp(config).platform)
+@@ -971,7 +1029,11 @@ def render_cloud_platform(
+ 
+         raise UnpinnedImagesError(copies.unresolved)
+ 
+-    environment = {k: v for k, v in values["environment"].items() if k not in variables}
++    environment = {
++        k: v
++        for k, v in values["environment"].items()
++        if k not in variables and k not in REALM_SETTINGS
++    }
+     # ArcadeDB's heap is its own container's, from its limit (above), never the cluster's
+     # machine-sized setting, which nothing else reads.
+     environment.pop("OSPREY_ARCADEDB_HEAP", None)
+@@ -996,7 +1058,9 @@ def render_cloud_platform(
+     environment["OSPREY_HIGHEST_MARKING"] = highest_marking(config)
+     # What the cluster's install writes into our Secret, and this profile has no install to write.
+     install = _what_the_install_writes(config, as_cluster, set(variables))
+-    environment.update(install.settings)
++    environment.update({k: v for k, v in install.settings.items() if k not in REALM_SETTINGS})
++    # Entra ID's, last, so nothing the cluster's realm wrote stands (ADR-148 Amendment 8).
++    environment.update(entra_settings(config))
+     sources = _cp(config).connector_sources
+     if _cp(config).connector_hosts or sources.declared():
+         # The Conduit's own allow-list, from the lists the egress policy allows (one list, both).
+@@ -1010,16 +1074,28 @@ def render_cloud_platform(
+             sources.model_dump(mode="json"), sort_keys=True
+         )
+     secrets = values["secrets"]
+-    secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
++    secrets["keys"] = sorted(
++        ({k for k in secrets["keys"] if k not in variables} | set(install.keys)) - REALM_SECRETS
++    )
+     secrets["defaults"] = {
+-        **{k: v for k, v in secrets["defaults"].items() if k not in variables},
+-        **install.defaults,
++        k: v
++        for k, v in {
++            **{k: v for k, v in secrets["defaults"].items() if k not in variables},
++            **install.defaults,
++        }.items()
++        if k not in REALM_SECRETS
++    }
++    secrets["copies"] = {
++        k: v for k, v in sorted(install.copies.items()) if REALM_SECRETS.isdisjoint((k, v))
+     }
+-    secrets["copies"] = dict(sorted(install.copies.items()))
+     # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
+     # master key (found on the kind cluster, where its pod could not start without it).
+ 
+-    files = {k: v for k, v in values["files"].items() if k != "Caddyfile"}
++    files = {
++        k: v
++        for k, v in values["files"].items()
++        if k != "Caddyfile" and not k.startswith(REALM_FILES)
++    }
+     storage: dict[str, Any] = {
+         "className": platform.storage.class_name,
+         "sharedClassName": platform.storage.class_name,
+@@ -1044,6 +1120,8 @@ def render_cloud_platform(
+         "environment": environment,
+         "files": {
+             **files,
++            # The Glass signs in with Entra ID (Amendment 8): its deployment file says where.
++            "glass.json": render_glass_settings(config, entra=_cp(config).claims),
+             # The deployment's own configuration, as it was written, not the cluster's shape.
+             "osprey.yaml": yaml.safe_dump(_as_written(config), sort_keys=False),
+         },
+diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+index 3aa19c2..da7713e 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
++++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
+@@ -9,15 +9,14 @@
+ # workload behind it and the workload's port. A door whose workload is not rendered is left out.
+ doors:
+   - {site: glass, workload: workspace, port: 8080}
+-  - {site: identity, workload: keycloak, port: 8080}
+   - {site: dashboards, workload: superset, port: 8088}
+ 
+ # An image built for any user in group 0 (OpenShift's convention) that writes into its own folders
+ # at start: its pod adds group 0 as a supplementary group, its user staying 10001 and non-root.
+-# Keycloak's (`/opt/keycloak` is `1000:0`, group-writable; it builds itself there), until P10
+-# replaces it. `make cp-policy-check` holds its own list (`GROUP_ZERO_ALLOWED`), so a row added
+-# here alone is refused there.
+-group_zero: [keycloak]
++# None since P10 part 2: Keycloak, the one there was, is not rendered (people sign in with Entra
++# ID). `make cp-policy-check` holds its own list (`GROUP_ZERO_ALLOWED`), so a row added here alone
++# is refused there.
++group_zero: []
+ 
+ # How each image of ours is built (decision 8): its Dockerfile and context, from OspreyFlow_Core,
+ # and its build arguments. The Conduit without Java on this profile (decision 12). An image of
+@@ -37,6 +36,9 @@ ours:
+ egress:
+   # On every render: the bucket (S3) and IRSA's role (STS). `{region}` is the platform's.
+   always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
++  # Entra ID's sign-in host, whose keys the Conduit reads to verify every token (P10 part 2): the
++  # Conduit's alone.
++  sign_in: ["login.microsoftonline.com"]
+   # A model engine that names no `api_base` is reached at its provider's own host.
+   engine_hosts:
+     openai: api.openai.com
+@@ -49,9 +51,10 @@ egress:
+   # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
+   # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
+   # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
+-  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host and a declared S3 or
+-  # Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
+-  # (ADR-140 Amendment 21; the worker's jobs read none).
++  # the Conduit, Entra ID's sign-in host the Conduit (P10 part 2), a connector host and a declared S3
++  # or Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
++  # (ADR-140 Amendment 21; the worker's jobs read none); nothing reaches the mail server since P10
++  # part 2 (Keycloak sent its sign-in mail).
+   # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
+   identity: ["sts.{region}.amazonaws.com"]
+   # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
+@@ -60,16 +63,17 @@ egress:
+   others: [backup, backup-claims, restore, restore-claims]
+   reach:
+     identity: [litellm]
++    sign_in: [api]
+     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
+     # P9's backup and restore pods.
+     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
+     engines: [litellm]
+     maps: [api]
+-    mail: [keycloak]
++    mail: []
+     connectors: [api]
+     sources: [api]
+   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
+-  managed: [api, worker, report-sync, superset, keycloak, litellm]
++  managed: [api, worker, report-sync, superset, litellm]
+   # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
+   # 443 is added when the deployment searches with it.
+   managed_ports: [5432, 6379]
+@@ -78,11 +82,9 @@ egress:
+   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
+   paths:
+     workspace: [api]
+-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset, laurium]
+-    worker: [arcadedb, clickhouse, keycloak, ner]
+-    report-sync: [api, keycloak]
+-    superset: [keycloak]
+-    keycloak: [keycloak]
++    api: [arcadedb, clickhouse, litellm, ner, superset, laurium]
++    worker: [arcadedb, clickhouse, ner]
++    report-sync: [api]
+     arcadedb: [arcadedb]
+     clickhouse: [clickhouse, clickhouse-keeper]
+     clickhouse-keeper: [clickhouse-keeper]
+@@ -114,7 +116,6 @@ resources:
+   report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
+   ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+   superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+-  keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+   litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
+   # Laurium 0.6.0, LangChain and spaCy's small English model in one process (ADR-135 Amendment 6).
+   laurium: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
+@@ -157,6 +158,5 @@ poc:
+     api: "2"
+     worker: "2"
+     ner: "1"
+-    keycloak: "1"
+     arcadedb: "2"
+     clickhouse: "2"
+diff --git a/OspreyFlow_Core/harness/cloud_platform/settings.py b/OspreyFlow_Core/harness/cloud_platform/settings.py
+index 6fea034..594ab3f 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/settings.py
++++ b/OspreyFlow_Core/harness/cloud_platform/settings.py
+@@ -183,7 +183,7 @@ class ImageOfOurs(_Strict):
+ 
+ #: The kinds of host the namespace reaches (`harness.cloud_platform._egress_hosts_by_kind`), each
+ #: reached only by the workloads `egress.reach` names for it.
+-HOST_KINDS = ("always", "identity", "engines", "maps", "mail", "connectors", "sources")
++HOST_KINDS = ("always", "identity", "sign_in", "engines", "maps", "mail", "connectors", "sources")
+ #: A path's target that is not a workload: the cluster's API server, by the `kubernetes` Service.
+ KUBE_API = "kube-api"
+ 
+@@ -201,6 +201,9 @@ class EgressHosts(_Strict):
+     #: STS alone (a subset of `always`), for a workload that signs in by a role of its own and
+     #: never reaches the buckets: the gateway's, for Bedrock (P11 part 2).
+     identity: list[str] = Field(default_factory=list)
++    #: Entra ID's sign-in host, whose keys the Conduit reads to verify every token (ADR-148
++    #: Amendment 8, P10 part 2).
++    sign_in: list[str] = Field(default_factory=list)
+     #: The pods rendered outside the workloads that have rows by their own pods' names (P9's
+     #: backup and restore); the render gives them to `egress_policy(..., others=...)`.
+     others: list[str] = Field(default_factory=list)
+diff --git a/OspreyFlow_Core/harness/render.py b/OspreyFlow_Core/harness/render.py
+index e9eb528..a5f3c95 100644
+--- a/OspreyFlow_Core/harness/render.py
++++ b/OspreyFlow_Core/harness/render.py
+@@ -1236,7 +1236,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
+     _gateway_database(config, services)
+     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
+         services["keycloak-db"] = _keycloak_database_step(config)
+-    if config.external.postgres is not None:
++    if config.external.postgres is not None and "keycloak" in services:
++        # Not rendered on the cloud-platform profile, whose people sign in with Entra ID.
+         services["keycloak"]["environment"]["KC_DB_URL"] = _keycloak_jdbc_url(config)
+     _drop_absent_dependencies(services)
+     _place_on_networks(config, services)
+diff --git a/OspreyFlow_Core/harness/site.py b/OspreyFlow_Core/harness/site.py
+index 72178a6..f8a632e 100644
+--- a/OspreyFlow_Core/harness/site.py
++++ b/OspreyFlow_Core/harness/site.py
+@@ -17,7 +17,7 @@ from pathlib import Path
+ from typing import Any
+ from urllib.parse import urlparse
+ 
+-from schemas.deployment import OspreyConfig, Profile, self_contained_small
++from schemas.deployment import EntraSignInConfig, OspreyConfig, Profile, self_contained_small
+ 
+ #: Caddy 2.11.4 (Apache-2.0), released 3 June 2026.
+ PROXY_IMAGE = "caddy:2.11.4-alpine"
+@@ -318,10 +318,15 @@ def organisation_label(config: OspreyConfig) -> str | None:
+     return governance.organisation_provider.label.strip() or None
+ 
+ 
+-def render_glass_settings(config: OspreyConfig) -> str:
++def render_glass_settings(config: OspreyConfig, *, entra: EntraSignInConfig | None = None) -> str:
+     """What the Glass reads at start (`/deployment.json`): where its identity provider is, the
+     marking it shows before any case data is on screen, the welcome page's settings and the
+-    deployment's appearance (ADR-132)."""
++    deployment's appearance (ADR-132).
++
++    **On Entra ID sign-in** (`entra`, the cloud-platform profile's `claims`; ADR-148 Amendment 8)
++    the realm's address is replaced by `sign_in`: Entra's authority, the Glass's own app
++    registration and the scope it asks the API for. Without it the file is byte for byte what it
++    was."""
+     welcome = config.welcome
+     links = {
+         name: address
+@@ -345,6 +350,15 @@ def render_glass_settings(config: OspreyConfig) -> str:
+         "appearance": config.appearance.model_dump(),
+         "version": deployment_version(),
+     }
++    if entra is not None:
++        del settings["identity_provider"], settings["realm"]
++        settings["sign_in"] = {
++            "kind": "entra",
++            "authority": f"https://login.microsoftonline.com/{entra.tenant_id}/v2.0",
++            "client_id": entra.client_id,
++            # `profile` for the names the Glass shows (`preferred_username`, `given_name`).
++            "scope": f"openid profile {entra.id_uri}/{entra.scope}",
++        }
+     return json.dumps(settings, indent=2) + "\n"
+ 
+ 
+diff --git a/OspreyFlow_Core/packages/schemas/deployment.py b/OspreyFlow_Core/packages/schemas/deployment.py
+index c396d3c..3389d8e 100644
+--- a/OspreyFlow_Core/packages/schemas/deployment.py
++++ b/OspreyFlow_Core/packages/schemas/deployment.py
+@@ -31,7 +31,7 @@ from __future__ import annotations
+ import re
+ from enum import StrEnum
+ from pathlib import Path
+-from typing import Annotated, Literal
++from typing import Annotated, Any, Literal
+ from urllib.parse import urlsplit
+ 
+ import yaml
+@@ -1088,6 +1088,113 @@ class ConnectorSources(BaseModel):
+         return sorted({s.host() for s in self.s3} | {a.host() for a in self.athena})
+ 
+ 
++_ENTRA_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
++
++
++class EntraSignInConfig(BaseModel):
++    """ADR-148 decision 9 and Amendment 8: how this deployment's people sign in with Entra ID, and
++    where `principal_auth` finds each of clearance, unit and handling codes in their token (a claim,
++    or a table from Entra group to value; `principal_auth.ClaimMapping` checks the shape at render).
++    Roles are not here: they are kept in Admin › People, the first administrators named below."""
++
++    model_config = ConfigDict(extra="forbid")
++
++    tenant_id: str = Field(pattern=_ENTRA_ID, description="The client's Entra tenant id")
++    client_id: str = Field(
++        pattern=_ENTRA_ID, description="The Glass's own app registration (application id)"
++    )
++    api_client_id: str = Field(
++        pattern=_ENTRA_ID,
++        description="This API's app registration (application id): the token's audience",
++    )
++    api_id_uri: str | None = Field(
++        default=None,
++        pattern=r"^api://\S+$",
++        description="Default: api://<api_client_id>. The API's application id URI, which the "
++        "Glass's scope names",
++    )
++    token_version: Literal["2.0", "1.0"] = Field(
++        default="2.0",
++        description="Default: 2.0. The access token version the API's registration is issued "
++        "(accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it",
++    )
++    scope: str = Field(
++        default="access_as_user",
++        pattern=r"^[A-Za-z0-9._-]+$",
++        description="Default: access_as_user. The delegated scope the Glass asks the API for",
++    )
++    clearance: dict[str, Any] = Field(
++        description="Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}}"
++    )
++    org_unit: dict[str, Any] = Field(
++        description="Where the organisational unit comes from: {claim: ...} or {groups: {...}}"
++    )
++    handling_codes: dict[str, Any] = Field(
++        description="Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}}"
++    )
++    groups_claim: str = Field(
++        default="groups",
++        min_length=1,
++        description="Default: groups. The token claim listing the person's Entra group ids, "
++        "which a {groups: ...} table above is read from",
++    )
++    first_administrators: list[str] = Field(
++        description="The people given the Admin role at install, by Entra object id (at least one)"
++    )
++    claims_mapping_policy: bool = Field(
++        default=False,
++        description="Default: false. Whether a claims-mapping policy signs the API's tokens with "
++        "its own key (the keys are then read with ?appid=<api_client_id>)",
++    )
++
++    @field_validator("first_administrators")
++    @classmethod
++    def _someone(cls, oids: list[str]) -> list[str]:
++        if not oids:
++            raise ValueError(
++                "names no first administrator: name at least one person by Entra object id "
++                "(an empty list is never everyone)"
++            )
++        if bad := [o for o in oids if not re.match(_ENTRA_ID, o)]:
++            raise ValueError(f"not an Entra object id (lower case): {bad[0]!r}")
++        return list(dict.fromkeys(oids))
++
++    @property
++    def issuer(self) -> str:
++        if self.token_version == "1.0":
++            return f"https://sts.windows.net/{self.tenant_id}/"
++        return f"https://login.microsoftonline.com/{self.tenant_id}/v2.0"
++
++    @property
++    def id_uri(self) -> str:
++        return self.api_id_uri or f"api://{self.api_client_id}"
++
++    @property
++    def audience(self) -> str:
++        # Unmeasured: as Microsoft documents v1.0 and v2.0 tokens' `aud`; one real token from the
++        # client's tenant settles it (ADR-148 Amendment 8; CARRIES).
++        return self.id_uri if self.token_version == "1.0" else self.api_client_id
++
++    @property
++    def jwks_url(self) -> str:
++        path = "discovery/keys" if self.token_version == "1.0" else "discovery/v2.0/keys"
++        url = f"https://login.microsoftonline.com/{self.tenant_id}/{path}"
++        return f"{url}?appid={self.api_client_id}" if self.claims_mapping_policy else url
++
++    def claim_mapping(self) -> dict[str, Any]:
++        """The `OSPREY_CLAIM_MAPPING` the Conduit reads (`principal_auth.ClaimMapping`)."""
++        return {
++            "tenant_id": self.tenant_id,
++            "client_id": self.client_id,
++            "api_client_id": self.api_client_id,
++            "scope": self.scope,
++            "clearance": self.clearance,
++            "org_unit": self.org_unit,
++            "handling_codes": self.handling_codes,
++            "groups_claim": self.groups_claim,
++        }
++
++
+ class CloudPlatformConfig(BaseModel):
+     """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
+     namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
+@@ -1141,8 +1248,14 @@ class CloudPlatformConfig(BaseModel):
+         default=None,
+         pattern=_KUBE_NAME,
+         description="Default: none — the platform's own certificate. The Kubernetes Secret "
+-        "holding the certificate for the deployment's names (its id. and bi. names among them), "
+-        "where the platform's wildcard does not cover them",
++        "holding the certificate for the deployment's name (the Glass's: the profile renders no "
++        "sign-in or reporting name), where the platform's wildcard does not cover it",
++    )
++    claims: EntraSignInConfig | None = Field(
++        default=None,
++        description="How people sign in, with Entra ID (required at render): the tenant, the "
++        "Glass's and the API's app registrations, where each claim comes from and the first "
++        "administrators",
+     )
+     connector_hosts: list[str] = Field(
+         default_factory=list,
+diff --git a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
+index 4d9221c..1e1aa3c 100644
+--- a/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
++++ b/OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts
+@@ -202,9 +202,45 @@ export type Registry = string | null;
+  */
+ export type AllowFrom = string[];
+ /**
+- * Default: none — the platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them
++ * Default: none — the platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's name (the Glass's: the profile renders no sign-in or reporting name), where the platform's wildcard does not cover it
+  */
+ export type TlsSecret = string | null;
++/**
++ * The client's Entra tenant id
++ */
++export type TenantId = string;
++/**
++ * The Glass's own app registration (application id)
++ */
++export type ClientId1 = string;
++/**
++ * This API's app registration (application id): the token's audience
++ */
++export type ApiClientId = string;
++/**
++ * Default: api://<api_client_id>. The API's application id URI, which the Glass's scope names
++ */
++export type ApiIdUri = string | null;
++/**
++ * Default: 2.0. The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it
++ */
++export type TokenVersion = "2.0" | "1.0";
++/**
++ * Default: access_as_user. The delegated scope the Glass asks the API for
++ */
++export type Scope = string;
++/**
++ * Default: groups. The token claim listing the person's Entra group ids, which a {groups: ...} table above is read from
++ */
++export type GroupsClaim = string;
++/**
++ * The people given the Admin role at install, by Entra object id (at least one)
++ */
++export type FirstAdministrators = string[];
++/**
++ * Default: false. Whether a claims-mapping policy signs the API's tokens with its own key (the keys are then read with ?appid=<api_client_id>)
++ */
++export type ClaimsMappingPolicy = boolean;
+ /**
+  * The hosts a SQL or API connection may reach, each as host or host:port (a name, not an IPv6 literal), with its networks in egress_nets under the host alone. The namespace's egress allows each host on its ports; the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS) holds the hosts alone, so a connection to a listed host on a port not listed here passes the Conduit and times out at the egress. A bare host is reached on 443 (an API connection over HTTPS); a SQL connection needs its database's port here (db.example.org:5432). A host given twice with two ports is reached on both
+  */
+@@ -763,6 +799,10 @@ export interface CloudPlatformConfig {
+   allow_from?: AllowFrom;
+   egress_nets?: EgressNets;
+   tls_secret?: TlsSecret;
++  /**
++   * How people sign in, with Entra ID (required at render): the tenant, the Glass's and the API's app registrations, where each claim comes from and the first administrators
++   */
++  claims?: EntraSignInConfig | null;
+   connector_hosts?: ConnectorHosts;
+   connector_sources?: ConnectorSources;
+ }
+@@ -772,6 +812,44 @@ export interface CloudPlatformConfig {
+ export interface EgressNets {
+   [k: string]: string[];
+ }
++/**
++ * ADR-148 decision 9 and Amendment 8: how this deployment's people sign in with Entra ID, and
++ * where `principal_auth` finds each of clearance, unit and handling codes in their token (a claim,
++ * or a table from Entra group to value; `principal_auth.ClaimMapping` checks the shape at render).
++ * Roles are not here: they are kept in Admin › People, the first administrators named below.
++ */
++export interface EntraSignInConfig {
++  tenant_id: TenantId;
++  client_id: ClientId1;
++  api_client_id: ApiClientId;
++  api_id_uri?: ApiIdUri;
++  token_version?: TokenVersion;
++  scope?: Scope;
++  clearance: Clearance;
++  org_unit: OrgUnit;
++  handling_codes: HandlingCodes;
++  groups_claim?: GroupsClaim;
++  first_administrators: FirstAdministrators;
++  claims_mapping_policy?: ClaimsMappingPolicy;
++}
++/**
++ * Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}}
++ */
++export interface Clearance {
++  [k: string]: unknown;
++}
++/**
++ * Where the organisational unit comes from: {claim: ...} or {groups: {...}}
++ */
++export interface OrgUnit {
++  [k: string]: unknown;
++}
++/**
++ * Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}}
++ */
++export interface HandlingCodes {
++  [k: string]: unknown;
++}
+ /**
+  * The S3 buckets and Athena workgroups an S3 or Athena connection may read (ADR-140 Amendment 21). Each becomes the Conduit's own egress row on 443 and an entry on its allow-list, and the namespace's IAM role gains read-only statements scoped to it. Admin › Connections refuses an S3 or Athena connection not declared here; declare it, re-render and run helm upgrade (and apply the Terraform)
+  */

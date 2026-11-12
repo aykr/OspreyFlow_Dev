@@ -1,0 +1,16 @@
+main eec25d1, a throwaway worktree at /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/0265890d-ec13-4ce9-936c-c1316e6dee63/scratchpad/mainwt (node_modules linked from the lane's), removed after; 2026-11-12T05:54Z
+
+$ npx vitest run (the workspace suite, as make test-js runs it)
+ ✓ src/matrix/MatrixView.budget.test.tsx (1 test) 4001ms
+     ✓ opens inside §5's first-frame budget, drawing one page of each table and saying so 4000ms
+ Test Files  365 passed (365)
+      Tests  3094 passed (3094)
+  4000 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+exit 0
+
+$ npx playwright test --config keyboard/playwright.config.ts (every spec)
+  ✘    7 keyboard/admin-models.spec.ts:59:1 › Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for (5.3s)
+  ✘  144 keyboard/admin-models.spec.ts:200:1 › every registered Models action has its own proving test case above (169ms)
+  2 failed
+  1 skipped
+  764 passed (2.9m)

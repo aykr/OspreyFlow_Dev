@@ -167,11 +167,16 @@ def people_managers(
     people: Iterable[PersonAccount], custom: Mapping[str, Iterable[Right]]
 ) -> list[str]:
     """The enabled people (never a system account) who hold `manage_people`, by their roles and
-    the custom roles' rights as given."""
+    the custom roles' rights as given, and who have signed in at least once: on Entra ID a person
+    added by object id who never has is no proof anyone can still administer (ADR-148 Amendment 8;
+    the orchestrator's ruling, 12 November 2026)."""
     return [
         p.id
         for p in people
-        if p.enabled and not p.system_account and Right.MANAGE_PEOPLE in rights_for(p.roles, custom)
+        if p.enabled
+        and p.signed_in
+        and not p.system_account
+        and Right.MANAGE_PEOPLE in rights_for(p.roles, custom)
     ]
 
 
@@ -184,7 +189,7 @@ def leaves_no_people_manager(
         raise RoleRefused(
             "locks_out_administrators",
             "this would leave nobody able to manage people: keep manage_people with at least one "
-            "enabled person",
+            "enabled person who has signed in",
         )
 
 
@@ -239,6 +244,18 @@ def _team(row: asyncpg.Record, today: date, members: Sequence[TeamMember] = ()) 
         members=list(members),
     )
     return team.model_copy(update={"acting_lead": acting_lead(team, today)})
+
+
+async def rights_on(conn: asyncpg.Connection) -> dict[str, frozenset[Right]]:
+    """Each custom role's current rights, read on a connection the caller holds (its lock and
+    transaction: the Entra people store's start, ADR-148 Amendment 8). None yet made, none."""
+    if await conn.fetchval("SELECT to_regclass('custom_roles')") is None:
+        return {}
+    rows = await conn.fetch("SELECT id, rights FROM custom_roles")
+    return {
+        r["id"]: frozenset(_RIGHT_VALUES[x] for x in r["rights"] if x in _RIGHT_VALUES)
+        for r in rows
+    }
 
 
 class CustomRoleStore:

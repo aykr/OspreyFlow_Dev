@@ -1,0 +1,30 @@
+head 9bf0aa8 on main 510141b with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack), 2026-11-12
+25.62s call     tests/test_seed_pid.py::test_the_seed_runs_end_to_end_over_fakes_and_prints_its_checks
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+FAILED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_release_local_builds_what_the_release_builds
+==== 3 failed, 12756 passed, 33 skipped, 132 warnings in 516.92s (0:08:36) =====
+make: *** [Makefile:166: test] Error 1
+Wall time: 518 s, exit 2 (no stack, no lease; set-up before it 13 s)
+exit 2
+
+Read (admin): 12,756 passed, 3 failed, none this branch's:
+- the server's GPU case (every lane's server gate);
+- test_docs_pdf: the guide's PDF, made at merge;
+- test_release_local_matrix: main's own. release.yml has no Laurium entry (P12 part 2's CI change went to the owner as P12p2_CI.diff); release.yml, tools/release_local.py and the test are byte for byte main's here.
+
+The run before it, at 41e1d6a (the same but for 9bf0aa8's one reservation row):
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_an_unreserved_adr_heading_is_reported
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_the_real_decision_log_has_no_unreserved_heading
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_an_unreserved_amendment_to_an_old_adr_is_reported
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_an_amendment_heading_in_another_form_is_reported
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_an_amendment_to_an_adr_with_none_at_the_baseline_is_reported
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_a_reserved_heading_passes
+FAILED ../OspreyFlow_Build/tests/test_adr_reservations.py::test_a_number_reserved_twice_is_reported
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+FAILED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_release_local_builds_what_the_release_builds
+  test_adr_reservations (7) and make ci's lanes-check: the rebase onto 510141b had left ADR-135 Amendment 9's row twice in ADR_RESERVATIONS.md (main's written one and a stale reserved one); fixed at 9bf0aa8.
+
+live-collect and test-js on their own: p10p2_mac_41e1d6a.txt.

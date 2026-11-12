@@ -389,8 +389,10 @@ def test_an_irsa_account_named_as_a_backups_account_is_refused(field: str, taken
 
 
 def test_the_writers_are_the_rendered_workloads_that_write_the_stores_or_mount_the_sets_claims() -> None:
+    # No report sync on the profile until it signs in through Entra ID (ADR-148 Amendment 8, the
+    # orchestrator's ruling (a)): the production fixture renders none, so it is no writer there.
     expected = {"development": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"],
-                "production": ["api", "arcadedb", "backup", "backup-claims", "report-sync", "worker", "workspace"]}  # fmt: skip
+                "production": ["api", "arcadedb", "backup", "backup-claims", "worker", "workspace"]}  # fmt: skip
     for fixture, writers in expected.items():
         assert rendered.values(fixture)["backups"]["writers"] == writers, fixture
     for fixture in rendered.fixtures():

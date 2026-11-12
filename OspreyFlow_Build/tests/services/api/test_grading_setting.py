@@ -56,6 +56,9 @@ def test_a_scheme_the_conduit_does_not_know_stops_it_rather_than_guessing(
 
 
 class _Resolver:
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return Principal(id=token, clearance="OFFICIAL", org_unit="unit-1", roles=[])
 

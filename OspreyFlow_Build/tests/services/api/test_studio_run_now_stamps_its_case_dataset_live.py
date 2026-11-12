@@ -63,6 +63,9 @@ class _Accounts:
     def __init__(self) -> None:
         self.by_token: dict[str, Principal] = {}
 
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return self.by_token[token]
 

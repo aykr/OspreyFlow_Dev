@@ -1,0 +1,10 @@
+head 0691cde (the worktree as `stack_lease.sh remote` copied it at 21:25Z, after the rebase; the live selection beside it ran at 274b36d), stack b, admin's lease taken 2026-11-11T19:56:40Z
+Running on ospreyflow-test (stack b, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261111T212517Z/log: bash -c cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/admin/p10p2/p10p2_plants.py --only-live
+control (diffs applied, no plant): green (exit 0) — 9 passed in 5.28s
+glass control: green (exit 0)
+[the store reads every tenant's row for an object id] test_another_tenants_row_for_the_same_oid_grants_nothing: red (exit 1) — 1 failed in 2.21s
+[first administrators re-granted at every start] test_first_administrators_are_seeded_once_and_a_removal_stands: red (exit 1) — 1 failed in 1.53s
+[the socket's read takes any tenant's row for an object id] test_the_sockets_read_is_this_tenants_and_records_nobody: red (exit 1) — 1 failed in 1.53s
+control (restored, branch alone): green (exit 0) — 200 passed, 1 warning in 84.17s (0:01:24)
+52 plants, 3 case runs: 3 red, 0 missed, 0 harness faults
+Wall time: 99 s, exit 0 (stack b, the lease admin took at 2026-11-11T19:56:40Z; set-up before it 22 s)

@@ -31,6 +31,7 @@ import type {
   RegisteredDashboard,
   ScheduleRunView,
   SignInDelivery,
+  SignInKind,
   SystemStatus,
 } from "../../../../packages/schemas/generated";
 
@@ -119,6 +120,10 @@ export const setRoles = (api: AdminApi, userId: string, roles: string[]) =>
 const person = (userId: string, what: string) => `people/${encodeURIComponent(userId)}/${what}`;
 export const invitePerson = (api: AdminApi, invite: InviteInput) =>
   call<SignInDelivery>(api, "people", { method: "POST", body: JSON.stringify(invite) });
+// ADR-148 Amendment 8: on Entra ID sign-in, Entra holds the accounts; a person is added by object id.
+export const signInKind = (api: AdminApi) => call<SignInKind>(api, "sign-in");
+export const addPersonByObjectId = (api: AdminApi, objectId: string) =>
+  call<PersonAccount>(api, "people/by-object-id", { method: "POST", body: JSON.stringify({ object_id: objectId }) });
 export const setAccess = (api: AdminApi, userId: string, access: AccessInput) =>
   call<PersonAccount>(api, person(userId, "access"), { method: "PUT", body: JSON.stringify(access) });
 export const disablePerson = (api: AdminApi, userId: string) =>

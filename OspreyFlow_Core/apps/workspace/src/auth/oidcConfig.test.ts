@@ -11,6 +11,8 @@ import {
   deploymentWelcome,
   loadDeploymentSettings,
   oidcAuthority,
+  oidcClientId,
+  oidcScope,
   resetDeploymentSettings,
 } from "./oidcConfig";
 
@@ -158,5 +160,43 @@ describe("the deployment's appearance", () => {
   it("is the OspreyFlow brand where there is no deployment file", async () => {
     await loadDeploymentSettings(answering(404, "not found"));
     expect(deploymentAppearance()).toEqual({ brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" });
+  });
+});
+
+// ADR-148 Amendment 8: Entra ID's authority, the Glass's app registration and this API's scope, read from the
+// deployment's file only when it names Entra; Keycloak's sign-in is exactly as it was.
+describe("the sign-in on Entra ID", () => {
+  afterEach(() => resetDeploymentSettings());
+  const TENANT = "00000000-1111-4222-8333-444444444444";
+  const ENTRA = {
+    kind: "entra",
+    authority: `https://login.microsoftonline.com/${TENANT}/v2.0`,
+    client_id: "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+    scope: "openid profile api://aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/access_as_user",
+  };
+
+  it("is Entra's authority, the Glass's registration and this API's scope", async () => {
+    await loadDeploymentSettings(answering(200, JSON.stringify({ sign_in: ENTRA, marking: "OFFICIAL" })));
+    expect([oidcAuthority(), oidcClientId(), oidcScope()]).toEqual([ENTRA.authority, ENTRA.client_id, ENTRA.scope]);
+    expect(deploymentMarking()).toBe("OFFICIAL");
+  });
+
+  it("is Keycloak's, exactly as before, when the file names no Entra sign-in", async () => {
+    await loadDeploymentSettings(
+      answering(200, JSON.stringify({ identity_provider: "https://id.osprey.test", realm: "osprey" })),
+    );
+    expect([oidcAuthority(), oidcClientId(), oidcScope()]).toEqual(["https://id.osprey.test/realms/osprey", "osprey-glass", "openid"]);
+  });
+
+  it.each([
+    ["another kind", { ...ENTRA, kind: "keycloak" }],
+    ["an authority that is not Entra's", { ...ENTRA, authority: "https://login.example.test/x/v2.0" }],
+    ["no client", { ...ENTRA, client_id: "" }],
+    ["no scope", { ...ENTRA, scope: undefined }],
+  ])("is not taken from %s", async (_why, signIn) => {
+    await loadDeploymentSettings(
+      answering(200, JSON.stringify({ identity_provider: "https://id.osprey.test", realm: "osprey", sign_in: signIn })),
+    );
+    expect([oidcAuthority(), oidcClientId(), oidcScope()]).toEqual(["https://id.osprey.test/realms/osprey", "osprey-glass", "openid"]);
   });
 });

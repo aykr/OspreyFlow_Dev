@@ -1,0 +1,136 @@
+head 1d20d94 on main 91a029c, clean tree; the harness applies readers, render, glass-sign-in, runbook and resolver-doubles itself; Mac, ports pinned (59991-59994)
+
+control (diffs applied, no plant): green (exit 0) — 404 passed, 1 warning in 113.95s (0:01:53)
+glass control: green (exit 0)
+[a member's idp compared to iss as a string (the old guest check)] test_a_member_whose_idp_names_our_tenant_in_either_form_resolves[member-v1-form]: red (exit 1) — 1 failed in 1.05s
+[an idp naming no Entra issuer admitted (only another tenant's refused)] test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest[msa]: red (exit 1) — 1 failed in 1.00s
+[an idp naming no Entra issuer admitted (only another tenant's refused)] test_an_idp_naming_no_entra_issuer_of_our_tenant_is_a_guest[federated]: red (exit 1) — 1 failed in 1.10s
+[client_id or scope accepted and ignored without a tenant] test_a_client_or_scope_without_a_tenant_is_refused[client]: red (exit 1) — 1 failed in 0.43s
+[client_id or scope accepted and ignored without a tenant] test_a_client_or_scope_without_a_tenant_is_refused[api-client]: red (exit 1) — 1 failed in 0.43s
+[client_id or scope accepted and ignored without a tenant] test_a_client_or_scope_without_a_tenant_is_refused[scope]: red (exit 1) — 1 failed in 0.43s
+[the app-only check removed (its cases red by the app-only words, never an AttributeError)] test_an_app_only_token_is_no_person[app-token]: red (exit 1) — 1 failed in 0.97s
+[the app-only check removed (its cases red by the app-only words, never an AttributeError)] test_an_app_only_token_is_no_person[no-scp]: red (exit 1) — 1 failed in 0.97s
+[the app-only check removed (its cases red by the app-only words, never an AttributeError)] test_an_app_only_token_is_no_person[idtyp-app]: red (exit 1) — 1 failed in 0.98s
+[an Entra principal's roles read from its token] test_an_entra_principals_roles_are_the_stored_ones_never_the_tokens: red (exit 1) — 1 failed in 0.99s
+[an Entra principal's roles read from its token] test_an_entra_app_role_grants_no_ospreyflow_role: red (exit 1) — 1 failed in 0.99s
+[an Entra principal's roles read from its token] test_me_answers_the_resolved_principal_never_the_tokens_roles: red (exit 1) — 1 failed in 1.95s
+[a person disabled here admitted] test_a_person_disabled_here_is_refused: red (exit 1) — 1 failed in 1.01s
+[a person disabled here admitted] test_me_for_a_person_disabled_here_is_refused: red (exit 1) — 1 failed in 1.99s
+[a failed read answered as a person with no roles] test_a_failed_or_slow_lookup_is_unavailable_never_a_principal[raises]: red (exit 1) — 1 failed in 1.00s
+[a failed read answered as a person with no roles] test_a_failed_or_slow_lookup_is_unavailable_never_a_principal[slow]: red (exit 1) — 1 failed in 1.00s
+[a failed read answered as a person with no roles] test_a_session_whose_roles_cannot_be_read_is_a_503: red (exit 1) — 1 failed in 1.93s
+[the store read before the token's refusals] test_a_refused_token_records_nobody: red (exit 1) — 1 failed in 0.97s
+[the store read before the token's refusals] test_me_for_another_tenants_token_is_refused: red (exit 1) — 1 failed in 1.96s
+[the synchronous path builds an Entra principal without its stored roles (both guards)] test_the_synchronous_path_refuses_an_entra_mapping: red (exit 1) — 1 failed in 1.00s
+[the construction path builds an Entra principal with no stored person] test_the_construction_path_refuses_an_entra_principal_without_its_stored_person: red (exit 1) — 1 failed in 0.43s
+[an Entra resolver built with no people store] test_an_entra_mapping_needs_a_people_store_and_keycloak_refuses_one: red (exit 1) — 1 failed in 0.93s
+[owner resolution by exchange on Entra] test_owner_resolution_is_unavailable_on_entra_even_with_an_exchange_configured: red (exit 1) — 1 failed in 1.44s
+[a mapping in the environment that is not JSON falls back to the fixed names] test_a_mapping_in_the_environment_that_does_not_load_stops_the_start[not-json]: red (exit 1) — 1 failed in 0.43s
+[no first administrator named, and the start goes on] test_first_administrators_none_or_malformed_stop_the_start['']: red (exit 1) — 1 failed in 1.48s
+[no first administrator named, and the start goes on] test_an_entra_mapping_with_no_first_administrator_does_not_start: red (exit 1) — 1 failed in 1.55s
+[adding by object id without manage_people] test_adding_a_person_needs_manage_people: red (exit 1) — 1 failed in 1.52s
+[the sign-in kind without manage_people] test_the_sign_in_kind_needs_manage_people: red (exit 1) — 1 failed in 1.52s
+[adding by object id on Keycloak] test_adding_by_object_id_is_refused_on_keycloak: red (exit 1) — 1 failed in 1.77s
+[a session whose roles cannot be read let through as an error, not a 503] test_a_session_whose_roles_cannot_be_read_is_a_503: red (exit 1) — 1 failed in 2.02s
+[an invite on Entra answered as if made] test_what_entra_holds_is_refused_in_words[invite]: red (exit 1) — 1 failed in 1.77s
+[the store reads every tenant's row for an object id] live: run with --live under a lease
+[first administrators re-granted at every start (the second review's amended ruling)] live: run with --live under a lease
+[an open socket's next message admitted without asking the store] test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[disabled-mid-socket]: red (exit 1) — 1 failed in 1.51s
+[an open socket's next message admitted without asking the store] test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[roles-taken-away]: red (exit 1) — 1 failed in 1.45s
+[a person disabled here still stands at the socket] test_a_socket_stands_only_while_the_store_says_so[disabled]: red (exit 1) — 1 failed in 1.54s
+[a store that cannot answer leaves the socket open] test_a_socket_stands_only_while_the_store_says_so[store-down]: red (exit 1) — 1 failed in 1.52s
+[a store that cannot answer leaves the socket open] test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[store-down]: red (exit 1) — 1 failed in 1.45s
+[a ticket minted before a disable admitted at connect] test_the_stream_asks_the_store_before_its_first_send: red (exit 1) — 1 failed in 1.59s
+[a duplicate object id answered in a sign-in name's words] test_adding_a_person_already_recorded_is_refused: red (exit 1) — 1 failed in 1.62s
+[a removal on Entra answered as if made] test_the_rest_of_what_entra_holds_is_refused_in_words[remove]: red (exit 1) — 1 failed in 1.47s
+[the socket's read takes any tenant's row for an object id] live: run with --live under a lease
+[a service identity's tenant not pinned] test_what_is_no_service_identity_on_entra_is_refused[other-tenant]: red (exit 1) — 1 failed in 0.80s
+[a service identity's tenant not pinned] test_what_is_no_service_identity_on_entra_is_refused[no-tid]: red (exit 1) — 1 failed in 0.86s
+[a person's delegated token taken for a service identity] test_what_is_no_service_identity_on_entra_is_refused[a-persons-delegated-token]: red (exit 1) — 1 failed in 0.79s
+[a person's delegated token taken for a service identity] test_what_is_no_service_identity_on_entra_is_refused[idtyp-user]: red (exit 1) — 1 failed in 0.80s
+[the Glass's or this API's own registration taken for an orchestrator] test_what_is_no_service_identity_on_entra_is_refused[the-glass]: red (exit 1) — 1 failed in 0.80s
+[the Glass's or this API's own registration taken for an orchestrator] test_what_is_no_service_identity_on_entra_is_refused[this-api-itself]: red (exit 1) — 1 failed in 0.79s
+[an Entra token under Keycloak's handling taken by its preferred_username] test_an_entra_token_under_keycloaks_handling_is_refused[our-tenant]: red (exit 1) — 1 failed in 0.79s
+[the API's own registration taken for an orchestrator on v1.0 tokens] test_on_v1_tokens_this_apis_own_registration_is_no_orchestrator: red (exit 1) — 1 failed in 0.82s
+[the console's /admin admits an Entra token's app role] test_the_consoles_admin_refuses_an_entra_token_with_the_admin_role[entra]: red (exit 1) — 1 failed in 0.88s
+[the realm's sign-in admits an Entra ID token] test_the_realms_sign_in_refuses_an_entra_id_token: red (exit 1) — 1 failed in 0.43s
+[Superset reads token roles on Entra] test_superset_reads_no_token_role_on_entra[entra]: red (exit 1) — 1 failed in 0.30s
+[the Glass's client left out of the rendered claim mapping] test_the_rendered_settings_sign_in_a_glass_token_through_the_one_construction_path: red (exit 1) — 1 failed in 0.97s
+[the realm's settings the cluster's install writes left in] test_the_realms_settings_are_gone_and_entras_are_rendered: red (exit 1) — 1 failed in 0.58s
+[Entra's settings written before the install's, which overwrite them] test_the_realms_settings_are_gone_and_entras_are_rendered: red (exit 1) — 1 failed in 0.57s
+[Entra's settings written before the install's, which overwrite them] test_v1_tokens_and_a_claims_mapping_policy_change_the_issuer_audience_and_keys: red (exit 1) — 1 failed in 0.57s
+[an empty list of first administrators accepted] test_no_first_administrator_is_refused_never_everyone: red (exit 1) — 1 failed in 0.43s
+[a render with no Entra sign-in let through] test_a_render_without_entra_sign_in_is_refused_in_words: red (exit 1) — 1 failed in 0.46s
+[Keycloak rendered] test_no_pod_takes_group_0_and_keycloak_is_not_rendered[development]: red (exit 1) — 1 failed in 0.48s
+[Keycloak's deployment.json given a sign_in] test_keycloaks_deployment_file_is_as_it_was: red (exit 1) — 1 failed in 0.43s
+[report sync or Superset rendered on cloud-platform] test_report_sync_or_superset_switched_on_is_refused_naming_its_step[sync]: red (exit 1) — 1 failed in 0.55s
+[report sync or Superset rendered on cloud-platform] test_report_sync_or_superset_switched_on_is_refused_naming_its_step[superset]: red (exit 1) — 1 failed in 0.56s
+[one of the realm's settings dropped from the list the render strips] test_the_realms_settings_are_gone_and_entras_are_rendered: red (exit 1) — 1 failed in 0.56s
+[Entra's sign-in taken from an authority that is not Entra's] is not taken from an authority that is not Entra's: red (exit 1) — Tests  1 failed | 15 skipped (16)
+[the shown clearance read from the ID token again] is read nowhere in apps/workspace/src: red (exit 1) — Tests  1 failed | 14 skipped (15)
+[a guess when /v1/me does not answer] is none after a refusal, never a guess: red (exit 1) — Tests  1 failed | 14 skipped (15)
+[People on Entra offers Access] says Entra holds the accounts and offers add by object id, never invite, access, reset or remove: red (exit 1) — Tests  1 failed | 4 skipped (5)
+[the disabled refusal shown as a misconfiguration] the Conduit's disabled refusal is shown in its own words, not as a misconfiguration: red (exit 1) — Tests  1 failed | 42 skipped (43)
+[the disabled words found inside other words] never from the words inside other words: red (exit 1) — Tests  1 failed | 5 skipped (6)
+[the source check blind to an alias of the profile] catches const c = user.profile; return c.roles;: red (exit 1) — Tests  1 failed | 14 skipped (15)
+[item 6: Admin › People lists every tenant's rows] live: run with --live under a lease
+[item 6: one person read from any tenant] live: run with --live under a lease
+[item 6: a role or Disable written to every tenant's row] live: run with --live under a lease
+[item 4(a): nobody able to manage people, and the named first administrators not given Admin again] live: run with --live under a lease
+[third review 6: the custom roles' rights not read (a custom role that manages people ignored)] live: run with --live under a lease
+[third review 6: the seed run without PEOPLE_LOCK] live: run with --live under a lease
+[second and third reviews 3: a start's Admin grant not audited in its own transaction] live: run with --live under a lease
+[second review 2: access_read_at never refreshed once recorded] live: run with --live under a lease
+[second review 2: access_read_at written at every sign-in] live: run with --live under a lease
+[note 9: the bootstrap run without its advisory lock] live: run with --live under a lease
+[item 5: a sign-in's access read never recorded as read] live: run with --live under a lease
+[item 4(b): a manager who never signed in counted as one who can administer] test_a_manager_who_never_signed_in_is_no_proof_anyone_can_administer: red (exit 1) — 1 failed in 1.46s
+[item 5: a transfer to someone whose access is a day old] test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words[stale]: red (exit 1) — 1 failed in 1.46s
+[item 5: nobody's access judged stale] test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words[stale]: red (exit 1) — 1 failed in 1.49s
+[item 5: a promotions alert to someone whose access is a day old] test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]: red (exit 1) — 1 failed in 1.46s
+[item 5: a reviewer left out of an alert without words] test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]: red (exit 1) — 1 failed in 1.46s
+[item 5: a day-old read taken as current] test_a_transfer_to_someone_whose_access_is_a_day_old_is_refused_in_words[stale]: red (exit 1) — 1 failed in 1.48s
+[item 5: a day-old read taken as current] test_a_promotions_alert_skips_someone_whose_access_is_a_day_old[stale]: red (exit 1) — 1 failed in 1.47s
+[item 7: a bearer whose roles cannot be read left to the exception] test_a_bearer_whose_roles_cannot_be_read_is_closed_try_again_later[roles-unreadable]: red (exit 1) — 1 failed in 1.67s
+[item 8 and note 9: an unknown key id fetched again every time (no window)] test_many_sign_ins_fetch_the_keys_once_and_an_unknown_kid_once_per_window: red (exit 1) — 1 failed in 0.98s
+[item 8 and note 9: an unknown key id fetched again every time (no window)] test_a_key_published_inside_the_window_is_refused_until_the_next_fetch: red (exit 1) — 1 failed in 0.96s
+[third review 5: the window opened before the fetch (an unreachable Entra then a 401)] test_an_unreachable_identity_provider_stays_a_503_for_an_unknown_key: red (exit 1) — 1 failed in 0.97s
+[note 8: a set with no key a token can be checked by taken as keys] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[encryption-only]: red (exit 1) — 1 failed in 2.04s
+[note 8: a set with no key a token can be checked by taken as keys] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[no-kid]: red (exit 1) — 1 failed in 1.96s
+[note 10: a thread that waited fetches again though another just did] test_concurrent_sign_ins_finding_the_keys_out_of_date_fetch_once: red (exit 1) — 1 failed in 5.48s
+[third review 4: the keys' wait without a total bound] test_a_body_that_trickles_is_bounded_in_total_and_the_next_caller_fetches_again: red (exit 1) — 1 failed in 2.94s
+[third review 4: a stuck fetch never abandoned] test_a_body_that_trickles_is_bounded_in_total_and_the_next_caller_fetches_again: red (exit 1) — 1 failed in 3.03s
+[third review 2: the run API's keys read on the event loop] test_the_run_apis_sign_in_reads_its_keys_in_their_own_threads_never_the_loop: red (exit 1) — 1 failed in 3.16s
+[second review 1: the keys never kept (fetched at every sign-in)] test_many_sign_ins_fetch_the_keys_once_and_an_unknown_kid_once_per_window: red (exit 1) — 1 failed in 0.95s
+[second review 1: the keys never kept (fetched at every sign-in)] test_the_keys_are_fetched_again_once_their_time_is_up: red (exit 1) — 1 failed in 1.02s
+[second review 5: every thread waits for the one fetching] test_while_one_thread_fetches_the_others_use_the_last_good_set: red (exit 1) — 1 failed in 2.50s
+[second review 5: no grace (a failed fetch past the keys' time is a 503 at once)] test_a_failed_fetch_keeps_the_last_good_set_for_an_hour_then_is_a_503: red (exit 1) — 1 failed in 0.96s
+[second review 5: the grace without end] test_a_failed_fetch_keeps_the_last_good_set_for_an_hour_then_is_a_503: red (exit 1) — 1 failed in 0.98s
+[second review 5: the keys read in to_thread's shared pool] test_a_slow_identity_provider_holds_only_the_keys_own_threads: red (exit 1) — 1 failed in 1.45s
+[second review 7: a body that is not JSON a 500] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[not-json]: red (exit 1) — 1 failed in 2.03s
+[second review 7: a set with no usable key a 500] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[no-keys]: red (exit 1) — 1 failed in 1.96s
+[second review 7: a set with no usable key a 500] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[no-usable-key]: red (exit 1) — 1 failed in 2.00s
+[the keys' URL taken whatever its scheme] test_the_keys_url_must_be_http_or_https: red (exit 1) — 1 failed in 0.43s/Users/ayankar/dev/osprey-wt/admin/OspreyFlow_Core/harness/cloud_platform/runbooks.py:469: SyntaxWarning: invalid escape sequence '\.'
+
+[second review 6: owner resolution's keys unreadable an exception, not unavailable] test_owner_resolution_with_the_keys_unreadable_is_unavailable_never_an_exception: red (exit 1) — 1 failed in 0.95s
+[second review 8: the run API's 503 dropped] test_the_identity_provider_unreachable_is_a_503_on_the_run_api: red (exit 1) — 1 failed in 0.35s
+[second review 8: the run API takes OIDC_ALGORITHMS on Entra] test_an_entra_service_identity_takes_rs256_alone_whatever_oidc_algorithms_says: red (exit 1) — 1 failed in 0.79s
+[second review 8: no leeway on the run API] test_a_service_identitys_token_a_little_past_its_expiry_is_given_sixty_seconds[30s]: red (exit 1) — 1 failed in 0.81s
+[second review 8: the run API's own keys, never the person path's] test_the_run_api_shares_the_person_paths_keys: red (exit 1) — 1 failed in 0.82s
+[note 12: a store that cannot answer closes an open socket 1008] test_an_open_socket_is_closed_at_its_next_message_once_the_person_no_longer_stands[store-down]: red (exit 1) — 1 failed in 1.53s
+[note 13: a person whose access is a day old named an Author] test_a_person_whose_access_is_a_day_old_is_not_named_an_author[stale]: red (exit 1) — 1 failed in 1.61s
+[item 8: the keys read on the event loop] test_a_slow_identity_provider_holds_only_the_keys_own_threads: red (exit 1) — 1 failed in 2.00s
+[item 8: unreachable keys said as a rejected token] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[unreachable]: red (exit 1) — 1 failed in 1.95s
+[item 8: unreachable keys said as a rejected token] test_every_way_the_identity_provider_fails_to_give_keys_is_a_503[refused]: red (exit 1) — 1 failed in 2.00s
+[item 8: the Conduit's 503 in words dropped] test_an_unreachable_identity_provider_is_a_503_in_words_not_a_rejected_token: red (exit 1) — 1 failed in 1.61s
+[note: Entra's algorithms taken from OIDC_ALGORITHMS] test_an_entra_mapping_takes_rs256_alone_whatever_oidc_algorithms_says: red (exit 1) — 1 failed in 0.96s
+[note: no leeway on a token's expiry] test_a_token_a_little_past_its_expiry_is_given_sixty_seconds[30s]: red (exit 1) — 1 failed in 1.00s
+[note: a service identity's token without an expiry] test_a_service_identitys_token_without_an_expiry_is_refused: red (exit 1) — 1 failed in 0.80s
+[note: the Glass asks Entra without `profile`] test_the_glass_is_told_entras_sign_in: red (exit 1) — 1 failed in 0.58s
+[note: the set-up console rendered on the profile] test_the_set_up_console_is_no_part_of_the_render[production]: red (exit 1) — 1 failed in 0.54s
+[item 4(c): the runbook says nothing of the way back in] test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left: red (exit 1) — 1 failed, 1 warning in 0.45s
+[item 3: a /v1/me that fails once strands the person] it says so, offers Try again and Sign out, and Try again reads it afresh: red (exit 1) — Tests  1 failed | 42 skipped (43)
+[item 3: Try again never asks /v1/me afresh] it says so, offers Try again and Sign out, and Try again reads it afresh: red (exit 1) — Tests  1 failed | 42 skipped (43)
+control (restored, branch alone): green (exit 0) — 238 passed in 93.18s (0:01:33)
+103 plants, 114 case runs: 114 red, 0 missed, 0 harness faults
+exit 0

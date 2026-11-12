@@ -1,0 +1,11 @@
+head 87503fe on main 1cbc164 with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack), 2026-11-12
+21.65s call     tests/test_seed_pid.py::test_a_second_seed_over_a_case_that_has_them_writes_none
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+==== 2 failed, 12386 passed, 33 skipped, 117 warnings in 428.02s (0:07:08) =====
+make: *** [Makefile:166: test] Error 1
+Wall time: 428 s, exit 2 (no stack, no lease; set-up before it 13 s)
+exit 2
+
+Read (admin): 12,386 passed, 2 failed: the server's GPU case (every lane's server gate) and test_docs_pdf (the guide's PDF, made at merge). make stops at this first line; live-collect and test-js are recorded on their own in p10p2_mac_87503fe.txt (must-fix 1).

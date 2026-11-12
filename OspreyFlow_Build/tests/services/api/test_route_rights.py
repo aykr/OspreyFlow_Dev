@@ -417,6 +417,8 @@ ROUTE_RIGHTS = {
     "reject_held_rows": "decide_held_rows",
     "issue_ws_ticket": None,
     "my_rights_route": None,
+    # ADR-148 Amendment 8: the caller's own principal as resolved, which the Glass shows.
+    "me_route": None,
     # L2.7 (ADR-145 decision 11, A2): the reader's own Needs you; each half gated by what it lists
     # (`needs_you.py`), its access cases in `test_needs_you.py`.
     "my_needs_you_route": None,
@@ -428,6 +430,9 @@ ROUTE_RIGHTS = {
     "set_person_roles_route": "manage_people",
     # ADR-114 Amendment 5 (B4b)
     "invite_person_route": "manage_people",
+    # ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
+    "add_person_by_object_id_route": "manage_people",
+    "sign_in_kind_route": "manage_people",
     "set_person_access_route": "manage_people",
     "disable_person_route": "manage_people",
     "enable_person_route": "manage_people",
@@ -665,11 +670,16 @@ def test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route(
             assert response.status_code == 200, (name, path, response.status_code, response.text)
             answered[name] = response.json()
     assert reads >= 40, f"only {reads} read routes reached"
-    unexpected = answered.keys() - REFERENCE_CATALOGUES - EMPTY_FOR_NO_ROLE
+    unexpected = answered.keys() - REFERENCE_CATALOGUES - EMPTY_FOR_NO_ROLE - OWN_PRINCIPAL
     assert not unexpected, {name: str(answered[name])[:300] for name in unexpected}
     # The case and its dataset exist (made above); this person is shown neither, nor any right.
     for name in EMPTY_FOR_NO_ROLE:
         assert name in answered and _holds_nothing(answered[name]), (name, answered.get(name))
+    # Their own principal and nothing else: their own id, no role, no code.
+    assert answered["me_route"] == {
+        "id": "from-the-organisation", "clearance": claims["clearance"],
+        "org_unit": claims["org_unit"], "roles": [], "receivable_handling_codes": [],
+    }  # fmt: skip
 
 
 #: Read routes any signed-in person may call (`ROUTE_RIGHTS` `None`, ADR-112) that hold the
@@ -682,6 +692,9 @@ REFERENCE_CATALOGUES = frozenset({
     "list_transforms",
     "model_engines_route", "openapi_document_route", "liveness_route", "readiness_route",
 })  # fmt: skip
+#: Read routes that answer the caller's own principal as resolved (ADR-148 Amendment 8), never
+#: another person's.
+OWN_PRINCIPAL = frozenset({"me_route"})
 #: Read routes any signed-in person may call that hold the deployment's data — its cases, its
 #: datasets and the person's own rights — and answer this person with none.
 EMPTY_FOR_NO_ROLE = frozenset({

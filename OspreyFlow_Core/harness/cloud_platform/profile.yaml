@@ -9,15 +9,14 @@
 # workload behind it and the workload's port. A door whose workload is not rendered is left out.
 doors:
   - {site: glass, workload: workspace, port: 8080}
-  - {site: identity, workload: keycloak, port: 8080}
   - {site: dashboards, workload: superset, port: 8088}
 
 # An image built for any user in group 0 (OpenShift's convention) that writes into its own folders
 # at start: its pod adds group 0 as a supplementary group, its user staying 10001 and non-root.
-# Keycloak's (`/opt/keycloak` is `1000:0`, group-writable; it builds itself there), until P10
-# replaces it. `make cp-policy-check` holds its own list (`GROUP_ZERO_ALLOWED`), so a row added
-# here alone is refused there.
-group_zero: [keycloak]
+# None since P10 part 2: Keycloak, the one there was, is not rendered (people sign in with Entra
+# ID). `make cp-policy-check` holds its own list (`GROUP_ZERO_ALLOWED`), so a row added here alone
+# is refused there.
+group_zero: []
 
 # How each image of ours is built (decision 8): its Dockerfile and context, from OspreyFlow_Core,
 # and its build arguments. The Conduit without Java on this profile (decision 12). An image of
@@ -37,6 +36,9 @@ ours:
 egress:
   # On every render: the bucket (S3) and IRSA's role (STS). `{region}` is the platform's.
   always: ["s3.{region}.amazonaws.com", "sts.{region}.amazonaws.com"]
+  # Entra ID's sign-in host, whose keys the Conduit reads to verify every token (P10 part 2): the
+  # Conduit's alone.
+  sign_in: ["login.microsoftonline.com"]
   # A model engine that names no `api_base` is reached at its provider's own host.
   engine_hosts:
     openai: api.openai.com
@@ -49,9 +51,10 @@ egress:
   # ADR-148 Amendment 5 point 21: egress is each workload's own, one Calico policy a workload; DNS
   # is every pod's, and anything not named here is denied. Who reaches each kind of host: S3 and STS
   # (`always`) the bucket role's pods (IRSA), a model engine the gateway alone, a proxied map source
-  # the Conduit, the mail server Keycloak (its sign-in mail), a connector host and a declared S3 or
-  # Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
-  # (ADR-140 Amendment 21; the worker's jobs read none).
+  # the Conduit, Entra ID's sign-in host the Conduit (P10 part 2), a connector host and a declared S3
+  # or Athena source (`connector_sources`) the Conduit alone: no other pod reads a connection
+  # (ADR-140 Amendment 21; the worker's jobs read none); nothing reaches the mail server since P10
+  # part 2 (Keycloak sent its sign-in mail).
   # STS alone: the gateway signs Bedrock's calls by its own role (P11 part 2) and never reaches S3.
   identity: ["sts.{region}.amazonaws.com"]
   # No KMS: S3 calls it on the backups' behalf (SSE-KMS), so none of P9's pods reaches it.
@@ -60,16 +63,17 @@ egress:
   others: [backup, backup-claims, restore, restore-claims]
   reach:
     identity: [litellm]
+    sign_in: [api]
     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
     # P9's backup and restore pods.
     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims]
     engines: [litellm]
     maps: [api]
-    mail: [keycloak]
+    mail: []
     connectors: [api]
     sources: [api]
   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
-  managed: [api, worker, report-sync, superset, keycloak, litellm]
+  managed: [api, worker, report-sync, superset, litellm]
   # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
   # 443 is added when the deployment searches with it.
   managed_ports: [5432, 6379]
@@ -78,11 +82,9 @@ egress:
   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
   paths:
     workspace: [api]
-    api: [arcadedb, clickhouse, keycloak, litellm, ner, superset, laurium]
-    worker: [arcadedb, clickhouse, keycloak, ner]
-    report-sync: [api, keycloak]
-    superset: [keycloak]
-    keycloak: [keycloak]
+    api: [arcadedb, clickhouse, litellm, ner, superset, laurium]
+    worker: [arcadedb, clickhouse, ner]
+    report-sync: [api]
     arcadedb: [arcadedb]
     clickhouse: [clickhouse, clickhouse-keeper]
     clickhouse-keeper: [clickhouse-keeper]
@@ -114,7 +116,6 @@ resources:
   report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
   ner: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
   superset: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
-  keycloak: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
   litellm: {cpu: 250m, memory: 512Mi, memory_limit: 1Gi}
   # Laurium 0.6.0, LangChain and spaCy's small English model in one process (ADR-135 Amendment 6).
   laurium: {cpu: 250m, memory: 1Gi, memory_limit: 2Gi}
@@ -157,6 +158,5 @@ poc:
     api: "2"
     worker: "2"
     ner: "1"
-    keycloak: "1"
     arcadedb: "2"
     clickhouse: "2"

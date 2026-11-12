@@ -1,61 +1,22 @@
-# admin lane · report · L2.5c: Admin's Delete for a removed case's layer, and refusals that name roles (10 November 2026)
+# admin · P10 part 2 · report (12 November 2026): Entra ID's claims wired into the cloud-platform profile
 
-Gated head **3bd210d**, on main 7bdd33b; the commit after it adds this report and the records only. Red record:
-`L2.5c_RED_RECORD.md` (10 plants, each red at its call site).
+After the orchestrator's third review of e8d5874 (and the second of 67f3d2a before it), every item fixed in one pass, on main 91a029c.
 
-| Exit criterion | State | Proving test |
-| --- | --- | --- |
-| An administrator deletes a removed case's layer by keyboard after its dry run | met | keyboard `admin.spec.ts`, "…deleted by keyboard after its dry run" (red first); `Datasets.test.tsx` |
-| The dry run gives the counts, never "would delete N" (ADR-143 Am 5 decision 11); a refused Delete drops it; the cases are read again; focus is moved; "It cannot be undone." is said | met | `test_admin_dataset_cases.py`; `Datasets.test.tsx` (the real 404 body, a second `GET …/cases`) |
-| No Admin refusal names a person: `not_an_author` carries the right, and the Glass names the roles | met | `test_a_dry_run_merge_is_an_authors_and_names_no_one`; `Datasets.test.tsx`, "…by the roles that may act" |
-| The census line removed; axe in three themes; a friction row | met | `test_admin_sections.py`; `gates/3bd210d.axe.txt` 84/84 (`show=delete`); `friction/2026-11-10-admin-delete-and-role-refusals.md` |
+1. Sign-in on cloud-platform uses Entra's claims through the one construction path, Keycloak not rendered: **met** (render.diff). `test_cloud_platform_entra.py`; the set-up console no pod, image, command or door on all five fixtures.
+2. Every reader of a role or principal goes through `principal_auth`, each refusal red first: **met**. Roles from the people store; the delta socket at connect and before each message (1013 when the store cannot answer, 1008 otherwise); the service identity; the realm's readers and Superset; the Glass from `GET /v1/me`, failing closed, and saying so with *Try again* and *Sign out*, each reached by keyboard and scanned by axe.
+3. cp-policy-check green with no Keycloak: **met**, 0 violations on all five fixtures (`gates/1d20d94.cp-policy.txt`).
+4. Gates through `stack_lease.sh offline admin` at 1d20d94, ten diffs applied: `make -k ci` exit 0 (`gates/1d20d94.ci.txt`); `make test` 12,762 passed, failing only the server's GPU case, the guide's PDF (made at merge) and main's own release-matrix case (until the owner applies P12p2_CI.diff; MORNING item 38) (`gates/1d20d94.test.txt`).
+5. The Mac's own at 1d20d94 (`gates/p10p2_mac_1d20d94.txt`): `make live-collect` exit 0; test-js 3,136 + 51 passed, exit 0; a11y 1,019 passed and 1 failed; keyboard 768 passed and 2 failed. The three failures fail on main alike (`gates/p10p2_main_baseline_8be1b77.txt`, raw; `p10p2_main_baseline_eec25d1.txt`, filtered as captured). The account-unread notice: its keyboard cases and its scans in dark, light and GOV.UK green, each shown red at 1d20d94. MatrixView's budget and Ingest Studio's expert-mode case failed in two earlier full runs here and passed in this one; the record says what is known of each.
+6. Live under admin's lease on stack b at 1d20d94 (`gates/p10p2_live_targeted_1d20d94.txt`): the targeted list with the promotion files, the audit census, the roles routes and the external-run routes, 228 passed and 11 skipped; the live plants 18 of 18 red; the stack down and released.
+7. Plants: 103 plants, 132 case runs red, 0 missed, 0 harness faults (114 offline at 1d20d94, 18 live under the lease) (`P10_P2_RED_RECORD.md`).
 
-1. **Gates at 3bd210d**, each with `registry-L2.5c.diff` applied:
-   - `make -k ci`: green except Docker's checks (8 image scans, opentofu, chart).
-   - `make test` on the server:
-     - pytest: 10,097 passed. The 2 failures are main's GPU and Valkey cases; the 2 errors are Docker Hub's 429.
-     - test-js: 2,902 passed, with `MatrixView.budget` failing under load.
-   - keyboard: 43/43.
-   - axe: 84/84.
-   - Live on stack c under the admin lease: 376 passed, including `test_route_rights.py`.
-2. **Review:** my lane-reviewer found 4 must-fixes, all fixed:
-   - the dry run's "would delete N";
-   - no red record;
-   - the re-read untested;
-   - the refusal path's mock in the wrong shape.
+**The second review's items:** (1) the keys' cache counted at the server, the five-minute window and the edge in it pinned, planted; (2) the hourly refresh live both ways, planted; (3) the re-grant only when nobody can manage people, under `PEOPLE_LOCK`, audited, the docstring, guide, runbook and point 10 as amended; (4) the account-unread notice as its own component, its keyboard spec and registry, its axe scans; (5) one thread fetching, an hour's grace, the keys' own executor, tested with the real `SigningKeys`; (6) owner resolution on Keycloak unavailable, not an exception; (7) a body not JSON and a set with no usable key each a 503, the fake refusing as the real one can; (8) the run API's 503, RS256 and leeway, one set of keys shared. Notes: (9) the bootstrap lock shown deterministically; (10) main's raw output kept; (11) the markings check's dead branch removed; (12) the socket's 1013; (13) Name an Author's 24 h rule; (14) the rotation edge in point 10 and the live checks' CARRIES row.
 
-   Its should-fixes were fixed too: the refused Delete's state, the role words, the case's name, focus and undo,
-   `no_layer`, and spec 02. Left by name: `ROUTES` in `test_admin_dataset_cases.py` still omits the Delete route.
-   Its access tests are in `test_promotions.py` and `test_route_rights.py`.
-3. **Commits:** `git log 7bdd33b..HEAD`.
-4. **Requests at the merge:**
-   - Apply `registry-L2.5c.diff`. It adds 1 id to `ADMIN_ACTIONS`.
-   - Ratify these files outside admin's map:
-     - `a11y/every-harness.spec.ts`;
-     - `keyboard/{admin.spec.ts,admin-harness.tsx}`;
-     - `LayerActionRefused`'s optional `right`, shared with case's Studio routes;
-     - specs 02 and 03.
-   - **Docs carry:** `spec/10_ADMINISTRATION_GUIDE.md:1209-1211` says Admin offers only the dry runs.
-5. **Decisions taken** (yours to overrule):
-   - (a) Admin's Delete takes one press after its dry run, the dry run being the confirmation, with "It cannot be
-     undone." said beside it.
-   - (b) The refusal names the level (Author) and the right; the Glass says which roles hold the right.
-   - (c) Refusals naming the person the administrator chose (a recipient, a lead) are left as they are. They name the
-     administrator's own choice, not who holds a right.
-6. **Questions:** none. **Still running:** nothing. Stack c is down and its lease released.
+**The third review's items:** (1) the event-loop case reads the fetch's own thread and the loop's largest gap, its plants red in the whole file and under `-n auto`; (2) the run API's sign-in async in the keys' threads; (3) the start's grant and its audit row one transaction; (4) the five seconds a total bound, a stuck fetch abandoned, the trickle exercised and planted; (5) the unknown-kid window opened only by a fetch that succeeded; (6) `PEOPLE_LOCK` planted, the custom roles' rights read inside it. Notes: a rotated-out key's lifetime stated (7); a set with no checkable key a 503 (8); the window edge planted (9); concurrent sign-ins measured, one fetch (10); the reds retaken at the head (11).
 
-## T1 part 4: parallel test workers (10 November 2026)
+**Found on the way:** P9's merge made P9's backups writers case expect report-sync on production, which this profile no longer renders (its expectation corrected in render.diff); the first token naming an unknown key fetched the keys twice in a row (now one fetch opens the window); the start's audit action was not yet in the audit census (a gate caught it); Admin › Audit shows no entry the system writes, so the start's grant is in the log but not on that screen (said in point 10).
 
-- **Built:** a plugin, `tests/worker_isolation.py`, gives each pytest-xdist worker its own stores. Its records are
-  `T1_P4_PLAN.md`, `T1_P4_RED_RECORD.md` and `gates/t1p4_*`.
-- **`make test` in parallel:** `makefile-T1p4.diff` sets `TEST_WORKERS ?= auto`. The comparison at the head is in
-  `gates/`.
-- **CI's `test` job stays serial:** no `ci.yml` change runs it in parallel. `ci-yml-T1p4.diff` only adds the live
-  proof to the ignore and conformance lists, and must land with the merge.
-- **Committed at the orchestrator's word:**
-  - `OspreyFlow_Build/scripts/stack_lease.sh`, which sets the test stacks' Postgres to `max_connections 400`;
-  - `test_valkey_config.py`;
-  - `pyproject.toml` and `uv.lock`.
-- **Named and left:**
-  - a rule 3 marker, which would touch shared files;
-  - the orchestrator's items 10 and 14 (friction row).
+**Diffs** (`p10p2/`): render, runbook, readers, glass-sign-in (16 files), actionRegistry, every-harness, makefile, ci-yml, resolver-doubles (25 test files), admin-guide (1.84; the PDF at merge).
+**Carried** (CARRIES): owner resolution, Superset and report sync on Entra, ADR-106 names from the people store, the live measurement against the client's tenant (with the key rotation), the service identity's app-role check.
+**Decisions:** the orchestrator's rulings only, each in ADR-148 Amendment 8; the amended re-grant and the 24 h rule listed for the owner.
+**Commits:** on `lane/admin-p10p2` over main 91a029c, `packages/schemas` its own commit at the head. Nothing of mine is running; stack b released.

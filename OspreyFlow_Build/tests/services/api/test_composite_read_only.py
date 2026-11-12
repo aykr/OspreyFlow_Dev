@@ -159,6 +159,9 @@ def _without(monkeypatch: pytest.MonkeyPatch, *checks: str) -> None:
 
 
 class _Resolver:
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return ROLED
 

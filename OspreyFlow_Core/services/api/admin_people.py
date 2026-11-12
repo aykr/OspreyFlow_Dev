@@ -38,6 +38,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal, cast
 
 import asyncpg
@@ -58,6 +59,7 @@ from schemas.domain import Principal
 from schemas.rights import CUSTOM_ROLE_PREFIX, Right, rights_for
 
 from .audit import AuditWriter
+from .entra_people import STALE_ACCESS_WORDS, access_current
 from .investigations import TEAM_GRANT_PREFIX, AccessLevel, InvestigationStore
 
 #: The kinds a person owns that the plan cannot list yet (L3.4's promotions, through L3.8's seam).
@@ -488,6 +490,8 @@ def markings_hold(
             continue
         to = chosen[key]
         account = who.people.get(to)
+        # A recipient whose clearance was read from Entra ID over a day ago never reaches here:
+        # `check_transfers`, run first, refuses them (ADR-148 Amendment 8).
         clearance = account.clearance if account else None
         if (
             clearance is None
@@ -535,6 +539,9 @@ class Recipients:
     people: Mapping[str, PersonAccount]
     rights: Mapping[str, frozenset[Right]]
     team_members: Mapping[str, frozenset[str]]
+    #: On Entra ID, the accounts whose clearance and unit were last read from a token over a day ago
+    #: (`entra_people.access_current`): never given anything until they sign in again.
+    stale: frozenset[str] = frozenset()
 
 
 def check_transfers(
@@ -575,6 +582,8 @@ def check_transfers(
             why = f"{to} is a service account, which owns nothing"
         elif not account.enabled:
             why = f"{to} is disabled"
+        elif to in who.stale:
+            why = f"{to}: {STALE_ACCESS_WORDS}"
         elif (
             item.kind in ("case_author", "home_case_author") or item.kind in CASE_KINDS
         ) and account.org_unit != unit:
@@ -814,14 +823,16 @@ def recipients(
     people: Sequence[PersonAccount],
     custom: Mapping[str, frozenset[Right]],
     teams: Mapping[str, frozenset[str]],
+    now: datetime | None = None,
 ) -> Recipients:
-    # Keyed by the directory's id for the account, which is the token's `sub`: the principal id
-    # every grant and owner column holds.
+    # Keyed by the directory's id for the account, which is the token's `sub` (Keycloak) or object
+    # id (Entra ID): the principal id every grant and owner column holds.
     by_account = {p.id: p for p in people}
     return Recipients(
         people=by_account,
         rights={a: rights_for(p.roles, custom) for a, p in by_account.items()},
         team_members=teams,
+        stale=frozenset(a for a, p in by_account.items() if not access_current(p, now)),
     )
 
 

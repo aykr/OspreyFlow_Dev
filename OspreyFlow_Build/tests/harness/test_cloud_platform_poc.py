@@ -247,7 +247,9 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
 ) -> None:
     """Between the push and the install: the registry's sign-in before the push (the platform's
     block), and a pinned render after it, so the values name ours by the digest the registry holds
-    (decision 8), before `helm` reads them; then the first administrator."""
+    (decision 8), before `helm` reads them; then the check that the Conduit reads Entra ID's
+    sign-in (P10 part 2: no sign-in service of ours, the first administrators named in the
+    settings)."""
     text = runbooks["INSTALL.md"]
     order = [
         text.index('"$CONFIG" --allow-unpinned\n```'),
@@ -255,11 +257,49 @@ def test_the_install_signs_in_to_the_registry_and_pins_before_it_installs(
         text.index("ospreyflow images push"),
         text.index('-m harness.render --config "$CONFIG"\n```\n\n## 5'),
         text.index("helm upgrade --install"),
-        text.index("-m harness.cloud_platform.identity"),
+        text.index("printenv OSPREY_IDENTITY_PROVIDER"),
     ]
     assert order == sorted(order), order
     assert "aws ecr get-login-password" in "".join(command_blocks(text, on_the_platform=True))
     assert "aws ecr" not in "".join(command_blocks(text, on_the_platform=False))
+
+
+def test_the_install_runbook_signs_in_with_entra_and_runs_no_realm_step(
+    runbooks: dict[str, str],
+) -> None:
+    """P7b's install runbook, step 6, on Entra ID (ADR-148 Amendment 8; the orchestrator's ruling):
+    the client's app registrations and the first administrators the settings name, a check that
+    the Conduit reads Entra's settings, and nothing of the realm (no identity module, no
+    Keycloak)."""
+    text = runbooks["INSTALL.md"]
+    step = text[text.index("## 6.") : text.index("## 7.")]
+    named = (
+        "00000000-1111-4222-8333-444444444444",  # the tenant
+        "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",  # the Glass's registration
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",  # the API's
+        "50000000-0000-4000-8000-000000000001",  # the first administrator
+    )
+    assert [n for n in named if n not in step] == []
+    assert "printenv OSPREY_IDENTITY_PROVIDER" in step
+    assert "keycloak" not in text.lower() and "cloud_platform.identity" not in text
+
+
+def test_the_install_runbook_says_how_to_recover_when_no_administrator_is_left(
+    runbooks: dict[str, str],
+) -> None:
+    """The orchestrator's review of P10 part 2, item 4(c): an administrator locked out of Admin is
+    recovered by naming a person in `first_administrators`, rendering again and restarting the
+    Conduit, which gives each one named Admin at start when nobody can manage people (the second
+    review's amended ruling; `seed_first_administrators`; its live case,
+    `test_when_nobody_can_manage_people_the_named_first_administrators_get_admin_again`)."""
+    text = runbooks["INSTALL.md"]
+    step = text[text.index("## 6.") : text.index("## 7.")]
+    recovery = step[step.index("If no administrator is left") :]
+    assert "cloud_platform.claims.first_administrators" in recovery
+    assert "only when nobody can manage people" in " ".join(recovery.split())
+    assert "grant_first_administrator" in recovery
+    assert "harness.render" in recovery
+    assert 'kubectl -n "$NS" rollout restart deploy/api' in recovery
 
 
 # ---- CPU limits (the orchestrator's D2c finding on LimitRanges) --------------------------------

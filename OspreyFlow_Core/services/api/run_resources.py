@@ -38,6 +38,7 @@ from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from ports.media import MediaStore
+from principal_auth import ClaimMapping
 from schemas.domain import OntologySchema
 
 from . import rule_editor
@@ -50,6 +51,7 @@ from .cache import CachedQuery
 from .config import ApiConfig
 from .dataset_scope import DatasetStampingGraph, stamping
 from .datasets import PostgresDatasetStore
+from .entra_people import EntraPeopleStore, open_people_store
 from .explore import EXPLORE_TTL_SECONDS
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
@@ -125,6 +127,8 @@ class RunResources:
     #: L3.6: the drawn watches a load is run against (ADR-143 Amendment 2 decision 8).
     board_items: PostgresBoardItemStore
     recipe_repo_root: Path = RECIPES_REPO_ROOT
+    #: ADR-148 Amendment 8: on Entra ID sign-in, the people store the resolver reads roles from.
+    people_store: EntraPeopleStore | None = None
 
     @property
     def watch_reach(self) -> DatasetReach:
@@ -217,6 +221,8 @@ class RunResources:
         await self.list_store.close()
         await self.board_items.close()
         await self.principal_resolver.aclose()
+        if self.people_store is not None:
+            await self.people_store.close()
         await self.close_analytics()
 
 
@@ -299,7 +305,12 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     # client, no lifecycle to close.
     compute: ComputePort = ComputeRustworkxAdapter()
     jobs = JobQueue(valkey)
-    principal_resolver = PrincipalResolver(config)
+    # ADR-148 Amendment 8: the deployment's claim mapping; on Entra ID, roles from the people store.
+    claim_mapping = ClaimMapping.from_env()
+    people_store = await open_people_store(config.postgres.dsn, claim_mapping, audit)
+    principal_resolver = PrincipalResolver(
+        config, claim_mapping=claim_mapping, role_source=people_store
+    )
 
     return RunResources(
         config=config,
@@ -336,5 +347,6 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         compute=compute,
         jobs=jobs,
         principal_resolver=principal_resolver,
+        people_store=people_store,
         board_items=board_items,
     )

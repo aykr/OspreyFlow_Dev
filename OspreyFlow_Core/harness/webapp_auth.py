@@ -36,6 +36,7 @@ def _not_found() -> HTTPException:
     request's traceback attach to another's exception."""
     return HTTPException(status_code=404)
 
+
 _LOOPBACK_ADDRESSES = {"127.0.0.1", "::1"}
 
 
@@ -132,6 +133,11 @@ def require_admin_role(request: Request) -> None:
     except jwt.PyJWTError as exc:
         raise _not_found() from exc
 
+    if "tid" in claims:
+        # ADR-148 Amendment 8: an Entra ID token's `roles` are app roles an Entra administrator
+        # assigns, never OspreyFlow's (Amendment 6 point 4). This console is the Keycloak realm's,
+        # and is not rendered on the cloud-platform profile.
+        raise _not_found()
     roles = claims.get("roles")
     if not isinstance(roles, list) or ADMIN_ROLE not in roles:
         raise _not_found()

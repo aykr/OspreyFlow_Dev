@@ -110,15 +110,14 @@ def test_the_ingress_routes_each_path_and_admits_each_path_s_service(tmp_path: P
     ingress = next(d for d in docs if d["kind"] == "Ingress")
     assert ingress["spec"]["tls"][0]["secretName"] == "ospreyflow-tls"
     rules = {r["host"]: r["http"]["paths"] for r in ingress["spec"]["rules"]}
-    identity = [(p["path"], p["backend"]["service"]["name"])
-                for p in rules["id.ospreyflow-dev.apps.example.org"]]  # fmt: skip
-    assert identity == [("/assets/govuk", "workspace"), ("/", "keycloak")]
+    # No identity door since P10 part 2: people sign in at Entra ID, whatever the brand.
+    assert "id.ospreyflow-dev.apps.example.org" not in rules
     policy = next(
         d for d in docs
         if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "ospreyflow-from-ingress"
     )  # fmt: skip
     admitted = policy["spec"]["podSelector"]["matchExpressions"][0]["values"]
-    assert set(admitted) == {"workspace", "keycloak"}
+    assert set(admitted) == {"workspace"}
     assert {p["port"] for p in policy["spec"]["ingress"][0]["ports"]} == {8080}
 
 
@@ -278,8 +277,8 @@ def test_run_as_non_root_false_with_a_numeric_user_is_refused(
 
 def test_an_init_container_is_held_to_the_rules(development: tuple[dict[str, Any], str]) -> None:
     docs, registry = _helm(development)
-    keycloak = next(d for d in docs if d["metadata"]["name"] == "keycloak" and pod_spec(d))
-    init = pod_spec(keycloak)["initContainers"][0]  # type: ignore[index]
+    gateway = next(d for d in docs if d["metadata"]["name"] == "litellm" and pod_spec(d))
+    init = pod_spec(gateway)["initContainers"][0]  # type: ignore[index]
     init["securityContext"]["allowPrivilegeEscalation"] = True
     found = check_manifests(docs, registry)
     assert [(v.rule, v.where.endswith(init["name"])) for v in found] == [("privileged", True)]
@@ -340,17 +339,18 @@ def test_a_container_s_own_group_alone_is_refused(development: tuple[dict[str, A
 def test_a_supplementary_group_outside_its_allowance_is_refused(
     development: tuple[dict[str, Any], str],
 ) -> None:
-    """Group 0 is Keycloak's alone (its image is built for group 0, until P10): the render gives
-    it to Keycloak and passes; given to another workload, or another group to Keycloak, refused."""
+    """Group 0 was Keycloak's alone (its image built for group 0); since P10 part 2 Keycloak is not
+    rendered (people sign in with Entra ID) and no workload is allowed a group of its own: the
+    render gives none, and group 0, or any other, given to a workload is refused."""
     values, registry = copy.deepcopy(development)
-    assert _workload(values, "keycloak")["supplementalGroups"] == [0]
+    assert not [w["name"] for w in values["workloads"] if w.get("supplementalGroups")]
     _workload(values, "api")["supplementalGroups"] = [0]
     docs = helm_template(yaml.safe_dump(values))
     assert [(v.rule, v.where, v.detail) for v in check_manifests(docs, registry)] == [
         ("supplementary-group", "Deployment/api", "supplementalGroups [0]")
     ]
     values, _ = copy.deepcopy(development)
-    _workload(values, "keycloak")["supplementalGroups"] = [0, 4]
+    _workload(values, "arcadedb")["supplementalGroups"] = [4]
     docs = helm_template(yaml.safe_dump(values))
     assert _found(docs, registry) == [("supplementary-group", "supplementalGroups [4]")]
 
@@ -573,7 +573,7 @@ def test_a_dropped_internal_policy_leaves_pods_open_and_is_refused(
     # The doors stay selected by the controller's policy; every other pod is left open.
     assert ("ingress-isolation", "Deployment/api",
             "no ingress policy selects its pods, so any address may reach them") in found  # fmt: skip
-    assert not [w for _, w, _ in found if w in {"Deployment/workspace", "StatefulSet/keycloak"}]
+    assert not [w for _, w, _ in found if w in {"Deployment/workspace"}]
 
 
 def test_a_widened_ingress_policy_is_refused(development: tuple[dict[str, Any], str]) -> None:
@@ -692,14 +692,14 @@ def test_a_calico_ingress_allow_from_a_selector_alone_passes(
 def test_a_container_without_resources_is_refused(development: tuple[dict[str, Any], str]) -> None:
     values, registry = copy.deepcopy(development)
     _workload(values, "arcadedb").pop("resources")
-    keycloak = _workload(values, "keycloak")
-    keycloak["initContainers"][0]["resources"] = {"requests": {"cpu": "100m"}}
+    gateway = _workload(values, "litellm")
+    gateway["initContainers"][0]["resources"] = {"requests": {"cpu": "100m"}}
     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
-    assert [(v.rule, v.where, v.detail) for v in found] == [
+    assert sorted((v.rule, v.where, v.detail) for v in found) == [
+        ("no-resources", "Deployment/litellm container litellm-db",
+         "no requests.memory, limits.memory"),
         ("no-resources", "StatefulSet/arcadedb container arcadedb",
          "no requests.cpu, requests.memory, limits.memory"),
-        ("no-resources", "StatefulSet/keycloak container keycloak-db",
-         "no requests.memory, limits.memory"),
     ]  # fmt: skip
 
 
@@ -790,8 +790,8 @@ def test_a_poc_container_without_a_cpu_limit_is_refused(
 # ---- the service account's token (Amendment 5 point 24) ----------------------------------------
 
 
-@pytest.mark.parametrize("workload", ["workspace", "ner", "superset", "keycloak", "arcadedb",
-                                      "clickhouse", "litellm"])  # fmt: skip
+# Superset and Keycloak are not rendered on this profile since P10 part 2 (ADR-148 Amendment 8).
+@pytest.mark.parametrize("workload", ["workspace", "ner", "arcadedb", "clickhouse", "litellm"])
 def test_a_token_mounted_where_no_kubernetes_api_is_called_is_refused(
     rendered: tuple[dict[str, Any], str], workload: str
 ) -> None:
@@ -1098,7 +1098,8 @@ def test_the_gateway_never_runs_as_the_bucket_role() -> None:
         ("token", "Deployment/litellm"),
     ]
     values, registry = _bedrock()
-    _workload(values, "superset")["serviceAccountName"] = irsa  # no token, the role all the same
+    # The workspace: Superset, which this planted on, is not rendered since P10 part 2.
+    _workload(values, "workspace")["serviceAccountName"] = irsa  # no token, the role all the same
     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
     assert [(v.rule, v.detail) for v in found if v.rule == "token"] == [
         ("token", f"runs as {irsa}, the bucket role's account")
@@ -1173,24 +1174,26 @@ def test_a_keyless_single_provider_s_key_is_refused_to_the_gateway(tmp_path: Pat
 
 
 def test_the_gateway_s_account_on_another_pod_is_refused() -> None:
-    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on the dashboards,
-    even with no token mounted, refused."""
+    """Item 2: the gateway's own account (Bedrock's role) is the gateway's alone: on another pod
+    (the workspace; the dashboards are not rendered since P10 part 2), even with no token mounted,
+    refused."""
     values, registry = _bedrock()
     gateway = _workload(values, "litellm")["serviceAccountName"]
-    _workload(values, "superset")["serviceAccountName"] = gateway
+    _workload(values, "workspace")["serviceAccountName"] = gateway
     found = check_manifests(helm_template(yaml.safe_dump(values)), registry)
     assert [(v.rule, v.where, v.detail) for v in found if v.rule == "token"] == [
-        ("token", "Deployment/superset", f"runs as {gateway}, the gateway's account")
+        ("token", "Deployment/workspace", f"runs as {gateway}, the gateway's account")
     ]
 
 
 def test_the_older_service_account_field_is_read() -> None:
     """Item 5: Kubernetes still reads `serviceAccount` when `serviceAccountName` is unset, so the
-    bucket role's account named there on the dashboards is refused as by the newer field."""
+    bucket role's account named there on the workspace (the dashboards are not rendered since P10
+    part 2) is refused as by the newer field."""
     values, registry = _bedrock()
     irsa = _workload(values, "api")["serviceAccountName"]
     docs = helm_template(yaml.safe_dump(values))
-    spec = pod_spec(_doc(docs, "Deployment", "superset"))
+    spec = pod_spec(_doc(docs, "Deployment", "workspace"))
     assert spec is not None and "serviceAccountName" not in spec
     spec["serviceAccount"] = irsa
     assert [(v.rule, v.detail) for v in check_manifests(docs, registry) if v.rule == "token"] == [

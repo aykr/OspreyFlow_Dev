@@ -104,6 +104,8 @@ if (serving === "people") {
               { kind: "team_lead", id: "r1", label: "Lead of the team Intel" },
               { kind: "typology_rule", id: "t1", label: "The rule Structuring, whose runs act as them" }] },
     "/v1/handling-scheme": { classification: ["OFFICIAL", "SECRET"], handling_codes: { P: {} } },
+    // ADR-148 Amendment 8: `show=entra`, People on Entra ID sign-in (its words, Add by object id).
+    "/v1/admin/sign-in": { kind: show === "entra" ? "entra" : "keycloak" },
     // L2.5b: `show=withheld`, the person also owns items this administrator may not see.
     "/v1/admin/people/u1/ownership": { person: "u1", items: [], counts: {}, withheld: show === "withheld",
       not_yet_listed: [] },

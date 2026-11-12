@@ -57,6 +57,7 @@ from schemas.domain import Principal
 from schemas.rights import Right, rights_for
 
 from . import audit_section
+from .entra_people import STALE_ACCESS_WORDS, access_current
 
 DEFAULT_ALERT_AFTER_DAYS = 3
 #: How often the sweep runs, unless `OSPREY_PROMOTION_SWEEP_SECONDS` says otherwise.
@@ -197,13 +198,22 @@ def recipients_of(
 ) -> list[str]:
     """Decision 11's recipients: those who `may_review` it, enabled accounts only, never a
     service account and never the proposer. The alert names the dataset, so it goes to nobody its
-    marking is above."""
-    return sorted(
-        person.id for person in people
+    marking is above. On Entra ID a clearance or unit read from a token over a day ago is not
+    trusted: that person is left out until they sign in again, and the log says so, by count
+    (ADR-148 Amendment 8)."""
+    reviewers = [
+        person for person in people
         if person.enabled and not person.system_account and person.id != p.proposed_by
         and may_review(person.id, person.roles, person.clearance, person.org_unit, p, authors,
                        custom, scheme)
-    )  # fmt: skip
+    ]  # fmt: skip
+    stale = sum(1 for person in reviewers if not access_current(person))
+    if stale:
+        log.info(
+            "promotion %s: %d reviewer(s) left out of its alert: %s",
+            p.promotion_id, stale, STALE_ACCESS_WORDS,
+        )  # fmt: skip
+    return sorted(person.id for person in reviewers if access_current(person))
 
 
 def cleared_to(clearance: str | None, marking: str | None, scheme: HandlingScheme | None) -> bool:

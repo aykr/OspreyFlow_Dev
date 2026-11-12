@@ -61,6 +61,9 @@ def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = 
 
 
 class _Resolver:
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return TOKENS[token]
 
@@ -929,7 +932,7 @@ def test_an_open_socket_reads_custom_rights_and_its_level_afresh_at_each_message
     world: SimpleNamespace,
 ) -> None:
     """`_admission`, asked before each message the delta socket acts on: a custom role's rights as
-    they are now, and the case level as it is now; `None` closes the socket."""
+    they are now, and the case level as it is now; a close code closes the socket."""
     import asyncio
 
     from services.api.app import _admission
@@ -953,7 +956,7 @@ def test_an_open_socket_reads_custom_rights_and_its_level_afresh_at_each_message
     second = asyncio.run(admitted())
     assert second is not None and "right:read_reports" not in second.roles
     level.revoked = True
-    assert asyncio.run(admitted()) is None
+    assert asyncio.run(admitted()) == 1008  # the level taken away: closed, 1008
 
 
 def test_a_clients_service_account_is_never_listed_so_never_given_roles_or_items(
@@ -1065,6 +1068,25 @@ def test_another_units_person_is_not_named_an_author(world: SimpleNamespace) -> 
     answer = _name(world, "c3", "ana-2")
     assert answer.status_code == 409 and answer.json()["detail"]["error"] == "other_unit"
     assert "ana-2" not in world.cases.grants["c3"]
+
+
+@pytest.mark.parametrize(("hours_ago", "named"), [(25, False), (23, True)], ids=["stale", "fresh"])
+def test_a_person_whose_access_is_a_day_old_is_not_named_an_author(
+    world: SimpleNamespace, hours_ago: int, named: bool
+) -> None:
+    """ADR-148 Amendment 8 (the orchestrator's second review, note 13): on Entra ID a unit read
+    from a token over a day ago does not place a person in the case's unit, as for a transfer."""
+    from datetime import UTC, datetime, timedelta
+
+    read = datetime.now(UTC) - timedelta(hours=hours_ago)
+    PEOPLE["ana-2"] = PEOPLE["ana-2"].model_copy(update={"access_read_at": read})
+    answer = _name(world, "c3", "ana-2")
+    if named:
+        assert answer.status_code == 204, answer.text
+    else:
+        assert answer.status_code == 409 and answer.json()["detail"]["error"] == "access_out_of_date"
+        assert "over a day ago" in answer.json()["detail"]["message"]
+        assert "ana-2" not in world.cases.grants["c3"]
 
 
 def test_an_author_of_another_unit_does_not_count_as_the_cases_author(world: SimpleNamespace) -> None:

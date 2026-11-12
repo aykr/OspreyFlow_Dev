@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AccountMenu } from "./AccountMenu";
-import { displayPrincipalFromUser } from "./userManager";
+import { sessionFromUser } from "./userManager";
 
 afterEach(cleanup);
 
@@ -51,17 +51,17 @@ describe("AccountMenu", () => {
   });
 });
 
-describe("displayPrincipalFromUser", () => {
+describe("sessionFromUser", () => {
   it("reads the user name from the token's preferred_username", () => {
-    const principal = displayPrincipalFromUser({
+    const session = sessionFromUser({
       profile: { sub: "s1", preferred_username: "analyst-1", clearance: "OFFICIAL" },
     } as never);
-    expect(principal.username).toBe("analyst-1");
+    expect(session.username).toBe("analyst-1");
   });
 
   it("leaves the user name empty when the token has none", () => {
-    const principal = displayPrincipalFromUser({ profile: { sub: "s1" } } as never);
-    expect(principal.username).toBe("");
+    const session = sessionFromUser({ profile: { sub: "s1" } } as never);
+    expect(session.username).toBe("");
   });
 });
 

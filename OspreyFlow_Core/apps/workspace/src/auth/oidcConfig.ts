@@ -32,9 +32,18 @@ import { PLAIN_APPEARANCE, readAppearance, type Appearance } from "../brand/bran
 
 const DEFAULT_KEYCLOAK_PORT = 8081;
 
+/** ADR-148 Amendment 8: a deployment whose people sign in with Entra ID names its authority, the Glass's
+ * own app registration and the one scope it asks this API for; `harness/site.py` writes them only then. */
+interface EntraSignIn {
+  authority: string;
+  clientId: string;
+  scope: string;
+}
+
 interface DeploymentSettings {
   identityProvider: string;
   realm: string;
+  entra: EntraSignIn | null;
   /** The marking a surface with no case data shows (ADR-115 decision 2). */
   marking: string | null;
   welcome: WelcomeSettingsRead;
@@ -87,6 +96,18 @@ function readWelcome(body: Record<string, unknown>): WelcomeSettingsRead {
   };
 }
 
+/** Entra's settings, only when all three are given and the authority is Entra's own address: anything
+ * else is no Entra sign-in, and the Glass signs in as it always has. */
+function readEntraSignIn(raw: unknown): EntraSignIn | null {
+  if (typeof raw !== "object" || !raw) return null;
+  const given = raw as { kind?: unknown; authority?: unknown; client_id?: unknown; scope?: unknown };
+  if (given.kind !== "entra") return null;
+  const { authority, client_id: clientId, scope } = given;
+  if (typeof authority !== "string" || !/^https:\/\/login\.microsoftonline\.com\/[0-9a-f-]{36}\/v2\.0$/.test(authority)) return null;
+  if (typeof clientId !== "string" || !clientId || typeof scope !== "string" || !scope) return null;
+  return { authority, clientId, scope };
+}
+
 let deployment: DeploymentSettings | null = null;
 
 /** Reads `/deployment.json` once. A missing or unreadable file (the development server, which
@@ -106,10 +127,13 @@ export async function loadDeploymentSettings(
       welcome?: unknown;
       appearance?: unknown;
       version?: unknown;
+      sign_in?: unknown;
     };
-    if (typeof body.identity_provider === "string" && body.identity_provider) {
+    const entra = readEntraSignIn(body.sign_in);
+    if ((typeof body.identity_provider === "string" && body.identity_provider) || entra) {
       deployment = {
-        identityProvider: body.identity_provider.replace(/\/+$/, ""),
+        entra,
+        identityProvider: typeof body.identity_provider === "string" ? body.identity_provider.replace(/\/+$/, "") : "",
         realm:
           typeof body.realm === "string" && body.realm ? body.realm : "osprey",
         marking: typeof body.marking === "string" && body.marking ? body.marking : null,
@@ -163,7 +187,19 @@ export function oidcRealm(): string {
 export const GLASS_CLIENT_ID = "osprey-glass";
 
 export function oidcAuthority(): string {
+  if (deployment?.entra) return deployment.entra.authority;
   return `${identityProviderOrigin()}/realms/${oidcRealm()}`;
+}
+
+/** The Glass's own client: `osprey-glass` in the deployment's realm, or its Entra app registration. */
+export function oidcClientId(): string {
+  return deployment?.entra?.clientId ?? GLASS_CLIENT_ID;
+}
+
+/** What the Glass asks for: `openid` from the realm, or, on Entra ID, this API's delegated scope too, without
+ * which its token carries no `scp` and the Conduit refuses it as no person's (ADR-148 Amendment 6 point 7). */
+export function oidcScope(): string {
+  return deployment?.entra?.scope ?? "openid";
 }
 
 /** The Glass's own origin — the redirect and post-logout URI both derive from this, matching

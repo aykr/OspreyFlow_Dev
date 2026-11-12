@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 import yaml
@@ -1088,6 +1088,113 @@ class ConnectorSources(BaseModel):
         return sorted({s.host() for s in self.s3} | {a.host() for a in self.athena})
 
 
+_ENTRA_ID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+
+class EntraSignInConfig(BaseModel):
+    """ADR-148 decision 9 and Amendment 8: how this deployment's people sign in with Entra ID, and
+    where `principal_auth` finds each of clearance, unit and handling codes in their token (a claim,
+    or a table from Entra group to value; `principal_auth.ClaimMapping` checks the shape at render).
+    Roles are not here: they are kept in Admin › People, the first administrators named below."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: str = Field(pattern=_ENTRA_ID, description="The client's Entra tenant id")
+    client_id: str = Field(
+        pattern=_ENTRA_ID, description="The Glass's own app registration (application id)"
+    )
+    api_client_id: str = Field(
+        pattern=_ENTRA_ID,
+        description="This API's app registration (application id): the token's audience",
+    )
+    api_id_uri: str | None = Field(
+        default=None,
+        pattern=r"^api://\S+$",
+        description="Default: api://<api_client_id>. The API's application id URI, which the "
+        "Glass's scope names",
+    )
+    token_version: Literal["2.0", "1.0"] = Field(
+        default="2.0",
+        description="Default: 2.0. The access token version the API's registration is issued "
+        "(accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it",
+    )
+    scope: str = Field(
+        default="access_as_user",
+        pattern=r"^[A-Za-z0-9._-]+$",
+        description="Default: access_as_user. The delegated scope the Glass asks the API for",
+    )
+    clearance: dict[str, Any] = Field(
+        description="Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}}"
+    )
+    org_unit: dict[str, Any] = Field(
+        description="Where the organisational unit comes from: {claim: ...} or {groups: {...}}"
+    )
+    handling_codes: dict[str, Any] = Field(
+        description="Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}}"
+    )
+    groups_claim: str = Field(
+        default="groups",
+        min_length=1,
+        description="Default: groups. The token claim listing the person's Entra group ids, "
+        "which a {groups: ...} table above is read from",
+    )
+    first_administrators: list[str] = Field(
+        description="The people given the Admin role at install, by Entra object id (at least one)"
+    )
+    claims_mapping_policy: bool = Field(
+        default=False,
+        description="Default: false. Whether a claims-mapping policy signs the API's tokens with "
+        "its own key (the keys are then read with ?appid=<api_client_id>)",
+    )
+
+    @field_validator("first_administrators")
+    @classmethod
+    def _someone(cls, oids: list[str]) -> list[str]:
+        if not oids:
+            raise ValueError(
+                "names no first administrator: name at least one person by Entra object id "
+                "(an empty list is never everyone)"
+            )
+        if bad := [o for o in oids if not re.match(_ENTRA_ID, o)]:
+            raise ValueError(f"not an Entra object id (lower case): {bad[0]!r}")
+        return list(dict.fromkeys(oids))
+
+    @property
+    def issuer(self) -> str:
+        if self.token_version == "1.0":
+            return f"https://sts.windows.net/{self.tenant_id}/"
+        return f"https://login.microsoftonline.com/{self.tenant_id}/v2.0"
+
+    @property
+    def id_uri(self) -> str:
+        return self.api_id_uri or f"api://{self.api_client_id}"
+
+    @property
+    def audience(self) -> str:
+        # Unmeasured: as Microsoft documents v1.0 and v2.0 tokens' `aud`; one real token from the
+        # client's tenant settles it (ADR-148 Amendment 8; CARRIES).
+        return self.id_uri if self.token_version == "1.0" else self.api_client_id
+
+    @property
+    def jwks_url(self) -> str:
+        path = "discovery/keys" if self.token_version == "1.0" else "discovery/v2.0/keys"
+        url = f"https://login.microsoftonline.com/{self.tenant_id}/{path}"
+        return f"{url}?appid={self.api_client_id}" if self.claims_mapping_policy else url
+
+    def claim_mapping(self) -> dict[str, Any]:
+        """The `OSPREY_CLAIM_MAPPING` the Conduit reads (`principal_auth.ClaimMapping`)."""
+        return {
+            "tenant_id": self.tenant_id,
+            "client_id": self.client_id,
+            "api_client_id": self.api_client_id,
+            "scope": self.scope,
+            "clearance": self.clearance,
+            "org_unit": self.org_unit,
+            "handling_codes": self.handling_codes,
+            "groups_claim": self.groups_claim,
+        }
+
+
 class CloudPlatformConfig(BaseModel):
     """ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
     namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
@@ -1141,8 +1248,14 @@ class CloudPlatformConfig(BaseModel):
         default=None,
         pattern=_KUBE_NAME,
         description="Default: none — the platform's own certificate. The Kubernetes Secret "
-        "holding the certificate for the deployment's names (its id. and bi. names among them), "
-        "where the platform's wildcard does not cover them",
+        "holding the certificate for the deployment's name (the Glass's: the profile renders no "
+        "sign-in or reporting name), where the platform's wildcard does not cover it",
+    )
+    claims: EntraSignInConfig | None = Field(
+        default=None,
+        description="How people sign in, with Entra ID (required at render): the tenant, the "
+        "Glass's and the API's app registrations, where each claim comes from and the first "
+        "administrators",
     )
     connector_hosts: list[str] = Field(
         default_factory=list,

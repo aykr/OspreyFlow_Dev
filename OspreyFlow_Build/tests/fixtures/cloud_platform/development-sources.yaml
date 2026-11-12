@@ -19,6 +19,17 @@ cloud_platform:
     # The declared bucket and Athena, by their networks (synthetic): the Conduit's alone.
     synthetic-exports.s3.eu-west-2.amazonaws.com: ["198.18.0.0/24"]
     athena.eu-west-2.amazonaws.com: ["198.18.3.0/24"]
+    # Entra ID's sign-in host (synthetic networks): the Conduit reads its keys (P10 part 2).
+    login.microsoftonline.com: ["198.18.2.0/24"]
+  # People sign in with Entra ID (ADR-148 decision 9; Amendment 8). Synthetic ids (rule 9).
+  claims:
+    tenant_id: 00000000-1111-4222-8333-444444444444
+    client_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
+    api_client_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
+    clearance: {claim: extension_0123456789abcdef0123456789abcdef_clearance}
+    org_unit: {groups: {20000000-0000-4000-8000-000000000001: unit-1}}
+    handling_codes: {groups: {30000000-0000-4000-8000-000000000001: [P]}}
+    first_administrators: [50000000-0000-4000-8000-000000000001]
   # What S3 and Athena connections may read (synthetic names): Admin refuses any other.
   connector_sources:
     s3:

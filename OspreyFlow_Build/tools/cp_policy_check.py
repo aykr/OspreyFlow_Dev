@@ -74,9 +74,8 @@ CALICO_DESTINATIONS = {"nets", "selector", "namespaceSelector", "serviceAccounts
 
 #: The workloads allowed group 0 as a supplementary group, and why. Held here on its own, not read
 #: from the harness's `profile.yaml`, so a render that widens that list is refused here.
-GROUP_ZERO_ALLOWED = {
-    "keycloak": "its image is built for any user in group 0 and builds itself at start (until P10)"
-}
+#: None since P10 part 2 (Keycloak, the one there was, is not rendered: ADR-148 Amendment 8).
+GROUP_ZERO_ALLOWED: dict[str, str] = {}
 
 
 @dataclass(frozen=True)

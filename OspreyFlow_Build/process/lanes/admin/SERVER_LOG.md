@@ -77,7 +77,7 @@ Minor items, all done except one:
 - (13) Codes and roles share one list reader.
 - (14) Not changed here: carried to part 2.
 
-**Built** at `72d87192`: 66 cases plus `test_auth.py`'s 11 (unchanged, green); 34 plants with 59 case
+*(Superseded: the record for the head is `P10_P1_RED_RECORD.md` at `54c1700`.)* **Built** at `72d87192`: 66 cases plus `test_auth.py`'s 11 (unchanged, green); 34 plants with 59 case
 runs, all red, none missed (`P10_P1_RED_RECORD.md`, `gates/p10_plants_72d8719.txt`). `ruff check`,
 `ruff format --check` and `mypy` are clean on the branch's diff (mypy also over `services/api/auth.py` and
 `harness/verify.py`). The gates at `5b0e6e1` are recorded below; the orchestrator's review round 1 found them run
@@ -136,8 +136,8 @@ The branch is left as gated.
    `""` is refused); handling codes are a list of strings or one string as **one** code. This also applies
    to the default mapping, and tightens two old behaviours: `list("RS")` used to grant codes `R` and `S`, and
    a list clearance used to be `str()`-ed. No existing test relied on either.
-6. `Principal.id` stays the token's `sub` (Entra's pairwise subject for this app), unchanged; `oid` is
-   required but not used as the id.
+6. *(Superseded by the orchestrator's ruling, Amendment 6 point 6: `Principal.id` is `oid`.)* `Principal.id` stays
+   the token's `sub` (Entra's pairwise subject for this app), unchanged; `oid` is required but not used as the id.
 7. *Roles from an Entra token?* **None** (the strict option, after the review). Its `roles` are app roles an
    Entra administrator assigns; decision 9 keeps roles in Admin › People. Until part 2 gives roles a home on
    this profile, an Entra principal has no OspreyFlow role, so it can sign in but holds no right.

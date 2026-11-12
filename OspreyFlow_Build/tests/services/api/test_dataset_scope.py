@@ -64,6 +64,9 @@ PROVENANCE = Provenance(
 
 
 class _Resolver:
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return ANALYST
 

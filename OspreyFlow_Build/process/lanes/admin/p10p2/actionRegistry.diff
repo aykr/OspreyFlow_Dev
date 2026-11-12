@@ -1,0 +1,23 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 9e0f50e..d29fdb9 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -935,6 +935,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+   "ask-the-system-again-by-keyboard",
+   // ADR-114 Amendment 5 (B4c): people.
+   "invite-a-person-by-keyboard",
++  // ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
++  "add-a-person-by-object-id-by-keyboard",
+   "edit-a-persons-access-by-keyboard",
+   "disable-and-enable-a-person-by-keyboard",
+   "reset-a-persons-sign-in-by-keyboard",
+@@ -1275,3 +1277,9 @@ export const STUDIO_TIPS_ACTIONS = defineActionRegistry("STUDIO_TIPS_ACTIONS", [
+   "reach-a-refused-studio-actions-tip-by-keyboard",
+   "open-roles-teams-and-authors-from-the-studio-by-keyboard",
+ ] as const);
++
++// ADR-148 Amendment 8 (P10 part 2): the top bar when the Conduit cannot say who the person is.
++export const ACCOUNT_UNREAD_ACTIONS = defineActionRegistry("ACCOUNT_UNREAD_ACTIONS", [
++  "try-reading-the-account-again-by-keyboard",
++  "sign-out-with-no-account-read-by-keyboard",
++] as const);

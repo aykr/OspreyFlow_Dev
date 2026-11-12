@@ -53,6 +53,9 @@ def _token(pid: str, roles: list[str], unit: str = "unit-1") -> None:
 
 
 class _Resolver:
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return TOKENS[token]
 

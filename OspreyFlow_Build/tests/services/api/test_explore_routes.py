@@ -39,6 +39,9 @@ ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", rol
 
 
 class _Resolver:
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.resolve(token)
+
     def resolve(self, token: str) -> Principal:
         return ANALYST
 
