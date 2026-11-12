@@ -1,5 +1,4 @@
-# as of 2026-11-12T16:45Z
-studio	carries	final make test and make -k ci re-running at its head (one citation fix); then the orchestrator's check and merge	12 Nov, about 17:45	B
+# as of 2026-11-12T17:30Z
 rules	lists	independent review found four rule-3 leaks; fixing, with the owner's close ruling	13 Nov	B
 rules-b	guides	done: merged 5675103; the guides' own text is docs' follow-up	done	A
 admin	P10	done: part 2 merged (e5e81bd); two patches for you	done	B
@@ -15,3 +14,4 @@ demo	rebuild	the demo lane (sol) rebuilds osprey-small from main once studio car
 
 docs	D2e	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
 docs	sites	the two new websites: recommendation and diffs first, then the build on the Mac; screenshots after Friday	13 Nov	B
+platform	R1	prepared Friday off the server; run from Friday evening on kind	15 Nov	B
