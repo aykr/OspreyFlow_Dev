@@ -756,6 +756,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
           runner. That goes to platform-b after gate-b.
 
         All three show at your next push.
+      - **Rules lists, third look (about 23:50): not yet.** The first review's five items are all done. Two new
+        leaks, possible only now that lists carry markings:
+        - a list raised to SECRET reuses its old OFFICIAL party, so new matches show to OFFICIAL readers;
+        - the offboarding plan shows a hidden list's name and can hand its schedule to someone uncleared.
+
+        Both confirmed in the code and being fixed. It lands after the demo if its gates miss Friday's 11:30.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
