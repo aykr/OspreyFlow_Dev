@@ -1,4 +1,4 @@
-# head 47d9954; plant: an S3 denial on the results location worded as the tables'
+# head d144bfa; plant: an S3 denial on the results location worded as the tables'
 # command: pytest -q -rA ../OspreyFlow_Build/tests/connectors/test_athena_connector.py
 # must fail: test_a_results_location_refusal_is_never_blamed_on_the_table_locations; all failed: yes
 PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_lands_as_the_golden_file
@@ -121,4 +121,4 @@ PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_anoth
 PASSED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_table_whose_data_the_role_may_not_read_is_refused_in_typed_words
 FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_athena_s_refusals_are_refused_in_words[results_unwritable-Athena could not run the query: Access denied when writing] - assert False
 FAILED ../OspreyFlow_Build/tests/connectors/test_athena_connector.py::test_a_results_location_refusal_is_never_blamed_on_the_table_locations - assert False
-2 failed, 118 passed in 4.78s
+2 failed, 118 passed in 4.65s

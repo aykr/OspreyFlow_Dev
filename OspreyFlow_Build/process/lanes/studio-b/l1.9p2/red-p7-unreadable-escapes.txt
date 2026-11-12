@@ -1,4 +1,4 @@
-# head 47d9954; plant: an unreadable declaration escapes as pydantic's error (a 500, no words)
+# head d144bfa; plant: an unreadable declaration escapes as pydantic's error (a 500, no words)
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py
 # must fail: test_an_unreadable_declaration_refuses_in_words_never_a_500; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[s3]
@@ -22,6 +22,11 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::te
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://synthetic-exports.s3.eu-west-2.amazonaws.com/]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://athena.eu-west-2.amazonaws.com/]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://SYNTHETIC-EXPORTS.s3.eu-west-2.amazonaws.com./]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_sql_connection_to_a_declared_source_s_host_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_leaving_results_to_its_workgroup_sends_the_declared_location
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_test_refuses_a_workgroup_enforcing_another_results_location
 FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[s3] - assert 500 == 422
 FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[athena] - assert 500 == 422
-2 failed, 21 passed, 19 warnings in 1.81s
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[sql] - AssertionError: Internal Server Error
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[api] - AssertionError: Internal Server Error
+4 failed, 24 passed, 20 warnings in 1.94s

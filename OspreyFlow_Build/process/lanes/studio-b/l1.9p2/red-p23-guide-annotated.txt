@@ -1,4 +1,4 @@
-# head 47d9954; plant: the guide's type of a constrained list item printed as pydantic's internals
+# head d144bfa; plant: the guide's type of a constrained list item printed as pydantic's internals
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_admin_guide.py
 # must fail: test_a_constrained_list_item_is_named_by_its_type_never_by_pydantic_s_internals; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_section_of_the_schema_has_its_line
@@ -63,4 +63,4 @@ PASSED ../OspreyFlow_Build/tests/test_admin_guide.py::test_every_server_setting_
 FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[10_ADMINISTRATION_GUIDE.md] - AssertionError: the guide's appendix A differs from the schema: run `python -m tools.admin_guide_options --write` and read what changed
 FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_the_settings_appendix_is_the_schemas_own[administration-guide.md] - AssertionError: the guide's appendix A differs from the schema: run `python -m tools.admin_guide_options --write` and read what changed
 FAILED ../OspreyFlow_Build/tests/test_admin_guide.py::test_a_constrained_list_item_is_named_by_its_type_never_by_pydantic_s_internals - AssertionError: assert ('FieldInfo' not in '| Option | ...install. |\n'
-3 failed, 59 passed in 0.29s
+3 failed, 59 passed in 0.30s

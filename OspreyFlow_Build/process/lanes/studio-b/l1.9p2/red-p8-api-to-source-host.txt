@@ -1,6 +1,6 @@
-# head 47d9954; plant: an API connection to a declared source's host passes
+# head d144bfa; plant: an API connection to a declared source's host passes
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py
-# must fail: test_an_api_connection_to_a_declared_source_s_host_is_refused; all failed: yes
+# must fail: test_an_api_connection_to_a_declared_source_s_host_is_refused, test_a_sql_connection_to_a_declared_source_s_host_is_refused; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[s3]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[athena]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_declared_connection_is_saved_and_tested[s3]
@@ -21,7 +21,12 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::te
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_another_profile_is_not_held_to_a_declaration[athena]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[s3]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_refuses_in_words_never_a_500[athena]
-FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://synthetic-exports.s3.eu-west-2.amazonaws.com/] - AssertionError: {"id":"01M76D8STTDA5Q0GPJXFQCA00C","kind":"api","name":"Synthetic api","created_by":"adm-1","created_at":"2026-11-11T22:57:14.586756Z","settings":{"kind":"api","base_url":"https://synt...
-FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://athena.eu-west-2.amazonaws.com/] - AssertionError: {"id":"01M76D8SX4DVJNV52CR4WMTEHS","kind":"api","name":"Synthetic api","created_by":"adm-1","created_at":"2026-11-11T22:57:14.660347Z","settings":{"kind":"api","base_url":"https://athena.eu-west-2.a...
-FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://SYNTHETIC-EXPORTS.s3.eu-west-2.amazonaws.com./] - AssertionError: {"id":"01M76D8SXB4EPWR3323M9SQR3K","kind":"api","name":"Synthetic api","created_by":"adm-1","created_at":"2026-11-11T22:57:14.667189Z","settings":{"kind":"api","base_url":"https://SYN...
-3 failed, 20 passed, 20 warnings in 1.83s
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[sql]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[api]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_leaving_results_to_its_workgroup_sends_the_declared_location
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_test_refuses_a_workgroup_enforcing_another_results_location
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://synthetic-exports.s3.eu-west-2.amazonaws.com/] - AssertionError: {"id":"01M76GY4N5NGNY18ZXRNG1NPDX","kind":"api","name":"Synthetic api","created_by":"adm-1","created_at":"2026-11-12T00:01:19.525732Z","settings":{"kind":"api","base_url":"https://synt...
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://athena.eu-west-2.amazonaws.com/] - AssertionError: {"id":"01M76GY4Q5NCT7637J78DE934M","kind":"api","name":"Synthetic api","created_by":"adm-1","created_at":"2026-11-12T00:01:19.589073Z","settings":{"kind":"api","base_url":"https://athena.eu-west-2.a...
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://SYNTHETIC-EXPORTS.s3.eu-west-2.amazonaws.com./] - AssertionError: {"id":"01M76GY4QCNZSPTEPKFMBKZNKB","kind":"api","name":"Synthetic api","created_by":"adm-1","created_at":"2026-11-12T00:01:19.596614Z","settings":{"kind":"api","base_url":"https://SYN...
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_sql_connection_to_a_declared_source_s_host_is_refused - AssertionError: {"id":"01M76GY4QKPARQ4R9R5YMVW0A8","kind":"sql","name":"Synthetic sql","created_by":"adm-1","created_at":"2026-11-12T00:01:19.603855Z","settings":{"kind":"sql","host":"athena.eu-west-2.amazonaws.com","port":443,"database":"visits","user":"r...
+4 failed, 24 passed, 22 warnings in 1.94s

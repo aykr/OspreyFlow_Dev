@@ -1,6 +1,6 @@
-# head 47d9954; plant: a bucket the declaration does not name admitted
+# head d144bfa; plant: a bucket the declaration does not name admitted
 # command: pytest -q -rA ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py
-# must fail: test_a_wide_statement_is_refused_by_the_render; for the reason 'planted5'; all failed: yes
+# must fail: test_a_wide_statement_is_refused_by_the_render; for the reason '[planted5-'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_each_declared_source_is_the_conduit_s_own_egress_row_on_443
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_conduit_s_allow_list_and_what_admin_is_told_are_the_declaration
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declared_source_s_host_needs_its_networks
@@ -16,7 +16,21 @@ PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wi
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted6-reads synthetic-exports outside its declared folders]
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted7-lists synthetic-exports beyond its declared folders]
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted8-names the database payroll, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted9-lists synthetic-exports under '*', beyond its declared folders]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted10-lists synthetic-exports under a StringNotLike condition, not StringLike]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted11-names the workgroup primary in eu-west-2, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted12-names the workgroup analysts in eu-west-1, which is not declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted13-names Glue in eu-west-1, where no workgroup is declared]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted14-names arn:aws:s3:eu-west-2:000000000000:accesspoint/synthetic-exports, a resource of a shape this check does not recognise]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted15-names arn:aws-cn:s3:::synthetic-exports/client-a/a, a resource of a shape this check does not recognise]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted16-names arn:aws:dynamodb:eu-west-2:${data.aws_caller_identity.osprey_connector_sources.account_id}:table/visits, a resource of a shape this check does not recognise]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted17-names a wildcard resource]
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_table_location_not_declared_is_athena_s_refusal_in_typed_words
 PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_nothing_is_rendered_with_no_source_declared
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_policy_past_iam_s_size_limit_is_refused_at_render
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_the_deployment_s_listing_asks_only_within_the_role_s_rendered_grants
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words[change0-cn-north-1 is outside AWS's standard partition]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words[change1-us-gov-west-1 is outside AWS's standard partition]
+PASSED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_declaration_the_role_s_statements_cannot_serve_is_refused_in_words[change2-table_locations names at least one s3://bucket/folder/]
 FAILED ../OspreyFlow_Build/tests/harness/test_cloud_sources_render.py::test_a_wide_statement_is_refused_by_the_render[planted5-names the bucket synthetic-other, which is not declared] - AssertionError: Regex pattern did not match.
-1 failed, 17 passed in 2.86s
+1 failed, 31 passed in 4.46s

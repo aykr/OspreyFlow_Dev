@@ -1,6 +1,6 @@
-# head 47d9954; plant: a folder matched without its closing /, so client-ab/ passes as client-a/
+# head d144bfa; plant: a folder matched without its closing /, so client-ab/ passes as client-a/
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py
-# must fail: test_a_connection_wider_than_its_declaration_is_refused; for the reason 's3-change4'; all failed: yes
+# must fail: test_a_connection_wider_than_its_declaration_is_refused; for the reason '[s3-change4]'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[s3]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_undeclared_connection_is_refused_when_it_is_saved[athena]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_declared_connection_is_saved_and_tested[s3]
@@ -23,5 +23,10 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::te
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://synthetic-exports.s3.eu-west-2.amazonaws.com/]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://athena.eu-west-2.amazonaws.com/]
 PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_api_connection_to_a_declared_source_s_host_is_refused[https://SYNTHETIC-EXPORTS.s3.eu-west-2.amazonaws.com./]
-FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change4] - AssertionError: {"id":"01M76D8G882H0TN3HWPW3M9V4G","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-11T22:57:04.776534Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-exports","prefix":"client-ab/"},"da...
-1 failed, 22 passed, 22 warnings in 1.81s
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_sql_connection_to_a_declared_source_s_host_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[sql]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_an_unreadable_declaration_is_never_blamed_on_s3_or_athena_for_another_kind[api]
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_leaving_results_to_its_workgroup_sends_the_declared_location
+PASSED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_test_refuses_a_workgroup_enforcing_another_results_location
+FAILED ../OspreyFlow_Build/tests/services/api/test_cloud_sources_declared.py::test_a_connection_wider_than_its_declaration_is_refused[s3-change4] - AssertionError: {"id":"01M76GXTMXPFH6T4F8TJ1587ZD","kind":"s3","name":"Synthetic s3","created_by":"adm-1","created_at":"2026-11-12T00:01:09.277556Z","settings":{"kind":"s3","region":"eu-west-2","bucket":"synthetic-exports","prefix":"client-ab/"},"da...
+1 failed, 27 passed, 25 warnings in 1.95s
