@@ -1,6 +1,6 @@
-# as of 2026-11-12T00:50Z
+# as of 2026-11-12T01:10Z
 admin	P10	part 1 merged (listed for you); part 2 building: roles in Postgres by tenant and oid (ruled, listed for you)	13 Nov	B
-case	P9	built at 7916044; orchestrator review running, then a rebase onto L1.9 part 2 and its three diffs at merge	12 Nov	B
+case	P9	orchestrator review: one must-fix (the ArcadeDB restore dropped the live graph first) and seven fixes; then a rebase onto L1.9 part 2 and a kind restore over a live database	12 Nov, afternoon	B
 case-b	P12	part 2 accepted after three rounds; after P9 lands, rebase and merge with Laurium's egress row and the owner's release.yml patch	12 Nov	B
 studio-b	L1.9	done: part 2 merged (184b798)	done	B
 platform	P7a	the production-shape run on kind, with P8 and P9b	after 20 Nov	B

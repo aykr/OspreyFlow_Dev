@@ -534,6 +534,15 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         On the merged tree, cp-policy-check found 0 violations on all five fixtures.
       - **P9 built** (7916044). My independent review is running. After it, case rebases onto L1.9 part 2 and
         refreshes its diffs, because both change the cloud-platform profile's files.
+      - **P9 review, about 01:10: one must-fix, and it blocks merge.** The ArcadeDB restore deleted the live graph
+        before restoring (`rm -rf … && restore.sh`), against Amendment 7's "never dropping first". A bad set would
+        have lost the live graph. Case is fixing it, along with seven smaller items, and is proving both
+        restores-over-live on kind.
+
+        **My two rulings, which you can overrule:**
+        - a restore also restores RDS point-in-time to the set's finish time, so withdrawn or deleted rows cannot
+          come back visible (a runbook step now; automated in P9b);
+        - P9 must not edit ADR-148 Amendment 5's accepted text; its correction stays in Amendment 7.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
