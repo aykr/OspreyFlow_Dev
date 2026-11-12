@@ -616,6 +616,20 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - the result by 20:00 with main's commit;
         - any failure reported at once;
         - nothing changed after the checks pass.
+      - **Evening (about 17:30):**
+        - **Landed:** studio carries (b380d45; ADR-140 Am 19) and D2c part 4 (78da1bb). D2c is closed; P8's section
+          is D2e, after the client's install.
+        - **The demo lane has its go:** install main at b380d45, checks by 20:00.
+        - **R1** (the client install's acceptance on kind, your order) is in the Client install view.
+        - **Platform-b** diagnoses the six red CI jobs from their logs tonight.
+        - **Docs** builds the two websites with your four decisions applied.
+        - **Rules lists** gets its heavy gates after your walk-through.
+
+        **Yours to decide:**
+        - the publish_pages.sh diffs (the Team page's names, one repository per site);
+        - the client's names for the hashed "no client named" check, added by running `client_hashes.py` yourself,
+          never in a chat;
+        - rules' 422 (subscribing under a hidden list's name reveals only that the name is taken).
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
