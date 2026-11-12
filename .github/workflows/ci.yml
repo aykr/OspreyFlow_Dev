@@ -388,6 +388,23 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
+  # ADR-135 Amendment 6 (P12 part 2): Laurium's own image, built from its folder alone, scanned as every image of ours.
+  trivy-image-laurium:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f services/laurium/Dockerfile -t ospreyflow/laurium:ci services/laurium
+      - uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          version: v0.76.1
+          trivyignores: OspreyFlow_Core/.trivyignore
+          image-ref: ospreyflow/laurium:ci
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
   schemas-check:
     runs-on: ubuntu-latest
     steps:

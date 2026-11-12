@@ -2,7 +2,7 @@
 # (`ghcr.io/ospreyflow`) has been a real reference since round 07 and a published one nowhere,
 # which is why a pull-mode render needed `--allow-unpinned` even against a genuine release: nothing
 # under that path resolved. This workflow is what makes it resolve — building, scanning and
-# pushing the four owned images this repository ships (`api`, `ingest`, `workspace`, `harness`) on
+# pushing the five owned images this repository ships (`api`, `ingest`, `workspace`, `harness`, `laurium`) on
 # a version tag, then running `make bundle` against the same tagged commit so its own
 # `versions.lock` locks each owned image to a real registry digest, not `unresolved`.
 #
@@ -16,7 +16,7 @@
 # itself (`docker push` reaching `ghcr.io` for real, with real, currently-valid credentials) is
 # only exercised by an actual run of this workflow, which needs a real tag push and this repository's
 # own `GITHUB_TOKEN` — `OspreyFlow_Build/tools/release_local.py` runs every other step (build, scan, `make bundle`)
-# locally with `--dry-run` in place of the four `docker push`/registry-attach calls below, printing
+# locally with `--dry-run` in place of the `docker push`/registry-attach calls below, printing
 # the references it would have pushed, so everything up to the push itself is exercised without
 # this sandbox ever needing `packages: write` credentials it does not have.
 name: release
@@ -92,6 +92,12 @@ jobs:
             # itself once released — baking the exact commit every other image in this matrix was
             # built from is what makes a pull-mode render's owned-image tag match what got pushed.
             build_args: "OSPREY_BUILT_FROM_SHA=${{ github.sha }}"
+          # ADR-135 Amendment 6 (P12 part 2): Laurium's image, beside the Conduit's (the same registry and
+          # commit, `harness.laurium.laurium_image`), built from its own folder alone.
+          - service: laurium
+            dockerfile: services/laurium/Dockerfile
+            context: services/laurium
+            build_args: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -112,7 +118,7 @@ jobs:
             -f ${{ matrix.dockerfile }} \
             ${{ matrix.build_args && format('--build-arg {0}', matrix.build_args) || '' }} \
             -t ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.service }}:${{ github.sha }} \
-            .
+            ${{ matrix.context || '.' }}
 
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
@@ -143,7 +149,7 @@ jobs:
       - run: uv sync
 
       # Pull mode is `make bundle`'s own default render (round 07's own fix to
-      # `OspreyFlow_Build/tools/osprey_bundle.py`) — no flag needed here. The four owned images this job's own
+      # `OspreyFlow_Build/tools/osprey_bundle.py`) — no flag needed here. The owned images this job's own
       # `needs:` just pushed are what its `versions.lock` now resolves against, for real, over the
       # network — `registry_digest_resolver` (already `build_bundle`'s own default resolver), the
       # same call `OspreyFlow_Build/tools/release_local.py --dry-run` exercises locally short of the push.
