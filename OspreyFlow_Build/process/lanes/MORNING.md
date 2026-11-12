@@ -534,8 +534,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
           - only the guides for places a person's rights open;
           - served by the Conduit behind each place's right, never as a static link;
           - the architecture guide not linked.
-        - **ADR-146 (one owner on two lists): your ruling is pending.** My recommendation: one alert citing both
-          lists, each list's citation shown only to a reader cleared for it.
+        - **ADR-146 (one owner on two lists): ruled by you at about 11:30, "happy with the calls you have made":**
+          one alert citing both lists, each list's citation shown only to a reader cleared for it. Rules is told.
+        - **Your agreement covers the other calls listed in this item too:**
+          - the guides' placement and serving;
+          - the stop verb;
+          - the re-grant and the 24 h clearance rule;
+          - the ClickHouse token;
+          - the RDS restore step.
         - **The osprey-small rebuild waits** until "guides" has landed.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
