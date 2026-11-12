@@ -243,6 +243,32 @@ def test_a_restore_beside_the_live_clickhouse_database_swaps_it_and_drops_the_ol
     assert fake.databases == {"ospreyflow"}
     assert [s for s in fake.statements if s.startswith("RENAME DATABASE ospreyflow TO ospreyflow_before_")]
 
+
+def test_a_swap_refused_between_its_renames_puts_the_live_database_back_and_says_where_each_is(
+    run: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live database set aside, then the restored one's RENAME into its place refused (by
+    ClickHouse, for any reason): the live one is renamed back, the restored one kept, and the
+    refusal names both, so ClickHouse is never left without its database unsaid."""
+    settings, bucket, stores, fake = run
+    manifest = pb.take(settings, bucket, stores)
+    ddl = fake._ddl
+
+    def refusing(request: Any, body: str) -> bytes:
+        if body.startswith("RENAME DATABASE ospreyflow_restoring_"):
+            text = b"Code: 999. DB::Exception: Keeper session expired. (KEEPER_EXCEPTION)"
+            raise urllib.error.HTTPError(request.full_url, 500, "error", Message(), io.BytesIO(text))
+        return ddl(request, body)
+
+    monkeypatch.setattr(fake, "_ddl", refusing)
+    with pytest.raises(pb.BackupRefused) as refused:
+        pb.restore_analytics(settings, bucket, stores, manifest["set"])
+    restored = f"ospreyflow_restoring_{manifest['set'].lower()}"
+    assert fake.databases == {"ospreyflow", restored}, "the live one back in place, the set's kept"
+    words = str(refused.value)
+    assert "Keeper session expired" in words and restored in words and "put back" in words
+
+
 def test_a_zip_that_does_not_match_its_manifest_is_never_restored(aws: Running, run: Any, tmp_path: Path) -> None:
     settings, bucket, stores, _ = run
     manifest = pb.take(settings, bucket, stores)
@@ -592,3 +618,21 @@ def test_the_api_refusing_the_restores_account_its_pods_list_is_refused_in_words
     assert "cannot confirm the writers are stopped" in words and "HTTP 403" in words
     assert 'cannot list resource \\"pods\\"' in words or 'cannot list resource "pods"' in words
     assert "nothing was touched" in words
+
+
+def test_a_set_records_when_it_finished_and_sets_says_it(
+    run: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], aws: Running
+) -> None:
+    """The time a restore brings the managed database (RDS) back to, point in time, before the
+    stores (the orchestrator's ruling 9): each finished set's, in its manifest and in `sets`."""
+    settings, bucket, stores, _ = run
+    manifest = pb.take(settings, bucket, stores, now=dt.datetime(2026, 11, 11, 2, 15, tzinfo=dt.UTC))
+    assert manifest["finished"] == (dt.datetime(2026, 11, 11, 2, 15, tzinfo=dt.UTC)
+                                    + dt.timedelta(seconds=manifest["seconds"])).strftime("%Y-%m-%dT%H:%M:%SZ")  # fmt: skip
+    bucket.put_bytes("sets/20261112T021500Z/arcadedb/ospreyflow.zip", ZIP)  # an unfinished one beside it
+    for name, value in {"OSPREY_BACKUP_BUCKET": BUCKET, "OSPREY_BACKUP_KMS_KEY": KEY_ARN, "AWS_REGION": REGION,
+                        "AWS_ENDPOINT_URL_S3": aws.endpoint}.items():  # fmt: skip
+        monkeypatch.setenv(name, value)
+    assert pb.main(["sets"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"{manifest['set']}\tfinished\t{manifest['finished']}", "20261112T021500Z\tunfinished"]

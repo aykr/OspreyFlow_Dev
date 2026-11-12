@@ -537,9 +537,28 @@ class Stores:
         # The live one set aside only if it is there: after a loss (the disaster the restore is
         # for) it is not, and a RENAME of it is refused (Code 81, measured on kind in round 3).
         live = self.clickhouse(f"EXISTS DATABASE {database}", "see whether the live one is there")
-        if live.strip() == "1":
+        aside = live.strip() == "1"
+        if aside:
             self.clickhouse(f"RENAME DATABASE {database} TO {old}{on}", "set the live one aside")
-        self.clickhouse(f"RENAME DATABASE {restoring} TO {database}{on}", "put the restored one in")
+        try:
+            self.clickhouse(
+                f"RENAME DATABASE {restoring} TO {database}{on}", "put the restored one in"
+            )
+        except BackupRefused as refusal:
+            # Between the two renames: the live one put back (or said where it is), the restored
+            # one kept, both named, so ClickHouse is never left without its database unsaid.
+            where = f"the set's restored database is kept as {restoring}"
+            if aside:
+                try:
+                    self.clickhouse(
+                        f"RENAME DATABASE {old} TO {database}{on}", "put the live one back"
+                    )
+                    where += f"; the live database was put back as {database}"
+                except BackupRefused:
+                    where += f"; the live database is in {old}, not put back (the recovery runbook)"
+            raise BackupRefused(
+                refusal.store, refusal.step, f"{refusal.reason}; {where}"
+            ) from refusal
         self.clickhouse(f"DROP DATABASE IF EXISTS {old}{on} SYNC", "drop the old one")
 
 
@@ -646,6 +665,12 @@ def take(
     if settings.claims:
         manifest["claims"] = _wait_for_claims(settings, bucket, set_id, tick, sleep)
     manifest["seconds"] = round(tick() - started, 1)
+    # When the set finished (UTC): the time a restore brings the managed database (RDS) back to,
+    # point in time, so the stores and it agree (ADR-148 Amendment 7; the recovery runbook).
+    finished = (
+        dt.datetime.now(dt.UTC) if now is None else now + dt.timedelta(seconds=manifest["seconds"])
+    )
+    manifest["finished"] = finished.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         bucket.put_bytes(prefix + MANIFEST, json.dumps(manifest, indent=2).encode())
     except Exception as error:  # noqa: BLE001 - reported in words
@@ -1088,8 +1113,17 @@ def main(argv: list[str] | None = None) -> int:
                 f"(ArcadeDB {graph['bytes']} bytes; ClickHouse {analytics['backup_id']})"
             )
         elif args.command == "sets":
+            # Each set, and for a finished one when it finished (UTC): the time a restore of it
+            # brings the managed database back to first (the recovery runbook).
             for found in sets(bucket):
-                print(f"{found.set_id}\t{'finished' if found.complete else 'unfinished'}")
+                if not found.complete:
+                    print(f"{found.set_id}\tunfinished")
+                    continue
+                try:
+                    at = manifest_of(bucket, found.set_id).get("finished", "time not recorded")
+                except BackupRefused as refusal:
+                    at = f"its manifest is unreadable ({refusal.reason})"
+                print(f"{found.set_id}\tfinished\t{at}")
         elif args.command == "fetch-graph":
             set_id = latest(bucket) if args.set == "latest" else args.set
             path = fetch_graph(bucket, set_id, args.to)
