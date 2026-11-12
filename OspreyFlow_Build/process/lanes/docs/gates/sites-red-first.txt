@@ -10,3 +10,7 @@ FAILED tests/test_sites.py::test_the_statement_check_flags_a_page_without_it
 # The build check shown red on drift: one space appended to the committed org/governance.html, then build.py rerun.
 FAILED tests/test_sites.py::test_the_pages_are_build_pys_output - AssertionError: PosixPath('governance.html')
 1 failed, 40 deselected (then, rebuilt: 1 passed)
+
+# Added with item 3: installs_without_a_mode, run against the drafts as delivered (8fecd8d, unpacked into the scratchpad): red on both public-sector pages, the command the install refuses ('Say which mode to install').
+['net/public-sector.html: 'ospreyflow install --starter govuk-crime …', 'org/public-sector.html: 'ospreyflow install --starter govuk-crime …']
+# After item 3's corrections: tests/test_sites.py 43 passed; with tests/test_website_wording.py, 74 passed.

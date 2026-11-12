@@ -184,6 +184,14 @@ def broken_links(root: Path) -> list[str]:
     return found
 
 
+def installs_without_a_mode(root: Path) -> list[str]:
+    """Every `ospreyflow install` a page shows names its mode: without `--mode` the install refuses, "Say which mode to
+    install" (`cli/ospreyflow/main.py`). The draft's public-sector command left it out."""
+    return [f"{_id(p)}: {html.unescape(m.group(0))!r}" for p in pages(root)
+            for m in re.finditer(r"ospreyflow install\b[^<\n]*", p.read_text(encoding="utf-8"))
+            if "--mode" not in m.group(0)]  # fmt: skip
+
+
 def foreign_repositories(root: Path) -> list[str]:
     """Every repository address the product's own: `git clone`'s `.git` form is the same address."""
     return [f"{_id(p)}: {a}" for p in pages(root) for a in repository_addresses(p)
@@ -203,6 +211,7 @@ CHECKS = {
     "request outside": requests_outside,
     "broken link": broken_links,
     "repository": foreign_repositories,
+    "install without a mode": installs_without_a_mode,
 }
 
 
@@ -333,6 +342,15 @@ def test_the_link_check_follows_a_link_to_the_other_site(sites: Path) -> None:
 def test_the_link_check_flags_an_image_not_held(sites: Path) -> None:
     (sites / "org" / "assets" / "communities.jpg").unlink()
     assert any("communities.jpg" in v for v in _red("broken link", sites))
+
+
+def test_the_install_check_flags_the_drafts_own_command(sites: Path) -> None:
+    _plant(sites / "net" / "public-sector.html",
+           '<pre><code>ospreyflow install --starter govuk-crime --service-name &quot;Analyse crime intelligence&quot; '
+           '--organisation &quot;Your organisation&quot;</code></pre>')  # fmt: skip
+    assert _red("install without a mode", sites) == [
+        "net/public-sector.html: 'ospreyflow install --starter govuk-crime --service-name \"Analyse crime intelligence\" "
+        "--organisation \"Your organisation\"'"]
 
 
 def test_the_repository_check_flags_another_home(sites: Path) -> None:

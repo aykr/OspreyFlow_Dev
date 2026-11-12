@@ -158,7 +158,7 @@ def split(text_html, figure_html, flip=False):
 
 DOMAINS = [
  ('Crime and intelligence analysis', 'Call records, intelligence reports, people, places and events in one network, with every link traced to the record it came from.'),
- ('Fraud detection', 'Shared addresses, accounts, devices and directors across claims, payments and suppliers, with rules that raise an alert when a pattern returns.'),
+ ('Fraud detection', 'Shared addresses, accounts, contact details and directors across payments and companies, with rules that raise an alert when a pattern returns.'),
  ('Anti-money laundering and sanctions screening', 'Customers screened against sanctions lists and re-screened when a list changes; typology rules for structuring, rapid movement and circular flows.'),
  ('Prison and offender intelligence', 'Cell-shares, visits, calls, incidents and finds read together, on a map of the site and a clock of the week.'),
 ]
@@ -170,7 +170,7 @@ PRINCIPLES = [
 ]
 PLACES = [
  ('The Glass', 'For investigating a case: the network, the map, the timeline, the Matrix view, reports, drawing boards and questions to a model.'),
- ('Ingest Studio', 'For bringing data in: a domain model, sources, pipelines and runs. Every file is verified before it loads, and a load can be reverted.'),
+ ('Ingest Studio', 'For bringing data in: a domain model, sources, pipelines and runs. A pipeline is verified before it is published, and a load can be reverted.'),
  ('Rules and Monitoring', 'For working alerts: one queue, rules written as sentences, hotlists, screening lists, held rows and approvals.'),
  ('Admin', 'For running the deployment: people, roles and teams, datasets, model engines, maps, operations and the audit.'),
 ]
@@ -204,7 +204,7 @@ def org_index():
              '<a href="public-sector.html">How it works, and what "designed to meet" means</a>.</p>', fig('rule'), flip=True))
     b += sec('Run it your way', cards([
              ('Lite', 'One computer, for evaluation and demonstrations. Docker, 16 GB of memory, one command.'),
-             ('Small', 'One server, in your cloud account or your own network, served over HTTPS with your organisation\'s sign-in.'),
+             ('Small', 'One server, in your cloud account or your own network, served over HTTPS; on a server of your own, with your organisation\'s sign-in.'),
              ('Enterprise', 'A Kubernetes cluster with the stores clustered and the cloud\'s managed services underneath.')]) +
              '<p class="more"><a href="get-started.html">Prerequisites and the install commands</a></p>')
     b += sec('Who is behind it', '<p class="intro">OspreyFlow was created at Solirius Reply, which develops it and looks after the project. '
@@ -214,44 +214,44 @@ def org_index():
 
 def org_features():
     b = hero('Features · release v0.5.0', 'Everything in OspreyFlow today',
-             'What is described here is built and in the current release unless it is marked as coming. Screens are from demonstration '
-             'deployments with synthetic data.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
+             'Everything on this page is built and in release v0.5.0, except the section headed "On main, coming with the next release". '
+             'Screens are from demonstration deployments with synthetic data.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
     toc = [('glass', 'The Glass'), ('studio', 'Ingest Studio'), ('monitoring', 'Rules and Monitoring'), ('boards', 'Drawing boards'),
-           ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture'), ('coming', 'Coming next')]
+           ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture'), ('coming', 'On main, coming next')]
     b += '<nav class="toc wrap" aria-label="On this page"><ul>' + ''.join(f'<li><a href="#{i}">{t}</a></li>' for i, t in toc) + '</ul></nav>'
     b += sec('The Glass: analysis', split(ul([
         '<strong>Network.</strong> Radial, organic and clustered layouts; communities; ranking by betweenness and other measures; expand from any node.',
         '<strong>Find connections.</strong> The shortest routes between two people, each step backed by its records.',
-        '<strong>Connection strength.</strong> How strongly a link is drawn rests on its count, its recency and how rare a shared value is, explained in the Inspector and usable in a rule.',
-        '<strong>Map.</strong> Events on a site plan or a street map; draw a boundary and select what falls inside it.',
-        '<strong>Timeline.</strong> Select a period and every view narrows to it; a heat map shows the hours and weekdays.',
-        '<strong>Matrix.</strong> The network as accessible tables, with what two people share.',
+        '<strong>Connection strength.</strong> How strongly a link is drawn rests on its count and its recency. How rare a shared value is is shown beside it, explained in the Inspector and usable in a rule.',
+        '<strong>Map.</strong> Events on a site plan or a street map; draw a boundary and filter to what falls inside it.',
+        '<strong>Timeline.</strong> Select a period and every view dims what falls outside it; a heat map shows the hours and weekdays.',
+        '<strong>Matrix.</strong> The network as accessible tables, with each link\'s strength and how rare what its two ends share is.',
         '<strong>Reports.</strong> Trends, report packs with marked notes, publishing to viewers and export.',
         '<strong>History.</strong> Every step in a view is kept and can be restored.']), fig('connections')) +
         '<div class="pair">' + fig('map-time') + fig('matrix') + '</div>', ident='glass')
     b += sec('Ingest Studio: bringing data in', split(ul([
         '<strong>1 Model.</strong> A domain model for each dataset: its entity types, link types and markings. Starters for crime, anti-money laundering, fraud and cyber.',
         '<strong>2 Sources.</strong> Files, a SQL database, an HTTP API or JSON files, each with a declared marking and legal basis.',
-        '<strong>3 Pipelines.</strong> One per source: its profile, its mapping and its load, published as a version.',
+        '<strong>3 Pipelines.</strong> Each source with its own profile, mapping and load, published as a version.',
         '<strong>4 Runs.</strong> By hand, on a schedule or when a file arrives. Verify shows what a file would create and which rows it would reject before anything loads.',
         '<strong>Held rows.</strong> A rule can hold rows for a reviewer before a load commits.',
         '<strong>Revert.</strong> A load can be taken back; its links and events are withdrawn and the record of it kept.',
         '<strong>Entity resolution.</strong> Matching across sources with a strictness an analyst can see and change.']), fig('verify'), flip=True),
-        'tint', 'studio', 'The gate into the network. Nothing reaches a case without passing through a pipeline someone published.')
+        'tint', 'studio', 'The gate into the network. Loaded data reaches a dataset only through a pipeline someone published.')
     b += sec('Rules and Monitoring', split(ul([
         '<strong>One queue</strong> for every alert you may see, by severity and age.',
         '<strong>Rules as sentences,</strong> built from your own types and links, previewed on the last 90 days.',
         '<strong>Hotlists and watches</strong> on a phone number, an email address or an account, each with a review date.',
-        '<strong>Screening lists.</strong> Connectors for the UK Sanctions List, OFAC, the EU and UN consolidated lists and OpenSanctions, re-screened when a list changes.',
+        '<strong>Screening lists.</strong> Connectors for the UK Sanctions List, OFAC, the EU and UN consolidated lists and OpenSanctions, re-screened when a list you load changes. The UN and OpenSanctions lists stay synthetic until their licences are confirmed.',
         '<strong>Templates</strong> for structuring, rapid movement, circular flow, high-risk jurisdictions, large cash and dormant accounts.',
-        '<strong>Closing reasons and a second person</strong> for a whole-deployment rule or a high-severity close.',
+        '<strong>Closing reasons, and a second person</strong> for a high-severity close.',
         '<strong>From an alert to a report pack,</strong> and to a monitoring dashboard.']), fig('second-person')) +
         '<div class="pair">' + fig('lists') + fig('hotlist') + '</div>', ident='monitoring')
     b += sec('Drawing boards', '<div class="cols2"><div><p>The analysis canvas shows what the data says. A drawing board is where an analyst '
         'writes down what they know that the data does not yet say.</p>' + ul([
         'Declare a person, an account or a place and draw the links between them, by pointer or by keyboard.',
         "Each case has its own analyst layer; the source data stays clean and no other case sees a drawn item.",
-        'Every drawn item records who drew it, its marking, a grading (5x5x5 by default) and a source note.',
+        'Every drawn item records who drew it, its marking, a grading (5x5x5 by default) and its source: a note, a document, or both.',
         'Promotion into a dataset happens as a load, reviewed by a second person where the dataset asks for it.']) + '</div><div>' + ul([
         'A drawn item that resembles a loaded one is offered as a pair; the analyst decides, and nothing is merged.',
         'An analyst can propose a new link type; a data engineer decides whether it joins the domain model.',
@@ -265,22 +265,22 @@ def org_features():
         '<strong>Keys are write-only,</strong> held by the model gateway alone, with limits and usage per engine.']), fig('questions'), flip=True), ident='models')
     b += sec('Admin and access', cards([
         ('People, roles and teams', 'Built-in roles (Analyst, Data Engineer, Administrator, Reports Viewer, Rule author) and roles you define. No one can give more than they hold.'),
-        ('Sign-in', "Your organisation's own account through Microsoft Entra ID, ADFS or any OpenID Connect provider."),
+        ('Sign-in', "OspreyFlow's own accounts. On a server of your own, your organisation's account through Microsoft Entra ID, ADFS or another OpenID Connect provider."),
         ('Markings and clearance', 'Handling markings on every record, a highest allowed marking per dataset, and reads filtered in the store.'),
         ('Audit', 'Who did what and when, including every export, every approval and every change to what may leave the deployment.'),
         ('Dashboards', 'Apache Superset embedded in a case with the same sign-in, reading a reporting feed.'),
-        ('Backups and updates', 'Signed releases; an update is backed up first and rolled back on failure.')]), 'tint', 'admin')
+        ('Backups and updates', 'Signed releases. On one computer or a server of your own, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.')]), 'tint', 'admin')
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
-        ('The Vault', 'ArcadeDB for the graph, ClickHouse for analytics, OpenSearch for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage, LiteLLM as the model gateway.')]) +
+        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
-    b += sec('Coming next', ul([
-        'A profile for shared government Kubernetes platforms: one namespace, the platform\'s managed services, non-root containers and a single-copy shape for a proof of concept.',
+    b += sec('On main, coming with the next release', ul([
+        'A profile for shared government Kubernetes platforms: one namespace, the platform\'s managed services, non-root containers and a single-copy shape for a proof of concept. Not yet installed on a platform.',
         'S3 and Athena as sources in the Ingest Studio.',
         'A second, open-source extraction engine for structured facts in documents.',
-        "Routing to a client's own model gateway or Amazon Bedrock."]) +
-        '<p>These are merged in development and arrive with the next release. The <a href="' + REPO + '">change log</a> is the record.</p>', 'tint', 'coming')
+        "Routing to your organisation's own AI gateway, or to Amazon Bedrock in London, on the shared-platform profile."]) +
+        '<p>These are merged in development and not in release v0.5.0. They arrive with the next release.</p>', 'tint', 'coming')
     return page('org', 'features.html', 'Features · OspreyFlow', 'Every feature in the current OspreyFlow release: analysis, ingest, monitoring, drawing boards, models and administration.', b)
 
 def public_sector(site):
@@ -293,7 +293,7 @@ def public_sector(site):
     b += sec('The GOV.UK theme, chosen at install', split(
         '<p>The GOV.UK theme is a deployment setting, not a separate edition or a fork. One setting gives every page the GOV.UK header and '
         'footer, the phase banner and the service\'s own name. Everything else is the same product, with the same features and the same tests.</p>' + ul([
-        '<strong>For services on a gov.uk domain.</strong> The GOV.UK look belongs to those services, and OspreyFlow offers it for those alone. It stays available on one computer for a demonstration.',
+        '<strong>For services on a gov.uk domain.</strong> The GOV.UK look belongs to those services, and is to be used for those alone. It stays available on one computer for a demonstration.',
         "<strong>Your service's name, not ours.</strong> The install asks for the service's name, the organisation and the phase.",
         '<strong>Switch back at any time.</strong> Nothing about the data or the cases changes.',
         '<strong>The four places in the GOV.UK header,</strong> with the banner as a GOV.UK notification banner.']), fig('network-govuk')), 'tint')
@@ -303,14 +303,14 @@ def public_sector(site):
         '<div class="tablewrap"><table><caption>The ten starters</caption><thead><tr><th scope="col">Domain</th><th scope="col">OspreyFlow theme</th><th scope="col">GOV.UK theme</th></tr></thead><tbody>' +
         ''.join(f'<tr><th scope="row">{d}</th><td><code>ospreyflow-{k}</code></td><td><code>govuk-{k}</code></td></tr>' for d, k in
                 [('Crime', 'crime'), ('Anti-money laundering', 'aml'), ('Fraud', 'fraud'), ('Cyber', 'cyber'), ('Blank', 'blank')]) +
-        '</tbody></table></div><pre><code>ospreyflow install --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "Your organisation"</code></pre>'
+        '</tbody></table></div><pre><code>ospreyflow install --mode lite --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "Your organisation"</code></pre>'
         '<p>Each starter except Blank comes with its own synthetic demonstration data.</p>', 'tint')
     b += sec('What a security or architecture team will ask', cards([
-        ('Where does the data live?', "Inside your own cloud account or data centre. The deployment never calls out unless an administrator enables it."),
+        ('Where does the data live?', "Inside your own cloud account or data centre. The deployment does not call out on its own: the install downloads its images and model, and anything else, such as a hosted model or your organisation's sign-in, is switched on by an administrator."),
         ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store, so a hidden record leaves no trace in a count.'),
         ('Can a finding be traced?', 'Every link keeps its source, its record and when it arrived. Every export and approval is in the audit.'),
         ('What about models?', 'Local by default. A hosted engine receives material only when the dataset and the handling code both allow it.'),
-        ('Is it accessible?', 'Designed to WCAG 2.2 AA, with automated accessibility scans on every screen in each theme and a Matrix view of the network as tables. An independent audit is planned.'),
+        ('Is it accessible?', 'Designed to WCAG 2.2 AA, with automated accessibility scans on every screen we test, in the light and dark themes and under GOV.UK on most of them, and a Matrix view of the network as tables. An independent audit is planned.'),
         ('What is inside it?', 'Open-source components throughout, each listed with its licence. No software licence fee.')]))
     return page(site, 'public-sector.html', 'UK public sector · OspreyFlow', 'OspreyFlow under the GOV.UK theme: designed to meet the GDS Service Standard, with security markings, need-to-know access and audit.', b)
 
@@ -323,11 +323,11 @@ def org_start():
         '<p>Every question the install asks can be answered in a file instead (<code>--config install.yaml --yes</code>).</p>')
     b += sec('What each mode needs', '<div class="tablewrap"><table><thead><tr><th scope="col">Mode</th><th scope="col">What you need</th></tr></thead><tbody>'
         '<tr><th scope="row">Lite: one machine</th><td>Docker, 16 GB of memory for Docker (32 GB is comfortable), 60 GB of free disk, Git, and internet for the first install.</td></tr>'
-        '<tr><th scope="row">Small: one server in your cloud</th><td>An AWS or Azure account, OpenTofu, that cloud\'s command line and a DNS name you control.</td></tr>'
-        '<tr><th scope="row">Small: your own server</th><td>One Linux server with 32 GB of memory, Docker, three names in your DNS and a certificate for them.</td></tr>'
+        '<tr><th scope="row">Small: one server in your cloud</th><td>An AWS or Azure account, OpenTofu, that cloud\'s command line, Git, uv and a DNS name you control.</td></tr>'
+        '<tr><th scope="row">Small: your own server</th><td>One Linux server (amd64) with 32 GB of memory, Docker, Git, uv and Python 3.12, port 443, three names in your DNS and a certificate for them.</td></tr>'
         '<tr><th scope="row">Enterprise: Kubernetes</th><td>An EKS or AKS cluster, or the account to build one, with the cloud\'s managed PostgreSQL, Valkey and object store.</td></tr>'
         '</tbody></table></div><p><code>ospreyflow doctor</code> checks these for the mode you choose and says what to fix.</p>', 'tint')
-    b += sec('Demonstration data', '<p>Each starter loads synthetic demonstration cases, so there is something to explore straight away. '
+    b += sec('Demonstration data', '<p>Each starter except Blank loads synthetic demonstration cases, so there is something to explore straight away. '
         'No install adds real data: a public dataset is one you download and accept yourself.</p>')
     b += sec('The guides', cards([
         ('Installation and Administration Guide', 'Choosing a mode, installing, people and accounts, backups, updates and every setting.'),
@@ -453,12 +453,12 @@ def net_sectors():
         'Every link traced to its source, for disclosure.'], 'connections'),
      ('fraud', 'Fraud detection', 'For counter-fraud teams in government, insurers and any organisation paying money out.', [
         'Shared addresses, bank accounts, devices and directors across claims, payments and suppliers.',
-        'Connection strength that weighs how rare a shared value is, so a common postcode does not drown a shared bank account.',
+        'How rare a shared value is, shown beside each link, so a common postcode does not drown a shared bank account.',
         'Rules that raise an alert when a pattern returns, previewed on past data before they go live.',
         'Rows held for a reviewer before a load commits.',
         'Report packs and dashboards for the people who answer for the money.'], 'rule'),
      ('aml', 'Anti-money laundering and sanctions screening', 'For regulators and regulated firms.', [
-        'Customers screened against the UK Sanctions List, OFAC, and the EU and UN consolidated lists, and re-screened when a list changes.',
+        'Customers screened against the UK Sanctions List, OFAC and the EU consolidated list, and re-screened when a list you load changes.',
         'A match is a suggestion until a person confirms it.',
         'Typology templates: structuring, rapid movement, circular flow, high-risk jurisdictions, large cash and dormant accounts.',
         'Layered ownership read as a network.',
