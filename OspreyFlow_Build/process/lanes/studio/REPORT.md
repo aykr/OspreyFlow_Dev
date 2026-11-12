@@ -70,7 +70,23 @@ Branch `lane/studio-carries` from main; the earlier L1.7 report is in this file'
    L1.7); `tests/services/api/{test_run_resources,test_recipe_run_path,test_route_rights}.py`.
 8. **Red record:** `carries_RED_RECORD.md` (every new test red first), and `plants/carries_reds.py` with its raw
    `plants/carries_reds.log`: 32 plants, each red for the test it names, re-runnable.
-9. **Gates:** below, once run.
+9. **Gates** (raw records and explanations in `gates/`; the code is as at ccc7f39, and only this report and
+   `gates/` follow it):
+   - **make test and make -k ci at ccc7f39**, on the server (`ccc7f39.{make-test,ci}.txt`, `ccc7f39.explained.md`).
+     - make test: pytest 3 failed, 12911 passed; vitest 1 failed, 3167 passed.
+     - make -k ci: all but route-coverage-check.
+     - This step's two failures are closed by the diffs at merge (`carries_audit_section.diff`,
+       `carries_conduit_routes.diff`), shown green with them applied.
+     - Two failures are not mine: `tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass`
+       and vitest `src/matrix/MatrixView.budget.test.tsx`.
+     - The round at 543baaa found one defect of mine: two explanations' test paths, refused by doc-citations-check.
+       ccc7f39 fixes it.
+   - **The leased live run at 354d39c** on stack d (`354d39c.live*`): 35 failed, 3427 passed. None are this step's,
+     and the new Postgres case passed. The code is unchanged since 354d39c.
+   - **Keyboard and axe at 3f4c762** in the Mac's slot (`3f4c762.*`): 56 keyboard cases on one worker and 148 axe
+     states in three themes, green. This branch's own workspace changes are byte-identical at 3f4c762 and at
+     ccc7f39 (the branch's diff from its merge base under `apps/`, compared). The rebase onto b4b570d brought in
+     main's Home page work (`src/home/`, `keyboard/start*`), which has its own gates.
 10. **Outside the ownership map** (the orchestrator ratified, item 7): `services/api/sources.py`, the Sources page
    (`apps/workspace/src/ingest/sources/{SourcePage.tsx,api.ts,sources.test.tsx}`) and the source routes in
    `services/api/app.py` (register, the governance edit, the new default-marking route) are studio-b's (L1.6);
