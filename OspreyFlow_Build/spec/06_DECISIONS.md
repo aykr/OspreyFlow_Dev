@@ -31886,6 +31886,82 @@ strict one first. The rest is as built. Amendments 5 and 8 stand except where th
 - Admin's own *Delete* button for a removed case's layer (admin, a later step);
 - the stored dry-run report above.
 
+### ADR-145, Amendment 10 (12 November 2026) — the guides from Home, by the places a person may open
+
+Status: written 12 November 2026 by the rules-b lane (its guides step), under the orchestrator's reservation of
+the same day. This is the owner's request of 12 November: on the landing page after sign-in, the user,
+developer and administration guides under the interfaces they belong to, only those the signed-in person's
+profile allows, so new people read the documentation from their own sign-in rather than being sent it. Built
+as the orchestrator's rulings of that day, which the owner may overrule. Each sentence below names the test
+that fails if it stops being true (rule 12).
+
+1. **Which guide, where.** Under Home's card for the Glass, the *User guide*; under the Ingest Studio's, the
+   *Developer guide*; under Admin's, the *Administration guide*. Rules and Monitoring's card has none, and the
+   architecture guide is linked nowhere.
+   - Test: `HomePage.test.tsx`, *links each guide under its own place's card*.
+   - Test: `guides.test.ts`, *gives the Glass, the Studio and Admin a guide each*.
+2. **No card, no guide (decision 1 and N6).** A guide is drawn only inside a card the person's rights already
+   open, never as a link of its own. With the rights unread, Home draws no card, so it links no guide.
+   - Test: `HomePage.test.tsx`, *shows … only the guides of the places their rights open*, across six rights
+     sets, and *links no guide while the rights could not be read*. A planted row of every place's guide outside
+     the cards fails seven of these (`process/lanes/rules-b/guides/glass-plants.txt`).
+   - Test: `start.spec.ts`, *a person whose rights open no card is linked no guide*.
+3. **Served by the Conduit, checked there, never a static link.** `GET /v1/guides/{user|developer|administration}`
+   answers the deployment's own PDF (`docs/pdf/`) only to a principal whose rights open the guide's place. That
+   is the switcher's test (`places.ts`'s `placesFor`): one of the place's rights and every right it needs.
+   - Anyone else is answered 403 `place_required`, which names the place and its rights and says in words to
+     ask an administrator for a role that opens it. No byte of the file is sent.
+   - The check runs before the file is touched, so a refused reader cannot learn whether the deployment
+     carries the PDF.
+   - The route names no single right in `test_route_rights.py`'s table (`None`), because a place opens on any
+     one of several. The place check is the route's own (`services/api/guides.py`).
+   - Test: `test_guides.py`, *each guide answers exactly whom its place opens*. It runs for every role, the Super
+     user preset, every legacy role, every right granted singly and nobody, with the expected answer computed
+     from `places.json` itself, not from the Conduit's copy.
+   - Test: `test_guides.py`, *a deployment built without the pdf says so* (503 `guide_not_carried`; still 403
+     for a refused reader).
+   - Test: `test_route_rights.py`, *each guide answers only whom its place opens signed in for real*, live with a
+     real token through `get_principal`.
+   - Red: removing the check fails 64 cases (`process/lanes/rules-b/guides/server-plants.txt`).
+4. **The Conduit's copy of the places' rights is `places.json`'s.** The image does not carry the workspace, so
+   `guides.py` writes the three places' rights out. A custom role's rights count, because `get_principal` adds
+   them as single grants (Amendment 5).
+   - Test: `test_guides.py`, *the conduit's place rights are places json's*. Red with `run_pipelines` added to
+     the Studio's copy, which would let a loader read the developer guide: three cases fail.
+   - Test: *a custom role's rights count as single grants*.
+5. **The file served is the one the image was built with, byte for byte.** It is the PDF that `manifest.json`
+   records for the guide's version, sent with `X-Guide-Version` and `Cache-Control: private, no-store`, inline.
+   Any other name is 404 `no_such_guide`, the architecture guide and a path that would reach another file among
+   them.
+   - Test: `test_guides.py`, *the pdf served is byte for byte the file carried*. Red with another PDF served.
+   - Test: *a guide that is not one of the three is not found*.
+6. **The image carries the three PDFs and the manifest, and not the architecture guide.**
+   `services/api/Dockerfile`'s final stage copies them to `/app/docs/pdf/`, after the `chown -R`, so they are
+   not written twice into the image's layers. They add about 12.6 MB.
+   - Test: `test_guides.py`, *the conduit image carries the three guides and their manifest*. Red with the line
+     removed, and red with the architecture guide added.
+7. **In the Glass: a plain link, a new tab, no token in a URL.** Under each card's words sits "Read the user
+   guide (PDF)", "Read the developer guide (PDF)" or "Read the administration guide (PDF)". It is a button drawn
+   as Recent cases' names are, in tokens only.
+   - Activating it opens a tab at once, while the activation is still the person's own, so a pop-up blocker
+     allows it. The PDF is then fetched with the person's token in the `Authorization` header, and the tab is
+     sent to a blob URL. The blob is released a minute later.
+   - A refusal is said under the link in the Conduit's own words, and the tab is closed. So is a failure to
+     reach the Conduit, or a tab the browser would not open.
+   - Test: `guides.test.ts`. Red with the token in the URL, and red with a refused guide's tab left open.
+   - Test: `HomePage.test.tsx`, *asks for the card's own guide* and *says under the link, in words, why a guide
+     could not be opened*.
+8. **Keyboard (rule 13) and axe.** Each link is reached by Tab and opened with Enter. A refused guide's words are
+   shown, with focus kept on the link and no tab left open.
+   - Test: `start.spec.ts`, `START_ACTIONS`' `read-a-place-s-guide-from-home-by-keyboard` and
+     `read-why-a-guide-was-refused-on-home-by-keyboard`.
+   - Axe: the start harness's default state shows the Glass, Studio and Admin cards with their links, and is
+     scanned in dark, light and GOV.UK by `every-harness.spec.ts`.
+
+**Left, by name:** the user guide's *Home* section and the administration guide each gain a line about the
+links (diffs for docs, `process/lanes/rules-b/docs-guides.patch`). A guide newer than the image is shown only
+after a rebuild, which is what "the version it was built with" means.
+
 ## ADR-148 — Deploying into a namespace on a shared Kubernetes platform: the `cloud-platform` profile, first for the UK public sector client's Cloud Platform — ACCEPTED (design)
 
 *9 November 2026. **Accepted (design): the owner's decision of 9 November 2026** (the client call of 9 November), written from the owner's record checked against the UK public sector client's Cloud Platform's user guide and this repository at `8e74fc8`. Open questions 1 to 3 stay open for the owner; question 1 waits for P8's report.*
