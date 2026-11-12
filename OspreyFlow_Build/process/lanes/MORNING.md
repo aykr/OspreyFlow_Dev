@@ -706,11 +706,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - Let's Encrypt by DNS-01 (TXT records by hand, or a token you enter);
         - one address change and apply, then repair-sign-in and re-checks, about 1–1½ h.
 
-        Waiting for:
-        - the DNS records;
-        - TXT or token;
-        - the venue's address;
-        - tonight or Friday morning.
+        **Started about 21:20:** your three A records are in and resolve publicly. With my recommendations taken
+        (TXT by hand, tonight, your current network only), the demo lane is moving osprey-small to
+        govuk.ospreyflow.app, beginning with a backup.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
