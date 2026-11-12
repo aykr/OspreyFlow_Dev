@@ -4,7 +4,9 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 - Code is cited as `path:line` under `OspreyFlow_Core/`. Spec is cited as `spec/…` under `OspreyFlow_Build/`.
 - The server was only inspected: `ss`, `free`, `docker stats`, `docker inspect`, `iptables -S`. Nothing was built, changed, or run in a way that writes.
 - osprey-small stayed frozen.
-- The questions are numbered as in the owner's prompt (1, 2, 2a, 3–8). Number 9 is the listener check the owner's rules ask for "before any name goes live". The orchestrator's "question 3 (memory)" is 2a here, and its "question 10 (answers files)" is 8.
+- **Numbering.** Sections follow the owner's numbering as the orchestrator gave it: 1 address, 2 routing, 3 memory, 4 GOV.UK, 5 gate, 6 models, 7 certificates, 8 reset, 9 demo accounts, 10 answers files.
+  - The copy of the prompt in the owner's folder (`5_PROMPT_ORCHESTRATOR.md`, 14:35) numbers them 1, 2, 2a, 3–8 and has no accounts question. There, 2a is 3 here, 3–7 are 4–8, and 8 is 10.
+  - The listener check from the owner's rules ("before any name goes live") is §11. The orchestrator asked for it at §10, but §10 is the owner's answers-files question.
 
 ## Summary
 
@@ -12,14 +14,15 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 | --- | --- | --- |
 | 1 | Bare domain as `server.address` | **Yes.** `id.` and `bi.` go in front of the whole host. |
 | 2 | Two Smalls on one server and one 443 | **Not in the product today.** Needs an ADR-114 amendment, code changes and an edge proxy. |
-| 2a | Memory | Two demos fit **only if** each is capped (`memory_gib` 24) and the lanes run three or four stacks at most. They **cannot** share one model server. |
-| 3 | GOV.UK theme off gov.uk | **Installs, with a warning only.** The banner wording is fixed text; changing it is a small product change. |
-| 4 | The gate | **A separate edge proxy.** The product's proxy has no hook for it and its config is generated. |
-| 5 | Gemini budget | **The gateway enforces it.** The next call is refused with a clear message. There is no automatic fall-back to the local model. |
-| 6 | Certificates | DNS-01 outside the product, then a deploy hook copies the files and runs `ospreyflow apply`. Only the proxy restarts. No port 80 needed. |
-| 7 | Nightly reset | No built-in schedule. A cron job runs `down -v`, `start`, `restore --yes`, then restarts the api. Measured time for a Small is unknown; estimate 5–10 min. |
-| 8 | Draft answers files | **Both are refused as written.** Corrected text is below. |
-| 9 | Listeners | **Today only sshd (1099) and 443 face the internet.** 443 is open to the owner's IP alone. Every store and lane port is loopback. |
+| 3 | Memory | Two demos fit **only if** each is capped (`memory_gib` 24) and the lanes run three or four stacks at most. They **cannot** share one model server. |
+| 4 | GOV.UK theme off gov.uk | **Installs, with a warning only.** The banner wording is fixed text; changing it is a small product change. |
+| 5 | The gate | **A separate edge proxy.** The product's proxy has no hook for it and its config is generated. |
+| 6 | Gemini budget | **The gateway enforces it.** The next call is refused with a clear message. There is no automatic fall-back to the local model. |
+| 7 | Certificates | DNS-01 outside the product, then a deploy hook copies the files and runs `ospreyflow apply`. Only the proxy restarts. No port 80 needed. |
+| 8 | Nightly reset | No built-in schedule. A cron job runs `down -v`, `start`, `restore --yes`, then restarts the api. Measured time for a Small is unknown; estimate 5–10 min. |
+| 9 | Demo accounts → invited accounts | Remove them in Admin › People **and** delete their four password lines from `deployment.env`, or every restore makes them again. **A restore keeps people but not passwords**, and loses anyone invited after the backup, so a nightly restore is not a reset a public demo can live with as it stands. |
+| 10 | Draft answers files | **Both are refused as written.** Corrected text is below. |
+| 11 | Listeners | **Today only sshd (1099) and 443 face the internet.** 443 is open to the owner's IP alone. Every store and lane port is loopback. |
 
 ## 1. A bare domain as the address: yes
 
@@ -71,7 +74,7 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 **Proposed routing.**
 - **An edge proxy on the public IP:443.** It routes the six names by SNI and Host:
   - `ospreyflow.app`, `id.`, `bi.` go to deployment A on `127.0.0.2:443`.
-  - `govuk.ospreyflow.app`, `id.govuk.`, `bi.govuk.` go to deployment B on `127.0.0.3:443`, with the gate (§4).
+  - `govuk.ospreyflow.app`, `id.govuk.`, `bi.govuk.` go to deployment B on `127.0.0.3:443`, with the gate (§5).
 - **Each deployment:**
   - its own name, so its own project, volumes, folder and backups subfolder;
   - `server.listen_address` set to its private address;
@@ -91,7 +94,7 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 - A different port avoids the 443 refusal, but not the 2480 refusal or the project clash.
 - A new port would also need its own owner-only firewall rule.
 
-## 2a. Memory and load (measured 17:40 UTC; no lease; read-only; the whole server)
+## 3. Memory and load (measured 17:40 UTC; no lease; read-only; the whole server)
 
 **What was measured:**
 - `free -m`: total 64,224 MiB, available 37,187 MiB, swap 32 of 4,095 MiB used.
@@ -139,7 +142,7 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
   - The standard demo uses `gpu: none` with the small local model as default, or Gemini under a budget.
   - Keep the owner's "quiet window" for demos the owner presents.
 
-## 3. The GOV.UK theme on a non-gov.uk address: accepted, with a warning only
+## 4. The GOV.UK theme on a non-gov.uk address: accepted, with a warning only
 
 **Code:**
 - The answers check only that the brand is known, the phase valid, and `service_name` present (`answers.py:197-223`).
@@ -169,7 +172,7 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 3. render it in `PhaseBanner.tsx`, showing the banner when the text is set even at `none`;
 4. optionally, require `banner_text` for GOV.UK off gov.uk, beside `doctor.py:699`.
 
-## 4. The gate: a separate edge proxy, not the product's own
+## 5. The gate: a separate edge proxy, not the product's own
 
 **Why not inside the product:**
 - The product's Caddyfile has no hook for extra directives. It emits only `reverse_proxy`, the GOV.UK assets block, `redir` and `respond` (`site.py:58-124`).
@@ -190,7 +193,7 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 
 **What this keeps:** the gate stays outside the product's upgrades and its security boundary.
 
-## 5. Models: Gemini with a token budget
+## 6. Models: Gemini with a token budget
 
 **Adding Gemini:**
 - `gemini` is a **provider name**, not an engine kind. Off the cloud platform the only kind is `provider` (`deployment.py:303, 336-338, 480-484`; ADR-135 decision 1, `06_DECISIONS.md:21251-21253`).
@@ -218,9 +221,9 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 - `sendable_handling_codes` cannot go in the answers file. It goes in `osprey.yaml`, and needs `hosted_fallback` or a provider named first (`deployment.py:751-755`).
 - On osprey-small tonight this was met with `hosted_fallback: gemini`, which nothing reads (`deployment.py:648`). The Gemini engine's name in Admin need not match it.
 
-**Font:** see §3. GDS Transport is served regardless of domain.
+**Font:** see §4. GDS Transport is served regardless of domain.
 
-## 6. Certificates by Let's Encrypt DNS-01, without port 80
+## 7. Certificates by Let's Encrypt DNS-01, without port 80
 
 **What the product does:**
 - It takes **paths** to a full-chain PEM and an unencrypted key. It mounts them read-only into the proxy and never copies them (`deployment.py:1328-1357`; `site.py:187-211`).
@@ -238,14 +241,14 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 2. Take two certificates:
    - A: `ospreyflow.app` + `*.ospreyflow.app`, or the three names;
    - B: `govuk.ospreyflow.app` + `*.govuk.ospreyflow.app`.
-   - Or one certificate naming all six. The edge (§4) uses the same files.
+   - Or one certificate naming all six. The edge (§5) uses the same files.
 3. A **deploy hook** copies `fullchain.pem` and `privkey.pem` to fixed paths, for example `/etc/ospreyflow/tls/<name>.crt|.key`, as `osprey:osprey` with the key at mode 600 (`deployment.py:1339-1342`).
    - Do not point the product at `/etc/letsencrypt/live/` directly. It is root-only, so `apply` (run as `osprey`) could not read it, and the proxy would run as root.
 4. Then the hook runs, as `osprey`: `cd /opt/<checkout> && ospreyflow apply [--name <name>]`. It also reloads the edge.
    - `apply` writes the leaf's fingerprint to `tls-fingerprint`, which only the proxy mounts, so **only the proxy restarts** (`apply.py:1359-1364`; `spec/05_DEPLOYMENT.md:869-871`). That is a few seconds' gap per deployment.
 5. certbot's timer renews from 30 days out, and the product warns under 30 days (`tls_check.py:43, 185-190`).
 
-## 7. A nightly reset from a verified backup
+## 8. A nightly reset from a verified backup
 
 **There is no reset schedule in the product.** The only scheduler is the Enterprise backup CronJob. A Small uses the service account's crontab (`spec/10_ADMINISTRATION_GUIDE.md:601-607`).
 
@@ -277,8 +280,62 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 - PI's own rehearsal reset is `python -m scripts.seed_internal prison-intelligence --reset-live --stop-api`. It restarts only the api, and lists what it **cannot** undo (alerts, rules, working sets, hotlists; `scripts/seed_pid.py:1817-1829`). A full nightly reset should use the restore path above.
 - Restore does not check other deployments (`restore.py:758, 877-880`). Stagger the two jobs.
 - The golden set for osprey-small exists: `/srv/ospreyflow/backups/small/20261112T173107Z-small-2be985a…`, taken after the seeds and before any check.
+- **The reset breaks invited accounts' passwords** (see §9). Read §9 before scheduling it.
 
-## 8. The draft answers files: both refused as written
+## 9. Demo accounts replaced by invited accounts, and what the reset does to them
+
+**Where the four demo accounts come from.**
+- A fresh Small never makes them: "This Small deployment has no demo accounts; none is made" (`harness/register_sign_in.py:388-393`; ADR-114 Amendment 33 drop 2, `spec/06_DECISIONS.md:23827`).
+- The two public demos, installed fresh, therefore start **without** them. Only `admin` (the owner's, from the one-time code) exists.
+- **They exist on osprey-small only** because tonight's rebuild put `OSPREY_DEMO_ADMIN_PASSWORD` and `OSPREY_DEMO_ANALYST_PASSWORD` into its `deployment.env`. That was the owner's choice (A), going round the gate (`REPORT.md`).
+- The gate keys on those lines: a Small "without demo accounts" is one whose `deployment.env` has no `OSPREY_DEMO_ADMIN_PASSWORD` (`register_sign_in.py:360-366`).
+
+**How the four are removed (needed only if osprey-small becomes a public demo).** The product's way has two parts, and both are needed.
+
+1. **Admin › People, as `admin`.**
+   - For `osprey-demo-admin`, start with *Disable…*, which shows what it owns (`GET /v1/admin/people/{id}/disable-plan`, `services/api/app.py:16786-16788`):
+     - it is the Author of seeded cases' rules: Ledger's "Screen customers against the lists" names *Demo Admin* as maker and owner;
+     - scheduled runs of a rule act as its owner (`services/api/admin_people.py:1-20`).
+   - Then *Transfer and disable*. It is refused while anything is untransferred (409 `untransferred`), so each item goes to `admin` first.
+   - Then *Remove* each of the four: `DELETE /v1/admin/people/{user_id}` (`app.py:17125-17160`, ADR-112 Amendment 3).
+   - It refuses removing yourself, an account OspreyFlow itself uses (`CONDUIT_ACCOUNTS` = the two verify probes only, `services/api/identity_admin.py:61`), the last people manager, and a team's lead. The demo accounts are none of these, so *Remove* is allowed.
+   - What they made keeps their id, shown as an id once the account is gone (ADR-106).
+2. **Delete the four lines `OSPREY_DEMO_ADMIN_PASSWORD`, `…_ANALYST_…`, `…_ENGINEER_…`, `…_REPORT_VIEWER_PASSWORD` from `deploy/generated/small/deployment.env`**, as `osprey`, keeping the file at mode 600.
+   - **Without this, the accounts come back:**
+     - `repair-sign-in` and `start --build` re-register them (`register_sign_in.py:143-190`);
+     - so does every restore, which calls the same registration (`harness/restore.py:461-480, 545`).
+   - No verb does this step. It is a hand edit of the settings file, as tonight's seeding was. **That is a product gap:** "retire the demo accounts" should be a verb or an Admin action. Record it as an ADR-114 amendment beside Amendment 33's gate.
+
+**Invites (Admin › People › Invite).**
+- `POST /v1/admin/people` (`app.py:16897-16925`, ADR-114 Amendment 5). Behind `manage_people`. The inviter may give only roles whose rights they hold (`_may_give`).
+- Without a mail server, the answer carries a **one-time code**, "in this answer only — never in the audit record, never stored".
+  - The account gets a temporary password and Keycloak's `UPDATE_PASSWORD` action, so the visitor chooses a password at first sign-in (`identity_admin.py:124, 433-440`).
+  - With mail, Keycloak's own emailed link (`identity_admin.py:241, 407`).
+- Give visitors **Analyst** only. Then give each visitor (or a team) Viewer or Editor on each demo case, in *Cases → Who can open this case*.
+- Unlike tonight's demo accounts, the packs' seeds make no visitor an Editor. They grant only the demo analyst, and only if it exists.
+- *Reset sign-in* (`POST …/{id}/reset-sign-in`, `app.py:17111-17123`) issues a new one-time code.
+
+**What a restore does to accounts.**
+- **Keycloak's database is not in the backup set.** `KEYCLOAK_DATABASE = "keycloak"` is "Not dumped: the identity item carries the people" (`harness/backup.py:382-388`).
+- The set holds `identity/realm.json`: every person with their **id, attributes and role mappings**, plus dashboard clients (`harness/identity.py:1-25`; `backup.py:475-490`). Tonight's set: 4,233 bytes.
+- **Passwords never travel:** "Keycloak does not give them out" (`identity.py:19-20`).
+- On restore, `import_identity` removes what the fresh realm made under the same usernames and imports the people with their ids (`identity.py:107-146`). It then sets **only the demo accounts'** passwords again, from `deployment.env` (`restore.py:461-480, 530-545`).
+- The nightly reset (§8) runs `down -v`, which empties Postgres, Keycloak's database included. So, after a reset:
+  - **People in the backup come back** with the same ids, roles and case grants (grants live in Postgres's dump).
+  - **But with no password.** An invited visitor, and `admin` itself, cannot sign in until a people manager uses *Reset sign-in*, or the owner recovers `admin`.
+  - Not verified live here (read-only). The code and its docstrings say so plainly.
+  - **People invited after the backup are lost:** neither their account nor anything they made survives. Their case grants are in Postgres from after the set.
+  - Any password a visitor chose, and any one-time code not yet used, is gone.
+
+**What that means for the plan.**
+- A nightly restore, as the product does it today, **is not a reset a public demo with invited visitors can use**.
+- Options:
+  - **(a)** Reset only the case data and keep Keycloak's database. The product has no such reset; it would be a product change (ADR-114 amendment), for example `restore --keep-identity`.
+  - **(b)** Use PI's own `--reset-live --stop-api`, which keeps every store. It cannot undo alerts, rules, working sets or hotlists (`scripts/seed_pid.py:1817-1829`), so it is not a clean slate.
+  - **(c)** Reset less often, and re-issue visitors' sign-in by *Reset sign-in* after each one.
+- **Recommendation: (a)**, decided before the demos open. Until then, reset by hand, and only when needed.
+
+## 10. The draft answers files: both refused as written
 
 **What the schema allows:**
 - Top level: `mode, components, folders, models, demo_packs, paysim_file, cloud, config, mail, external, cluster, starter, appearance, demo_accounts, server, admin_email, sign_in, grading` (`answers.py:94-98`).
@@ -289,8 +346,8 @@ The demo lane, 12 November 2026. These answers are about main at **b380d456**, t
 **What that means for the drafts:**
 - `starter: ospreyflow-aml` is real: OspreyFlow's look, with the Operation Ledger pack and the `fibo` domain (`starters.py:57-66`). Add the other packs with `demo_packs` or `ospreyflow demo add`.
 - `service_name`, `organisation` and `phase` belong **under `appearance:`** (`:126`). As top-level keys they are refused.
-- `models.sendable_handling_codes` is **refused** in the answers file (`:122`). Set it in `osprey.yaml` after install, with `hosted_fallback` or a provider (§5).
-- `memory_gib: auto` would size each to the whole 62 GiB (§2a), so use 24.
+- `models.sendable_handling_codes` is **refused** in the answers file (`:122`). Set it in `osprey.yaml` after install, with `hosted_fallback` or a provider (§6).
+- `memory_gib: auto` would size each to the whole 62 GiB (§3), so use 24.
 - The deployment name and the listen address need the §2 change. They are shown here as they would be used.
 - Listing `prison-intelligence` in `demo_packs` makes the install turn post-ingest resolution off (`answers.py:680-707`). That avoids tonight's second apply.
 - The demo accounts are never made on a Small (ADR-114 Amendment 33, `harness/register_sign_in.py:388`). For a public demo that is right: the owner invites Analyst accounts in Admin.
@@ -308,11 +365,11 @@ server:
   ingest: /srv/ospreyflow/ingest-standard
   redirect_http: false
   backups: /srv/ospreyflow/backups # sets go to <backups>/<name>/
-  memory_gib: 24                   # not auto: two demos share the server (§2a)
-  gpu: none                        # the GPU is the GOV.UK demo's (§2a)
+  memory_gib: 24                   # not auto: two demos share the server (§3)
+  gpu: none                        # the GPU is the GOV.UK demo's (§3)
 components: {dashboards: true}
 models:
-  local_only: false                # sendable_handling_codes: [P] goes in osprey.yaml after install (§5)
+  local_only: false                # sendable_handling_codes: [P] goes in osprey.yaml after install (§6)
 ```
 
 ```yaml
@@ -323,12 +380,12 @@ demo_packs: [prison-intelligence, hmp]   # PI here makes the install turn resolu
 appearance:                        # answers.py:126: these three live here, not at the top level
   service_name: Prison Intelligence (demonstration)   # starters.py:40-42 advises a name not tied to one case
   organisation: Solirius Reply demonstration
-  phase: beta                      # draws "Beta: This is a new service." (fixed text; §3)
+  phase: beta                      # draws "Beta: This is a new service." (fixed text; §4)
 server:
   address: https://govuk.ospreyflow.app   # id.govuk.ospreyflow.app and bi.govuk.ospreyflow.app follow
   certificate: /etc/ospreyflow/tls/govuk.ospreyflow.app.crt   # SANs: govuk.ospreyflow.app + *.govuk.ospreyflow.app
   key: /etc/ospreyflow/tls/govuk.ospreyflow.app.key
-  listen_address: 127.0.0.3        # behind the edge and its gate (§4; needs the §2 change)
+  listen_address: 127.0.0.3        # behind the edge and its gate (§5; needs the §2 change)
   ingest: /srv/ospreyflow/ingest   # osprey-small's, if this becomes osprey-small
   redirect_http: false
   backups: /srv/ospreyflow/backups
@@ -341,7 +398,7 @@ models:
 
 **Not checked:** whether two deployments may share one `server.ingest` folder. Separate folders are the safe choice.
 
-## 9. Listeners (the owner's rule: before any name goes live)
+## 11. Listeners (the owner's rule: before any name goes live)
 
 Measured at 17:45 UTC with `ss -H -ltnu`, `iptables -S DOCKER-USER`, `ip6tables -S DOCKER-USER`, `ip -6 addr`.
 
