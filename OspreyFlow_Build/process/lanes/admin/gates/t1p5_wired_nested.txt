@@ -1,0 +1,4 @@
+the xdist case as committed at c2a0010, with an enclosing run having taken all 15 Valkey databases (OSPREY_WORKER_VALKEY_TAKEN=15, as the server's make test at -n 15 leaves it):
+1 failed, 2 deselected in 0.41s
+as fixed (the nested run offline, the enclosing count cleared):
+1 passed, 2 deselected in 1.15s

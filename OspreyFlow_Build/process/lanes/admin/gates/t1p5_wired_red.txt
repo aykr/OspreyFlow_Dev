@@ -1,0 +1,10 @@
+test_worker_isolation_wired.py at 11bde5a on main 9a4a0fb, 10:30Z.
+--- red: main's conftest (the diff taken back), with -p tests.worker_isolation on the command line as make test passes it:
+FAILED ../OspreyFlow_Build/tests/test_worker_isolation_wired.py::test_the_root_conftest_names_the_worker_isolation_plugin
+FAILED ../OspreyFlow_Build/tests/test_worker_isolation_wired.py::test_make_tests_own_arguments_without_the_flag_load_the_plugin_under_xdist
+2 failed, 1 passed in 1.26s
+--- green: conftest-T1p4.diff applied, no -p:
+3 passed in 1.09s
+--- the xdist case's own run, printing the plugin's header (-n 2, the Makefile's -c, no -p):
+worker_isolation: 2 workers, Valkey databases 1 to 2, no stores made (offline)
+============================== 1 passed in 0.67s ===============================

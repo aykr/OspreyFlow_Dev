@@ -1,6 +1,8 @@
---- a/OspreyFlow_Build/tests/conftest.py	2026-11-10 23:24:53
-+++ b/OspreyFlow_Build/tests/conftest.py	2026-11-10 23:24:53
-@@ -38,7 +38,8 @@
+diff --git a/OspreyFlow_Build/tests/conftest.py b/OspreyFlow_Build/tests/conftest.py
+index 20708b6..6d51d2d 100644
+--- a/OspreyFlow_Build/tests/conftest.py
++++ b/OspreyFlow_Build/tests/conftest.py
+@@ -38,7 +38,8 @@ from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F40
  # reported, or failed with OSPREY_STORE_MARK=fail (tests/store_mark.py).
  # A test that calls the docker CLI skips at once, in words, where local stacks are off (T2,
  # tests/local_docker_guard.py).

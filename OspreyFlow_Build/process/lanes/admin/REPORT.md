@@ -1,22 +1,35 @@
-# admin · P10 part 2 · report (12 November 2026): Entra ID's claims wired into the cloud-platform profile
+# admin · T1 part 5 · report (12 November 2026): the up-check and the reaper, after two orchestrator reviews
 
-After the orchestrator's third review of e8d5874 (and the second of 67f3d2a before it), every item fixed in one pass, on main 91a029c.
+`lane/admin-t1p5` over main `9a4a0fb`, gated at `a23886c`. The reset is its own step (the split ruling); its code
+stays on `srv-wt/lane/admin-t1p5`. `SERVER_LOG_T1P5.md` has every finding and its red. (P10 part 2's report is in
+main's history at `33e402d`.)
 
-1. Sign-in on cloud-platform uses Entra's claims through the one construction path, Keycloak not rendered: **met** (render.diff). `test_cloud_platform_entra.py`; the set-up console no pod, image, command or door on all five fixtures.
-2. Every reader of a role or principal goes through `principal_auth`, each refusal red first: **met**. Roles from the people store; the delta socket at connect and before each message (1013 when the store cannot answer, 1008 otherwise); the service identity; the realm's readers and Superset; the Glass from `GET /v1/me`, failing closed, and saying so with *Try again* and *Sign out*, each reached by keyboard and scanned by axe.
-3. cp-policy-check green with no Keycloak: **met**, 0 violations on all five fixtures (`gates/1d20d94.cp-policy.txt`).
-4. Gates through `stack_lease.sh offline admin` at 1d20d94, ten diffs applied: `make -k ci` exit 0 (`gates/1d20d94.ci.txt`); `make test` 12,762 passed, failing only the server's GPU case, the guide's PDF (made at merge) and main's own release-matrix case (until the owner applies P12p2_CI.diff; MORNING item 38) (`gates/1d20d94.test.txt`).
-5. The Mac's own at 1d20d94 (`gates/p10p2_mac_1d20d94.txt`): `make live-collect` exit 0; test-js 3,136 + 51 passed, exit 0; a11y 1,019 passed and 1 failed; keyboard 768 passed and 2 failed. The three failures fail on main alike (`gates/p10p2_main_baseline_8be1b77.txt`, raw; `p10p2_main_baseline_eec25d1.txt`, filtered as captured). The account-unread notice: its keyboard cases and its scans in dark, light and GOV.UK green, each shown red at 1d20d94. MatrixView's budget and Ingest Studio's expert-mode case failed in two earlier full runs here and passed in this one; the record says what is known of each.
-6. Live under admin's lease on stack b at 1d20d94 (`gates/p10p2_live_targeted_1d20d94.txt`): the targeted list with the promotion files, the audit census, the roles routes and the external-run routes, 228 passed and 11 skipped; the live plants 18 of 18 red; the stack down and released.
-7. Plants: 103 plants, 132 case runs red, 0 missed, 0 harness faults (114 offline at 1d20d94, 18 live under the lease) (`P10_P2_RED_RECORD.md`).
+**What merges.** The per-worker store plugin named in the root conftest (`conftest-T1p4.diff`) and the flag dropped
+from `make test` (`makefile-T1p4.diff`, the owner's, against main as it stands); in `stack_lease.sh` and its tests
+(`stack-lease-T1p5.diff`, the orchestrator's): the up-check before `remote` and `live`; each run tagged and reaped
+when it ends and on TERM; `stop <lane>` to end a run (TERM to its group, a bounded wait, KILL, its exit written;
+Ctrl-C on the lane's machine ends only the follow); `reap <lane>` for what an ended run left, failing closed; the
+start call no longer holding ssh; a run's folder new or refused. Committed: `test_worker_isolation_wired.py`, the
+plants harness, `apply_diff.py` (all or nothing across files, whole lines, CRLF, no-newline), the reads audit, the
+log, the friction fragment and the gate records.
 
-**The second review's items:** (1) the keys' cache counted at the server, the five-minute window and the edge in it pinned, planted; (2) the hourly refresh live both ways, planted; (3) the re-grant only when nobody can manage people, under `PEOPLE_LOCK`, audited, the docstring, guide, runbook and point 10 as amended; (4) the account-unread notice as its own component, its keyboard spec and registry, its axe scans; (5) one thread fetching, an hour's grace, the keys' own executor, tested with the real `SigningKeys`; (6) owner resolution on Keycloak unavailable, not an exception; (7) a body not JSON and a set with no usable key each a 503, the fake refusing as the real one can; (8) the run API's 503, RS256 and leeway, one set of keys shared. Notes: (9) the bootstrap lock shown deterministically; (10) main's raw output kept; (11) the markings check's dead branch removed; (12) the socket's 1013; (13) Name an Author's 24 h rule; (14) the rotation edge in point 10 and the live checks' CARRIES row.
+| Gate, at `a23886c` with the three diffs applied | Result | Record |
+| --- | --- | --- |
+| Plants, on the server (Linux) | 24 plants, 31 case runs, all red, 0 missed, 0 faults; the whole file green before (72) and after (50, main's script) | `gates/t1p5_plants_a23886c.txt` |
+| `make -k ci`, the server, offline | exit 0; cp-policy-check 0 violations | `gates/t1p5_a23886c.ci.raw.txt` |
+| `make test`, the server, offline, each part run | pytest 12,789 passed, the server's GPU case alone failed, the plugin's header `worker_isolation: 15 workers …`; live-collect ran (its counts in the log); test-js 3,135 passed and MatrixView's first-frame budget failed (a known perf-budget item, MORNING, failing on main under load too) | `gates/t1p5_a23886c.test.raw.txt` |
+| test-js, the Mac | 3,135 passed; MatrixView's budget failed in the full run (3,099 ms against 2,500), passed alone twice at `c2a0010` | `gates/t1p5_mac_a23886c.test-js.raw.txt` |
+| Hand-made reds | the old `pkill` (confined to the case's own group: this Mac runs another session's heartbeat watcher); the wired cases; the nested xdist case under an enclosing run of 15; the applier against the old one | `gates/t1p5_{pkill_plant,wired_red,wired_nested,apply_diff}.txt` |
 
-**The third review's items:** (1) the event-loop case reads the fetch's own thread and the loop's largest gap, its plants red in the whole file and under `-n auto`; (2) the run API's sign-in async in the keys' threads; (3) the start's grant and its audit row one transaction; (4) the five seconds a total bound, a stuck fetch abandoned, the trickle exercised and planted; (5) the unknown-kid window opened only by a fetch that succeeded; (6) `PEOPLE_LOCK` planted, the custom roles' rights read inside it. Notes: a rotated-out key's lifetime stated (7); a set with no checkable key a 503 (8); the window edge planted (9); concurrent sign-ins measured, one fetch (10); the reds retaken at the head (11).
+**Found on the way:** a run on a host starts with INT ignored, from main's own start call, so INT does nothing to a
+run (stopping one is `stop`); an attempt of mine to make INT work made gate runs uninterruptible and was taken out;
+the stand-in ssh hid exit codes and returned before its output closed, so two cases could not be red until it did as
+ssh does; the old applier could not apply a diff of two files at all; the nested xdist case did not fit inside `make
+test` at 15 workers until it ran offline.
 
-**Found on the way:** P9's merge made P9's backups writers case expect report-sync on production, which this profile no longer renders (its expectation corrected in render.diff); the first token naming an unknown key fetched the keys twice in a row (now one fetch opens the window); the start's audit action was not yet in the audit census (a gate caught it); Admin › Audit shows no entry the system writes, so the start's grant is in the log but not on that screen (said in point 10).
+**Not shown red alone:** the reaper's re-read before TERM (a pid changing between the scan and the TERM cannot be
+timed; the re-read before KILL, the same function, is red); "no error lines in a run's log" (as root on the server
+every environment is readable).
 
-**Diffs** (`p10p2/`): render, runbook, readers, glass-sign-in (16 files), actionRegistry, every-harness, makefile, ci-yml, resolver-doubles (25 test files), admin-guide (1.84; the PDF at merge).
-**Carried** (CARRIES): owner resolution, Superset and report sync on Entra, ADR-106 names from the people store, the live measurement against the client's tenant (with the key rotation), the service identity's app-role check.
-**Decisions:** the orchestrator's rulings only, each in ADR-148 Amendment 8; the amended re-grant and the 24 h rule listed for the owner.
-**Commits:** on `lane/admin-p10p2` over main 91a029c, `packages/schemas` its own commit at the head. Nothing of mine is running; stack b released.
+**Carried:** the INT row's text, for the orchestrator to add (not edited on the branch). **Decisions:** the
+orchestrator's rulings only (the split; the diffs' ownership; `stop`). Nothing of mine is running; no stack is held.

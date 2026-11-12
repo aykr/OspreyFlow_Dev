@@ -1,0 +1,3 @@
+# T1 part 5's merge checks on the merged tree (branch 7af3fc6, gated at a23886c, raw records in admin/gates/t1p5_*a23886c*; with stack-lease-T1p5, conftest-T1p4 and makefile-T1p4 (the owner's yes, 12 Nov))
+offline: test_stack_lease, test_worker_isolation_wired, test_lanes_heartbeat, test_lanes_launch: 141 passed (the merged stack_lease.sh's own reaper reaped 3 leftovers after each run)
+test-file-coverage-check 1017 files no drift; lanes-check clean; make -n test carries no '-p tests.worker_isolation'

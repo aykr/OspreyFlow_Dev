@@ -38,7 +38,8 @@ from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F40
 # reported, or failed with OSPREY_STORE_MARK=fail (tests/store_mark.py).
 # A test that calls the docker CLI skips at once, in words, where local stacks are off (T2,
 # tests/local_docker_guard.py).
-pytest_plugins = ["tests.store_mark", "tests.local_docker_guard"]
+# tests.worker_isolation: each pytest-xdist worker its own stores (admin T1 part 4); a no-op without -n.
+pytest_plugins = ["tests.store_mark", "tests.local_docker_guard", "tests.worker_isolation"]
 
 
 @pytest.fixture(autouse=True)

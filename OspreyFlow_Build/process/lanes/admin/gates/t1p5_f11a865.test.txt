@@ -1,0 +1,11 @@
+head f11a865 on main bb1c897 (the owner's five patches on main) with conftest-T1p4, makefile-T1p4 and stack-lease-T1p5 applied; stack_lease.sh offline admin (no stack), 2026-11-12
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+==== 1 failed, 12782 passed, 33 skipped, 132 warnings in 656.48s (0:10:56) =====
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+ Test Files  1 failed | 367 passed (368)
+      Tests  1 failed | 3135 passed (3136)
+Wall time: 714 s, exit 2 (no stack, no lease; set-up before it 11 s)
+exit 2
+
+Read (admin): make test's parts each ran (main's shape since 44ec30d). pytest: 12,782 passed, 1 failed, the server's GPU case alone, as the orchestrator expects with the owner's patches on main. test-js on the server: 3,135 passed, 1 failed, MatrixView.budget's first-frame budget (6,527 ms on the loaded server; a known perf-budget item, MORNING; the orchestrator's main run at 1cbc164 failed it too; it passed in the Mac's full run, t1p5_mac_f11a865.txt).

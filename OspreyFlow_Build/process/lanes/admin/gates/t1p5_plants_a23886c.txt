@@ -1,0 +1,42 @@
+# head a23886c on main 9a4a0fb with conftest-T1p4, makefile-T1p4 and stack-lease-T1p5 applied (the plants harness applies stack-lease-T1p5.diff itself); stack_lease.sh offline admin on the server (Linux, /proc and setsid real). Raw.
+Running on ospreyflow-test (stack offline, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261112T111735Z/log: bash -c cd ../OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/admin/t1/t1p5_plants.py
+applied: OspreyFlow_Build/scripts/stack_lease.sh
+applied: OspreyFlow_Build/tests/test_stack_lease.py
+control (the diff applied, no plant): green (exit 0) — 72 passed in 35.68s
+[remote runs without checking the stack is up] test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent[remote-one-down]: red (exit 1) — 1 failed in 0.62s
+[remote runs without checking the stack is up] test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent[remote-all-down]: red (exit 1) — 1 failed in 0.64s
+[remote runs without checking the stack is up] test_a_run_is_refused_when_docker_cannot_say_whether_the_stack_is_up: red (exit 1) — 1 failed in 0.70s
+[live runs without checking the stack is up] test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent[live-one-down]: red (exit 1) — 1 failed in 0.62s
+[live runs without checking the stack is up] test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent[live-all-down]: red (exit 1) — 1 failed in 0.62s
+[one container up taken for the stack up (the old stack_state's test)] test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent[remote-one-down]: red (exit 1) — 1 failed in 0.64s
+[one container up taken for the stack up (the old stack_state's test)] test_a_run_on_a_stack_not_wholly_up_is_refused_before_anything_is_sent[live-one-down]: red (exit 1) — 1 failed in 0.64s
+[docker's failure read as the stack up] test_a_run_is_refused_when_docker_cannot_say_whether_the_stack_is_up: red (exit 1) — 1 failed in 0.63s
+[the check asked of this machine, not the stack's host] test_a_run_on_a_wholly_up_stack_asks_only_its_own_containers_on_its_own_host: red (exit 1) — 1 failed in 0.62s
+[the run is not tagged] test_a_run_reaps_a_server_that_left_its_process_group: red (exit 1) — 1 failed in 8.81s
+[the run is not tagged] test_a_run_ended_by_a_signal_still_reaps_its_server: red (exit 1) — 1 failed in 8.84s
+[the run is not tagged] test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease: red (exit 1) — 1 failed in 0.63s
+[the reaper is not run when the run ends] test_a_run_reaps_a_server_that_left_its_process_group: red (exit 1) — 1 failed in 8.79s
+[the reaper is not run when the run ends] test_a_run_ended_by_a_signal_still_reaps_its_server: red (exit 1) — 1 failed in 8.85s
+[the tag matched as a prefix, so another run's processes are ended] test_reap_ends_what_a_run_whose_wrapper_was_killed_left_behind: red (exit 1) — 1 failed in 3.58s
+[every run's processes under the same home ended, not this run's alone] test_the_reaper_leaves_every_process_outside_the_run_alone: red (exit 1) — 1 failed in 4.14s
+[should-fix 3: the environment read line by line (a value holding a newline then the tag matches)] test_the_reaper_never_matches_a_tag_inside_another_value: red (exit 1) — 1 failed in 3.29s
+[reap reaps nothing] test_reap_ends_what_a_run_whose_wrapper_was_killed_left_behind: red (exit 1) — 1 failed in 9.21s
+[must-fix 4 / should-fix 6: reap ends a run whose wrapper still answers] test_reap_refuses_a_run_that_is_still_running: red (exit 1) — 1 failed in 3.03s
+[should-fix 6: reap ends a run whose wrapper was killed while its session goes on] test_reap_refuses_while_a_process_of_the_runs_session_lives_on: red (exit 1) — 1 failed in 3.07s
+[minor 10: reap says it reaped when nothing tagged was found] test_reap_says_when_no_tagged_process_was_found: red (exit 1) — 1 failed in 1.00s
+[must-fix 4: an empty tag reaps every process tagged with nothing] test_the_reaper_refuses_an_empty_tag: red (exit 1) — 1 failed in 2.91s
+[minor 10: an empty argument falls back to the caller's own tag] test_the_reaper_refuses_an_empty_tag: red (exit 1) — 1 failed in 2.89s
+[must-fix 5: no KILL pass (TERM alone)] test_the_reaper_kills_what_survives_term: red (exit 1) — 1 failed in 5.46s
+[must-fix 5: the KILL pass sent to each pid without reading it again] test_the_kill_pass_reads_each_pid_again_and_spares_one_now_another_process: red (exit 1) — 1 failed in 3.93s
+[must-fix 6: the run's folder named by the second alone] test_two_runs_of_one_lane_in_one_second_never_share_a_folder: red (exit 1) — 1 failed in 1.75s
+[should-fix 4: the start not chained on the folder's being made new] test_two_runs_named_alike_are_refused_in_words_not_shared: red (exit 1) — 1 failed in 1.29s
+[the start call's backgrounded list holding ssh's output open] test_the_start_call_returns_while_the_run_goes_on: red (exit 1) — 1 failed in 7.19s
+[should-fix 5: stop signals the wrapper alone, not the run's process group] test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed: red (exit 1) — 1 failed in 30.89s
+[should-fix 5: stop gives the run no time before the KILL] test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed: red (exit 1) — 1 failed in 3.60s
+[should-fix 5: stop writes no exit file (the follow waits, then gives up)] test_stop_ends_a_run_its_command_and_its_server_and_the_next_run_is_allowed: red (exit 1) — 1 failed in 5.15s
+took back: OspreyFlow_Build/scripts/stack_lease.sh
+took back: OspreyFlow_Build/tests/test_stack_lease.py
+control (restored, main's script): green (exit 0) — 50 passed in 5.59s
+24 plants, 31 case runs: 31 red, 0 missed, 0 harness faults
+Wall time: 186 s, exit 0 (no stack, no lease; set-up before it 13 s)
+exit 0

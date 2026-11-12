@@ -1,0 +1,9 @@
+main e59da4f, a scratch worktree; the owner's five in MORNING item 38's order, then this lane's makefile-T1p4.diff:
+  applied case-b/P12p2_CI.diff
+  applied case-b/P12p2_core_makefile.diff
+  applied admin/p10p2/ci-yml.diff
+  applied admin/p10p2/makefile.diff
+  applied merger/owner-diffs/make-test-runs-every-part.diff
+  applied admin/makefile-T1p4.diff (this lane's, sixth)
+  -p tests.worker_isolation left in the Makefile: 0
+and on main alone (not its order): error: patch failed: OspreyFlow_Build/Makefile:166

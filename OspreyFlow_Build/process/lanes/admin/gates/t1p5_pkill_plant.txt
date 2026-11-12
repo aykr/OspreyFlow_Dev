@@ -1,0 +1,8 @@
+must-fix 1's plant, by hand on the Mac at 11bde5a with the three diffs applied, 10:29Z.
+The old line was pkill -f "sleep 6". Planted here confined to the case's own process group (pkill -g <its pgid>), since this Mac runs another session's lanes_heartbeat.sh watch 60, whose sleep 60 an unconfined plant would end: the same substring match, reaching only the case's own bystander.
+--- planted:
+E           AssertionError: the case ended a bystander whose command line held 'sleep 6'
+1 failed in 1.70s
+--- restored (identical):
+1 passed in 1.70s
+--- the heartbeat watcher's sleep, after: 36586 sleep 60
