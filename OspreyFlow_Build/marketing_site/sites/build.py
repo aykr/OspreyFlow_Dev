@@ -43,7 +43,7 @@ SHOTS = {  # output name: (source file, alt text)
  'hotlist': ('mon-hotlist-inbox.jpg', 'A hotlist and the alerts it raised, each saying what it matched'),
  'pack': ('mon-alert-in-pack.jpg', 'An alert added to a report pack beside an alert trend'),
  'queue-govuk': ('ps-govuk-queue.jpg', 'The alert queue under the GOV.UK theme'),
- 'queue-osprey': ('ps-ospreyflow-queue.jpg', "The same alert queue in OspreyFlow's own look"),
+ 'queue-osprey': ('ps-ospreyflow-queue.jpg', "An alert queue in OspreyFlow's own look"),
  'matrix-govuk': ('ps-govuk-matrix.jpg', 'The Matrix view under the GOV.UK theme, with a link explained in the Inspector'),
 }
 
@@ -203,7 +203,7 @@ def org_index():
              '<h3>A UK public sector option</h3><p>The GOV.UK theme is a setting chosen at install, not a fork. '
              '<a href="public-sector.html">How it works, and what "designed to meet" means</a>.</p>', fig('rule'), flip=True))
     b += sec('Run it your way', cards([
-             ('Lite', 'One computer, for evaluation and demonstrations. Docker, 16 GB of memory, one command.'),
+             ('Lite', 'One computer, for evaluation and demonstrations. Docker, 16 GB of memory, and a few commands.'),
              ('Small', 'One server, in your cloud account or your own network, served over HTTPS; on a server of your own, with your organisation\'s sign-in.'),
              ('Enterprise', 'A Kubernetes cluster with the stores clustered and the cloud\'s managed services underneath.')]) +
              '<p class="more"><a href="get-started.html">Prerequisites and the install commands</a></p>')
@@ -215,7 +215,7 @@ def org_index():
 def org_features():
     b = hero('Features · release v0.5.0', 'Everything in OspreyFlow today',
              'Everything on this page is built and in release v0.5.0, except the section headed "On main, coming with the next release". '
-             'Screens are from demonstration deployments with synthetic data.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
+             'Screens are from demonstration deployments with synthetic data, taken before v0.5.0, and are being replaced.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
     toc = [('glass', 'The Glass'), ('studio', 'Ingest Studio'), ('monitoring', 'Rules and Monitoring'), ('boards', 'Drawing boards'),
            ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture'), ('coming', 'On main, coming next')]
     b += '<nav class="toc wrap" aria-label="On this page"><ul>' + ''.join(f'<li><a href="#{i}">{t}</a></li>' for i, t in toc) + '</ul></nav>'
@@ -269,11 +269,11 @@ def org_features():
         ('Markings and clearance', 'Handling markings on every record, a highest allowed marking per dataset, and reads filtered in the store.'),
         ('Audit', 'Who did what and when, including every export, every approval and every change to what may leave the deployment.'),
         ('Dashboards', 'Apache Superset embedded in a case with the same sign-in, reading a reporting feed.'),
-        ('Backups and updates', 'Signed releases. On one computer or a server of your own, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.')]), 'tint', 'admin')
+        ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.')]), 'tint', 'admin')
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
-        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage, LiteLLM as the model gateway.')]) +
+        ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
     b += sec('On main, coming with the next release', ul([
         'A profile for shared government Kubernetes platforms: one namespace, the platform\'s managed services, non-root containers and a single-copy shape for a proof of concept. Not yet installed on a platform.',
@@ -286,7 +286,7 @@ def org_features():
 def public_sector(site):
     b = hero('UK public sector', 'OspreyFlow for the UK public sector',
              'The whole product under the GOV.UK Design System\'s look, for services on a gov.uk domain, with government security markings, '
-             'need-to-know access and a full audit trail.',
+             'need-to-know access and a full audit trail. Everything on this page is in release v0.5.0.',
              [('get-started.html', 'Install with a GOV.UK starter', 'primary')] if site == 'org' else [('contact.html', 'Talk to Solirius Reply', 'primary'), (ORG + '/get-started.html', 'Install it yourself', '')],
              site, art=False)
     b += sec('What "designed to meet" means', f'<p class="callout">{GDS}</p>')
@@ -297,8 +297,8 @@ def public_sector(site):
         "<strong>Your service's name, not ours.</strong> The install asks for the service's name, the organisation and the phase.",
         '<strong>Switch back at any time.</strong> Nothing about the data or the cases changes.',
         '<strong>The four places in the GOV.UK header,</strong> with the banner as a GOV.UK notification banner.']), fig('network-govuk')), 'tint')
-    b += sec('One setting changes the look, and nothing else', '<div class="pair">' + fig('queue-govuk', 'The alert queue under the GOV.UK theme.') +
-             fig('queue-osprey', "The same screen in OspreyFlow's own look.") + '</div>')
+    b += sec('One setting changes the look', '<div class="pair">' + fig('queue-govuk', 'The alert queue under the GOV.UK theme.') +
+             fig('queue-osprey', "An alert queue in OspreyFlow's own look.") + '</div>')
     b += sec('Starters: a theme and a domain in one command',
         '<div class="tablewrap"><table><caption>The ten starters</caption><thead><tr><th scope="col">Domain</th><th scope="col">OspreyFlow theme</th><th scope="col">GOV.UK theme</th></tr></thead><tbody>' +
         ''.join(f'<tr><th scope="row">{d}</th><td><code>ospreyflow-{k}</code></td><td><code>govuk-{k}</code></td></tr>' for d, k in
@@ -306,7 +306,7 @@ def public_sector(site):
         '</tbody></table></div><pre><code>ospreyflow install --mode lite --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "Your organisation"</code></pre>'
         '<p>Each starter except Blank comes with its own synthetic demonstration data.</p>', 'tint')
     b += sec('What a security or architecture team will ask', cards([
-        ('Where does the data live?', "Inside your own cloud account or data centre. The deployment does not call out on its own: the install downloads its images and model, and anything else, such as a hosted model or your organisation's sign-in, is switched on by an administrator."),
+        ('Where does the data live?', "Inside your own cloud account or data centre. The deployment does not call out on its own: the install downloads its images and model, a server fetches its own certificate, and anything else, such as a hosted model or your organisation's sign-in, is switched on by an administrator."),
         ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store, so a hidden record leaves no trace in a count.'),
         ('Can a finding be traced?', 'Every link keeps its source, its record and when it arrived. Every export and approval is in the audit.'),
         ('What about models?', 'Local by default. A hosted engine receives material only when the dataset and the handling code both allow it.'),
@@ -315,7 +315,8 @@ def public_sector(site):
     return page(site, 'public-sector.html', 'UK public sector · OspreyFlow', 'OspreyFlow under the GOV.UK theme: designed to meet the GDS Service Standard, with security markings, need-to-know access and audit.', b)
 
 def org_start():
-    b = hero('Get started', 'Install OspreyFlow', 'One command per computer, then a check, then the install. Lite runs on one machine and is the place to start.',
+    b = hero('Get started · release v0.5.0', 'Install OspreyFlow', 'One command per computer, then a check, then the install. Lite runs on one machine and is the place to start. '
+             'Everything on this page is in release v0.5.0.',
              [(REPO, 'Open the repository', 'primary')], 'org', art=False)
     b += sec('Three commands', f'<pre><code>git clone {REPO}.git\ncd OspreyFlow\nsh install.sh</code></pre>'
         '<p>On Windows, run <code>install.ps1</code>. Then:</p>'
@@ -324,7 +325,7 @@ def org_start():
     b += sec('What each mode needs', '<div class="tablewrap"><table><thead><tr><th scope="col">Mode</th><th scope="col">What you need</th></tr></thead><tbody>'
         '<tr><th scope="row">Lite: one machine</th><td>Docker, 16 GB of memory for Docker (32 GB is comfortable), 60 GB of free disk, Git, and internet for the first install.</td></tr>'
         '<tr><th scope="row">Small: one server in your cloud</th><td>An AWS or Azure account, OpenTofu, that cloud\'s command line, Git, uv and a DNS name you control.</td></tr>'
-        '<tr><th scope="row">Small: your own server</th><td>One Linux server (amd64) with 32 GB of memory, Docker, Git, uv and Python 3.12, port 443, three names in your DNS and a certificate for them.</td></tr>'
+        '<tr><th scope="row">Small: your own server</th><td>One Linux server (amd64) with 32 GB of memory, Docker, Git, uv and Python 3.12, port 443, three names in your DNS and a certificate for them, and access to the releases and their images (or your own mirror).</td></tr>'
         '<tr><th scope="row">Enterprise: Kubernetes</th><td>An EKS or AKS cluster, or the account to build one, with the cloud\'s managed PostgreSQL, Valkey and object store.</td></tr>'
         '</tbody></table></div><p><code>ospreyflow doctor</code> checks these for the mode you choose and says what to fix.</p>', 'tint')
     b += sec('Demonstration data', '<p>Each starter except Blank loads synthetic demonstration cases, so there is something to explore straight away. '
@@ -332,7 +333,8 @@ def org_start():
     b += sec('The guides', cards([
         ('Installation and Administration Guide', 'Choosing a mode, installing, people and accounts, backups, updates and every setting.'),
         ('User Guide', 'Cases, the network, map, timeline and reports, alerts and watches, and how what you see is decided.'),
-        ('Developer Guide', 'The Ingest Studio from a first pipeline to a scheduled one, the domain model, screening lists and the API.')]) +
+        ('Developer Guide', 'The Ingest Studio from a first pipeline to a scheduled one, the domain model, screening lists and the API.'),
+        ('Architecture Guide', 'How it is built, what crosses each boundary and how access is enforced, for architects and security reviewers.')], 4) +
         f'<p>Each is in the repository\'s <code>docs/</code> folder, as Markdown and as a PDF with screenshots. <a href="{REPO}">Open the repository</a>.</p>', 'tint')
     b += sec('Releases', '<p>A checkout of a release tag installs that release\'s own signed images. Nothing checks for updates on its own, '
         'because the deployment never calls out; ask with <code>ospreyflow update --check</code>.</p>')
@@ -368,20 +370,20 @@ def org_contribute():
         ('Try it and tell us', 'Install Lite with a starter, work through a demonstration case, and open an issue for anything that confused you or broke.'),
         ('Connectors and recipes', 'A connector reads one kind of source; a recipe maps it to a domain model. Each is a small, self-contained file with its own test.'),
         ('Domain models', 'Crime, anti-money laundering, fraud and cyber ship today. A model for another field is a contribution in itself.'),
-        ('Guides', 'The three guides live in the repository as Markdown. Corrections and clearer wording are reviewed like code.'),
+        ('Guides', 'The guides live in the repository as Markdown. Corrections and clearer wording are reviewed like code.'),
         ('Adapters', 'Each of the four ports has a conformance suite. An adapter for another engine is supported once it passes it.'),
-        ('Accessibility', 'Every screen is scanned in each theme. Reports from people using assistive technology are especially valuable.')]))
+        ('Accessibility', 'The screens are scanned automatically in the light and dark themes. Reports from people using assistive technology are especially valuable.')]))
     b += sec('What we ask of a change', ul([
         '<strong>Synthetic data only.</strong> No real person\'s data in a test, a fixture, a screenshot or an issue.',
         '<strong>A test that fails first.</strong> A fix arrives with a test that fails without it.',
         '<strong>Access control is never weakened.</strong> A read that skips the viewer\'s access is refused at review.',
         '<strong>Plain words on screen.</strong> A refusal says what was refused and why, in words a person can act on.',
-        '<strong>You have the right to submit it.</strong> Contributions are made under the Apache License 2.0, with a sign-off saying so.']), 'tint')
+        '<strong>You have the right to submit it.</strong> Contributions are made under the Apache License 2.0.']), 'tint')
     b += sec('How a change is reviewed', '<ol class="steps"><li>Open an issue describing the problem, or comment on an existing one.</li>'
-        '<li>Open a pull request. The automated checks run: tests, licence checks, accessibility scans and image scans.</li>'
+        '<li>Open a pull request. Before it is merged, the project\'s checks run on it: tests, licence checks, accessibility scans and image scans.</li>'
         '<li>A maintainer reviews it. A change to access control or to what may leave a deployment gets a second reviewer.</li>'
         '<li>Once merged, it ships in the next release and is named in the change log.</li></ol>'
-        '<p class="note">The repository\'s contributing guide and code of conduct are being added with the next release. Until then, open an issue to start a conversation.</p>')
+        '<p class="note">The repository\'s contributing guide and code of conduct are not yet in the repository. Until then, open an issue to start a conversation.</p>')
     b += sec('Security', f'<p>Please do not open a public issue for a security problem. Report it privately to <a href="mailto:{MAILBOX}">{MAILBOX}</a>. '
         "Put 'OspreyFlow security' in the subject.</p>", 'tint')
     return page('org', 'contribute.html', 'Contribute · OspreyFlow', 'How to contribute to OspreyFlow: where to start, what a change needs and how it is reviewed.', b)
@@ -403,7 +405,7 @@ def org_governance():
         'A disagreement is settled by the person who answers for that area, and the decision is written down.',
         'The open-source product is the whole product. Solirius Reply sells services around it, not a separate edition.']))
     b += sec('Changing this', '<p>This page describes how the project runs today, with a small founding team. As contributors join, it will change, '
-        'and changes will be proposed in the open. <span class="note">A governance file and a list of maintainers are being added to the repository with the next release.</span></p>', 'tint')
+        'and changes will be proposed in the open. <span class="note">A governance file and a list of maintainers are not yet in the repository.</span></p>', 'tint')
     return page('org', 'governance.html', 'Governance · OspreyFlow', 'Who decides what in the OspreyFlow project: the steward, the project leads and maintainers.', b)
 
 # ------------------------------------------------------------------ ospreyflow.net
@@ -492,7 +494,7 @@ def net_services():
         ('The configuration', 'Your domain models, pipelines and rules are files you own and can read.')]), 'tint')
     b += sec('Deployment options', cards([
         ('Your cloud account', 'AWS or Azure, on one server or a Kubernetes cluster, using the cloud\'s managed services.'),
-        ('Your own data centre', 'One Linux server or a cluster in your network, with your own certificates. Air-gapped if you need it.'),
+        ('Your own data centre', 'One Linux server or a cluster in your network, with your own certificates.'),
         ('A shared government platform', 'A profile for shared Kubernetes platforms is arriving with the next release.')]))
     b += sec('Who we are', f'<p>Solirius Reply created OspreyFlow and leads its development. <a href="{ORG}/team.html">Meet the team</a> on the project\'s own site.</p>', 'tint')
     return page('net', 'services.html', 'Services · OspreyFlow', 'How Solirius Reply helps organisations adopt OspreyFlow: a pilot, a build, and running it.', b)
@@ -528,7 +530,7 @@ pre{background:var(--ink);color:#F1ECDF;padding:18px 20px;border-radius:6px;over
 .top nav a:hover,.top nav a[aria-current]{border-bottom-color:var(--amber)}
 .hero{padding:72px 0 64px;border-bottom:1px solid var(--line)}.hero.plain{padding:56px 0 40px}
 .hero .grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:48px;align-items:center}.hero.plain .grid{grid-template-columns:minmax(0,820px)}
-.kicker{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);font-weight:600;margin:0}
+.kicker{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:#8C5208;font-weight:600;margin:0}
 .lede{font-size:1.2rem;color:var(--ink2);max-width:42em}
 .motif{width:100%;max-width:460px;height:auto;display:block;margin:0 auto}
 .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:1.6em}

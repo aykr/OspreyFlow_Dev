@@ -62,7 +62,9 @@ CREDENTIAL = re.compile(
 #: organisation's shared mailbox, for enquiries on .net and security reports on .org.
 ADDRESSES = {"servicecentre@solirius.com"}
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-PLACEHOLDER = re.compile(r'class="fill"|\bto (?:be )?add(?:ed)?\b', re.IGNORECASE)
+#: The drafts' highlighted gaps (`class="fill"`), build.py's own placeholder card (`class="person placeholder"`), and
+#: a gap written in words.
+PLACEHOLDER = re.compile(r'class="[^"]*\b(?:fill|placeholder)\b|\bto (?:be )?add(?:ed)?\b', re.IGNORECASE)
 #: Planted in the client check's cases: synthetic, its hash the first line of `client_names.sha256`.
 SYNTHETIC_CLIENT = "Example Shire Constabulary"
 
@@ -111,10 +113,17 @@ def names(root: Path, pattern: re.Pattern[str]) -> list[str]:
     return [f"{_id(p)}: {m.group(0)!r}" for p in pages(root) for m in pattern.finditer(page_text(p))]
 
 
+def _readable(page: Path) -> str:
+    """What the page shows, and every attribute's value too (an address, a file name, an email address)."""
+    source = page.read_text(encoding="utf-8")
+    values = re.findall(r'\b[a-z-]+="([^"]*)"', source, flags=re.IGNORECASE)
+    return page_text(page) + " . " + " . ".join(html.unescape(v) for v in values)
+
+
 def clients(root: Path) -> list[str]:
     """Each page carrying a name in `client_names.sha256`, by its hash alone, so a failure names no client."""
     held = client_hashes.known()
-    return [f"{_id(p)}: {h[:12]}…" for p in pages(root) for h in sorted(client_hashes.named(page_text(p), held))]
+    return [f"{_id(p)}: {h[:12]}…" for p in pages(root) for h in sorted(client_hashes.named(_readable(p), held))]
 
 
 def in_source(root: Path, pattern: re.Pattern[str]) -> list[str]:
@@ -147,16 +156,33 @@ def _parse(page: Path) -> _Links:
     return parser
 
 
+#: In a style sheet, a page's `<style>` or a `style="…"`: a fetch from another host, or an import.
+OUTSIDE_IN_CSS = re.compile(r"url\(\s*['\"]?\s*(?:[a-z][a-z0-9+.-]*:)?//[^)]*\)|@import", re.IGNORECASE)
+
+
+def _elsewhere(value: str) -> bool:
+    """An address on another host: with a scheme (`https://…`) or protocol-relative (`//…`)."""
+    parts = urlsplit(value.strip())
+    return bool(parts.scheme or parts.netloc)
+
+
 def requests_outside(root: Path) -> list[str]:
     """No script, and nothing the browser fetches by itself (a style sheet, an image, a font) from elsewhere."""
     found = [f"{_id(p)}: <script>" for p in pages(root) if "<script" in p.read_text(encoding="utf-8").lower()]
     for p in pages(root):
+        source = p.read_text(encoding="utf-8")
         for tag, attribute, value in _parse(p).links:
-            if tag != "a" and urlsplit(value).scheme:
+            if tag != "a" and _elsewhere(value):
                 found.append(f"{_id(p)}: <{tag} {attribute}={value!r}>")
+        for srcset in re.findall(r'\bsrcset="([^"]*)"', source, flags=re.IGNORECASE):
+            found += [f"{_id(p)}: srcset {c!r}" for c in (part.split()[0] for part in srcset.split(",") if part.strip())
+                      if _elsewhere(c)]  # fmt: skip
+        inline = re.findall(r"<style\b[^>]*>(.*?)</style>", source, flags=re.DOTALL | re.IGNORECASE)
+        inline += [html.unescape(v) for v in re.findall(r'\bstyle="([^"]*)"', source, flags=re.IGNORECASE)]
+        found += [f"{_id(p)}: {m}" for css in inline for m in OUTSIDE_IN_CSS.findall(css)]
     for site in DOMAINS:
         css = (root / site / "assets" / "site.css").read_text(encoding="utf-8")
-        found += [f"{site}/assets/site.css: {m}" for m in re.findall(r"url\(\s*['\"]?(?:https?:)?//[^)]*\)|@import", css)]
+        found += [f"{site}/assets/site.css: {m}" for m in OUTSIDE_IN_CSS.findall(css)]
     return found
 
 
@@ -177,6 +203,10 @@ def broken_links(root: Path) -> list[str]:
                 target = root / site / (parts.path.lstrip("/") or "index.html")
             else:
                 target = (page.parent / parts.path).resolve() if parts.path else page
+                if not target.is_relative_to(page.parent.resolve()):
+                    # Published alone, a site holds nothing above its own folder.
+                    found.append(f"{_id(page)}: <{tag}> {value!r} leaves the site's folder")
+                    continue
             if not target.is_file():
                 found.append(f"{_id(page)}: <{tag}> {value!r} reaches no file")
             elif parts.fragment and parts.fragment not in ids.get(target, _parse(target).ids if target.suffix == ".html" else set()):
@@ -293,6 +323,20 @@ def test_the_client_check_reads_a_name_split_by_markup_and_marks(sites: Path) ->
     assert _red("client", sites)
 
 
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        "<p>E.X.A.M.P.L.E. Shire Constabulary</p>",
+        "<p>Ex\u00e1mple Shire Constabulary</p>",
+        "<p>Ex&shy;ample Shire Con&#x200b;stabulary</p>",
+        '<p><a href="https://example-shire-constabulary.example/">A link</a></p>',
+    ],
+)
+def test_the_client_check_reads_dots_accents_invisible_characters_and_addresses(sites: Path, fragment: str) -> None:
+    _plant(sites / "net" / "index.html", fragment)
+    assert _red("client", sites)
+
+
 def test_the_local_path_check_flags_one_in_an_address(sites: Path) -> None:
     _plant(sites / "org" / "get-started.html", '<p><a href="file:///Users/someone/guide.pdf">The guide</a></p>')
     assert _red("local path", sites)
@@ -304,6 +348,13 @@ def test_the_local_path_check_flags_one_in_an_address(sites: Path) -> None:
 def test_the_credential_check_flags_each_shape(sites: Path, secret: str) -> None:
     _plant(sites / "org" / "get-started.html", f"<pre><code>{secret}</code></pre>")
     assert _red("credential", sites)
+
+
+def test_the_placeholder_check_flags_build_pys_placeholder_card(sites: Path) -> None:
+    _plant(sites / "org" / "team.html",
+           '<article class="person placeholder"><div class="avatar" aria-hidden="true"></div><div><h3>Maintainer</h3>'
+           '<p class="role">Maintainer</p></div></article>')  # fmt: skip
+    assert _red("placeholder", sites)
 
 
 def test_the_placeholder_check_flags_the_drafts_highlight(sites: Path) -> None:
@@ -323,6 +374,21 @@ def test_the_request_check_flags_a_script_and_a_font_from_elsewhere(sites: Path)
     assert any("<script>" in v for v in found) and any("site.css" in v for v in found)
 
 
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        '<link rel="stylesheet" href="//fonts.example/a.css">',
+        '<img src="//images.example/a.jpg" alt="">',
+        '<img src="assets/communities.jpg" srcset="assets/communities.jpg 1x, https://images.example/a.jpg 2x" alt="">',
+        '<div style="background:url(https://images.example/a.jpg)"></div>',
+        '<style>.hero{background:url(//images.example/a.jpg)}</style>',
+    ],
+)
+def test_the_request_check_flags_each_other_way_out(sites: Path, fragment: str) -> None:
+    _plant(sites / "net" / "services.html", fragment)
+    assert _red("request outside", sites)
+
+
 def test_the_request_check_flags_an_image_from_elsewhere(sites: Path) -> None:
     _plant(sites / "org" / "team.html", '<img src="https://images.example/a.jpg" alt="">')
     assert _red("request outside", sites)
@@ -332,6 +398,14 @@ def test_the_link_check_flags_a_missing_page_and_a_missing_anchor(sites: Path) -
     _plant(sites / "org" / "index.html", '<a href="pricing.html">Pricing</a><a href="features.html#ports">Ports</a>')
     found = _red("broken link", sites)
     assert any("pricing.html" in v for v in found) and any("#ports" in v for v in found)
+
+
+@pytest.mark.parametrize("href", ["../build.py", "../net/contact.html", "../../README.md"])
+def test_the_link_check_flags_a_link_out_of_the_sites_folder(sites: Path, href: str) -> None:
+    (sites / "build.py").write_text("")
+    (sites.parent / "README.md").write_text("")
+    _plant(sites / "org" / "index.html", f'<a href="{href}">Out</a>')
+    assert any("leaves the site's folder" in v for v in _red("broken link", sites))
 
 
 def test_the_link_check_follows_a_link_to_the_other_site(sites: Path) -> None:

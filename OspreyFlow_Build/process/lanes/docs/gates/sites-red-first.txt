@@ -13,4 +13,13 @@ FAILED tests/test_sites.py::test_the_pages_are_build_pys_output - AssertionError
 
 # Added with item 3: installs_without_a_mode, run against the drafts as delivered (8fecd8d, unpacked into the scratchpad): red on both public-sector pages, the command the install refuses ('Say which mode to install').
 ['net/public-sector.html: 'ospreyflow install --starter govuk-crime …', 'org/public-sector.html: 'ospreyflow install --starter govuk-crime …']
-# After item 3's corrections: tests/test_sites.py 43 passed; with tests/test_website_wording.py, 74 passed.
+# After item 3's corrections, at ccc0521 (12 November 2026, about 17:40 UK): tests/test_sites.py 43 passed; with tests/test_website_wording.py, 74 passed.
+
+# After the lane-reviewer's round: thirteen new cases, run against the checks as they stood at ccc0521 (that commit's
+# test_sites.py and client_hashes.py, in a scratch tree, the new cases' CHECKS replaced by the old), all red; then
+# against the new checks, green. Each names a hole the reviewer found.
+FAILED test_the_client_check_reads_dots_accents_invisible_characters_and_addresses[E.X.A.M.P.L.E.] [an accent] [&shy; and a zero-width space] [an address]
+FAILED test_the_placeholder_check_flags_build_pys_placeholder_card
+FAILED test_the_request_check_flags_each_other_way_out[//… stylesheet] [//… image] [srcset] [style="url(…)"] [<style>]
+FAILED test_the_link_check_flags_a_link_out_of_the_sites_folder[../build.py] [../net/contact.html] [../../README.md]
+13 failed, 43 deselected

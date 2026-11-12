@@ -11,9 +11,10 @@ anywhere else. The current six-page site, in `../deploy/`, is separate and uncha
 ## How they are made
 
 `build.py` writes every page and both style sheets. Its output in `org/` and `net/` is committed, because it is what
-GitHub Pages will serve and what the tests read. Change a page by changing `build.py`, then run it:
+GitHub Pages will serve and what the tests read. Change a page by changing `build.py`, then run it with Python 3.12
+or later (the repository's own; macOS's `python3` is older and cannot read it):
 
-    python3 OspreyFlow_Build/marketing_site/sites/build.py
+    OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/marketing_site/sites/build.py
 
 `tests/test_sites.py` fails when a committed page differs from what `build.py` writes. Run it before committing.
 
@@ -27,8 +28,15 @@ demonstration after Friday 13 November (item 6). Captures use synthetic data onl
 - The product's statement, and "Solirius Reply".
 - "Designed to meet the GDS Service Standard", never a status only an assessment panel gives. The three checks are
   named as planned wherever the Standard is named.
-- No client named. The names are held only as SHA-256 hashes in `../client_names.sha256`, so this repository never
-  names them. The owner adds them with `../client_hashes.py`, which prints a count and never a name.
+- No client named. The names are held only as SHA-256 hashes in `../client_names.sha256`, so the repository does not
+  spell them out. The owner adds them with `../client_hashes.py`, which prints a count and never a name. **A hash is
+  not a secret**: anyone who hashes a list of candidate names (UK police forces, departments) can tell which ones are
+  in the file. If that matters, the file can stay out of git, as `real_data_exceptions.yaml` does, or use a keyed hash
+  with the key held outside the repository. Either way the check then runs only where the file or key is present.
+  The owner decides before a real name is added.
+- The check reads what a page shows and every attribute's value (an address, a file name), with accents folded,
+  invisible characters dropped and an abbreviation's full stops removed. It does not see a name broken by a tag in
+  the middle of a word.
 - No competitor named. i2 is not named until an ADR deciding it is accepted. Laurium is not named (the owner's
   decision, 12 November 2026).
 - No local path, no credential and no placeholder. The only email address is `servicecentre@solirius.com`.
@@ -57,8 +65,9 @@ is in `process/lanes/docs/gates/sites-red-first.txt`.
 The current site is the product repository's `gh-pages` branch, at `https://aykr.github.io/OspreyFlow/`.
 Recommendation: **redirect it, then retire it**.
 
-1. **On the day the new sites are live**, publish a replacement for each of the current site's six pages, from the
-   same branch and under the same name. Each replacement is a small page that sends the reader on. It uses a meta
+1. **On the day the new sites are live**, publish a replacement for each of the four pages the publish script puts
+   on that branch (`index.html`, `intro-video.html`, `public-sector.html`, `monitoring.html`), under the same
+   name. `drawing-boards.html` and `three-places.html` are in `../deploy/` but have never been published. Each replacement is a small page that sends the reader on. It uses a meta
    refresh, a canonical link and a visible link, with no script. GitHub Pages cannot send a server redirect, so
    this is the nearest it allows.
 
@@ -67,8 +76,6 @@ Recommendation: **redirect it, then retire it**.
    | `index.html` | `https://ospreyflow.org/` |
    | `public-sector.html` | `https://ospreyflow.org/public-sector.html` |
    | `monitoring.html` | `https://ospreyflow.org/features.html#monitoring` |
-   | `drawing-boards.html` | `https://ospreyflow.org/features.html#boards` |
-   | `three-places.html` | `https://ospreyflow.org/index.html` |
    | `intro-video.html` | `https://ospreyflow.org/index.html` |
 
    The new sites carry no video. The animated overview stays in this repository, and whether it comes back on
@@ -77,7 +84,7 @@ Recommendation: **redirect it, then retire it**.
 3. **After six months**, the owner switches Pages off for the product repository and deletes `gh-pages`. Six months
    lets links in decks, emails and search results catch up.
 4. **In this repository, when the redirects are published:**
-   - `../deploy/` is reduced to the six redirect pages;
+   - `../deploy/` is reduced to the four redirect pages;
    - `test_website_wording.py`'s checks of the current pages are retired, since `test_sites.py` already holds the
      same rules for the new pages;
    - the publish script's default path publishes the redirects.

@@ -16,6 +16,7 @@ import getpass
 import hashlib
 import re
 import sys
+import unicodedata
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -24,10 +25,18 @@ HASHES = Path(__file__).with_name("client_names.sha256")
 LONGEST = 6
 
 
+#: Characters a page can hold inside a word without showing them: a soft hyphen and the zero-width ones.
+INVISIBLE = re.compile("[\u00ad\u200b-\u200d\u2060\ufeff]")
+
+
 def normalise(text: str) -> str:
-    """Lower case, `&` read as "and", every other mark a space, runs of space one: "H.M. Example & Co" and
-    "hm example and co" are the same name."""
-    text = text.lower().replace("&", " and ")
+    """Accents folded ("Société" is "societe"), invisible characters dropped, lower case, a full stop after a
+    lone letter dropped so an abbreviation reads as one word ("H.M.P." is "hmp"), `&` read as "and", every other
+    mark a space, and runs of space one: "H.M. Example & Co" and "hm example and co" are the same name."""
+    text = unicodedata.normalize("NFKD", INVISIBLE.sub("", text))
+    text = "".join(c for c in text if not unicodedata.combining(c)).lower()
+    # A full stop after a lone letter is an abbreviation's; any other separates words (a domain's).
+    text = re.sub(r"(?<![a-z0-9])([a-z])\.", r"\1", text).replace("&", " and ")
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
 
 
