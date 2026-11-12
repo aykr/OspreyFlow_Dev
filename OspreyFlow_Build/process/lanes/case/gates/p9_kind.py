@@ -685,18 +685,20 @@ class Run:
         (`ospreyflow.io/shared`), standing for the Conduit and the workers."""
         values = self.values()
         security = values.get("podSecurity") or {"user": 10001, "group": 10001}
-        apply(
-            {
-                "apiVersion": "v1",
-                "kind": "PersistentVolumeClaim",
-                "metadata": {"name": "ospreyflow-ingest", "namespace": self.ns},
-                "spec": {
-                    "accessModes": ["ReadWriteOnce"],
-                    "storageClassName": values["storage"]["className"],
-                    "resources": {"requests": {"storage": "1Gi"}},
-                },
-            }
-        )
+        # The chart makes the claim itself since P7b (`storage.claims`); made here only if missing.
+        if not kubectl("-n", self.ns, "get", "pvc", "ospreyflow-ingest", "--ignore-not-found", "-o", "name").strip():
+            apply(
+                {
+                    "apiVersion": "v1",
+                    "kind": "PersistentVolumeClaim",
+                    "metadata": {"name": "ospreyflow-ingest", "namespace": self.ns},
+                    "spec": {
+                        "accessModes": ["ReadWriteOnce"],
+                        "storageClassName": values["storage"]["className"],
+                        "resources": {"requests": {"storage": "1Gi"}},
+                    },
+                }
+            )
         if kubectl(
             "-n", self.ns, "get", "pod", "p9-shared", "--ignore-not-found", "-o", "name"
         ).strip():

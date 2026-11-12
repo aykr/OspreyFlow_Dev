@@ -152,6 +152,13 @@ deploy() {
   kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
   DRIVER standin
   DRIVER secrets
+  # Since P7b the chart makes the Ingest root's claim itself; one made by an earlier run here is
+  # adopted into the release (Helm's own ownership marks), its data kept.
+  if kubectl -n "$NS" get pvc ospreyflow-ingest >/dev/null 2>&1; then
+    kubectl -n "$NS" label pvc ospreyflow-ingest app.kubernetes.io/managed-by=Helm --overwrite
+    kubectl -n "$NS" annotate pvc ospreyflow-ingest meta.helm.sh/release-name=ospreyflow \
+      meta.helm.sh/release-namespace="$NS" --overwrite
+  fi
   helm upgrade --install ospreyflow /chart -n "$NS" -f /render/values.yaml
   DRIVER patch
   for s in clickhouse-keeper clickhouse arcadedb; do kubectl -n "$NS" rollout status "statefulset/$s" --timeout=600s; done
