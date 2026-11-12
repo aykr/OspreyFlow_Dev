@@ -1,0 +1,16 @@
+Triage of d7f7f29.live.txt (35 failed, 3455 passed, 94 skipped; stack b, rules' lease, 12 Nov 2026, after the
+orchestrator's verification of e911b90). None is in a file this branch changes. The 35 are the same
+tests, failing the same ways, as the 35 environmental failures of 00b24cc.live.triage.txt (the
+lists of FAILED lines compared, the two fixed test_kyc_rules.py cases there aside: identical):
+- 9 port guard refusing stack a's valkey on 6379 (test_worker x3, test_ws_ticket x5, resolve/test_trigger);
+- 13 no model or stanza service on stack b (model_port x3, vision x1, recognise_port x4, golden set,
+  phase 6, witness statement);
+- 10 test_apply_env (the apply harness on the server; the demo analyst's studio roles, main's);
+- 4 test_media_blob (no Azure blob settings);
+- test_phase8_exit_criterion_end_to_end (fails at main alike).
+test_route_rights.py and every live file this change reaches (test_kyc_rules.py, the screening list
+store, routes, refresh and schedule files, test_custom_roles_store.py, test_analytics_clickhouse.py,
+the analytics conformance suite) had no failure in this run. test_disable_list_schedules.py, new, was
+not among the files the live selector chose (tools/live_select.py); it ran green on the same stack and
+code in the live plants' built and restored selections (lists/AM7_LIVE_RECORD.txt, 103 passed each),
+and red under its plants L24 and L25.
