@@ -14,3 +14,4 @@ orchestrator	your laptop	rebuild your local deployment after the whole build	aft
 demo	rebuild	the demo lane (sol) rebuilds osprey-small from main once studio carries lands: backup done and verified; then install, demo accounts, five packs, the owner's checks	12 Nov, checks reported by 20:00	A
 
 docs	D2e	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
+docs	sites	the two new websites: recommendation and diffs first, then the build on the Mac; screenshots after Friday	13 Nov	B

@@ -1,31 +1,49 @@
-# Docs lane · brief D2c part 4 · the model route on the cloud-platform profile (P11), then D2c closes (S)
+# Docs lane · brief sites · the two new websites, ospreyflow.org and ospreyflow.net (Housekeeping)
 
-Written by the orchestrator, 12 November 2026, at the owner's request, for a **fresh docs session on `sol`**, from
-**main** (`git fetch`, branch `lane/docs-d2c4` from `main`). Read BRIEF_D2c.md, ADR-135 Amendments 4, 7 and 8
-(P11 parts 1 and 2 as built), and the guide's §6a, §10.1 and Appendix A first. Opus, medium. Size S.
+Written by the orchestrator, 12 November 2026, at the owner's request, for the docs session on `sol`, from **main**
+(branch `lane/docs-sites` from `main`). D2c is closed (its last brief is BRIEF_D2c4.md). Opus, medium.
 
-**Why:** P11 merged on 11 November, but §6a has no section on the model route: it shows only in Appendix A
-(1.77), §10.1 (1.78), the gateway's line in §6a.1 and 1.80's alignment. The owner wants it written now, so the
-Client install view shows only what is truly left. P8's section is a step of its own after the client's install
-(D2e), not part of this one.
+**Priority and the server.** The demo rebuild tonight, rules' lists, GitHub CI and the v0.5.1 release keep priority
+for the server, merges and reviews. This step needs no server at all: everything here runs on the Mac. Nothing of it
+runs on the server, and never from 12:00 UK on Friday 13 November. Item 6 (screenshots) waits until after Friday's
+demo. Not pushed; nothing published; no repository created.
 
-**Write, in both copies (OspreyFlow_Core/docs/administration-guide.md §6a, and spec/10_ADMINISTRATION_GUIDE.md word
-for word):** a new §6a subsection, *The model route*, before *Coming*, as built and in an operator's words:
-- the model gateway (LiteLLM), always rendered; how the namespace reaches the client's own approved gateway, or
-  Bedrock by the namespace's IAM role (no key stored anywhere), with the settings (`models.provider(s).kind`,
-  `auth`, `region`) and the region answer;
-- the Terraform it renders for Bedrock (the role's statements), and what the platform team applies;
-- the egress rows the route needs, and what Admin › Models allows and refuses on this profile (§10.1's refusal
-  words, with the render-again, `helm upgrade`, Terraform order the guide now gives);
-- Laurium's key on the gateway, as already said in §6a.1, cross-referenced rather than repeated;
-- what is not yet tried against the client's own gateway or account (the live checks), said as such.
-Check every claim against the code on main (harness/cloud_platform/*, services/api/model_admin.py, packages/schemas/
-deployment.py), with the file and line in your report. Remove anything about the model route from §6a.9 *Coming*
-that is now built.
+**The owner's request, verbatim (it governs):**
 
-Version row 1.88, in an operator's words, with ADR references only (no P-numbers or lane names), ending
-"PDF made by the orchestrator at merge". Docs gates on the Mac: test_admin_guide; test_docs_pdf red for the admin
-PDF alone. One lane-reviewer round, then send "ready". Not pushed; the orchestrator merges.
+> Take over the two new websites. The drafts are in "Claude outputs/ospreyflow_sites_2026-11-12.zip": ospreyflow.org
+> (7 pages, the open-source project) and ospreyflow.net (5 pages, Solirius Reply's services), with build.py, which
+> generates both. Static files, no external requests, no script.
+>
+> 1. Bring them into OspreyFlow_Build/marketing_site as two sites beside the current one. Recommend whether to keep
+>    build.py as the generator or keep the pages hand-written, and say why. Do not change or remove the current
+>    six-page site yet.
+> 2. Hold every new page to the existing rules, with tests shown red first: the product statement and "Solirius
+>    Reply"; "designed to meet the GDS Service Standard", with the three checks planned; no client named, no
+>    competitor named, i2 only once its ADR is accepted; no local path; no credential; every internal link and
+>    anchor resolves.
+> 3. Check every factual claim on the Features, Get started and UK public sector pages against main and the guides,
+>    and correct what is wrong. Mark what is in the last release and what is only on main. List what you changed.
+> 4. The Team page names six people on purpose (my decision). The publish script's personal-identifier rule would
+>    refuse it. Propose the smallest change that allows the Team page's names and nothing else, as a diff for me.
+> 5. Publishing: each domain needs its own Pages site. Propose how publish_pages.sh publishes each site to its own
+>    repository, which I will create myself. Do not create any repository, and publish nothing until I say.
+> 6. Screenshots: replace the drafts' images with fresh captures from the rebuilt demo once it is frozen after
+>    Friday, synthetic data only, in both looks.
+> 7. Propose what happens to the current site at aykr.github.io/OspreyFlow once the new ones are live.
+>
+> Still mine to decide; leave these as they are and list them back to me: the spelling of Matthew's surname; the
+> contact address on .net and the security-report address on .org (highlighted placeholders); the "How it is
+> built" paragraph on the Team page; whether Laurium is named under "Coming next".
 
-**Never.** osprey-small (the owner's demo, being rebuilt tonight by the demo lane) is never touched. Nothing of yours
-runs on the server from 12:00 UK on Friday 13 November.
+**Order of work.**
+1. **First, within the hour, message the orchestrator** with: your recommendation for item 1 (generator or
+   hand-written, and why); item 4's diff (the smallest change to publish_pages.sh's personal-identifier rule that
+   allows the Team page's six names and nothing else, with a test that a seventh name or the same names on any
+   other page is still refused); item 5's proposal and diff (each site to its own repository, the owner creating
+   them; nothing run); and an estimate for items 1 to 3 and 7. Build nothing past reading until then.
+2. Then items 1 to 3 and 7's proposal, on the Mac, each rule's test shown red first. Then "ready".
+3. Item 6 after Friday's demo, when the orchestrator says.
+
+**Never.** No change to the current six-page site, and no publish, push or repository. No local path, credential,
+client or competitor name in any page. Leave the owner's four decisions exactly as they are. osprey-small is never
+touched.
