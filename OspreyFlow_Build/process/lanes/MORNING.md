@@ -548,8 +548,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **The demo rebuild (your word, about 11:50): osprey-small is rebuilt from main, with the guides,** once
         rules-b's "guides" has landed. That is likely 19:00–21:00, after a backup of today's state is taken first.
         This lifts v0.5.0's freeze for osprey-small for that rebuild alone; the demo then runs main as merged
-        today. Still yours to say at rebuild time: whether `local_only: false` and `sendable_handling_codes: [P]`
-        go into its osprey.yaml, for Gemini.
+        today. **Your word, about 12:00: yes, Gemini.** The rebuild's osprey.yaml gets `local_only: false` and
+        `sendable_handling_codes: [P]`, so you can add Gemini and its key yourself in Admin › Models. I never
+        handle the key.
       - **ADR-146 Am 7 is bigger than S.** No screening list carried a marking, and alerts are shown or withheld
         whole. Rules is building it at size M:
         - a list's own marking, OFFICIAL by default;

@@ -12,4 +12,4 @@ platform	P8, P9b	deferred until after the client's install	after 20 Nov	B
 admin	T1	part 5: the fixes (T1P5_FINDINGS.md) start now P10 part 2 is in	12 Nov, evening	A
 rules	UPG-check	done: v0.4.12 to v0.5.0, the CHANGELOG's steps 1–4 green on osprey-upg (12:26); two small findings; torn down	done	A
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B
-orchestrator	demo	osprey-small (the demo deployment) to be rebuilt from main with the guides, once rules-b guides lands (the owner, 12 Nov ~11:50): backup first, fresh install with a one-time code to a file, the demo packs, your Admin steps 6-7, the demo walk; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 19:00-21:00	A
+orchestrator	demo	osprey-small (the demo deployment) to be rebuilt from main with the guides, once rules-b guides lands (the owner, 12 Nov ~11:50): backup first, fresh install with a one-time code to a file and local_only false with P sendable (Gemini, the owner's word), the demo packs, your Admin steps 6-7, the demo walk; the server quiet from 12:00 UK on Fri 13 Nov	12 Nov, 19:00-21:00	A
