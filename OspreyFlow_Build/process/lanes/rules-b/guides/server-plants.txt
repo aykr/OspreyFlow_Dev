@@ -1,24 +1,2752 @@
-=== PLANT: the route's place check removed (if False and ...)
-64 failed, 13 passed in 3.08s
+# Server plants for the guides step, rerun after both reviews' fixes, 2026-11-12T11:20:33Z, at dc7b682 plus the working tree's fixes; local, closed ports, no stack.
+# Each section: the plant's diff, then pytest's own output (its progress dots alone dropped; every FAILED line and the summary kept).
+
+=================== PLANT: 1. require_guide_place's place check removed
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..36cf615 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,10 +132,11 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
++COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+ 
+ USER 10001:10001
+ EXPOSE 8000
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..6a91e21 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,22 +19126,33 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
+     known = guide_files.GUIDES.get(guide)
+     if known is None:
+         raise HTTPException(
+             status_code=status.HTTP_404_NOT_FOUND, detail=guide_files.unknown(guide)
+         )
+-    if not guide_files.opens_place(known.place, principal.roles):
++    if False and not guide_files.opens_place(known.place, principal.roles):
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+     path = folder / known.pdf
+     if not path.is_file():
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..6235e4f 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+________ test_each_guide_answers_exactly_whom_its_place_opens[analyst] _________
+
+role = 'analyst'
+as_who = (<starlette.testclient.TestClient object at 0x1119cdbe0>, [Principal(id='guide-analyst', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('analyst', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_______ test_each_guide_answers_exactly_whom_its_place_opens[compliance] _______
+
+role = 'compliance'
+as_who = (<starlette.testclient.TestClient object at 0x1122a46b0>, [Principal(id='guide-compliance', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['compliance'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('compliance', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_________ test_each_guide_answers_exactly_whom_its_place_opens[loader] _________
+
+role = 'loader'
+as_who = (<starlette.testclient.TestClient object at 0x112470560>, [Principal(id='guide-loader', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['loader'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('loader', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__________ test_each_guide_answers_exactly_whom_its_place_opens[none] __________
+
+role = 'none'
+as_who = (<starlette.testclient.TestClient object at 0x112472f30>, [Principal(id='guide-none', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('none', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+______ test_each_guide_answers_exactly_whom_its_place_opens[osprey-admin] ______
+
+role = 'osprey-admin'
+as_who = (<starlette.testclient.TestClient object at 0x112472c60>, [Principal(id='guide-osprey-admin', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['osprey-admin'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('osprey-admin', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_____ test_each_guide_answers_exactly_whom_its_place_opens[reports_viewer] _____
+
+role = 'reports_viewer'
+as_who = (<starlette.testclient.TestClient object at 0x1124702c0>, [Principal(id='guide-reports_viewer', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['reports_viewer'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('reports_viewer', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:accept_types] ___
+
+role = 'right:accept_types'
+as_who = (<starlette.testclient.TestClient object at 0x1124f78f0>, [Principal(id='guide-right:accept_types', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:accept_types'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:accept_types', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:add_ingest_files] _
+
+role = 'right:add_ingest_files'
+as_who = (<starlette.testclient.TestClient object at 0x1124f57f0>, [Principal(id='guide-right:add_ingest_files', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:add_ingest_files'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:add_ingest_files', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:administer_system] _
+
+role = 'right:administer_system'
+as_who = (<starlette.testclient.TestClient object at 0x1124f64b0>, [Principal(id='guide-right:administer_system', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:administer_system'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:administer_system', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+____ test_each_guide_answers_exactly_whom_its_place_opens[right:ask_model] _____
+
+role = 'right:ask_model'
+as_who = (<starlette.testclient.TestClient object at 0x1124f6b10>, [Principal(id='guide-right:ask_model', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:ask_model'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:ask_model', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:author_rules] ___
+
+role = 'right:author_rules'
+as_who = (<starlette.testclient.TestClient object at 0x1124f7290>, [Principal(id='guide-right:author_rules', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:author_rules'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:author_rules', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:confirm_inferred] _
+
+role = 'right:confirm_inferred'
+as_who = (<starlette.testclient.TestClient object at 0x112471970>, [Principal(id='guide-right:confirm_inferred', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:confirm_inferred'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:confirm_inferred', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:create_case] ____
+
+role = 'right:create_case'
+as_who = (<starlette.testclient.TestClient object at 0x112417380>, [Principal(id='guide-right:create_case', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:create_case'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:create_case', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:decide_held_rows] _
+
+role = 'right:decide_held_rows'
+as_who = (<starlette.testclient.TestClient object at 0x112472300>, [Principal(id='guide-right:decide_held_rows', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:decide_held_rows'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:decide_held_rows', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:deploy_rules] ___
+
+role = 'right:deploy_rules'
+as_who = (<starlette.testclient.TestClient object at 0x112516c60>, [Principal(id='guide-right:deploy_rules', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:deploy_rules'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:deploy_rules', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:draw_on_boards] __
+
+role = 'right:draw_on_boards'
+as_who = (<starlette.testclient.TestClient object at 0x112515f70>, [Principal(id='guide-right:draw_on_boards', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:draw_on_boards'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:draw_on_boards', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+____ test_each_guide_answers_exactly_whom_its_place_opens[right:edit_graph] ____
+
+role = 'right:edit_graph'
+as_who = (<starlette.testclient.TestClient object at 0x112516b10>, [Principal(id='guide-right:edit_graph', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:edit_graph'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:edit_graph', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:edit_pipelines] __
+
+role = 'right:edit_pipelines'
+as_who = (<starlette.testclient.TestClient object at 0x112516660>, [Principal(id='guide-right:edit_pipelines', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:edit_pipelines'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:edit_pipelines', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:edit_target_model] _
+
+role = 'right:edit_target_model'
+as_who = (<starlette.testclient.TestClient object at 0x112516a50>, [Principal(id='guide-right:edit_target_model', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:edit_target_model'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:edit_target_model', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+______ test_each_guide_answers_exactly_whom_its_place_opens[right:export] ______
+
+role = 'right:export'
+as_who = (<starlette.testclient.TestClient object at 0x112514f50>, [Principal(id='guide-right:export', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:export'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:export', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:export_override] __
+
+role = 'right:export_override'
+as_who = (<starlette.testclient.TestClient object at 0x112472690>, [Principal(id='guide-right:export_override', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:export_override'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:export_override', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:extract_files] ___
+
+role = 'right:extract_files'
+as_who = (<starlette.testclient.TestClient object at 0x112470830>, [Principal(id='guide-right:extract_files', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:extract_files'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:extract_files', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:investigate] ____
+
+role = 'right:investigate'
+as_who = (<starlette.testclient.TestClient object at 0x1124f4590>, [Principal(id='guide-right:investigate', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:investigate'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:investigate', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:keep_watches] ___
+
+role = 'right:keep_watches'
+as_who = (<starlette.testclient.TestClient object at 0x11256ff20>, [Principal(id='guide-right:keep_watches', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:keep_watches'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:keep_watches', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:load_screening_lists] _
+
+role = 'right:load_screening_lists'
+as_who = (<starlette.testclient.TestClient object at 0x11256ede0>, [Principal(id='guide-right:load_screening_lists', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:load_screening_lists'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:load_screening_lists', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:manage_dashboards] _
+
+role = 'right:manage_dashboards'
+as_who = (<starlette.testclient.TestClient object at 0x112473b90>, [Principal(id='guide-right:manage_dashboards', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:manage_dashboards'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:manage_dashboards', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:manage_geospatial] _
+
+role = 'right:manage_geospatial'
+as_who = (<starlette.testclient.TestClient object at 0x112472ea0>, [Principal(id='guide-right:manage_geospatial', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:manage_geospatial'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:manage_geospatial', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:manage_models] ___
+
+role = 'right:manage_models'
+as_who = (<starlette.testclient.TestClient object at 0x1124f78f0>, [Principal(id='guide-right:manage_models', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:manage_models'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:manage_models', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:manage_ontology] __
+
+role = 'right:manage_ontology'
+as_who = (<starlette.testclient.TestClient object at 0x11256f470>, [Principal(id='guide-right:manage_ontology', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:manage_ontology'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:manage_ontology', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:manage_people] ___
+
+role = 'right:manage_people'
+as_who = (<starlette.testclient.TestClient object at 0x11256cd10>, [Principal(id='guide-right:manage_people', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:manage_people'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:manage_people', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:manage_strength_influencers] _
+
+role = 'right:manage_strength_influencers'
+as_who = (<starlette.testclient.TestClient object at 0x112517170>, [Principal(id='guide-right:manage_strength_influencers', cle...SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:manage_strength_influencers'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:manage_strength_influencers', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:merge_datasets] __
+
+role = 'right:merge_datasets'
+as_who = (<starlette.testclient.TestClient object at 0x112516e70>, [Principal(id='guide-right:merge_datasets', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:merge_datasets'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:merge_datasets', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:operate_schedules] _
+
+role = 'right:operate_schedules'
+as_who = (<starlette.testclient.TestClient object at 0x11251fc80>, [Principal(id='guide-right:operate_schedules', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:operate_schedules'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:operate_schedules', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:promote_to_dataset] _
+
+role = 'right:promote_to_dataset'
+as_who = (<starlette.testclient.TestClient object at 0x11251c5f0>, [Principal(id='guide-right:promote_to_dataset', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:promote_to_dataset'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:promote_to_dataset', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:propose_link_type] _
+
+role = 'right:propose_link_type'
+as_who = (<starlette.testclient.TestClient object at 0x11256b9b0>, [Principal(id='guide-right:propose_link_type', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:propose_link_type'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:propose_link_type', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:propose_types] ___
+
+role = 'right:propose_types'
+as_who = (<starlette.testclient.TestClient object at 0x112568ad0>, [Principal(id='guide-right:propose_types', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:propose_types'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:propose_types', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:publish_pipelines] _
+
+role = 'right:publish_pipelines'
+as_who = (<starlette.testclient.TestClient object at 0x11256a0c0>, [Principal(id='guide-right:publish_pipelines', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:publish_pipelines'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:publish_pipelines', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:read_alert_queue] _
+
+role = 'right:read_alert_queue'
+as_who = (<starlette.testclient.TestClient object at 0x112569910>, [Principal(id='guide-right:read_alert_queue', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_alert_queue'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_alert_queue', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+____ test_each_guide_answers_exactly_whom_its_place_opens[right:read_audit] ____
+
+role = 'right:read_audit'
+as_who = (<starlette.testclient.TestClient object at 0x11251e300>, [Principal(id='guide-right:read_audit', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_audit'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_audit', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:read_data_feeds] __
+
+role = 'right:read_data_feeds'
+as_who = (<starlette.testclient.TestClient object at 0x11251fc50>, [Principal(id='guide-right:read_data_feeds', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_data_feeds'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_data_feeds', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:read_export_ledger] _
+
+role = 'right:read_export_ledger'
+as_who = (<starlette.testclient.TestClient object at 0x112515610>, [Principal(id='guide-right:read_export_ledger', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_export_ledger'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_export_ledger', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:read_held_rows] __
+
+role = 'right:read_held_rows'
+as_who = (<starlette.testclient.TestClient object at 0x11256ee70>, [Principal(id='guide-right:read_held_rows', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_held_rows'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_held_rows', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:read_report_feed] _
+
+role = 'right:read_report_feed'
+as_who = (<starlette.testclient.TestClient object at 0x11256e7e0>, [Principal(id='guide-right:read_report_feed', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_report_feed'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_report_feed', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:read_reports] ___
+
+role = 'right:read_reports'
+as_who = (<starlette.testclient.TestClient object at 0x1124f7ef0>, [Principal(id='guide-right:read_reports', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_reports'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_reports', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:read_rule_audit] __
+
+role = 'right:read_rule_audit'
+as_who = (<starlette.testclient.TestClient object at 0x11256d2e0>, [Principal(id='guide-right:read_rule_audit', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:read_rule_audit'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:read_rule_audit', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:record_assessment] _
+
+role = 'right:record_assessment'
+as_who = (<starlette.testclient.TestClient object at 0x11256e360>, [Principal(id='guide-right:record_assessment', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:record_assessment'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:record_assessment', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:remove_case] ____
+
+role = 'right:remove_case'
+as_who = (<starlette.testclient.TestClient object at 0x112291400>, [Principal(id='guide-right:remove_case', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:remove_case'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:remove_case', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:resolve_entities] _
+
+role = 'right:resolve_entities'
+as_who = (<starlette.testclient.TestClient object at 0x11251f080>, [Principal(id='guide-right:resolve_entities', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:resolve_entities'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:resolve_entities', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:revert_loads] ___
+
+role = 'right:revert_loads'
+as_who = (<starlette.testclient.TestClient object at 0x11251cec0>, [Principal(id='guide-right:revert_loads', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:revert_loads'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:revert_loads', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:review_promotions] _
+
+role = 'right:review_promotions'
+as_who = (<starlette.testclient.TestClient object at 0x11256be00>, [Principal(id='guide-right:review_promotions', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:review_promotions'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:review_promotions', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+___ test_each_guide_answers_exactly_whom_its_place_opens[right:run_analysis] ___
+
+role = 'right:run_analysis'
+as_who = (<starlette.testclient.TestClient object at 0x112569cd0>, [Principal(id='guide-right:run_analysis', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:run_analysis'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:run_analysis', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:run_pipelines] ___
+
+role = 'right:run_pipelines'
+as_who = (<starlette.testclient.TestClient object at 0x11256b290>, [Principal(id='guide-right:run_pipelines', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:run_pipelines'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:run_pipelines', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:schedule_pipelines] _
+
+role = 'right:schedule_pipelines'
+as_who = (<starlette.testclient.TestClient object at 0x11256b260>, [Principal(id='guide-right:schedule_pipelines', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:schedule_pipelines'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:schedule_pipelines', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+____ test_each_guide_answers_exactly_whom_its_place_opens[right:share_case] ____
+
+role = 'right:share_case'
+as_who = (<starlette.testclient.TestClient object at 0x11251de20>, [Principal(id='guide-right:share_case', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:share_case'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:share_case', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:trace_ownership] __
+
+role = 'right:trace_ownership'
+as_who = (<starlette.testclient.TestClient object at 0x11256e0f0>, [Principal(id='guide-right:trace_ownership', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:trace_ownership'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:trace_ownership', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:triage_alerts] ___
+
+role = 'right:triage_alerts'
+as_who = (<starlette.testclient.TestClient object at 0x1124f4320>, [Principal(id='guide-right:triage_alerts', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:triage_alerts'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:triage_alerts', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:verify_pipelines] _
+
+role = 'right:verify_pipelines'
+as_who = (<starlette.testclient.TestClient object at 0x112471310>, [Principal(id='guide-right:verify_pipelines', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:verify_pipelines'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:verify_pipelines', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_each_guide_answers_exactly_whom_its_place_opens[right:write_sql_transforms] _
+
+role = 'right:write_sql_transforms'
+as_who = (<starlette.testclient.TestClient object at 0x117923500>, [Principal(id='guide-right:write_sql_transforms', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:write_sql_transforms'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:write_sql_transforms', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+______ test_each_guide_answers_exactly_whom_its_place_opens[rule_author] _______
+
+role = 'rule_author'
+as_who = (<starlette.testclient.TestClient object at 0x117923f50>, [Principal(id='guide-rule_author', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('rule_author', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+____ test_each_guide_answers_exactly_whom_its_place_opens[source_approver] _____
+
+role = 'source_approver'
+as_who = (<starlette.testclient.TestClient object at 0x11798f110>, [Principal(id='guide-source_approver', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['source_approver'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('source_approver', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_____ test_each_guide_answers_exactly_whom_its_place_opens[source_author] ______
+
+role = 'source_author'
+as_who = (<starlette.testclient.TestClient object at 0x117923710>, [Principal(id='guide-source_author', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['source_author'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('source_author', 'user', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+_ test_a_custom_role_s_current_rights_open_its_guide_through_the_real_get_principal _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x117923950>
+
+    def test_a_custom_role_s_current_rights_open_its_guide_through_the_real_get_principal(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A token carrying only a custom role (`role:studio-desk`, holding `edit_pipelines`) reads the
+        developer guide and nothing else, through the real `get_principal`, which adds the role's
+        current rights as single grants (ADR-145 Amendment 5, `custom_roles.expand`). With the role
+        changed to hold nothing, the same token is refused: its rights are read at each request."""
+        from services.api import custom_roles
+        from services.api.app import app
+    
+        from schemas.domain import Principal as P
+    
+        class Resolver:
+            async def resolve_principal(self, token: str) -> P:
+                return P(id="desk-1", clearance="SECRET", org_unit="unit-1", roles=["role:studio-desk"])
+    
+        class Roles:
+            current: dict[str, list[Right]] = {"studio-desk": [Right.EDIT_PIPELINES]}
+    
+            async def expand(self, principal: P) -> P:
+                return custom_roles.expand(principal, self.current)
+    
+        roles = Roles()
+        monkeypatch.setattr(app.state, "principal_resolver", Resolver(), raising=False)
+        monkeypatch.setattr(app.state, "custom_roles", roles, raising=False)
+        client = TestClient(app, raise_server_exceptions=False)
+        headers = {"Authorization": "Bearer desk"}
+        statuses = {g: client.get(f"/v1/guides/{g}", headers=headers).status_code for g in GUIDE_PLACE}
+>       assert statuses == {"user": 403, "developer": 200, "administration": 403}
+E       AssertionError: assert {'user': 200,...tration': 200} == {'user': 403,...tration': 403}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'user': 200} != {'user': 403}
+E         {'administration': 200} != {'administration': 403}
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:165: AssertionError
+__________ test_the_refusal_says_which_place_and_which_rights_open_it __________
+
+as_who = (<starlette.testclient.TestClient object at 0x112515e50>, [Principal(id='guide-analyst', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst'], datasets=None)])
+
+    def test_the_refusal_says_which_place_and_which_rights_open_it(
+        as_who: tuple[TestClient, list[Principal]],
+    ) -> None:
+        client, who = as_who
+        who.append(_principal("analyst", ["analyst"]))
+>       detail = client.get("/v1/guides/administration").json()["detail"]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:175: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx2/_models.py:830: in json
+    return jsonlib.loads(self.content, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+s = b'%PDF-1.4\n%\xd3\xeb\xe9\xe1\n1 0 obj\n<</Title <FEFF004F007300700072006500790046006C006F00770020201400200049006E0073...508 00000 n \n0003886855 00000 n \ntrailer\n<</Size 13794\n/Root 12905 0 R\n/Info 1 0 R>>\nstartxref\n3888972\n%%EOF\n'
+cls = None, object_hook = None, parse_float = None, parse_int = None
+parse_constant = None, object_pairs_hook = None, kw = {}
+
+    def loads(s, *, cls=None, object_hook=None, parse_float=None,
+            parse_int=None, parse_constant=None, object_pairs_hook=None, **kw):
+        """Deserialize ``s`` (a ``str``, ``bytes`` or ``bytearray`` instance
+        containing a JSON document) to a Python object.
+    
+        ``object_hook`` is an optional function that will be called with the
+        result of any object literal decode (a ``dict``). The return value of
+        ``object_hook`` will be used instead of the ``dict``. This feature
+        can be used to implement custom decoders (e.g. JSON-RPC class hinting).
+    
+        ``object_pairs_hook`` is an optional function that will be called with the
+        result of any object literal decoded with an ordered list of pairs.  The
+        return value of ``object_pairs_hook`` will be used instead of the ``dict``.
+        This feature can be used to implement custom decoders.  If ``object_hook``
+        is also defined, the ``object_pairs_hook`` takes priority.
+    
+        ``parse_float``, if specified, will be called with the string
+        of every JSON float to be decoded. By default this is equivalent to
+        float(num_str). This can be used to use another datatype or parser
+        for JSON floats (e.g. decimal.Decimal).
+    
+        ``parse_int``, if specified, will be called with the string
+        of every JSON int to be decoded. By default this is equivalent to
+        int(num_str). This can be used to use another datatype or parser
+        for JSON integers (e.g. float).
+    
+        ``parse_constant``, if specified, will be called with one of the
+        following strings: -Infinity, Infinity, NaN.
+        This can be used to raise an exception if invalid JSON numbers
+        are encountered.
+    
+        To use a custom ``JSONDecoder`` subclass, specify it with the ``cls``
+        kwarg; otherwise ``JSONDecoder`` is used.
+        """
+        if isinstance(s, str):
+            if s.startswith('\ufeff'):
+                raise JSONDecodeError("Unexpected UTF-8 BOM (decode using utf-8-sig)",
+                                      s, 0)
+        else:
+            if not isinstance(s, (bytes, bytearray)):
+                raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+                                f'not {s.__class__.__name__}')
+>           s = s.decode(detect_encoding(s), 'surrogatepass')
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           UnicodeDecodeError: 'utf-8' codec can't decode byte 0xd3 in position 10: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/json/__init__.py:341: UnicodeDecodeError
+_______________ test_a_deployment_built_without_the_pdf_says_so ________________
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2454/test_a_deployment_built_withou0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11251c3e0>
+as_who = (<starlette.testclient.TestClient object at 0x11251f500>, [Principal(id='guide-super', clearance='SECRET', org_unit='u...ncipal(id='guide-none', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=None)])
+
+    def test_a_deployment_built_without_the_pdf_says_so(
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        as_who: tuple[TestClient, list[Principal]],
+    ) -> None:
+        """A missing file is said in words (503), never answered as an empty or another document, and
+        the place's check still comes first: a refused reader learns nothing about what is carried."""
+        monkeypatch.setenv("OSPREY_GUIDES_DIR", str(tmp_path))
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get("/v1/guides/user")
+        assert response.status_code == 503
+        assert response.json()["detail"]["error"] == "guide_not_carried"
+        who.append(_principal("none", []))
+>       assert client.get("/v1/guides/user").status_code == 403
+E       AssertionError: assert 503 == 403
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+E        +    where <Response [503 Service Unavailable]> = get('/v1/guides/user')
+E        +      where get = <starlette.testclient.TestClient object at 0x11251f500>.get
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:266: AssertionError
+=========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[analyst]
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[compliance]
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[loader]
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[none]
-=== PLANT: guides.PLACE_RIGHTS[ingest] gains run_pipelines (a loader would read the developer guide)
-3 failed, 74 passed in 2.35s
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[osprey-admin]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[reports_viewer]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:accept_types]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:add_ingest_files]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:administer_system]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:ask_model]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:author_rules]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:confirm_inferred]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:create_case]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:decide_held_rows]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:deploy_rules]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:draw_on_boards]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:edit_graph]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:edit_pipelines]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:edit_target_model]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:export]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:export_override]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:extract_files]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:investigate]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:keep_watches]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:load_screening_lists]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_dashboards]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_geospatial]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_models]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_ontology]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_people]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:manage_strength_influencers]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:merge_datasets]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:operate_schedules]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:promote_to_dataset]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:propose_link_type]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:propose_types]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:publish_pipelines]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_alert_queue]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_audit]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_data_feeds]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_export_ledger]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_held_rows]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_report_feed]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_reports]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:read_rule_audit]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:record_assessment]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:remove_case]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:resolve_entities]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:revert_loads]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:review_promotions]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_analysis]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_pipelines]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:schedule_pipelines]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:share_case]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:trace_ownership]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:triage_alerts]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:verify_pipelines]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:write_sql_transforms]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[rule_author]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[source_approver]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[source_author]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_custom_role_s_current_rights_open_its_guide_through_the_real_get_principal
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_refusal_says_which_place_and_which_rights_open_it
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_deployment_built_without_the_pdf_says_so
+64 failed, 17 passed in 3.36s
+
+=================== PLANT: 2. the Conduit's copy of the Studio's rights gains run_pipelines
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..36cf615 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,10 +132,11 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
++COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+ 
+ USER 10001:10001
+ EXPOSE 8000
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..6ca360c 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,13 +19126,13 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
+     known = guide_files.GUIDES.get(guide)
+     if known is None:
+         raise HTTPException(
+@@ -19142,6 +19142,17 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+     path = folder / known.pdf
+     if not path.is_file():
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..160075c 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -57,7 +57,7 @@ PLACE_RIGHTS: dict[str, frozenset[Right]] = {
+         Right.READ_REPORTS, Right.RECORD_ASSESSMENT, Right.REMOVE_CASE, Right.RESOLVE_ENTITIES,
+         Right.RUN_ANALYSIS, Right.SHARE_CASE, Right.TRACE_OWNERSHIP,
+     }),
+-    "ingest": frozenset({Right.EDIT_PIPELINES}),
++    "ingest": frozenset({Right.EDIT_PIPELINES, Right.RUN_PIPELINES}),
+     "admin": frozenset({
+         Right.ADMINISTER_SYSTEM, Right.MANAGE_DASHBOARDS, Right.MANAGE_PEOPLE,
+         Right.OPERATE_SCHEDULES, Right.READ_AUDIT,
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+______________ test_the_conduit_s_place_rights_are_places_json_s _______________
+
+    def test_the_conduit_s_place_rights_are_places_json_s() -> None:
+        from services.api import guides
+    
+        places = _places()
+        for place in ("glass", "ingest", "admin"):
+>           assert {r.value for r in guides.PLACE_RIGHTS[place]} == places[place]["rights"], place
+E           AssertionError: ingest
+E           assert {'edit_pipeli...un_pipelines'} == frozenset({'edit_pipelines'})
+E             
+E             Extra items in the left set:
+E             'run_pipelines'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:101: AssertionError
+_________ test_each_guide_answers_exactly_whom_its_place_opens[loader] _________
+
+role = 'loader'
+as_who = (<starlette.testclient.TestClient object at 0x1276639e0>, [Principal(id='guide-loader', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['loader'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('loader', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+__ test_each_guide_answers_exactly_whom_its_place_opens[right:run_pipelines] ___
+
+role = 'right:run_pipelines'
+as_who = (<starlette.testclient.TestClient object at 0x148111eb0>, [Principal(id='guide-right:run_pipelines', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['right:run_pipelines'], datasets=None)])
+
+    @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
+    def test_each_guide_answers_exactly_whom_its_place_opens(
+        role: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """For every role and every right granted singly, each guide: 200 and the PDF where the guide's
+        place opens for them, 403 in words where it does not, never a byte of the file."""
+        client, who = as_who
+        who.append(_principal(role, TOKEN_ROLES[role]))
+        readable = _readable(TOKEN_ROLES[role])
+        for guide, place in GUIDE_PLACE.items():
+            response = client.get(f"/v1/guides/{guide}", headers={"Authorization": "Bearer x"})
+            if guide in readable:
+                assert response.status_code == 200, (role, guide, response.text[:200])
+                assert response.headers["content-type"] == "application/pdf"
+                assert response.content.startswith(b"%PDF-")
+            else:
+>               assert response.status_code == 403, (role, guide, response.status_code)
+E               AssertionError: ('right:run_pipelines', 'developer', 200)
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:130: AssertionError
+=========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_s_place_rights_are_places_json_s
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[loader]
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_each_guide_answers_exactly_whom_its_place_opens[right:run_pipelines]
-=== PLANT: the route serves another PDF (architecture-guide.pdf) for every guide
-3 failed, 74 passed in 2.20s
+3 failed, 78 passed in 2.79s
+
+=================== PLANT: 3. the route serves another PDF for every guide
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..36cf615 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,10 +132,11 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
++COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+ 
+ USER 10001:10001
+ EXPOSE 8000
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..18e18ad 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,13 +19126,13 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
+     known = guide_files.GUIDES.get(guide)
+     if known is None:
+         raise HTTPException(
+@@ -19142,8 +19142,19 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+-    path = folder / known.pdf
++    path = folder / "architecture-guide.pdf"
+     if not path.is_file():
+         raise HTTPException(
+             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=guide_files.not_carried(known)
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..6235e4f 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+____ test_the_pdf_served_is_byte_for_byte_the_file_carried[administration] _____
+
+guide = 'administration'
+as_who = (<starlette.testclient.TestClient object at 0x124ef3560>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", sorted(GUIDE_PLACE))
+    def test_the_pdf_served_is_byte_for_byte_the_file_carried(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The bytes answered are the file in `docs/pdf/`, which is the PDF `manifest.json` records for
+        its version: the guide this deployment was built with, not another copy of it."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+        on_disk = (PDF_DIR / f"{GUIDE_FILE[guide]}.pdf").read_bytes()
+        manifest = json.loads((PDF_DIR / "manifest.json").read_text(encoding="utf-8"))
+        entry = manifest[f"{GUIDE_FILE[guide]}.md"]
+        assert response.status_code == 200
+>       assert hashlib.sha256(response.content).hexdigest() == hashlib.sha256(on_disk).hexdigest()
+E       AssertionError: assert '9b2b8a9b717f...c7dde2d10a76f' == '6ceaf7bc5d10...cefec715c4279'
+E         
+E         - 6ceaf7bc5d104af4fd54f0eac1728f3a94520c6f7b38246edb3cefec715c4279
+E         + 9b2b8a9b717feb04d73e2c717a3d18344d7d21321fc8e540d8dc7dde2d10a76f
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:244: AssertionError
+_______ test_the_pdf_served_is_byte_for_byte_the_file_carried[developer] _______
+
+guide = 'developer'
+as_who = (<starlette.testclient.TestClient object at 0x124f29dc0>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", sorted(GUIDE_PLACE))
+    def test_the_pdf_served_is_byte_for_byte_the_file_carried(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The bytes answered are the file in `docs/pdf/`, which is the PDF `manifest.json` records for
+        its version: the guide this deployment was built with, not another copy of it."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+        on_disk = (PDF_DIR / f"{GUIDE_FILE[guide]}.pdf").read_bytes()
+        manifest = json.loads((PDF_DIR / "manifest.json").read_text(encoding="utf-8"))
+        entry = manifest[f"{GUIDE_FILE[guide]}.md"]
+        assert response.status_code == 200
+>       assert hashlib.sha256(response.content).hexdigest() == hashlib.sha256(on_disk).hexdigest()
+E       AssertionError: assert '9b2b8a9b717f...c7dde2d10a76f' == 'aa76b72cb0a3...cb7aad5a92c72'
+E         
+E         - aa76b72cb0a3d4fd427be17db5657d95be18510052adf46a78acb7aad5a92c72
+E         + 9b2b8a9b717feb04d73e2c717a3d18344d7d21321fc8e540d8dc7dde2d10a76f
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:244: AssertionError
+_________ test_the_pdf_served_is_byte_for_byte_the_file_carried[user] __________
+
+guide = 'user'
+as_who = (<starlette.testclient.TestClient object at 0x124f8b770>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", sorted(GUIDE_PLACE))
+    def test_the_pdf_served_is_byte_for_byte_the_file_carried(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The bytes answered are the file in `docs/pdf/`, which is the PDF `manifest.json` records for
+        its version: the guide this deployment was built with, not another copy of it."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+        on_disk = (PDF_DIR / f"{GUIDE_FILE[guide]}.pdf").read_bytes()
+        manifest = json.loads((PDF_DIR / "manifest.json").read_text(encoding="utf-8"))
+        entry = manifest[f"{GUIDE_FILE[guide]}.md"]
+        assert response.status_code == 200
+>       assert hashlib.sha256(response.content).hexdigest() == hashlib.sha256(on_disk).hexdigest()
+E       AssertionError: assert '9b2b8a9b717f...c7dde2d10a76f' == 'b950ceea1919...773af611db399'
+E         
+E         - b950ceea19191c249f3b048eefca26ed3d9785c4d2ecc0a9e87773af611db399
+E         + 9b2b8a9b717feb04d73e2c717a3d18344d7d21321fc8e540d8dc7dde2d10a76f
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:244: AssertionError
+=========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[administration]
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[developer]
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_pdf_served_is_byte_for_byte_the_file_carried[user]
-=== PLANT: the Dockerfile's COPY docs/pdf line removed
-1 failed, 76 passed in 2.57s
+3 failed, 78 passed in 2.15s
+
+=================== PLANT: 4. the Dockerfile's COPY of the guides removed
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..074f32b 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,10 +132,10 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+ 
+ USER 10001:10001
+ EXPOSE 8000
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..6ca360c 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,13 +19126,13 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
+     known = guide_files.GUIDES.get(guide)
+     if known is None:
+         raise HTTPException(
+@@ -19142,6 +19142,17 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+     path = folder / known.pdf
+     if not path.is_file():
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..6235e4f 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+______ test_the_conduit_image_carries_the_three_guides_and_their_manifest ______
+
+    def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None:
+        """`services/api/Dockerfile`'s final stage copies the three PDFs and the manifest from the build
+        context to `/app/docs/pdf/` (`guides.py`'s default folder, `parents[2] / docs / pdf` from
+        `/app/services/api/guides.py`), and not the architecture guide."""
+        copies = [
+            line for line in _final_stage(REPO_ROOT / "services/api/Dockerfile")
+            if line.upper().startswith("COPY ") and "--from=" not in line
+        ]  # fmt: skip
+        carried = [line for line in copies if "docs/pdf" in line]
+>       assert len(carried) == 1, carried
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:287: AssertionError
+=========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_image_carries_the_three_guides_and_their_manifest
-=== PLANT: the Dockerfile carries the architecture guide too
-1 failed, 76 passed in 2.50s
+1 failed, 80 passed in 2.53s
+
+=================== PLANT: 5. the Dockerfile carries the architecture guide too
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..56c56f6 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,10 +132,11 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
++COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json docs/pdf/architecture-guide.pdf ./docs/pdf/
+ 
+ USER 10001:10001
+ EXPOSE 8000
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..6ca360c 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,13 +19126,13 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
+     known = guide_files.GUIDES.get(guide)
+     if known is None:
+         raise HTTPException(
+@@ -19142,6 +19142,17 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+     path = folder / known.pdf
+     if not path.is_file():
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..6235e4f 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+______ test_the_conduit_image_carries_the_three_guides_and_their_manifest ______
+
+    def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None:
+        """`services/api/Dockerfile`'s final stage copies the three PDFs and the manifest from the build
+        context to `/app/docs/pdf/` (`guides.py`'s default folder, `parents[2] / docs / pdf` from
+        `/app/services/api/guides.py`), and not the architecture guide."""
+        copies = [
+            line for line in _final_stage(REPO_ROOT / "services/api/Dockerfile")
+            if line.upper().startswith("COPY ") and "--from=" not in line
+        ]  # fmt: skip
+        carried = [line for line in copies if "docs/pdf" in line]
+        assert len(carried) == 1, carried
+        # 0444 whatever the checkout's modes, so a 0600 file in a checkout cannot make the route fail.
+        assert "--chmod=0444" in carried[0].split(), carried[0]
+        tokens = [t for t in carried[0].split()[1:] if not t.startswith("--")]
+        sources, target = tokens[:-1], tokens[-1]
+>       assert sorted(sources) == sorted(
+            [f"docs/pdf/{name}.pdf" for name in GUIDE_FILE.values()] + ["docs/pdf/manifest.json"]
+        )
+E       AssertionError: assert ['docs/pdf/ad...er-guide.pdf'] == ['docs/pdf/ad...er-guide.pdf']
+E         
+E         At index 1 diff: 'docs/pdf/architecture-guide.pdf' != 'docs/pdf/developer-guide.pdf'
+E         Left contains one more item: 'docs/pdf/user-guide.pdf'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:292: AssertionError
+=========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_image_carries_the_three_guides_and_their_manifest
-=== PLANT: none (all restored)
-77 passed in 2.44s
+1 failed, 80 passed in 2.72s
+
+=================== PLANT: 6. the Dockerfile's --chmod=0444 removed
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..852dd0b 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,7 +132,8 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+ COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..6ca360c 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,13 +19126,13 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
+     known = guide_files.GUIDES.get(guide)
+     if known is None:
+         raise HTTPException(
+@@ -19142,6 +19142,17 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+     path = folder / known.pdf
+     if not path.is_file():
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..6235e4f 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+______ test_the_conduit_image_carries_the_three_guides_and_their_manifest ______
+
+    def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None:
+        """`services/api/Dockerfile`'s final stage copies the three PDFs and the manifest from the build
+        context to `/app/docs/pdf/` (`guides.py`'s default folder, `parents[2] / docs / pdf` from
+        `/app/services/api/guides.py`), and not the architecture guide."""
+        copies = [
+            line for line in _final_stage(REPO_ROOT / "services/api/Dockerfile")
+            if line.upper().startswith("COPY ") and "--from=" not in line
+        ]  # fmt: skip
+        carried = [line for line in copies if "docs/pdf" in line]
+        assert len(carried) == 1, carried
+        # 0444 whatever the checkout's modes, so a 0600 file in a checkout cannot make the route fail.
+>       assert "--chmod=0444" in carried[0].split(), carried[0]
+E       AssertionError: COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+E       assert '--chmod=0444' in ['COPY', 'docs/pdf/user-guide.pdf', 'docs/pdf/developer-guide.pdf', 'docs/pdf/administration-guide.pdf', 'docs/pdf/manifest.json', './docs/pdf/']
+E        +  where ['COPY', 'docs/pdf/user-guide.pdf', 'docs/pdf/developer-guide.pdf', 'docs/pdf/administration-guide.pdf', 'docs/pdf/manifest.json', './docs/pdf/'] = <built-in method split of str object at 0x11d2b2970>()
+E        +    where <built-in method split of str object at 0x11d2b2970> = 'COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/'.split
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:289: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_the_conduit_image_carries_the_three_guides_and_their_manifest
+1 failed, 80 passed in 2.74s
+
+=================== PLANT: 7. an unknown name falls back to the user guide (the route's own 404 gone)
+--- diff:
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index b0f6ff5..36cf615 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -132,10 +132,11 @@ RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-set
+ # whoever's rights open the guide's place: the deployment's own PDFs, the version this image was
+ # built with, and the manifest that records it. Not the architecture guide, which is not served.
+ # After the `chown -R` above, so the files are not written twice into the image's layers (about
+-# 12.6 MB, read-only and root-owned, which the Conduit's user may read).
++# 12.6 MB, root-owned and 0444 whatever the checkout's modes, so the Conduit's user can always
++# read them).
+ # `tests/services/api/test_guides.py` holds this line to the three files and the folder `guides.py`
+ # reads.
+-COPY docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
++COPY --chmod=0444 docs/pdf/user-guide.pdf docs/pdf/developer-guide.pdf docs/pdf/administration-guide.pdf docs/pdf/manifest.json ./docs/pdf/
+ 
+ USER 10001:10001
+ EXPOSE 8000
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 1531635..e056f0f 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -19126,14 +19126,14 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
+     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+ 
+ 
+-@app.get("/v1/guides/{guide}", response_class=FileResponse)
+-async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+-    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
+-    the place it belongs to (`guides.py`): the user guide with the Glass, the developer guide with
+-    the Ingest Studio, the administration guide with Admin. It names no single right because a
+-    place opens on any one of several; the place's check is made here, before the file is touched,
+-    and refuses in words (403 `place_required`). Home's link is a convenience, never the gate."""
+-    known = guide_files.GUIDES.get(guide)
++async def require_guide_place(guide: str, principal: PrincipalDep) -> guide_files.Guide:
++    """ADR-145 Amendment 10: the guide's place's gate, asked before the route touches any file. A
++    name that is not one of the three guides is 404 `no_such_guide`; a principal whose rights do
++    not open the guide's place (the switcher's test: one of its rights, every right it needs) is
++    403 `place_required`, which names the place, its rights and its needs, in words. The place
++    follows the guide's name, so it is not a static `required_place`: `test_guides.py` asks every
++    role and single right of it instead (`test_place_routes.py` reads static checks only)."""
++    known = guide_files.GUIDES.get(guide, guide_files.GUIDES["user"])
+     if known is None:
+         raise HTTPException(
+             status_code=status.HTTP_404_NOT_FOUND, detail=guide_files.unknown(guide)
+@@ -19142,6 +19142,17 @@ async def read_guide_route(guide: str, principal: PrincipalDep) -> Response:
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN, detail=guide_files.refusal(known)
+         )
++    return known
++
++
++@app.get("/v1/guides/{guide}", response_class=FileResponse)
++async def read_guide_route(
++    known: Annotated[guide_files.Guide, Depends(require_guide_place)],
++) -> Response:
++    """ADR-145 Amendment 10: a guide's PDF, the deployment's own, to a principal whose rights open
++    the place it belongs to (`require_guide_place`): the user guide with the Glass, the developer
++    guide with the Ingest Studio, the administration guide with Admin. It names no single right,
++    because a place opens on any one of several. Home's link is a convenience, never the gate."""
+     folder = guide_files.guides_dir()
+     path = folder / known.pdf
+     if not path.is_file():
+diff --git a/OspreyFlow_Core/services/api/guides.py b/OspreyFlow_Core/services/api/guides.py
+index a6458e8..6235e4f 100644
+--- a/OspreyFlow_Core/services/api/guides.py
++++ b/OspreyFlow_Core/services/api/guides.py
+@@ -99,6 +99,7 @@ def refusal(guide: Guide) -> dict[str, object]:
+         "error": "place_required",
+         "place": guide.place,
+         "rights": sorted(r.value for r in PLACE_RIGHTS[guide.place]),
++        "needs": sorted(r.value for r in PLACE_NEEDS[guide.place]),
+         "message": f"The {guide.title} opens with {guide.place_name}, which your roles do not "
+         f"open. Ask an administrator for a role that opens {guide.place_name}.",
+     }
+--- pytest test_guides.py (raw):
+=================================== FAILURES ===================================
+_____ test_a_guide_that_is_not_one_of_the_three_is_not_found[architecture] _____
+
+guide = 'architecture'
+as_who = (<starlette.testclient.TestClient object at 0x117552960>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", ["architecture", "x", "user-guide", "manifest.json"])
+    def test_a_guide_that_is_not_one_of_the_three_is_not_found(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The architecture guide is not served (ADR-145 Amendment 10): any name but the three is the
+        route's own 404 `no_such_guide`, in words, even to a principal who opens every place."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+>       assert response.status_code == 404, (guide, response.status_code)
+E       AssertionError: ('architecture', 200)
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:203: AssertionError
+__________ test_a_guide_that_is_not_one_of_the_three_is_not_found[x] ___________
+
+guide = 'x'
+as_who = (<starlette.testclient.TestClient object at 0x117553650>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", ["architecture", "x", "user-guide", "manifest.json"])
+    def test_a_guide_that_is_not_one_of_the_three_is_not_found(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The architecture guide is not served (ADR-145 Amendment 10): any name but the three is the
+        route's own 404 `no_such_guide`, in words, even to a principal who opens every place."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+>       assert response.status_code == 404, (guide, response.status_code)
+E       AssertionError: ('x', 200)
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:203: AssertionError
+______ test_a_guide_that_is_not_one_of_the_three_is_not_found[user-guide] ______
+
+guide = 'user-guide'
+as_who = (<starlette.testclient.TestClient object at 0x117567530>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", ["architecture", "x", "user-guide", "manifest.json"])
+    def test_a_guide_that_is_not_one_of_the_three_is_not_found(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The architecture guide is not served (ADR-145 Amendment 10): any name but the three is the
+        route's own 404 `no_such_guide`, in words, even to a principal who opens every place."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+>       assert response.status_code == 404, (guide, response.status_code)
+E       AssertionError: ('user-guide', 200)
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:203: AssertionError
+____ test_a_guide_that_is_not_one_of_the_three_is_not_found[manifest.json] _____
+
+guide = 'manifest.json'
+as_who = (<starlette.testclient.TestClient object at 0x117566f60>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("guide", ["architecture", "x", "user-guide", "manifest.json"])
+    def test_a_guide_that_is_not_one_of_the_three_is_not_found(
+        guide: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """The architecture guide is not served (ADR-145 Amendment 10): any name but the three is the
+        route's own 404 `no_such_guide`, in words, even to a principal who opens every place."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(f"/v1/guides/{guide}")
+>       assert response.status_code == 404, (guide, response.status_code)
+E       AssertionError: ('manifest.json', 200)
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:203: AssertionError
+_____ test_no_path_reaches_another_file[/v1/guides/user/../manifest.json] ______
+
+path = '/v1/guides/user/../manifest.json'
+as_who = (<starlette.testclient.TestClient object at 0x1175f95e0>, [Principal(id='guide-super', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst', 'data_engineer', 'rule_author'], datasets=None)])
+
+    @pytest.mark.parametrize("path", CLIMBING)
+    def test_no_path_reaches_another_file(
+        path: str, as_who: tuple[TestClient, list[Principal]]
+    ) -> None:
+        """A path that would climb out of the guides is never matched to a file: the guide is a name
+        looked up in a table of three, never joined to a path from the request."""
+        client, who = as_who
+        who.append(_principal("super", list(SUPER_USER_PRESET)))
+        response = client.get(path)
+>       assert response.status_code == 404, (path, response.status_code)
+E       AssertionError: ('/v1/guides/user/../manifest.json', 200)
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_guides.py:224: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[architecture]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[x]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[user-guide]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_a_guide_that_is_not_one_of_the_three_is_not_found[manifest.json]
+FAILED ../OspreyFlow_Build/tests/services/api/test_guides.py::test_no_path_reaches_another_file[/v1/guides/user/../manifest.json]
+5 failed, 76 passed in 2.62s
+
+=================== UNREACHABLE: guides.opens_place's needs half (PLACE_NEEDS[place] <= held)
+None of the three places a guide belongs to needs a right (places.json: no 'needs' on glass, ingest or admin; test_the_conduit_s_place_rights_are_places_json_s holds that), so removing the half changes no answer for any principal: no plant can fail. It is kept so the check stays the switcher's own (placesFor), and the table test fails the day places.json gives one of these places a need.
+
+=================== NONE (all restored)
+81 passed in 2.64s
