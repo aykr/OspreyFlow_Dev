@@ -1,6 +1,8 @@
 """The site's personal-identifier rule (publish_pages.sh): a page may name the company, never a person or a
 path on this machine. One exception, the owner's decision of 12 November 2026: ospreyflow.org's Team page
-(`team.html`) names the six people in `TEAM_NAMES`, each once, in its person cards, and nobody else.
+(`team.html`) names the six people in `TEAM_NAMES`, each once, in its person cards, and nobody else. No page names
+a client: each is checked against the owner's local `client_names.local.sha256` (`client_hashes.py`), and without
+that file nothing is published (the owner's ruling, 12 November 2026).
 
     python3 identifier_check.py <site folder>     # exit 1, naming each file and why, on a violation
 """
@@ -12,6 +14,8 @@ import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
+
+import client_hashes
 
 #: The owner's identifiers, as publish_pages.sh has always refused them.
 OWNER = re.compile(r"ayan[\s._-]?(d[._-])?kar|ayankarsolirius", re.IGNORECASE)
@@ -60,12 +64,23 @@ def _flat(text: str) -> str:
     return " ".join(html.unescape(text).split()).casefold()
 
 
-def violations(folder: Path) -> list[str]:
+def _readable(text: str) -> str:
+    """What a page shows, tags read as spaces, and every attribute's value (an address, a file name)."""
+    values = re.findall(r'\b[a-z-]+="([^"]*)"', text, flags=re.IGNORECASE)
+    return html.unescape(re.sub(r"<[^>]+>", " ", text)) + " . " + " . ".join(html.unescape(v) for v in values)
+
+
+def violations(folder: Path, hashes: Path = client_hashes.HASHES) -> list[str]:
     names = team_names()
     found: list[str] = []
+    held = client_hashes.known(hashes)
+    if held is None:
+        found.append(client_hashes.ABSENT + "; nothing is published without it")
     for page in sorted(folder.rglob("*.html")):
         text = page.read_text(encoding="utf-8", errors="replace")
         where = page.relative_to(folder).as_posix()
+        if held and client_hashes.named(_readable(text), held):
+            found.append(f"{where}: a client's name (by its hash; the name is not printed)")
         if LOCAL_PATH.search(text):
             found.append(f"{where}: a path on this machine")
         if where == TEAM_PAGE:

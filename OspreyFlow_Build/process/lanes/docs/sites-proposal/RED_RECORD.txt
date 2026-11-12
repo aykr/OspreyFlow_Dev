@@ -22,3 +22,10 @@ Burnside]
 # The reds that test the new logic: the site as built (team.html refused), a seventh card, a renamed card, a name twice, each other team name elsewhere, and a name in another case or spacing. The owner's address, a local path and the exit code are red on wording only: the old rule refuses those too, in its own words. The shared mailbox is red only because the old rule refuses team.html itself; the address does not match the owner's pattern.
 # 2. Against identifier_check.py as proposed:
 19 passed in 0.22s
+
+# 3. The client names added to the publish path (the owner's ruling, 12 November 2026, about 19:10), against the
+# checker as it stood at a78ccd7, in the same scratch tree: both new cases red, then green with the checker as proposed.
+FAILED tests/test_site_identifiers.py::test_a_clients_name_is_refused_without_printing_it
+FAILED tests/test_site_identifiers.py::test_nothing_is_published_without_the_local_hash_file
+2 failed, 19 deselected
+# Against identifier_check.py as proposed: 21 passed.

@@ -19,6 +19,21 @@ ORG = MARKETING / "sites" / "org"
 CARD = '<article class="person"><div class="avatar" aria-hidden="true"></div><div><h3>{}</h3><p class="role">{}</p></div></article>'
 
 
+SYNTHETIC_CLIENT = "Example Shire Constabulary"
+
+
+@pytest.fixture(autouse=True)
+def hashes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A local hash file of the test's own, holding a synthetic name, in place of the owner's."""
+    import client_hashes
+
+    path = tmp_path / "client_names.local.sha256"
+    path.write_text(client_hashes.digest(SYNTHETIC_CLIENT) + "\n")
+    monkeypatch.setattr(client_hashes, "HASHES", path)
+    monkeypatch.setattr(identifier_check.violations, "__defaults__", (path,))
+    return path
+
+
 @pytest.fixture
 def site(tmp_path: Path) -> Path:
     copy = tmp_path / "org"
@@ -82,6 +97,18 @@ def test_the_team_page_under_another_name_is_refused(site: Path) -> None:
     found = identifier_check.violations(site)
     assert any(v.startswith("people.html: a personal identifier") for v in found)
     assert any(v.startswith("team.html") for v in found) is False
+
+
+def test_a_clients_name_is_refused_without_printing_it(site: Path) -> None:
+    _plant(site / "governance.html", "</main>", f"<p>For the {SYNTHETIC_CLIENT}.</p>")
+    found = identifier_check.violations(site)
+    assert found == ["governance.html: a client's name (by its hash; the name is not printed)"]
+    assert SYNTHETIC_CLIENT.lower() not in " ".join(found).lower()
+
+
+def test_nothing_is_published_without_the_local_hash_file(site: Path, hashes: Path) -> None:
+    hashes.unlink()
+    assert any("nothing is published without it" in v for v in identifier_check.violations(site))
 
 
 def test_the_command_exits_one_on_a_violation(site: Path) -> None:

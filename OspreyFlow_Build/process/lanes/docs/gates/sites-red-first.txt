@@ -23,3 +23,12 @@ FAILED test_the_placeholder_check_flags_build_pys_placeholder_card
 FAILED test_the_request_check_flags_each_other_way_out[//… stylesheet] [//… image] [srcset] [style="url(…)"] [<style>]
 FAILED test_the_link_check_flags_a_link_out_of_the_sites_folder[../build.py] [../net/contact.html] [../../README.md]
 13 failed, 43 deselected
+
+# The client hashes out of git (the owner's ruling, 12 November 2026, about 19:10), 2026-11-12T17:24:07Z, on the Mac on closed ports.
+# 1. The new tests in this tree before client_names.sha256 was removed and the local file gitignored:
+FAILED tests/test_sites.py::test_the_hash_file_is_local_and_never_tracked
+1 failed, 56 passed, 1 skipped (the local-file case, in its words)
+# 2. The new tests against client_hashes.py as on main (bcc86c2), in a scratch tree: 11 failed, 47 passed. The reds that matter: an absent file read as an empty pass (test_an_absent_hash_file_is_said_in_words_never_an_empty_pass), the script writing the tracked client_names.sha256 (test_the_script_appends_hashes_and_prints_no_name), and the tracked file (test_the_hash_file_is_local_and_never_tracked); the other eight fail on known()'s new path argument alone.
+# 3. After: tests/test_sites.py and test_website_wording.py 88 passed, 1 skipped:
+SKIPPED tests/test_sites.py: client_names.local.sha256 is absent on this machine, so the pages were not checked against the client's names; run client_hashes.py to make it
+# With a local file holding the synthetic name (made by client_hashes.py, then deleted): the local-file case ran and passed, and git status did not list the file.

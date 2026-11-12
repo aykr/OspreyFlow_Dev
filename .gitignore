@@ -76,3 +76,7 @@ Claude outputs/
 
 # make test's failure marker (OspreyFlow_Build/Makefile), left only by an interrupted run
 OspreyFlow_Build/.make-test-failed
+
+# The client names no website page may carry, as hashes (OspreyFlow_Build/marketing_site/client_hashes.py): local
+# to the machine that publishes, never committed (the owner's ruling, 12 November 2026).
+OspreyFlow_Build/marketing_site/client_names.local.sha256

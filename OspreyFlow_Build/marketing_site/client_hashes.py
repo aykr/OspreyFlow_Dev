@@ -1,13 +1,16 @@
-"""The names no page on either site may carry, kept as hashes so that this repository never names them.
+"""The names no page on either site may carry, kept as hashes in a local file that never enters git.
 
 The owner runs this on the Mac and types or pipes the names, one per line: each client's name, its abbreviations,
-and its departments and agencies. Each name's SHA-256, taken after `normalise`, is appended to `client_names.sha256`
-beside this file. The script prints a count only, never a name, and asks without echoing when typed at a terminal:
+and its departments and agencies. Each name's SHA-256, taken after `normalise`, is appended to
+`client_names.local.sha256` beside this file, which is gitignored: a hash of a short public name is not a secret, so
+the file stays on the machine that publishes (the owner's ruling, 12 November 2026). The script prints a count only,
+never a name, and asks without echoing when typed at a terminal:
 
     python3 OspreyFlow_Build/marketing_site/client_hashes.py              # type each name, an empty line to finish
     python3 OspreyFlow_Build/marketing_site/client_hashes.py < names.txt  # or from a file, deleted afterwards
 
-`tests/test_sites.py` checks every run of one to six words on every page of both sites against the file.
+`tests/test_sites.py` checks every run of one to six words on every page of both sites against the file where it is
+present, and says in words that it did not where it is absent; the publish path refuses to publish without it.
 """
 
 from __future__ import annotations
@@ -20,7 +23,12 @@ import unicodedata
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-HASHES = Path(__file__).with_name("client_names.sha256")
+HASHES = Path(__file__).with_name("client_names.local.sha256")
+#: Said wherever the local file is needed and absent: never a silent pass.
+ABSENT = (
+    "client_names.local.sha256 is absent on this machine, so the pages were not checked against the client's names; "
+    "run client_hashes.py to make it"
+)
 #: The longest name, in words, the check looks for.
 LONGEST = 6
 
@@ -44,11 +52,12 @@ def digest(name: str) -> str:
     return hashlib.sha256(normalise(name).encode("utf-8")).hexdigest()
 
 
-def known() -> set[str]:
-    """The hashes in the file, without its comments."""
-    if not HASHES.exists():
-        return set()
-    lines = (line.split("#", 1)[0].strip() for line in HASHES.read_text().splitlines())
+def known(path: Path = HASHES) -> set[str] | None:
+    """The hashes in the file, without its comments; None when there is no file, so a caller cannot read an absent
+    file as an empty list of names."""
+    if not path.exists():
+        return None
+    lines = (line.split("#", 1)[0].strip() for line in path.read_text().splitlines())
     return {line for line in lines if line}
 
 
@@ -73,7 +82,7 @@ def _typed() -> Iterator[str]:
 
 def main() -> int:
     names = _typed() if sys.stdin.isatty() else (line.rstrip("\n") for line in sys.stdin)
-    have = known()
+    have = known() or set()
     new: list[str] = []
     for name in names:
         if not normalise(name):
