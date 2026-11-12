@@ -46,6 +46,18 @@ PLANTS: list[tuple[str, ...]] = [
         "test_each_triage",
     ),
     (
+        "P3b a suppression returns the stored row as the store gave it",
+        "services/api/alert_queue.py",
+        "    return _as_shown(\n"
+        "        await store.set_suppression(alert_id, investigation_id, member, until=until, reason=reason),\n"
+        "        row.alert,\n"
+        "    )",
+        "    return await store.set_suppression(\n"
+        "        alert_id, investigation_id, member, until=until, reason=reason\n"
+        "    )",
+        "test_a_suppression_returns",
+    ),
+    (
         "P4 an alert with citations shown with none readable",
         "services/api/alerts.py",
         "            and (not alert.citations or bool(self.citations_read(alert)))\n",

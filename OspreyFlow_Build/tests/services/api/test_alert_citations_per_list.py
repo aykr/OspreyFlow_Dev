@@ -14,7 +14,7 @@ reader cleared for both is shown both.
 These run the real `alert_queue` functions against the fakes `test_alert_evidence_withheld.py`
 answers as the adapters do. The live counterpart, with the lists marked and the alert raised by the
 gate, is `tests/ingest/test_kyc_rules.py`'s Amendment 7 cases. Each was shown red by a plant at its
-real call site (`process/lanes/rules/lists/AM7_RED_RECORD.md`).
+real call site (`process/lanes/rules/lists/AM7_RED_RECORD.txt`).
 """
 
 from __future__ import annotations
@@ -157,6 +157,25 @@ async def test_each_triage_returns_to_a_reader_cleared_for_one_list_that_list_al
     store = TriageStore([alert])
     returned = await _path(path)(store, graph, analytics, alert.id)
     assert store.writes == [f"triage {alert.id}"]
+    _says_nothing_of_b(returned)
+
+
+async def test_a_suppression_returns_to_a_reader_cleared_for_one_list_that_list_alone() -> None:
+    """*Suppress until…* by the team's lead returns the stored row, served as the lead was shown it."""
+
+    class _Suppressing(TriageStore):
+        async def set_suppression(self, alert_id: str, *_: Any, **__: Any) -> Alert:
+            self.writes.append(f"suppress {alert_id}")
+            return next(a for a in self.alerts if a.id == alert_id)
+
+    alert = BOTH.model_copy(update={"routed_team": "team-1"})
+    _, graph, analytics, _ = _world(NOT_B, [alert])
+    store = _Suppressing([alert])
+    returned = await alert_queue.suppress(
+        store, graph, analytics, CASE, alert.id, READER,  # type: ignore[arg-type]
+        until=NOW.date(), reason="Known", lead_of={"team-1"}, today=NOW.date(),
+    )  # fmt: skip
+    assert store.writes == [f"suppress {alert.id}"]
     _says_nothing_of_b(returned)
 
 
