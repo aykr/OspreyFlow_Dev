@@ -1,0 +1,32 @@
+t1/apply_diff.py against the old applier (9cbb457), each in a scratch folder shaped like the repository; then the real conftest-T1p4.diff taken back and applied again on lane/admin-t1p5 (git sees no change after taking it back).
+--- the old applier (9cbb457):
+  1. the only match inside a longer line (beta in xbeta):
+    applied: x/a.txt
+    a.txt: xBETA|
+  2. two files, both writable:
+    refused: a hunk of ad.fQwR/two.diff matches 0 times in y/b.txt; nothing written
+    a.txt: alpha|  b.txt: one|
+  3. two files, the second's folder read-only:
+    refused: a hunk of ad.fQwR/two.diff matches 0 times in y/b.txt; nothing written
+    a.txt: alpha|  b.txt: one|
+  4. a removed line that itself begins -- :
+    refused: a hunk of ad.fQwR/dash.diff matches 0 times in x/q.sql; nothing written
+    q.sql: select 1;|-- old note|select 2;|
+--- as built:
+  1. the only match inside a longer line (beta in xbeta):
+    refused: a hunk of ad.r0a5/inside.diff matches 0 times in x/a.txt; nothing written
+    a.txt: xbeta|
+  2. two files, both writable:
+    applied: x/a.txt
+    applied: y/b.txt
+    a.txt: ALPHA|  b.txt: ONE|
+  3. two files, the second's folder read-only:
+    refused: [Errno 13] Permission denied: 'ad.r0a5/y/.b.txt.apply_diff'; nothing written
+    a.txt: alpha|  b.txt: one|
+  4. a removed line that itself begins -- :
+    applied: x/q.sql
+    q.sql: select 1;|-- new note|select 2;|
+--- as built, the real conftest-T1p4.diff there and back on this tree (git sees no change after):
+    took back: OspreyFlow_Build/tests/conftest.py
+    applied: OspreyFlow_Build/tests/conftest.py
+    after applying again:  1 file changed, 2 insertions(+), 1 deletion(-)

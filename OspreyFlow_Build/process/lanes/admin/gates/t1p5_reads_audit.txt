@@ -1,0 +1,30 @@
+# t1/t1p5_reads_audit.py on lane/admin-t1p5 over main e59da4f, 12 November 2026 (a static scan, not a gate). Judged in SERVER_LOG_T1P5.md item 4b.
+R2	tests/adapters/graph_arcadedb/test_client_row_limit.py:47	g.V().count()
+R1	tests/connectors/test_sql_connector_live.py:618	SELECT count(*) FROM nomis_replica_fixture.visit_bookings
+R1	tests/ingest/test_repoint_journal_callers_live.py:813	SELECT count(*) FROM alert_repoint_records
+R1	tests/ingest/test_repoint_journal_callers_live.py:796	SELECT count(*) FROM alert_repoint_records
+R1	tests/ingest/test_repoint_journal_callers_live.py:1116	SELECT count(*) FROM alert_repoint_records
+R1	tests/ingest/test_sql_transform.py:70	SELECT v.booking_id, v.visitor_name, count(c.pin) AS calls, v._ref AS _ref, list(c._ref) AS _ref_calls FROM vi
+R1	tests/ingest/test_sql_transform.py:335	SELECT count(*) AS n FROM visits a, visits b, visits c, visits d, visits e
+R1	tests/ingest/test_sql_transform.py:343	SELECT count(*) AS n, list(a._ref) AS _ref FROM visits a, visits b, visits c, visits d
+R1	tests/ingest/test_sql_transform.py:795	SELECT pin, count(*) AS n, list(_ref) AS _ref FROM pin_calls GROUP BY ROLLUP (pin)
+R1	tests/ingest/test_sql_transform.py:796	SELECT pin, count(*) AS n, list(_ref) AS _ref FROM pin_calls GROUP BY CUBE (pin, called)
+R1	tests/ingest/test_sql_transform.py:201	SELECT pin, count(*) AS n, list(_ref) AS _ref FROM pin_calls GROUP BY pin ORDER BY pin
+R1	tests/ingest/test_sql_transform.py:771	SELECT family, count(*) AS n, list(_ref) AS _ref FROM visits GROUP BY family
+R1	tests/ingest/test_sql_transform.py:327	SELECT count(*) AS n, list(_ref) AS _ref FROM visits
+R4	tests/resolve/test_trigger.py:1	`services/resolve/trigger.py` — `06_DECISIONS.md` ADR-025's corpus-wide resolution trigger. Four layers, each 
+R1	tests/scenarios/test_phase7_stage6c_watch_routes.py:480	SELECT count(*) FROM pg_stat_activity
+R4	tests/services/api/test_audit_section_store.py:463	DELETE FROM audit_log_units_from
+R1	tests/services/api/test_custom_roles_store.py:270	SELECT count(*) FROM audit_log
+R1	tests/services/api/test_custom_roles_store.py:403	SELECT count(*) FROM audit_log
+R1	tests/services/api/test_disable_l38_transfers.py:297	SELECT count(*) FROM audit_log
+R1	tests/services/api/test_investigation_access_store.py:325	SELECT count(*) FROM "
+R1	tests/test_make_home_cases_store.py:54	SELECT count(*) FROM investigations
+R1	tests/test_make_home_cases_store.py:104	SELECT dataset_id, count(*) AS n FROM home_cases GROUP BY dataset_id
+R1	tests/test_make_home_cases_store.py:57	SELECT count(*) FROM investigations
+R1	tests/test_make_home_cases_store.py:58	SELECT count(*) FROM home_cases
+R1	tests/test_migrate_branches_to_views_store.py:216	SELECT count(*) FROM case_views
+R1	tests/test_migrate_branches_to_views_store.py:224	SELECT count(*) FROM case_views
+R1	tests/test_migrate_cases_to_one_dataset_store.py:43	SELECT count(*) FROM investigation_datasets
+R1	tests/test_migrate_cases_to_one_dataset_store.py:46	SELECT count(*) FROM investigation_datasets
+# 28 candidates in 308 live files

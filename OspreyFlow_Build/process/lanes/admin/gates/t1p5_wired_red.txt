@@ -1,0 +1,5 @@
+red first, on main e59da4f's conftest (the diff not applied), with -p on the command line as make test passes it:
+FAILED ../OspreyFlow_Build/tests/test_worker_isolation_wired.py::test_the_root_conftest_names_the_worker_isolation_plugin
+1 failed, 1 passed in 0.28s
+with conftest-T1p4.diff applied, no -p:
+2 passed in 0.24s
