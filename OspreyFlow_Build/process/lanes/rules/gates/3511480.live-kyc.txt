@@ -1,0 +1,58 @@
+test_kyc_rules.py live at 3511480 (lane/rules-lists on main beb2208; OspreyFlow_Core tree 5d3eaf1934d51a91d579b37cf82ee1733d4fe33f), stack b under the rules lane's lease: the file of the two cases changed after 00b24cc.live.txt, re-run whole at the final head. Core differs from 00b24cc's only by main's two Playwright keyboard files (apps/harness/keyboard/setup-screens.spec.ts, apps/workspace/keyboard/playwright.config.ts).
+Running on ospreyflow-test (stack b, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261112T204339Z-cce74e80/log: .venv/bin/python -m pytest -q -p no:cacheprovider ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py
+...........................                                              [100%]
+--------------------- 27 unmarked test(s) reached a store ----------------------
+tests/ingest/test_kyc_rules.py::test_a_close_decides_only_the_matches_its_closer_may_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_customer_the_deployer_cannot_read_is_not_judged: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_kyc_rules.py::test_a_document_that_lapses_is_caught_by_the_daily_sweep_once: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_document_the_reader_cannot_see_verifies_no_one_for_them: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_kyc_rules.py::test_a_held_loads_note_counts_only_the_matches_its_loader_may_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_loads_report_counts_only_the_alerts_its_loader_may_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_rule_screens_only_against_lists_its_deployer_is_cleared_for: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_shared_phone_is_flagged_at_the_count: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_true_positive_confirms_only_the_matches_the_closer_can_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_a_valid_document_raises_nothing: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_proposed_match: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_kyc_rules.py::test_an_expired_document_verifies_no_one: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+… and 7 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+7.83s call     tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+7.56s call     tests/ingest/test_kyc_rules.py::test_a_held_loads_note_counts_only_the_matches_its_loader_may_read
+7.30s call     tests/ingest/test_kyc_rules.py::test_a_loads_report_counts_only_the_alerts_its_loader_may_read
+6.97s call     tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+6.87s call     tests/ingest/test_kyc_rules.py::test_each_proposal_confirms_by_its_own_disposition
+6.87s call     tests/ingest/test_kyc_rules.py::test_an_approval_by_a_reader_cleared_for_both_confirms_only_the_proposed_match
+6.13s call     tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+6.07s call     tests/ingest/test_kyc_rules.py::test_a_true_positive_confirms_only_the_matches_the_closer_can_read
+5.82s call     tests/ingest/test_kyc_rules.py::test_a_close_decides_only_the_matches_its_closer_may_read
+5.65s call     tests/ingest/test_kyc_rules.py::test_a_reader_not_cleared_for_a_list_is_shown_the_alert_with_the_other_list_alone
+5.08s call     tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+4.78s call     tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+4.77s call     tests/ingest/test_kyc_rules.py::test_a_reader_not_cleared_for_a_list_is_given_a_risk_its_hidden_match_takes_no_part_in
+4.36s call     tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+4.35s call     tests/ingest/test_kyc_rules.py::test_one_owner_on_two_lists_raises_one_alert_citing_both
+4.30s call     tests/ingest/test_kyc_rules.py::test_a_rule_screens_only_against_lists_its_deployer_is_cleared_for
+3.78s call     tests/ingest/test_kyc_rules.py::test_a_shared_phone_is_flagged_at_the_count
+3.52s call     tests/ingest/test_kyc_rules.py::test_an_expired_document_verifies_no_one
+3.25s call     tests/ingest/test_kyc_rules.py::test_a_valid_document_raises_nothing
+3.17s call     tests/ingest/test_kyc_rules.py::test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on
+3.14s call     tests/ingest/test_kyc_rules.py::test_a_document_that_lapses_is_caught_by_the_daily_sweep_once
+3.11s call     tests/ingest/test_kyc_rules.py::test_an_owner_below_the_threshold_is_not_screened
+1.28s call     tests/ingest/test_kyc_rules.py::test_the_gate_the_routes_build_carries_what_the_kyc_and_pattern_rules_read
+0.78s call     tests/ingest/test_kyc_rules.py::test_a_document_the_reader_cannot_see_verifies_no_one_for_them
+0.75s call     tests/ingest/test_kyc_rules.py::test_the_gate_runs_after_commit_too
+0.59s call     tests/ingest/test_kyc_rules.py::test_a_customer_the_deployer_cannot_read_is_not_judged
+0.09s setup    tests/ingest/test_kyc_rules.py::test_a_customer_the_deployer_cannot_read_is_not_judged
+0.09s setup    tests/ingest/test_kyc_rules.py::test_a_valid_document_raises_nothing
+0.09s setup    tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+0.09s setup    tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+27 passed in 122.92s (0:02:02)
+Wall time: 125 s, exit 0 (stack b, the lease rules took at 2026-11-12T19:04:16Z; set-up before it 13 s)
