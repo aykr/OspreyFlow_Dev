@@ -14,11 +14,12 @@ repository root, after P9 merges and `P9_render.diff` is applied (checked in tha
    (`whole-secret: CronJob/ospreyflow-backup/backup`). P9 now gives that key to the backup's own container alone
    (committed on the branch); `NAMED_SECRET_ALLOWED["backup"]` lists it here. The other three pods hold no key of ours.
 
-Also here: P7b's two tests and Amendment 5 point 21's words follow the rows; three plants in `p7b_reds.py`, each red
-with this diff applied (the record: `gates/p9_rows.r1.log`); and P9's own two test files lose their waiting
-conditions (`AWAITED`, the strict xfail on the restores' rows), so once applied nothing reads its own expectation
-from the rows it checks. With this diff on the branch: the four suites 583 passed, none held; without it, the
-branch's 579 passed and the two restores' rows xfailed (strict).
+Also here: P7b's two tests follow the rows; three plants in `p7b_reds.py`, each red with this diff applied (the
+record: `gates/p9_rows.r1.log`); and P9's own two test files lose their waiting conditions (`AWAITED`, the strict
+xfail on the restores' rows), so once applied nothing reads its own expectation from the rows it checks. Amendment 5
+point 21's words are not edited (the orchestrator's ruling 10: accepted text is not rewritten); Amendment 7's
+consequences record the correction. Re-cut on main after L1.9 part 2 (816ccf7) and checked to apply after
+`P9_render.diff`; the merged record is `gates/p9_cp_policy_merged.r2.txt`.
 
 diff --git a/OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py b/OspreyFlow_Build/process/lanes/platform/gates/p7b_reds.py
 index 2700d09..ffe8728 100644
@@ -57,31 +58,8 @@ index 2700d09..ffe8728 100644
  ]
  
  if __name__ == "__main__":
-diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
-index a93987f..28f3d3b 100644
---- a/OspreyFlow_Build/spec/06_DECISIONS.md
-+++ b/OspreyFlow_Build/spec/06_DECISIONS.md
-@@ -34812,10 +34812,14 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
-     - P9's backup and restore pods (`backup`, `backup-claims`, `restore`, `restore-claims`) are
-       rows by their own pods' names (`egress.others`), which the render gives to
-       `egress_policy(..., others=...)`, since they render beside the workloads. A row whose pod is
--      not rendered selects nothing. Each admits nothing and reaches S3 and STS. The backup and the
--      restore also reach ArcadeDB and ClickHouse, which admit them, and a restore alone the
--      cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that the
--      writers have stopped. The claims' runs reach none of ours: a claim is a mount, not a path.
-+      not rendered selects nothing. Each admits nothing and reaches S3 and STS. Each also reaches
-+      what its commands call, and no more (`test_backups_rows.py` reads them from
-+      `platform_backup`'s own call graph): the backup ArcadeDB and ClickHouse, the restore
-+      ClickHouse alone (ArcadeDB's restore is from the zip on the Job's own claim and calls
-+      nothing), each admitted; and the two restores (`restore`, `restore-claims`), alone of every
-+      pod, the cluster's API by the `kubernetes` Service (the path target `kube-api`), to see that
-+      the writers have stopped (P9's check after P7b landed). The claims' runs reach none of ours:
-+      a claim is a mount, not a path.
-       No row names KMS: S3 calls it on the backups' behalf (SSE-KMS), so a row to it would be a
-       path never used (the orchestrator's ruling with case, 11 November). Calico matches networks,
-       not names, so an STS or regional range that also holds KMS is not excluded (a question for
 diff --git a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py
-index e567103..74147e9 100644
+index bacf499..7543d9e 100644
 --- a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py
 +++ b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py
 @@ -15,15 +15,14 @@ from typing import Any
@@ -105,7 +83,7 @@ index e567103..74147e9 100644
  
  def _docs(values: dict[str, Any], *, chart: Path | None = None) -> list[dict[str, Any]]:
 diff --git a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py
-index 3b6494e..0e26306 100644
+index 6432c62..4181fcd 100644
 --- a/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py
 +++ b/OspreyFlow_Build/tests/cloud_platform_backup/test_backups_rows.py
 @@ -31,14 +31,9 @@ REACHES = {
@@ -226,10 +204,10 @@ index 1310135..a8a7c43 100644
                             "OSPREY_KEYCLOAK_DB_PASSWORD"}),
      # The engines' keys are not listed: this deployment's keyed engines' alone (`_engine_keys`),
 diff --git a/OspreyFlow_Core/harness/cloud_platform/profile.yaml b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-index 0af3ab4..b245a83 100644
+index 90bbaee..9c588bf 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/profile.yaml
 +++ b/OspreyFlow_Core/harness/cloud_platform/profile.yaml
-@@ -82,13 +82,15 @@ egress:
+@@ -84,13 +84,15 @@ egress:
      arcadedb: [arcadedb]
      clickhouse: [clickhouse, clickhouse-keeper]
      clickhouse-keeper: [clickhouse-keeper]

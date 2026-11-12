@@ -19,10 +19,14 @@ whose region rule caught one command of section 9 first); its nine new cases red
     own policy replaced before its scheduled deletion, the key by its ARN (describe-key), never the alias;
   - section 10, restoring a kept set later, is the platform team's procedure, carried to P9b with its steps written.
 
+Re-cut on main after L1.9 part 2 (816ccf7) as a git diff with index lines (the orchestrator's review of 7916044); section 10
+names no build step (the runbook is the client's team's).
+
 diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py b/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py
---- a2/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py	2026-11-11 17:10:42
-+++ b2/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py	2026-11-11 18:33:51
-@@ -26,6 +26,7 @@
+index 09542e4..506286c 100644
+--- a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py
++++ b/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py
+@@ -26,6 +26,7 @@ from harness.cloud_platform.decommission_check import (
      declared_resources,
      main,
  )
@@ -30,7 +34,7 @@ diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.p
  from harness.render import render
  from tools.cp_policy_check import FIXTURES, _resolver
  
-@@ -372,3 +373,54 @@
+@@ -372,3 +373,54 @@ def test_a_left_bucket_s_removal_names_its_region_and_step_6(
      [item] = _check(values, terraform, given).items
      assert "step 6" in item.why
      assert f"aws s3api delete-bucket --region {REGION} --bucket {PREFIX}media" in item.why
@@ -86,9 +90,10 @@ diff --git a/OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.p
 +    assert config.cloud_platform is not None
 +    return backups_terraform(config, load_platform(config.cloud_platform.platform))
 diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/OspreyFlow_Core/harness/cloud_platform/decommission_check.py
---- a2/OspreyFlow_Core/harness/cloud_platform/decommission_check.py	2026-11-11 17:10:42
-+++ b2/OspreyFlow_Core/harness/cloud_platform/decommission_check.py	2026-11-11 18:33:51
-@@ -34,6 +34,8 @@
+index 4a45e47..0e609f9 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py
++++ b/OspreyFlow_Core/harness/cloud_platform/decommission_check.py
+@@ -34,6 +34,8 @@ from typing import Any
  
  import yaml
  
@@ -97,7 +102,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
  RELEASE = "ospreyflow"
  PART_OF = "app.kubernetes.io/part-of"
  #: The EBS CSI driver's tag on each volume it makes for a claim: the claim's namespace.
-@@ -65,6 +67,9 @@
+@@ -65,6 +67,9 @@ class ListingRefused(ValueError):
  class Leftovers:
      items: list[Leftover] = field(default_factory=list)
      not_ours: list[str] = field(default_factory=list)
@@ -107,7 +112,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
  
  
  def _claim_patterns(values: dict[str, Any]) -> list[re.Pattern[str]]:
-@@ -246,12 +251,16 @@
+@@ -246,12 +251,16 @@ def check(
          if not address:
              continue
          resource = _ours_in_state(address, ours, module)
@@ -126,7 +131,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
              found.items.append(
                  Leftover(
                      f"bucket/{bucket}",
-@@ -286,6 +295,8 @@
+@@ -286,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
          return 2
      for name in sorted(found.not_ours):
          print(f"left alone (not the deployment's): {name}")
@@ -136,9 +141,10 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/decommission_check.py b/Ospr
          print(f"LEFT BEHIND  {item.what}: {item.why}")
      print(f"decommission check: {len(found.items)} thing(s) left behind")
 diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
---- a2/OspreyFlow_Core/harness/cloud_platform/runbooks.py	2026-11-11 17:10:42
-+++ b2/OspreyFlow_Core/harness/cloud_platform/runbooks.py	2026-11-11 18:33:51
-@@ -24,6 +24,7 @@
+index 05efa62..1520fe0 100644
+--- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py
++++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
+@@ -24,6 +24,7 @@ from typing import Any
  from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
  from harness.cloud_platform.settings import PlatformSettings
  from harness.cloud_platform.terraform import BUCKETS, ecr_repositories
@@ -146,7 +152,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
  from schemas.deployment import OspreyConfig, generated_folder
  
  RELEASE = "ospreyflow"
-@@ -183,6 +184,10 @@
+@@ -199,6 +200,10 @@ its Secrets, its buckets and images, and the namespace's resources. **It deletes
  data for good**: step 2 takes the last backup first. The namespace itself, and every other resource
  in it, is the platform team's and stays.
  
@@ -157,7 +163,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
  **What it needs.** The release's `OspreyFlow_Core` folder with its environment (`.venv`) and this
  deployment's rendered folder, `kubectl` pointed at the namespace, `helm`, the AWS command line (v2)
  signed in to the namespace's account, and bash. Run each block in order, in one bash shell, from
-@@ -199,13 +204,21 @@
+@@ -215,13 +220,21 @@ cp "$FOLDER/values.yaml" "$WORK/values.yaml" && rm -rf "$WORK/terraform" && cp -
  
  ## 2. The last backup
  
@@ -184,7 +190,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
  ```
  
  ## 3. The workloads
-@@ -294,11 +307,26 @@
+@@ -310,11 +323,26 @@ test -z "$failed"
  
  ## 7. The namespace's resources (the platform team's pull request)
  
@@ -213,7 +219,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
  echo "Raise the pull request removing $FOLDER/terraform/'s files, and wait for it to be applied."
  ```
  
-@@ -320,7 +348,7 @@
+@@ -336,7 +364,7 @@ there.
  : "${{STATE:?the output of tofu state list in the namespace folder, saved to a file}}"
  cp "$STATE" "$WORK/state.txt"
  : > "$WORK/buckets.txt" && failed=
@@ -222,7 +228,7 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
    if out=$(aws s3api head-bucket --region "$REGION" --bucket "$PREFIX$b" 2>&1); then echo "$PREFIX$b" >> "$WORK/buckets.txt"
    elif echo "$out" | grep -q -e '404' -e 'Not Found'; then :
    else echo "$PREFIX$b could not be checked: $out"; failed=1; fi
-@@ -356,4 +384,51 @@
+@@ -372,4 +400,51 @@ test "${{#seen[@]}}" -gt 0 || {{ echo "no listing of the disks: give DISKS, or l
    ${{TF_MODULE:+--module "$TF_MODULE"}} --state "$WORK/state.txt" --terraform "$WORK/terraform" \\
    --buckets "$WORK/buckets.txt" --bucket-prefix "$PREFIX"
  ```
@@ -257,10 +263,10 @@ diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Cor
 +aws kms delete-alias --region "$REGION" --alias-name "alias/{cp.namespace}-backups"
 +```
 +
-+## 10. Restoring a kept set, after the decommission (the platform team's, carried to P9b)
++## 10. Restoring a kept set, after the decommission (the platform team's)
 +
 +A procedure of the platform team's and the account's administrators, who alone may change the kept
-+bucket's and key's policies; written in full, and rehearsed, in P9b. Its steps:
++bucket's and key's policies; not yet rehearsed, so rehearse it before relying on it. Its steps:
 +
 +1. **Into this namespace again:** the kept bucket (`$PREFIX{BUCKET_SUFFIX}`) and alias
 +   (`alias/{cp.namespace}-backups`) are taken, so the reinstall's Terraform must not make its own:
