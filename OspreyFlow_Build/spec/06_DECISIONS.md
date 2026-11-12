@@ -31808,29 +31808,40 @@ is the right default (fail closed), but nothing let a person say what such a tab
 2. **A source may declare a default marking** (`SourceTable.default_marking`): one of the handling scheme's
    classifications, or none. When its table is unmarked, its rows carry the default, in each column the pipeline
    binds a classification from (`recipe_rules.classification_columns`), before any step runs
-   (`staging_catalogue.carry_declared_marking`). Its raw rows carry it too, so every judgement of a row's marking
-   (who may read it, a sample's markings) reads what the Join and Map read.
+   (`staging_catalogue.carry_declared_marking`). It sets the classification alone: a pipeline binding another
+   part of the marking (caveats, say) to a column the unmarked table lacks is still refused. Its raw rows carry it
+   too, so every judgement of a row's marking (who may read it, a sample's markings) reads what the Join and Map
+   read.
 3. **The default never lowers, or fills, a bound marking.** A marked table is left as it is, a `SECRET` cell
    staying `SECRET` and an empty one staying empty. The default is refused below the source's own marking
-   (`handling.classification`).
+   (`handling.classification`) when it is set, and judged again whenever a run reads it
+   (`studio_staging.declared_markings`): a default left below the source's marking by a later governance edit (or
+   one made between the route's read and its write) is not carried, so the table is unmarked again, and the
+   source page says so.
 4. **Set in Studio › Sources by a source approver.** `PUT /v1/datasets/{dataset_id}/sources/{source_id}/default-marking`
-   needs Deploy pipelines (`publish_pipelines`, the source approver's right) and the dataset's own gate (404 to a
-   person none of whose cases loads into it), and is refused for a composite. It is refused in words (422
+   needs Deploy pipelines (`publish_pipelines`, the source approver's right), and, since its answer is the whole
+   source, what reading the source needs too (Add ingest files and the source author's Edit pipelines), and the
+   dataset's own gate (404 to a person none of whose cases loads into it); it is refused for a composite. It is refused in words (422
    `default_marking_refused`) outside the scheme, above the approver's clearance (they would mark rows they could
    not read) or above the deployment's highest marking (ADR-148 decision 10). Clearing it is always allowed: the
    table is then unmarked again.
 5. **Audited, a new version.** Each change records who, when, from and to (`set_dataset_source_default_marking`),
-   is a new version of the source holding who set it and when, and flags each deployed pipeline reading the source
-   as needing attention, as a governance edit does (Amendment 4).
+   is a new version of the source holding who set it and when (the version taken in the store's own update), flags
+   each deployed pipeline reading the source as needing attention and makes each draft reading it follow, its Test
+   no longer standing, as a governance edit does (Amendment 4).
 6. **Read where the source is read.** The default travels on the source, so it is read only by those who may read
-   the source (Add ingest files and the dataset's own gate); no other route returns it.
+   the source (Add ingest files, Edit pipelines and the dataset's own gate): the source's list and page, the
+   governance edit's answer and the setting's own answer, each behind those gates.
 7. **Every path that runs the steps reads it**: the load (manual, scheduled and watched runs, through
-   `RecipeRunDeps.sources` and `run_published_pipeline(source_store=)`), Test and a step's preview, each from the
+   `RecipeRunDeps.sources` and `run_published_pipeline(source_store=)`), Test, Load Preview and a step's preview,
+   each from the
    dataset's registered sources by the source node's own location (`studio_staging.declared_markings`). A path given
    no source store carries no default, so the Join refuses (fail closed).
 8. **The refusal names the setting.** A Join refused because a row is unmarked says so, and that a source approver
-   can declare a default marking in Studio › Sources; a refusal of two marked rows does not point at it. Neither
-   names a row's value or marking.
+   can declare a default marking in Studio › Sources; a refusal where both rows' tables hold a marking column (an
+   empty cell included) does not point at it, since a default would not help. Neither names a row's value or
+   marking. The default is looked up by the source node's own registered location, before a run's file choice: a
+   node naming no file of its own carries its draft's source's declaration.
 
 **What it costs.** An approver's declaration now marks rows that were unmarked, so a sample or Test once withheld
 for them may run; that is the declaration's purpose, and it can only raise a marking above the source's own. A
@@ -31850,25 +31861,34 @@ marking cell reads as one the person may not view), so its words are the withhel
   `test_a_load_whose_unmarked_source_declares_another_marking_is_refused`; the raw rows,
   `tests/services/api/test_studio_staging_routes.py::test_a_preview_joins_an_unmarked_source_carrying_its_declared_default`
   (red with the raw rows not carried).
-- **Decision 3:** `test_the_default_never_touches_a_table_that_has_a_marking_column`,
+- **Decision 3:** `tests/ingest/test_staged_pipeline_run.py::test_a_default_left_below_a_raised_source_marking_is_not_carried`,
+  `test_the_default_never_touches_a_table_that_has_a_marking_column`,
   `test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default`, and
   `tests/services/api/test_dataset_sources.py::test_a_default_marking_is_refused_in_words_and_nothing_is_set[below-the-source]`.
 - **Decision 4:** `test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset` (rule 4 on the write: a
-  source author 403; another dataset's route, another unit, a case that only reads the dataset 404) and
+  source author 403; another dataset's route, another unit, a case that only reads the dataset 404),
+  `test_an_approver_who_may_not_read_the_source_cannot_set_its_default` (Deploy pipelines without Edit pipelines:
+  403, as the read is) and
   `test_a_default_marking_is_refused_in_words_and_nothing_is_set` (`not-in-the-scheme`, `above-the-approver`,
   `above-the-ceiling`); the composite refusal by `test_composite_schedules.py`'s route census; the right by
   `test_route_rights.py`'s table.
 - **Decision 5:** `test_a_source_approver_declares_changes_and_clears_a_default_marking_audited` (who, when, from, to,
-  the version, the flagged pipelines; declared, changed and cleared).
+  the version, the flagged pipelines, the drafts following; declared, changed and cleared); on Postgres and the
+  in-memory store alike, `tests/services/api/test_studio_recipes_store.py::test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere_on_both_stores`
+  (live).
 - **Decision 6:** `test_the_default_is_read_with_the_source_and_only_where_the_source_is_read` (rule 4 on the read).
 - **Decision 7:** at the load, the decision 2 cases (red with the run passing no declaration);
   `tests/services/api/test_recipe_run_path.py::test_a_recipe_run_hands_the_pipeline_runner_its_source_store` and
   `test_the_scheduler_reads_every_run_dependency_from_where_the_route_does`; `test_run_resources.py` (the builder
-  opens and closes the store); Test, `test_test_reads_the_sources_declared_default_as_the_run_does`; a step's
+  opens and closes the store); Test, `test_test_reads_the_sources_declared_default_as_the_run_does`; Load Preview,
+  `test_load_preview_reads_the_sources_declared_default_as_the_run_does`; a step's
   preview, `test_a_preview_joins_an_unmarked_source_carrying_its_declared_default` and
   `test_a_preview_of_a_join_to_an_unmarked_source_without_a_default_is_refused`.
-- **Decision 8:** `test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting` and
-  `test_a_refusal_of_two_marked_rows_does_not_point_at_the_default`.
+- **Decision 8:** `test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting`,
+  `test_a_refusal_of_two_marked_rows_does_not_point_at_the_default`,
+  `test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default` and
+  `test_a_default_marked_differently_from_the_other_table_is_still_refused` (the words never name the setting
+  where a default could not help).
 - **The Glass:** `apps/workspace/src/ingest/sources/sources.test.tsx` ("the source page's default marking") and
   `keyboard/ingest-studio.spec.ts`'s "a source's default marking is declared by keyboard, and says who declared it"
   (rule 13; `declare-a-sources-default-marking-by-keyboard`).
