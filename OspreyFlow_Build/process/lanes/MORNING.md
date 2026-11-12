@@ -495,6 +495,7 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
     night goes. For you in the morning:
     - the push (none since 10:20);
     - the `release.yml` patch for P12 part 2;
+    - the Makefile patch so `make test` runs all three of its parts (below, under P10 part 2's review);
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
     - **What happened overnight:**
       - **About 22:05, P7b landed** (3673660), after a final review, a re-check and a second pass. cp-policy-check
@@ -543,6 +544,25 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - a restore also restores RDS point-in-time to the set's finish time, so withdrawn or deleted rows cannot
           come back visible (a runbook step now; automated in P9b);
         - P9 must not edit ADR-148 Amendment 5's accepted text; its correction stays in Amendment 7.
+      - **P10 part 2's review, about 02:30: the code has no blocker.** Its gate record does have a gap, which
+        applies to every lane: when `make test`'s first line fails (the server's known GPU case is enough),
+        make stops, and `live-collect` and `test-js` never run. I checked main myself: `live-collect` is green
+        on the server, and `test-js` on this Mac passes apart from the known `MatrixView.budget` failure
+        (2,611 ms against 2,500). So P7b and L1.9 part 2 hid nothing.
+
+        **Your Makefile patch:** `git apply OspreyFlow_Build/process/lanes/merger/owner-diffs/make-test-runs-every-part.diff`
+        - It runs all three parts whatever happens, then fails if any of them failed.
+        - It is shown red then green in the `.red-green.txt` beside it, and test-file-coverage-check still
+          passes.
+
+        Admin is fixing seven smaller items as well, including retries on /v1/me, the JWKS cache, and planted
+        tenant filters.
+
+        **My two rulings, which you can overrule:**
+        - On Entra, a `first_administrators` id that holds no role gets Admin again at start. A person who has
+          never signed in does not count as the last people-manager.
+        - On Entra, a clearance stored from a sign-in more than 24 h old is not trusted for choosing transfer
+          recipients or promotion-alert recipients. Those people are left out, and the words say why.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

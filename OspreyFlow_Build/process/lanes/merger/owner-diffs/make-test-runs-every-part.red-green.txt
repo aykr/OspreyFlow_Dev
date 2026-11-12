@@ -1,0 +1,11 @@
+# make test with the pytest line forced to fail (PYTEST="sh -c ... exit 1", SKIP_JS=1), 12 November 2026
+== main's Makefile, the pytest line forced to fail
+(the pytest line, echoed)
+PYTEST-RAN
+make: *** [test] Error 1
+== the new Makefile
+PYTEST-RAN
+cd ../OspreyFlow_Core && sh -c 'echo PYTEST-RAN; exit 1' x --collect-only -qq -p no:cacheprovider $(cd <repo>/OspreyFlow_Build && ../OspreyFlow_Core/.venv/bin/python -m tools.live_select --all | sed 's|^|../OspreyFlow_Build/|')
+PYTEST-RAN
+make[1]: *** [live-collect] Error 1
+make: *** [test] Error 1
