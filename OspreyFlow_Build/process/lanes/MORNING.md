@@ -771,6 +771,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         4. the demo lane switches the key prompt on and checks it, by 10:30.
 
         If the key isn't set by 11:00, the demo runs with the banner alone, behind your address allowlist.
+      - **Your rulings (about 00:20):**
+        - the session pass beside the hash, accepted;
+        - gate-b's ci.yml diff applied with its merge;
+        - **the footer for Friday:** off gov.uk, no crown, royal arms, Crown copyright or OGL; a slim footer in
+          the workspace. Committed separately so the banner and key can go without it if it misses 08:30.
+
+        The gate's proof is the demo lane's scripted sign-ins plus your own sign-in at about 09:45. If either
+        fails, the key prompt goes off again.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
