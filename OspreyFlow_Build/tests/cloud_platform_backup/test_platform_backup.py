@@ -160,8 +160,12 @@ def test_arcadedb_reporting_no_file_is_refused_in_words(run: Any) -> None:
     fake.arcadedb_answer = b'{"result": [{"backupFile": "elsewhere.zip"}]}'
     with pytest.raises(pb.BackupRefused, match="is not in the mounted backups folder"):
         pb.take(settings, bucket, stores)
-    # A name reaching outside the database's folder, to a file that is there: only the guard refuses it.
+    # A name reaching outside the database's folder, to a file that is there (the path resolves:
+    # the database's folder exists too), so the name's own guard alone refuses it (rule 15).
+    (settings.arcadedb_folder / settings.arcadedb_database).mkdir(parents=True, exist_ok=True)
     (settings.arcadedb_folder / "escape.zip").write_bytes(b"not the database's backup")
+    escaped = settings.arcadedb_folder / settings.arcadedb_database / ".." / "escape.zip"
+    assert escaped.is_file(), "the escape must resolve to a real file, or another check refuses it"
     fake.arcadedb_answer = b'{"result": [{"backupFile": "../escape.zip"}]}'
     with pytest.raises(pb.BackupRefused, match="an unexpected backup file name"):
         pb.take(settings, bucket, stores)
@@ -429,10 +433,14 @@ def test_a_manifest_that_is_another_sets_is_refused(aws: Running, run: Any) -> N
 def test_a_manifest_naming_another_sets_objects_is_refused(aws: Running, run: Any) -> None:
     settings, bucket, stores, _ = run
     manifest = pb.take(settings, bucket, stores)
-    _rewrite_manifest(aws, manifest["set"],
-                      lambda m: m["arcadedb"].update(key="sets/20201231T000000Z/arcadedb/ospreyflow.zip"))  # fmt: skip
-    with pytest.raises(pb.BackupRefused, match="outside the set"):
+    # The object outside the set exists, the set's own zip byte for byte, so its size and digest
+    # match: the outside-the-set check alone refuses it (rule 15), not a missing key.
+    outside = "sets/20201231T000000Z/arcadedb/ospreyflow.zip"
+    aws.stand_in.put(BUCKET, outside, aws.stand_in.read(BUCKET, manifest["arcadedb"]["key"]), KEY_ARN)
+    _rewrite_manifest(aws, manifest["set"], lambda m: m["arcadedb"].update(key=outside))
+    with pytest.raises(pb.BackupRefused, match="outside the set") as refused:
         pb.verify_set(bucket, manifest["set"])
+    assert "S3 refused" not in str(refused.value) and "manifest says" not in str(refused.value)
 
 
 def test_a_set_without_the_deployments_claims_is_refused(run: Any) -> None:
