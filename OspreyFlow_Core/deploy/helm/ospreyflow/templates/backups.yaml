@@ -37,6 +37,10 @@ unfinished and never restored from. Its restore is a Job of its own, with the sh
 {{- /* A restore refuses while any of these runs (Amendment 7): it lists the pods by its own Role. */}}
 {{- $writers := required "backups.writers: the pods a restore refuses to run beside (ADR-148 Amendment 7)" $b.writers }}
 {{- $restoreEnv := append $env (dict "name" "OSPREY_BACKUP_WRITERS" "value" (join "," $writers)) }}
+{{- /* Each store's settings to the containers that call it alone: ArcadeDB's to the backup;
+       ClickHouse's to the backup and to restore-analytics (Amendment 7). */}}
+{{- $graphEnv := ($b.arcadedb.env | default list) }}
+{{- $analyticsEnv := (($b.clickhouse | default dict).env | default list) }}
 ---
 # A restore's own right (Amendment 7): to see whether anything that writes still runs, and nothing
 # more. The backup's service account may get and list the namespace's pods.
@@ -74,6 +78,8 @@ metadata:
     {{- include "ospreyflow.labels" $ctx | nindent 4 }}
 spec:
   schedule: {{ $b.schedule | quote }}
+  # The schedule in UTC, whatever the cluster's own zone: a set is named by its UTC slot.
+  timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   # A run missed by more than an hour (the cluster down, say) is skipped, not run late beside the next.
   startingDeadlineSeconds: 3600
@@ -99,7 +105,7 @@ spec:
           containers:
             {{- include "ospreyflow.container" (dict "w" (dict "name" "backup" "image" $b.image
                   "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "backup")
-                  "env" (concat $env ($b.arcadedb.env | default list)) "resources" $b.resources
+                  "env" (concat $env $graphEnv $analyticsEnv) "resources" $b.resources
                   "claims" (list (dict "name" "arcadedb-backups" "mountPath" "/arcadedb-backups")))
                 "root" $root) | nindent 12 }}
           volumes:
@@ -125,6 +131,8 @@ metadata:
     {{- include "ospreyflow.labels" (dict "name" "backup-claims" "root" $root) | nindent 4 }}
 spec:
   schedule: {{ $b.schedule | quote }}
+  # The schedule in UTC, whatever the cluster's own zone: a set is named by its UTC slot.
+  timeZone: Etc/UTC
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 3600
   successfulJobsHistoryLimit: 3
@@ -168,8 +176,13 @@ spec:
 {{- end }}
 {{- with $b.restore }}
 {{- if .set }}
+{{- /* One set, named once: `latest` (or anything else) would be resolved again at each step, and
+       the steps could restore from two sets if one finished between them. */}}
+{{- if not (regexMatch "^[0-9]{8}T[0-9]{6}Z$" (toString .set)) }}
+{{- fail (printf "backups.restore.set: %q is not a set's name (YYYYMMDDTHHMMSSZ, as `sets` lists them): name the set to restore" (toString .set)) }}
+{{- end }}
 {{- if not $b.restorable }}
-{{- fail "backups.restore: the restore is proven for one ArcadeDB and one ClickHouse copy (ADR-148 Amendment 7); this deployment runs more, whose restore is P9b's" }}
+{{- fail "backups.restore: the restore is supported for one ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is not supported yet (ADR-148 Amendment 7)" }}
 {{- end }}
 ---
 # The restore of set {{ .set }} (Amendment 7): applied by hand with ArcadeDB stopped (its StatefulSet
@@ -209,20 +222,26 @@ spec:
               "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "writers")
               "env" $restoreEnv "resources" $b.resources)
             "root" $root) | nindent 8 }}
+        {{- /* ArcadeDB's restore beside the live database, checked, then swapped in by rename; the
+               live one kept until then, and untouched on any failure (deploy/backups/restore-graph.sh). */}}
         {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-graph" "image" $b.arcadedb.image
-              "command" (list "sh" "-c" (printf "rm -rf /home/arcadedb/databases/%s && cd /home/arcadedb && ./bin/restore.sh -f file:///restore/%s.zip -d /home/arcadedb/databases/%s" $b.arcadedb.database $b.arcadedb.database $b.arcadedb.database))
+              "command" (list "sh" "/restore-graph/restore-graph.sh" $b.arcadedb.database (printf "/restore/%s.zip" $b.arcadedb.database) "/home/arcadedb/databases" "/restore-graph/CheckDatabase.java")
               "resources" $b.arcadedb.resources
+              "files" (list (dict "key" "restore-graph.sh" "mountPath" "/restore-graph/restore-graph.sh") (dict "key" "restore-graph-check.java" "mountPath" "/restore-graph/CheckDatabase.java"))
               "scratch" (list (dict "mountPath" "/restore"))
               "claims" (list (dict "name" "arcadedb-databases" "mountPath" "/home/arcadedb/databases")))
             "root" $root) | nindent 8 }}
       containers:
         {{- include "ospreyflow.container" (dict "w" (dict "name" "restore-analytics" "image" $b.image
               "command" (list "/app/.venv/bin/python" "-m" "services.api.platform_backup" "restore-analytics" "--set" .set)
-              "env" $restoreEnv "resources" $b.resources)
+              "env" (concat $restoreEnv $analyticsEnv) "resources" $b.resources)
             "root" $root) | nindent 8 }}
       volumes:
         - name: scratch-0
           emptyDir: {}
+        - name: files
+          configMap:
+            name: ospreyflow-files
         - name: arcadedb-databases
           persistentVolumeClaim:
             claimName: {{ $b.arcadedb.databasesClaim }}
