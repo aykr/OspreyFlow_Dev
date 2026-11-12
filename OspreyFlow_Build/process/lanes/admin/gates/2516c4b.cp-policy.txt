@@ -1,0 +1,72 @@
+head 2516c4b on main 816ccf7 with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack); cp-policy-check unfiltered
+Running on ospreyflow-test (stack offline, osprey-runs/admin/), logged at osprey-runs/admin.meta/runs/20261112T014703Z/log: bash -c cd OspreyFlow_Build && make cp-policy-check
+cd ../OspreyFlow_Core && PYTHONPATH=.:packages:/root/osprey-runs/admin/OspreyFlow_Build .venv/bin/python -m tools.cp_policy_check
+development-sources.yaml: 51 manifests, 0 violation(s)
+development.yaml: 51 manifests, 0 violation(s)
+poc.yaml: 44 manifests, 0 violation(s)
+production-bedrock.yaml: 51 manifests, 0 violation(s)
+production.yaml: 51 manifests, 0 violation(s)
+cp-policy-check: 0 violation(s)
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/admin/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/cp_policy_check ../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/admin/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 376 items
+
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_decommission_check.py . [  0%]
+...................................                                      [  9%]
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py ...... [ 11%]
+ss........ss........ss..                                                 [ 17%]
+../OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py ...... [ 19%]
+........................................................................ [ 38%]
+........................................................................ [ 57%]
+........................................................                 [ 72%]
+../OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py ... [ 73%]
+.......                                                                  [ 75%]
+../OspreyFlow_Build/tests/harness/test_cloud_platform_render.py ........ [ 77%]
+........................................................................ [ 96%]
+..............                                                           [100%]
+
+=============================== warnings summary ===============================
+tests/harness/test_cloud_platform_render.py::test_with_bedrock_enabled_the_gateway_runs_as_its_own_account
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+25.39s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[development]
+22.70s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[poc]
+18.71s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production]
+16.88s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production-bedrock]
+16.15s call     tests/cp_policy_check/test_rendered_terraform.py::test_a_reference_to_nothing_is_refused
+14.69s call     tests/cp_policy_check/test_rendered_terraform.py::test_the_terraform_is_formatted_and_valid[production+opensearch]
+4.67s call     tests/cp_policy_check/test_cp_policy_check.py::test_main_passes_on_the_fixtures
+2.66s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[development]
+2.61s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_never_runs_as_the_bucket_role
+2.47s call     tests/harness/test_cloud_platform_render.py::test_with_bedrock_enabled_the_gateway_runs_as_its_own_account
+2.15s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused[development]
+2.08s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_widened_ingress_policy_is_refused[poc]
+1.98s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[production]
+1.84s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_render_is_valid_kubernetes[poc]
+1.66s call     tests/cp_policy_check/test_cp_policy_check.py::test_an_iam_role_engine_s_held_key_is_refused_to_the_gateway
+1.64s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_keyless_single_provider_s_key_is_refused_to_the_gateway
+1.52s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_new_workload_given_one_key_of_ours_is_refused[development]
+1.52s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_irsa_pods_mount_their_tokens_and_pass[production]
+1.50s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[development]
+1.48s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_new_workload_given_one_key_of_ours_is_refused[production]
+1.47s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_new_workload_given_one_key_of_ours_is_refused[poc]
+1.47s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[production]
+1.46s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[poc]
+1.46s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[development]
+1.44s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_token_in_a_job_is_refused[production]
+1.44s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_supplementary_group_outside_its_allowance_is_refused[development]
+1.43s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[poc-named]
+1.43s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_gateway_holds_this_deployment_s_engines_keys_and_no_store_s[poc]
+1.42s call     tests/cp_policy_check/test_cp_policy_check.py::test_the_irsa_pods_mount_their_tokens_and_pass[development]
+1.39s call     tests/cp_policy_check/test_cp_policy_check.py::test_a_p9_pod_under_the_default_account_is_refused[development-named]
+============ 370 passed, 6 skipped, 1 warning in 309.21s (0:05:09) =============
+Wall time: 316 s, exit 0 (no stack, no lease; set-up before it 13 s)

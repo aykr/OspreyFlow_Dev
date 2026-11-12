@@ -1,0 +1,10 @@
+head 2516c4b on main 816ccf7 with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack)
+23.12s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+==== 2 failed, 12364 passed, 33 skipped, 117 warnings in 435.31s (0:07:15) =====
+make: *** [Makefile:166: test] Error 1
+
+Read (admin, 12 November 2026, 02:20Z): 12,364 passed, 2 failed: the server's GPU case (every lane's server gate),
+and test_docs_pdf, since admin-guide.diff changes the guide's Markdown (1.84) and the orchestrator makes its PDF at
+merge (the orchestrator's instruction (a)).
