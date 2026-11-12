@@ -557,8 +557,8 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - one alert per screened party, citing each list;
         - each citation shown only to a reader who can read it.
 
-        **One narrowing, which you can overrule:** a true positive confirms only the matches the closer can read.
-        A hidden one stays inferred (rules 3 and 5). It lands tomorrow morning, or after the demo.
+        **One narrowing, ruled by you at about 12:05:** a true positive confirms only the matches the closer can
+        read, and a hidden one stays inferred (rules 3 and 5). It lands tomorrow morning, or after the demo.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
