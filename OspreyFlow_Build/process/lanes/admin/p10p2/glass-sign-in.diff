@@ -34,11 +34,24 @@ index 0000000..ed00a11
 +            {**entra_claims(**_GOOD)}, BY_EXTENSION, StoredPerson(roles=(), disabled=True)
 +        )
 +    assert str(refused.value) == found.group(1)
+diff --git a/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
+index 4059b22..be4c19b 100644
+--- a/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/App.chrome.test.tsx
+@@ -86,6 +86,8 @@ beforeEach(() => {
+   // throw while the count is taken.
+   const answers: [RegExp, unknown][] = [
+     [/\/v1\/me\/rights$/, { rights: RIGHTS }],
++    // ADR-148 Amendment 8: the account menu shows the Conduit's resolved principal, never the token's.
++    [/\/v1\/me$/, { id: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] }],
+     [/\/v1\/ontology$/, { entity_types: [], edge_types: [] }],
+     [/\/v1\/handling-scheme$/, { name: "test", classification: ["OFFICIAL"], handling_codes: {} }],
+     [/\/v1\/investigations$/, [{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" }]],
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
-index 4ed79b8..3f845c1 100644
+index 4ed79b8..20664d9 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.test.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
-@@ -931,3 +931,85 @@ describe("windows stay signed in: the token is renewed silently before it expire
+@@ -931,3 +931,123 @@ describe("windows stay signed in: the token is renewed silently before it expire
      expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
    });
  });
@@ -124,8 +137,46 @@ index 4ed79b8..3f845c1 100644
 +    expect(screen.queryByText(/disabled in this deployment/)).toBeNull();
 +  });
 +});
++
++// The orchestrator's review of P10 part 2, item 3: a /v1/me that does not answer once never strands the
++// person: words, Try again (which reads it afresh) and Sign out, with nothing role-gated offered meanwhile.
++describe("when the Conduit cannot say who you are (ADR-148 Amendment 8)", () => {
++  beforeEach(() => {
++    vi.mocked(userManager.isSignInRedirectCallback).mockReset().mockReturnValue(true);
++    vi.mocked(userManager.completeSignInFromRedirect).mockReset().mockResolvedValue({
++      access_token: "a-token", profile: { sub: "pairwise-sub", preferred_username: "ana" },
++    } as never);
++    vi.mocked(userManager.signOut).mockReset().mockResolvedValue(undefined);
++    sessionStorage.removeItem("ospreyflow.investigationId");
++  });
++
++  test("it says so, offers Try again and Sign out, and Try again reads it afresh", async () => {
++    let answers = 0;
++    const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
++    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
++      const url = String(input).split("?")[0]!;
++      if (url.endsWith("/v1/me")) {
++        answers += 1;
++        return answers === 1
++          ? json({}, 503)
++          : json({ id: "oid-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] });
++      }
++      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate"] });
++      return new Promise<Response>(() => undefined);
++    });
++    render(<App />);
++    const notice = await screen.findByRole("alert");
++    expect(notice.textContent).toContain("Your account could not be read just now");
++    fireEvent.click(within(notice).getByRole("button", { name: "Sign out" }));
++    expect(vi.mocked(userManager.signOut)).toHaveBeenCalledTimes(1);
++    fireEvent.click(within(notice).getByRole("button", { name: "Try again" }));
++    expect((await screen.findByRole("button", { name: /^ana/ })).textContent).toContain("OFFICIAL");
++    expect(answers).toBe(2);
++    expect(screen.queryByText("Your account could not be read just now, so nothing is offered.")).toBeNull();
++  });
++});
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
-index 460c470..bc46027 100644
+index 460c470..6743137 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
 @@ -17,18 +17,22 @@ import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
@@ -177,24 +228,33 @@ index 460c470..bc46027 100644
            scheduleRenewal(user.expires_at);
            restoreViewStateAfterReauth();
            const noted = takeNotedAddress();
-@@ -363,6 +373,16 @@ export function App() {
+@@ -363,6 +373,25 @@ export function App() {
    }
  
    const unauthenticatedHandledRef = useRef(false);
 +  // ADR-148 Amendment 8: the principal as the Conduit resolved it, asked afresh for every token.
++  // Asked again on *Try again* (`resolvedAttempt`); when it does not answer the person is told so, and
++  // can try again or sign out (the orchestrator's review of P10 part 2, item 3).
++  const [resolvedAttempt, setResolvedAttempt] = useState(0);
++  const [resolvedFailed, setResolvedFailed] = useState(false);
 +  useEffect(() => {
 +    setResolved(null);
++    setResolvedFailed(false);
 +    if (!bearerToken) return;
 +    let cancelled = false;
-+    void fetchResolvedPrincipal(API_BASE_URL, bearerToken).then((found) => !cancelled && setResolved(found));
++    void fetchResolvedPrincipal(API_BASE_URL, bearerToken).then((found) => {
++      if (cancelled) return;
++      setResolved(found);
++      setResolvedFailed(found === null);
++    });
 +    return () => {
 +      cancelled = true;
 +    };
-+  }, [bearerToken]);
++  }, [bearerToken, resolvedAttempt]);
    useEffect(() => {
      if (!bearerToken) {
        setRights(null);
-@@ -403,8 +423,8 @@ export function App() {
+@@ -403,8 +432,8 @@ export function App() {
    const sessionPromptRef = useRef<"ended" | "unreachable" | null>(null);
    const [sessionPromptBusy, setSessionPromptBusy] = useState(false);
    const [sessionPromptProblem, setSessionPromptProblem] = useState<string | null>(null);
@@ -205,7 +265,7 @@ index 460c470..bc46027 100644
    const askToSignInAgain = useCallback((why: "ended" | "unreachable" | null) => {
      sessionPromptRef.current = why;
      setSessionPrompt(why);
-@@ -412,12 +432,12 @@ export function App() {
+@@ -412,12 +441,12 @@ export function App() {
    }, []);
    const adoptRenewedUser = useCallback(
      (user: RenewedUser) => {
@@ -220,7 +280,7 @@ index 460c470..bc46027 100644
        } else {
          renewedRef.current = { for: bearerTokenRef.current, token: user.access_token };
        }
-@@ -459,14 +479,23 @@ export function App() {
+@@ -459,14 +488,23 @@ export function App() {
     * `true` when a renewed token is in place, so the refused call can be made once more. The two need
     * different reactions, and a bare 401 cannot tell them apart on its own — only "has this session
     * ever produced a usable token" can. */
@@ -246,6 +306,36 @@ index 460c470..bc46027 100644
        setSignInReason(
          "Your sign-in could not be used to reach the workspace. Check with your " +
            "administrator that this deployment's identity provider is configured correctly.",
+@@ -1494,10 +1532,20 @@ export function App() {
+       onOpenOperations={rights?.has("operate_schedules") ? openOperations : undefined}
+     />
+   ) : null;
++  // ADR-148 Amendment 8: without a resolved principal nothing is offered, but the person is never
++  // left without words or a way out.
++  const accountUnread =
++    !isDevBypass && !principal && resolvedFailed ? (
++      <div role="alert" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
++        <span>Your account could not be read just now, so nothing is offered.</span>
++        <Button onClick={() => setResolvedAttempt((n) => n + 1)}>Try again</Button>
++        <Button onClick={() => void signOut()}>Sign out</Button>
++      </div>
++    ) : null;
+   const account = (
+     <>
+       {needsYou}
+-      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null}
++      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : accountUnread}
+     </>
+   );
+   const startScreenShown =
+@@ -1682,6 +1730,7 @@ export function App() {
+               // button that keeps the clearance in view. The Glass derives nothing from any of it.
+               <AccountMenu principal={principal} onSignOut={() => void signOut()} />
+             )}
++            {accountUnread}
+           </>
+         }
+       />
 diff --git a/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx b/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx
 index 8e18f37..e524bfa 100644
 --- a/OspreyFlow_Core/apps/workspace/src/auth/AccountMenu.test.tsx
@@ -338,7 +428,7 @@ index 0000000..698f310
 +  }
 +}
 diff --git a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
-index 48e6e7e..631db76 100644
+index 48e6e7e..f4f18db 100644
 --- a/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
 +++ b/OspreyFlow_Core/apps/workspace/src/auth/oidcConfig.test.ts
 @@ -11,6 +11,8 @@ import {
@@ -364,7 +454,7 @@ index 48e6e7e..631db76 100644
 +    kind: "entra",
 +    authority: `https://login.microsoftonline.com/${TENANT}/v2.0`,
 +    client_id: "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
-+    scope: "openid api://aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/access_as_user",
++    scope: "openid profile api://aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/access_as_user",
 +  };
 +
 +  it("is Entra's authority, the Glass's registration and this API's scope", async () => {
