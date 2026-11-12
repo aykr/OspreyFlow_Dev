@@ -1,0 +1,12 @@
+head 1d20d94 on main 91a029c with the ten p10p2 diffs applied; stack_lease.sh offline admin (no stack), 2026-11-12
+22.80s call     tests/test_pid_naming_check.py::test_the_real_tree_and_its_generated_output_are_clean
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step
+FAILED ../OspreyFlow_Build/tests/test_release_local_matrix.py::test_release_local_builds_what_the_release_builds
+==== 3 failed, 12762 passed, 33 skipped, 135 warnings in 413.05s (0:06:53) =====
+make: *** [Makefile:166: test] Error 1
+Wall time: 414 s, exit 2 (no stack, no lease; set-up before it 12 s)
+exit 2
+
+Read (admin): 12,762 passed, 3 failed, none this branch's: the server's GPU case; test_docs_pdf (the guide's PDF, made at merge); test_release_local_matrix, main's own until the owner applies P12p2_CI.diff (MORNING item 38; every file it reads is main's here). live-collect and test-js on their own: p10p2_mac_1d20d94.txt.

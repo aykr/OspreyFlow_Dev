@@ -12,6 +12,7 @@ What counts as red is as in part 1's harness:
 
 | Head | Plants | Case runs | Result | Output |
 | --- | --- | --- | --- | --- |
+| `1d20d94` (the head after the orchestrator's third review of e8d5874, on main 91a029c) | 103: 89 offline, 14 live | 114 offline + 18 live | 132 red, 0 missed, 0 harness faults | `gates/p10p2_plants_1d20d94.txt`; the live eighteen under admin's lease on stack b, `gates/p10p2_live_targeted_1d20d94.txt` |
 | `9bf0aa8` (the head after the orchestrator's second review of 67f3d2a, on main 510141b) | 95: 83 offline, 12 live | 106 offline + 15 live | 121 red, 0 missed, 0 harness faults | `gates/p10p2_plants_9bf0aa8.txt`; the live fifteen under admin's lease on stack b at 9bf0aa8, `gates/p10p2_live_targeted_9bf0aa8.txt` |
 | `d994612` (the head after the orchestrator's review of 3848c32, on main 1cbc164; the code as 87503fe) | 76: 68 offline, 8 live | 88 offline + 10 live | 98 red, 0 missed, 0 harness faults | `gates/p10p2_plants_d994612.txt`; the live ten under admin's lease on stack c at 87503fe, `gates/p10p2_live_targeted_87503fe.txt` |
 | `cc684ec` (on L1.9 part 2's main) | 52: 49 offline, 3 live | 68 offline + 3 live | 71 red, 0 missed, 0 harness faults | `gates/p10p2_plants_cc684ec.txt`; the live three under the lease at 2516c4b, `gates/p10p2_live_targeted_2516c4b.txt` |
@@ -72,3 +73,14 @@ hand (playwright, which the harness does not run): `gates/p10p2_mac_41e1d6a.txt`
 resolution's use of the keys' threads (the same error mapping catches it either way; the same `in_keys_thread` is red on
 the person path). The first full run had one harness fault: Name an Author's case is in a file `resolver-doubles.diff`
 carries, which the harness did not yet apply (no tests ran); it does now, and the whole harness was run again.
+
+**The third review's plants** (11 new, 4 moved), each red for its own reason: the keys' wait without a total bound,
+and a stuck fetch never abandoned (a body that trickles, each read inside its own timeout, the whole past it; the
+first try of the second missed, because the test's server sped the stuck request up when the next was given no
+pause, and was fixed in the test, not the code); the unknown-kid window opened before the fetch (an unreachable
+Entra then a 401); a set with no key a token can be checked by; a waiting thread fetching again (twelve concurrent
+sign-ins, one request); the run API's keys on the event loop; the grant and its audit row apart; the custom roles'
+rights not read; the seed without `PEOPLE_LOCK`; and the window edge added to the no-window plant. **Must-fix 1**:
+the event-loop case reads the fetch's own thread and the loop's largest gap, and both its plants are red in the whole
+file's run and under `-n auto` (`gates/p10p2_mac_1d20d94.txt`). The account-unread notice's keyboard and axe reds
+retaken at 1d20d94, the same file.
