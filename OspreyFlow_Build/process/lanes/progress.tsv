@@ -83,5 +83,5 @@ platform-b	carries	M	done	The upgrade path's carries (ADR-114 Am 40): one atomic
 studio	carries	S	todo	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19)
 docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (user 1.46, admin 1.72), with their PDFs; merged f262e7b after two reviews
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape
-platform	P7b	M	done	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks, each run on kind; its kind run is the client install's acceptance (merged, 11 Nov)
+platform	P7b	M	done	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks written and checked as text (ADR-148 Am 5: no block yet run against a cluster or an account); their run on kind is the client install's acceptance, still to come (merged, 11 Nov)
 platform	P9b	S	todo	After the client's install: alerts, the PodDisruptionBudgets' drain test, the volume-expansion procedure
