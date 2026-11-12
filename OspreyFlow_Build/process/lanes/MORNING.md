@@ -688,6 +688,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         - both draft answers files are corrected.
 
         Your question 9 (invited accounts) is being added.
+      - **Your word (about 20:50):** Friday stays with option 1's single look switch. Two deployments on one server
+        (their own names and ports) come after the demo, in Part 3, with:
+        - the ADR-114 amendment allowing a name for Small;
+        - doctor's 2480 check reading the configured port;
+        - a firewall rule per port;
+        - the second model on the CPU or on Gemini.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
