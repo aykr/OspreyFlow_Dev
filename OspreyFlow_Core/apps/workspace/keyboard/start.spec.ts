@@ -1,6 +1,8 @@
 // A keyboard-only walkthrough of Home (ADR-114 Amendment 5 point 9, ADR-115 E3, `CLAUDE.md` rule 13):
 // each place's button and its key, the guide under each card (ADR-145 Amendment 10), and the mark back to
 // Home from a case's workspace and from the Admin area — no `page.mouse`, no `.click()`.
+import { readFile } from "node:fs/promises";
+
 import { expect, test, type Page } from "@playwright/test";
 
 import { START_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -37,6 +39,28 @@ async function serve(page: Page, options: { refuseAdministration?: boolean } = {
     return route.fulfill({ status: 404, body: "{}" });
   });
   return asked;
+}
+
+/** What reached a guide's tab from its blob URL: shown in the tab where the browser has a PDF viewer, or
+ * handed to the browser's downloads where it has none (headless Chromium, or a browser set to download
+ * PDFs). Either way the bytes are the guide's, read from the blob, never from a URL bearing a token. */
+async function guideIn(tab: Page): Promise<{ url: string; body: string }> {
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`the guide never reached the tab (${tab.url()})`)), 10_000);
+    tab.on("download", (download) => {
+      void download.path().then(async (path) => {
+        clearTimeout(timer);
+        resolve({ url: download.url(), body: await readFile(path, "utf8") });
+      }, reject);
+    });
+    tab.on("framenavigated", (frame) => {
+      if (frame !== tab.mainFrame() || !frame.url().startsWith("blob:")) return;
+      void tab.evaluate(async () => (await fetch(location.href)).text()).then((body) => {
+        clearTimeout(timer);
+        resolve({ url: frame.url(), body });
+      }, reject);
+    });
+  });
 }
 
 async function press(page: Page, name: string | RegExp) {
@@ -125,7 +149,9 @@ test("each card's guide is reached and opened in a new tab by keyboard, with the
     const opened = page.waitForEvent("popup");
     await page.keyboard.press("Enter");
     const tab = await opened;
-    await expect.poll(() => tab.url()).toMatch(/^blob:/);
+    const reached = await guideIn(tab);
+    expect(reached.url).toMatch(/^blob:/);
+    expect(reached.body).toBe(GUIDE_PDF);
     expect(asked).toContain(`${guide}: Bearer unused`);
     await tab.close();
     // Activating the link opens the guide and leaves Home where it was.

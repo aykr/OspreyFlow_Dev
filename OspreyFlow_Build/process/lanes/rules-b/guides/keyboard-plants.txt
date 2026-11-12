@@ -1,0 +1,20 @@
+=== PLANT: the guide link's onClick removed (HomePage.tsx), slot 9, local
+ OspreyFlow_Core/apps/workspace/src/home/HomePage.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+  1) keyboard/start.spec.ts:134:1 › each card's guide is reached and opened in a new tab by keyboard, with the token in a header 
+    Error: page.waitForEvent: Test timeout of 60000ms exceeded.
+  2) keyboard/start.spec.ts:165:1 › a guide the Conduit refuses is said in words under its link, and no tab is left open, by keyboard 
+    Error: page.waitForEvent: Test timeout of 60000ms exceeded.
+  3) keyboard/start.spec.ts:187:1 › every registered Start action has its own proving test case above 
+    Error: START_ACTIONS: keyboard action(s) registered with no proving test case: choose-the-glass-from-start-by-keyboard, choose-the-ingest-studio-from-start-by-keyboard, choose-admin-from-start-by-keyboard, return-to-start-from-the-mark-by-keyboard, open-a-place-from-home-with-its-key, read-a-place-s-guide-from-home-by-keyboard, read-why-a-guide-was-refused-on-home-by-keyboard
+  3 failed
+  6 passed (2.0m)
+=== PLANT: a refused guide's tab left open (guides.ts fail() keeps the tab)
+  1) keyboard/start.spec.ts:165:1 › a guide the Conduit refuses is said in words under its link, and no tab is left open, by keyboard 
+    Error: expect(received).toBe(expected) // Object.is equality
+  2) keyboard/start.spec.ts:187:1 › every registered Start action has its own proving test case above 
+    Error: START_ACTIONS: keyboard action(s) registered with no proving test case: choose-the-glass-from-start-by-keyboard, choose-the-ingest-studio-from-start-by-keyboard, choose-admin-from-start-by-keyboard, return-to-start-from-the-mark-by-keyboard, open-a-place-from-home-with-its-key, read-a-place-s-guide-from-home-by-keyboard, read-why-a-guide-was-refused-on-home-by-keyboard
+  2 failed
+  7 passed (7.9s)
+=== none (restored)
+  9 passed (3.3s)
