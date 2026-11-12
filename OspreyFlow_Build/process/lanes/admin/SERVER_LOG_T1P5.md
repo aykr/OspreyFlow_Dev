@@ -99,3 +99,16 @@ an unfiltered listing, a whole-table delete. 28 candidates:
 - **A real accumulation risk (1):** `scenarios/test_phase7_stage6c_watch_routes.py:480` counts every connection on
   the server; a carry for its owning lane.
 - **A whole-table delete (1):** `services/api/test_audit_section_store.py:463`, safe inside its schema.
+
+## Gates at `f11a865` on main `bb1c897` (the owner's five patches on main; this lane's three diffs applied)
+
+- **The plants**, on the server (Linux, /proc and setsid real; the harness applies `stack-lease-T1p5.diff` with
+  `t1/apply_diff.py` and takes it back): 16 plants, 23 case runs, all red, none missed, no harness fault; the whole
+  file green before (66 passed) and after on main's script (`gates/t1p5_plants_f11a865.txt`). Three earlier runs each found
+  something, all fixed here: the stand-in ssh hid `reap`'s exit code; the INT claim (above); and the stand-in ssh
+  returned before its output closed, so the held start call could not be red.
+- **The server, offline:** `make -k ci` exit 0 (`gates/t1p5_f11a865.ci.txt`); `make test`, each part run: pytest 12,782
+  passed and the server's GPU case alone failed; test-js on the server 3,135 passed and MatrixView's first-frame budget
+  failed under the server's load (a known perf-budget item; passed in the Mac's full run) (`gates/t1p5_f11a865.test.txt`).
+- **The Mac:** live-collect exit 0; test-js 3,136 + 51 passed; a11y 1,019 passed and 1 failed, keyboard 768 passed and 2
+  failed, those three main's own (`gates/t1p5_mac_f11a865.txt`).
