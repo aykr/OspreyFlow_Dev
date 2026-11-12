@@ -517,9 +517,6 @@ jobs:
       ARCADEDB_HOST: localhost
       ARCADEDB_HTTP_PORT: "2480"
       ARCADEDB_ROOT_PASSWORD: playwithdata123
-      # ADR-143 Amendment 2 decision 4: the restore test that names a layer backs up and restores
-      # inside this job's ArcadeDB service (`tests/harness/test_restore_drawn_layer.py`).
-      OSPREY_TEST_ARCADEDB_CONTAINER: ${{ job.services.arcadedb.id }}
       MINIO_ENDPOINT: "localhost:9000"
       CLICKHOUSE_HTTP_PORT: "8123"
       CLICKHOUSE_USER: osprey
@@ -633,7 +630,12 @@ jobs:
       # run nowhere in CI since the day each was written, the identical gap class this gate exists
       # to catch, now caught by the gate itself rather than found by accident a fifth and sixth
       # time.
-      - run: >-
+      - env:
+          # ADR-143 Amendment 2 decision 4: the restore test that names a layer backs up and restores
+          # inside this job's ArcadeDB service (`tests/harness/test_restore_drawn_layer.py`). In the
+          # step's env: GitHub refuses the `job` context in a job's own env (an invalid workflow file).
+          OSPREY_TEST_ARCADEDB_CONTAINER: ${{ job.services.arcadedb.id }}
+        run: >-
           uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/ingest
           ../OspreyFlow_Build/tests/conformance/analytics_port
           ../OspreyFlow_Build/tests/test_analytics_clickhouse.py
