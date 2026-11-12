@@ -1,0 +1,79 @@
+# Stand-ins for the platform's managed stores on R1's kind cluster (`r1_kind.py platform`), as P7's, in their own
+# namespace, as RDS, ElastiCache and S3 are outside the deployment's: Postgres 16 over TLS and Valkey over
+# TLS with a password (S3 is r1_kind.py's S3, STS and KMS stand-in). Throwaway credentials; never a deployment's.
+# **The Postgres stand-in refuses what RDS refuses** (CLAUDE.md rule 15, reviewer point 9): its master user
+# (`osprey`) is not a superuser, only CREATEDB and CREATEROLE as RDS's `rds_superuser` grants, and a
+# connection without TLS is refused (RDS for PostgreSQL 15 and later: `rds.force_ssl=1` by default).
+apiVersion: v1
+kind: Service
+metadata: {name: postgres, namespace: platform-managed}
+spec:
+  selector: {app: postgres}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: postgres, namespace: platform-managed}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      initContainers:
+        - name: key
+          image: localhost:5001/postgres:16.4
+          command: ["sh", "-c", "cp /tls/tls.crt /tls/tls.key /pgtls/ && printf 'local all all trust\\nhostssl all all all scram-sha-256\\nhost all all all reject\\n' > /pgtls/pg_hba.conf && chown 999:999 /pgtls/* && chmod 600 /pgtls/tls.key"]
+          volumeMounts: [{name: tls, mountPath: /tls}, {name: pgtls, mountPath: /pgtls}]
+      containers:
+        - name: postgres
+          image: localhost:5001/postgres:16.4
+          args: ["-c", "ssl=on", "-c", "ssl_cert_file=/pgtls/tls.crt", "-c", "ssl_key_file=/pgtls/tls.key",
+                 "-c", "hba_file=/pgtls/pg_hba.conf"]
+          env:
+            # The image's superuser is the platform's, never handed out; `osprey` is the master user.
+            - {name: POSTGRES_USER, value: postgres}
+            - {name: POSTGRES_PASSWORD, value: ${PASSWORD}-root}
+          readinessProbe: {exec: {command: ["pg_isready", "-U", "postgres"]}, periodSeconds: 5}
+          volumeMounts: [{name: pgtls, mountPath: /pgtls}, {name: rds, mountPath: /docker-entrypoint-initdb.d}]
+      volumes:
+        - {name: tls, secret: {secretName: standin-tls}}
+        - {name: pgtls, emptyDir: {}}
+        - name: rds
+          configMap: {name: rds-master}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: rds-master, namespace: platform-managed}
+data:
+  master.sql: |
+    CREATE ROLE osprey LOGIN CREATEDB CREATEROLE NOSUPERUSER PASSWORD '${PASSWORD}';
+    CREATE DATABASE ospreyflow OWNER osprey;
+---
+apiVersion: v1
+kind: Service
+metadata: {name: valkey, namespace: platform-managed}
+spec:
+  selector: {app: valkey}
+  ports: [{port: 6379, targetPort: 6379}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: valkey, namespace: platform-managed}
+spec:
+  serviceName: valkey
+  replicas: 1
+  selector: {matchLabels: {app: valkey}}
+  template:
+    metadata: {labels: {app: valkey}}
+    spec:
+      containers:
+        - name: valkey
+          image: localhost:5001/valkey/valkey:8.0
+          args: ["--port", "0", "--tls-port", "6379", "--tls-cert-file", "/tls/tls.crt", "--tls-key-file",
+                 "/tls/tls.key", "--tls-ca-cert-file", "/tls/ca.crt", "--tls-auth-clients", "no",
+                 "--requirepass", "${PASSWORD}"]
+          readinessProbe: {tcpSocket: {port: 6379}, periodSeconds: 5}
+          volumeMounts: [{name: tls, mountPath: /tls}]
+      volumes: [{name: tls, secret: {secretName: standin-tls}}]
