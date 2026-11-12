@@ -64,6 +64,7 @@ from .rule_evaluation import RuleGate
 from .run_quotas import QuotaLimit, QuotaRefused, QuotaStore
 from .run_quotas import judge as judge_quota
 from .screening import ScreeningListStore
+from .sources import SourceStore
 from .strength_influencers import InfluencerStore
 from .studio_map import resolve_source_handling
 from .studio_publish import LoadSink, run_published_recipe
@@ -113,6 +114,9 @@ class RecipeRunDeps:
     #: ADR-140 Amendment 13: the deployment-wide lists and each dataset's subscriptions. None: a
     #: staged run reads the dataset's own lists alone.
     list_store: ListStore | None = None
+    #: ADR-140 Amendment 19: the datasets' registered sources, whose declared default markings an
+    #: unmarked table carries before a join. None: none is carried (a Join refuses it, fail closed).
+    sources: SourceStore | None = None
     #: ADR-146 decision 3 (L2.11): how a sentence's named Studio list is read, within the rule's own
     #: dataset (`rule_editor.rule_list_reader`). None: a rule naming a list cannot run here, and
     #: says so as any run that cannot read what it needs.
@@ -432,6 +436,7 @@ async def _execute_recipe_run(
             staging_storage=deps.staging_storage,
             staging_meter=staging,
             list_store=deps.list_store,
+            source_store=deps.sources,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(

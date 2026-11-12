@@ -46,16 +46,22 @@ export async function exportRelease(
   return (await response.json()) as ReleaseExport;
 }
 
-/** The import's plan. A refusal comes back as a plan too (422), with `refused` in words. */
+/** The import's plan. A refusal comes back as a plan too (422), with `refused` in words.
+ * `replaceOwnDraft`: the version of the importer's own in-progress draft of the model they confirm
+ * replacing, as the check reported it (CARRIES row 90); another person's draft is refused whatever
+ * it says. */
 export async function importRelease(
   apiBaseUrl: string,
   bearerToken: string,
   datasetId: string,
   files: Record<string, string>,
   dryRun: boolean,
+  replaceOwnDraft: number | null = null,
 ): Promise<ReleaseImportPlan> {
+  const confirm =
+    replaceOwnDraft === null ? "" : `&replace_own_draft=${replaceOwnDraft}`;
   const response = await fetch(
-    `${dataset(apiBaseUrl, datasetId)}/release/import?dry_run=${dryRun}`,
+    `${dataset(apiBaseUrl, datasetId)}/release/import?dry_run=${dryRun}${confirm}`,
     {
       method: "POST",
       headers: {

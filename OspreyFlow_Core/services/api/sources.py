@@ -18,8 +18,10 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import asyncpg
+from services.ingest.ceiling import DeploymentCeiling
 
 from conduit_common.identity import new_id
+from ontology.handling import HandlingScheme
 from schemas.domain import Principal
 from schemas.sources import (
     Connection,
@@ -64,6 +66,9 @@ class SourceStore(Protocol):
         self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
     ) -> SourceTable: ...
     async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None: ...
+    async def set_default_marking(
+        self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
+    ) -> tuple[str | None, SourceTable]: ...
     async def connection(self, connection_id: str) -> Connection: ...
     async def cursor(self, source_id: str) -> str | None: ...
     async def set_cursor(self, source_id: str, cursor: str | None) -> None: ...
@@ -74,6 +79,77 @@ class SourceStore(Protocol):
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _with_default_marking(
+    source: SourceTable, marking: str | None, principal: Principal
+) -> SourceTable:
+    """ADR-140 Amendment 19: the source with its default marking declared, changed or cleared, by
+    whom and when; a new version, as any change to how its rows are marked is."""
+    return source.model_copy(
+        update={
+            "default_marking": marking,
+            "default_marking_set_by": principal.id,
+            "default_marking_set_at": _now(),
+            "version": source.version + 1,
+        }
+    )
+
+
+def default_marking_problems(
+    source: SourceTable,
+    marking: str | None,
+    principal: Principal,
+    scheme: HandlingScheme,
+    ceiling: DeploymentCeiling,
+) -> list[str]:
+    """Why `marking` may not be `source`'s declared default (ADR-140 Amendment 19), in words; none
+    when it may. A default already above the declarer's clearance is theirs neither to change nor
+    to clear. Otherwise clearing it (`None`) may: the table is then unmarked, which the Join refuses
+    to join to a marked one (fail closed). A default is one of the scheme's
+    classifications; never above the declarer's own clearance (they would mark rows they could
+    not read) or the deployment's highest marking (ADR-148 decision 10); never below the source's
+    own marking, since a default never lowers a marking."""
+    levels = list(scheme.classification)
+    current = source.default_marking
+    if current and (
+        current not in levels
+        or principal.clearance not in levels
+        or levels.index(current) > levels.index(principal.clearance)
+    ):
+        # The mirror of the clearance check below (the orchestrator's review, item 3; the strict
+        # option): a default above the approver is theirs neither to lower nor to clear, since
+        # either changes how rows they may not read are marked.
+        return [
+            f"the default marking now is above your clearance: changing or clearing it needs "
+            f"{current} clearance"
+        ]
+    if marking is None:
+        return []
+    if marking not in levels:
+        return [
+            f"{marking!r} is not a classification of the {scheme.name} handling scheme: use one "
+            f"of {', '.join(levels)}"
+        ]
+    problems: list[str] = []
+    if principal.clearance not in levels or levels.index(marking) > levels.index(
+        principal.clearance
+    ):
+        problems.append(
+            "the default marking is above your clearance: a source's rows are never marked "
+            "higher than the person declaring it may read"
+        )
+    if ceiling.above(marking):
+        problems.append(
+            f"the default marking is above this deployment's highest marking, {ceiling.marking}"
+        )
+    own = source.handling.get("classification")
+    if isinstance(own, str) and own in levels and levels.index(marking) < levels.index(own):
+        problems.append(
+            f"the default marking is below the source's own marking, {own}: a default never "
+            "lowers a marking"
+        )
+    return problems
 
 
 def _secret_of(settings: object) -> str | None:
@@ -224,6 +300,15 @@ class InMemorySourceStore:
         self._sources[source_id] = edited
         return edited
 
+    async def set_default_marking(
+        self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
+    ) -> tuple[str | None, SourceTable]:
+        """The default as it was, and the source as written."""
+        before = await self.get(dataset_id, source_id)
+        edited = _with_default_marking(before, marking, principal)
+        self._sources[source_id] = edited
+        return before.default_marking, edited
+
     async def watched(self) -> list[SourceTable]:
         """Every source, of any dataset, whose refresh is a folder watch (the executor's alone)."""
         return sorted(
@@ -284,6 +369,10 @@ ALTER TABLE ingest_connections ADD COLUMN IF NOT EXISTS datasets JSONB NOT NULL 
 CREATE UNIQUE INDEX IF NOT EXISTS ingest_connections_secret
     ON ingest_connections ((settings ->> 'secret')) WHERE settings ->> 'secret' IS NOT NULL;
 ALTER TABLE ingest_sources ADD COLUMN IF NOT EXISTS read JSONB;
+-- ADR-140 Amendment 19: a source's declared default marking, and who set it when (audited too).
+ALTER TABLE ingest_sources ADD COLUMN IF NOT EXISTS default_marking TEXT;
+ALTER TABLE ingest_sources ADD COLUMN IF NOT EXISTS default_marking_set_by TEXT;
+ALTER TABLE ingest_sources ADD COLUMN IF NOT EXISTS default_marking_set_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS connector_cursors (
     source_id TEXT PRIMARY KEY REFERENCES ingest_sources (id) ON DELETE CASCADE,
     cursor TEXT
@@ -292,7 +381,8 @@ CREATE TABLE IF NOT EXISTS connector_cursors (
 
 _SOURCE_COLUMNS = (
     "id, dataset_id, connection_id, name, location, connector_profile, handling, legal_basis, "
-    "refresh, version, created_by, created_at, updated_by, updated_at, read"
+    "refresh, version, created_by, created_at, updated_by, updated_at, read, default_marking, "
+    "default_marking_set_by, default_marking_set_at"
 )
 
 
@@ -432,11 +522,12 @@ class PostgresSourceStore:
                 await conn.execute(
                     f"INSERT INTO ingest_sources ({_SOURCE_COLUMNS}) VALUES "
                     "($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, "
-                    "$15::jsonb)",
+                    "$15::jsonb, $16, $17, $18)",
                     made.id, made.dataset_id, made.connection_id, made.name, made.location,
                     made.connector_profile, json.dumps(made.handling), made.legal_basis,
                     made.refresh.model_dump_json(), made.version, made.created_by, made.created_at,
                     None, None, made.read.model_dump_json() if made.read else None,
+                    made.default_marking, made.default_marking_set_by, made.default_marking_set_at,
                 )  # fmt: skip
             except asyncpg.UniqueViolationError as exc:
                 raise SourceAlreadyRegisteredError(body.location) from exc
@@ -446,16 +537,44 @@ class PostgresSourceStore:
         self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
     ) -> SourceTable:
         edited = _governed(await self.get(dataset_id, source_id), body, principal)
+        # The version taken in the update itself, as the default marking's is, so a governance edit
+        # and a default change at once never write one version (the orchestrator's review, note 9).
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            row = await conn.fetchrow(
                 "UPDATE ingest_sources SET handling = $3::jsonb, legal_basis = $4, "
-                "refresh = $5::jsonb, version = $6, updated_by = $7, updated_at = $8 "
-                "WHERE dataset_id = $1 AND id = $2",
+                "refresh = $5::jsonb, version = version + 1, updated_by = $6, updated_at = $7 "
+                f"WHERE dataset_id = $1 AND id = $2 RETURNING {_SOURCE_COLUMNS}",
                 dataset_id, source_id, json.dumps(edited.handling), edited.legal_basis,
-                edited.refresh.model_dump_json(), edited.version, edited.updated_by,
-                edited.updated_at,
+                edited.refresh.model_dump_json(), edited.updated_by, edited.updated_at,
             )  # fmt: skip
-        return edited
+        if row is None:
+            raise SourceNotFoundError(source_id)
+        return _source(row)
+
+    async def set_default_marking(
+        self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
+    ) -> tuple[str | None, SourceTable]:
+        """The default as it was, and the source as written: both taken in the one update, under
+        the row's lock, so the audit's *from* is what this write replaced (the orchestrator's
+        review, note 10) and two edits at once never both write one version (the lane review,
+        item 6)."""
+        stamp = _with_default_marking(await self.get(dataset_id, source_id), marking, principal)
+        returned = ", ".join(f"s.{c.strip()}" for c in _SOURCE_COLUMNS.split(","))
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "UPDATE ingest_sources AS s SET default_marking = $3, default_marking_set_by = $4, "
+                "default_marking_set_at = $5, version = s.version + 1 "
+                "FROM (SELECT id, default_marking AS before FROM ingest_sources "
+                "WHERE dataset_id = $1 AND id = $2 FOR UPDATE) AS old "
+                f"WHERE s.id = old.id RETURNING old.before AS previous, {returned}",
+                dataset_id, source_id, stamp.default_marking, stamp.default_marking_set_by,
+                stamp.default_marking_set_at,
+            )  # fmt: skip
+        if row is None:
+            raise SourceNotFoundError(source_id)
+        data = dict(row)
+        previous = data.pop("previous")
+        return previous, _source(data)
 
     async def watched(self) -> list[SourceTable]:
         async with self._pool.acquire() as conn:

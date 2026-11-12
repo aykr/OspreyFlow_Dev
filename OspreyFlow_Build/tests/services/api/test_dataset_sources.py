@@ -504,3 +504,201 @@ def test_a_refresh_is_not_paused_through_another_datasets_route_nor_by_one_witho
     )
     assert missing.status_code == 404
     assert world.sources._sources[made["id"]].refresh.paused is False
+
+
+# --- ADR-140 Amendment 19: a source's declared default marking ------------------------------------
+
+
+def _default(world: SimpleNamespace, source_id: str, marking: str | None, *, who: str = "engineer",
+             dataset: str = "ds-a") -> Any:  # fmt: skip
+    return world.client.put(
+        f"/v1/datasets/{dataset}/sources/{source_id}/default-marking",
+        json={"default_marking": marking},
+        headers=_as(who),
+    )
+
+
+def _set_defaults(world: SimpleNamespace) -> list[dict[str, Any]]:
+    return [e for e in world.audit.entries if e["action"] == "set_dataset_source_default_marking"]
+
+
+def test_a_source_approver_declares_changes_and_clears_a_default_marking_audited(
+    world: SimpleNamespace,
+) -> None:
+    """Who, when, from and to, each time; a new version that flags the deployed pipelines."""
+    made = _register(world).json()
+    steps = [(None, "OFFICIAL", 2), ("OFFICIAL", "SECRET", 3), ("SECRET", None, 4)]
+    for before, after, version in steps:
+        response = _default(world, made["id"], after)
+        assert response.status_code == 200, response.text
+        source = response.json()["source"]
+        assert source["default_marking"] == after and source["version"] == version
+        assert source["default_marking_set_by"] == "eng-1"
+        assert source["default_marking_set_at"] is not None
+        assert response.json()["needs_attention"] == ["PIN calls"]
+        entry = _set_defaults(world)[-1]
+        assert entry["principal"].id == "eng-1"
+        query = entry["resolved_query"]
+        assert (query["default_marking_before"], query["default_marking_after"]) == (before, after)
+        assert query["set_at"] == source["default_marking_set_at"].replace("Z", "+00:00")
+    assert world.recipes.flagged == [("ds-a", made["location"], SOURCE_GOVERNANCE_CHANGED)] * 3
+    # Each draft reading the source follows too, its Test no longer standing (the lane review,
+    # item 7): a draft tested under one declaration is tested again before it is deployed.
+    assert world.recipes.followed == [("ds-a", made["location"], "OFFICIAL")] * 3
+
+
+def test_the_default_is_read_with_the_source_and_only_where_the_source_is_read(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 4 on the read: the list and the source page carry it for a person reaching the
+    dataset; another dataset's route, another unit, a case that only reads the dataset and a
+    person without Add ingest files are each refused, so the setting is never read there."""
+    made = _register(world).json()
+    assert _default(world, made["id"], "OFFICIAL").status_code == 200
+    listed = world.client.get("/v1/datasets/ds-a/sources", headers=_as("engineer")).json()
+    assert [s["default_marking"] for s in listed] == ["OFFICIAL"]
+    page = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("engineer"))
+    assert page.json()["default_marking"] == "OFFICIAL"
+    viewer = Principal(id="vw-1", clearance="SECRET", org_unit="unit-1", roles=["viewer"])
+    monkeypatch.setitem(PEOPLE, "viewer", viewer)
+    monkeypatch.setitem(CASES, "vw-1", {"case-v": ["ds-a"]})
+    for who, dataset, code in (
+        ("engineer", "ds-c", 404), ("stranger", "ds-a", 404), ("reader", "ds-a", 404),
+        ("viewer", "ds-a", 403),
+    ):  # fmt: skip
+        one = world.client.get(f"/v1/datasets/{dataset}/sources/{made['id']}", headers=_as(who))
+        every = world.client.get(f"/v1/datasets/{dataset}/sources", headers=_as(who))
+        assert (one.status_code, who) == (code, who)
+        assert "OFFICIAL" not in one.text
+        if dataset == "ds-a":
+            assert (every.status_code, who) == (code, who)
+            assert "default_marking" not in every.text
+
+
+def test_an_approver_who_may_not_read_the_source_cannot_set_its_default(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 4 (the lane review, item 2): the setting's answer is the whole source, so the write
+    needs what the read needs (Add ingest files, Edit pipelines) as well as Deploy pipelines. A
+    person holding Deploy pipelines without Edit pipelines is refused, and is told nothing of it."""
+    made = _register(world).json()
+    # Reaches the dataset (an analyst's Add ingest files) and holds Deploy pipelines, but not the
+    # source author's Edit pipelines that reading a source needs.
+    approver = Principal(
+        id="apr-1", clearance="SECRET", org_unit="unit-1", roles=["source_approver", "analyst"]
+    )
+    monkeypatch.setitem(PEOPLE, "approver", approver)
+    monkeypatch.setitem(CASES, "apr-1", {"case-a": ["ds-a"]})
+    read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("approver"))
+    assert read.status_code == 403
+    answer = _default(world, made["id"], "OFFICIAL", who="approver")
+    # Refused as the read is refused, in the same way.
+    assert answer.status_code == read.status_code, answer.text
+    assert made["location"] not in answer.text and "Cell stays" not in answer.text
+    assert world.sources._sources[made["id"]].default_marking is None
+
+
+def test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 4 on the write: a source author (no Deploy pipelines) is 403; another dataset's
+    route, another unit and a case that only reads the dataset are 404 alike; nothing is set,
+    audited or flagged."""
+    made = _register(world).json()
+    assert _default(world, made["id"], "OFFICIAL", who="author").status_code == 403
+    for who, dataset in (("engineer", "ds-c"), ("stranger", "ds-a"), ("reader", "ds-a")):
+        assert _default(world, made["id"], "OFFICIAL", who=who, dataset=dataset).status_code == 404
+    assert world.sources._sources[made["id"]].default_marking is None
+    assert world.sources._sources[made["id"]].version == 1
+    assert not _set_defaults(world)
+    assert world.recipes.flagged == []
+
+
+@pytest.mark.parametrize(
+    ("who", "source_marking", "default", "ceiling", "words"),
+    [
+        ("engineer", "OFFICIAL", "TOP-SECRET-ISH", None, "is not a classification of the"),
+        ("junior", "OFFICIAL", "SECRET", None, "above your clearance"),
+        ("engineer", "OFFICIAL", "SECRET", "OFFICIAL", "above this deployment's highest marking"),
+        ("engineer", "SECRET", "OFFICIAL", None, "below the source's own marking, SECRET"),
+    ],
+    ids=["not-in-the-scheme", "above-the-approver", "above-the-ceiling", "below-the-source"],
+)
+def test_a_default_marking_is_refused_in_words_and_nothing_is_set(
+    world: SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    who: str,
+    source_marking: str,
+    default: str,
+    ceiling: str | None,
+    words: str,
+) -> None:
+    if ceiling is not None:
+        monkeypatch.setenv("OSPREY_HIGHEST_MARKING", ceiling)
+    made = _register(world, handling=HANDLING | {"classification": source_marking}).json()
+    response = _default(world, made["id"], default, who=who)
+    assert response.status_code == 422, response.text
+    assert response.json()["error"] == "default_marking_refused"
+    assert any(words in p for p in response.json()["problems"])
+    assert world.sources._sources[made["id"]].default_marking is None
+    assert world.recipes.flagged == []
+
+
+def test_a_governance_edit_is_refused_to_someone_the_source_read_refuses(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 4 (the orchestrator's review of the carries step, item 2): the governance edit answers
+    the whole source, its default marking included, so it needs what reading the source needs. A
+    custom role holding Edit pipelines without Add ingest files is refused the read, and the edit,
+    alike; nothing is edited, flagged or followed."""
+    made = _register(world).json()
+    editor = Principal(id="edt-1", clearance="SECRET", org_unit="unit-1", roles=["right:edit_pipelines"])
+    monkeypatch.setitem(PEOPLE, "editor", editor)
+    monkeypatch.setitem(CASES, "edt-1", {"case-a": ["ds-a"]})
+    read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("editor"))
+    assert read.status_code == 403, read.text
+    edit = world.client.patch(
+        f"/v1/datasets/ds-a/sources/{made['id']}/governance",
+        json={"handling": HANDLING | {"classification": "SECRET"}},
+        headers=_as("editor"),
+    )
+    assert edit.status_code == 403, edit.text
+    assert made["location"] not in edit.text
+    assert world.sources._sources[made["id"]].version == 1
+    assert world.recipes.flagged == [] and world.recipes.followed == []
+
+
+@pytest.mark.parametrize("change", ["OFFICIAL", None], ids=["lowered", "cleared"])
+def test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them(
+    world: SimpleNamespace, change: str | None
+) -> None:
+    """The orchestrator's review, item 3 (the strict option): a default above the approver's own
+    clearance is theirs neither to lower nor to clear, since either changes how rows they may not
+    read are marked; refused in words naming the clearance needed, and nothing is written."""
+    made = _register(world).json()
+    assert _default(world, made["id"], "SECRET").status_code == 200
+    before = world.sources._sources[made["id"]]
+    answer = _default(world, made["id"], change, who="junior")
+    assert answer.status_code == 422, answer.text
+    assert any("needs SECRET clearance" in p for p in answer.json()["problems"])
+    assert world.sources._sources[made["id"]] == before
+    assert len(_set_defaults(world)) == 1
+
+
+@pytest.mark.parametrize("same", ["OFFICIAL", None], ids=["the-same-level", "none-again"])
+def test_a_default_set_to_what_it_already_is_writes_nothing(
+    world: SimpleNamespace, same: str | None
+) -> None:
+    """The orchestrator's review, item 4: no change is no new version, no audit entry and no
+    pipeline flagged or draft made to follow; the answer is the source as it is."""
+    made = _register(world).json()
+    if same is not None:
+        assert _default(world, made["id"], same).status_code == 200
+    before = world.sources._sources[made["id"]]
+    audited, flagged = len(_set_defaults(world)), list(world.recipes.flagged)
+    answer = _default(world, made["id"], same)
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["source"]["version"] == before.version
+    assert answer.json()["needs_attention"] == []
+    assert world.sources._sources[made["id"]] == before
+    assert len(_set_defaults(world)) == audited and world.recipes.flagged == flagged

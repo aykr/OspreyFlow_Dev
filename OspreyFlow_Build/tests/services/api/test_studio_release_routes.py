@@ -73,39 +73,58 @@ _HANDLING = {
 
 class _Models:
     """The model store's calls an export and an import make, with the real store's refusals for
-    them: one draft at a time, and a save needs an open draft."""
+    them, raised as the real store raises them (`TargetModelRefused`, which the route answers 409):
+    one draft at a time (`_refuse_a_second_draft`), a save needs an open draft and is judged by the
+    real `_checked`, and each dataset holds its own draft (the orchestrator's review, item 6)."""
 
     def __init__(self) -> None:
         self.live_model: TargetModel | None = TargetModel(
             dataset_id="pid", version=2, state="live", packs={"niem": 1},
             reference_lists=["lst-wings"], created_at=_AT, created_by="owner-9",
         )  # fmt: skip
-        self.draft_model: TargetModel | None = None
+        self.drafts: dict[str, TargetModel] = {}
         self.saved: list[TargetModelDraftInput] = []
+
+    @property
+    def draft_model(self) -> TargetModel | None:
+        return self.drafts.get("pid")
+
+    @draft_model.setter
+    def draft_model(self, model: TargetModel | None) -> None:
+        if model is None:
+            self.drafts.pop("pid", None)
+        else:
+            self.drafts["pid"] = model
 
     async def live(self, dataset_id: str) -> TargetModel | None:
         return self.live_model if dataset_id == "pid" else None
 
     async def draft(self, dataset_id: str) -> TargetModel | None:
-        return self.draft_model
+        return self.drafts.get(dataset_id)
 
     async def open_draft(self, dataset_id: str, principal: Principal) -> TargetModel:
-        if self.draft_model is not None:
-            raise AssertionError("a second draft: the real store refuses it")
+        from services.api.target_models import _refuse_a_second_draft
+
+        _refuse_a_second_draft(self.drafts.get(dataset_id))
         base = self.live_model
-        self.draft_model = TargetModel(
+        self.drafts[dataset_id] = TargetModel(
             dataset_id=dataset_id, version=(base.version + 1 if base else 1), state="draft",
             created_at=_AT, created_by=principal.id,
         )  # fmt: skip
-        return self.draft_model
+        return self.drafts[dataset_id]
 
     async def save_draft(
         self, dataset_id: str, given: TargetModelDraftInput, principal: Principal
     ) -> TargetModel:
-        assert self.draft_model is not None, "the real store refuses a save with no draft open"
+        from services.api.target_models import TargetModelRefused, _checked, core_types_of
+
+        draft = self.drafts.get(dataset_id)
+        if draft is None:
+            raise TargetModelRefused("there is no draft to save: open one first")
+        _checked(await self.live(dataset_id), draft, given, core_types_of([], []))
         self.saved.append(given)
-        self.draft_model = self.draft_model.model_copy(update=given.model_dump())
-        return self.draft_model
+        self.drafts[dataset_id] = draft.model_copy(update=given.model_dump())
+        return self.drafts[dataset_id]
 
 
 def _graph(location: str, *, sql: bool = False) -> PipelineGraph:
@@ -435,3 +454,170 @@ def test_a_secret_planted_in_the_deployments_environment_is_never_exported(
     assert answer.status_code == 422, answer.text
     assert "one of this deployment's secrets" in answer.text
     assert planted not in answer.text
+
+
+# --- CARRIES row 90 (L1.7's review): an import never silently replaces an in-progress draft ------
+
+
+def _held_by(world: _World, who: str) -> TargetModel:
+    """An in-progress draft of the dataset's model, opened by `who`, as the real store holds one."""
+    world.models.draft_model = TargetModel(
+        dataset_id="pid", version=3, state="draft", packs={"niem": 1},
+        reference_lists=["lst-wings"], created_at=_AT, created_by=who,
+    )  # fmt: skip
+    return world.models.draft_model
+
+
+def _import(client: TestClient, files: dict[str, str], **params: object):  # type: ignore[no-untyped-def]
+    return client.post("/v1/datasets/pid/release/import", params=params, json={"files": files})
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_another_persons_draft_is_refused_in_words_naming_them(
+    store: Path, ingest: Path, confirmed: bool, dry_run: bool
+) -> None:
+    """Their draft is theirs: no confirmation of the importer's replaces it, and a dry run says so
+    before the import is tried."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    held = _held_by(world, "analyst-7")
+    world.recipes.create_calls.clear()
+    # A confirmation naming their draft's own version, the strongest an importer could send.
+    answer = _import(client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {}))
+    assert answer.status_code == 422, answer.text
+    plan = answer.json()
+    (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
+    assert "analyst-7" in words and "Studio › Model" in words and "discard" in words
+    assert plan["replaces_own_draft"] is False, "another's draft is never offered to confirm"
+    assert world.models.draft_model == held and world.models.saved == []
+    assert world.recipes.create_calls == []
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_the_importers_own_draft_is_refused_until_confirmed(
+    store: Path, ingest: Path, dry_run: bool
+) -> None:
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    held = _held_by(world, ENGINEER.id)
+    world.recipes.create_calls.clear()
+    answer = _import(client, files, dry_run=dry_run)
+    assert answer.status_code == 422, answer.text
+    plan = answer.json()
+    (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
+    assert "your own" in words and "--replace-own-draft 3" in words
+    assert plan["replaces_own_draft"] is True and plan["own_draft_version"] == 3
+    assert world.models.draft_model == held and world.models.saved == []
+    assert world.recipes.create_calls == []
+
+
+def test_the_importers_own_draft_is_replaced_when_confirmed(store: Path, ingest: Path) -> None:
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    _held_by(world, ENGINEER.id)
+    world.recipes.create_calls.clear()
+    answer = _import(client, files, replace_own_draft=3)
+    assert answer.status_code == 200, answer.text
+    plan = answer.json()
+    assert plan["refused"] == [] and plan["replaces_own_draft"] is True
+    assert ("domain_model", "replaces_draft") in {(i["role"], i["action"]) for i in plan["items"]}
+    assert world.models.saved and world.models.saved[-1].packs == {"niem": 1}
+    assert len(world.recipes.create_calls) == 1
+    (entry,) = [e for e in world.audit.records if e["action"] == "import_dataset_release"]
+    assert entry["resolved_query"]["replaced_own_draft"] is True
+
+
+def test_with_no_draft_the_import_opens_one_without_a_confirmation(
+    store: Path, ingest: Path
+) -> None:
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    world.recipes.create_calls.clear()
+    answer = _import(client, files)
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["replaces_own_draft"] is False
+    assert world.models.draft_model is not None
+    assert world.models.draft_model.created_by == ENGINEER.id
+    (entry,) = [e for e in world.audit.records if e["action"] == "import_dataset_release"]
+    assert entry["resolved_query"]["replaced_own_draft"] is False
+
+
+def test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write(
+    store: Path, ingest: Path
+) -> None:
+    """The plan and the write each read the draft: someone opening one in between is refused at
+    the write, before the model, a pipeline or a list is written (the strict option)."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    world.recipes.create_calls.clear()
+    reads = 0
+    real_draft = world.models.draft
+
+    async def opened_meanwhile(dataset_id: str) -> TargetModel | None:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            _held_by(world, "analyst-7")
+        return await real_draft(dataset_id)
+
+    world.models.draft = opened_meanwhile  # type: ignore[method-assign]
+    answer = _import(client, files)
+    assert answer.status_code == 422, answer.text
+    assert any("analyst-7" in p for p in answer.json()["refused"])
+    assert world.models.saved == [] and world.recipes.create_calls == []
+    assert world.models.draft_model is not None
+    assert world.models.draft_model.created_by == "analyst-7"
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_a_confirmation_for_another_version_of_the_own_draft_is_refused(
+    store: Path, ingest: Path, dry_run: bool
+) -> None:
+    """The orchestrator's review, item 5: the confirmation names the draft version the importer saw.
+    Their draft discarded and opened again since (now version 4) is not replaced on a confirmation
+    given for version 3, nor on a bare `true`."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    held = _held_by(world, ENGINEER.id).model_copy(update={"version": 4})
+    world.models.draft_model = held
+    world.recipes.create_calls.clear()
+    for given in ("3", "true"):
+        answer = _import(client, files, dry_run=dry_run, replace_own_draft=given)
+        assert answer.status_code == 422, answer.text
+        if given == "3":
+            assert any("version 4" in p and "version 3" in p for p in answer.json()["refused"])
+    assert world.models.draft_model == held and world.models.saved == []
+    assert world.recipes.create_calls == []
+
+
+def test_a_draft_opened_in_the_open_draft_window_is_refused_by_the_store_before_any_write(
+    store: Path, ingest: Path
+) -> None:
+    """The orchestrator's review, item 6: the import re-reads no draft, then another person opens
+    one before the import's own `open_draft`. The real store refuses the second draft
+    (`TargetModelRefused`), so the route answers 409 in its words and nothing is written."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    world.recipes.create_calls.clear()
+    real_open = world.models.open_draft
+
+    async def opened_first(dataset_id: str, principal: Principal) -> TargetModel:
+        _held_by(world, "analyst-7")
+        return await real_open(dataset_id, principal)
+
+    world.models.open_draft = opened_first  # type: ignore[method-assign]
+    answer = _import(client, files)
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["error"] == "model_refused"
+    assert "already has a draft" in answer.json()["detail"]
+    assert world.models.saved == [] and world.recipes.create_calls == []
+    assert world.models.draft_model is not None
+    assert world.models.draft_model.created_by == "analyst-7"

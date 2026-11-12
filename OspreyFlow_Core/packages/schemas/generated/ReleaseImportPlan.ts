@@ -10,6 +10,8 @@ export type Items = ReleaseImportItem[];
 export type Refused = string[];
 export type MissingConnections = string[];
 export type Notes = string[];
+export type ReplacesOwnDraft = boolean;
+export type OwnDraftVersion = number | null;
 
 /**
  * What an import writes, or with `--dry-run` would write: always drafts. `refused` names in
@@ -22,6 +24,8 @@ export interface ReleaseImportPlan {
   refused?: Refused;
   missing_connections?: MissingConnections;
   notes?: Notes;
+  replaces_own_draft?: ReplacesOwnDraft;
+  own_draft_version?: OwnDraftVersion;
 }
 export interface ReleaseMetadata {
   name: Name;

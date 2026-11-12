@@ -1,0 +1,23 @@
+diff --git a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+index 616b86c..5a1f7c8 100644
+--- a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
++++ b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+@@ -593,7 +593,7 @@ GET    /v1/runs/{run_id}                one external run's status, read back onl
+ GET    /v1/admin/operations/runs        Operations' figures (`?days=`, ADR-141 decisions 7-8): runs, refusals and metering by day and unit, scheduler health, external triggers, quotas and budget alerts, each read in its store's WHERE by the reader's units; counts withheld above the reader; no account id; operate_schedules
+ PUT    /v1/admin/operations/quotas/{scope}/{key}   set a dataset's or unit's quota of runs a day and its alert share (ADR-141 decision 6); administer_system; audited as set_run_quota
+ GET    /v1/datasets/{dataset_id}/release   a dataset's release (`?name=&version=`, ADR-140 Amendment 9 decision 4): the `DatasetRelease` manifest and its files, never a credential, owner, membership, folder path or licensed row; edit_target_model and publish_pipelines; audited as export_dataset_release
+-POST   /v1/datasets/{dataset_id}/release/import   a release's files judged as Connect, Map, dedupe and the canvas judge a draft (`?dry_run=true` writes nothing), landed as drafts only; refused whole in words; edit_target_model and edit_pipelines; audited as plan_dataset_release_import or import_dataset_release
++POST   /v1/datasets/{dataset_id}/release/import   a release's files judged as Connect, Map, dedupe and the canvas judge a draft (`?dry_run=true` writes nothing), landed as drafts only; refused whole in words; an in-progress model draft of another person refused, naming them, and the importer's own replaced only with `?replace_own_draft=<the draft's version>`, as the dry run names it (CARRIES row 90); edit_target_model and edit_pipelines; audited as plan_dataset_release_import or import_dataset_release
+ GET    /v1/investigations/{id}/data-feeds   the pipelines feeding the case (Viewer, read_data_feeds)
+ GET    /v1/admin/schedules              every schedule (operate_schedules)
+ GET    /v1/admin/schedules/{rid}/runs   one schedule's run ledger (operate_schedules)
+@@ -668,7 +668,8 @@ PUT    /v1/studio/screening-lists/{list_id}/schedule       every day or week at
+ GET    /v1/datasets/{dataset_id}/sources/{source_id}        one source (404 through another dataset's route)
+ GET    /v1/datasets/{dataset_id}/sources/{source_id}/profile   its profile, computed for the reader, never stored
+ GET    /v1/datasets/{dataset_id}/sources/{source_id}/lineage   the dataset's pipelines that read it
+-PATCH  /v1/datasets/{dataset_id}/sources/{source_id}/governance   a new version of its governance, audited; deployed pipelines reading it need attention
++PATCH  /v1/datasets/{dataset_id}/sources/{source_id}/governance   a new version of its governance, audited; deployed pipelines reading it need attention; edit_pipelines with add_ingest_files (its answer is the whole source)
++PUT    /v1/datasets/{dataset_id}/sources/{source_id}/default-marking   the source's declared default marking (`{"default_marking"}`, null clears it), which an unmarked table's rows carry before a join (ADR-140 Amendment 19); 422 `default_marking_refused` in words (a default above the approver is theirs neither to change nor to clear); no change writes nothing; publish_pipelines with add_ingest_files and edit_pipelines; a new version, deployed readers flagged, drafts following; audited as set_dataset_source_default_marking
+ POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause   pauses its refresh, with why; not an edit; audited (schedule_pipelines; ADR-110 Amendment 13)
+ POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume  resumes it; audited (schedule_pipelines)
+ PUT    /v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}   copies a gazetteer of the dataset's own unit into it (another unit's answered as none, 404), identifiers withheld and never matched; audited (run_pipelines, the dataset's gate; ADR-147 Amendment 2)

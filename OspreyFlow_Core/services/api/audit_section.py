@@ -192,6 +192,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "set_dataset_owner_setting",
         "register_dataset_source",
         "edit_dataset_source_governance",
+        # ADR-140 Amendment 19 (studio carries): a source's declared default marking, from and to.
+        "set_dataset_source_default_marking",
         "make_home_case",
         "make_drawn_dataset",
         "set_case_datasets",

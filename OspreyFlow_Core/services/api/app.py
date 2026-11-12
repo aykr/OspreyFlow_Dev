@@ -490,6 +490,7 @@ from schemas.sources import (
     GovernanceEdited,
     PauseRefreshInput,
     RegisterSourceInput,
+    SourceDefaultMarkingInput,
     SourceGovernanceInput,
     SourceLineage,
     SourceRefresh,
@@ -1009,12 +1010,12 @@ from .sites import ControlPointQuad, Site, SiteNotFoundError, SiteStore
 from .source_refresh import StoredSourceWatches
 from .sources import (
     InMemorySourceStore,
-    PostgresSourceStore,
     SecretInUseError,
     SourceAlreadyRegisteredError,
     SourceNotFoundError,
     SourceStore,
     UnknownConnectionError,
+    default_marking_problems,
 )
 from .strength_influencers import (
     InfluencerChangeRefused,
@@ -1063,6 +1064,7 @@ from .studio_recipes import (
     reconcile_recipe_pins,
 )
 from .studio_release import (
+    DraftHeld,
     apply_import,
     bundle_from_text,
     deployment_secrets,
@@ -1073,6 +1075,7 @@ from .studio_release import (
 from .studio_staging import (
     StagedTestInputs,
     dataset_reference_lists,
+    declared_markings,
     draft_marked,
     pipeline_from_yaml,
     pipeline_yaml,
@@ -1233,8 +1236,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     trend_store = await TrendStore.connect(config.postgres.dsn)
     pack_store = await PackStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
-    # ADR-140 Amendment 4: connections and the sources registered on them.
-    source_store = await PostgresSourceStore.connect(config.postgres.dsn)
+    # ADR-140 Amendment 4: connections and the sources registered on them, opened with the run's
+    # resources, which a staged run reads each source's declared default marking through
+    # (ADR-140 Amendment 19; one pool).
+    source_store = resources.sources
     # ADR-140 Amendment 13: deployment-wide screening lists and each dataset's subscriptions,
     # opened with the run's resources, which a staged run reads them through (one pool).
     list_store = resources.list_store
@@ -1636,7 +1641,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # A closed store must not outlive the app: a request's custom roles are read through it.
         app.state.custom_roles = None
         await history.close()
-        await source_store.close()
+        # Closed with the run's resources; a closed store must not outlive the app.
+        app.state.sources = None
         # Closed with the run's resources; a closed store must not outlive the app.
         app.state.list_store = None
         await case_view_store.close()
@@ -11487,11 +11493,14 @@ async def import_dataset_release(
     handling_scheme: HandlingSchemeDep,
     ontology: OntologyDep,
     dry_run: bool = False,
+    replace_own_draft: str | None = None,
 ) -> ReleaseImportPlan:
     """*Import* and `ospreyflow release import [--dry-run]`: the bundle read and checked, every
     pipeline judged by the canvas's own gates, then (unless `dry_run`) everything written as a
     draft. A bundle that cannot be read, or any refusal, writes nothing (422, the plan's words).
-    Nothing goes live: *Make live* stays a person's audited step."""
+    Nothing goes live: *Make live* stays a person's audited step. An in-progress draft of the
+    model is never replaced silently: another person's is refused, naming them, and the importer's
+    own only with `replace_own_draft` (CARRIES row 90)."""
     try:
         bundle = bundle_from_text(body.files)
     except BundleRefused as refused:
@@ -11501,6 +11510,11 @@ async def import_dataset_release(
                 mode="json"
             ),
         )
+    # The confirmation names the version of the importer's own draft it was given for (the
+    # orchestrator's review, item 5); anything else (a bare `true`, say) confirms nothing.
+    confirmed = (
+        int(replace_own_draft) if replace_own_draft and replace_own_draft.isdigit() else None
+    )
     planned = await plan_import(
         bundle,
         dataset_id=dataset_id,
@@ -11513,6 +11527,7 @@ async def import_dataset_release(
         sources=sources,
         scheme=handling_scheme,
         ontology=ontology,
+        replace_own_draft=confirmed,
     )
     plan = planned.plan
     if plan.refused:
@@ -11527,15 +11542,24 @@ async def import_dataset_release(
             result_cardinality=len(plan.items),
         )
         return plan
-    made = await apply_import(
-        bundle,
-        planned,
-        dataset_id=dataset_id,
-        principal=principal,
-        models=models,
-        recipes=studio_recipes,
-        rows_kept=rows_kept,
-    )
+    try:
+        made, replaced = await apply_import(
+            bundle,
+            planned,
+            dataset_id=dataset_id,
+            principal=principal,
+            models=models,
+            recipes=studio_recipes,
+            rows_kept=rows_kept,
+            replace_own_draft=confirmed,
+        )
+    except DraftHeld as held:
+        refused_now = plan.model_copy(
+            update={"items": [], "refused": held.problems, "replaces_own_draft": held.own}
+        )
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content=refused_now.model_dump(mode="json")
+        )
     await audit.record(
         principal=principal,
         action="import_dataset_release",
@@ -11544,6 +11568,9 @@ async def import_dataset_release(
             "release": bundle.manifest.metadata.name,
             "version": bundle.manifest.metadata.version,
             "pipelines": made,
+            # CARRIES row 90: the importer's own in-progress draft replaced, by their confirmation,
+            # as the write found it (the lane review, item 3).
+            "replaced_own_draft": replaced,
         },
         result_cardinality=len(plan.items),
     )
@@ -11908,7 +11935,13 @@ async def get_dataset_source_lineage(
 
 @app.patch(
     "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingAComposite],
+    dependencies=[
+        Depends(require_right(Right.EDIT_PIPELINES)),
+        # The answer is the whole source, its default marking included, so the edit needs what
+        # reading it needs (rule 4; the orchestrator's review of the carries step, item 2).
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        NoLoadingAComposite,
+    ],
 )
 async def edit_dataset_source_governance(
     dataset_id: StudioDatasetDep,
@@ -11944,6 +11977,76 @@ async def edit_dataset_source_governance(
             "handling_after": edited.handling,
             "legal_basis_before": before.legal_basis,
             "legal_basis_after": edited.legal_basis,
+            "pipelines_needing_attention": len(flagged),
+            "drafts_following": len(followed),
+        },
+        result_cardinality=1,
+    )
+    return GovernanceEdited(source=edited, needs_attention=flagged)
+
+
+@app.put(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/default-marking",
+    dependencies=[
+        Depends(require_right(Right.PUBLISH_PIPELINES)),
+        # The answer is the whole source, so the write needs what reading it needs (rule 4; the
+        # lane review, item 2): Add ingest files and the source author's Edit pipelines.
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        Depends(require_studio_role(StudioRole.SOURCE_AUTHOR)),
+        NoLoadingAComposite,
+    ],
+)
+async def set_dataset_source_default_marking(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    body: SourceDefaultMarkingInput,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    sources: SourcesDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
+) -> GovernanceEdited:
+    """Studio › Sources › *Default marking* (ADR-140 Amendment 19): a source approver declares,
+    changes or clears the classification an unmarked table of this source carries before a join.
+    Refused in words (422 `default_marking_refused`) outside the scheme, above the approver's
+    clearance or the deployment's highest marking, or below the source's own marking. Audited
+    with who, when, from and to; a new version of the source, so each deployed pipeline reading
+    it needs attention, as after any governance edit (ADR-140 Amendment 4)."""
+    before = await _source_of(sources, dataset_id, source_id)
+    marking = body.default_marking.strip() if body.default_marking else None
+    problems = default_marking_problems(
+        before, marking, principal, handling_scheme, DeploymentCeiling.from_env(handling_scheme)
+    )
+    if problems:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content={"error": "default_marking_refused", "problems": problems}
+        )
+    if marking == before.default_marking:
+        # No change writes nothing: no version, audit, flag or draft following (the orchestrator's
+        # review, item 4).
+        return GovernanceEdited(source=before, needs_attention=[])
+    previous, edited = await sources.set_default_marking(dataset_id, source_id, marking, principal)
+    flagged = await studio_recipes.flag_for_source(
+        dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
+    )
+    # Each draft reading it is tested again (the lane review, item 7): its handling is unchanged,
+    # so following only clears its Test, as after a governance edit.
+    followed = await studio_recipes.follow_source(
+        dataset_id, edited.location, edited.handling, edited.legal_basis
+    )
+    await audit.record(
+        principal=principal,
+        action="set_dataset_source_default_marking",
+        resolved_query={
+            "dataset_id": dataset_id,
+            "source_id": source_id,
+            "version": edited.version,
+            # What this write replaced, as the store's update read it under the row's lock.
+            "default_marking_before": previous,
+            "default_marking_after": edited.default_marking,
+            "set_at": edited.default_marking_set_at.isoformat()
+            if edited.default_marking_set_at
+            else None,
             "pipelines_needing_attention": len(flagged),
             "drafts_following": len(followed),
         },
@@ -12675,6 +12778,7 @@ async def preview_studio_recipe_staging(
     staging_storage: StagingStorageDep,
     body: StagingPreviewInput,
     list_store: ListStoreDep,
+    sources: SourcesDep,
 ) -> StagingPreview:
     """A staging step's drawer's live sample (ADR-140 Amendment 12, Q4 (a)): the steps up to one,
     over the first ten rows of each source, read as Map's sample is read (`edit_pipelines`, the
@@ -12705,6 +12809,7 @@ async def preview_studio_recipe_staging(
             models, recipe.dataset_id, staging_storage, lists=list_store
         ),
         storage=staging_storage,
+        declared=await declared_markings(sources, recipe.dataset_id, scheme),
     )
     await audit.record(
         principal=principal,
@@ -12768,6 +12873,7 @@ async def _studio_dry_run(
     models: TargetModelStore,
     staging_storage: ObjectStorageConfig,
     list_store: ListStore | None = None,
+    sources: SourceStore | None = None,
 ) -> tuple[VerifyReport, list[Any]]:
     """The dry run Test and Preview share (§5; ADR-140 decision 14): the report, and the files it
     read with their hashes. It writes nothing; what Test records afterwards is Test's alone."""
@@ -12812,6 +12918,8 @@ async def _studio_dry_run(
                 models, recipe.dataset_id, staging_storage, lists=list_store
             ),
             storage=staging_storage,
+            # ADR-140 Amendment 19: Test reads the sources' declared default markings as the run.
+            declared=await declared_markings(sources, recipe.dataset_id, scheme),
         ),
     )
     return report, checked
@@ -12843,6 +12951,7 @@ async def verify_studio_recipe(
     staging_storage: StagingStorageDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
     list_store: ListStoreDep = None,  # type: ignore[assignment]
+    sources: SourcesDep = None,  # type: ignore[assignment]
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
     Parquet staging, no `GraphPort` write, no transaction — but an
@@ -12859,7 +12968,7 @@ async def verify_studio_recipe(
         analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
         hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
         repo_root=repo_root, influencers_store=influencers_store, models=models,
-        staging_storage=staging_storage, list_store=list_store,
+        staging_storage=staging_storage, list_store=list_store, sources=sources,
     )  # fmt: skip
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
@@ -12903,6 +13012,7 @@ async def preview_studio_recipe_graph(
     staging_storage: StagingStorageDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
     list_store: ListStoreDep = None,  # type: ignore[assignment]
+    sources: SourcesDep = None,  # type: ignore[assignment]
 ) -> VerifyReport:
     """Phase 6's *Preview* of a Map or Load step (ADR-140 decision 14; ADR-140 Amendment 8 point 2):
     the same dry run Test runs, under the same right and level and the person's own principal, but
@@ -12916,7 +13026,7 @@ async def preview_studio_recipe_graph(
         analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
         hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
         repo_root=repo_root, influencers_store=influencers_store, models=models,
-        staging_storage=staging_storage, list_store=list_store,
+        staging_storage=staging_storage, list_store=list_store, sources=sources,
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -13338,6 +13448,7 @@ async def run_studio_recipe(
     models: TargetModelsDep = None,  # type: ignore[assignment]
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
     list_store: ListStoreDep = None,  # type: ignore[assignment]
+    sources: SourcesDep = None,  # type: ignore[assignment]
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
     rule_reach: RuleReachDep = None,  # type: ignore[assignment]
     run_quotas: RunQuotasDep = None,
@@ -13428,6 +13539,7 @@ async def run_studio_recipe(
             target_models=models,
             staging_storage=staging_storage,
             list_store=list_store,
+            sources=sources,
             rule_lists=rule_lists,
             rule_reach=rule_reach,
             watch_reach=watch_reach,

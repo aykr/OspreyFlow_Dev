@@ -34,6 +34,9 @@ export const RELEASE_WORDS = {
     "Everything imported is a draft. Make the model live in 1 Model when it is ready.",
   checkFirst:
     "Check the folder first: the import is offered once the check finds nothing wrong.",
+  replaceOwn: "Replace my draft of the domain model",
+  replaceOwnHint:
+    "You have a draft of this dataset's domain model open. Importing replaces it, and what you have not made live in 1 Model is lost.",
 } as const;
 
 function download(path: string, text: string): void {
@@ -110,6 +113,8 @@ export function ReleasesTab({
   const [written, setWritten] = useState<ReleaseImportPlan | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // CARRIES row 90: the importer's own in-progress draft is replaced only once they say so here.
+  const [replaceOwn, setReplaceOwn] = useState(false);
 
   if (!datasetId) {
     return (
@@ -144,6 +149,7 @@ export function ReleasesTab({
     run(async () => {
       setChecked(null);
       setWritten(null);
+      setReplaceOwn(false);
       setFiles(
         chosen && chosen.length > 0
           ? await bundleFromFolder(Array.from(chosen))
@@ -151,20 +157,47 @@ export function ReleasesTab({
       );
     });
 
-  const onCheck = () =>
+  // The confirmation names the version of the draft the check reported (the review, item 5).
+  const versionOf = (confirmed: boolean): number | null =>
+    confirmed ? (checked?.own_draft_version ?? null) : null;
+
+  const check = (confirmed: boolean) =>
     run(async () => {
       if (files)
         setChecked(
-          await importRelease(apiBaseUrl, bearerToken, datasetId, files, true),
+          await importRelease(
+            apiBaseUrl,
+            bearerToken,
+            datasetId,
+            files,
+            true,
+            versionOf(confirmed),
+          ),
         );
     });
 
+  const onCheck = () => check(replaceOwn);
+
+  const onReplaceOwn = (confirmed: boolean) => {
+    setReplaceOwn(confirmed);
+    check(confirmed);
+  };
+
   const onImport = () =>
     run(async () => {
-      if (files)
-        setWritten(
-          await importRelease(apiBaseUrl, bearerToken, datasetId, files, false),
-        );
+      if (!files) return;
+      const result = await importRelease(
+        apiBaseUrl,
+        bearerToken,
+        datasetId,
+        files,
+        false,
+        versionOf(replaceOwn),
+      );
+      // A refusal at the write (a draft someone opened since the check, say) wrote nothing: it is
+      // shown as a refused check, so a new check goes on from it (the lane review, item 9).
+      if ((result.refused ?? []).length > 0) setChecked(result);
+      else setWritten(result);
     });
 
   const clean = checked !== null && (checked.refused ?? []).length === 0;
@@ -285,6 +318,28 @@ export function ReleasesTab({
             Import as drafts
           </Button>
         </div>
+        {checked?.replaces_own_draft && !written && (
+          <div style={{ display: "grid", gap: "var(--sp-4)" }}>
+            <label
+              style={{
+                display: "flex",
+                gap: "var(--sp-8)",
+                alignItems: "center",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={replaceOwn}
+                disabled={!mayImport || busy}
+                onChange={(e) => onReplaceOwn(e.target.checked)}
+              />
+              <span>{RELEASE_WORDS.replaceOwn}</span>
+            </label>
+            <p className="caption" style={{ margin: 0 }}>
+              {RELEASE_WORDS.replaceOwnHint}
+            </p>
+          </div>
+        )}
         {checked && !written && <Plan plan={checked} />}
         {written && (
           <>

@@ -37,6 +37,9 @@ export type CreatedBy = string;
 export type CreatedAt = string;
 export type UpdatedBy = string | null;
 export type UpdatedAt = string | null;
+export type DefaultMarking = string | null;
+export type DefaultMarkingSetBy = string | null;
+export type DefaultMarkingSetAt = string | null;
 export type NeedsAttention = string[];
 
 export interface GovernanceEdited {
@@ -60,6 +63,9 @@ export interface SourceTable {
   created_at: CreatedAt;
   updated_by?: UpdatedBy;
   updated_at?: UpdatedAt;
+  default_marking?: DefaultMarking;
+  default_marking_set_by?: DefaultMarkingSetBy;
+  default_marking_set_at?: DefaultMarkingSetAt;
   [k: string]: unknown;
 }
 export interface Handling {

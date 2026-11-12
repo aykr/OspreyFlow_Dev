@@ -1040,6 +1040,8 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   // ADR-140 Amendment 4: registered sources.
   "register-a-source-by-keyboard",
   "edit-a-sources-governance-by-keyboard",
+  // ADR-140 Amendment 19 (studio carries): a source's declared default marking.
+  "declare-a-sources-default-marking-by-keyboard",
   "re-profile-a-source-and-open-it-in-a-pipeline-by-keyboard",
   "use-a-registered-source-in-a-pipeline-by-keyboard",
   // ADR-140 Amendment 6: phase 3's exit, a file registered and used in a new pipeline, no marking asked.
@@ -1095,6 +1097,8 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases.
   "export-a-release-by-keyboard",
   "check-and-import-a-release-by-keyboard",
+  // CARRIES row 90 (studio carries): the importer's own model draft replaced only once confirmed.
+  "replace-own-draft-on-import-by-keyboard",
   // ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's external orchestration.
   "hand-a-pipeline-to-an-orchestrator-by-keyboard",
   "read-a-pipelines-airflow-dag-by-keyboard",

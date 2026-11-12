@@ -370,7 +370,8 @@ EXPECTED_QUERY = {
     "operations_runs": {"days"},
     "set_run_quota": set(),
     "export_dataset_release": {"name", "version"},
-    "import_dataset_release": {"dry_run"},
+    # CARRIES row 90: the importer's confirmation that their own open model draft is replaced.
+    "import_dataset_release": {"dry_run", "replace_own_draft"},
 }
 
 

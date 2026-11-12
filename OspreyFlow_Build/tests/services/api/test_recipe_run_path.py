@@ -143,6 +143,8 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "models": given["target_models"], "staging_storage": given["staging_storage"],
         # ADR-140 Amendment 13: the deployment-wide lists a staged run's Lookups may subscribe to.
         "list_store": given["list_store"],
+        # ADR-140 Amendment 19: the sources whose declared default markings a staged run reads.
+        "sources": given["sources"],
         # L3.6: the drawn watches a load is run against, and the case read sets of their owners.
         "board_items": given["board_items"], "datasets": given["datasets"],
         "investigations": given["investigations"],
@@ -169,3 +171,46 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
     assert call["trigger"] == "manual"
     for name in names:
         assert getattr(call["deps"], name) is given[name], name
+
+
+async def test_a_recipe_run_hands_the_pipeline_runner_its_source_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-140 Amendment 19: the manual, scheduled and watched runs all come through
+    `_execute_recipe_run`, which must hand the runner `deps.sources`, or no run reads a source's
+    declared default marking and every Join of an unmarked table is refused although one is set.
+    Red with `recipe_run`'s `source_store=` set to None."""
+    from services.api import recipe_run
+
+    store = object()
+    given: dict[str, Any] = {}
+
+    class _Stop(Exception):
+        pass
+
+    async def runner(*_args: Any, **kwargs: Any) -> Any:
+        given.update(kwargs)
+        raise _Stop
+
+    async def no_gate(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    class Deps:
+        sources = store
+
+        def __getattr__(self, name: str) -> Any:
+            return None
+
+    monkeypatch.setattr(recipe_run, "run_published_pipeline", runner)
+    monkeypatch.setattr(recipe_run, "_rule_gate", no_gate)
+    with pytest.raises(_Stop):
+        await recipe_run._execute_recipe_run(
+            Deps(),  # type: ignore[arg-type]
+            principal=object(),  # type: ignore[arg-type]
+            recipe=SimpleNamespace(pipeline=object(), recipe_id="r"),  # type: ignore[arg-type]
+            investigation_id="case-1",
+            source_location=None,
+            trigger="manual",
+            sink=None,  # type: ignore[arg-type]
+        )
+    assert given["source_store"] is store

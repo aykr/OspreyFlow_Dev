@@ -153,6 +153,23 @@ test("a source's governance is edited by keyboard, and says which pipelines need
   registerCovered(REGISTRY, "edit-a-sources-governance-by-keyboard");
 });
 
+// ADR-140 Amendment 19: a source approver declares the default marking an unmarked table carries.
+test("a source's default marking is declared by keyboard, and says who declared it", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Open source Wing phone calls file");
+  await expect(page.getByText(/None declared: this source's table/)).toBeVisible();
+  const choice = page.getByRole("combobox", { name: "Default marking" });
+  await choice.focus();
+  await choice.selectOption("OFFICIAL");
+  await press(page, "Save the default marking");
+  await expect(page.getByRole("status").filter({ hasText: "need attention" })).toContainText("Wing phone calls");
+  await expect(page.getByText(/^OFFICIAL, declared by engineer-1 on /)).toBeVisible();
+  const put = (await asked(page)).find((a) => a.method === "PUT" && a.path.endsWith("/default-marking"));
+  expect(JSON.parse(put?.body ?? "{}")).toEqual({ default_marking: "OFFICIAL" });
+  registerCovered(REGISTRY, "declare-a-sources-default-marking-by-keyboard");
+});
+
 test("a source's refresh is set to read only rows past a watermark, by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await tab(page, "2 Sources");
@@ -1073,6 +1090,31 @@ test("a release is checked, then imported as drafts, by keyboard", async ({ page
   const imports = (await asked(page)).filter((a) => a.path === "/v1/datasets/harbour-extract/release/import");
   expect(imports).toHaveLength(2);
   registerCovered(REGISTRY, "check-and-import-a-release-by-keyboard");
+});
+
+// CARRIES row 90: an import replaces the importer's own in-progress model draft only once they
+// confirm it, the checkbox reached by Tab from the check, never by a pointer.
+test("an importer's own draft is replaced only once confirmed, by keyboard", async ({ page }) => {
+  await page.goto(`${HARNESS}?rights=releases&draft=own`);
+  await tab(page, "5 Releases");
+  const folder = mkdtempSync(join(tmpdir(), "ospreyflow-release-"));
+  writeFileSync(join(folder, "release.yaml"), "apiVersion: ospreyflow.io/v1\n");
+  await page.getByLabel("Choose the release's folder").setInputFiles(folder);
+  await expect(page.getByRole("button", { name: "Check the release" })).toBeEnabled();
+  await press(page, "Check the release");
+  await expect(page.getByText(/your own in-progress draft/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import as drafts" })).toBeDisabled();
+  await page.keyboard.press("Tab");
+  const confirm = page.getByRole("checkbox", { name: "Replace my draft of the domain model" });
+  await expect(confirm).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(confirm).toBeChecked();
+  await expect(page.getByText("Would write the domain model as the draft, in place of the one open now.")).toBeVisible();
+  await press(page, "Import as drafts");
+  await expect(page.getByText("Everything imported is a draft. Make the model live in 1 Model when it is ready.")).toBeVisible();
+  const imports = (await asked(page)).filter((a) => a.path === "/v1/datasets/harbour-extract/release/import");
+  expect(imports).toHaveLength(3);
+  registerCovered(REGISTRY, "replace-own-draft-on-import-by-keyboard");
 });
 
 // ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's quota bar, Owned externally, and the DAG.

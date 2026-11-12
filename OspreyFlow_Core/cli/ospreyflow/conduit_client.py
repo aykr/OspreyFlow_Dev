@@ -153,11 +153,15 @@ def _bundle_files(folder: Path) -> dict[str, str]:
 
 def release_import(
     http: httpx.Client, *, token: str, dataset: str, folder: Path, dry_run: bool,
-    say: Callable[[str], None] = print,
+    replace_own_draft: int | None = None, say: Callable[[str], None] = print,
 ) -> int:  # fmt: skip
+    params = {"dry_run": "true" if dry_run else "false"}
+    if replace_own_draft is not None:
+        # CARRIES row 90: the version of the importer's own open model draft they confirm replacing.
+        params["replace_own_draft"] = str(replace_own_draft)
     answer = http.post(
         f"/v1/datasets/{dataset}/release/import",
-        params={"dry_run": "true" if dry_run else "false"},
+        params=params,
         json={"files": _bundle_files(folder)},
         headers={"Authorization": f"Bearer {token}"},
     )

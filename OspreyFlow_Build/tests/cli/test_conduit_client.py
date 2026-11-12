@@ -267,3 +267,51 @@ def test_run_through_the_command_needs_the_service_identity(
     env = {"OSPREY_API_URL": "http://c", "OSPREY_TOKEN": "svc-token"}
     assert _main(product, tmp_path / "home", *args, "--wait", "--fail-on", "held", env=env) == 0
     assert conduit[0].url.path == "/v1/runs"
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_replace_own_draft_is_sent_only_when_given(tmp_path: Path, confirmed: bool) -> None:
+    """CARRIES row 90: the confirmation travels as the route's own query, never by default."""
+    (tmp_path / "release.yaml").write_text("x")
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"items": [], "refused": []})
+
+    code = release_import(
+        _conduit(handler), token="t", dataset="pid", folder=tmp_path, dry_run=False,
+        replace_own_draft=3 if confirmed else None, say=lambda _: None,
+    )  # fmt: skip
+    assert code == 0
+    # The version confirmed, or nothing at all: never a bare true (the orchestrator's review, item 5).
+    assert seen[0].url.params.get("replace_own_draft") == ("3" if confirmed else None)
+
+
+def test_the_parser_takes_replace_own_draft() -> None:
+    from cli.ospreyflow.main import _parser
+
+    args = _parser().parse_args(
+        ["release", "import", "bundle", "--dataset", "pid", "--replace-own-draft", "3"]
+    )
+    assert args.replace_own_draft == 3
+    plain = _parser().parse_args(["release", "import", "bundle", "--dataset", "pid"])
+    assert plain.replace_own_draft is None
+    with pytest.raises(SystemExit):
+        _parser().parse_args(["release", "import", "b", "--dataset", "pid", "--replace-own-draft"])
+
+
+@pytest.mark.parametrize("given", [False, True])
+def test_replace_own_draft_reaches_the_route_through_the_command(
+    product: Path, tmp_path: Path, conduit: list[httpx.Request], given: bool
+) -> None:
+    """The lane review, item 8: the parser and the client are tested apart above; this is the
+    dispatch between them. Red with `main`'s `replace_own_draft=` left out."""
+    out = tmp_path / "bundle"
+    out.mkdir()
+    (out / "release.yaml").write_text("x")
+    args = ["release", "import", str(out), "--dataset", "pid"]
+    if given:
+        args += ["--replace-own-draft", "3"]
+    assert _main(product, tmp_path / "home", *args, env=_PERSON) == 0
+    assert conduit[0].url.params.get("replace_own_draft") == ("3" if given else None)

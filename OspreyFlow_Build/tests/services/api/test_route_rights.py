@@ -278,6 +278,8 @@ ROUTE_RIGHTS = {
     "get_dataset_source_profile": "add_ingest_files",
     "get_dataset_source_lineage": "add_ingest_files",
     "edit_dataset_source_governance": "edit_pipelines",
+    # ADR-140 Amendment 19: a source's declared default marking, a source approver's.
+    "set_dataset_source_default_marking": "publish_pipelines",
     "pause_source_refresh": "schedule_pipelines",
     "resume_source_refresh": "schedule_pipelines",
     # ADR-140 Amendment 13: the screening-list connector, subscriptions by id, a dataset's lists.

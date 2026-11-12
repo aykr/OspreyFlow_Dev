@@ -17,8 +17,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 
 import yaml
 from pydantic import ValidationError
@@ -30,7 +30,7 @@ from services.ingest.pipeline import (
     step_record_violations,
 )
 from services.ingest.profiler import profile_source
-from services.ingest.recipe_rules import marked_columns
+from services.ingest.recipe_rules import classification_columns, marked_columns
 from services.ingest.reference_list_import import kept_lists, lists_for_run
 from services.ingest.sql_transform import sql_gate_problems
 from services.ingest.staged_run import staging_rejection_record, step_counts
@@ -40,6 +40,7 @@ from services.ingest.staging_catalogue import (
     StagedRef,
     StagedTable,
     StagingError,
+    carry_declared_marking,
     run_staging,
     source_table,
     staging_rule_violations,
@@ -61,6 +62,7 @@ from schemas.staging import LookupStep, SqlStep, StagingStep, step_inputs
 
 from .list_connector import ListStore, deployment_references, subscribed_list_ids
 from .run_source import branch_location, topological
+from .sources import SourceStore
 from .studio_map import draft_handling_columns, resolve_source_handling
 from .studio_profile import _read_rows, offered_to, row_markings, sample_markings
 from .target_models import TargetModelStore
@@ -76,6 +78,9 @@ class StagedTestInputs:
 
     references: Sequence[ReferenceList]
     storage: ObjectStorageConfig
+    #: ADR-140 Amendment 19: each source's declared default marking, by its location
+    #: (`declared_markings`); none carried when empty, so a Join of an unmarked table is refused.
+    declared: Mapping[str, str] = field(default_factory=dict)
 
 
 async def dataset_reference_lists(
@@ -180,6 +185,35 @@ class SourceRows:
     raw: dict[str, list[dict[str, str]]]
 
 
+async def declared_markings(
+    sources: SourceStore | None, dataset_id: str | None, scheme: HandlingScheme
+) -> dict[str, str]:
+    """Each of the dataset's sources that declares a default marking (ADR-140 Amendment 19), by its
+    registered location. None given (a caller with no source store): none, so an unmarked table
+    stays unmarked and a Join refuses it (fail closed).
+
+    A default is judged here, as the run reads it, against the source's marking now: one the
+    scheme does not hold, or one below the source's own classification (a governance edit raised
+    the source after the default was declared), is left out, so its table stays unmarked. The
+    route's check alone would let an edit made afterwards, or between its read and its write,
+    leave a lower default carried (the lane review, item 1; rule 3)."""
+    if sources is None or not dataset_id:
+        return {}
+    levels = list(scheme.classification)
+    kept: dict[str, str] = {}
+    for source in await sources.list_for(dataset_id):
+        default = source.default_marking
+        if not default or default not in levels:
+            continue
+        own = source.handling.get("classification")
+        if isinstance(own, str) and own and (
+            own not in levels or levels.index(default) < levels.index(own)
+        ):
+            continue
+        kept[source.location] = default
+    return kept
+
+
 def source_tables(
     draft: StudioRecipeDraft,
     pipeline: PipelineGraph,
@@ -187,22 +221,38 @@ def source_tables(
     load_id: str,
     limit: int | None = None,
     location: str | None = None,
+    declared: Mapping[str, str] | None = None,
 ) -> SourceRows:
     """Each source node's rows as a table named by its id, read by its own load
     (`<load_id>:<node id>`); the first `limit` rows only, when given. `location`: a run's file,
-    read by a source node that names none of its own (as `run_source.branch_location`)."""
+    read by a source node that names none of its own (as `run_source.branch_location`).
+
+    `declared` (ADR-140 Amendment 19, `declared_markings`): a source's default marking by its
+    registered location, the node's own location before a run's file choice. A table with no
+    marking column of its own carries it in each column the draft binds a classification from,
+    in its raw rows too, so each judgement of a row's marking (who may read it, the sample's
+    markings) reads the same marking the Join and Map do. Never a table with a marking column."""
     tables: dict[str, StagedTable] = {}
     raw: dict[str, list[dict[str, str]]] = {}
+    marked = draft_marked(draft)
+    classified = classification_columns(draft.row_template, draft_handling_columns(draft))
     for node in source_nodes(pipeline):
         reader = _source_draft(draft, node)
+        default = (declared or {}).get(reader.source_location or "")
         chosen = branch_location(node, location)  # the run's file choice, as Verify's
         if chosen:
             reader = reader.model_copy(update={"source_location": chosen})
         rows = _read_rows(reader)
         if limit is not None:
             rows = rows[:limit]
+        table = source_table(node.id, rows, load_id=f"{load_id}:{node.id}")
+        carried = carry_declared_marking(
+            table, default, marked=marked, classification=classified
+        )
+        if carried is not table and default is not None:
+            rows = [row | dict.fromkeys(sorted(classified), default) for row in rows]
         raw[node.id] = rows
-        tables[node.id] = source_table(node.id, rows, load_id=f"{load_id}:{node.id}")
+        tables[node.id] = carried
     return SourceRows(tables, raw)
 
 
@@ -290,6 +340,7 @@ def preview_staging(
     scheme: HandlingScheme,
     references: Sequence[ReferenceList],
     storage: ObjectStorageConfig,
+    declared: Mapping[str, str] | None = None,
 ) -> StagingPreview:
     """The steps up to `body.step` over the first ten rows of each source of the **saved**
     pipeline, with every refusal of the save gate for the pipeline the drawer holds beside it.
@@ -341,7 +392,10 @@ def preview_staging(
         return StagingPreview(
             step=body.step, problems=[*problems, LISTS_WITHHELD], values_masked=True
         )
-    read = source_tables(draft, pipeline, load_id="preview", limit=PREVIEW_ROWS)
+    # ADR-140 Amendment 19: the sources' declared default markings, as the run reads them.
+    read = source_tables(
+        draft, pipeline, load_id="preview", limit=PREVIEW_ROWS, declared=declared
+    )
     every_row = [r for rows in read.raw.values() for r in rows]
     sample = sample_markings(draft, scheme, every_row)
     if not sample.readable_by(principal, scheme):

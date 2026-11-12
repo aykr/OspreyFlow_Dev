@@ -156,6 +156,14 @@ class ReleaseImportPlan(BaseModel):
     #: What an import leaves to a person, in words: a screening list to subscribe to here, a
     #: large list's rows to import here.
     notes: list[str] = Field(default_factory=list)
+    #: The import replaces the importer's own in-progress draft of the domain model: refused until
+    #: they confirm it (`replace_own_draft`), then written. Another person's draft is never
+    #: offered to confirm: it is refused in words naming them (CARRIES row 90).
+    replaces_own_draft: bool = False
+    #: The version of the importer's own open draft the plan saw: the confirmation names it
+    #: (`replace_own_draft=<version>`), so a draft discarded and opened again since is not replaced
+    #: on a confirmation given for another (the orchestrator's review of the carries step, item 5).
+    own_draft_version: int | None = Field(default=None, ge=1)
 
 
 class ReleaseBundleInput(BaseModel):

@@ -188,6 +188,132 @@ describe("Import", () => {
     ).toBe(true);
   });
 
+  // CARRIES row 90: an import never silently replaces an in-progress draft of the model.
+  async function chooseAndCheck() {
+    fireEvent.change(screen.getByLabelText("Choose the release's folder"), {
+      target: { files: folder(["b/release.yaml", "r"]) },
+    });
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Check the release",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Check the release" }));
+  }
+  const importOffered = () =>
+    !(
+      screen.getByRole("button", {
+        name: "Import as drafts",
+      }) as HTMLButtonElement
+    ).disabled;
+
+  it("shows another person's draft refused, naming them, with nothing to confirm", async () => {
+    const words =
+      "the domain model has an in-progress draft (version 3) by analyst-7, opened 10 November 2026 at 00:00 UTC: an import never replaces another person's draft. Ask analyst-7 to make it live or discard it in Studio › Model, then import again";
+    answers({
+      status: 422,
+      body: {
+        dry_run: true,
+        items: [],
+        refused: [words],
+        replaces_own_draft: false,
+      },
+    });
+    open();
+    await chooseAndCheck();
+    await screen.findByText(words);
+    expect(screen.queryByLabelText(RELEASE_WORDS.replaceOwn)).toBeNull();
+    expect(importOffered()).toBe(false);
+  });
+
+  it("asks the importer to confirm replacing their own draft, then checks and imports with it", async () => {
+    const own =
+      "the domain model has your own in-progress draft (version 3), opened 10 November 2026 at 00:00 UTC: importing replaces it";
+    const confirmed = {
+      dry_run: true,
+      items: [
+        {
+          role: "domain_model",
+          name: "the domain model",
+          action: "replaces_draft",
+        },
+      ],
+      refused: [],
+      replaces_own_draft: true,
+      own_draft_version: 3,
+    };
+    const calls = answers(
+      {
+        status: 422,
+        body: {
+          dry_run: true,
+          items: [],
+          refused: [own],
+          replaces_own_draft: true,
+          own_draft_version: 3,
+        },
+      },
+      { status: 200, body: confirmed },
+      { status: 200, body: { ...confirmed, dry_run: false } },
+    );
+    open();
+    await chooseAndCheck();
+    await screen.findByText(own);
+    expect(importOffered()).toBe(false);
+    expect(calls[0]!.url).not.toContain("replace_own_draft");
+    fireEvent.click(screen.getByLabelText(RELEASE_WORDS.replaceOwn));
+    await screen.findByText(
+      "Would write the domain model as the draft, in place of the one open now.",
+    );
+    expect(calls[1]!.url).toContain("dry_run=true");
+    // The version the check reported, never a bare true (the orchestrator's review, item 5).
+    expect(calls[1]!.url).toContain("replace_own_draft=3");
+    expect(importOffered()).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Import as drafts" }));
+    await screen.findByText(RELEASE_WORDS.drafts);
+    expect(calls[2]!.url).toContain("dry_run=false");
+    expect(calls[2]!.url).toContain("replace_own_draft=3");
+  });
+
+  it("shows a refusal at the write as a refused check, and a new check goes on from it", async () => {
+    const meanwhile =
+      "the domain model has an in-progress draft (version 3) by analyst-7, opened 12 November 2026 at 10:00 UTC: an import never replaces another person's draft";
+    answers(
+      { status: 200, body: CHECKED },
+      { status: 422, body: { dry_run: false, items: [], refused: [meanwhile], replaces_own_draft: false } },
+      { status: 200, body: CHECKED },
+    );
+    open();
+    await chooseAndCheck();
+    await screen.findByText("Would write Visits as a new draft.");
+    fireEvent.click(screen.getByRole("button", { name: "Import as drafts" }));
+    await screen.findByText(meanwhile);
+    expect(screen.getByText("Nothing was written, because:")).toBeTruthy();
+    expect(screen.queryByText(RELEASE_WORDS.drafts)).toBeNull();
+    expect(importOffered()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Check the release" }));
+    await screen.findByText("Would write Visits as a new draft.");
+    expect(importOffered()).toBe(true);
+  });
+
+  it("never sends a confirmation the importer did not give", async () => {
+    const calls = answers(
+      { status: 200, body: CHECKED },
+      { status: 200, body: { ...CHECKED, dry_run: false } },
+    );
+    open();
+    await chooseAndCheck();
+    await screen.findByText("Would write Visits as a new draft.");
+    expect(screen.queryByLabelText(RELEASE_WORDS.replaceOwn)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Import as drafts" }));
+    await screen.findByText(RELEASE_WORDS.drafts);
+    expect(calls[1]!.url).not.toContain("replace_own_draft");
+  });
+
   it("is not offered without its rights", () => {
     open(new Set(["edit_target_model", "publish_pipelines"]));
     expect(

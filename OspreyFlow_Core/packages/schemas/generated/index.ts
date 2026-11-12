@@ -228,6 +228,7 @@ export type { RegisterSourceInput } from "./RegisterSourceInput";
 export type { SourceGovernanceInput } from "./SourceGovernanceInput";
 export type { SourceLineage } from "./SourceLineage";
 export type { GovernanceEdited } from "./GovernanceEdited";
+export type { SourceDefaultMarkingInput } from "./SourceDefaultMarkingInput";
 export type { BlankListMapping } from "./BlankListMapping";
 export type { DeploymentListInput } from "./DeploymentListInput";
 export type { DeploymentList } from "./DeploymentList";

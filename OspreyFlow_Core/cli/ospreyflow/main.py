@@ -410,6 +410,13 @@ def _parser() -> argparse.ArgumentParser:
     imported.add_argument("folder", type=Path, help="the folder an export made")
     imported.add_argument("--dataset", required=True, help="the receiving dataset's id")
     imported.add_argument("--dry-run", action="store_true", help="what it would write; no writes")
+    imported.add_argument(
+        "--replace-own-draft",
+        type=int,
+        metavar="VERSION",
+        help="replace your own in-progress draft of the domain model, at the version the dry run "
+        "names (never another person's)",
+    )
     # ADR-141 decision 9: a run triggered by the deployment's service identity, as its owner.
     run_verb = verbs.add_parser("run", help="run a deployed pipeline, as its owner")
     run_verb.add_argument("dataset", help="the dataset's id")
@@ -1438,8 +1445,9 @@ def _conduit_verb(args: argparse.Namespace, ctx: _Context) -> int:
                 version=args.release_version, out=args.out,
             )  # fmt: skip
         return conduit_client.release_import(
-            http, token=token, dataset=args.dataset, folder=args.folder, dry_run=args.dry_run
-        )
+            http, token=token, dataset=args.dataset, folder=args.folder, dry_run=args.dry_run,
+            replace_own_draft=args.replace_own_draft,
+        )  # fmt: skip
 
 
 def _grading(args: argparse.Namespace, ctx: _Context) -> int:

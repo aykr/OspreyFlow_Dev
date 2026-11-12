@@ -1,0 +1,3 @@
+# studio carries' merge checks on the merged tree (branch eaaa9d4, code at ccc7f39; with carries_action_registry, carries_audit_section and carries_conduit_routes)
+offline: test_audit_kinds, test_route_coverage_check, test_dataset_sources, test_studio_release_routes, test_adr_reservations, test_guides: 168 passed
+route-coverage-check 421 routes no drift; test-file-coverage-check 1017 no drift; schemas-check 602 match; citation-check every cited path exists; adr-reservations-check clean
