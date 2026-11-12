@@ -1,32 +1,31 @@
-# Docs lane · brief D2a · the README, the guides, the welcome pages and the website, as built
+# Docs lane · brief D2c part 4 · the model route on the cloud-platform profile (P11), then D2c closes (S)
 
-Written by the orchestrator, 9 November 2026, for a **fresh docs session on the default account** (`ayan`). **The
-owner's ruling of 9 November, about 21:35:** D2a starts now, leaving out the alerts and rules pages until rules'
-L2.10 is merged and deployed (it relaxes the earlier gate, "after L2.9, L2.10, L2.5, P1 and P3 run deployed").
-Read `process/BUILD_PLAN_PARALLEL_LANES.md`'s D2a section, `FDE_HANDOVER.md` §1 (British English, the owner's tone)
-and the merged reports in `process/lanes/*/REPORT.md` first. Sonnet or Opus, medium. Size M.
+Written by the orchestrator, 12 November 2026, at the owner's request, for a **fresh docs session on `sol`**, from
+**main** (`git fetch`, branch `lane/docs-d2c4` from `main`). Read BRIEF_D2c.md, ADR-135 Amendments 4, 7 and 8
+(P11 parts 1 and 2 as built), and the guide's §6a, §10.1 and Appendix A first. Opus, medium. Size S.
 
-**The lane.** The docs row: `OspreyFlow_Core/docs/**`, `OspreyFlow_Core/README.md`, `apps/workspace/src/welcome/**`,
-`OspreyFlow_Build/marketing_site/**`. Never `OspreyFlow_presentations/` (D2b). Never run `publish_pages.sh` or push
-anything, anywhere: the website is public when published, and only the owner publishes it. Docker is off on this
-Mac, so take no new screenshots tonight; list in the report which pages need captures once a deployment runs.
+**Why:** P11 merged on 11 November, but §6a has no section on the model route: it shows only in Appendix A
+(1.77), §10.1 (1.78), the gateway's line in §6a.1 and 1.80's alignment. The owner wants it written now, so the
+Client install view shows only what is truly left. P8's section is a step of its own after the client's install
+(D2d), not part of this one.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (rule 9 above all: no real data, no real names, nothing from outside this
-repository); the spec as merged; describe only what is on `main` as built, and mark anything else "coming".
+**Write, in both copies (OspreyFlow_Core/docs/administration-guide.md §6a, and spec/10_ADMINISTRATION_GUIDE.md word
+for word):** a new §6a subsection, *The model route*, before *Coming*, as built and in an operator's words:
+- the model gateway (LiteLLM), always rendered; how the namespace reaches the client's own approved gateway, or
+  Bedrock by the namespace's IAM role (no key stored anywhere), with the settings (`models.provider(s).kind`,
+  `auth`, `region`) and the region answer;
+- the Terraform it renders for Bedrock (the role's statements), and what the platform team applies;
+- the egress rows the route needs, and what Admin › Models allows and refuses on this profile (§10.1's refusal
+  words, with the render-again, `helm upgrade`, Terraform order the guide now gives);
+- Laurium's key on the gateway, as already said in §6a.1, cross-referenced rather than repeated;
+- what is not yet tried against the client's own gateway or account (the live checks), said as such.
+Check every claim against the code on main (harness/cloud_platform/*, services/api/model_admin.py, packages/schemas/
+deployment.py), with the file and line in your report. Remove anything about the model route from §6a.9 *Coming*
+that is now built.
 
-**Do now:**
-1. **The README** (`OspreyFlow_Core/README.md`) as the plan says (the overview deck's lasting content, as built). It
-   is published, so it stays a draft for the owner to approve: say so at its head.
-2. **The user, developer and administration guides, and a standalone architecture guide** (`tools/docs_pdf.py`):
-   everything the plan lists **except** the alerts and rules module (one queue, what raises alerts, watches, team
-   routing, Raise an alert, the rule editor), which waits for L2.10 and L2.11. Include: four places; no branches;
-   home cases, Authors and teams; releases; the Reports Viewer's journey; Maps and Models administration; the roles'
-   words from `help/roles.ts`; Disable and ownership as far as L3.8 built them; the backups folder as ADR-114
-   Amendment 37 decides (it is being built: "coming" until it merges); `spec/10_ADMINISTRATION_GUIDE.md`'s missing
-   §9.5 and §9.6.
-3. **The welcome pages, the website and the GOV.UK wording**, brought into line with one another and the guides.
-   The website marks unbuilt features "coming".
+Version row 1.88, in an operator's words, with ADR references only (no P-numbers or lane names), ending
+"PDF made by the orchestrator at merge". Docs gates on the Mac: test_admin_guide; test_docs_pdf red for the admin
+PDF alone. One lane-reviewer round, then send "ready". Not pushed; the orchestrator merges.
 
-**Exit.** The guides build to PDF (`tools/docs_pdf.py`); the docs gates green (`make citation-check
-product-tree-link-check provenance-annotation-check demo-guide-check`, and `make ci`'s docs checks); every claim
-traceable to a merged report or the spec; a friction row; the report names what waits for L2.10 and L2.11.
+**Never.** osprey-small (the owner's demo, being rebuilt tonight by the demo lane) is never touched. Nothing of yours
+runs on the server from 12:00 UK on Friday 13 November.

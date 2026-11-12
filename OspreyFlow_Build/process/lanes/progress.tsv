@@ -57,7 +57,7 @@ case-b	P12	L	done	Laurium as a second extraction engine: part 1 merged (5571caa7
 platform-b	P6	S	done	The case's gazetteer panel beside place search, by keyboard (merged fd171f7)
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	done	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed) (merged 99d927d)
-docs	D2c	M	building	The Cloud Platform deployment guide: parts 1 (fb6b02c, 1.76), 2 (e1b7626, 1.81) and 3 (P7b, P9, L1.9 part 2, P12 part 2, P10 part 2; guide 1.86, 12 Nov) merged; P8 and P11 later
+docs	D2c	M	building	The Cloud Platform deployment guide: parts 1 (fb6b02c, 1.76), 2 (e1b7626, 1.81) and 3 (0a4beef, 1.86) merged; part 4, the model route (P11: the client's gateway and Bedrock by the IAM role), started 12 Nov; P8's section is its own step, D2d
 platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-114 Am 37) (merged f8df603)
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
 admin	L2.5c	S	done	Admin's Delete for a removed case's layer; refusals that name roles (merged f4eb985)
@@ -86,4 +86,5 @@ docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape
 platform	P7b	M	done	The proof-of-concept shape, shape: poc (ADR-148 Am 5): one ArcadeDB, one ClickHouse with Keeper inside, no PDBs, Ingest scratch; manual-install and decommission runbooks written and checked as text (ADR-148 Am 5: no block yet run against a cluster or an account); their run on kind is the client install's acceptance, still to come (merged, 11 Nov)
 platform	P9b	S	todo	After the client's install: alerts, the PodDisruptionBudgets' drain test, the volume-expansion procedure
+docs	D2d	S	todo	After the client's install (with P8): the Cloud Platform guide's section on P8, nothing on a shared disk (S3 for uploads, staging, tiles, models; settings and recipes per ADR-148), written once P8 is built
 demo	rebuild	M	building	osprey-small rebuilt from main for the owner's Friday demo (Part 1 of the demo-sites prompt): fresh stores, the four demo accounts, five synthetic packs, Gemini allowed; the owner's checks by 20:00
