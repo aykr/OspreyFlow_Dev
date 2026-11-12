@@ -563,6 +563,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
           never signed in does not count as the last people-manager.
         - On Entra, a clearance stored from a sign-in more than 24 h old is not trusted for choosing transfer
           recipients or promotion-alert recipients. Those people are left out, and the words say why.
+      - **P9 round 4 (afc1a5f):** every code fix from my review is real. ArcadeDB's restore now restores
+        beside the live database, checks it, then swaps. On kind, restores over a live, changed database
+        passed, and a truncated set left both stores untouched. A second review found the operator's
+        runbook still had a step that hangs for 10 minutes on any deployment that has run a backup. Case is
+        fixing that, and will walk the runbook's commands exactly as written on kind, before it lands.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
