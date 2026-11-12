@@ -659,6 +659,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 
         The pristine post-seed backup is `/srv/ospreyflow/backups/small/20261112T173107Z-small-…`, restored in
         about 25 s. Recommended: no v0.5.0 fall-back. You walk it tonight.
+      - **Your word (about 20:00):**
+        - Part 2's answers start now, read-only, on the demo lane.
+        - R1 runs **beside** osprey-small: after your Friday demo, its sizing is capped (memory_gib 62 → about 24,
+          one apply) and its model unloads when idle, so kind gets about 30–32 GiB.
+        - R1 is briefed to platform on sol: it prepares off the server until Friday evening.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.

@@ -1,37 +1,33 @@
-# Platform lane · brief P7 · the `cloud-platform` profile (ADR-148)
+# Platform lane · brief R1 · the client install's acceptance on kind (L)
 
-Written by the orchestrator, 9 November 2026, from the owner's client decision (ADR-148, ACCEPTED (design)), for
-a **fresh platform session on the default account** (`ayan`), **started from lane/platform at 78bb4ae (P5, cleared, merging now)**: build on it, and rebase onto main once P5
-is merged there (the orchestrator tells you). Read `spec/06_DECISIONS.md` ADR-148 first (decisions 1–5, 7, 8, 12 and 14 are this step), then
-`process/BUILD_PLAN_PARALLEL_LANES.md`'s P7 row and merge-order items 19–21. Opus, medium. Size L.
+Written by the orchestrator, 12 November 2026, at the owner's order, for a **fresh platform session on `sol`**, from
+**main** (`git fetch`, branch `lane/platform-r1` from `main`). Read P7b's install runbook and decommission runbook as
+rendered (harness/cloud_platform/runbooks.py → INSTALL.md, DECOMMISSION.md), ADR-148 Amendments 5 to 8, P9's
+RUNBOOK.md (backups and restore) and the guide's §6a first. Opus, medium. Size L.
 
-**No client access is needed or wanted.** P7 proves itself on a local **kind or k3d cluster on the owner's test
-server** (`ospreyflow-test`, which has Docker), set up to the platform's rules: the Calico deny-egress policy and no
-ReadWriteMany storage class. Never create anything on the client's GitHub or AWS: every client-side change is a pull
-request the owner's team raises once access is granted. The *live on the platform* exit is recorded later, when the
-client's namespaces exist. No real data, ever (rule 9).
+**The owner's words:** R1 is the client install's acceptance. The `cloud-platform` profile in `shape: poc`, installed
+on kind by following P7b's install runbook **exactly as written**, checked, backed up and restored, then removed by
+the decommission runbook. Every place the runbook is wrong or unclear is a finding: fix the runbook and the product,
+then run the affected part again. Say what a platform team member would have been stuck on. **The v0.5.1 release is
+cut from the commit that passes R1.**
 
-**The lane, the stacks, the merge rule.** Platform's row, plus ADR-148's ownership lines: the harness's
-`cloud-platform` profile files, `deploy/generated/cloud-platform/`, `deploy/helm/ospreyflow/templates/ingress.yaml`
-(remove its citation-allowlist line when you write it), the policy check and `ospreyflow images push`. **Shared,
-first and alone:** the numeric UID `10001` in every `Dockerfile`'s `USER` line, as its own small commit, which the
-orchestrator merges ahead of the rest (merge order 20). **The owner's files:** `make cp-policy-check`'s Makefile
-target and `ci.yml` job go in `process/lanes/platform/P7_ci_makefile.diff` (merge order 21). The kind or k3d cluster
-runs on the server: ask the orchestrator for the server's Docker, as for P5's image work. Name your images and
-cluster `osprey-p7-*`, never touch `osprey-small` or the `osprey-test-*` stacks, and tear it all down after. `make
-test` runs on the server through `stack_lease.sh offline platform -- …`. Ask before make -k ci or Playwright here.
-Report by message.
+**Timing.**
+- **Until Friday evening: no server.** Prepare on the Mac: read both runbooks as a platform team member would; list
+  every command and what it needs; prepare the kind cluster's settings; write the check list (what "checked" means:
+  sign-in, a case, a load, a rule, a backup set, a restore beside a live store, the decommission's leftovers).
+- **Nothing on the server from 12:00 UK on Friday 13 November** (the owner's demo) until the orchestrator says the
+  demo is over.
+- **From Friday evening, on the orchestrator's word:** run it. The lanes' heavy runs are paused while R1 has the server.
 
-**Build:** P7's row: the profile rendering Helm values into an existing namespace and the namespace's Terraform for
-RDS, ElastiCache, OpenSearch, S3, ECR and IRSA in the environments repository's shape; the chart's optional Ingress;
-UID 10001, `runAsNonRoot`, no privilege escalation, capabilities dropped on every rendered pod; the managed stores in
-place of ours, their connection details from the platform's secrets; ArcadeDB ×3, ClickHouse ×2 and Keeper ×3 as
-StatefulSets on `gp2-expand` with PodDisruptionBudgets (one each in development); the Calico deny and allow policies
-from the settings ADR-135 Am 2 and ADR-147 gate; `ospreyflow images push --registry`; the Conduit built without Java
-on this profile (a build argument), with *Admin › Maps*' Build saying so (pending the owner's ruling on ADR-148
-question 3; build to the recommended answer); `make cp-policy-check`.
+**Memory (the owner's decision, 12 Nov): osprey-small stays up.** After the demo, the demo lane caps osprey-small's
+sizing (server.memory_gib 62 → about 24, one apply), and its local model unloads when idle. Your kind node gets
+**about 30–32 GiB** (the poc development shape asks about 27 GiB, limits about 33). The 10 November attempt ran out
+at a 4 GB node. Record the node's memory and every pod's actual use in your record. Disk (~30–40 GB of 572 free) and
+CPU (~4 of 16 cores) are not constraints.
 
-**Exit** (P7's row): `make cp-policy-check` green on the render and red on each planted fault (a root pod, a named
-UID, an RWX claim, a hostPath, a port below 1024, a foreign registry, no deny-egress); ArcadeDB, ClickHouse and Keeper
-each shown to start as UID 10001 (or a thin image of ours, in the licence register); the acceptance scenarios green on
-the kind/k3d cluster; `local-lite`, `small` and `cluster` renders unchanged except the UIDs; a friction row.
+**Records:** each runbook block as run (copied from the rendered runbook, the placeholders filled as an operator
+would), its output, and each finding with its fix and the re-run. A plain-words list for the owner: where a platform
+team member would have been stuck. Gates at the final head as every step.
+
+**Never.** osprey-small is the demo lane's, never yours: no command touches its containers or volumes. No push. No
+real data. Nothing reachable from the internet.

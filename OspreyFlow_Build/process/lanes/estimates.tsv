@@ -14,4 +14,4 @@ demo	rebuild	the demo lane (sol) rebuilds osprey-small from main once studio car
 
 docs	D2e	P8's section of the Cloud Platform guide, once P8 is built	after 20 Nov	B
 docs	sites	items 1-3 and 7 merged; the publish diffs (4, 5) await the owner; screenshots after Friday	after Friday	B
-platform	R1	prepared Friday off the server; run from Friday evening on kind	15 Nov	B
+platform	R1	preparing on the Mac (no server) until Friday evening; then run on kind beside osprey-small (capped after the demo)	15 Nov	B
