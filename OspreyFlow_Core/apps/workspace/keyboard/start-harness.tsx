@@ -88,6 +88,24 @@ function Harness() {
   );
 }
 
+// `?guide=refused` (ADR-145 Amendment 10): Home with the administration guide refused, its words under its
+// link, for the axe scan of that state. The Conduit's refusal stood in for, then the link activated once.
+if (params.get("guide") === "refused") {
+  const fetchFirst = window.fetch.bind(window);
+  window.fetch = async (input, init) =>
+    String(input).endsWith("/v1/guides/administration")
+      ? new Response(JSON.stringify({ detail: { error: "place_required", place: "admin",
+          message: "The administration guide opens with Admin, which your roles do not open. Ask an administrator for a role that opens Admin." } }),
+          { status: 403, headers: { "Content-Type": "application/json" } }) // prettier-ignore
+      : fetchFirst(input, init);
+  const activate = () => {
+    const link = [...document.querySelectorAll("a")].find((a) => a.textContent === "Read the administration guide (PDF)");
+    if (link) link.click();
+    else requestAnimationFrame(activate);
+  };
+  requestAnimationFrame(activate);
+}
+
 // Under `?brand=govuk` Start sits in the real GOV.UK frame, as the Glass draws it (ADR-132).
 const brand = await applyHarnessBrand();
 

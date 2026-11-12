@@ -94,6 +94,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         answers={input.answers}
         // ADR-145 Amendment 10: a guide's PDF through the Conduit, with the person's token in a header.
         onReadGuide={(guide) => openGuide(guide, { apiBaseUrl: input.apiBaseUrl, bearerToken: input.bearerToken })}
+        apiBaseUrl={input.apiBaseUrl}
       />
     );
   }

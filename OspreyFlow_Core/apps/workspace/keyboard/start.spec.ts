@@ -41,28 +41,6 @@ async function serve(page: Page, options: { refuseAdministration?: boolean } = {
   return asked;
 }
 
-/** What reached a guide's tab from its blob URL: shown in the tab where the browser has a PDF viewer, or
- * handed to the browser's downloads where it has none (headless Chromium, or a browser set to download
- * PDFs). Either way the bytes are the guide's, read from the blob, never from a URL bearing a token. */
-async function guideIn(tab: Page): Promise<{ url: string; body: string }> {
-  return await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`the guide never reached the tab (${tab.url()})`)), 10_000);
-    tab.on("download", (download) => {
-      void download.path().then(async (path) => {
-        clearTimeout(timer);
-        resolve({ url: download.url(), body: await readFile(path, "utf8") });
-      }, reject);
-    });
-    tab.on("framenavigated", (frame) => {
-      if (frame !== tab.mainFrame() || !frame.url().startsWith("blob:")) return;
-      void tab.evaluate(async () => (await fetch(location.href)).text()).then((body) => {
-        clearTimeout(timer);
-        resolve({ url: frame.url(), body });
-      }, reject);
-    });
-  });
-}
-
 async function press(page: Page, name: string | RegExp) {
   await page.getByRole("button", { name, exact: typeof name === "string" }).focus();
   await page.keyboard.press("Enter");
@@ -131,57 +109,67 @@ test("a place opens with its key from anywhere on Home, and one the rights do no
   registerCovered(REGISTRY, "open-a-place-from-home-with-its-key");
 });
 
-test("each card's guide is reached and opened in a new tab by keyboard, with the token in a header", async ({ page }) => {
+// Headless Chromium shows no PDFs (`navigator.pdfViewerEnabled` is false), so a guide is saved under its
+// own name rather than shown in a tab; `guides.test.ts` holds the tab's path. Either way the bytes come
+// from a blob read with the token in a header.
+test("each card's guide is reached and opened by keyboard, with the token in a header", async ({ page, context }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/start-harness.html");
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  expect(await page.evaluate(() => navigator.pdfViewerEnabled)).toBe(false);
   for (const [card, words, guide] of [
     ["The Glass", "Read the user guide (PDF)", "user"],
     ["Ingest Studio", "Read the developer guide (PDF)", "developer"],
     ["Admin", "Read the administration guide (PDF)", "administration"],
   ] as const) {
-    const link = page.getByRole("region", { name: card }).getByRole("button", { name: words, exact: true });
-    // Reached by Tab from the card's own words, the way a keyboard user reads down the card.
+    const link = page.getByRole("region", { name: card }).getByRole("link", { name: words, exact: true });
+    // In the page's tab order: Tab leaves it and Shift+Tab comes back to it.
     await link.focus();
-    await page.keyboard.press("Shift+Tab");
     await page.keyboard.press("Tab");
+    await expect(link).not.toBeFocused();
+    await page.keyboard.press("Shift+Tab");
     await expect(link).toBeFocused();
-    const opened = page.waitForEvent("popup");
+    const saved = page.waitForEvent("download");
     await page.keyboard.press("Enter");
-    const tab = await opened;
-    const reached = await guideIn(tab);
-    expect(reached.url).toMatch(/^blob:/);
-    expect(reached.body).toBe(GUIDE_PDF);
+    const download = await saved;
+    expect(download.url()).toMatch(/^blob:/);
+    expect(download.suggestedFilename()).toBe(`ospreyflow-${guide}-guide.pdf`);
+    expect(await readFile(await download.path(), "utf8")).toBe(GUIDE_PDF);
     expect(asked).toContain(`${guide}: Bearer unused`);
-    await tab.close();
-    // Activating the link opens the guide and leaves Home where it was.
+    // Opening the guide leaves Home where it was, in this one tab.
     await expect(page.getByRole("heading", { level: 1, name: /^Good/ })).toBeVisible();
+    expect(context.pages()).toHaveLength(1);
   }
   // Rules and Monitoring has no guide; the architecture guide is linked nowhere.
   expect(asked.filter((a) => a.startsWith("/v1/guides/"))).toEqual(["/v1/guides/user", "/v1/guides/developer", "/v1/guides/administration"]);
   registerCovered(REGISTRY, "read-a-place-s-guide-from-home-by-keyboard");
 });
 
-test("a guide the Conduit refuses is said in words under its link, and no tab is left open, by keyboard", async ({ page, context }) => {
+test("a guide the Conduit refuses is said in words under its link, by keyboard", async ({ page, context }) => {
   await serve(page, { refuseAdministration: true });
   await page.goto("/keyboard/start-harness.html");
-  const link = page.getByRole("region", { name: "Admin" }).getByRole("button", { name: "Read the administration guide (PDF)" });
+  const link = page.getByRole("region", { name: "Admin" }).getByRole("link", { name: "Read the administration guide (PDF)" });
   await link.focus();
-  const opened = page.waitForEvent("popup");
   await page.keyboard.press("Enter");
-  const tab = await opened;
   await expect(page.getByRole("region", { name: "Admin" }).getByText(ADMINISTRATION_REFUSED)).toBeVisible();
-  await expect.poll(() => tab.isClosed()).toBe(true);
   expect(context.pages()).toHaveLength(1);
   await expect(link).toBeFocused();
   registerCovered(REGISTRY, "read-why-a-guide-was-refused-on-home-by-keyboard");
 });
 
-test("a person whose rights open no card is linked no guide", async ({ page }) => {
+test("only the guides of the cards a person's rights open are linked", async ({ page }) => {
   await serve(page);
+  await page.goto("/keyboard/start-harness.html?rights=investigate");
+  await expect(page.getByRole("link", { name: /guide \(PDF\)$/ })).toHaveText(["Read the user guide (PDF)"]);
   await page.goto("/keyboard/start-harness.html?rights=run_pipelines");
   await expect(page.getByText("Your account opens no place yet.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: /guide \(PDF\)$/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /guide \(PDF\)$/ })).toHaveCount(0);
+});
+
+test("the harness's refused state, which every-harness scans, shows the refusal under its link", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/start-harness.html?guide=refused");
+  await expect(page.getByRole("region", { name: "Admin" }).getByText(ADMINISTRATION_REFUSED)).toBeVisible();
 });
 
 test("every registered Start action has its own proving test case above", () => {

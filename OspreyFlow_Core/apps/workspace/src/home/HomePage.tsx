@@ -13,7 +13,7 @@ import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { PLACE_KEY, PLACE_NAME } from "../shell/places";
 import { startPlaces } from "../rights/visibility";
 import type { StartPlace } from "../rights/visibility";
-import { GUIDE_FOR_PLACE, type GuideId } from "./guides";
+import { GUIDE_FOR_PLACE, WORDS as GUIDE_WORDS, guideUrl, type GuideId } from "./guides";
 import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
 import { TIPS, TipPicture } from "./tips";
 import "./home.css";
@@ -52,6 +52,9 @@ export interface HomePageProps {
    * Each guide is linked under its place's card (`guides.ts`), so only with a card the person's
    * rights open; without this, no guide is linked. */
   onReadGuide?: (guide: GuideId) => Promise<string | null>;
+  /** The Conduit's address, for each guide link's `href` (the route itself, which asks for a token:
+   * the activation is handled, so the token goes in a header, never in the link). */
+  apiBaseUrl?: string;
 }
 
 // The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
@@ -195,7 +198,7 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
   );
 }
 
-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide }: HomePageProps) {
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers, onReadGuide, apiBaseUrl = "" }: HomePageProps) {
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];
@@ -205,7 +208,9 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
   const readGuide = (guide: GuideId) => {
     if (!onReadGuide) return;
     setGuideSaid((said) => ({ ...said, [guide]: undefined }));
-    void onReadGuide(guide).then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
+    void onReadGuide(guide)
+      .catch(() => GUIDE_WORDS.unreachable)
+      .then((words) => setGuideSaid((said) => ({ ...said, [guide]: words ?? undefined })));
   };
 
   useEffect(() => {
@@ -294,9 +299,13 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                   <p className="home-panel__what">{p.what}</p>
                   {guide && (
                     <div className="home-panel__guide">
-                      <button type="button" className="home-panel__guide-link" onClick={() => readGuide(guide.id)}>
+                      {/* A link (the brief: a plain link), its activation handled: a middle click is too,
+                          since the route without the token would only refuse. */}
+                      <a className="home-panel__guide-link" href={guideUrl(apiBaseUrl, guide.id)} target="_blank" rel="noopener"
+                         onClick={(event) => { event.preventDefault(); readGuide(guide.id); }}
+                         onAuxClick={(event) => { event.preventDefault(); readGuide(guide.id); }}>
                         {guide.words}
-                      </button>
+                      </a>
                       <p className="home-panel__guide-said" aria-live="polite">{guideSaid[guide.id] ?? ""}</p>
                     </div>
                   )}

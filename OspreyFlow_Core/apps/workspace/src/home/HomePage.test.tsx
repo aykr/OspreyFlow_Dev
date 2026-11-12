@@ -237,15 +237,15 @@ describe("Home under the GOV.UK brand", () => {
 // ADR-145 Amendment 10: the guides, each under the card of its place, only with a card the rights open.
 describe("Home's guides", () => {
   const GUIDE_LINK = /^Read the (user|developer|administration) guide \(PDF\)$/;
-  const guideLinks = () => screen.queryAllByRole("button", { name: GUIDE_LINK }).map((b) => b.textContent);
+  const guideLinks = () => screen.queryAllByRole("link", { name: GUIDE_LINK }).map((b) => b.textContent);
 
   it("links each guide under its own place's card: the user guide under the Glass, the developer guide under the Studio, the administration guide under Admin", () => {
     home(["investigate", "edit_pipelines", "manage_people", "triage_alerts", "read_alert_queue"], { onReadGuide: vi.fn() });
-    expect(panel("The Glass").getByRole("button", { name: "Read the user guide (PDF)" })).toBeTruthy();
-    expect(panel("Ingest Studio").getByRole("button", { name: "Read the developer guide (PDF)" })).toBeTruthy();
-    expect(panel("Admin").getByRole("button", { name: "Read the administration guide (PDF)" })).toBeTruthy();
+    expect(panel("The Glass").getByRole("link", { name: "Read the user guide (PDF)" })).toBeTruthy();
+    expect(panel("Ingest Studio").getByRole("link", { name: "Read the developer guide (PDF)" })).toBeTruthy();
+    expect(panel("Admin").getByRole("link", { name: "Read the administration guide (PDF)" })).toBeTruthy();
     // Rules and Monitoring has no guide of its own; the architecture guide is linked nowhere.
-    expect(panel("Rules and Monitoring").queryAllByRole("button", { name: GUIDE_LINK })).toHaveLength(0);
+    expect(panel("Rules and Monitoring").queryAllByRole("link", { name: GUIDE_LINK })).toHaveLength(0);
     expect(screen.queryByText(/architecture guide/i)).toBeNull();
     expect(guideLinks()).toHaveLength(3);
   });
@@ -267,12 +267,28 @@ describe("Home's guides", () => {
     expect(guideLinks()).toEqual([]);
   });
 
+  it("is a link to the guide's route, its activation handled so no token goes in a URL", () => {
+    const onReadGuide = vi.fn(async () => null);
+    home(["investigate"], { onReadGuide, apiBaseUrl: "https://conduit.example" });
+    const link = screen.getByRole("link", { name: "Read the user guide (PDF)" });
+    expect(link.getAttribute("href")).toBe("https://conduit.example/v1/guides/user");
+    // The click is handled (its default prevented): the browser never follows the bare route.
+    expect(fireEvent.click(link)).toBe(false);
+    expect(onReadGuide).toHaveBeenCalledWith("user");
+  });
+
+  it("says the guide could not be read when opening it throws", async () => {
+    home(["investigate"], { onReadGuide: vi.fn().mockRejectedValue(new Error("boom")) });
+    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
+    await waitFor(() => expect(panel("The Glass").getByText("The guide could not be read just now. Try again shortly.")).toBeTruthy());
+  });
+
   it("asks for the card's own guide when its link is activated", () => {
     const onReadGuide = vi.fn(async () => null);
     home(["investigate", "edit_pipelines", "manage_people"], { onReadGuide });
-    fireEvent.click(screen.getByRole("button", { name: "Read the developer guide (PDF)" }));
+    fireEvent.click(screen.getByRole("link", { name: "Read the developer guide (PDF)" }));
     expect(onReadGuide).toHaveBeenCalledWith("developer");
-    fireEvent.click(screen.getByRole("button", { name: "Read the administration guide (PDF)" }));
+    fireEvent.click(screen.getByRole("link", { name: "Read the administration guide (PDF)" }));
     expect(onReadGuide).toHaveBeenLastCalledWith("administration");
     expect(onReadGuide).toHaveBeenCalledTimes(2);
   });
@@ -281,9 +297,9 @@ describe("Home's guides", () => {
     const onReadGuide = vi.fn().mockResolvedValueOnce("The user guide opens with the Glass, which your roles do not open.")
                                .mockResolvedValueOnce(null); // prettier-ignore
     home(["investigate"], { onReadGuide });
-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
+    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
     await waitFor(() => expect(panel("The Glass").getByText(/which your roles do not open/)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Read the user guide (PDF)" }));
+    fireEvent.click(screen.getByRole("link", { name: "Read the user guide (PDF)" }));
     await waitFor(() => expect(panel("The Glass").queryByText(/which your roles do not open/)).toBeNull());
   });
 });
