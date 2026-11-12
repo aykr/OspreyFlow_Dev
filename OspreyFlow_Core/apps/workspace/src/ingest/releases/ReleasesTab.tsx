@@ -157,6 +157,10 @@ export function ReleasesTab({
       );
     });
 
+  // The confirmation names the version of the draft the check reported (the review, item 5).
+  const versionOf = (confirmed: boolean): number | null =>
+    confirmed ? (checked?.own_draft_version ?? null) : null;
+
   const check = (confirmed: boolean) =>
     run(async () => {
       if (files)
@@ -167,7 +171,7 @@ export function ReleasesTab({
             datasetId,
             files,
             true,
-            confirmed,
+            versionOf(confirmed),
           ),
         );
     });
@@ -188,7 +192,7 @@ export function ReleasesTab({
         datasetId,
         files,
         false,
-        replaceOwn,
+        versionOf(replaceOwn),
       );
       // A refusal at the write (a draft someone opened since the check, say) wrote nothing: it is
       // shown as a refused check, so a new check goes on from it (the lane review, item 9).

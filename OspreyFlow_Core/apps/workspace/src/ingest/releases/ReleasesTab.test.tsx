@@ -244,6 +244,7 @@ describe("Import", () => {
       ],
       refused: [],
       replaces_own_draft: true,
+      own_draft_version: 3,
     };
     const calls = answers(
       {
@@ -253,6 +254,7 @@ describe("Import", () => {
           items: [],
           refused: [own],
           replaces_own_draft: true,
+          own_draft_version: 3,
         },
       },
       { status: 200, body: confirmed },
@@ -262,18 +264,19 @@ describe("Import", () => {
     await chooseAndCheck();
     await screen.findByText(own);
     expect(importOffered()).toBe(false);
-    expect(calls[0]!.url).toContain("replace_own_draft=false");
+    expect(calls[0]!.url).not.toContain("replace_own_draft");
     fireEvent.click(screen.getByLabelText(RELEASE_WORDS.replaceOwn));
     await screen.findByText(
       "Would write the domain model as the draft, in place of the one open now.",
     );
     expect(calls[1]!.url).toContain("dry_run=true");
-    expect(calls[1]!.url).toContain("replace_own_draft=true");
+    // The version the check reported, never a bare true (the orchestrator's review, item 5).
+    expect(calls[1]!.url).toContain("replace_own_draft=3");
     expect(importOffered()).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Import as drafts" }));
     await screen.findByText(RELEASE_WORDS.drafts);
     expect(calls[2]!.url).toContain("dry_run=false");
-    expect(calls[2]!.url).toContain("replace_own_draft=true");
+    expect(calls[2]!.url).toContain("replace_own_draft=3");
   });
 
   it("shows a refusal at the write as a refused check, and a new check goes on from it", async () => {
@@ -308,7 +311,7 @@ describe("Import", () => {
     expect(screen.queryByLabelText(RELEASE_WORDS.replaceOwn)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Import as drafts" }));
     await screen.findByText(RELEASE_WORDS.drafts);
-    expect(calls[1]!.url).toContain("replace_own_draft=false");
+    expect(calls[1]!.url).not.toContain("replace_own_draft");
   });
 
   it("is not offered without its rights", () => {

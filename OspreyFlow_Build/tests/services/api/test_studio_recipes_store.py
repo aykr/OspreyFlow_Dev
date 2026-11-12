@@ -2228,7 +2228,8 @@ async def test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere
         )
         assert (made.default_marking, made.default_marking_set_by) == (None, None)
         assert (await sources.get(dataset, made.id)).default_marking is None
-        declared = await sources.set_default_marking(dataset, made.id, "OFFICIAL", AUTHOR)
+        previous, declared = await sources.set_default_marking(dataset, made.id, "OFFICIAL", AUTHOR)
+        assert previous is None
         read = await sources.get(dataset, made.id)
         assert (read.default_marking, read.default_marking_set_by) == ("OFFICIAL", AUTHOR.id)
         assert read.default_marking_set_at is not None and read.version == declared.version == 2
@@ -2236,7 +2237,8 @@ async def test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere
         with pytest.raises(SourceNotFoundError):
             await sources.set_default_marking(f"ds-{new_id()}", made.id, "SECRET", AUTHOR)
         assert (await sources.get(dataset, made.id)).default_marking == "OFFICIAL"
-        await sources.set_default_marking(dataset, made.id, None, AUTHOR)
+        previous, _ = await sources.set_default_marking(dataset, made.id, None, AUTHOR)
+        assert previous == "OFFICIAL"
         cleared = await sources.get(dataset, made.id)
         assert (cleared.default_marking, cleared.version) == (None, 3)
     finally:

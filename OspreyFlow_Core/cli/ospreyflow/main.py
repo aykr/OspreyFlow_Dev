@@ -412,8 +412,10 @@ def _parser() -> argparse.ArgumentParser:
     imported.add_argument("--dry-run", action="store_true", help="what it would write; no writes")
     imported.add_argument(
         "--replace-own-draft",
-        action="store_true",
-        help="replace your own in-progress draft of the domain model (never another person's)",
+        type=int,
+        metavar="VERSION",
+        help="replace your own in-progress draft of the domain model, at the version the dry run "
+        "names (never another person's)",
     )
     # ADR-141 decision 9: a run triggered by the deployment's service identity, as its owner.
     run_verb = verbs.add_parser("run", help="run a deployed pipeline, as its owner")

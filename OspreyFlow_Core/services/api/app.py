@@ -11493,7 +11493,7 @@ async def import_dataset_release(
     handling_scheme: HandlingSchemeDep,
     ontology: OntologyDep,
     dry_run: bool = False,
-    replace_own_draft: bool = False,
+    replace_own_draft: str | None = None,
 ) -> ReleaseImportPlan:
     """*Import* and `ospreyflow release import [--dry-run]`: the bundle read and checked, every
     pipeline judged by the canvas's own gates, then (unless `dry_run`) everything written as a
@@ -11510,6 +11510,11 @@ async def import_dataset_release(
                 mode="json"
             ),
         )
+    # The confirmation names the version of the importer's own draft it was given for (the
+    # orchestrator's review, item 5); anything else (a bare `true`, say) confirms nothing.
+    confirmed = (
+        int(replace_own_draft) if replace_own_draft and replace_own_draft.isdigit() else None
+    )
     planned = await plan_import(
         bundle,
         dataset_id=dataset_id,
@@ -11522,7 +11527,7 @@ async def import_dataset_release(
         sources=sources,
         scheme=handling_scheme,
         ontology=ontology,
-        replace_own_draft=replace_own_draft,
+        replace_own_draft=confirmed,
     )
     plan = planned.plan
     if plan.refused:
@@ -11546,7 +11551,7 @@ async def import_dataset_release(
             models=models,
             recipes=studio_recipes,
             rows_kept=rows_kept,
-            replace_own_draft=replace_own_draft,
+            replace_own_draft=confirmed,
         )
     except DraftHeld as held:
         refused_now = plan.model_copy(
@@ -11930,7 +11935,13 @@ async def get_dataset_source_lineage(
 
 @app.patch(
     "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingAComposite],
+    dependencies=[
+        Depends(require_right(Right.EDIT_PIPELINES)),
+        # The answer is the whole source, its default marking included, so the edit needs what
+        # reading it needs (rule 4; the orchestrator's review of the carries step, item 2).
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        NoLoadingAComposite,
+    ],
 )
 async def edit_dataset_source_governance(
     dataset_id: StudioDatasetDep,
@@ -12010,7 +12021,11 @@ async def set_dataset_source_default_marking(
         return JSONResponse(  # type: ignore[return-value]
             status_code=422, content={"error": "default_marking_refused", "problems": problems}
         )
-    edited = await sources.set_default_marking(dataset_id, source_id, marking, principal)
+    if marking == before.default_marking:
+        # No change writes nothing: no version, audit, flag or draft following (the orchestrator's
+        # review, item 4).
+        return GovernanceEdited(source=before, needs_attention=[])
+    previous, edited = await sources.set_default_marking(dataset_id, source_id, marking, principal)
     flagged = await studio_recipes.flag_for_source(
         dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
     )
@@ -12026,7 +12041,8 @@ async def set_dataset_source_default_marking(
             "dataset_id": dataset_id,
             "source_id": source_id,
             "version": edited.version,
-            "default_marking_before": before.default_marking,
+            # What this write replaced, as the store's update read it under the row's lock.
+            "default_marking_before": previous,
             "default_marking_after": edited.default_marking,
             "set_at": edited.default_marking_set_at.isoformat()
             if edited.default_marking_set_at

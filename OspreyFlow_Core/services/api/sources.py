@@ -68,7 +68,7 @@ class SourceStore(Protocol):
     async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None: ...
     async def set_default_marking(
         self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
-    ) -> SourceTable: ...
+    ) -> tuple[str | None, SourceTable]: ...
     async def connection(self, connection_id: str) -> Connection: ...
     async def cursor(self, source_id: str) -> str | None: ...
     async def set_cursor(self, source_id: str, cursor: str | None) -> None: ...
@@ -104,14 +104,28 @@ def default_marking_problems(
     ceiling: DeploymentCeiling,
 ) -> list[str]:
     """Why `marking` may not be `source`'s declared default (ADR-140 Amendment 19), in words; none
-    when it may. Clearing it (`None`) always may: the table is then unmarked, which the Join
-    refuses to join to a marked one (fail closed). A default is one of the scheme's
+    when it may. A default already above the declarer's clearance is theirs neither to change nor
+    to clear. Otherwise clearing it (`None`) may: the table is then unmarked, which the Join refuses
+    to join to a marked one (fail closed). A default is one of the scheme's
     classifications; never above the declarer's own clearance (they would mark rows they could
     not read) or the deployment's highest marking (ADR-148 decision 10); never below the source's
     own marking, since a default never lowers a marking."""
+    levels = list(scheme.classification)
+    current = source.default_marking
+    if current and (
+        current not in levels
+        or principal.clearance not in levels
+        or levels.index(current) > levels.index(principal.clearance)
+    ):
+        # The mirror of the clearance check below (the orchestrator's review, item 3; the strict
+        # option): a default above the approver is theirs neither to lower nor to clear, since
+        # either changes how rows they may not read are marked.
+        return [
+            f"the default marking now is above your clearance: changing or clearing it needs "
+            f"{current} clearance"
+        ]
     if marking is None:
         return []
-    levels = list(scheme.classification)
     if marking not in levels:
         return [
             f"{marking!r} is not a classification of the {scheme.name} handling scheme: use one "
@@ -288,10 +302,12 @@ class InMemorySourceStore:
 
     async def set_default_marking(
         self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
-    ) -> SourceTable:
-        edited = _with_default_marking(await self.get(dataset_id, source_id), marking, principal)
+    ) -> tuple[str | None, SourceTable]:
+        """The default as it was, and the source as written."""
+        before = await self.get(dataset_id, source_id)
+        edited = _with_default_marking(before, marking, principal)
         self._sources[source_id] = edited
-        return edited
+        return before.default_marking, edited
 
     async def watched(self) -> list[SourceTable]:
         """Every source, of any dataset, whose refresh is a folder watch (the executor's alone)."""
@@ -521,34 +537,44 @@ class PostgresSourceStore:
         self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
     ) -> SourceTable:
         edited = _governed(await self.get(dataset_id, source_id), body, principal)
+        # The version taken in the update itself, as the default marking's is, so a governance edit
+        # and a default change at once never write one version (the orchestrator's review, note 9).
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            row = await conn.fetchrow(
                 "UPDATE ingest_sources SET handling = $3::jsonb, legal_basis = $4, "
-                "refresh = $5::jsonb, version = $6, updated_by = $7, updated_at = $8 "
-                "WHERE dataset_id = $1 AND id = $2",
+                "refresh = $5::jsonb, version = version + 1, updated_by = $6, updated_at = $7 "
+                f"WHERE dataset_id = $1 AND id = $2 RETURNING {_SOURCE_COLUMNS}",
                 dataset_id, source_id, json.dumps(edited.handling), edited.legal_basis,
-                edited.refresh.model_dump_json(), edited.version, edited.updated_by,
-                edited.updated_at,
+                edited.refresh.model_dump_json(), edited.updated_by, edited.updated_at,
             )  # fmt: skip
-        return edited
+        if row is None:
+            raise SourceNotFoundError(source_id)
+        return _source(row)
 
     async def set_default_marking(
         self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
-    ) -> SourceTable:
+    ) -> tuple[str | None, SourceTable]:
+        """The default as it was, and the source as written: both taken in the one update, under
+        the row's lock, so the audit's *from* is what this write replaced (the orchestrator's
+        review, note 10) and two edits at once never both write one version (the lane review,
+        item 6)."""
         stamp = _with_default_marking(await self.get(dataset_id, source_id), marking, principal)
-        # The version is taken in the update itself, so two edits at once never both write one
-        # version (the lane review, item 6); the row is read back as written.
+        returned = ", ".join(f"s.{c.strip()}" for c in _SOURCE_COLUMNS.split(","))
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "UPDATE ingest_sources SET default_marking = $3, default_marking_set_by = $4, "
-                f"default_marking_set_at = $5, version = version + 1 WHERE dataset_id = $1 "
-                f"AND id = $2 RETURNING {_SOURCE_COLUMNS}",
+                "UPDATE ingest_sources AS s SET default_marking = $3, default_marking_set_by = $4, "
+                "default_marking_set_at = $5, version = s.version + 1 "
+                "FROM (SELECT id, default_marking AS before FROM ingest_sources "
+                "WHERE dataset_id = $1 AND id = $2 FOR UPDATE) AS old "
+                f"WHERE s.id = old.id RETURNING old.before AS previous, {returned}",
                 dataset_id, source_id, stamp.default_marking, stamp.default_marking_set_by,
                 stamp.default_marking_set_at,
             )  # fmt: skip
         if row is None:
             raise SourceNotFoundError(source_id)
-        return _source(row)
+        data = dict(row)
+        previous = data.pop("previous")
+        return previous, _source(data)
 
     async def watched(self) -> list[SourceTable]:
         async with self._pool.acquire() as conn:

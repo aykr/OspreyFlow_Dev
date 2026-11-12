@@ -226,13 +226,15 @@ class DraftHeld(Exception):
 
 
 def held_draft_problem(
-    draft: TargetModel | None, principal: Principal, *, replace_own_draft: bool
+    draft: TargetModel | None, principal: Principal, *, replace_own_draft: int | None
 ) -> DraftHeld | None:
     """Whether an import may write the domain model over `draft` (CARRIES row 90, L1.7's review;
     the strict option). No draft: yes. Another person's: never, whatever the importer confirms, in
     words naming whose it is and how to go on, since it is their unsaved work. The importer's own:
-    only when they confirm it (`replace_own_draft`, the Studio's *Replace my draft* and
-    `ospreyflow release import --replace-own-draft`)."""
+    only when they confirm that very version (`replace_own_draft=<version>`, the Studio's *Replace
+    my draft* and `ospreyflow release import --replace-own-draft <version>`), so a draft discarded
+    and opened again since is never replaced on a confirmation given for another (the
+    orchestrator's review, item 5)."""
     if draft is None:
         return None
     opened = draft.created_at.strftime("%d %B %Y at %H:%M UTC")
@@ -246,14 +248,23 @@ def held_draft_problem(
             ],
             own=False,
         )
-    if replace_own_draft:
+    if replace_own_draft == draft.version:
         return None
+    if replace_own_draft is not None:
+        return DraftHeld(
+            [
+                f"you confirmed replacing your draft's version {replace_own_draft}, but your "
+                f"draft is now version {draft.version}, opened {opened}: check the release again "
+                "and confirm that version"
+            ],
+            own=True,
+        )
     return DraftHeld(
         [
             f"the domain model has your own in-progress draft (version {draft.version}), opened "
             f"{opened}: importing replaces it, and what you have not made live is lost. Confirm "
-            "Replace my draft (ospreyflow release import --replace-own-draft) to go on, or make "
-            "it live or discard it in Studio › Model first"
+            f"Replace my draft (ospreyflow release import --replace-own-draft {draft.version}) "
+            "to go on, or make it live or discard it in Studio › Model first"
         ],
         own=True,
     )
@@ -369,7 +380,7 @@ async def plan_import(
     sources: SourceStore,
     scheme: HandlingScheme,
     ontology: OntologySchema,
-    replace_own_draft: bool = False,
+    replace_own_draft: int | None = None,
 ) -> ImportPlan:
     """What the import writes and every refusal, judged before anything is written. Returns the
     plan and the dataset's own lists the import would add (definitions at the receiving id). An
@@ -477,6 +488,9 @@ async def plan_import(
             missing_connections=missing,
             notes=notes,
             replaces_own_draft=draft is not None and draft.created_by == principal.id,
+            own_draft_version=(
+                draft.version if draft is not None and draft.created_by == principal.id else None
+            ),
         ),
         own_lists=own_lists,
         pipelines=settled,
@@ -492,7 +506,7 @@ async def apply_import(
     models: TargetModelStore,
     recipes: StudioRecipeStore,
     rows_kept: ListRows,
-    replace_own_draft: bool = False,
+    replace_own_draft: int | None = None,
 ) -> tuple[list[str], bool]:
     """Writes the plan's drafts; returns the new pipeline drafts' ids, and whether the importer's
     own open draft was replaced (as the write found it, for the audit). Never called for a dry run

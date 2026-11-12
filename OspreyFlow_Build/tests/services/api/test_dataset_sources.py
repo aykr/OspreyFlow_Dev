@@ -642,3 +642,63 @@ def test_a_default_marking_is_refused_in_words_and_nothing_is_set(
     assert any(words in p for p in response.json()["problems"])
     assert world.sources._sources[made["id"]].default_marking is None
     assert world.recipes.flagged == []
+
+
+def test_a_governance_edit_is_refused_to_someone_the_source_read_refuses(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 4 (the orchestrator's review of the carries step, item 2): the governance edit answers
+    the whole source, its default marking included, so it needs what reading the source needs. A
+    custom role holding Edit pipelines without Add ingest files is refused the read, and the edit,
+    alike; nothing is edited, flagged or followed."""
+    made = _register(world).json()
+    editor = Principal(id="edt-1", clearance="SECRET", org_unit="unit-1", roles=["right:edit_pipelines"])
+    monkeypatch.setitem(PEOPLE, "editor", editor)
+    monkeypatch.setitem(CASES, "edt-1", {"case-a": ["ds-a"]})
+    read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("editor"))
+    assert read.status_code == 403, read.text
+    edit = world.client.patch(
+        f"/v1/datasets/ds-a/sources/{made['id']}/governance",
+        json={"handling": HANDLING | {"classification": "SECRET"}},
+        headers=_as("editor"),
+    )
+    assert edit.status_code == 403, edit.text
+    assert made["location"] not in edit.text
+    assert world.sources._sources[made["id"]].version == 1
+    assert world.recipes.flagged == [] and world.recipes.followed == []
+
+
+@pytest.mark.parametrize("change", ["OFFICIAL", None], ids=["lowered", "cleared"])
+def test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them(
+    world: SimpleNamespace, change: str | None
+) -> None:
+    """The orchestrator's review, item 3 (the strict option): a default above the approver's own
+    clearance is theirs neither to lower nor to clear, since either changes how rows they may not
+    read are marked; refused in words naming the clearance needed, and nothing is written."""
+    made = _register(world).json()
+    assert _default(world, made["id"], "SECRET").status_code == 200
+    before = world.sources._sources[made["id"]]
+    answer = _default(world, made["id"], change, who="junior")
+    assert answer.status_code == 422, answer.text
+    assert any("needs SECRET clearance" in p for p in answer.json()["problems"])
+    assert world.sources._sources[made["id"]] == before
+    assert len(_set_defaults(world)) == 1
+
+
+@pytest.mark.parametrize("same", ["OFFICIAL", None], ids=["the-same-level", "none-again"])
+def test_a_default_set_to_what_it_already_is_writes_nothing(
+    world: SimpleNamespace, same: str | None
+) -> None:
+    """The orchestrator's review, item 4: no change is no new version, no audit entry and no
+    pipeline flagged or draft made to follow; the answer is the source as it is."""
+    made = _register(world).json()
+    if same is not None:
+        assert _default(world, made["id"], same).status_code == 200
+    before = world.sources._sources[made["id"]]
+    audited, flagged = len(_set_defaults(world)), list(world.recipes.flagged)
+    answer = _default(world, made["id"], same)
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["source"]["version"] == before.version
+    assert answer.json()["needs_attention"] == []
+    assert world.sources._sources[made["id"]] == before
+    assert len(_set_defaults(world)) == audited and world.recipes.flagged == flagged

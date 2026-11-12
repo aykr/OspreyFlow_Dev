@@ -274,13 +274,13 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path === "/v1/datasets/harbour-extract/release/import" && method === "POST") {
     const query = new URL(String(input)).searchParams;
     const dryRun = query.get("dry_run") === "true";
-    // CARRIES row 90: `&draft=own` holds the importer's own in-progress model draft, which the
-    // Conduit refuses to replace until `replace_own_draft=true` confirms it.
+    // CARRIES row 90: `&draft=own` holds the importer's own in-progress model draft (version 3),
+    // which the Conduit refuses to replace until `replace_own_draft=3` confirms that version.
     if (startParams.get("draft") === "own") {
-      if (query.get("replace_own_draft") !== "true")
-        return reply({ dry_run: dryRun, items: [], missing_connections: [], notes: [], replaces_own_draft: true,
+      if (query.get("replace_own_draft") !== "3")
+        return reply({ dry_run: dryRun, items: [], missing_connections: [], notes: [], replaces_own_draft: true, own_draft_version: 3,
           refused: ["the domain model has your own in-progress draft (version 3), opened 10 November 2026 at 09:00 UTC: importing replaces it"] }, 422); // prettier-ignore
-      return reply({ dry_run: dryRun, refused: [], missing_connections: [], notes: [], replaces_own_draft: true,
+      return reply({ dry_run: dryRun, refused: [], missing_connections: [], notes: [], replaces_own_draft: true, own_draft_version: 3,
         items: [{ role: "domain_model", name: "the domain model", action: "replaces_draft" }] }); // prettier-ignore
     }
     return reply({ dry_run: dryRun, items: [{ role: "pipeline", name: "Wing phone calls", action: "new_draft" }],
