@@ -82,3 +82,35 @@ Plants for the seams the reviewer found untested (item 8) and the strengthened c
 Item 6's Postgres half (`test_studio_recipes_store.py::test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere_on_both_stores[postgres]`)
 is a live case, run in the leased live set at the gate; its in-memory half passes here. Item 3's window inside
 `save_draft`'s own lock is carried to the case lane (REPORT.md), not fixed here.
+
+## Round 3 · the orchestrator's review at 51f5a70, and the record made re-runnable
+
+`plants/carries_reds.py` holds every plant of this step with its exact old and new text, its file and the test it
+must turn red. It puts each file back byte for byte, and exits 0 only if every plant went red as named. Its raw
+output is `plants/carries_reds.log` (32 of 32 red as named, on the Mac, stack-free). Plants 1–21 are the rows
+above. Plants 5 and 6 now take each gate out in both places it is held: the Deploy pipelines right and the
+approver's role, and the dataset's gate on the parameter and in `NoLoadingAComposite`. Plants 22–32 are new:
+
+| # | Plant | Red |
+| --- | --- | --- |
+| 22 | the default judged at the run's read against the source's marking | `test_a_default_left_below_a_raised_source_marking_is_not_carried` |
+| 23 | the setting's read gates (Add ingest files, Edit pipelines) | `test_an_approver_who_may_not_read_the_source_cannot_set_its_default` |
+| 24 | drafts following a default change | `test_a_source_approver_declares_changes_and_clears_a_default_marking_audited` |
+| 25 | the unmarked words told apart from a marked table's empty cell | `test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default` |
+| 26 | the governance edit's Add ingest files right (review item 2) | `test_a_governance_edit_is_refused_to_someone_the_source_read_refuses` |
+| 27 | a default above the approver changed or cleared (item 3) | `test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them[cleared]` |
+| 28 | no change written anyway (item 4) | `test_a_default_set_to_what_it_already_is_writes_nothing[the-same-level]` |
+| 29 | the confirmation not tied to the version (item 5) | `test_a_confirmation_for_another_version_of_the_own_draft_is_refused[False]` |
+| 30 | another person's draft replaced on a confirmation | `test_another_persons_draft_is_refused_in_words_naming_them[True-False]` |
+| 31 | the write's own re-read of the draft | `test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write` |
+| 32 | the store's refusal of a second draft (`target_models._refuse_a_second_draft`; the open_draft window, item 6) | `test_a_draft_opened_in_the_open_draft_window_is_refused_by_the_store_before_any_write` |
+
+Written first and run red before their fixes, this round:
+
+- item 2: `200 == 403`, the whole source answered;
+- item 3: `200 == 422`, for both lowering and clearing;
+- item 4: the version was bumped;
+- item 5: the CLI's five cases, the Glass's two, and the route's version cases.
+
+Item 6's open_draft-window case passed at once against the corrected fake, since the real store's refusal
+already answered it; plant 32 is its red.

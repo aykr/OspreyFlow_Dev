@@ -1,0 +1,2290 @@
+== plant 1: the scheme check (services/api/sources.py)
+--- old
+    if marking not in levels:
+        return [
+--- new
+    if False:
+        return [
+...........................F........                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_default_marking_is_refused_in_words_and_nothing_is_set[not-in-the-scheme] _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x1169c31d0>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x117b23f20>, sources=<services.api.sources.InMemorySourceStore object at 0x117b21eb0>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x117b231d0>
+who = 'engineer', source_marking = 'OFFICIAL', default = 'TOP-SECRET-ISH'
+ceiling = None, words = 'is not a classification of the'
+
+    @pytest.mark.parametrize(
+        ("who", "source_marking", "default", "ceiling", "words"),
+        [
+            ("engineer", "OFFICIAL", "TOP-SECRET-ISH", None, "is not a classification of the"),
+            ("junior", "OFFICIAL", "SECRET", None, "above your clearance"),
+            ("engineer", "OFFICIAL", "SECRET", "OFFICIAL", "above this deployment's highest marking"),
+            ("engineer", "SECRET", "OFFICIAL", None, "below the source's own marking, SECRET"),
+        ],
+        ids=["not-in-the-scheme", "above-the-approver", "above-the-ceiling", "below-the-source"],
+    )
+    def test_a_default_marking_is_refused_in_words_and_nothing_is_set(
+        world: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+        who: str,
+        source_marking: str,
+        default: str,
+        ceiling: str | None,
+        words: str,
+    ) -> None:
+        if ceiling is not None:
+            monkeypatch.setenv("OSPREY_HIGHEST_MARKING", ceiling)
+        made = _register(world, handling=HANDLING | {"classification": source_marking}).json()
+>       response = _default(world, made["id"], default, who=who)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:639: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:514: in _default
+    return world.client.put(
+.venv/lib/python3.12/site-packages/httpx2/_client.py:1241: in put
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx2/_client.py:797: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx2/_client.py:994: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx2/_client.py:988: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx2/_models.py:876: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx2/_models.py:892: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx2/_models.py:947: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx2/_client.py:143: in __iter__
+    yield from self._stream
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12016: in set_dataset_source_default_marking
+    problems = default_marking_problems(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+source = SourceTable(id='01M77VTHW51ZAHEDXGRXSZZZ9F', dataset_id='ds-a', connection_id='files', name='Cell stays', location='/p...utc), updated_by=None, updated_at=None, default_marking=None, default_marking_set_by=None, default_marking_set_at=None)
+marking = 'TOP-SECRET-ISH'
+principal = Principal(id='eng-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['data_engineer'], datasets=['ds-a'])
+scheme = HandlingScheme(name='uk-le', classification=['PUBLIC', 'OFFICIAL', 'OFFICIAL-SENSITIVE', 'SECRET'], handling_codes={'P...be sanitised', consult_originator=False), 'S2': SanitisationCode(label='Consult originator', consult_originator=True)})
+ceiling = DeploymentCeiling(marking='SECRET', scheme=HandlingScheme(name='uk-le', classification=['PUBLIC', 'OFFICIAL', 'OFFICIA...e sanitised', consult_originator=False), 'S2': SanitisationCode(label='Consult originator', consult_originator=True)}))
+
+    def default_marking_problems(
+        source: SourceTable,
+        marking: str | None,
+        principal: Principal,
+        scheme: HandlingScheme,
+        ceiling: DeploymentCeiling,
+    ) -> list[str]:
+        """Why `marking` may not be `source`'s declared default (ADR-140 Amendment 19), in words; none
+        when it may. A default already above the declarer's clearance is theirs neither to change nor
+        to clear. Otherwise clearing it (`None`) may: the table is then unmarked, which the Join refuses
+        to join to a marked one (fail closed). A default is one of the scheme's
+        classifications; never above the declarer's own clearance (they would mark rows they could
+        not read) or the deployment's highest marking (ADR-148 decision 10); never below the source's
+        own marking, since a default never lowers a marking."""
+        levels = list(scheme.classification)
+        current = source.default_marking
+        if current and (
+            current not in levels
+            or principal.clearance not in levels
+            or levels.index(current) > levels.index(principal.clearance)
+        ):
+            # The mirror of the clearance check below (the orchestrator's review, item 3; the strict
+            # option): a default above the approver is theirs neither to lower nor to clear, since
+            # either changes how rows they may not read are marked.
+            return [
+                f"the default marking now is above your clearance: changing or clearing it needs "
+                f"{current} clearance"
+            ]
+        if marking is None:
+            return []
+        if False:
+            return [
+                f"{marking!r} is not a classification of the {scheme.name} handling scheme: use one "
+                f"of {', '.join(levels)}"
+            ]
+        problems: list[str] = []
+>       if principal.clearance not in levels or levels.index(marking) > levels.index(
+                                                ^^^^^^^^^^^^^^^^^^^^^
+            principal.clearance
+        ):
+E       ValueError: 'TOP-SECRET-ISH' is not in list
+
+services/api/sources.py:135: ValueError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_marking_is_refused_in_words_and_nothing_is_set[not-in-the-scheme]
+1 failed, 35 passed, 3 warnings in 2.06s
+
+=> RED as named
+
+== plant 2: the approver's clearance check (services/api/sources.py)
+--- old
+    if principal.clearance not in levels or levels.index(marking) > levels.index(
+--- new
+    if False and levels.index(marking) > levels.index(
+............................F.......                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_default_marking_is_refused_in_words_and_nothing_is_set[above-the-approver] _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x133e40110>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x133e43ad0>, sources=<services.api.sources.InMemorySourceStore object at 0x133e42060>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x133ac36e0>
+who = 'junior', source_marking = 'OFFICIAL', default = 'SECRET', ceiling = None
+words = 'above your clearance'
+
+    @pytest.mark.parametrize(
+        ("who", "source_marking", "default", "ceiling", "words"),
+        [
+            ("engineer", "OFFICIAL", "TOP-SECRET-ISH", None, "is not a classification of the"),
+            ("junior", "OFFICIAL", "SECRET", None, "above your clearance"),
+            ("engineer", "OFFICIAL", "SECRET", "OFFICIAL", "above this deployment's highest marking"),
+            ("engineer", "SECRET", "OFFICIAL", None, "below the source's own marking, SECRET"),
+        ],
+        ids=["not-in-the-scheme", "above-the-approver", "above-the-ceiling", "below-the-source"],
+    )
+    def test_a_default_marking_is_refused_in_words_and_nothing_is_set(
+        world: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+        who: str,
+        source_marking: str,
+        default: str,
+        ceiling: str | None,
+        words: str,
+    ) -> None:
+        if ceiling is not None:
+            monkeypatch.setenv("OSPREY_HIGHEST_MARKING", ceiling)
+        made = _register(world, handling=HANDLING | {"classification": source_marking}).json()
+        response = _default(world, made["id"], default, who=who)
+>       assert response.status_code == 422, response.text
+E       AssertionError: {"source":{"id":"01M77VTMEXPSS5JFEDMGYFJHHG","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2639/test_a_default_marking_is_refu1/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"OFFICIAL","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:30:53.405714Z","paused":false,"paused_reason":null},"read":null,"version":2,"created_by":"eng-1","created_at":"2026-11-12T12:30:53.405717Z","updated_by":null,"updated_at":null,"default_marking":"SECRET","default_marking_set_by":"jun-1","default_marking_set_at":"2026-11-12T12:30:53.407324Z"},"needs_attention":["PIN calls"]}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:640: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_marking_is_refused_in_words_and_nothing_is_set[above-the-approver]
+1 failed, 35 passed, 3 warnings in 1.82s
+
+=> RED as named
+
+== plant 3: the deployment ceiling check (services/api/sources.py)
+--- old
+    if ceiling.above(marking):
+--- new
+    if False:
+.............................F......                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_default_marking_is_refused_in_words_and_nothing_is_set[above-the-ceiling] _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x13465eff0>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x13465c7a0>, sources=<services.api.sources.InMemorySourceStore object at 0x13465ecf0>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1343c75c0>
+who = 'engineer', source_marking = 'OFFICIAL', default = 'SECRET'
+ceiling = 'OFFICIAL', words = "above this deployment's highest marking"
+
+    @pytest.mark.parametrize(
+        ("who", "source_marking", "default", "ceiling", "words"),
+        [
+            ("engineer", "OFFICIAL", "TOP-SECRET-ISH", None, "is not a classification of the"),
+            ("junior", "OFFICIAL", "SECRET", None, "above your clearance"),
+            ("engineer", "OFFICIAL", "SECRET", "OFFICIAL", "above this deployment's highest marking"),
+            ("engineer", "SECRET", "OFFICIAL", None, "below the source's own marking, SECRET"),
+        ],
+        ids=["not-in-the-scheme", "above-the-approver", "above-the-ceiling", "below-the-source"],
+    )
+    def test_a_default_marking_is_refused_in_words_and_nothing_is_set(
+        world: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+        who: str,
+        source_marking: str,
+        default: str,
+        ceiling: str | None,
+        words: str,
+    ) -> None:
+        if ceiling is not None:
+            monkeypatch.setenv("OSPREY_HIGHEST_MARKING", ceiling)
+        made = _register(world, handling=HANDLING | {"classification": source_marking}).json()
+        response = _default(world, made["id"], default, who=who)
+>       assert response.status_code == 422, response.text
+E       AssertionError: {"source":{"id":"01M77VTPSBS2J06J438J4QYVEZ","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2640/test_a_default_marking_is_refu2/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"OFFICIAL","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:30:55.787780Z","paused":false,"paused_reason":null},"read":null,"version":2,"created_by":"eng-1","created_at":"2026-11-12T12:30:55.787783Z","updated_by":null,"updated_at":null,"default_marking":"SECRET","default_marking_set_by":"eng-1","default_marking_set_at":"2026-11-12T12:30:55.789359Z"},"needs_attention":["PIN calls"]}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:640: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_marking_is_refused_in_words_and_nothing_is_set[above-the-ceiling]
+1 failed, 35 passed, 3 warnings in 1.81s
+
+=> RED as named
+
+== plant 4: never below the source's own marking, at the route (services/api/sources.py)
+--- old
+and levels.index(marking) < levels.index(own):
+--- new
+and False:
+..............................F.....                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_default_marking_is_refused_in_words_and_nothing_is_set[below-the-source] _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x1362e2a50>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x1367415e0>, sources=<services.api.sources.InMemorySourceStore object at 0x136742360>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1363328a0>
+who = 'engineer', source_marking = 'SECRET', default = 'OFFICIAL'
+ceiling = None, words = "below the source's own marking, SECRET"
+
+    @pytest.mark.parametrize(
+        ("who", "source_marking", "default", "ceiling", "words"),
+        [
+            ("engineer", "OFFICIAL", "TOP-SECRET-ISH", None, "is not a classification of the"),
+            ("junior", "OFFICIAL", "SECRET", None, "above your clearance"),
+            ("engineer", "OFFICIAL", "SECRET", "OFFICIAL", "above this deployment's highest marking"),
+            ("engineer", "SECRET", "OFFICIAL", None, "below the source's own marking, SECRET"),
+        ],
+        ids=["not-in-the-scheme", "above-the-approver", "above-the-ceiling", "below-the-source"],
+    )
+    def test_a_default_marking_is_refused_in_words_and_nothing_is_set(
+        world: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+        who: str,
+        source_marking: str,
+        default: str,
+        ceiling: str | None,
+        words: str,
+    ) -> None:
+        if ceiling is not None:
+            monkeypatch.setenv("OSPREY_HIGHEST_MARKING", ceiling)
+        made = _register(world, handling=HANDLING | {"classification": source_marking}).json()
+        response = _default(world, made["id"], default, who=who)
+>       assert response.status_code == 422, response.text
+E       AssertionError: {"source":{"id":"01M77VTS5BMG7J7T963HC1SYJ1","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2641/test_a_default_marking_is_refu3/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"SECRET","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:30:58.219678Z","paused":false,"paused_reason":null},"read":null,"version":2,"created_by":"eng-1","created_at":"2026-11-12T12:30:58.219682Z","updated_by":null,"updated_at":null,"default_marking":"OFFICIAL","default_marking_set_by":"eng-1","default_marking_set_at":"2026-11-12T12:30:58.221304Z"},"needs_attention":["PIN calls"]}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:640: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_marking_is_refused_in_words_and_nothing_is_set[below-the-source]
+1 failed, 35 passed, 3 warnings in 1.83s
+
+=> RED as named
+
+== plant 5: the approver's gate (right and role), a source author's instead (services/api/app.py)
+--- old
+    dependencies=[
+        Depends(require_right(Right.PUBLISH_PIPELINES)),
+        # The answer is the whole source, so the write needs what reading it needs (rule 4; the
+        # lane review, item 2): Add ingest files and the source author's Edit pipelines.
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        Depends(require_studio_role(StudioRole.SOURCE_AUTHOR)),
+        NoLoadingAComposite,
+    ],
+)
+async def set_dataset_source_default_marking(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    body: SourceDefaultMarkingInput,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+--- new
+    dependencies=[
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        Depends(require_studio_role(StudioRole.SOURCE_AUTHOR)),
+        NoLoadingAComposite,
+    ],
+)
+async def set_dataset_source_default_marking(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    body: SourceDefaultMarkingInput,
+    principal: SourceAuthorDep,
+..........................F.........                                     [100%]
+=================================== FAILURES ===================================
+____ test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset ____
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x12cae6570>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x12cd7a090>, sources=<services.api.sources.InMemorySourceStore object at 0x12cd78200>)
+
+    def test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset(
+        world: SimpleNamespace,
+    ) -> None:
+        """Rule 4 on the write: a source author (no Deploy pipelines) is 403; another dataset's
+        route, another unit and a case that only reads the dataset are 404 alike; nothing is set,
+        audited or flagged."""
+        made = _register(world).json()
+>       assert _default(world, made["id"], "OFFICIAL", who="author").status_code == 403
+E       AssertionError: assert 200 == 403
+E        +  where 200 = <Response [200 OK]>.status_code
+E        +    where <Response [200 OK]> = _default(namespace(client=<starlette.testclient.TestClient object at 0x12cae6570>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x12cd7a090>, sources=<services.api.sources.InMemorySourceStore object at 0x12cd78200>), '01M77VTVHWDCBYQHE8MVSFVG6Q', 'OFFICIAL', who='author')
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:608: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset
+1 failed, 35 passed, 3 warnings in 1.90s
+
+=> RED as named
+
+== plant 6: the dataset's gate, from the parameter and the composite refusal (services/api/app.py)
+--- old
+        NoLoadingAComposite,
+    ],
+)
+async def set_dataset_source_default_marking(
+    dataset_id: StudioDatasetDep,
+--- new
+    ],
+)
+async def set_dataset_source_default_marking(
+    dataset_id: str,
+..........................F.........                                     [100%]
+=================================== FAILURES ===================================
+____ test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset ____
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x12c0d9250>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x12c0da870>, sources=<services.api.sources.InMemorySourceStore object at 0x12c0d88f0>)
+
+    def test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset(
+        world: SimpleNamespace,
+    ) -> None:
+        """Rule 4 on the write: a source author (no Deploy pipelines) is 403; another dataset's
+        route, another unit and a case that only reads the dataset are 404 alike; nothing is set,
+        audited or flagged."""
+        made = _register(world).json()
+        assert _default(world, made["id"], "OFFICIAL", who="author").status_code == 403
+        for who, dataset in (("engineer", "ds-c"), ("stranger", "ds-a"), ("reader", "ds-a")):
+>           assert _default(world, made["id"], "OFFICIAL", who=who, dataset=dataset).status_code == 404
+E           AssertionError: assert 200 == 404
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +    where <Response [200 OK]> = _default(namespace(client=<starlette.testclient.TestClient object at 0x12c0d9250>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x12c0da870>, sources=<services.api.sources.InMemorySourceStore object at 0x12c0d88f0>), '01M77VTXZDQ1E151FPDKFFA018', 'OFFICIAL', who='stranger', dataset='ds-a')
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:610: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset
+1 failed, 35 passed, 3 warnings in 1.88s
+
+=> RED as named
+
+== plant 7: deployed pipelines not flagged (services/api/app.py)
+--- old
+    flagged = await studio_recipes.flag_for_source(
+        dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
+    )
+    # Each draft reading it
+--- new
+    flagged: list[str] = []
+    # Each draft reading it
+.......................F............                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_source_approver_declares_changes_and_clears_a_default_marking_audited _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x115653380>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x115652690>, sources=<services.api.sources.InMemorySourceStore object at 0x1156535c0>)
+
+    def test_a_source_approver_declares_changes_and_clears_a_default_marking_audited(
+        world: SimpleNamespace,
+    ) -> None:
+        """Who, when, from and to, each time; a new version that flags the deployed pipelines."""
+        made = _register(world).json()
+        steps = [(None, "OFFICIAL", 2), ("OFFICIAL", "SECRET", 3), ("SECRET", None, 4)]
+        for before, after, version in steps:
+            response = _default(world, made["id"], after)
+            assert response.status_code == 200, response.text
+            source = response.json()["source"]
+            assert source["default_marking"] == after and source["version"] == version
+            assert source["default_marking_set_by"] == "eng-1"
+            assert source["default_marking_set_at"] is not None
+>           assert response.json()["needs_attention"] == ["PIN calls"]
+E           AssertionError: assert [] == ['PIN calls']
+E             
+E             Right contains one more item: 'PIN calls'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:538: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_source_approver_declares_changes_and_clears_a_default_marking_audited
+1 failed, 35 passed, 3 warnings in 1.88s
+
+=> RED as named
+
+== plant 8: the audit's from taken from the new value (services/api/app.py)
+--- old
+"default_marking_before": previous,
+--- new
+"default_marking_before": edited.default_marking,
+.......................F............                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_source_approver_declares_changes_and_clears_a_default_marking_audited _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x114ff4a10>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x114ff6d80>, sources=<services.api.sources.InMemorySourceStore object at 0x114ff5670>)
+
+    def test_a_source_approver_declares_changes_and_clears_a_default_marking_audited(
+        world: SimpleNamespace,
+    ) -> None:
+        """Who, when, from and to, each time; a new version that flags the deployed pipelines."""
+        made = _register(world).json()
+        steps = [(None, "OFFICIAL", 2), ("OFFICIAL", "SECRET", 3), ("SECRET", None, 4)]
+        for before, after, version in steps:
+            response = _default(world, made["id"], after)
+            assert response.status_code == 200, response.text
+            source = response.json()["source"]
+            assert source["default_marking"] == after and source["version"] == version
+            assert source["default_marking_set_by"] == "eng-1"
+            assert source["default_marking_set_at"] is not None
+            assert response.json()["needs_attention"] == ["PIN calls"]
+            entry = _set_defaults(world)[-1]
+            assert entry["principal"].id == "eng-1"
+            query = entry["resolved_query"]
+>           assert (query["default_marking_before"], query["default_marking_after"]) == (before, after)
+E           AssertionError: assert ('OFFICIAL', 'OFFICIAL') == (None, 'OFFICIAL')
+E             
+E             At index 0 diff: 'OFFICIAL' != None
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:542: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_source_approver_declares_changes_and_clears_a_default_marking_audited
+1 failed, 35 passed, 3 warnings in 1.88s
+
+=> RED as named
+
+== plant 9: the source page's dataset gate (services/api/app.py)
+--- old
+async def get_dataset_source(
+    dataset_id: StudioDatasetDep, source_id: str,
+--- new
+async def get_dataset_source(
+    dataset_id: str, source_id: str,
+........................F...........                                     [100%]
+=================================== FAILURES ===================================
+__ test_the_default_is_read_with_the_source_and_only_where_the_source_is_read __
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x12de8a780>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x12de89700>, sources=<services.api.sources.InMemorySourceStore object at 0x12de8a5d0>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x12de89f70>
+
+    def test_the_default_is_read_with_the_source_and_only_where_the_source_is_read(
+        world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rule 4 on the read: the list and the source page carry it for a person reaching the
+        dataset; another dataset's route, another unit, a case that only reads the dataset and a
+        person without Add ingest files are each refused, so the setting is never read there."""
+        made = _register(world).json()
+        assert _default(world, made["id"], "OFFICIAL").status_code == 200
+        listed = world.client.get("/v1/datasets/ds-a/sources", headers=_as("engineer")).json()
+        assert [s["default_marking"] for s in listed] == ["OFFICIAL"]
+        page = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("engineer"))
+        assert page.json()["default_marking"] == "OFFICIAL"
+        viewer = Principal(id="vw-1", clearance="SECRET", org_unit="unit-1", roles=["viewer"])
+        monkeypatch.setitem(PEOPLE, "viewer", viewer)
+        monkeypatch.setitem(CASES, "vw-1", {"case-v": ["ds-a"]})
+        for who, dataset, code in (
+            ("engineer", "ds-c", 404), ("stranger", "ds-a", 404), ("reader", "ds-a", 404),
+            ("viewer", "ds-a", 403),
+        ):  # fmt: skip
+            one = world.client.get(f"/v1/datasets/{dataset}/sources/{made['id']}", headers=_as(who))
+            every = world.client.get(f"/v1/datasets/{dataset}/sources", headers=_as(who))
+>           assert (one.status_code, who) == (code, who)
+E           AssertionError: assert (200, 'stranger') == (404, 'stranger')
+E             
+E             At index 0 diff: 200 != 404
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:571: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_the_default_is_read_with_the_source_and_only_where_the_source_is_read
+1 failed, 35 passed, 3 warnings in 1.90s
+
+=> RED as named
+
+== plant 10: the source page's Add ingest files right (services/api/app.py)
+--- old
+    "/v1/datasets/{dataset_id}/sources/{source_id}",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+--- new
+    "/v1/datasets/{dataset_id}/sources/{source_id}",
+    dependencies=[],
+........................F......F....                                     [100%]
+=================================== FAILURES ===================================
+__ test_the_default_is_read_with_the_source_and_only_where_the_source_is_read __
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x11cc2bcb0>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x11cfee660>, sources=<services.api.sources.InMemorySourceStore object at 0x11cfef590>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11cfb3770>
+
+    def test_the_default_is_read_with_the_source_and_only_where_the_source_is_read(
+        world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rule 4 on the read: the list and the source page carry it for a person reaching the
+        dataset; another dataset's route, another unit, a case that only reads the dataset and a
+        person without Add ingest files are each refused, so the setting is never read there."""
+        made = _register(world).json()
+        assert _default(world, made["id"], "OFFICIAL").status_code == 200
+        listed = world.client.get("/v1/datasets/ds-a/sources", headers=_as("engineer")).json()
+        assert [s["default_marking"] for s in listed] == ["OFFICIAL"]
+        page = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("engineer"))
+        assert page.json()["default_marking"] == "OFFICIAL"
+        viewer = Principal(id="vw-1", clearance="SECRET", org_unit="unit-1", roles=["viewer"])
+        monkeypatch.setitem(PEOPLE, "viewer", viewer)
+        monkeypatch.setitem(CASES, "vw-1", {"case-v": ["ds-a"]})
+        for who, dataset, code in (
+            ("engineer", "ds-c", 404), ("stranger", "ds-a", 404), ("reader", "ds-a", 404),
+            ("viewer", "ds-a", 403),
+        ):  # fmt: skip
+            one = world.client.get(f"/v1/datasets/{dataset}/sources/{made['id']}", headers=_as(who))
+            every = world.client.get(f"/v1/datasets/{dataset}/sources", headers=_as(who))
+>           assert (one.status_code, who) == (code, who)
+E           AssertionError: assert (404, 'viewer') == (403, 'viewer')
+E             
+E             At index 0 diff: 404 != 403
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:571: AssertionError
+_____ test_a_governance_edit_is_refused_to_someone_the_source_read_refuses _____
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x11db9f020>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x11db9e450>, sources=<services.api.sources.InMemorySourceStore object at 0x11db9cfb0>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11db9ea50>
+
+    def test_a_governance_edit_is_refused_to_someone_the_source_read_refuses(
+        world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rule 4 (the orchestrator's review of the carries step, item 2): the governance edit answers
+        the whole source, its default marking included, so it needs what reading the source needs. A
+        custom role holding Edit pipelines without Add ingest files is refused the read, and the edit,
+        alike; nothing is edited, flagged or followed."""
+        made = _register(world).json()
+        editor = Principal(id="edt-1", clearance="SECRET", org_unit="unit-1", roles=["right:edit_pipelines"])
+        monkeypatch.setitem(PEOPLE, "editor", editor)
+        monkeypatch.setitem(CASES, "edt-1", {"case-a": ["ds-a"]})
+        read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("editor"))
+>       assert read.status_code == 403, read.text
+E       AssertionError: {"id":"01M77VV7QGWJKRDQTMDS44639W","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2647/test_a_governance_edit_is_refu0/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"OFFICIAL","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:31:13.136948Z","paused":false,"paused_reason":null},"read":null,"version":1,"created_by":"eng-1","created_at":"2026-11-12T12:31:13.136952Z","updated_by":null,"updated_at":null,"default_marking":null,"default_marking_set_by":null,"default_marking_set_at":null}
+E       assert 200 == 403
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:659: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_the_default_is_read_with_the_source_and_only_where_the_source_is_read
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_governance_edit_is_refused_to_someone_the_source_read_refuses
+2 failed, 34 passed, 3 warnings in 1.89s
+
+=> RED as named
+
+== plant 11: the load passes no declaration (services/api/pipeline_run.py)
+--- old
+            declared=declared,
+        )  # fmt: skip
+--- new
+        )  # fmt: skip
+......F..                                                                [100%]
+=================================== FAILURES ===================================
+______ test_a_load_joins_an_unmarked_source_carrying_its_declared_default ______
+
+draft = StudioRecipeDraft(recipe_id='recipe-1', version=1, status=<StudioRecipeStatus.PUBLISHED: 'published'>, label='Visits',...arget='with_owner'), PipelineEdge(source='with_owner', target='titled'), PipelineEdge(source='titled', target='map')]))
+principal = Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['loader'], datasets=None)
+pipeline = PipelineGraph(nodes=[PipelineNode(id='domain', kind=<PipelineNodeKind.DOMAIN_MODEL: 'domain_model'>, label='Domain mod...target='with_owner'), PipelineEdge(source='with_owner', target='titled'), PipelineEdge(source='titled', target='map')])
+graph = <tests.ingest.recipe_test_support.ValidatingGraph object at 0x118fc9a30>
+ontology = OntologySchema(version=17, entity_types=[EntityTypeDef(name='Person', pole_class=<PoleClass.PERSON: 'person'>, channel...se, required=False, sensitivity=None, values=None)])], storage_aliases={}, overlay_revision=0, packs={}, type_packs={})
+scheme = HandlingScheme(name='uk-le', classification=['PUBLIC', 'OFFICIAL', 'OFFICIAL-SENSITIVE', 'SECRET'], handling_codes={'P...be sanitised', consult_originator=False), 'S2': SanitisationCode(label='Consult originator', consult_originator=True)})
+load_id = 'run-d', investigation_scope = 'case-1'
+repo_root = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2648/test_a_load_joins_an_unmarked_0/repo')
+analytics = None, media = None, source_location = None, rules = None
+sink = None, withdraw_dropped = False, refresh = None
+models = <tests.services.api.test_studio_staging_routes._Models object at 0x119978d70>
+storage = ObjectStorageConfig(endpoint='localhost:9000', access_key='minioadmin', secret_key='minioadmin', bucket='staging', use_ssl=False, region=None)
+meter = None, list_store = None
+source_store = <services.api.sources.InMemorySourceStore object at 0x11997b4d0>
+
+    async def _run_staged_branch(
+        draft: StudioRecipeDraft,
+        principal: Principal,
+        *,
+        pipeline: PipelineGraph,
+        graph: GraphPort,
+        ontology: OntologySchema,
+        scheme: HandlingScheme,
+        load_id: str,
+        investigation_scope: str,
+        repo_root: Path,
+        analytics: AnalyticsPort | None,
+        media: MediaStore | None,
+        source_location: str | None,
+        rules: RuleGate | None,
+        sink: LoadSink | None,
+        withdraw_dropped: bool,
+        refresh: RefreshRead | None,
+        models: TargetModelStore | None,
+        storage: ObjectStorageConfig,
+        meter: StagingMeter | None,
+        list_store: ListStore | None = None,
+        source_store: SourceStore | None = None,
+    ) -> BranchRunReport:
+        """A staged pipeline's one load (ADR-140 Amendment 12): every source node's whole file read
+        by a load of its own (`<load_id>:<node id>`), new for each run, so no two runs share a raw
+        file; the dataset's lists from their versions' files; the steps; then Map over the last table
+        through the same rule gate, ledger and lock as any load (`load_with_rules`). A refresh that
+        withdraws or reads incrementally was refused before (`run_published_pipeline`)."""
+        recipe = await asyncio.to_thread(load_published_recipe, draft, repo_root)
+        if not recipe.staging:
+            raise RecipeRuleError(
+                [f"Recipe {recipe.id!r} has staging steps on its pipeline but none in its file."]
+            )
+        # ADR-140 Amendment 13: the dataset's own lists and the deployment-wide ones it subscribes to.
+        # ADR-148 decision 10: what can be judged without rows (a marking no column sets) is refused
+        # before the step tables are written; `run_recipe` judges every row again before its own writes.
+        refuse_fixed_markings_above_the_ceiling(recipe, DeploymentCeiling.from_env())
+        references = await dataset_reference_lists(models, draft.dataset_id, storage, lists=list_store)
+        # ADR-140 Amendment 19: each source's declared default marking, read for this run.
+        declared = await declared_markings(source_store, draft.dataset_id, scheme)
+        try:
+            read = await asyncio.to_thread(
+                source_tables, draft, pipeline, load_id=load_id, location=source_location,
+            )  # fmt: skip
+            lists = await asyncio.to_thread(
+                lists_for_run,
+                recipe.staging,
+                references,
+                dataset_id=draft.dataset_id or "",
+                storage=storage,
+                subscribed=subscribed_in(references),
+            )
+>           prepared = await prepare_staged_load(
+                recipe,
+                sources=read.tables,
+                lists=lists,
+                dataset_id=draft.dataset_id or "",
+                subscribed=subscribed_in(references),
+                load_id=load_id,
+                storage=storage,
+                # ADR-140 decision 12: a SQL step reads with the principal of the person the run is
+                # for, so a source row they may not read is absent from its tables.
+                may_read=row_reader(draft, read, principal, scheme),
+            )
+
+services/api/pipeline_run.py:565: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/ingest/staged_run.py:215: in prepare_staged_load
+    staging = await asyncio.to_thread(
+../../../../miniconda3/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/ingest/staged_run.py:172: in _stage
+    return run_staging(
+services/ingest/staging_catalogue.py:862: in run_staging
+    done = _join(step, tables[step.left], tables[step.right], marked=marked)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/ingest/staging_catalogue.py:690: in _join
+    refuse_a_differing_marking(step.id, row, match, marked)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_id = 'with_owner'
+row = StagedTableRow(cells={'booking_id': 'VB-2605-001', 'estab_id': 'FMR', 'visitor_family_name': 'WHITLOW', 'visitor_given...lishments@v3', row_index=0, row_key='1d554b5d655c493a9f238e80dc7de7322bceba2db9629201936a77138d1d3e08', load_id=None)))
+other = StagedTableRow(cells={'number': '+447700900731', 'owner_family_name': 'WHITLOW', 'since': '2025-04-01'}, refs=(StagedR..._index=0, row_key='81f522c18b13aaff8d73acd3e6ebfcfba192d719606a1435e02106edf722dbf7', load_id='run-d:number_owners'),))
+marked = frozenset({'classification'})
+
+    def refuse_a_differing_marking(
+        step_id: str, row: StagedTableRow, other: StagedTableRow, marked: Collection[str]
+    ) -> None:
+        """Rule 3 at the run (CARRIES row 48): an output row drawing on two rows is written under the
+        first's marking cells, so the second's must be the same; otherwise the step is refused whole,
+        in words naming neither row's values nor their markings. An unmarked row (no marking cell at
+        all) differs from a marked one, fail closed; the words then name the source's declared default
+        marking, the setting that marks such a table (ADR-140 Amendment 19)."""
+        if not marked:
+            return
+        mine, theirs = marking_of(row.cells, marked), marking_of(other.cells, marked)
+        if mine == theirs:
+            return
+        words = (
+            f"step {step_id!r} joins a row to one whose marking differs: a joined row is "
+            "written under one marking, so rows of different markings are never joined. Split "
+            "them by their marking first, or join only rows marked alike"
+        )
+        # Unmarked: the row's table has none of the marking columns at all (a source table's row holds
+        # a cell for each of its table's columns). A marked table's empty cell is not unmarked, and a
+        # default would not fill it, so the words never point at one there (the lane review, item 4).
+        unmarked = not any(c in row.cells for c in marked) or not any(c in other.cells for c in marked)
+>       raise StagingError([f"{words}. {UNMARKED_WORDS}" if unmarked else words])
+E       services.ingest.staging_catalogue.StagingError: step 'with_owner' joins a row to one whose marking differs: a joined row is written under one marking, so rows of different markings are never joined. Split them by their marking first, or join only rows marked alike. One of the rows is unmarked: its table has no marking column, and its source declares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+
+services/ingest/staging_catalogue.py:536: StagingError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2648/test_a_load_joins_an_unmarked_0')
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2648/test_a_load_joins_an_unmarked_0/store')
+
+    async def test_a_load_joins_an_unmarked_source_carrying_its_declared_default(
+        tmp_path: Path, store: Path
+    ) -> None:
+        draft, repo, owners = await _published_marked(tmp_path)
+        sources = await _owners_declared(owners, "OFFICIAL")
+>       report, graph = await _run(draft, repo, "run-d", source_store=sources)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py:254: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py:85: in _run
+    report = await run_published_pipeline(
+services/api/pipeline_run.py:711: in run_published_pipeline
+    await _run_staged_branch(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+draft = StudioRecipeDraft(recipe_id='recipe-1', version=1, status=<StudioRecipeStatus.PUBLISHED: 'published'>, label='Visits',...arget='with_owner'), PipelineEdge(source='with_owner', target='titled'), PipelineEdge(source='titled', target='map')]))
+principal = Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=['loader'], datasets=None)
+pipeline = PipelineGraph(nodes=[PipelineNode(id='domain', kind=<PipelineNodeKind.DOMAIN_MODEL: 'domain_model'>, label='Domain mod...target='with_owner'), PipelineEdge(source='with_owner', target='titled'), PipelineEdge(source='titled', target='map')])
+graph = <tests.ingest.recipe_test_support.ValidatingGraph object at 0x118fc9a30>
+ontology = OntologySchema(version=17, entity_types=[EntityTypeDef(name='Person', pole_class=<PoleClass.PERSON: 'person'>, channel...se, required=False, sensitivity=None, values=None)])], storage_aliases={}, overlay_revision=0, packs={}, type_packs={})
+scheme = HandlingScheme(name='uk-le', classification=['PUBLIC', 'OFFICIAL', 'OFFICIAL-SENSITIVE', 'SECRET'], handling_codes={'P...be sanitised', consult_originator=False), 'S2': SanitisationCode(label='Consult originator', consult_originator=True)})
+load_id = 'run-d', investigation_scope = 'case-1'
+repo_root = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2648/test_a_load_joins_an_unmarked_0/repo')
+analytics = None, media = None, source_location = None, rules = None
+sink = None, withdraw_dropped = False, refresh = None
+models = <tests.services.api.test_studio_staging_routes._Models object at 0x119978d70>
+storage = ObjectStorageConfig(endpoint='localhost:9000', access_key='minioadmin', secret_key='minioadmin', bucket='staging', use_ssl=False, region=None)
+meter = None, list_store = None
+source_store = <services.api.sources.InMemorySourceStore object at 0x11997b4d0>
+
+    async def _run_staged_branch(
+        draft: StudioRecipeDraft,
+        principal: Principal,
+        *,
+        pipeline: PipelineGraph,
+        graph: GraphPort,
+        ontology: OntologySchema,
+        scheme: HandlingScheme,
+        load_id: str,
+        investigation_scope: str,
+        repo_root: Path,
+        analytics: AnalyticsPort | None,
+        media: MediaStore | None,
+        source_location: str | None,
+        rules: RuleGate | None,
+        sink: LoadSink | None,
+        withdraw_dropped: bool,
+        refresh: RefreshRead | None,
+        models: TargetModelStore | None,
+        storage: ObjectStorageConfig,
+        meter: StagingMeter | None,
+        list_store: ListStore | None = None,
+        source_store: SourceStore | None = None,
+    ) -> BranchRunReport:
+        """A staged pipeline's one load (ADR-140 Amendment 12): every source node's whole file read
+        by a load of its own (`<load_id>:<node id>`), new for each run, so no two runs share a raw
+        file; the dataset's lists from their versions' files; the steps; then Map over the last table
+        through the same rule gate, ledger and lock as any load (`load_with_rules`). A refresh that
+        withdraws or reads incrementally was refused before (`run_published_pipeline`)."""
+        recipe = await asyncio.to_thread(load_published_recipe, draft, repo_root)
+        if not recipe.staging:
+            raise RecipeRuleError(
+                [f"Recipe {recipe.id!r} has staging steps on its pipeline but none in its file."]
+            )
+        # ADR-140 Amendment 13: the dataset's own lists and the deployment-wide ones it subscribes to.
+        # ADR-148 decision 10: what can be judged without rows (a marking no column sets) is refused
+        # before the step tables are written; `run_recipe` judges every row again before its own writes.
+        refuse_fixed_markings_above_the_ceiling(recipe, DeploymentCeiling.from_env())
+        references = await dataset_reference_lists(models, draft.dataset_id, storage, lists=list_store)
+        # ADR-140 Amendment 19: each source's declared default marking, read for this run.
+        declared = await declared_markings(source_store, draft.dataset_id, scheme)
+        try:
+            read = await asyncio.to_thread(
+                source_tables, draft, pipeline, load_id=load_id, location=source_location,
+            )  # fmt: skip
+            lists = await asyncio.to_thread(
+                lists_for_run,
+                recipe.staging,
+                references,
+                dataset_id=draft.dataset_id or "",
+                storage=storage,
+                subscribed=subscribed_in(references),
+            )
+            prepared = await prepare_staged_load(
+                recipe,
+                sources=read.tables,
+                lists=lists,
+                dataset_id=draft.dataset_id or "",
+                subscribed=subscribed_in(references),
+                load_id=load_id,
+                storage=storage,
+                # ADR-140 decision 12: a SQL step reads with the principal of the person the run is
+                # for, so a source row they may not read is absent from its tables.
+                may_read=row_reader(draft, read, principal, scheme),
+            )
+        except StagingError as refused:
+>           raise RecipeRuleError(refused.problems) from refused
+E           services.ingest.recipe_rules.RecipeRuleError: step 'with_owner' joins a row to one whose marking differs: a joined row is written under one marking, so rows of different markings are never joined. Split them by their marking first, or join only rows marked alike. One of the rows is unmarked: its table has no marking column, and its source declares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+
+services/api/pipeline_run.py:578: RecipeRuleError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py::test_a_load_joins_an_unmarked_source_carrying_its_declared_default
+1 failed, 8 passed in 2.15s
+
+=> RED as named
+
+== plant 12: the run hands the runner no source store (services/api/recipe_run.py)
+--- old
+            source_store=deps.sources,
+--- new
+            source_store=None,
+....F                                                                    [100%]
+=================================== FAILURES ===================================
+_________ test_a_recipe_run_hands_the_pipeline_runner_its_source_store _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1336d36b0>
+
+    async def test_a_recipe_run_hands_the_pipeline_runner_its_source_store(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """ADR-140 Amendment 19: the manual, scheduled and watched runs all come through
+        `_execute_recipe_run`, which must hand the runner `deps.sources`, or no run reads a source's
+        declared default marking and every Join of an unmarked table is refused although one is set.
+        Red with `recipe_run`'s `source_store=` set to None."""
+        from services.api import recipe_run
+    
+        store = object()
+        given: dict[str, Any] = {}
+    
+        class _Stop(Exception):
+            pass
+    
+        async def runner(*_args: Any, **kwargs: Any) -> Any:
+            given.update(kwargs)
+            raise _Stop
+    
+        async def no_gate(*_args: Any, **_kwargs: Any) -> None:
+            return None
+    
+        class Deps:
+            sources = store
+    
+            def __getattr__(self, name: str) -> Any:
+                return None
+    
+        monkeypatch.setattr(recipe_run, "run_published_pipeline", runner)
+        monkeypatch.setattr(recipe_run, "_rule_gate", no_gate)
+        with pytest.raises(_Stop):
+            await recipe_run._execute_recipe_run(
+                Deps(),  # type: ignore[arg-type]
+                principal=object(),  # type: ignore[arg-type]
+                recipe=SimpleNamespace(pipeline=object(), recipe_id="r"),  # type: ignore[arg-type]
+                investigation_id="case-1",
+                source_location=None,
+                trigger="manual",
+                sink=None,  # type: ignore[arg-type]
+            )
+>       assert given["source_store"] is store
+E       assert None is <object object at 0x1333ccde0>
+
+../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py:216: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py::test_a_recipe_run_hands_the_pipeline_runner_its_source_store
+1 failed, 4 passed in 1.58s
+
+=> RED as named
+
+== plant 13: the engine's never-a-marked-table guard (services/ingest/staging_catalogue.py)
+--- old
+    if any(column in table.columns for column in marked):
+        return table
+--- new
+
+.................FF...                                                   [100%]
+=================================== FAILURES ===================================
+_______ test_the_default_never_touches_a_table_that_has_a_marking_column _______
+
+    def test_the_default_never_touches_a_table_that_has_a_marking_column() -> None:
+        """Never lowers a bound marking: a SECRET row stays SECRET, so the join is still refused."""
+        tables = _carried("SECRET", "OFFICIAL")
+>       assert [r.cells["classification"] for r in tables["people"].rows] == ["SECRET"]  # type: ignore[attr-defined]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert ['OFFICIAL'] == ['SECRET']
+E         
+E         At index 0 diff: 'OFFICIAL' != 'SECRET'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:238: AssertionError
+_____ test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default ______
+
+    def test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default() -> None:
+        """The table has the marking column, so it is marked: an empty cell is not an unmarked table
+        (the strict option); the join is refused as before."""
+        tables = _carried("", "OFFICIAL")
+        people = tables["people"]
+        assert "classification" in people.columns  # type: ignore[attr-defined]
+>       assert [r.cells["classification"] for r in people.rows] == [None]  # type: ignore[attr-defined]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert ['OFFICIAL'] == [None]
+E         
+E         At index 0 diff: 'OFFICIAL' != None
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:249: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_the_default_never_touches_a_table_that_has_a_marking_column
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default
+2 failed, 20 passed in 0.79s
+
+=> RED as named
+
+== plant 14: the refusal no longer names the setting (services/ingest/staging_catalogue.py)
+--- old
+raise StagingError([f"{words}. {UNMARKED_WORDS}" if unmarked else words])
+--- new
+raise StagingError([words])
+...................F..                                                   [100%]
+=================================== FAILURES ===================================
+__ test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting __
+
+    def test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting() -> None:
+        with pytest.raises(StagingError) as refused:
+            _run(_carried(None, None))
+        words = str(refused.value)
+        assert "whose marking differs" in words
+>       assert "unmarked" in words and "default marking" in words and "Studio › Sources" in words
+E       assert ('unmarked' in "step 'j' joins a row to one whose marking differs: a joined row is written under one marking, so rows of different markings are never joined. Split them by their marking first, or join only rows marked alike")
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:263: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting
+1 failed, 21 passed in 0.80s
+
+=> RED as named
+
+== plant 15: the setting named for marked rows too (services/ingest/staging_catalogue.py)
+--- old
+raise StagingError([f"{words}. {UNMARKED_WORDS}" if unmarked else words])
+--- new
+raise StagingError([f"{words}. {UNMARKED_WORDS}"])
+................F.F.F.                                                   [100%]
+=================================== FAILURES ===================================
+___ test_a_default_marked_differently_from_the_other_table_is_still_refused ____
+
+    def test_a_default_marked_differently_from_the_other_table_is_still_refused() -> None:
+        tables = _carried(None, "SECRET")
+        # The default was carried (the row is marked SECRET now), so the refusal is a difference of
+        # markings, never the unmarked words: an uncarried table would fail both assertions.
+        assert [r.cells["classification"] for r in tables["people"].rows] == ["SECRET"]  # type: ignore[attr-defined]
+        with pytest.raises(StagingError) as refused:
+            _run(tables)
+        assert "whose marking differs" in str(refused.value)
+>       assert "default marking" not in str(refused.value)
+E       assert 'default marking' not in "step 'j' jo...ore the join"
+E         
+E         'default marking' is contained here:
+E           clares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+E         ?           +++++++++++++++
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:232: AssertionError
+_____ test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default ______
+
+    def test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default() -> None:
+        """The table has the marking column, so it is marked: an empty cell is not an unmarked table
+        (the strict option); the join is refused as before."""
+        tables = _carried("", "OFFICIAL")
+        people = tables["people"]
+        assert "classification" in people.columns  # type: ignore[attr-defined]
+        assert [r.cells["classification"] for r in people.rows] == [None]  # type: ignore[attr-defined]
+        with pytest.raises(StagingError) as refused:
+            _run(tables)
+        # The table is marked, so the words never point at a default that could not help it (the lane
+        # review, item 4).
+        assert "whose marking differs" in str(refused.value)
+>       assert "default marking" not in str(refused.value)
+E       assert 'default marking' not in "step 'j' jo...ore the join"
+E         
+E         'default marking' is contained here:
+E           clares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+E         ?           +++++++++++++++
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:255: AssertionError
+_______ test_a_refusal_of_two_marked_rows_does_not_point_at_the_default ________
+
+    def test_a_refusal_of_two_marked_rows_does_not_point_at_the_default() -> None:
+        """The setting is named only where it could help: a row with no marking at all."""
+        with pytest.raises(StagingError) as refused:
+            _run(_carried("SECRET", None))
+>       assert "default marking" not in str(refused.value)
+E       assert 'default marking' not in "step 'j' jo...ore the join"
+E         
+E         'default marking' is contained here:
+E           clares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+E         ?           +++++++++++++++
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:271: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_a_default_marked_differently_from_the_other_table_is_still_refused
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_a_refusal_of_two_marked_rows_does_not_point_at_the_default
+3 failed, 19 passed in 0.79s
+
+=> RED as named
+
+== plant 16: the step preview passes no declaration (services/api/app.py)
+--- old
+        declared=await declared_markings(sources, recipe.dataset_id, scheme),
+    )
+    await audit.record(
+--- new
+    )
+    await audit.record(
+.......................F...                                              [100%]
+=================================== FAILURES ===================================
+____ test_a_preview_joins_an_unmarked_source_carrying_its_declared_default _____
+
+staged = <starlette.testclient.TestClient object at 0x136f1e330>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2653/test_a_preview_joins_an_unmark0')
+
+    def test_a_preview_joins_an_unmarked_source_carrying_its_declared_default(
+        staged: TestClient, tmp_path: Path
+    ) -> None:
+        _marked(staged, tmp_path, "OFFICIAL")
+        body = _preview(staged, "with_owner").json()
+>       assert body["problems"] == [], body["problems"]
+E       AssertionError: ["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]
+E       assert ['The sample ...heir values.'] == []
+E         
+E         Left contains one more item: "The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:637: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12343: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12277: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_a_preview_joins_an_unmarked_source_carrying_its_declared_default
+1 failed, 26 passed, 4 warnings in 2.44s
+
+=> RED as named
+
+== plant 17: Test passes no declaration (services/api/studio_verify.py)
+--- old
+                declared=staging.declared,
+
+--- new
+
+.........................FF                                              [100%]
+=================================== FAILURES ===================================
+____ test_test_reads_the_sources_declared_default_as_the_run_does[declared] ____
+
+staged = <starlette.testclient.TestClient object at 0x1501a8320>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2654/test_test_reads_the_sources_de1')
+default = 'OFFICIAL'
+
+    @pytest.mark.parametrize("default", [None, "OFFICIAL"], ids=["none-declared", "declared"])
+    def test_test_reads_the_sources_declared_default_as_the_run_does(
+        staged: TestClient, tmp_path: Path, default: str | None
+    ) -> None:
+        _marked(staged, tmp_path, default)
+        response = staged.post(f"{RECIPE_URL}/verify")
+        if default is None:
+            # Withheld before the Join, as the preview is (fail closed).
+            assert response.status_code == 422, response.text
+            assert "The sample is withheld" in response.text
+        else:
+>           assert response.status_code == 200, response.text
+E           AssertionError: {"error":"recipe_rule","problems":["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]}
+E           assert 422 == 200
+E            +  where 422 = <Response [422 Unprocessable Content]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:653: AssertionError
+_____ test_load_preview_reads_the_sources_declared_default_as_the_run_does _____
+
+staged = <starlette.testclient.TestClient object at 0x150233fb0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2654/test_load_preview_reads_the_so0')
+
+    def test_load_preview_reads_the_sources_declared_default_as_the_run_does(
+        staged: TestClient, tmp_path: Path
+    ) -> None:
+        """The lane review, item 8: Load Preview runs the same dry run as Test through its own route,
+        which must hand it the sources too. Red with the route's `sources=` left out."""
+        _marked(staged, tmp_path, "OFFICIAL")
+        response = staged.post(f"{RECIPE_URL}/preview-graph")
+>       assert response.status_code == 200, response.text
+E       AssertionError: {"error":"recipe_rule","problems":["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Content]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:664: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12343: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12277: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_test_reads_the_sources_declared_default_as_the_run_does[declared]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_load_preview_reads_the_sources_declared_default_as_the_run_does
+2 failed, 25 passed, 4 warnings in 2.46s
+
+=> RED as named
+
+== plant 18: the raw rows not carried (services/api/studio_staging.py)
+--- old
+            rows = [row | dict.fromkeys(sorted(classified), default) for row in rows]
+--- new
+            pass
+.......................F.FF                                              [100%]
+=================================== FAILURES ===================================
+____ test_a_preview_joins_an_unmarked_source_carrying_its_declared_default _____
+
+staged = <starlette.testclient.TestClient object at 0x1196d8950>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2655/test_a_preview_joins_an_unmark0')
+
+    def test_a_preview_joins_an_unmarked_source_carrying_its_declared_default(
+        staged: TestClient, tmp_path: Path
+    ) -> None:
+        _marked(staged, tmp_path, "OFFICIAL")
+        body = _preview(staged, "with_owner").json()
+>       assert body["problems"] == [], body["problems"]
+E       AssertionError: ["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]
+E       assert ['The sample ...heir values.'] == []
+E         
+E         Left contains one more item: "The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:637: AssertionError
+____ test_test_reads_the_sources_declared_default_as_the_run_does[declared] ____
+
+staged = <starlette.testclient.TestClient object at 0x1196766c0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2655/test_test_reads_the_sources_de1')
+default = 'OFFICIAL'
+
+    @pytest.mark.parametrize("default", [None, "OFFICIAL"], ids=["none-declared", "declared"])
+    def test_test_reads_the_sources_declared_default_as_the_run_does(
+        staged: TestClient, tmp_path: Path, default: str | None
+    ) -> None:
+        _marked(staged, tmp_path, default)
+        response = staged.post(f"{RECIPE_URL}/verify")
+        if default is None:
+            # Withheld before the Join, as the preview is (fail closed).
+            assert response.status_code == 422, response.text
+            assert "The sample is withheld" in response.text
+        else:
+>           assert response.status_code == 200, response.text
+E           AssertionError: {"error":"recipe_rule","problems":["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]}
+E           assert 422 == 200
+E            +  where 422 = <Response [422 Unprocessable Content]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:653: AssertionError
+_____ test_load_preview_reads_the_sources_declared_default_as_the_run_does _____
+
+staged = <starlette.testclient.TestClient object at 0x11965d790>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2655/test_load_preview_reads_the_so0')
+
+    def test_load_preview_reads_the_sources_declared_default_as_the_run_does(
+        staged: TestClient, tmp_path: Path
+    ) -> None:
+        """The lane review, item 8: Load Preview runs the same dry run as Test through its own route,
+        which must hand it the sources too. Red with the route's `sources=` left out."""
+        _marked(staged, tmp_path, "OFFICIAL")
+        response = staged.post(f"{RECIPE_URL}/preview-graph")
+>       assert response.status_code == 200, response.text
+E       AssertionError: {"error":"recipe_rule","problems":["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Content]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:664: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12343: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12277: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_a_preview_joins_an_unmarked_source_carrying_its_declared_default
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_test_reads_the_sources_declared_default_as_the_run_does[declared]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_load_preview_reads_the_sources_declared_default_as_the_run_does
+3 failed, 24 passed, 4 warnings in 2.43s
+
+=> RED as named
+
+== plant 19: no carry at all (services/ingest/staging_catalogue.py)
+--- old
+    if declared is None or not marked or not classification:
+        return table
+--- new
+    if True:
+        return table
+..............FFF.....                                                   [100%]
+=================================== FAILURES ===================================
+_ test_an_unmarked_table_carrying_its_sources_default_joins_rows_marked_alike __
+
+    def test_an_unmarked_table_carrying_its_sources_default_joins_rows_marked_alike() -> None:
+>       result = _run(_carried(None, "OFFICIAL"))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:213: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:206: in _run
+    return run_staging(
+services/ingest/staging_catalogue.py:862: in run_staging
+    done = _join(step, tables[step.left], tables[step.right], marked=marked)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/ingest/staging_catalogue.py:690: in _join
+    refuse_a_differing_marking(step.id, row, match, marked)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+step_id = 'j'
+row = StagedTableRow(cells={'pin': 'A1', 'classification': 'OFFICIAL', 'note': 'x'}, refs=(StagedRef(source='visits', row_index=0, row_key='7322a7c7877c5bb6780f2e01ab8591eb5535c63b7224937f07c79bd38c8ef79b', load_id='l1'),))
+other = StagedTableRow(cells={'pin': 'A1', 'name': 'Ann Example'}, refs=(StagedRef(source='people', row_index=0, row_key='ac27967b620d109569b2a90e8b81817086a4989e914067379340ca946b408d7c', load_id='l2'),))
+marked = frozenset({'classification'})
+
+    def refuse_a_differing_marking(
+        step_id: str, row: StagedTableRow, other: StagedTableRow, marked: Collection[str]
+    ) -> None:
+        """Rule 3 at the run (CARRIES row 48): an output row drawing on two rows is written under the
+        first's marking cells, so the second's must be the same; otherwise the step is refused whole,
+        in words naming neither row's values nor their markings. An unmarked row (no marking cell at
+        all) differs from a marked one, fail closed; the words then name the source's declared default
+        marking, the setting that marks such a table (ADR-140 Amendment 19)."""
+        if not marked:
+            return
+        mine, theirs = marking_of(row.cells, marked), marking_of(other.cells, marked)
+        if mine == theirs:
+            return
+        words = (
+            f"step {step_id!r} joins a row to one whose marking differs: a joined row is "
+            "written under one marking, so rows of different markings are never joined. Split "
+            "them by their marking first, or join only rows marked alike"
+        )
+        # Unmarked: the row's table has none of the marking columns at all (a source table's row holds
+        # a cell for each of its table's columns). A marked table's empty cell is not unmarked, and a
+        # default would not fill it, so the words never point at one there (the lane review, item 4).
+        unmarked = not any(c in row.cells for c in marked) or not any(c in other.cells for c in marked)
+>       raise StagingError([f"{words}. {UNMARKED_WORDS}" if unmarked else words])
+E       services.ingest.staging_catalogue.StagingError: step 'j' joins a row to one whose marking differs: a joined row is written under one marking, so rows of different markings are never joined. Split them by their marking first, or join only rows marked alike. One of the rows is unmarked: its table has no marking column, and its source declares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+
+services/ingest/staging_catalogue.py:536: StagingError
+_ test_an_unmarked_tables_rows_carry_the_default_in_the_classification_column __
+
+    def test_an_unmarked_tables_rows_carry_the_default_in_the_classification_column() -> None:
+        people = _carried(None, "OFFICIAL")["people"]
+>       assert "classification" in people.columns  # type: ignore[attr-defined]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'classification' in ['pin', 'name']
+E        +  where ['pin', 'name'] = StagedTable(name='people', columns=['pin', 'name'], rows=[StagedTableRow(cells={'pin': 'A1', 'name': 'Ann Example'}, r...y='ac27967b620d109569b2a90e8b81817086a4989e914067379340ca946b408d7c', load_id='l2'),))], kind='source', reference=None).columns
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:220: AssertionError
+___ test_a_default_marked_differently_from_the_other_table_is_still_refused ____
+
+    def test_a_default_marked_differently_from_the_other_table_is_still_refused() -> None:
+        tables = _carried(None, "SECRET")
+        # The default was carried (the row is marked SECRET now), so the refusal is a difference of
+        # markings, never the unmarked words: an uncarried table would fail both assertions.
+>       assert [r.cells["classification"] for r in tables["people"].rows] == ["SECRET"]  # type: ignore[attr-defined]
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'classification'
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:228: KeyError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_an_unmarked_table_carrying_its_sources_default_joins_rows_marked_alike
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_an_unmarked_tables_rows_carry_the_default_in_the_classification_column
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_a_default_marked_differently_from_the_other_table_is_still_refused
+3 failed, 19 passed in 0.81s
+
+=> RED as named
+
+== plant 20: Load Preview passes no sources (services/api/app.py)
+--- old
+    report, _ = await _studio_dry_run(
+        investigation=investigation, recipe=recipe, principal=principal, scheme=scheme, graph=graph,
+        ontology=ontology, recipe_runs=recipe_runs, typology_rules=typology_rules,
+        analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
+        hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
+        repo_root=repo_root, influencers_store=influencers_store, models=models,
+        staging_storage=staging_storage, list_store=list_store, sources=sources,
+--- new
+    report, _ = await _studio_dry_run(
+        investigation=investigation, recipe=recipe, principal=principal, scheme=scheme, graph=graph,
+        ontology=ontology, recipe_runs=recipe_runs, typology_rules=typology_rules,
+        analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
+        hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
+        repo_root=repo_root, influencers_store=influencers_store, models=models,
+        staging_storage=staging_storage, list_store=list_store,
+..........................F                                              [100%]
+=================================== FAILURES ===================================
+_____ test_load_preview_reads_the_sources_declared_default_as_the_run_does _____
+
+staged = <starlette.testclient.TestClient object at 0x117316690>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2657/test_load_preview_reads_the_so0')
+
+    def test_load_preview_reads_the_sources_declared_default_as_the_run_does(
+        staged: TestClient, tmp_path: Path
+    ) -> None:
+        """The lane review, item 8: Load Preview runs the same dry run as Test through its own route,
+        which must hand it the sources too. Red with the route's `sources=` left out."""
+        _marked(staged, tmp_path, "OFFICIAL")
+        response = staged.post(f"{RECIPE_URL}/preview-graph")
+>       assert response.status_code == 200, response.text
+E       AssertionError: {"error":"recipe_rule","problems":["The sample is withheld: some of its source rows are above your clearance or restricted to another unit, and a step's own settings could be used to tell their values."]}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Content]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py:664: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12343: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:12277: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py::test_load_preview_reads_the_sources_declared_default_as_the_run_does
+1 failed, 26 passed, 4 warnings in 2.43s
+
+=> RED as named
+
+== plant 21: the command's dispatch drops the version (cli/ospreyflow/main.py)
+--- old
+            replace_own_draft=args.replace_own_draft,
+
+--- new
+
+....................F                                                    [100%]
+=================================== FAILURES ===================================
+______ test_replace_own_draft_reaches_the_route_through_the_command[True] ______
+
+product = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2658/test_replace_own_draft_reaches1/ospreyflow')
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2658/test_replace_own_draft_reaches1')
+conduit = [<Request('POST', 'http://conduit.test/v1/datasets/pid/release/import?dry_run=false')>]
+given = True
+
+    @pytest.mark.parametrize("given", [False, True])
+    def test_replace_own_draft_reaches_the_route_through_the_command(
+        product: Path, tmp_path: Path, conduit: list[httpx.Request], given: bool
+    ) -> None:
+        """The lane review, item 8: the parser and the client are tested apart above; this is the
+        dispatch between them. Red with `main`'s `replace_own_draft=` left out."""
+        out = tmp_path / "bundle"
+        out.mkdir()
+        (out / "release.yaml").write_text("x")
+        args = ["release", "import", str(out), "--dataset", "pid"]
+        if given:
+            args += ["--replace-own-draft", "3"]
+        assert _main(product, tmp_path / "home", *args, env=_PERSON) == 0
+>       assert conduit[0].url.params.get("replace_own_draft") == ("3" if given else None)
+E       AssertionError: assert None == '3'
+E        +  where None = get('replace_own_draft')
+E        +    where get = QueryParams('dry_run=false').get
+E        +      where QueryParams('dry_run=false') = URL('http://conduit.test/v1/datasets/pid/release/import?dry_run=false').params
+E        +        where URL('http://conduit.test/v1/datasets/pid/release/import?dry_run=false') = <Request('POST', 'http://conduit.test/v1/datasets/pid/release/import?dry_run=false')>.url
+
+../OspreyFlow_Build/tests/cli/test_conduit_client.py:317: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Everything is a draft: make the model live in the Studio when it is ready.
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/cli/test_conduit_client.py::test_replace_own_draft_reaches_the_route_through_the_command[True]
+1 failed, 20 passed in 0.27s
+
+=> RED as named
+
+== plant 22: a default below a raised source marking carried (judged at read) (services/api/studio_staging.py)
+--- old
+        if isinstance(own, str) and own and (
+--- new
+        if False and (
+........F                                                                [100%]
+=================================== FAILURES ===================================
+_______ test_a_default_left_below_a_raised_source_marking_is_not_carried _______
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2659/test_a_default_left_below_a_ra0')
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2659/test_a_default_left_below_a_ra0/store')
+
+    async def test_a_default_left_below_a_raised_source_marking_is_not_carried(
+        tmp_path: Path, store: Path
+    ) -> None:
+        """The lane review, item 1 (rule 3): a default declared OFFICIAL, then the source's own marking
+        raised to SECRET by a governance edit, is below the source's marking and never carried, so
+        the owners' rows stay unmarked and the Join is refused, as before the default was declared.
+        Judged when the run reads the declaration, so no edit order or race can get round it."""
+        from schemas.sources import SourceGovernanceInput
+    
+        draft, repo, owners = await _published_marked(tmp_path)
+        sources = await _owners_declared(owners, "OFFICIAL")
+        (owner,) = await sources.list_for("pid")
+        raised = SourceGovernanceInput(handling=HANDLING | {"classification": "SECRET"})
+        await sources.edit_governance("pid", owner.id, raised, Principal(id="eng-1", clearance="SECRET", org_unit="unit-1"))
+>       with pytest.raises(RecipeRuleError) as refused:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RecipeRuleError
+
+../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py:284: Failed
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staged_pipeline_run.py::test_a_default_left_below_a_raised_source_marking_is_not_carried
+1 failed, 8 passed in 2.06s
+
+=> RED as named
+
+== plant 23: the setting's read gates (Edit pipelines) taken out (services/api/app.py)
+--- old
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        Depends(require_studio_role(StudioRole.SOURCE_AUTHOR)),
+
+--- new
+
+.........................F..........                                     [100%]
+=================================== FAILURES ===================================
+_____ test_an_approver_who_may_not_read_the_source_cannot_set_its_default ______
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x14fe4d970>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x14fe7a600>, sources=<services.api.sources.InMemorySourceStore object at 0x14fe79df0>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x14fe7b410>
+
+    def test_an_approver_who_may_not_read_the_source_cannot_set_its_default(
+        world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rule 4 (the lane review, item 2): the setting's answer is the whole source, so the write
+        needs what the read needs (Add ingest files, Edit pipelines) as well as Deploy pipelines. A
+        person holding Deploy pipelines without Edit pipelines is refused, and is told nothing of it."""
+        made = _register(world).json()
+        # Reaches the dataset (an analyst's Add ingest files) and holds Deploy pipelines, but not the
+        # source author's Edit pipelines that reading a source needs.
+        approver = Principal(
+            id="apr-1", clearance="SECRET", org_unit="unit-1", roles=["source_approver", "analyst"]
+        )
+        monkeypatch.setitem(PEOPLE, "approver", approver)
+        monkeypatch.setitem(CASES, "apr-1", {"case-a": ["ds-a"]})
+        read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("approver"))
+        assert read.status_code == 403
+        answer = _default(world, made["id"], "OFFICIAL", who="approver")
+        # Refused as the read is refused, in the same way.
+>       assert answer.status_code == read.status_code, answer.text
+E       AssertionError: {"source":{"id":"01M77VW2CH9NB5CSCW168WK2PW","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2660/test_an_approver_who_may_not_r0/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"OFFICIAL","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:31:40.433137Z","paused":false,"paused_reason":null},"read":null,"version":2,"created_by":"eng-1","created_at":"2026-11-12T12:31:40.433143Z","updated_by":null,"updated_at":null,"default_marking":"OFFICIAL","default_marking_set_by":"apr-1","default_marking_set_at":"2026-11-12T12:31:40.436536Z"},"needs_attention":["PIN calls"]}
+E       assert 200 == 403
+E        +  where 200 = <Response [200 OK]>.status_code
+E        +  and   403 = <Response [403 Forbidden]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:596: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_an_approver_who_may_not_read_the_source_cannot_set_its_default
+1 failed, 35 passed, 3 warnings in 2.00s
+
+=> RED as named
+
+== plant 24: drafts not following a default change (services/api/app.py)
+--- old
+    followed = await studio_recipes.follow_source(
+        dataset_id, edited.location, edited.handling, edited.legal_basis
+    )
+    await audit.record(
+        principal=principal,
+        action="set_dataset_source_default_marking",
+--- new
+    followed: list[str] = []
+    await audit.record(
+        principal=principal,
+        action="set_dataset_source_default_marking",
+.......................F............                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_source_approver_declares_changes_and_clears_a_default_marking_audited _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x11f07d0d0>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x11f07f470>, sources=<services.api.sources.InMemorySourceStore object at 0x11f07e9f0>)
+
+    def test_a_source_approver_declares_changes_and_clears_a_default_marking_audited(
+        world: SimpleNamespace,
+    ) -> None:
+        """Who, when, from and to, each time; a new version that flags the deployed pipelines."""
+        made = _register(world).json()
+        steps = [(None, "OFFICIAL", 2), ("OFFICIAL", "SECRET", 3), ("SECRET", None, 4)]
+        for before, after, version in steps:
+            response = _default(world, made["id"], after)
+            assert response.status_code == 200, response.text
+            source = response.json()["source"]
+            assert source["default_marking"] == after and source["version"] == version
+            assert source["default_marking_set_by"] == "eng-1"
+            assert source["default_marking_set_at"] is not None
+            assert response.json()["needs_attention"] == ["PIN calls"]
+            entry = _set_defaults(world)[-1]
+            assert entry["principal"].id == "eng-1"
+            query = entry["resolved_query"]
+            assert (query["default_marking_before"], query["default_marking_after"]) == (before, after)
+            assert query["set_at"] == source["default_marking_set_at"].replace("Z", "+00:00")
+        assert world.recipes.flagged == [("ds-a", made["location"], SOURCE_GOVERNANCE_CHANGED)] * 3
+        # Each draft reading the source follows too, its Test no longer standing (the lane review,
+        # item 7): a draft tested under one declaration is tested again before it is deployed.
+>       assert world.recipes.followed == [("ds-a", made["location"], "OFFICIAL")] * 3
+E       AssertionError: assert [] == [('ds-a', '/p..., 'OFFICIAL')]
+E         
+E         Right contains 3 more items, first extra item: ('ds-a', '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2661/test_a_source_approver_declare0/ingest/uploaded/ds-a/cells.csv', 'OFFICIAL')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:547: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_source_approver_declares_changes_and_clears_a_default_marking_audited
+1 failed, 35 passed, 3 warnings in 1.89s
+
+=> RED as named
+
+== plant 25: the unmarked words for a marked table's empty cell (services/ingest/staging_catalogue.py)
+--- old
+    unmarked = not any(c in row.cells for c in marked) or not any(c in other.cells for c in marked)
+--- new
+    unmarked = all(c is None for c in mine) or all(c is None for c in theirs)
+..................F...                                                   [100%]
+=================================== FAILURES ===================================
+_____ test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default ______
+
+    def test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default() -> None:
+        """The table has the marking column, so it is marked: an empty cell is not an unmarked table
+        (the strict option); the join is refused as before."""
+        tables = _carried("", "OFFICIAL")
+        people = tables["people"]
+        assert "classification" in people.columns  # type: ignore[attr-defined]
+        assert [r.cells["classification"] for r in people.rows] == [None]  # type: ignore[attr-defined]
+        with pytest.raises(StagingError) as refused:
+            _run(tables)
+        # The table is marked, so the words never point at a default that could not help it (the lane
+        # review, item 4).
+        assert "whose marking differs" in str(refused.value)
+>       assert "default marking" not in str(refused.value)
+E       assert 'default marking' not in "step 'j' jo...ore the join"
+E         
+E         'default marking' is contained here:
+E           clares no default marking. A source approver can declare one in Studio › Sources (Default marking); that table's rows then carry it before the join
+E         ?           +++++++++++++++
+
+../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py:255: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_staging_marked_rows.py::test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default
+1 failed, 21 passed in 0.81s
+
+=> RED as named
+
+== plant 26: the governance edit's Add ingest files right (services/api/app.py)
+--- old
+        # reading it needs (rule 4; the orchestrator's review of the carries step, item 2).
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+
+--- new
+
+...............................F....                                     [100%]
+=================================== FAILURES ===================================
+_____ test_a_governance_edit_is_refused_to_someone_the_source_read_refuses _____
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x1329d3aa0>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x1329d0890>, sources=<services.api.sources.InMemorySourceStore object at 0x1329d2e70>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1327f63c0>
+
+    def test_a_governance_edit_is_refused_to_someone_the_source_read_refuses(
+        world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Rule 4 (the orchestrator's review of the carries step, item 2): the governance edit answers
+        the whole source, its default marking included, so it needs what reading the source needs. A
+        custom role holding Edit pipelines without Add ingest files is refused the read, and the edit,
+        alike; nothing is edited, flagged or followed."""
+        made = _register(world).json()
+        editor = Principal(id="edt-1", clearance="SECRET", org_unit="unit-1", roles=["right:edit_pipelines"])
+        monkeypatch.setitem(PEOPLE, "editor", editor)
+        monkeypatch.setitem(CASES, "edt-1", {"case-a": ["ds-a"]})
+        read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("editor"))
+        assert read.status_code == 403, read.text
+        edit = world.client.patch(
+            f"/v1/datasets/ds-a/sources/{made['id']}/governance",
+            json={"handling": HANDLING | {"classification": "SECRET"}},
+            headers=_as("editor"),
+        )
+>       assert edit.status_code == 403, edit.text
+E       AssertionError: {"source":{"id":"01M77VW8K6832W62DJ5VFG1ECZ","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2663/test_a_governance_edit_is_refu0/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"SECRET","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":null,"refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:31:46.790645Z","paused":false,"paused_reason":null},"read":null,"version":2,"created_by":"eng-1","created_at":"2026-11-12T12:31:46.790649Z","updated_by":"edt-1","updated_at":"2026-11-12T12:31:46.793278Z","default_marking":null,"default_marking_set_by":null,"default_marking_set_at":null},"needs_attention":["PIN calls"]}
+E       assert 200 == 403
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:665: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_governance_edit_is_refused_to_someone_the_source_read_refuses
+1 failed, 35 passed, 3 warnings in 2.00s
+
+=> RED as named
+
+== plant 27: a default above the approver changed or cleared by them (services/api/sources.py)
+--- old
+    if current and (
+        current not in levels
+--- new
+    if False and (
+        current not in levels
+................................FF..                                     [100%]
+=================================== FAILURES ===================================
+_ test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them[lowered] _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x129893d70>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x129ab9c40>, sources=<services.api.sources.InMemorySourceStore object at 0x129ab92b0>)
+change = 'OFFICIAL'
+
+    @pytest.mark.parametrize("change", ["OFFICIAL", None], ids=["lowered", "cleared"])
+    def test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them(
+        world: SimpleNamespace, change: str | None
+    ) -> None:
+        """The orchestrator's review, item 3 (the strict option): a default above the approver's own
+        clearance is theirs neither to lower nor to clear, since either changes how rows they may not
+        read are marked; refused in words naming the clearance needed, and nothing is written."""
+        made = _register(world).json()
+        assert _default(world, made["id"], "SECRET").status_code == 200
+        before = world.sources._sources[made["id"]]
+        answer = _default(world, made["id"], change, who="junior")
+>       assert answer.status_code == 422, answer.text
+E       AssertionError: {"source":{"id":"01M77VWB6VKXP6HMYT571922Q1","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2664/test_a_default_above_the_appro0/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"OFFICIAL","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:31:49.467976Z","paused":false,"paused_reason":null},"read":null,"version":3,"created_by":"eng-1","created_at":"2026-11-12T12:31:49.467981Z","updated_by":null,"updated_at":null,"default_marking":"OFFICIAL","default_marking_set_by":"jun-1","default_marking_set_at":"2026-11-12T12:31:49.471795Z"},"needs_attention":["PIN calls"]}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:682: AssertionError
+_ test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them[cleared] _
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x129ab9580>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x129ab82c0>, sources=<services.api.sources.InMemorySourceStore object at 0x129aba5a0>)
+change = None
+
+    @pytest.mark.parametrize("change", ["OFFICIAL", None], ids=["lowered", "cleared"])
+    def test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them(
+        world: SimpleNamespace, change: str | None
+    ) -> None:
+        """The orchestrator's review, item 3 (the strict option): a default above the approver's own
+        clearance is theirs neither to lower nor to clear, since either changes how rows they may not
+        read are marked; refused in words naming the clearance needed, and nothing is written."""
+        made = _register(world).json()
+        assert _default(world, made["id"], "SECRET").status_code == 200
+        before = world.sources._sources[made["id"]]
+        answer = _default(world, made["id"], change, who="junior")
+>       assert answer.status_code == 422, answer.text
+E       AssertionError: {"source":{"id":"01M77VWB93MGTEQGTKSWCNZKD6","dataset_id":"ds-a","connection_id":"files","name":"Cell stays","location":"/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2664/test_a_default_above_the_appro1/ingest/uploaded/ds-a/cells.csv","connector_profile":"generic-csv","handling":{"classification":"OFFICIAL","handling_code":"P","originator":"unit-1","owning_unit":"unit-1"},"legal_basis":"Synthetic demonstration","refresh":{"trigger":"manual","pattern":null,"mode":"snapshot","dropped_rows":"keep","watermark_column":null,"owner":"eng-1","set_at":"2026-11-12T12:31:49.539461Z","paused":false,"paused_reason":null},"read":null,"version":3,"created_by":"eng-1","created_at":"2026-11-12T12:31:49.539467Z","updated_by":null,"updated_at":null,"default_marking":null,"default_marking_set_by":"jun-1","default_marking_set_at":"2026-11-12T12:31:49.542820Z"},"needs_attention":["PIN calls"]}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:682: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them[lowered]
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_above_the_approver_is_neither_changed_nor_cleared_by_them[cleared]
+2 failed, 34 passed, 3 warnings in 2.01s
+
+=> RED as named
+
+== plant 28: no change still written (services/api/app.py)
+--- old
+    if marking == before.default_marking:
+--- new
+    if False:
+..................................FF                                     [100%]
+=================================== FAILURES ===================================
+___ test_a_default_set_to_what_it_already_is_writes_nothing[the-same-level] ____
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x1261a9100>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x1261ef500>, sources=<services.api.sources.InMemorySourceStore object at 0x1261ed490>)
+same = 'OFFICIAL'
+
+    @pytest.mark.parametrize("same", ["OFFICIAL", None], ids=["the-same-level", "none-again"])
+    def test_a_default_set_to_what_it_already_is_writes_nothing(
+        world: SimpleNamespace, same: str | None
+    ) -> None:
+        """The orchestrator's review, item 4: no change is no new version, no audit entry and no
+        pipeline flagged or draft made to follow; the answer is the source as it is."""
+        made = _register(world).json()
+        if same is not None:
+            assert _default(world, made["id"], same).status_code == 200
+        before = world.sources._sources[made["id"]]
+        audited, flagged = len(_set_defaults(world)), list(world.recipes.flagged)
+        answer = _default(world, made["id"], same)
+        assert answer.status_code == 200, answer.text
+>       assert answer.json()["source"]["version"] == before.version
+E       AssertionError: assert 3 == 2
+E        +  where 2 = SourceTable(id='01M77VWDQCSTATCVWGZJQK3WG0', dataset_id='ds-a', connection_id='files', name='Cell stays', location='/p...et_by='eng-1', default_marking_set_at=datetime.datetime(2026, 11, 12, 12, 31, 52, 46650, tzinfo=datetime.timezone.utc)).version
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:701: AssertionError
+_____ test_a_default_set_to_what_it_already_is_writes_nothing[none-again] ______
+
+world = namespace(client=<starlette.testclient.TestClient object at 0x121ba4cb0>, root=PosixPath('/private/var/folders/wn/c2zl...ataset_sources._Audit object at 0x1261ef980>, sources=<services.api.sources.InMemorySourceStore object at 0x1261ee780>)
+same = None
+
+    @pytest.mark.parametrize("same", ["OFFICIAL", None], ids=["the-same-level", "none-again"])
+    def test_a_default_set_to_what_it_already_is_writes_nothing(
+        world: SimpleNamespace, same: str | None
+    ) -> None:
+        """The orchestrator's review, item 4: no change is no new version, no audit entry and no
+        pipeline flagged or draft made to follow; the answer is the source as it is."""
+        made = _register(world).json()
+        if same is not None:
+            assert _default(world, made["id"], same).status_code == 200
+        before = world.sources._sources[made["id"]]
+        audited, flagged = len(_set_defaults(world)), list(world.recipes.flagged)
+        answer = _default(world, made["id"], same)
+        assert answer.status_code == 200, answer.text
+>       assert answer.json()["source"]["version"] == before.version
+E       AssertionError: assert 2 == 1
+E        +  where 1 = SourceTable(id='01M77VWDSGE9NK5VZF4C023K8N', dataset_id='ds-a', connection_id='files', name='Cell stays', location='/p...utc), updated_by=None, updated_at=None, default_marking=None, default_marking_set_by=None, default_marking_set_at=None).version
+
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py:701: AssertionError
+=============================== warnings summary ===============================
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9905: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_set_to_what_it_already_is_writes_nothing[the-same-level]
+FAILED ../OspreyFlow_Build/tests/services/api/test_dataset_sources.py::test_a_default_set_to_what_it_already_is_writes_nothing[none-again]
+2 failed, 34 passed, 3 warnings in 1.91s
+
+=> RED as named
+
+== plant 29: the confirmation not tied to the draft's version (services/api/studio_release.py)
+--- old
+    if replace_own_draft == draft.version:
+--- new
+    if replace_own_draft is not None:
+............................FF.                                          [100%]
+=================================== FAILURES ===================================
+__ test_a_confirmation_for_another_version_of_the_own_draft_is_refused[False] __
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2666/test_a_confirmation_for_anothe0/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2666/test_a_confirmation_for_anothe0/ingest')
+dry_run = False
+
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_a_confirmation_for_another_version_of_the_own_draft_is_refused(
+        store: Path, ingest: Path, dry_run: bool
+    ) -> None:
+        """The orchestrator's review, item 5: the confirmation names the draft version the importer saw.
+        Their draft discarded and opened again since (now version 4) is not replaced on a confirmation
+        given for version 3, nor on a bare `true`."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        held = _held_by(world, ENGINEER.id).model_copy(update={"version": 4})
+        world.models.draft_model = held
+        world.recipes.create_calls.clear()
+        for given in ("3", "true"):
+            answer = _import(client, files, dry_run=dry_run, replace_own_draft=given)
+>           assert answer.status_code == 422, answer.text
+E           AssertionError: {"dry_run":false,"release":{"name":"pid-release","version":"1"},"items":[{"role":"domain_model","name":"the domain model","action":"replaces_draft"},{"role":"pipeline","name":"Visits","action":"new_draft"}],"refused":[],"missing_connections":[],"notes":["the list 'wings' (version 1) is already kept here; it is left as it is"],"replaces_own_draft":true,"own_draft_version":4}
+E           assert 200 == 422
+E            +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:593: AssertionError
+__ test_a_confirmation_for_another_version_of_the_own_draft_is_refused[True] ___
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2666/test_a_confirmation_for_anothe1/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2666/test_a_confirmation_for_anothe1/ingest')
+dry_run = True
+
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_a_confirmation_for_another_version_of_the_own_draft_is_refused(
+        store: Path, ingest: Path, dry_run: bool
+    ) -> None:
+        """The orchestrator's review, item 5: the confirmation names the draft version the importer saw.
+        Their draft discarded and opened again since (now version 4) is not replaced on a confirmation
+        given for version 3, nor on a bare `true`."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        held = _held_by(world, ENGINEER.id).model_copy(update={"version": 4})
+        world.models.draft_model = held
+        world.recipes.create_calls.clear()
+        for given in ("3", "true"):
+            answer = _import(client, files, dry_run=dry_run, replace_own_draft=given)
+>           assert answer.status_code == 422, answer.text
+E           AssertionError: {"dry_run":true,"release":{"name":"pid-release","version":"1"},"items":[{"role":"domain_model","name":"the domain model","action":"replaces_draft"},{"role":"pipeline","name":"Visits","action":"new_draft"}],"refused":[],"missing_connections":[],"notes":["the list 'wings' (version 1) is already kept here; it is left as it is"],"replaces_own_draft":true,"own_draft_version":4}
+E           assert 200 == 422
+E            +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:593: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_a_confirmation_for_another_version_of_the_own_draft_is_refused[False]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_a_confirmation_for_another_version_of_the_own_draft_is_refused[True]
+2 failed, 29 passed in 2.61s
+
+=> RED as named
+
+== plant 30: another person's draft replaced on confirmation (services/api/studio_release.py)
+--- old
+    if draft.created_by != principal.id:
+--- new
+    if False:
+...................FFFF....F...                                          [100%]
+=================================== FAILURES ===================================
+___ test_another_persons_draft_is_refused_in_words_naming_them[False-False] ____
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_0/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_0/ingest')
+confirmed = False, dry_run = False
+
+    @pytest.mark.parametrize("confirmed", [False, True])
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_another_persons_draft_is_refused_in_words_naming_them(
+        store: Path, ingest: Path, confirmed: bool, dry_run: bool
+    ) -> None:
+        """Their draft is theirs: no confirmation of the importer's replaces it, and a dry run says so
+        before the import is tried."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        held = _held_by(world, "analyst-7")
+        world.recipes.create_calls.clear()
+        # A confirmation naming their draft's own version, the strongest an importer could send.
+        answer = _import(client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {}))
+        assert answer.status_code == 422, answer.text
+        plan = answer.json()
+        (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
+>       assert "analyst-7" in words and "Studio › Model" in words and "discard" in words
+E       AssertionError: assert ('analyst-7' in 'the domain model has your own in-progress draft (version 3), opened 10 November 2026 at 00:00 UTC: importing replaces...raft (ospreyflow release import --replace-own-draft 3) to go on, or make it live or discard it in Studio › Model first')
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:492: AssertionError
+____ test_another_persons_draft_is_refused_in_words_naming_them[False-True] ____
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_1/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_1/ingest')
+confirmed = True, dry_run = False
+
+    @pytest.mark.parametrize("confirmed", [False, True])
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_another_persons_draft_is_refused_in_words_naming_them(
+        store: Path, ingest: Path, confirmed: bool, dry_run: bool
+    ) -> None:
+        """Their draft is theirs: no confirmation of the importer's replaces it, and a dry run says so
+        before the import is tried."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        held = _held_by(world, "analyst-7")
+        world.recipes.create_calls.clear()
+        # A confirmation naming their draft's own version, the strongest an importer could send.
+        answer = _import(client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {}))
+>       assert answer.status_code == 422, answer.text
+E       AssertionError: {"dry_run":false,"release":{"name":"pid-release","version":"1"},"items":[{"role":"domain_model","name":"the domain model","action":"replaces_draft"},{"role":"pipeline","name":"Visits","action":"new_draft"}],"refused":[],"missing_connections":[],"notes":["the list 'wings' (version 1) is already kept here; it is left as it is"],"replaces_own_draft":false,"own_draft_version":null}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:489: AssertionError
+____ test_another_persons_draft_is_refused_in_words_naming_them[True-False] ____
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_2/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_2/ingest')
+confirmed = False, dry_run = True
+
+    @pytest.mark.parametrize("confirmed", [False, True])
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_another_persons_draft_is_refused_in_words_naming_them(
+        store: Path, ingest: Path, confirmed: bool, dry_run: bool
+    ) -> None:
+        """Their draft is theirs: no confirmation of the importer's replaces it, and a dry run says so
+        before the import is tried."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        held = _held_by(world, "analyst-7")
+        world.recipes.create_calls.clear()
+        # A confirmation naming their draft's own version, the strongest an importer could send.
+        answer = _import(client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {}))
+        assert answer.status_code == 422, answer.text
+        plan = answer.json()
+        (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
+>       assert "analyst-7" in words and "Studio › Model" in words and "discard" in words
+E       AssertionError: assert ('analyst-7' in 'the domain model has your own in-progress draft (version 3), opened 10 November 2026 at 00:00 UTC: importing replaces...raft (ospreyflow release import --replace-own-draft 3) to go on, or make it live or discard it in Studio › Model first')
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:492: AssertionError
+____ test_another_persons_draft_is_refused_in_words_naming_them[True-True] _____
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_3/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_another_persons_draft_is_3/ingest')
+confirmed = True, dry_run = True
+
+    @pytest.mark.parametrize("confirmed", [False, True])
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_another_persons_draft_is_refused_in_words_naming_them(
+        store: Path, ingest: Path, confirmed: bool, dry_run: bool
+    ) -> None:
+        """Their draft is theirs: no confirmation of the importer's replaces it, and a dry run says so
+        before the import is tried."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        held = _held_by(world, "analyst-7")
+        world.recipes.create_calls.clear()
+        # A confirmation naming their draft's own version, the strongest an importer could send.
+        answer = _import(client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {}))
+>       assert answer.status_code == 422, answer.text
+E       AssertionError: {"dry_run":true,"release":{"name":"pid-release","version":"1"},"items":[{"role":"domain_model","name":"the domain model","action":"replaces_draft"},{"role":"pipeline","name":"Visits","action":"new_draft"}],"refused":[],"missing_connections":[],"notes":["the list 'wings' (version 1) is already kept here; it is left as it is"],"replaces_own_draft":false,"own_draft_version":null}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:489: AssertionError
+_ test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write _
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_a_draft_opened_by_another0/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2667/test_a_draft_opened_by_another0/ingest')
+
+    def test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write(
+        store: Path, ingest: Path
+    ) -> None:
+        """The plan and the write each read the draft: someone opening one in between is refused at
+        the write, before the model, a pipeline or a list is written (the strict option)."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        world.recipes.create_calls.clear()
+        reads = 0
+        real_draft = world.models.draft
+    
+        async def opened_meanwhile(dataset_id: str) -> TargetModel | None:
+            nonlocal reads
+            reads += 1
+            if reads == 2:
+                _held_by(world, "analyst-7")
+            return await real_draft(dataset_id)
+    
+        world.models.draft = opened_meanwhile  # type: ignore[method-assign]
+        answer = _import(client, files)
+        assert answer.status_code == 422, answer.text
+>       assert any("analyst-7" in p for p in answer.json()["refused"])
+E       assert False
+E        +  where False = any(<generator object test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write.<locals>.<genexpr> at 0x115ffae90>)
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:572: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_another_persons_draft_is_refused_in_words_naming_them[False-False]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_another_persons_draft_is_refused_in_words_naming_them[False-True]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_another_persons_draft_is_refused_in_words_naming_them[True-False]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_another_persons_draft_is_refused_in_words_naming_them[True-True]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write
+5 failed, 26 passed in 2.51s
+
+=> RED as named
+
+== plant 31: the write's own re-read of the draft (services/api/studio_release.py)
+--- old
+    if held is not None:
+        raise held
+--- new
+    if False:
+        raise held
+...........................F...                                          [100%]
+=================================== FAILURES ===================================
+_ test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write _
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2668/test_a_draft_opened_by_another0/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2668/test_a_draft_opened_by_another0/ingest')
+
+    def test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write(
+        store: Path, ingest: Path
+    ) -> None:
+        """The plan and the write each read the draft: someone opening one in between is refused at
+        the write, before the model, a pipeline or a list is written (the strict option)."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        world.recipes.create_calls.clear()
+        reads = 0
+        real_draft = world.models.draft
+    
+        async def opened_meanwhile(dataset_id: str) -> TargetModel | None:
+            nonlocal reads
+            reads += 1
+            if reads == 2:
+                _held_by(world, "analyst-7")
+            return await real_draft(dataset_id)
+    
+        world.models.draft = opened_meanwhile  # type: ignore[method-assign]
+        answer = _import(client, files)
+>       assert answer.status_code == 422, answer.text
+E       AssertionError: {"dry_run":false,"release":{"name":"pid-release","version":"1"},"items":[{"role":"domain_model","name":"the domain model","action":"new_draft"},{"role":"pipeline","name":"Visits","action":"new_draft"}],"refused":[],"missing_connections":[],"notes":["the list 'wings' (version 1) is already kept here; it is left as it is"],"replaces_own_draft":false,"own_draft_version":null}
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:571: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write
+1 failed, 30 passed in 2.48s
+
+=> RED as named
+
+== plant 32: the store's refusal of a second draft (the open_draft window) (services/api/target_models.py)
+--- old
+def _refuse_a_second_draft(draft: TargetModel | None) -> None:
+    if draft is not None:
+--- new
+def _refuse_a_second_draft(draft: TargetModel | None) -> None:
+    if False:
+..............................F                                          [100%]
+=================================== FAILURES ===================================
+_ test_a_draft_opened_in_the_open_draft_window_is_refused_by_the_store_before_any_write _
+
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2669/test_a_draft_opened_in_the_ope0/store')
+ingest = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2669/test_a_draft_opened_in_the_ope0/ingest')
+
+    def test_a_draft_opened_in_the_open_draft_window_is_refused_by_the_store_before_any_write(
+        store: Path, ingest: Path
+    ) -> None:
+        """The orchestrator's review, item 6: the import re-reads no draft, then another person opens
+        one before the import's own `open_draft`. The real store refuses the second draft
+        (`TargetModelRefused`), so the route answers 409 in its words and nothing is written."""
+        world = _World(ingest)
+        client = world.install(ENGINEER)
+        files = _export(client)
+        world.recipes.create_calls.clear()
+        real_open = world.models.open_draft
+    
+        async def opened_first(dataset_id: str, principal: Principal) -> TargetModel:
+            _held_by(world, "analyst-7")
+            return await real_open(dataset_id, principal)
+    
+        world.models.open_draft = opened_first  # type: ignore[method-assign]
+        answer = _import(client, files)
+>       assert answer.status_code == 409, answer.text
+E       AssertionError: {"dry_run":false,"release":{"name":"pid-release","version":"1"},"items":[{"role":"domain_model","name":"the domain model","action":"new_draft"},{"role":"pipeline","name":"Visits","action":"new_draft"}],"refused":[],"missing_connections":[],"notes":["the list 'wings' (version 1) is already kept here; it is left as it is"],"replaces_own_draft":false,"own_draft_version":null}
+E       assert 200 == 409
+E        +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py:618: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_release_routes.py::test_a_draft_opened_in_the_open_draft_window_is_refused_by_the_store_before_any_write
+1 failed, 30 passed in 2.49s
+
+=> RED as named
+
