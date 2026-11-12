@@ -77,8 +77,14 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     (
         "L0 test_screening_refresh leaves its lists",
         "OspreyFlow_Build/tests/services/api/test_screening_refresh.py",
-        '        await remove_screening_lists(dsn, prefixes=["Synthetic list"])\n',
-        "",
+        # The teardown removes its lists before closing the store (the orchestrator's review, a
+        # note), so the plant takes the whole try out, not the one line (an empty try: broke
+        # collection, the run after the rebase onto 4ecd322: BROKEN, recorded).
+        "        try:\n"
+        '            await remove_screening_lists(dsn, prefixes=["Synthetic list"])\n'
+        "        finally:\n"
+        "            await made.close()\n",
+        "        await made.close()\n",
         [f"{B}/services/api/test_screening_refresh.py", CROSS],
     ),
     (
@@ -116,10 +122,13 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         [AM7[1]],
     ),
     (
-        "L4 every list screened, the deployer cleared or not",
+        # The judge asks the store with the deployer's clearance (item 1); `lists_cleared_for` is
+        # no longer on its path (GREEN there, the run after the rebase onto 4ecd322, recorded), so
+        # the plant is at the judge's own call: a clearance admitting every list.
+        "L4 every list screened, the deployer cleared or not (the judge's call)",
         "OspreyFlow_Core/services/api/kyc_rules.py",
-        "    return [e for e in entries if handling_readable(scheme, deployer, list_handling(e, deployer))]",
-        "    return list(entries)",
+        "    cleared = ListClearance.of(deployer, ctx.scheme)\n",
+        "    cleared = ListClearance(tuple(ctx.scheme.classification), tuple(ctx.scheme.handling_codes))\n",
         [AM7[3]],
     ),
     (
@@ -182,11 +191,13 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
         [STORE_CASES[1], ROUTE_CASES[1]],
     ),
     (
+        # The marking is kept in screening_list_markings and every read takes it from there, so
+        # the old plant in apply_update left it held (GREEN, the run after the rebase onto 4ecd322,
+        # recorded): the plant now has `_kept_marking` pass the table by, reading the entries alone.
         "L12 a list's marking read from its entries alone (item 3, an emptied list)",
         "OspreyFlow_Core/services/api/screening.py",
-        "            marked = await _kept_marking(conn, list_name)\n",
-        "            marked = next(((r[\"classification\"], r[\"handling_code\"]) for r in rows\n"
-        "                           if r[\"classification\"] is not None), None)\n",
+        '"SELECT classification, handling_code FROM screening_list_markings WHERE list_name = $1"\n',
+        '"SELECT classification, handling_code FROM screening_list_markings WHERE list_name = $1 AND false"\n',
         [STORE_CASES[2]],
     ),
     (
