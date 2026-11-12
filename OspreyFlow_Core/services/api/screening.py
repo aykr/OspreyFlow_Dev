@@ -69,6 +69,9 @@ CREATE TABLE IF NOT EXISTS screening_entries (
 );
 CREATE INDEX IF NOT EXISTS screening_entries_type_idx ON screening_entries (entity_type);
 ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS aliases TEXT[] NOT NULL DEFAULT '{}';
+-- ADR-146 Amendment 7: the list's marking, carried by each of its entries; NULL is OFFICIAL, P.
+ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS classification TEXT;
+ALTER TABLE screening_entries ADD COLUMN IF NOT EXISTS handling_code TEXT;
 CREATE TABLE IF NOT EXISTS screening_lists (
     list_name TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -172,11 +175,17 @@ class ScreeningEntry:
     synthetic: bool = True
     #: Every other name the list gives (ADR-133 stage (c)); a name matches on any of them.
     aliases: tuple[str, ...] = ()
+    #: ADR-146 Amendment 7: the list's marking, which its listed party (and so each match on it)
+    #: carries: only a reader it clears is shown a match on the list. `None` is the default,
+    #: OFFICIAL with handling code P, as every list was marked before.
+    classification: str | None = None
+    handling_code: str | None = None
 
     def fingerprint(self) -> tuple[object, ...]:
         """What makes two versions of one entry the same entry: everything screening reads."""
         return (self.listing, self.entity_type, self.name, tuple(sorted(self.aliases)),
-                self.date_of_birth, self.country)  # fmt: skip
+                self.date_of_birth, self.country, self.classification,
+                self.handling_code)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -306,11 +315,12 @@ class ScreeningListStore:
     ) -> None:
         await conn.executemany(
             "INSERT INTO screening_entries (id, list_name, listing, entity_type, name, "
-            "date_of_birth, country, synthetic, loaded_at, aliases) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            "date_of_birth, country, synthetic, loaded_at, aliases, classification, "
+            "handling_code) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
             [
                 (e.id, list_name, e.listing, e.entity_type, e.name, e.date_of_birth,
-                 e.country, e.synthetic, now, list(e.aliases))
+                 e.country, e.synthetic, now, list(e.aliases), e.classification,
+                 e.handling_code)
                 for e in entries
             ],
         )  # fmt: skip
@@ -320,7 +330,8 @@ class ScreeningListStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT id, list_name, listing, entity_type, name, date_of_birth, country, "
-                "synthetic, aliases FROM screening_entries WHERE entity_type = $1 ORDER BY id",
+                "synthetic, aliases, classification, handling_code FROM screening_entries "
+                "WHERE entity_type = $1 ORDER BY id",
                 entity_type,
             )
         return [_entry(r) for r in rows]
@@ -381,7 +392,8 @@ class ScreeningListStore:
             )
             rows = await conn.fetch(
                 "SELECT id, list_name, listing, entity_type, name, date_of_birth, country, "
-                "synthetic, aliases FROM screening_entries WHERE list_name = $1",
+                "synthetic, aliases, classification, handling_code FROM screening_entries "
+                "WHERE list_name = $1",
                 list_name,
             )
             diff = diff_entries(
@@ -586,6 +598,7 @@ def _entry(r: asyncpg.Record) -> ScreeningEntry:
         id=r["id"], list_name=r["list_name"], listing=r["listing"],
         entity_type=r["entity_type"], name=r["name"], date_of_birth=r["date_of_birth"],
         country=r["country"], synthetic=r["synthetic"], aliases=tuple(r["aliases"] or ()),
+        classification=r["classification"], handling_code=r["handling_code"],
     )  # fmt: skip
 
 
