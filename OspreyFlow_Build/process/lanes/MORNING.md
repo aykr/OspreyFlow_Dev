@@ -520,6 +520,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         and I changed nothing. Its `local_only` is true and it has no sendable codes; the demo sources are
         handled P. Adding Gemini needs `local_only: false` and `sendable_handling_codes: [P]` in its
         osprey.yaml, then `ospreyflow apply`, which restarts parts of it. Not done; that is yours to say.
+      - **T1 part 5's review (relayed on sol, about 10:40): not yet.** One of its own tests ran
+        `pkill -f "sleep 6"` on the shared server, which would kill other lanes' processes; its gates predate main's
+        last moves. Also missing: the run folder's start isn't chained on its creation, the reaper failed open on a
+        missing pid file, and there was no way to stop a run. **My ruling, which you can overrule:** add a
+        `stop <lane>` verb in this step. Ctrl-C on the Mac only ever ended the follow, never the run.
       I also swept your uncommitted `osprey.yaml` into a commit once (`git commit -a`, c9abc3f). It is undone:
       the history no longer has it, the file in your tree is byte for byte as it was, and nothing was pushed.
     - Thursday's osprey-small check by 11:00 UK, with your steps 6 and 7 in the Admin UI.
