@@ -641,6 +641,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       - **R1's memory (about 18:10):** osprey-small's ArcadeDB heap may grow to 24 GB, so kind would have only about
         25 GiB. Recommended: stop osprey-small for R1, from Friday evening after your demo (kind then gets 40–44 GiB),
         or cap its heap (about 30–32 GiB). R1 is closest to the Small sizing, at about a third of it.
+      - **The websites (a56ace2):** items 1–3 and 7 merged; nothing published. **Your answers (about 19:10), my
+        recommendations taken:**
+        1. the client-name hashes are kept out of git;
+        2. the extraction-engine line stays;
+        3. Contribute reads "a maintainer runs the project's checks on it before it is merged";
+        4. the image note stays.
+
+        Still yours: the item 4 and 5 diffs in `process/lanes/docs/sites-proposal/`.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
