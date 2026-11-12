@@ -31,6 +31,16 @@ export type RoutedTeam = string | null;
 export type SuppressedUntil = string | null;
 export type SuppressReason = string | null;
 export type SuppressedBy = string | null;
+export type Words1 = string;
+export type NodeIds = NodeId[];
+export type EdgeIds1 = EdgeId[];
+export type Status1 = "open" | "closing" | "closed";
+export type Disposition1 = ("true_positive" | "false_positive" | "duplicate" | "no_further_action" | "referred") | null;
+export type DispositionReason1 = string | null;
+export type DecidedBy1 = string | null;
+export type DecidedAt1 = string | null;
+export type CloseProposedBy1 = string | null;
+export type Citations = AlertCitation[];
 
 /**
  * A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
@@ -79,10 +89,32 @@ export interface Alert {
   suppressed_until?: SuppressedUntil;
   suppress_reason?: SuppressReason;
   suppressed_by?: SuppressedBy;
+  citations?: Citations;
   [k: string]: unknown;
 }
 export interface Interval {
   valid_from: ValidFrom;
   valid_to?: ValidTo;
+  [k: string]: unknown;
+}
+/**
+ * ADR-146 Amendment 7: one of the things an alert cites that a reader may be cleared for or
+ * not, apart from the rest of it: a screening alert's match on one list (the listed party and the
+ * scored `SAME_AS` to it). The alert is shown to a reader who may read everything it rests on
+ * outside its citations and at least one citation; each citation is shown only to a reader who
+ * may read every node and link it names, and a hidden one is left out of the alert as served
+ * (its words, its ids and how many there are), so the alert never says which lists, or how many,
+ * a reader cannot see (rule 3).
+ */
+export interface AlertCitation {
+  words: Words1;
+  node_ids?: NodeIds;
+  edge_ids?: EdgeIds1;
+  status?: Status1;
+  disposition?: Disposition1;
+  disposition_reason?: DispositionReason1;
+  decided_by?: DecidedBy1;
+  decided_at?: DecidedAt1;
+  close_proposed_by?: CloseProposedBy1;
   [k: string]: unknown;
 }

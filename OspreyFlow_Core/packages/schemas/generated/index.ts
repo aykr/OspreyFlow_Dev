@@ -32,6 +32,7 @@ export type { PatternNode } from "./PatternNode";
 export type { PatternEdge } from "./PatternEdge";
 export type { PatternQuery } from "./PatternQuery";
 export type { SavedPattern } from "./SavedPattern";
+export type { AlertCitation } from "./AlertCitation";
 export type { Alert } from "./Alert";
 export type { Hotlist } from "./Hotlist";
 export type { Monitor } from "./Monitor";
