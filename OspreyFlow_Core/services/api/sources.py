@@ -535,17 +535,20 @@ class PostgresSourceStore:
     async def set_default_marking(
         self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
     ) -> SourceTable:
-        edited = _with_default_marking(await self.get(dataset_id, source_id), marking, principal)
+        stamp = _with_default_marking(await self.get(dataset_id, source_id), marking, principal)
+        # The version is taken in the update itself, so two edits at once never both write one
+        # version (the lane review, item 6); the row is read back as written.
         async with self._pool.acquire() as conn:
-            done = await conn.execute(
+            row = await conn.fetchrow(
                 "UPDATE ingest_sources SET default_marking = $3, default_marking_set_by = $4, "
-                "default_marking_set_at = $5, version = $6 WHERE dataset_id = $1 AND id = $2",
-                dataset_id, source_id, edited.default_marking, edited.default_marking_set_by,
-                edited.default_marking_set_at, edited.version,
+                f"default_marking_set_at = $5, version = version + 1 WHERE dataset_id = $1 "
+                f"AND id = $2 RETURNING {_SOURCE_COLUMNS}",
+                dataset_id, source_id, stamp.default_marking, stamp.default_marking_set_by,
+                stamp.default_marking_set_at,
             )  # fmt: skip
-        if done.endswith(" 0"):
+        if row is None:
             raise SourceNotFoundError(source_id)
-        return edited
+        return _source(row)
 
     async def watched(self) -> list[SourceTable]:
         async with self._pool.acquire() as conn:

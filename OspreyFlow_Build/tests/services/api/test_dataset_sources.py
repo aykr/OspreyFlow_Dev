@@ -542,6 +542,9 @@ def test_a_source_approver_declares_changes_and_clears_a_default_marking_audited
         assert (query["default_marking_before"], query["default_marking_after"]) == (before, after)
         assert query["set_at"] == source["default_marking_set_at"].replace("Z", "+00:00")
     assert world.recipes.flagged == [("ds-a", made["location"], SOURCE_GOVERNANCE_CHANGED)] * 3
+    # Each draft reading the source follows too, its Test no longer standing (the lane review,
+    # item 7): a draft tested under one declaration is tested again before it is deployed.
+    assert world.recipes.followed == [("ds-a", made["location"], "OFFICIAL")] * 3
 
 
 def test_the_default_is_read_with_the_source_and_only_where_the_source_is_read(
@@ -570,6 +573,29 @@ def test_the_default_is_read_with_the_source_and_only_where_the_source_is_read(
         if dataset == "ds-a":
             assert (every.status_code, who) == (code, who)
             assert "default_marking" not in every.text
+
+
+def test_an_approver_who_may_not_read_the_source_cannot_set_its_default(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 4 (the lane review, item 2): the setting's answer is the whole source, so the write
+    needs what the read needs (Add ingest files, Edit pipelines) as well as Deploy pipelines. A
+    person holding Deploy pipelines without Edit pipelines is refused, and is told nothing of it."""
+    made = _register(world).json()
+    # Reaches the dataset (an analyst's Add ingest files) and holds Deploy pipelines, but not the
+    # source author's Edit pipelines that reading a source needs.
+    approver = Principal(
+        id="apr-1", clearance="SECRET", org_unit="unit-1", roles=["source_approver", "analyst"]
+    )
+    monkeypatch.setitem(PEOPLE, "approver", approver)
+    monkeypatch.setitem(CASES, "apr-1", {"case-a": ["ds-a"]})
+    read = world.client.get(f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("approver"))
+    assert read.status_code == 403
+    answer = _default(world, made["id"], "OFFICIAL", who="approver")
+    # Refused as the read is refused, in the same way.
+    assert answer.status_code == read.status_code, answer.text
+    assert made["location"] not in answer.text and "Cell stays" not in answer.text
+    assert world.sources._sources[made["id"]].default_marking is None
 
 
 def test_the_default_is_set_only_by_a_source_approver_reaching_the_dataset(

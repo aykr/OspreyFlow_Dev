@@ -529,7 +529,10 @@ def refuse_a_differing_marking(
         "written under one marking, so rows of different markings are never joined. Split "
         "them by their marking first, or join only rows marked alike"
     )
-    unmarked = all(c is None for c in mine) or all(c is None for c in theirs)
+    # Unmarked: the row's table has none of the marking columns at all (a source table's row holds
+    # a cell for each of its table's columns). A marked table's empty cell is not unmarked, and a
+    # default would not fill it, so the words never point at one there (the lane review, item 4).
+    unmarked = not any(c in row.cells for c in marked) or not any(c in other.cells for c in marked)
     raise StagingError([f"{words}. {UNMARKED_WORDS}" if unmarked else words])
 
 

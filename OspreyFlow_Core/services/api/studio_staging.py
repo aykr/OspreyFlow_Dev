@@ -185,14 +185,33 @@ class SourceRows:
     raw: dict[str, list[dict[str, str]]]
 
 
-async def declared_markings(sources: SourceStore | None, dataset_id: str | None) -> dict[str, str]:
+async def declared_markings(
+    sources: SourceStore | None, dataset_id: str | None, scheme: HandlingScheme
+) -> dict[str, str]:
     """Each of the dataset's sources that declares a default marking (ADR-140 Amendment 19), by its
     registered location. None given (a caller with no source store): none, so an unmarked table
-    stays unmarked and a Join refuses it (fail closed)."""
+    stays unmarked and a Join refuses it (fail closed).
+
+    A default is judged here, as the run reads it, against the source's marking now: one the
+    scheme does not hold, or one below the source's own classification (a governance edit raised
+    the source after the default was declared), is left out, so its table stays unmarked. The
+    route's check alone would let an edit made afterwards, or between its read and its write,
+    leave a lower default carried (the lane review, item 1; rule 3)."""
     if sources is None or not dataset_id:
         return {}
-    found = await sources.list_for(dataset_id)
-    return {s.location: s.default_marking for s in found if s.default_marking}
+    levels = list(scheme.classification)
+    kept: dict[str, str] = {}
+    for source in await sources.list_for(dataset_id):
+        default = source.default_marking
+        if not default or default not in levels:
+            continue
+        own = source.handling.get("classification")
+        if isinstance(own, str) and own and (
+            own not in levels or levels.index(default) < levels.index(own)
+        ):
+            continue
+        kept[source.location] = default
+    return kept
 
 
 def source_tables(

@@ -36,7 +36,9 @@ export interface SourcePageProps {
 // ADR-140 Amendment 19: a source's declared default marking, in words.
 export const SOURCE_WORDS = {
   defaultIntro:
-    "A table with no marking column of its own is unmarked, and a Join never joins its rows to a marked table's. A source approver can declare the marking this source's rows carry when its table has none; they then carry it before any step runs. It is never below the source's own marking, and never replaces a marking a column gives.",
+    "A table with no marking column of its own is unmarked, and a Join never joins its rows to a marked table's. A source approver can declare the classification this source's rows carry when its table has none; they then carry it before any step runs. It sets the classification alone, is never below the source's own marking, and never replaces a marking a column gives.",
+  belowOwn:
+    "It is below the source's own marking now, so it is not carried: this source's table stays unmarked until a higher default is declared.",
   noDefault:
     "None declared: this source's table, when it has no marking column, is unmarked and is never joined to a marked one.",
   none: "None",
@@ -62,6 +64,12 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
   // ADR-140 Amendment 19: the default marking chosen here, saved by a source approver.
   const [chosenDefault, setChosenDefault] = useState(source.default_marking ?? "");
   useEffect(() => setChosenDefault(source.default_marking ?? ""), [source.default_marking]);
+  // Whether a declared default is below the source's own classification (a governance edit raised
+  // the source afterwards): the run then leaves it out (`studio_staging.declared_markings`).
+  const below = (marking: string, own: unknown): boolean => {
+    const levels = scheme?.classification ?? [];
+    return typeof own === "string" && levels.includes(own) && levels.indexOf(marking) < levels.indexOf(own);
+  };
 
   const reprofile = useCallback(() => {
     setProfile(null);
@@ -242,6 +250,11 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
             ? `${source.default_marking}, declared by ${source.default_marking_set_by ?? "someone"}${source.default_marking_set_at ? ` on ${declaredOn(source.default_marking_set_at)}` : ""}.`
             : SOURCE_WORDS.noDefault}
         </p>
+        {source.default_marking && below(source.default_marking, source.handling?.classification) && (
+          <p role="note" style={{ margin: 0 }}>
+            {SOURCE_WORDS.belowOwn}
+          </p>
+        )}
         <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}>
           <label style={{ display: "grid", gap: "var(--sp-4)" }}>
             <span>Default marking</span>

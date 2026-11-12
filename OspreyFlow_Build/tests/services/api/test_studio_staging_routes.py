@@ -652,3 +652,13 @@ def test_test_reads_the_sources_declared_default_as_the_run_does(
     else:
         assert response.status_code == 200, response.text
         assert response.json()["rows_read"] == 10
+
+
+def test_load_preview_reads_the_sources_declared_default_as_the_run_does(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    """The lane review, item 8: Load Preview runs the same dry run as Test through its own route,
+    which must hand it the sources too. Red with the route's `sources=` left out."""
+    _marked(staged, tmp_path, "OFFICIAL")
+    response = staged.post(f"{RECIPE_URL}/preview-graph")
+    assert response.status_code == 200, response.text

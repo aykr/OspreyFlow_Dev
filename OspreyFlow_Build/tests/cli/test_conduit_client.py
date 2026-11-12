@@ -296,3 +296,19 @@ def test_the_parser_takes_replace_own_draft() -> None:
     assert args.replace_own_draft is True
     plain = _parser().parse_args(["release", "import", "bundle", "--dataset", "pid"])
     assert plain.replace_own_draft is False
+
+
+@pytest.mark.parametrize("given", [False, True])
+def test_replace_own_draft_reaches_the_route_through_the_command(
+    product: Path, tmp_path: Path, conduit: list[httpx.Request], given: bool
+) -> None:
+    """The lane review, item 8: the parser and the client are tested apart above; this is the
+    dispatch between them. Red with `main`'s `replace_own_draft=` left out."""
+    out = tmp_path / "bundle"
+    out.mkdir()
+    (out / "release.yaml").write_text("x")
+    args = ["release", "import", str(out), "--dataset", "pid"]
+    if given:
+        args.append("--replace-own-draft")
+    assert _main(product, tmp_path / "home", *args, env=_PERSON) == 0
+    assert conduit[0].url.params["replace_own_draft"] == ("true" if given else "false")

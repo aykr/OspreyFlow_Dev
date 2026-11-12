@@ -276,6 +276,27 @@ describe("Import", () => {
     expect(calls[2]!.url).toContain("replace_own_draft=true");
   });
 
+  it("shows a refusal at the write as a refused check, and a new check goes on from it", async () => {
+    const meanwhile =
+      "the domain model has an in-progress draft (version 3) by analyst-7, opened 12 November 2026 at 10:00 UTC: an import never replaces another person's draft";
+    answers(
+      { status: 200, body: CHECKED },
+      { status: 422, body: { dry_run: false, items: [], refused: [meanwhile], replaces_own_draft: false } },
+      { status: 200, body: CHECKED },
+    );
+    open();
+    await chooseAndCheck();
+    await screen.findByText("Would write Visits as a new draft.");
+    fireEvent.click(screen.getByRole("button", { name: "Import as drafts" }));
+    await screen.findByText(meanwhile);
+    expect(screen.getByText("Nothing was written, because:")).toBeTruthy();
+    expect(screen.queryByText(RELEASE_WORDS.drafts)).toBeNull();
+    expect(importOffered()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Check the release" }));
+    await screen.findByText("Would write Visits as a new draft.");
+    expect(importOffered()).toBe(true);
+  });
+
   it("never sends a confirmation the importer did not give", async () => {
     const calls = answers(
       { status: 200, body: CHECKED },

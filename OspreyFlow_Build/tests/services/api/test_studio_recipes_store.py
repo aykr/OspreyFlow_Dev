@@ -2193,3 +2193,54 @@ async def test_flag_for_model_fails_with_one_condition_removed(
         assert await _status_and_reason(store, w["flagged"].recipe_id) == [
             (1, "flagged", "a later reason")
         ]
+
+
+@pytest.mark.parametrize("kind", ["postgres", "memory"])
+async def test_a_sources_default_marking_is_kept_read_back_and_refused_elsewhere_on_both_stores(
+    kind: str,
+) -> None:
+    """ADR-140 Amendment 19 on the real store (the lane review, item 6): the columns the bootstrap
+    adds, a registration's insert of them (none declared), the update with who and when, the
+    version, clearing it, and another dataset's id refused, as the in-memory store answers. Every
+    row written is removed in teardown."""
+    from services.api.sources import (
+        FILES_CONNECTION_ID,
+        InMemorySourceStore,
+        PostgresSourceStore,
+        SourceNotFoundError,
+    )
+
+    from schemas.sources import RegisterSourceInput
+
+    sources: Any = (
+        await PostgresSourceStore.connect(PostgresConfig.from_env().dsn)
+        if kind == "postgres"
+        else InMemorySourceStore()
+    )
+    dataset = f"ds-{new_id()}"
+    try:
+        made = await sources.register(
+            dataset,
+            RegisterSourceInput(connection_id=FILES_CONNECTION_ID, name="Owners",
+                                location=f"/ingest/{dataset}/owners.csv",
+                                handling={"classification": "OFFICIAL"}),  # fmt: skip
+            AUTHOR,
+        )
+        assert (made.default_marking, made.default_marking_set_by) == (None, None)
+        assert (await sources.get(dataset, made.id)).default_marking is None
+        declared = await sources.set_default_marking(dataset, made.id, "OFFICIAL", AUTHOR)
+        read = await sources.get(dataset, made.id)
+        assert (read.default_marking, read.default_marking_set_by) == ("OFFICIAL", AUTHOR.id)
+        assert read.default_marking_set_at is not None and read.version == declared.version == 2
+        assert [s.default_marking for s in await sources.list_for(dataset)] == ["OFFICIAL"]
+        with pytest.raises(SourceNotFoundError):
+            await sources.set_default_marking(f"ds-{new_id()}", made.id, "SECRET", AUTHOR)
+        assert (await sources.get(dataset, made.id)).default_marking == "OFFICIAL"
+        await sources.set_default_marking(dataset, made.id, None, AUTHOR)
+        cleared = await sources.get(dataset, made.id)
+        assert (cleared.default_marking, cleared.version) == (None, 3)
+    finally:
+        if kind == "postgres":
+            async with sources._pool.acquire() as conn:
+                await conn.execute("DELETE FROM ingest_sources WHERE dataset_id = $1", dataset)
+            await sources.close()

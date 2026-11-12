@@ -265,3 +265,22 @@ async def test_a_load_whose_unmarked_source_declares_another_marking_is_refused(
     sources = await _owners_declared(owners, "SECRET")
     with pytest.raises(RecipeRuleError, match="whose marking differs"):
         await _run(draft, repo, "run-s", source_store=sources)
+
+
+async def test_a_default_left_below_a_raised_source_marking_is_not_carried(
+    tmp_path: Path, store: Path
+) -> None:
+    """The lane review, item 1 (rule 3): a default declared OFFICIAL, then the source's own marking
+    raised to SECRET by a governance edit, is below the source's marking and never carried, so
+    the owners' rows stay unmarked and the Join is refused, as before the default was declared.
+    Judged when the run reads the declaration, so no edit order or race can get round it."""
+    from schemas.sources import SourceGovernanceInput
+
+    draft, repo, owners = await _published_marked(tmp_path)
+    sources = await _owners_declared(owners, "OFFICIAL")
+    (owner,) = await sources.list_for("pid")
+    raised = SourceGovernanceInput(handling=HANDLING | {"classification": "SECRET"})
+    await sources.edit_governance("pid", owner.id, raised, Principal(id="eng-1", clearance="SECRET", org_unit="unit-1"))
+    with pytest.raises(RecipeRuleError) as refused:
+        await _run(draft, repo, "run-r", source_store=sources)
+    assert "whose marking differs" in str(refused.value)

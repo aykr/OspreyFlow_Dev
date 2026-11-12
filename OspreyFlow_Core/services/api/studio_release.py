@@ -493,10 +493,14 @@ async def apply_import(
     recipes: StudioRecipeStore,
     rows_kept: ListRows,
     replace_own_draft: bool = False,
-) -> list[str]:
-    """Writes the plan's drafts; returns the new pipeline drafts' ids. Never called for a dry run
+) -> tuple[list[str], bool]:
+    """Writes the plan's drafts; returns the new pipeline drafts' ids, and whether the importer's
+    own open draft was replaced (as the write found it, for the audit). Never called for a dry run
     or a plan with a refusal. The draft is read again first: one another person opened since the
-    plan raises `DraftHeld` before anything is written."""
+    plan raises `DraftHeld` before anything is written. The store's own save does not check the
+    draft's owner under its lock, so a draft opened in the instant between this read and the save
+    is not caught here (carried to the case lane: `save_draft` given the expected owner and
+    version)."""
     assert not planned.plan.dry_run and not planned.plan.refused
     open_model = await models.draft(dataset_id)
     held = held_draft_problem(open_model, principal, replace_own_draft=replace_own_draft)
@@ -542,7 +546,7 @@ async def apply_import(
     for reference in planned.own_lists:
         rows: list[dict[str, object]] = [dict(r) for r in bundle.list_rows[reference.name]]
         await asyncio.to_thread(rows_kept.write, reference, rows)
-    return made
+    return made, open_model is not None
 
 
 def bundle_from_text(files: Mapping[str, str]) -> Bundle:

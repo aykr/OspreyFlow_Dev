@@ -507,6 +507,8 @@ def test_the_importers_own_draft_is_replaced_when_confirmed(store: Path, ingest:
     assert ("domain_model", "replaces_draft") in {(i["role"], i["action"]) for i in plan["items"]}
     assert world.models.saved and world.models.saved[-1].packs == {"niem": 1}
     assert len(world.recipes.create_calls) == 1
+    (entry,) = [e for e in world.audit.records if e["action"] == "import_dataset_release"]
+    assert entry["resolved_query"]["replaced_own_draft"] is True
 
 
 def test_with_no_draft_the_import_opens_one_without_a_confirmation(
@@ -521,6 +523,8 @@ def test_with_no_draft_the_import_opens_one_without_a_confirmation(
     assert answer.json()["replaces_own_draft"] is False
     assert world.models.draft_model is not None
     assert world.models.draft_model.created_by == ENGINEER.id
+    (entry,) = [e for e in world.audit.records if e["action"] == "import_dataset_release"]
+    assert entry["resolved_query"]["replaced_own_draft"] is False
 
 
 def test_a_draft_opened_by_another_between_plan_and_write_is_refused_before_any_write(

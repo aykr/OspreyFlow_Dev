@@ -549,7 +549,7 @@ async def _run_staged_branch(
     refuse_fixed_markings_above_the_ceiling(recipe, DeploymentCeiling.from_env())
     references = await dataset_reference_lists(models, draft.dataset_id, storage, lists=list_store)
     # ADR-140 Amendment 19: each source's declared default marking, read for this run.
-    declared = await declared_markings(source_store, draft.dataset_id)
+    declared = await declared_markings(source_store, draft.dataset_id, scheme)
     try:
         read = await asyncio.to_thread(
             source_tables, draft, pipeline, load_id=load_id, location=source_location,

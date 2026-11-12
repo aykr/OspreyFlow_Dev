@@ -11538,7 +11538,7 @@ async def import_dataset_release(
         )
         return plan
     try:
-        made = await apply_import(
+        made, replaced = await apply_import(
             bundle,
             planned,
             dataset_id=dataset_id,
@@ -11563,8 +11563,9 @@ async def import_dataset_release(
             "release": bundle.manifest.metadata.name,
             "version": bundle.manifest.metadata.version,
             "pipelines": made,
-            # CARRIES row 90: the importer's own in-progress draft replaced, by their confirmation.
-            "replaced_own_draft": plan.replaces_own_draft,
+            # CARRIES row 90: the importer's own in-progress draft replaced, by their confirmation,
+            # as the write found it (the lane review, item 3).
+            "replaced_own_draft": replaced,
         },
         result_cardinality=len(plan.items),
     )
@@ -11975,7 +11976,14 @@ async def edit_dataset_source_governance(
 
 @app.put(
     "/v1/datasets/{dataset_id}/sources/{source_id}/default-marking",
-    dependencies=[Depends(require_right(Right.PUBLISH_PIPELINES)), NoLoadingAComposite],
+    dependencies=[
+        Depends(require_right(Right.PUBLISH_PIPELINES)),
+        # The answer is the whole source, so the write needs what reading it needs (rule 4; the
+        # lane review, item 2): Add ingest files and the source author's Edit pipelines.
+        Depends(require_right(Right.ADD_INGEST_FILES)),
+        Depends(require_studio_role(StudioRole.SOURCE_AUTHOR)),
+        NoLoadingAComposite,
+    ],
 )
 async def set_dataset_source_default_marking(
     dataset_id: StudioDatasetDep,
@@ -12006,6 +12014,11 @@ async def set_dataset_source_default_marking(
     flagged = await studio_recipes.flag_for_source(
         dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
     )
+    # Each draft reading it is tested again (the lane review, item 7): its handling is unchanged,
+    # so following only clears its Test, as after a governance edit.
+    followed = await studio_recipes.follow_source(
+        dataset_id, edited.location, edited.handling, edited.legal_basis
+    )
     await audit.record(
         principal=principal,
         action="set_dataset_source_default_marking",
@@ -12019,6 +12032,7 @@ async def set_dataset_source_default_marking(
             if edited.default_marking_set_at
             else None,
             "pipelines_needing_attention": len(flagged),
+            "drafts_following": len(followed),
         },
         result_cardinality=1,
     )
@@ -12779,7 +12793,7 @@ async def preview_studio_recipe_staging(
             models, recipe.dataset_id, staging_storage, lists=list_store
         ),
         storage=staging_storage,
-        declared=await declared_markings(sources, recipe.dataset_id),
+        declared=await declared_markings(sources, recipe.dataset_id, scheme),
     )
     await audit.record(
         principal=principal,
@@ -12889,7 +12903,7 @@ async def _studio_dry_run(
             ),
             storage=staging_storage,
             # ADR-140 Amendment 19: Test reads the sources' declared default markings as the run.
-            declared=await declared_markings(sources, recipe.dataset_id),
+            declared=await declared_markings(sources, recipe.dataset_id, scheme),
         ),
     )
     return report, checked

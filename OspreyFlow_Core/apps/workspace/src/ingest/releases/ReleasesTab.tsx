@@ -181,17 +181,19 @@ export function ReleasesTab({
 
   const onImport = () =>
     run(async () => {
-      if (files)
-        setWritten(
-          await importRelease(
-            apiBaseUrl,
-            bearerToken,
-            datasetId,
-            files,
-            false,
-            replaceOwn,
-          ),
-        );
+      if (!files) return;
+      const result = await importRelease(
+        apiBaseUrl,
+        bearerToken,
+        datasetId,
+        files,
+        false,
+        replaceOwn,
+      );
+      // A refusal at the write (a draft someone opened since the check, say) wrote nothing: it is
+      // shown as a refused check, so a new check goes on from it (the lane review, item 9).
+      if ((result.refused ?? []).length > 0) setChecked(result);
+      else setWritten(result);
     });
 
   const clean = checked !== null && (checked.refused ?? []).length === 0;

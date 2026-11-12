@@ -222,8 +222,14 @@ def test_an_unmarked_tables_rows_carry_the_default_in_the_classification_column(
 
 
 def test_a_default_marked_differently_from_the_other_table_is_still_refused() -> None:
-    with pytest.raises(StagingError, match="whose marking differs"):
-        _run(_carried(None, "SECRET"))
+    tables = _carried(None, "SECRET")
+    # The default was carried (the row is marked SECRET now), so the refusal is a difference of
+    # markings, never the unmarked words: an uncarried table would fail both assertions.
+    assert [r.cells["classification"] for r in tables["people"].rows] == ["SECRET"]  # type: ignore[attr-defined]
+    with pytest.raises(StagingError) as refused:
+        _run(tables)
+    assert "whose marking differs" in str(refused.value)
+    assert "default marking" not in str(refused.value)
 
 
 def test_the_default_never_touches_a_table_that_has_a_marking_column() -> None:
@@ -241,8 +247,12 @@ def test_a_bound_column_with_an_empty_cell_is_not_filled_by_the_default() -> Non
     people = tables["people"]
     assert "classification" in people.columns  # type: ignore[attr-defined]
     assert [r.cells["classification"] for r in people.rows] == [None]  # type: ignore[attr-defined]
-    with pytest.raises(StagingError, match="whose marking differs"):
+    with pytest.raises(StagingError) as refused:
         _run(tables)
+    # The table is marked, so the words never point at a default that could not help it (the lane
+    # review, item 4).
+    assert "whose marking differs" in str(refused.value)
+    assert "default marking" not in str(refused.value)
 
 
 def test_no_default_declared_keeps_the_guard_fail_closed_and_names_the_setting() -> None:

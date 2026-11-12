@@ -220,6 +220,13 @@ describe("the source page's default marking", () => {
     expect(await screen.findByText("OFFICIAL, declared by eng-1 on 12 November 2026.")).toBeTruthy();
   });
 
+  it("says a default left below the source's own marking is not carried", async () => {
+    serve(PAGE_ROUTES);
+    page({ ...SOURCE, handling: { ...HANDLING, classification: "SECRET" }, default_marking: "OFFICIAL",
+      default_marking_set_by: "eng-1", default_marking_set_at: "2026-11-12T10:00:00Z" });  // prettier-ignore
+    expect(await screen.findByText(SOURCE_WORDS.belowOwn)).toBeTruthy();
+  });
+
   it("clears a declared default by choosing None", async () => {
     const declared = { ...SOURCE, default_marking: "OFFICIAL", default_marking_set_by: "eng-1", default_marking_set_at: "2026-11-12T10:00:00Z" };
     const calls = serve({ ...PAGE_ROUTES, "PUT /v1/datasets/ds-a/sources/s1/default-marking": { source: { ...SOURCE, version: 3 }, needs_attention: [] } });  // prettier-ignore
