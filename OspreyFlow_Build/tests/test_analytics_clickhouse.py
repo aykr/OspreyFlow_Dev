@@ -24,6 +24,8 @@ from adapters.analytics_clickhouse.adapter import as_multipolygon
 from adapters.analytics_clickhouse.adapter import AnalyticsClickHouseAdapter
 from adapters.analytics_clickhouse.client import ClickHouseClient, ClickHouseSettings, bind
 from adapters.analytics_clickhouse.schema import (
+    CREATE_ALERT_FACT_HANDLINGS_TABLE,
+    CREATE_ALERT_FACTS_TABLE,
     CREATE_EVENTS_TABLE,
     create_database,
     create_tables,
@@ -247,6 +249,42 @@ async def test_a_store_made_before_load_id_is_brought_forward_and_keeps_its_rows
             EventListRequest(filter=EventFilter(investigation_scope=CASE)), READER
         )
         assert [e.event_id for e in page.events] == ["old"]
+    finally:
+        await client.command(drop_database(database, client.cluster), database=None)
+        await client.aclose()
+
+
+async def test_a_store_made_before_the_alert_facts_sets_is_brought_forward_and_keeps_its_rows() -> None:
+    """ADR-146 Amendment 7 (the orchestrator's review, item 6), on a real server: `alert_facts` and
+    `alert_fact_handlings` made before `fact_id` and `grp` get them, each old row read as its own
+    set (`fact_id` its alert's, group 0), and a second start changes nothing. The fake's counterpart
+    is `test_analytics_clickhouse_migration.py`; red with the `ALTER`s gone: no column added."""
+    database = f"conformance_{str(ULID()).lower()}"
+    client = ClickHouseClient(ClickHouseSettings.from_env(database))
+    await client.command(create_database(database, client.cluster), database=None)
+    try:
+        await client.command(CREATE_ALERT_FACTS_TABLE.replace(",\n    fact_id String DEFAULT alert_id", ""))
+        await client.command(CREATE_ALERT_FACT_HANDLINGS_TABLE.replace(
+            ",\n    fact_id String DEFAULT alert_id,\n    grp UInt8 DEFAULT 0", ""))  # fmt: skip
+
+        async def columns(table: str) -> set[str]:
+            rows = await client.rows(
+                "SELECT name FROM system.columns WHERE database = ? AND table = ?", [database, table]
+            )
+            return {row[0] for row in rows}
+
+        assert "fact_id" not in await columns("alert_facts")
+        assert not {"fact_id", "grp"} & await columns("alert_fact_handlings")
+        await client.insert("alert_fact_handlings", [
+            {"alert_id": "old", "handling_classification": "OFFICIAL", "handling_code": "P",
+             "owning_unit": "unit-1", "originator": "unit-1"},
+        ])  # fmt: skip
+        await create_tables(client)
+        await create_tables(client)  # and again: a no-op on a store that has them
+        assert "fact_id" in await columns("alert_facts")
+        assert {"fact_id", "grp"} <= await columns("alert_fact_handlings")
+        rows = await client.rows("SELECT alert_id, fact_id, grp FROM alert_fact_handlings")
+        assert [tuple(r) for r in rows] == [("old", "old", 0)]
     finally:
         await client.command(drop_database(database, client.cluster), database=None)
         await client.aclose()
