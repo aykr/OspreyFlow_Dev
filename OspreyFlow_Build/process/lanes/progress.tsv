@@ -82,6 +82,7 @@ rules	lists	M	building	Live files remove the screening lists they load; ADR-146:
 rules-b	T3b	S	done	The contrast probe's limits, made independent of the platform (shadows by their paint, covers judged, never a silent pass), shown on the server's Chromium; merged 2102d21 after three reviews
 rules-b	guides	S	done	The guides from Home, by the places a person may open (ADR-145 Am 10; the owner's request, 12 Nov): user, developer and administration guides served by the Conduit to a principal holding the place's right; merged 5675103, 12 Nov
 platform-b	carries	M	done	The upgrade path's carries (ADR-114 Am 40): one atomic writer for deployment.env, the refresh's lock, stage and pending record, every verb's lockout words, refusals that reach the operator through the redactor; merged f165de2 after three reviews, listed for the owner (it writes deployment.env)
+platform-b	ci-green	S	building	GitHub CI green before v0.5.1 (the owner, 12 Nov): the six red jobs of run 43198701543 diagnosed from their logs tonight (code or CI environment), then fixed, with each proof on GitHub at the owner's push
 studio	carries	S	done	An import replacing an in-progress draft; a source's declared default marking at a Join (ADR-140 Am 19); started 12 Nov on sol; merged b380d45, 12 Nov (ADR-140 Am 19)
 docs	D2d	S	done	The rule editor and the one queue in the user and admin guides (user 1.46, admin 1.72), with their PDFs; merged f262e7b after two reviews
 platform	P7a	M	todo	After the client's install (with P8 and P9b): P7's acceptance run on kind in the production shape

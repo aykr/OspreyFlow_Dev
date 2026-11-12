@@ -91,3 +91,4 @@ demo	rebuild	Housekeeping	Small
 docs	D2e	Housekeeping	After the client's install
 docs	sites	Housekeeping	Housekeeping
 platform	R1	Housekeeping	Client install
+platform-b	ci-green	Housekeeping	Housekeeping
