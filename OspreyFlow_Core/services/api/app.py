@@ -13757,6 +13757,7 @@ def _list_schedule_executor(application: FastAPI) -> ListRefreshExecutor:
             application, state.principal_resolver.resolve_for_owner_detailed
         ),
         refresh=refresh,
+        scheme=state.handling_scheme,
     )
 
 
@@ -17529,8 +17530,9 @@ async def subscribe_screening_list(
     """A list subscribed (or its subscription changed): its connector and its file in the ingest
     folder. Nothing is read until it is refreshed; a location outside the folder is refused now. A
     name held by a list the administrator is not cleared for is refused before anything is written,
-    in the same words as a name already taken, never changing or answering that list (ADR-146
-    Amendment 7; the orchestrator's review, item 3)."""
+    never changing or answering that list (ADR-146 Amendment 7; the orchestrator's review, item 3).
+    The refusal says only that the name cannot be used, which tells them some list holds it: logged
+    in Amendment 7, and accepted by the orchestrator."""
     try:
         check_location(body.location)
     except ListRefused as refused:

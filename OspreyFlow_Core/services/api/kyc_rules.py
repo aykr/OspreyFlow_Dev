@@ -242,9 +242,27 @@ async def _listed_party(
         )
     except FindLimitExceeded:
         found = None
-    if found is not None and all(str(found.properties.get(k)) == v for k, v in also.items()):
+    if (
+        found is not None
+        and all(str(found.properties.get(k)) == v for k, v in also.items())
+        and _holds(ctx.scheme, found.handling, candidate.handling)
+    ):
         return found.id, None, found.handling
+    # None found, or one written at a marking below the list's now (a list may be reloaded at a
+    # higher marking, never a lower: `replace_list`): a party of its own at the list's marking, so
+    # the match is never shown at the old one (the orchestrator's verification of e911b90, item 1).
     return candidate.id, candidate, candidate.handling
+
+
+def _holds(scheme: HandlingScheme, found: Handling, wanted: Handling) -> bool:
+    """A party found at `found` may carry a match at `wanted`: its classification at least as high,
+    and the same handling code (a code is not ranked, as `screening._lowers` reads it)."""
+    try:
+        return scheme.clears(found.classification, wanted.classification) and (
+            found.handling_code == wanted.handling_code
+        )
+    except Exception:  # noqa: BLE001 - a marking outside the scheme holds nothing
+        return False
 
 
 _LISTING_WORDS = {"sanction": "a sanctions list", "pep": "a politically exposed persons list",

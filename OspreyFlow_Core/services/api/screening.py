@@ -189,15 +189,24 @@ class ListClearance:
 
     @classmethod
     def of(cls, principal: Principal, scheme: HandlingScheme) -> ListClearance:
+        return cls.of_clearance(principal.clearance, principal.receivable_handling_codes, scheme)
+
+    @classmethod
+    def of_clearance(
+        cls, clearance: str | None, receivable: Sequence[str], scheme: HandlingScheme
+    ) -> ListClearance:
+        """As `of`, from a clearance and handling codes alone: a directory account's, for one who
+        is to be given a list's schedule (`admin_people.markings_hold`)."""
         try:
             classifications = tuple(
-                c for c in scheme.classification if scheme.clears(principal.clearance, c)
-            )
+                c for c in scheme.classification
+                if clearance is not None and scheme.clears(clearance, c)
+            )  # fmt: skip
         except Exception:  # noqa: BLE001 - a clearance outside the scheme clears nothing
             classifications = ()
         codes = tuple(
             k for k, d in scheme.handling_codes.items()
-            if d.dissemination != "restricted" or k in principal.receivable_handling_codes
+            if d.dissemination != "restricted" or k in receivable
         )  # fmt: skip
         return cls(classifications, codes)
 

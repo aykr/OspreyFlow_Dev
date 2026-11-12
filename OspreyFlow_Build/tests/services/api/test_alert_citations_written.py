@@ -258,12 +258,14 @@ class HeldParties(WritingGraph):
         return None
 
 
-def _party(node_id: str, entry: ScreeningEntry) -> Any:
-    """The party a match on `entry` writes (`kyc_rules._listed_write`), as held."""
-    family, _, given = entry.name.partition(",")
-    return SimpleNamespace(id=node_id, type="Person", handling=_handling(),
-                           properties={"family_name": family.strip().title(), "given_names": given.strip(),
-                                       "listing": entry.listing, "list_name": entry.list_name})  # fmt: skip
+def _party(node_id: str, entry: ScreeningEntry, marking: str = "OFFICIAL") -> Any:
+    """The party a match on `entry` writes (`kyc_rules._listed_write`, its own properties), as held
+    at `marking`."""
+    from services.api.kyc_rules import _listed_write
+
+    written = _listed_write(ScreeningHit(entry=entry, score=1.0), SWEEPER, NOW)
+    return SimpleNamespace(id=node_id, type="Person", handling=_handling(marking),
+                           properties=dict(written.properties))  # fmt: skip
 
 
 async def _cited_party(graph: HeldParties, entry: ScreeningEntry) -> tuple[list[str], list[Any]]:
@@ -273,6 +275,34 @@ async def _cited_party(graph: HeldParties, entry: ScreeningEntry) -> tuple[list[
                                       [ScreeningHit(entry=entry, score=0.97)], ctx)  # fmt: skip
     (citation,) = finding.citations
     return citation.node_ids, [w for w in finding.pending if getattr(w, "type", None) == "Person"]
+
+
+async def _cited_handling(graph: HeldParties, entry: ScreeningEntry) -> tuple[list[str], list[Any], Handling]:
+    gate = _sweep_gate(graph, Stores())
+    ctx = KycContext(graph=graph, scheme=SCHEME, screening=None, compute=None, today=date(2026, 11, 12))  # type: ignore[arg-type]
+    finding = await screening_finding(gate.rules[0], SWEEPER, CUSTOMER, OWNER,  # type: ignore[arg-type]
+                                      [ScreeningHit(entry=entry, score=0.97)], ctx)  # fmt: skip
+    (citation,), (handling,) = finding.citations, finding.citation_handlings
+    return citation.node_ids, [w for w in finding.pending if getattr(w, "type", None) == "Person"], handling
+
+
+async def test_a_party_held_below_its_lists_marking_now_is_not_reused() -> None:
+    """The orchestrator's verification of e911b90, item 1: list B's party was written when B was
+    OFFICIAL, and B has since been reloaded SECRET (raising is allowed; nothing re-marks the parties
+    already written). A match on B now is cited to a party of its own at SECRET, never the OFFICIAL
+    one, which an OFFICIAL reader would be shown with its match. Red with the found party reused
+    whatever its marking: the citation was OFFICIAL."""
+    graph = HeldParties([_party("old-b", ENTRY_B, "OFFICIAL")])
+    ids, written, handling = await _cited_handling(graph, ENTRY_B)
+    assert [w.handling.classification for w in written] == ["SECRET"] and ids == [written[0].id]
+    assert handling.classification == "SECRET"
+
+
+async def test_a_party_held_at_its_lists_marking_is_reused() -> None:
+    """The same, the party held at the list's marking: found and reused, nothing written."""
+    graph = HeldParties([_party("b-party", ENTRY_B, "SECRET")])
+    ids, written, handling = await _cited_handling(graph, ENTRY_B)
+    assert (ids, written, handling.classification) == (["b-party"], [], "SECRET")
 
 
 async def test_a_match_reuses_its_own_lists_party_never_another_lists_of_the_same_name() -> None:

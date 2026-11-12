@@ -34,7 +34,7 @@ from services.api.investigations import AccessLevel, InvestigationNotFoundError,
 from services.api.link_type_store import LinkTypeProposalStore
 from services.api.monitors import MonitorStore
 from services.api.pattern_store import PatternStore
-from services.api.screening import ScreeningListStore
+from services.api.screening import ListClearance, ScreeningListStore
 from services.api.studio_recipes import StudioRecipeStore
 from services.api.typology_rules import TypologyRuleStore
 
@@ -141,9 +141,11 @@ async def test_a_persons_level_is_the_highest_they_hold_in_their_name_or_a_teams
 
 
 def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = False,
-            unit: str = UNIT) -> PersonAccount:  # fmt: skip
+            unit: str = UNIT, clearance: str | None = "OFFICIAL") -> PersonAccount:  # fmt: skip
+    # A clearance, as a directory account carries one: a list's schedule goes only to someone
+    # cleared for the list (the orchestrator's verification of e911b90, item 2).
     return PersonAccount(id=pid, username=pid, name=pid, enabled=enabled, roles=roles,
-                         system_account=system, org_unit=unit)  # fmt: skip
+                         system_account=system, org_unit=unit, clearance=clearance)  # fmt: skip
 
 
 async def test_the_rows_name_levels_through_a_team_and_cases_with_no_author(
@@ -311,7 +313,8 @@ async def test_two_units_each_transfer_their_share_and_only_then_is_nothing_left
 
     async with world.people._pool.acquire() as conn:
         listed = await _plan_items(conn, "ana", UNIT, cleared=list(SCHEME.classification),
-                                    top=SCHEME.classification[-1])
+                                    top=SCHEME.classification[-1],
+                                    lists_cleared=ListClearance.of(ADMIN, SCHEME))  # fmt: skip
     assert listed.elsewhere == 1 and [i.id for i in listed.items] == [here.id]
     directory = [_person("bea", ["analyst"]), _person("bob", ["analyst"], unit="unit-2")]
     who = recipients(directory, {}, {})

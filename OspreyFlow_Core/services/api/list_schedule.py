@@ -7,8 +7,9 @@ in Europe/London. Each slot:
   so neither a second replica nor a later tick runs it again; after downtime only the latest slot
   runs;
 - **as the person who set the schedule**, resolved afresh, who must still hold
-  `load_screening_lists` (ADR-112 L9) — never as the system. Otherwise the slot is refused, recorded
-  with the list's refreshes in words, and nothing is read;
+  `load_screening_lists` (ADR-112 L9) and still be cleared for the list's marking (ADR-146
+  Amendment 7) — never as the system. Otherwise the slot is refused, recorded with the list's
+  refreshes in words, and nothing is read;
 - **through the one refresh** (`screening_refresh.refresh`), re-screening as each rule's deployer.
 """
 
@@ -24,6 +25,7 @@ from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
+from ontology.handling import HandlingScheme
 from principal_auth import PrincipalRevoked
 from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
@@ -32,7 +34,7 @@ from schemas.screening import ScreeningListUpdate
 
 from .rule_schedule import cron_of
 from .scheduler import DEFAULT_TIMEZONE, due_slots
-from .screening import ScheduledList
+from .screening import ListClearance, ScheduledList
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ class ScheduledLists(Protocol):
     async def scheduled_lists(self) -> list[ScheduledList]: ...
     async def mark_slot(self, list_name: str, slot: datetime) -> bool: ...
     async def record_update(self, update: ScreeningListUpdate) -> None: ...
+    async def hidden(self, list_name: str, *, cleared: ListClearance) -> bool: ...
 
 
 @dataclass
@@ -67,6 +70,8 @@ class ListRefreshExecutor:
     resolve_owner: Callable[[str], Awaitable[Principal]]
     #: The one refresh, run as the given person, for the given slot.
     refresh: Callable[[str, Principal, datetime], Awaitable[ScreeningListUpdate]]
+    #: The deployment's handling scheme, which the owner's clearance for the list is read in.
+    scheme: HandlingScheme
 
     async def tick(self, now: datetime) -> None:
         for scheduled in await self.lists.scheduled_lists():
@@ -99,6 +104,16 @@ class ListRefreshExecutor:
         if Right.LOAD_SCREENING_LISTS not in rights_for(owner.roles):
             await self._refused(scheduled, f"the schedule's owner, {scheduled.owner}, no longer "
                                            "holds load_screening_lists")  # fmt: skip
+            return
+        # The list's marking may have been raised, or the schedule given to someone, since it was
+        # set: a refresh runs only as an owner still cleared for the list (the orchestrator's
+        # verification of e911b90, item 2). Recorded with the list's refreshes, which only a
+        # reader cleared for the list is shown.
+        if await self.lists.hidden(
+            scheduled.list_name, cleared=ListClearance.of(owner, self.scheme)
+        ):
+            await self._refused(scheduled, f"the schedule's owner, {scheduled.owner}, is not "
+                                           "cleared for the list")  # fmt: skip
             return
         await self.refresh(scheduled.list_name, owner, latest)
 
