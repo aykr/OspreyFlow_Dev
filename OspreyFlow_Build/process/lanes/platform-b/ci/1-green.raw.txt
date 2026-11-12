@@ -1,0 +1,4 @@
+# 1 with the diff, CI=true (ports pinned closed, 59991-59994)
+25 passed, 2 skipped in 3.06s
+# 1 with the diff, CI unset (same ports)
+27 passed in 4.32s

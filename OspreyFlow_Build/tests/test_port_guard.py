@@ -212,6 +212,7 @@ def test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease(
     from tests import port_guard
 
     monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.delenv("CI", raising=False)  # the lease rule stands aside under CI=true; this case tests it, so not in CI
     if lane is None:
         monkeypatch.delenv("OSPREY_LANE", raising=False)
     else:
@@ -342,6 +343,7 @@ def test_each_stack_is_reached_only_by_its_own_holder(
     from tests import port_guard
 
     monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.delenv("CI", raising=False)  # the lease rule stands aside under CI=true; this case tests it, so not in CI
     monkeypatch.setenv("OSPREY_LANE", lane)
     _hold_lease(tmp_path, "studio", "a")
     _hold_lease(tmp_path, "rules", "b")
@@ -390,6 +392,7 @@ def test_each_stack_s_object_store_is_refused_to_anyone_but_its_holder(
     from tests import port_guard
 
     monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.delenv("CI", raising=False)  # the lease rule stands aside under CI=true; this case tests it, so not in CI
     monkeypatch.setenv("OSPREY_LANE", "studio")
     _hold_lease(tmp_path, "rules", stack)
     _RecordingSocket.asked = []
