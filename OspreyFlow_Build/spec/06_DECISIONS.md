@@ -31892,75 +31892,105 @@ Status: written 12 November 2026 by the rules-b lane (its guides step), under th
 the same day. This is the owner's request of 12 November: on the landing page after sign-in, the user,
 developer and administration guides under the interfaces they belong to, only those the signed-in person's
 profile allows, so new people read the documentation from their own sign-in rather than being sent it. Built
-as the orchestrator's rulings of that day, which the owner may overrule. Each sentence below names the test
-that fails if it stops being true (rule 12).
+as the orchestrator's rulings of that day, which the owner may overrule. Each point names the test that fails
+if it stops being true (rule 12); every red named here is recorded with its diff and raw output in
+`process/lanes/rules-b/guides/` (`server-plants.txt`, `glass-plants.txt`, `keyboard-plants.txt`).
 
 1. **Which guide, where.** Under Home's card for the Glass, the *User guide*; under the Ingest Studio's, the
    *Developer guide*; under Admin's, the *Administration guide*. Rules and Monitoring's card has none, and the
    architecture guide is linked nowhere.
    - Test: `HomePage.test.tsx`, *links each guide under its own place's card*.
-   - Test: `guides.test.ts`, *gives the Glass, the Studio and Admin a guide each*.
+   - Test: `test_guides.py`, *the glass links each guide under the place the conduit serves it for*, which holds
+     `guides.ts`'s table to `guides.py`'s.
 2. **No card, no guide (decision 1 and N6).** A guide is drawn only inside a card the person's rights already
    open, never as a link of its own. With the rights unread, Home draws no card, so it links no guide.
-   - Test: `HomePage.test.tsx`, *shows … only the guides of the places their rights open*, across six rights
-     sets, and *links no guide while the rights could not be read*. A planted row of every place's guide outside
-     the cards fails seven of these (`process/lanes/rules-b/guides/glass-plants.txt`).
-   - Test: `start.spec.ts`, *a person whose rights open no card is linked no guide*.
+   - Test: `HomePage.test.tsx`, *shows … only the guides of the places their rights open* (six rights sets) and
+     *links no guide while the rights could not be read*. Red: seven fail with every place's guide planted
+     outside the cards.
+   - Test: `start.spec.ts`, *only the guides of the cards a person's rights open are linked*: the Glass's alone
+     for `investigate`, none for `run_pipelines`.
 3. **Served by the Conduit, checked there, never a static link.** `GET /v1/guides/{user|developer|administration}`
-   answers the deployment's own PDF (`docs/pdf/`) only to a principal whose rights open the guide's place. That
-   is the switcher's test (`places.ts`'s `placesFor`): one of the place's rights and every right it needs.
-   - Anyone else is answered 403 `place_required`, which names the place and its rights and says in words to
+   answers the deployment's own PDF only to a principal whose rights open the guide's place. That is the
+   switcher's test (`places.ts`'s `placesFor`): one of the place's rights and every right it needs.
+   - The check is the dependency `require_guide_place`. It runs before the route touches any file, so a refused
+     reader cannot learn whether the deployment carries the PDF.
+   - Anyone else gets 403 `place_required`, naming the place, its rights and its needs and saying in words to
      ask an administrator for a role that opens it. No byte of the file is sent.
-   - The check runs before the file is touched, so a refused reader cannot learn whether the deployment
-     carries the PDF.
-   - The route names no single right in `test_route_rights.py`'s table (`None`), because a place opens on any
-     one of several. The place check is the route's own (`services/api/guides.py`).
-   - Test: `test_guides.py`, *each guide answers exactly whom its place opens*. It runs for every role, the Super
-     user preset, every legacy role, every right granted singly and nobody, with the expected answer computed
-     from `places.json` itself, not from the Conduit's copy.
-   - Test: `test_guides.py`, *a deployment built without the pdf says so* (503 `guide_not_carried`; still 403
-     for a refused reader).
-   - Test: `test_route_rights.py`, *each guide answers only whom its place opens signed in for real*, live with a
-     real token through `get_principal`.
-   - Red: removing the check fails 64 cases (`process/lanes/rules-b/guides/server-plants.txt`).
-4. **The Conduit's copy of the places' rights is `places.json`'s.** The image does not carry the workspace, so
-   `guides.py` writes the three places' rights out. A custom role's rights count, because `get_principal` adds
-   them as single grants (Amendment 5).
-   - Test: `test_guides.py`, *the conduit's place rights are places json's*. Red with `run_pipelines` added to
-     the Studio's copy, which would let a loader read the developer guide: three cases fail.
-   - Test: *a custom role's rights count as single grants*.
+   - The route names no single right in `test_route_rights.py`'s table (`None`), because a place opens on any one
+     of several. The place follows the guide's name, so it is not a static `required_place`, and
+     `test_place_routes.py`, which reads static checks only, does not see it. `test_guides.py` asks every
+     principal instead.
+   - Test: `test_guides.py`, *each guide answers exactly whom its place opens*, for every role, the Super user
+     preset, every legacy role, every right granted singly and nobody. The expected answer is computed from
+     `places.json` itself, not from the Conduit's copy. Red: 64 fail with the check removed.
+   - Test: `test_guides.py`, *a deployment built without the pdf says so* (503 `guide_not_carried`, still 403 for
+     a refused reader).
+   - Test: `test_route_rights.py`, *each guide answers only whom its place opens signed in for real*, live, with
+     a real token through `get_principal`. Four roles are checked, a person with no role, and a person arriving
+     from the organisation's identity provider with no roles claim (ADR-114 Amendment 33 decision 4).
+4. **The Conduit's copy of the places' rights is `places.json`'s, and a custom role counts.** The image does not
+   carry the workspace, so `guides.py` writes the three places' rights out. A custom role's current rights count,
+   read at each request: `get_principal` adds them as single grants (Amendment 5).
+   - Test: `test_guides.py`, *the conduit's place rights are places json's*. Red: three fail with `run_pipelines`
+     added to the Studio's copy, which would let a loader read the developer guide.
+   - Test: *a custom role's current rights open its guide through the real get_principal*. A token holding only
+     `role:studio-desk` reads the developer guide alone, and is refused once the role holds nothing.
+   - **Unreachable, recorded:** `opens_place`'s needs half (`PLACE_NEEDS[place] <= held`). None of the three
+     places needs a right, so no plant can fail. The table test fails the day `places.json` gives one a need.
 5. **The file served is the one the image was built with, byte for byte.** It is the PDF that `manifest.json`
-   records for the guide's version, sent with `X-Guide-Version` and `Cache-Control: private, no-store`, inline.
-   Any other name is 404 `no_such_guide`, the architecture guide and a path that would reach another file among
-   them.
+   records for the guide's version, sent inline with `X-Guide-Version` and `Cache-Control: private, no-store`.
+   - Any name but the three is the route's own 404 `no_such_guide`, in words: the architecture guide, say, or
+     `manifest.json`.
+   - A path that would climb out (`..%2Fmanifest.json`, `user/../manifest.json`) never matches the route at all
+     and is the router's plain 404, because a guide is a name looked up in a table of three, never joined to a
+     path from the request.
    - Test: `test_guides.py`, *the pdf served is byte for byte the file carried*. Red with another PDF served.
-   - Test: *a guide that is not one of the three is not found*.
-6. **The image carries the three PDFs and the manifest, and not the architecture guide.**
-   `services/api/Dockerfile`'s final stage copies them to `/app/docs/pdf/`, after the `chown -R`, so they are
-   not written twice into the image's layers. They add about 12.6 MB.
+   - Test: *a guide that is not one of the three is not found* asserts `no_such_guide`. Red: five fail with the
+     route's 404 replaced by a fall back to the user guide.
+   - Test: *no path reaches another file*.
+   - Test: the live case compares each answer with the checkout's file, byte for byte.
+6. **The image carries the three PDFs and the manifest, read-only to all, and not the architecture guide.**
+   `services/api/Dockerfile`'s final stage copies them with `--chmod=0444` to `/app/docs/pdf/` (under
+   `WORKDIR /app`), after the `chown -R`, so they are not written twice into the image's layers. They add about
+   12.6 MB.
    - Test: `test_guides.py`, *the conduit image carries the three guides and their manifest*. Red with the line
-     removed, and red with the architecture guide added.
-7. **In the Glass: a plain link, a new tab, no token in a URL.** Under each card's words sits "Read the user
-   guide (PDF)", "Read the developer guide (PDF)" or "Read the administration guide (PDF)". It is a button drawn
-   as Recent cases' names are, in tokens only.
-   - Activating it opens a tab at once, while the activation is still the person's own, so a pop-up blocker
-     allows it. The PDF is then fetched with the person's token in the `Authorization` header, and the tab is
-     sent to a blob URL. The blob is released a minute later.
-   - A refusal is said under the link in the Conduit's own words, and the tab is closed. So is a failure to
-     reach the Conduit, or a tab the browser would not open.
-   - Test: `guides.test.ts`. Red with the token in the URL, and red with a refused guide's tab left open.
-   - Test: `HomePage.test.tsx`, *asks for the card's own guide* and *says under the link, in words, why a guide
-     could not be opened*.
-8. **Keyboard (rule 13) and axe.** Each link is reached by Tab and opened with Enter. A refused guide's words are
-   shown, with focus kept on the link and no tab left open.
+     removed, with the architecture guide added, and with `--chmod` removed.
+   - Built-image check: `process/lanes/rules-b/guides/image_check.sh` builds the image on the test server and
+     compares each PDF's SHA-256 inside it with `manifest.json`'s, mode 0444. It is shown red with a stale user
+     guide planted in the build context.
+7. **In the Glass: a link whose activation is handled, no token in a URL.** Under each card's words sits "Read
+   the user guide (PDF)", "Read the developer guide (PDF)" or "Read the administration guide (PDF)", drawn as
+   Recent cases' names are, in tokens only.
+   - It is an `<a>` whose `href` is the route itself, so it is announced as a link. Its click and middle click
+     are handled, so the browser never follows the bare route, which would only refuse without the token.
+   - Where the browser shows PDFs, a tab is opened at once, while the activation is still the person's own. A
+     blocked pop-up is said before anything is fetched.
+   - The PDF is then fetched with the token in the `Authorization` header. Only a PDF (its type or its `%PDF-`
+     bytes) is accepted, and the tab is sent to an `application/pdf` blob, without an opener. The blob is kept
+     while the tab is open.
+   - Where the browser shows no PDFs (`navigator.pdfViewerEnabled` false), no tab is opened. The PDF is saved as
+     `ospreyflow-<guide>-guide.pdf`.
+   - Every failure is said under the link in words and its tab closed: a refusal (in the Conduit's words), an
+     ended sign-in (401), an unreachable Conduit, an unreadable body, an answer that is not a PDF, a tab closed
+     while loading. Opening a guide never rejects.
+   - Test: `guides.test.ts`, one case each. Reds: the token in the URL, a failed guide's tab left open, the PDF
+     check removed, a blocked pop-up said late, and the blob let go while its tab is open.
+   - Test: `HomePage.test.tsx`, *is a link to the guide's route, its activation handled*, *asks for the card's
+     own guide*, *says under the link, in words, why a guide could not be opened*, and *says the guide could not
+     be read when opening it throws* (red with Home's catch removed).
+8. **Keyboard (rule 13) and axe.** Each link is in the tab order and opened with Enter. In headless Chromium,
+   which shows no PDFs, the guide is saved under its own name with the guide's bytes, and its token went in a
+   header. A refused guide's words are shown with focus kept on the link.
    - Test: `start.spec.ts`, `START_ACTIONS`' `read-a-place-s-guide-from-home-by-keyboard` and
-     `read-why-a-guide-was-refused-on-home-by-keyboard`.
-   - Axe: the start harness's default state shows the Glass, Studio and Admin cards with their links, and is
-     scanned in dark, light and GOV.UK by `every-harness.spec.ts`.
+     `read-why-a-guide-was-refused-on-home-by-keyboard`. Red with the link's handler removed, with the
+     developer guide saved under another name, and with a refusal's words dropped.
+   - Axe: `every-harness.spec.ts` scans the start harness's default state, which shows the Glass, Studio and
+     Admin cards with their links, and its `guide=refused` state, which shows a refusal under Admin's link, in
+     dark, light and GOV.UK. That `start.spec.ts` case shows the refused state really draws the words.
 
-**Left, by name:** the user guide's *Home* section and the administration guide each gain a line about the
-links (diffs for docs, `process/lanes/rules-b/docs-guides.patch`). A guide newer than the image is shown only
-after a rebuild, which is what "the version it was built with" means.
+**Left, by name:** the docs' lines (user guide §3, administration guide §9.1) and the spec's (02 §2's Home, 03's
+route table) go as patches to their owners (`process/lanes/rules-b/PATCHES.md`). A guide newer than the image
+reaches Home only with a new image, which is what "the version it was built with" means.
 
 ## ADR-148 — Deploying into a namespace on a shared Kubernetes platform: the `cloud-platform` profile, first for the UK public sector client's Cloud Platform — ACCEPTED (design)
 
