@@ -1,18 +1,18 @@
-# Case lane · P9 (scheduled, encrypted backups of ArcadeDB and ClickHouse to S3 by IAM role) · report, 12 November 2026
+# Case lane · P9 round 4 (the orchestrator's review of 7916044) · report, 12 November 2026
 
-Gated head **`7916044`** on `lane/case-p9`, rebased on main `00bb30a` (P7b, 3673660). Gates (`gates/7916044.notes.md`): `make -k ci` **exit 0** (cp-policy-check 0 violation(s) on all four fixtures; harness-a11y in slot 14, 34 passed); `make test` **12339 passed**, 2 failed (the server's GPU, OpenSearch's memory case: known, not this branch's), 2 xfailed strict (the restores' rows awaiting `P9_rows.diff`). Plants **72 of 72 red** (`gates/p9_reds.r4.log`).
+Gated head **`afc1a5f`** on `lane/case-p9`, rebased on main `816ccf7` (L1.9 part 2 in). Gates (`gates/afc1a5f.notes.md`): `make -k ci` **exit 0** (cp-policy-check 0 violation(s) on all five fixtures; harness-a11y in slot 14, 34 passed); `make test` **12459 passed**, 1 failed (the server's GPU, known), 2 xfailed strict (the restores' rows awaiting `P9_rows.diff`); `make live-collect` **exit 0**. With the three diffs applied: 0 violation(s) on all five, 717 passed none held, plants **96 of 96** red, the diff's **5 of 5** (`gates/p9_cp_policy_merged.r2.txt`).
 
-| Exit criterion | State | Proof |
+| Review item | State | Proof |
 | --- | --- | --- |
-| Scheduled, encrypted backup to S3 by IAM role, no stored key | **Met** | `tests/cloud_platform_backup/`; kind round 3 (`gates/p9_kind.r3.log`) |
-| Kind round trip against a stand-in refusing what S3 refuses; every refusal red first | **Met** | `p9_kind_{roundtrip,reds,restore_refused,osprey_sources,osprey_bound_red}.r3.json` |
-| cp-policy-check green, red on a plant | **Met**, on the merged render too (both diffs applied: 60/53/67/67 manifests, 0 violation(s)) | `gates/p9_cp_policy_merged.r1.txt`; `test_backups_chart.py`'s plants |
-| Restore timed under a lease | **Met**: 70.8 s end to end, backup 7.1 s, under the case lane's lease on stack c | `gates/p9_kind_roundtrip_timed.r3.json` |
-| P7b's rows (61f782d) against P9's pods as built | **Three mismatches found and fixed**: restore-claims lacked `kube-api` (every claims restore refused), restore had an unused ArcadeDB row, the backup's key not allowed; ArcadeDB's password now to the backup's container alone | `test_backups_rows.py`; `P9_rows.diff` (583 passed with it, its 3 plants red) |
-| ADR-148 Amendment 7, runbook, friction row | **Met** | `spec/06_DECISIONS.md`, `deploy/RUNBOOK.md`, `process/friction/2026-11-11-case-p9-backups.md` |
+| 1 MUST: ArcadeDB never removed before its restore is proven | **Fixed**: restored into `<db>.restoring`, held to the set's zip and opened (ArcadeDB opens damage with only a warning, measured), swapped by rename; any failure leaves the live one; ClickHouse's failed second RENAME puts the live one back | `test_restore_graph.py` (ArcadeDB's own image); runbook's *Where the data is* |
+| 2 ClickHouse's user to backup and restore-analytics alone | **Fixed** | `test_each_container_holds_the_secret_keys_its_command_calls_for_and_no_more` |
+| 3 a killed run's zip | **Fixed**, red first | `test_a_zip_a_killed_run_left_…` |
+| 4 kind, beside a live database (lease b) | **PASS**: back as the set, nothing left; truncated zip and ClickHouse's refused reads each leave the live data, refused for their own reason. It found a real bug: ClickHouse's Keeper path reused on the same set's second restore (Code 253), fixed red first | `gates/p9_kind_live_restore.r4.json` |
+| 5 writers from the render; CronJobs suspended | **Fixed** (transitive over the rows; the report sync and the Glass caught) | `test_a_new_workload_that_writes_is_a_writer_without_naming_it` |
+| 6 one set's name | **Fixed** | `test_a_restore_names_one_set_or_is_refused` |
+| 7 two plants red for another reason | **Fixed**; also three plants that named unselectable cases, four re-anchored | `gates/p9_cp_policy_merged.r2.txt` |
+| 8 stand-in's InvalidPart/Order, EntityTooSmall; RBAC 403; versioning | **Done** (Am 7 point 11; CARRIES row) | `test_s3_standin.py`, `test_the_api_refusing_…` |
+| 9 RDS to the set's finish | **Done**: `finished` in each manifest, `sets` prints it; Am 7 point 10; runbook's first step; CARRIES | `test_a_set_records_when_it_finished_…` |
+| 10 and notes | **Done**: Am 5 hunk dropped; runbook for the operator; UTC; database names from the render; malformed manifest; claims' swap keeps both; diffs re-cut with index lines | `P9_ROUND4.md` |
 
-**Rulings applied:** A (osprey's RESTORE of ClickHouse's own part accepted as a measured limit, listed for the owner; terms 1–4); ClickHouse's token unmounted, `TOKEN_ALLOWED` unchanged (11 November).
-**For the orchestrator to apply, in order:** `P9_render.diff` (refreshed on P7b's render; four files), `P9_rows.diff`, `P9_decommission.diff` (still applies); `P9_carries.diff` (the live-checks row: ClickHouse's IRSA with no default token, to measure on EKS). Still open: ADR_RESERVATIONS row 195 marked written; platform's `_file`, `_q`, `_secret` made public.
-**Left (P9b, Amendment 7's Left):** the alert on a failed run; object lock; production's restore beyond one copy; the restore's own service account; the backup user's networks.
-**Questions for the owner:** ruling A's limit (osprey can RESTORE a set's ClickHouse part), listed in Amendment 7 point 4.
-**Running:** the osprey-p9 kind cluster, up for the orchestrator's review (round 3's render, from before 7916044's changes); torn down on the orchestrator's word, or at the latest by a systemd timer on the server, Friday 13 November 11:25 UK. No stack lease held.
+**For the orchestrator to apply, in order:** `P9_render.diff`, `P9_rows.diff`, `P9_decommission.diff`; and `P9_carries.diff` (yours). **Questions for the owner:** rulings A and 9 (listed in Am 7 points 4 and 10). **Running:** the osprey-p9 kind cluster, up for review (round 4's render), down on the orchestrator's word or at the latest by the server's timer, Friday 13 November 11:25 UK. No lease held.
