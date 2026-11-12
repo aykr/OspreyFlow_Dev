@@ -740,6 +740,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         no osprey.yaml or data/ commit, no key, no ACME value, and one applied patch's author header redacted.
         Every commit's author email is your git identity, as on origin already; GitHub's noreply address would stop
         that for future commits (your call). GitHub CI is running on it.
+      - **Your decision (about 23:15): the disclaimer for Friday's demo**, built by platform-b tonight, merged by
+        08:30, deployed by the demo lane by 10:00:
+        - option B, a disclaimer banner on every screen and the sign-in page: "Demonstration only: this is not a
+          government service, and all data is synthetic." (ADR-132 Am 7);
+        - the browser's key prompt on all three names, checked against a bcrypt hash you set on the server with
+          the step's helper (ADR-114 Am 41).
+
+        The full disclaimer-page gate (4_gate_disclaimer.html) follows after Friday, with the public demos.
       - **Stopping the demo would not speed up the tests** (measured 11:55): osprey-small uses about 9% of one
         core, 6 GB of 62 GB, and the GPU's memory only. The morning's slowness was the lanes' own parallel runs.
         - **The osprey-small rebuild waits** until "guides" has landed.
